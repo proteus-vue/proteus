@@ -91,6 +91,12 @@ const needMountPath = [
   //   ★为什么允许改这条字面量：该判据的意图是「入口真的调了替换」，不是「变量必须叫 nodes」；
   //     而 #1143 把解析段抽成 `parseScreenCommandsInput` 后，替换发生在解析函数内（更早、更内聚）。
   ['hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp', 'substituteEnvTokens(in.nodes, envTable)', '鸿蒙屏内容入口（AppScreenCommands）未替换 env token'],
+  // 鸿蒙：**屏切换通路**（`screen.mount`）——与上面 AppScreenCommands 是**两条不同的建树通路**。
+  // ★★★#1144（2026-10-20 真内核取证）：此前只有 AppScreenCommands 解析 ⇒ executor 走 screen.mount 时
+  //   `"env:--pf-vh"` 直进内核 ⇒ serde `invalid type: string, expected f32` ⇒ create 返 0
+  //   ⇒ 屏内容 0 节点（真机读数 exec_content_nodes=0，而入库版本是 114）。这就是 #677/#694/#593 的
+  //   **第三次复发**——每次都是"新通路漏解析"，故判据必须逐通路断言，不能只查"文件里有解析器"。
+  ['hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h', 'substituteEnvTokens(nodesInner, hostEnvTable())', '鸿蒙屏切换通路（screen.mount）未替换 env token（#1144 复发：executor 屏内容 0 节点）'],
 ]
 for (const [f, marker, why] of needMountPath) {
   const p = path.join(ROOT, f)

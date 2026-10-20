@@ -147,7 +147,9 @@ static inline void substituteEnvTokens(std::string& nodes, const std::map<std::s
   std::string out; out.reserve(nodes.size());
   size_t i = 0;
   while (i < nodes.size()) {
-    if (nodes.compare(i, 5, "\"env:") == 0) {
+    // ★★#1144：只认契约前缀 `"--pf-`（check-env-vars 的闭集判据即 `env:--pf-*`）——
+    //   原实现匹配任意 `"env:` ⇒ 文本值若以 "env:" 开头会被整段替换成数字（自检实测）。
+    if (nodes.compare(i, 10, "\"env:--pf-") == 0) {
       size_t close = nodes.find('"', i + 5);
       if (close == std::string::npos) { out += nodes[i]; i++; continue; }
       std::string name = nodes.substr(i + 5, close - (i + 5));
@@ -161,6 +163,44 @@ static inline void substituteEnvTokens(std::string& nodes, const std::map<std::s
   }
   nodes = out;
 }
+/**
+ * ★宿主环境变量表（**跨 TU 唯一实例**）——`AppScreenCommands` 每次渲染拿到 ArkTS 采集的 env 表后
+ *   缓存于此；`screen.mount`（另一条建内核树的通路）复用它。
+ * 【为什么不是 static】本头被 proteus_host.cpp 与 proteus_bench.cpp 两个 TU 共同 include，
+ *   `static` 会各得一份 ⇒ 一个 TU 写入、另一个 TU 读到空表（正是"同一语义两通路"的静默失效形态）。
+ *   `inline` 函数的函数内 static 由标准保证**全程序一份**。
+ */
+inline std::map<std::string, double>& hostEnvTable() {
+  static std::map<std::string, double> table;
+  return table;
+}
+
+/**
+ * 把 nodes 串里**第一个** `"parentId": null`（紧凑 `"parentId":null` 同义）改指 rootId。
+ * ★原实现只匹配带空格的形态，而 JSON.stringify 产出**紧凑串**（无空格）⇒ 从未命中：
+ *   内容根一直悬空在合成根之外（真内核验证：remap 未命中时仍能建树，但屏根子树为空）。
+ */
+static inline void retargetFirstNullParent(std::string& nodes, int rootId) {
+  size_t from = 0;
+  while (true) {
+    size_t at = nodes.find("\"parentId\"", from);
+    if (at == std::string::npos) return;
+    size_t v = at + 10;  // 跳过 "parentId"（含两侧引号共 10 字符）
+    while (v < nodes.size() && (nodes[v] == ' ' || nodes[v] == '\t')) ++v;
+    if (v < nodes.size() && nodes[v] == ':') {
+      ++v;
+      while (v < nodes.size() && (nodes[v] == ' ' || nodes[v] == '\t')) ++v;
+      if (nodes.compare(v, 4, "null") == 0) {
+        char repl[40];
+        snprintf(repl, sizeof(repl), "\"parentId\":%d", rootId);
+        nodes.replace(at, v + 4 - at, repl);
+        return;
+      }
+    }
+    from = at + 10;
+  }
+}
+
 static inline std::string extractNodesArray(const std::string& json) {
     size_t p = json.find("\"nodes\"");
     if (p == std::string::npos) return "";

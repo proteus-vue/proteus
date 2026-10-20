@@ -98,6 +98,13 @@ const LOCAL_ONLY = {
   'check:ios-style-keys': 'iOS 宿主 styleOf 白名单 ↔ 消费键覆盖门禁——与 check:host-kernel-keys 同族（开发机跑；纯静态扫描，零 Xcode）',
   // ★★★内置环境变量门禁（决策 #593）：与 check:host-rounding / check:host-kernel-keys 同族（跨宿主源码 + Web 基础样式事实核对，开发机跑；需先 build-packages）
   'check:env-vars': '内置 CSS 环境变量四同步门禁（契约 + 编译器两路径 + 一致性三端 + 三端宿主 + Web 基础样式）——与 check:host-rounding 同族（开发机跑，需 dist）',
+  // ★★★屏切换通路纯函数门禁（2026-10-20 · #1144）：真跑鸿蒙 screen.mount 用的三个纯函数
+  //   （env token 替换 / 合成根重映射 / 单个 token 求值）+ **逐字节比对** runner 副本与源头。
+  //   背景：executor 的 exec_content_nodes 长期为 0，根因是"两条建树通路只修了一条"，且首版修复
+  //   自己还带 off-by-2（三种输入全不生效）——**只 grep 调用点永远发现不了**，必须真跑函数。
+  //   与 check:invoke-wire-parity 同族：纯本机 C++（clang++），零设备零 OHOS sysroot ⇒ CI 也可跑，
+  //   但按该族先例（改宿主后本地跑一次即可）归开发机。
+  'check:screen-mount-helpers': '鸿蒙 screen.mount 纯函数门禁（env 替换 + 合成根重映射，真跑 14 条用例 + runner 防漂移比对）——与 check:invoke-wire-parity 同族（开发机跑，零设备）',
   // ★★★hosts 关注点分层门禁（2026-10-07 · 用户「宿主里项目信息与项目无关抽象混在一起」）：
   //   校验三端 runtime/shell/dev 三层齐备 + runtime 无反向依赖 + 无被跟踪产物。
   //   与 check:host-rounding / check:host-kernel-keys 同族：宿主侧门禁，开发机跑（CI 无宿主源码语境）。

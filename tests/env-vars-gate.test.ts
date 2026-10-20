@@ -102,6 +102,22 @@ describe('★内置环境变量门禁（含"通路必须调用解析器"判据 �
     }
   })
 
+  it('⑤ 删掉鸿蒙屏切换通路（screen.mount）的替换调用 ⇒ 红（#1144：executor 屏内容 0 节点）', () => {
+    const dir = buildFixture()
+    try {
+      stripInFixture(
+        dir,
+        'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h',
+        'substituteEnvTokens(nodesInner, hostEnvTable())'
+      )
+      const r = runGate(dir)
+      expect(r.ok, '删掉 screen.mount 通路调用应判红').toBe(false)
+      expect(r.out, '报错须指名屏切换通路').toMatch(/屏切换通路.*#1144/)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('④ 删掉鸿蒙屏内容入口的替换调用 ⇒ 红', () => {
     const dir = buildFixture()
     try {

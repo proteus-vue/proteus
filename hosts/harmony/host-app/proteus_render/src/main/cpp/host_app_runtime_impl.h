@@ -93,14 +93,10 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         //   并把**内容首个根节点**的 parentId:null 改指该根（单点替换，零 id 重排）。
         int rootId = 900000 + (g_scSeq) * 10000;
         std::string nodesInner = nodesArr.substr(1, nodesArr.size() - 2); // 去外层 []
-        {
-            const std::string needle = "\"parentId\": null";
-            size_t pn = nodesInner.find(needle);
-            if (pn != std::string::npos) {
-                char pnr[40]; snprintf(pnr, sizeof(pnr), "\"parentId\": %d", rootId);
-                nodesInner = nodesInner.substr(0, pn) + pnr + nodesInner.substr(pn + needle.size());
-            }
-        }
+        retargetFirstNullParent(nodesInner, rootId);
+        // ★★★#1144：屏切换通路也须解析 env token（此前只有 AppScreenCommands 解析）——
+        //   `"env:--pf-vh"` 直进内核 ⇒ serde expected f32 ⇒ create 返 0（executor 读数 0）。
+        substituteEnvTokens(nodesInner, hostEnvTable());
         char rootNode[100]; snprintf(rootNode, sizeof(rootNode), "{\"id\":%d,\"parentId\":null,\"width\":1080,\"height\":2400}", rootId);
         std::string req = "{\"viewport\":{\"width\":1080,\"height\":2400},\"nodes\":[" + std::string(rootNode) + (count > 0 ? "," : "") + nodesInner + "]}";
         uint64_t h = proteus_layout_create(req.c_str());

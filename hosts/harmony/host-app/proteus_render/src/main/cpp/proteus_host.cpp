@@ -386,7 +386,7 @@ static ScreenCommandsInput parseScreenCommandsInput(napi_env env, napi_callback_
     //   `"env:<name>[+N|-N][~F]"` token 就地替换为 **vp 数值**（Stage 1：宿主侧解析）。
     std::map<std::string, double> envTable;
     parseEnvObject(argsJson, envTable);
-    substituteEnvTokens(in.nodes, envTable);
+    substituteEnvTokens(in.nodes, envTable); hostEnvTable() = envTable;   // ★#1144：缓存给 screen.mount 通路
     // ★★第五轮修复（2026-10-05 · 右缘 1px 缝的**唯一收敛修法**）：**视口向上取整到整物理像素**——
     //   ArkTS 侧 vp↔px 往返会丢小数（实测页根 cmd 宽 1319.5px vs 屏 1320px ⇒ 最右 1px 列
     //   露宿主深色底，第四轮复评实测 x=1319 全高 #0f1018）。
