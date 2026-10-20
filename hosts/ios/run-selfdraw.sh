@@ -133,9 +133,9 @@ for a in "$@"; do
     --screen=*) SCREEN_ARG="${a#--screen=}" ;;
     --scroll=*) SCROLL_ARG="${a#--scroll=}" ;;
     # ★★★探针参数（#1115 响应体上限 / #1118 流式 / #1120 上传 / #1121 取消）——同一模式，统一解析
-    --fetch-limit-probe=*|--stream-probe=*|--upload-probe=*|--cancel-probe=*)
+    --fetch-limit-probe=*|--stream-probe=*|--upload-probe=*|--cancel-probe=*|--usefetch-probe=*)
       PN="${a#--}"; PN="${PN%%=*}"; PV="${a##*=}"
-      case "$PN" in fetch-limit-probe) FETCH_LIMIT_ARG="$PV" ;; stream-probe) STREAM_PROBE_ARG="$PV" ;; upload-probe) UPLOAD_PROBE_ARG="$PV" ;; cancel-probe) CANCEL_PROBE_ARG="$PV" ;; esac ;;
+      case "$PN" in fetch-limit-probe) FETCH_LIMIT_ARG="$PV" ;; stream-probe) STREAM_PROBE_ARG="$PV" ;; upload-probe) UPLOAD_PROBE_ARG="$PV" ;; cancel-probe) CANCEL_PROBE_ARG="$PV" ;; usefetch-probe) USEFETCH_PROBE_ARG="$PV" ;; esac ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -646,10 +646,11 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${SCROLL_ARG:-}" ]; then SA_ARGS+=("--scroll=$SCROLL_ARG"); fi
   # ★#1115：响应体上限探针（自动化验证 ⇒ 同样用 --console 阻塞到报告落盘自退）
   # ★探针参数转发（同一模式，统一处理）
-  for pv in FETCH_LIMIT_ARG:fetch-limit-probe STREAM_PROBE_ARG:stream-probe UPLOAD_PROBE_ARG:upload-probe CANCEL_PROBE_ARG:cancel-probe; do
+  # ★#1126：usefetch-probe 走 useFetch 门面（与 Android run-usefetch-probe.sh 同参）
+  for pv in FETCH_LIMIT_ARG:fetch-limit-probe STREAM_PROBE_ARG:stream-probe UPLOAD_PROBE_ARG:upload-probe CANCEL_PROBE_ARG:cancel-probe USEFETCH_PROBE_ARG:usefetch-probe; do
     v="${pv%%:*}"; [ -n "${!v:-}" ] && SA_ARGS+=("--${pv#*:}=${!v}")
   done
-  ANY_PROBE="${FETCH_LIMIT_ARG:-}${STREAM_PROBE_ARG:-}${UPLOAD_PROBE_ARG:-}${CANCEL_PROBE_ARG:-}"
+  ANY_PROBE="${FETCH_LIMIT_ARG:-}${STREAM_PROBE_ARG:-}${UPLOAD_PROBE_ARG:-}${CANCEL_PROBE_ARG:-}${USEFETCH_PROBE_ARG:-}"
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
   if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "$ANY_PROBE" ]; then

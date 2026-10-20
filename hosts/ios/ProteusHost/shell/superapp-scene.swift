@@ -436,6 +436,12 @@ final class SuperappScene: NSObject {
                 let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
                 let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 20) : 20
                 extra = "\(chunks),\(size),\(delayMs)"
+            case "--usefetch-probe=":
+                // 与 Android `run-usefetch-probe.sh` 同参（chunks/size/delayMs）
+                let chunks = parts.count >= 2 ? (Int(parts[1]) ?? 128) : 128
+                let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
+                let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 20) : 20
+                extra = "\(chunks),\(size),\(delayMs)"
             default:
                 extra = ""
             }

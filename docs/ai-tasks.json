@@ -2226,7 +2226,7 @@
         "T-app-fetch-cancel",
         "T-app-upload-stream"
       ],
-      "note": "四类缺口：5 字段没进 FetchConfig / status+headers 被丢 / Web+MP 腿没用平台能力 / 零条走门面测试。★iOS 与 Web/MP 的实际运行未验（只有静态判据），如实登记。"
+      "note": "门面证据已双端齐（#1122 Android 9/9 + #1126 iOS 9/9）。★仍待：Web/MP 实跑（目前只有静态判据）。"
     },
     {
       "id": "T-doc-generator-drift",

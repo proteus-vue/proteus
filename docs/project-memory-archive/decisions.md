@@ -10163,3 +10163,41 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① 阈值按实际编辑行为标定（现在是拍的）；
   ② 英文页的类型引用段（#1124 遗留）；
   ③ "长表换长文"那类语义缩水需要另一类判据（信息密度），优先级低。
+
+1126. **★★iOS `useFetch` 门面真机判据补齐（#1122 诚实边界①收口）· 双端门面证据齐 · 决策**（2026-10-20 · 承接 #1122「下一步①」）：
+
+【补的是什么（#1122 自己登记的缺口）】
+  #1122 把 `useFetch` 门面打开（5 个 S3 字段 + status/headers + 错误码归一），但**只在 Android 真机验过**。
+  iOS 的**底层**（流式 #1118 / 落盘 #1119 / 上传 #1120 / 取消 #1121）都验过，
+  但**门面这条路 iOS 没单独跑**——而门面的价值恰恰是"业务真正看到的那一层"。
+  ★这是本仓纪律的直接应用：**"某端底层验过" ≠ "该端门面验过"**（层不同，链路不同）。
+
+【为什么这次很省力（#1121 的重构回报）】
+  #1121 把四个探针分支抽成了 `SuperappProbes` 的 `ProbeConfig` 表。
+  ⇒ 本轮加 iOS 的 usefetch 探针只需**两条改动**：
+    ① `superapp-probes.swift` 的 `all` 数组加一个 `ProbeConfig`（15 行）；
+    ② `superapp-scene.swift` 的 extra 参数 switch 加一个 case（6 行）。
+  ★对照：如果是 #1121 之前的形态（每探针 40 行复制），这里要再抄一遍。
+  这是"抽同一模式"的直接收益——**第二次用同一套装置的成本接近零**。
+
+【真机结果（iOS 9/9）】
+  · 流式 **19 块**逐块到达 · 序号连续 · `status=200` · `headers` 齐全
+  · 第 4 块取消 ⇒ **`fetch.aborted`** · 宿主 `http.cancel` **hits=1**
+  ★与 Android（#1122：24 块 / 同样 9 项）**同判据、同参数、同结论**。
+
+【落地】
+  · `hosts/ios/ProteusHost/shell/superapp-probes.swift`：`ProbeConfig` 表加 `--usefetch-probe=`
+  · `hosts/ios/ProteusHost/shell/superapp-scene.swift`：extra 参数 switch 加 case
+  · `hosts/ios/run-selfdraw.sh`：探针参数解析（`PN`/`PV` 已统一处理）与 `ANY_PROBE` 拼接
+  · `hosts/ios/run-usefetch-probe.sh`（新）：与 Android 版**同判据**（9 项断言）
+
+【门禁】
+  `check:ios-source-lists`（两份清单同集）· `check:file-size`（run-selfdraw 998 行）·
+  `check:no-blind-wait` · `check:safe-edit` · iOS 类型检查 · 38/38 相关测试。
+
+【诚实边界】
+  ① **Web/MP 两条腿仍只有静态判据**（无浏览器 / 微信开发者工具实跑）——#1122 边界②仍在；
+  ② iOS 判据的"取消后块停止"强度与 Android 同档（都靠宿主 `hits` + 服务端无完成记录交叉验证，
+     引擎无 `setTimeout` ⇒ 无等待窗口，见 #1121 边界①）；
+  ③ 本轮只补 usefetch 一条，**落盘/上传/取消在 iOS 的门面路径**未单独跑
+     （它们底层已验，门面只是透传；若将来门面再加字段，建议同批补跑）。

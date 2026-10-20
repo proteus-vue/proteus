@@ -74,6 +74,20 @@ enum SuperappProbes {
         return ["host_cancel_stats": ["calls": cs.calls, "hits": cs.hits, "misses": cs.misses]]
       },
     ),
+    // ★★★#1126：**走 useFetch 门面**的判据（此前只在 Android 跑过，#1122 的诚实边界①）
+    //   ★这条与 `--stream-probe` / `--cancel-probe` 的区别：那两个打底层 `invokeHostStream`，
+    //     这条只走 `createCapabilityHooks(...).useFetch` —— 业务真正看到的那个面。
+    ProbeConfig(
+      argPrefix: "--usefetch-probe=",
+      kickFormat: "__proteusHostAppUseFetchProbe(%@)",
+      resultKey: "__proteusHostUseFetchProbeResult",
+      reportPrefix: "usefetch",
+      deadlineSeconds: 180,
+      extraReadings: { _ in
+        let cs = HttpCapability.cancelStats()
+        return ["host_cancel_stats": ["calls": cs.calls, "hits": cs.hits, "misses": cs.misses]]
+      },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。
