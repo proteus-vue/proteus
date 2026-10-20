@@ -10491,3 +10491,74 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② MP 真机（非模拟器）跑同一判据；真浏览器补 Firefox/WebKit；
   ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）；
   ④ 鸿蒙 S3 缺口（一次性 VM 无回推接收方，需先改宿主形态）。
+
+1131. **★★全量门禁 9 条既有红收口 —— 5 个真缺陷 / 2 处过期路径 / 2 处数字与判据问题 · 决策**（2026-10-20 · 承接 #1130 收尾时跑全量发现）：
+
+【怎么发现的】
+  #1130 的定向判据全绿（145/145），但按纪律跑一次**全量**（`pnpm test`）暴露 9 条失败。
+  ★逐条取证后**没有一条是 #1130 引入的**——都是此前几轮留下的债（#1081/#1088/#1106/#1121/#1122 等）。
+  ★这条本身就是价值：**定向绿 ≠ 全量绿**；而"全量红"里混着"真缺陷"和"装置过期"两类，
+    必须逐条判，不能一律当回归、也不能一律当噪声。
+
+【5 个真缺陷（代码/判据有问题，门禁是对的）】
+  ① **`wrap()` 压平普通 Error 的错误码**（`capability-types.ts`）
+     只认 `instanceof CapError`，而实际抛点常是普通 Error 挂 `code`
+     （`capability-runtime.ts::connectWs` 的 `Object.assign(new Error(), { code: 'websocket.unsupported' })`）
+     ⇒ 一律压成 `cap.failed` ⇒ 业务失去"能力缺失 vs 执行失败"的区分。
+     ★与 #1122 在 `runFetch` 修的是**同一形态**（当时只修了 fetch 那一条）。
+  ② **`http.cancel` / `http.cancelStats` 没登记进宿主契约**（`host-invoke-contract.ts`）
+     #1121/#1122 在 Android/iOS 都实现、真机也验过，但契约 SSOT 没这两项
+     ⇒ `check:host-invoke-contract` 报「未知方法」，覆盖率数字还**低报**。
+     ★"实现了但门禁看不见"与"没实现但门禁判绿"一样糟。
+  ③ **`loadAppBridgeKeysFrom` 同一文件多次登记被覆盖**（`app-bridge-keys.mjs`）
+     `capability-app-device.ts` 同时贡献 `createAppDeviceCapabilities` 与装配层 `createAppCapabilities`
+     ⇒ 直接赋值 `perSource[file] = ...` 让后一条覆盖前一条 ⇒ 计数只剩 9（实际 27）
+     ⇒ 判据报"设备域没抽全"，而抽取器其实是对的（**判据自己错**）。
+     ★修法：同一文件**合并**（键并集），并显式收 `keys` 集合（首版误用 `perFn` 的函数名当键）。
+  ④ **环境变量门禁的 Android 路径过期**（`check-env-vars.mjs`）
+     #1081 把采集下沉到 `runtime/EnvVars`（壳只调 `EnvVars.collect`），门禁仍指向壳
+     `SuperappActivity.java` ⇒ 该文件再没有 `"--pf-hairline"` 字面量 ⇒ 一直红。
+     ★判据文件路径必须跟着实现搬迁走。
+  ⑤ **vendored 桥源漂移**（`packages/cli/templates-host/shared/bridge/entry-superapp.ts`）
+     `hosts/shared/bridge/entry-superapp.ts` 改过多轮但没跑 `sync-host-bridge.mjs`
+     ⇒ CLI 随包副本与真源不一致（纯 npm 安装会拿到旧代码，正是 #666 要根治的那类问题）。
+
+【2 处生成物漂移（源改了没重生成）】
+  ⑥ `showcase/data/catalog.ts` —— 能力页 desc 在 #1088 改了 SSOT 后快照没跟上（83 行）。
+  ⑦ `website/en/reference/cli.md` —— 见第 ⑨ 条的措辞修正（生成物）。
+
+【2 处数字与判据问题】
+  ⑧ `website/src/stats.ts` 的 `plans` 声明 88，实际 89（#1106 TV 焦点方案入库后没更新）。
+  ⑨ **`runtime-profiler` 的「按耗时降序」判据不确定**
+     用 `busy(2)`/`busy(8)`/`busy(1)` 真实毫秒断言顺序，而 `flush`(2) 与 `relink`(1) 只差 1ms
+     ⇒ **全量并行负载下互换**（实测：全量红、单跑连绿 3 次）。
+     ⇒ `createRuntimeProfiler({ now })` 支持注入时钟，该用例改用**确定性步进**并顺带断言精确 ms。
+     ★同族纪律：**时间类判据必须把时间变成输入**（与"判据的解析器要先自证"同源）。
+
+【顺带：代号门禁抓到对外面出现未登记代号】
+  `packages/cli/src/args.ts` 的 doctor 描述写着「Apollo 硬约束」，而 Apollo 未登记进 `PUBLIC_PENDING`
+  （代号只该在内部文档用）⇒ 改为「诊断器硬约束」（中英同步）+ 重生成 `cli.md`。
+  ★这条是 #1107（万神殿上官网只写方法论）之后**第一次**由 `check:codenames` 在生成物上抓到，
+    说明该门禁真的在跟生成链走（不是只扫手写文档）。
+
+【顺带：`capability-types.ts` 越棘轮 ⇒ 按职责拆】
+  `wrap` 是**运行时行为**，不该躺在纯类型契约文件里（该文件 3835 行，`check:file-size` 只减不增）。
+  ⇒ 新 `packages/api/src/capability-wrap.ts`；`capability-types.ts` 改为 `export { wrap } from ...`
+    ⇒ 既有 `from './capability-types'` 的 import 零改动。基线 3835 → 3833（`--write` 降钉）。
+
+【诚实边界】
+  ① 本轮只修"门禁已经报出来的"；`harmony` 能力覆盖 18/46 这类**已如实登记的缺口**不在范围内；
+  ② ⑨ 只修了那一条判据，其它用例仍走真实计时（它们不断言精确顺序，真实时钟更接近生产形态）；
+  ③ `wrap` 的错误码提取**未加"消息前缀"兜底**（`runFetch` 有）——目前没有抛点只给 message，
+     加了反而可能误认；等真出现再加。
+
+【门禁】
+  `pnpm test` **498 文件 / 6374 条全绿**（此前 9 红）· `npx vue-tsc --noEmit` 绿
+  · eslint 0 error · file-size（存量降钉 3835→3833）· script-compile · gates-sync
+  · check:stats（plans 89）· check:codenames · 真浏览器 7/7 · MP 真容器 5/5（改动后复跑）。
+
+【下一步】
+  ① 描述准确性（语义层）——仍无判据（#1129 下一步①）；
+  ② `check:codenames` 现在能抓生成物 ⇒ 可考虑把"生成链里的内部代号"也纳入已知清单核对；
+  ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）；
+  ④ 鸿蒙 S3 缺口（一次性 VM 无回推接收方，需先改宿主形态）。
