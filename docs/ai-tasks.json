@@ -2286,6 +2286,24 @@
         "T-doc-generator-drift"
       ],
       "note": "只判结构不判语义（\"长表换长文\"不在覆盖内）· 阈值（绝对2/相对10%）是拍的 · 基线只增不减 ⇒ 确需变短须人工删基线条目。"
+    },
+    {
+      "id": "T-demo-api-parity",
+      "title": "#1128 showcase 能力页\"教用户做不到\" 修正 + 数据表 vs 实现对齐门禁",
+      "type": "docs",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "scripts/gen-capability-demo-pages.mjs",
+        "tests/demo-page-api-parity.test.ts"
+      ],
+      "decision": 1128,
+      "verification": "npx vitest run tests/demo-page-api-parity.test.ts && node scripts/gen-capability-demo-pages.mjs --check",
+      "branch": null,
+      "related": [
+        "T-app-usefetch-surface"
+      ],
+      "note": "★最大结构性缺口：其它 26 个能力页没有可机读的\"实现侧 SSOT\"，上不了同款门禁（API 数据表手写）。"
     }
   ]
 }

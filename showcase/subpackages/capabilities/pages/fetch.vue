@@ -14,7 +14,7 @@ import { createCapabilityHooks } from '@proteus-vue/api'
 const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code 字面量会破坏 WXML 解析）
-const codeDemo = ref("const res = await useFetch<{ name: string }>(\"/assets/demo-fetch.json\")\nif (res.ok) { /* res.data: { name } —— 已解析 */ }\nelse { /* res.error.code === \"fetch.failed\" */ }")
+const codeDemo = ref("const res = await useFetch<{ name: string }>(\"/assets/demo-fetch.json\")\nif (res.ok) { /* res.data / res.status */ }\nelse { /* res.error.code */ }")
 
 const out = ref('点击按钮发起同源请求（演示站自带 /assets/demo-fetch.json）')
 async function onFetch(): Promise<void> {
@@ -27,18 +27,24 @@ async function onFetch(): Promise<void> {
 }
 
 const apiRows = ref([
-  ["useFetch<T>(url, config?)", "网络请求；返回 Promise<CapResult<T>>（data = 已解析载荷）", "CapResult<T>"],
+  ["useFetch<T>(url, config?)", "网络请求；返回 Promise<FetchResult<T>>", "FetchResult<T>"],
   ["config.method / data", "HTTP 方法（缺省 GET）/ 请求体（对象自动 JSON 序列化）", "'GET' | 'POST' | … / unknown"],
   ["config.params / headers", "查询参数（自动拼接）/ 自定义请求头", "Record<string, unknown> / Record<string, string>"],
-  ["data", "响应载荷：JSON 自动解析，非 JSON 原样文本", "T"],
-  ["error.code", "机器码：fetch.failed（HTTP 非 2xx / 请求失败）/ fetch.unsupported", "string"],
-  ["config.timeout", "★诚实边界：契约已声明，两端桥当前均未接线（超时不会主动中止请求）", "number?"],
+  ["config.timeout", "★已接线：Web 用 AbortController、MP 传 wx.request；超时 ⇒ fetch.timeout", "number?"],
+  ["config.responseType", "★响应体解释方式；arraybuffer 时 data 是裸字节（不走文本解码）", "'text' | 'json' | 'arraybuffer'"],
+  ["res.data", "响应载荷：JSON 自动解析，非 JSON 原样文本", "T"],
+  ["res.status / res.headers", "★HTTP 状态码 / 响应头（此前被丢弃 ⇒ 无法区分 404/500）", "number / Record<string, string>"],
+  ["res.error.code", "fetch.aborted / fetch.timeout / fetch.failed / fetch.unsupported", "string"],
+  ["config.signal", "取消：abort() 后立即以 fetch.aborted 结束（App 用 createAbortController）", "{ readonly aborted: boolean }?"],
+  ["config.onChunk", "流式消费：每块回调一次，内存不随响应体增长（App 回推 / Web ReadableStream；MP 不支持）", "(chunk, seq) => void?"],
+  ["config.savePath / upload", "★仅 App：宿主直写沙箱 / 宿主自读文件上传（Web、MP 明确 unsupported）", "string? / UploadSpec?"],
 ])
 const compatRows = ref([
-  ["Web SPA", "fetch + JSON.parse（非 2xx → Err fetch.failed）", "✅"],
-  ["微信小程序", "wx.request（success → StatusCode 判非 2xx → Err）", "✅"],
+  ["Web SPA", "fetch + AbortController（timeout/取消）+ ReadableStream（流式）", "✅"],
+  ["微信小程序", "wx.request（timeout + responseType）；流式/落盘/上传/取消明确 unsupported", "✅"],
   ["Headless（SSR/测试）", "mock 桥注入", "✅"],
-  ["iOS / Android / 鸿蒙 / Flutter", "端原型映射·能力桥未接线（Err 显式降级）", "🟡"],
+  ["iOS / Android", "宿主原生 HTTP；流式/落盘/上传/取消 + 32 MiB 上限（S3）", "✅"],
+  ["鸿蒙", "RCP 同步往返 + 32 MiB 上限（S2）；流式/取消 unsupported", "🟡"],
 ])
 </script>
 

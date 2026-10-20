@@ -10261,3 +10261,72 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① **`test:e2e:web`**（真浏览器）覆盖 CORS / 混合内容层；
   ② **`test:e2e:mp`**（真设备）覆盖登录态 / 域名白名单 / 并发上限；
   ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）。
+
+1128. **★★★showcase 能力页在**教用户做不到**（比文档缺失更糟）+ 加"数据表 vs 实现"对齐门禁 · 决策**（2026-10-20 · 承接 #1127「下一步」，动手前取证发现）：
+
+【问题（比"文档没更新"严重一档）】
+  `showcase/subpackages/capabilities/pages/fetch.vue`（演示站的能力详情页，**用户实际会点**）写着：
+  · `config.timeout` —— 「★诚实边界：契约已声明，**两端桥当前均未接线（超时不会主动中止请求）**」
+  · 返回 `Promise<CapResult<T>>`
+  · 错误码只列 `fetch.failed` / `fetch.unsupported`
+  · 兼容表底部还有一行「iOS / Android / 鸿蒙 / Flutter：端原型映射·**能力桥未接线** 🟡」
+  ⇒ 而 #1122/#1127 早已：接上 timeout、返回 `FetchResult<T>`（带 status/headers）、
+    错误码扩到 5 个、新增 5 个 S3 字段、Android/iOS 都是 **S3 ✅**。
+  ★**最刺眼的是自相矛盾**：同一页里同时有「iOS / Android … S3 ✅」和「iOS / Android / 鸿蒙 / Flutter … 未接线 🟡」。
+  ★危害分级：**文档缺失 = 用户不知道；文档说"做不到" = 用户主动放弃能用的能力**。后者更糟。
+
+【根因（两处，都不是"忘了更新"）】
+  ① **`renderPage` 里硬编码兜底行**：`[...p.compat, ['iOS / Android / 鸿蒙 / Flutter', '…未接线…', '🟡']]`
+     —— **无条件追加**。即使数据表已经写了 App 端状态，页面底部仍多一行打架的。
+     ⇒ 修法：`appCovered = p.compat.some(r => /iOS|Android|鸿蒙|Flutter/.test(r[0]))`，只有没写时才追加兜底。
+  ② **数据表本身落后**：`api` 数组只列 6 条（缺 `responseType`/`savePath`/`onChunk`/`upload`/`signal`），
+     `timeout` 那条还写着"未接线"，`compat` 只到 Web/MP/Headless。
+     ⇒ 按实现的真实状态重写：API 表 11 条（含 S3 五字段 + `res.status`/`res.headers` + 4 个错误码）、
+        compat 表补 iOS/Android（S3 ✅）与鸿蒙（S2 🟡，流式/取消 unsupported）。
+
+【★为什么现有门禁拦不住（关键）】
+  `check:capability-demo` 只比"生成的 .vue 与数据表是否**一致**"——
+  数据表**自己**落后时，两边一致，它照样 `OK: 27 个能力详情页与数据表一致`。
+  ★这与 #1123/#1124/#1125 挖出的七个缺陷**同源**：
+    **门禁只验"内部一致"，不验"与实现一致"** ⇒ 一起落后就永远绿。
+
+【新门禁（`tests/demo-page-api-parity.test.ts` 5/5）】
+  · **拿 `FetchConfig` 的真实字段去对 API 表**：每个字段都必须以 `config.<字段>` 形态出现在表里
+    （允许合并写法 `config.method / data`）；
+  · **禁止过时的事实错误**：页面里不得再出现「未接线 / 不会主动中止」；
+  · 返回类型必须是 `FetchResult` 且 API 表要提 `res.status`；
+  · 4 个错误码（aborted/timeout/failed/unsupported）必须列全；
+  · 数据表（生成器源）也要覆盖全部字段（否则只是页面碰巧有）。
+
+【★判据自己的两轮假绿（本轮实测，值得记）】
+  Ⅰ 首版只要求"字段名在页面里出现过" ⇒ **删掉 `config.responseType` 那行后仍然全绿**——
+    因为"微信小程序：wx.request（timeout + **responseType**）"这行描述里有这个词。
+    ⇒ 改成要求 `config.<字段>` 形态。
+  Ⅱ 改成 `page.includes('config.' + f)` ⇒ **`data` / `headers` 误报缺失**——
+    它们写成合并行 `config.method / data`、`config.params / headers`。
+    ⇒ 改成"该行以 `config.` 开头，且 `config.` 之后的标识符集合包含它"。
+  ★两轮都说明同一件事（本仓第 6 次同族）：**判据的匹配口径必须对准"表格行"这个真实形态**，
+    而不是"文本里有没有这个词"。
+
+【破坏性验证】
+  删掉 `config.responseType` 那一行 ⇒ **精确报出 `responseType` 缺失**（其它合并写法的字段正确放行）。
+  补回后 5/5 绿。
+
+【诚实边界】
+  ① **只覆盖 fetch 一页**——其它 26 个能力页的"实现侧 SSOT"还没有可机读的字段表
+     （它们的 API 数据表是手写的，没有 `FetchConfig` 这样的单一类型源）；
+  ② 判据只保证**字段被提到**，不保证**描述准确**（"提到 ≠ 写得对"）；
+  ③ `renderPage` 的兜底行改成"按需追加"后，**其它 26 页行为不变**（它们的数据表确实没写 App 端），
+     仅 fetch 一页减少一行。
+
+【落地】
+  · `scripts/gen-capability-demo-pages.mjs`：fetch 数据表重写（api 6→11 条、compat 3→5 行）+
+    `renderPage` 兜底行改为按需追加
+  · `showcase/subpackages/capabilities/pages/fetch.vue`：重新生成
+  · `tests/demo-page-api-parity.test.ts`（新，5/5）
+
+【下一步】
+  ① **把"实现侧 SSOT"补到其它能力页**（每个能力都要有可机读的字段表，才能上同款门禁）——
+     这是本轮暴露的最大结构性缺口；
+  ② 真浏览器（`test:e2e:web`）/ 真容器（`test:e2e:mp`）层仍未验（#1127 遗留）；
+  ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）。
