@@ -26,7 +26,7 @@ const props = withDefaults(
     strokeScale?: number
     /** 是否画旋转扫描弧（默认 true；HUD 用） */
     sweep?: boolean
-    /** 环带是否自转（CSS 驱动；HUD 用——转速由能量算，见 MorpheusHud） */
+    /** 环带是否自转（CSS 驱动；HUD 用——转速由能量算，见 KairosHud） */
     spin?: boolean
     /** 自转周期（秒；由调用方按能量注入） */
     durA?: string

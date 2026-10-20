@@ -204,7 +204,7 @@ if (resultHostRt.warnings.length) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// ★★第四个 entry —— **灯光秀**（Morpheus 第二个炫技节目 · 800 灯颜色编舞）
+// ★★第四个 entry —— **灯光秀**（Kairos 第二个炫技节目 · 800 灯颜色编舞）
 //
 // 【与节目一（showcase）的差别】节目一的设备入口在 iOS 壳（`entry-showcase.ts`，JSC）；
 //   灯光秀的用户要求是**在安卓上做** ⇒ 本 entry 面向 Android QuickJS，

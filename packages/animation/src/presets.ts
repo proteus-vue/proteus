@@ -1,12 +1,12 @@
 // packages/animation/src/presets.ts
-// ★★Morpheus（MA1）—— **预设库**（"开箱即用" = 预设，不是参数；Morpheus §6）
+// ★★Kairos（MA1）—— **预设库**（"开箱即用" = 预设，不是参数；Kairos §6）
 //
 // 【为什么不暴露参数】开发者的真实需求不是"能配 spring 的 damping"，而是
 //   **"这个列表项飞到详情页" —— 一句话能写出来**。⇒ 预设优先，参数兜底。
 //
 // 【★与微信 routeType 对齐（§6.2）】仓库已支持 `routeType: 'wx://bottom-sheet'` 等；
 //   本预设库的**语义与之对齐**（见每个预设的 `wxRouteType` 字段）——降低开发者认知负担，
-//   且便于双端一致（同一份源码在 MP 走 Skyline 的 routeType，在 App 走 Morpheus 预设）。
+//   且便于双端一致（同一份源码在 MP 走 Skyline 的 routeType，在 App 走 Kairos 预设）。
 //
 // 【分层（哪些是"转场"、哪些是"元素动画"）】
 //   · `route.*`  —— **页面级转场**（进场页 + 出场页两个"节点"）；对应 §5-bis 的合成属性路径；
@@ -214,7 +214,7 @@ export interface SharedElementSpec {
 
 export const list = {
   /**
-   * ★★**列表项增删让位**（Morpheus §5 的招牌能力）
+   * ★★**列表项增删让位**（Kairos §5 的招牌能力）
    *
    * 【为什么这一条最值钱】传统 FLIP 要**前后各读一次几何**（跨边界查询，VDOM 框架里很贵）；
    *   而本仓几何本来就在 Rust 内核 ⇒ 两次快照都是内部读，**零跨边界、零 JS**。
@@ -397,7 +397,7 @@ export const element = {
   },
 
   /**
-   * ★★**共享元素**（跨元素/跨页面飞行）——Morpheus §6.1 清单最后一项
+   * ★★**共享元素**（跨元素/跨页面飞行）——Kairos §6.1 清单最后一项
    *
    * 【与 `sharedElementFlyIn` 的本质差别】那个是"**在落点上**做缩放+淡入"（不需要源几何）；
    *   本条是**真·共享元素**：从**源矩形**飞到目标位置再归位——需要"源"的稳态几何。

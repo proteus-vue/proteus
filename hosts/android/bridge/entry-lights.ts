@@ -1,4 +1,4 @@
-// hosts/android/bridge/entry-lights.ts —— ★★Morpheus 炫技场 · 第二个节目（灯光秀）· **Android 设备入口**
+// hosts/android/bridge/entry-lights.ts —— ★★Kairos 炫技场 · 第二个节目（灯光秀）· **Android 设备入口**
 //
 // 【这一场是什么】800 灯颜色编舞（用户要求：炫丽、吸睛、其他跨端框架不敢轻易尝试；在安卓上做）。
 //   节目单在 `hosts/shared/bridge/showcase-lights.ts`（**零手写相位循环**，全部

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// scripts/gen-anim-manual.mjs —— ★Morpheus **动画声明项 AI 说明书**生成器 + conformance 门禁
+// scripts/gen-anim-manual.mjs —— ★Kairos **动画声明项 AI 说明书**生成器 + conformance 门禁
 //
-// 【为什么生成（而不是手写文档）】Morpheus §13 执行指令第 11 条要求「每个预设与声明项必须配
+// 【为什么生成（而不是手写文档）】Kairos §13 执行指令第 11 条要求「每个预设与声明项必须配
 //   conformance 断言 + AI 说明书」。手写文档必然漂移——本轮就实测到一处：
 //   包 README 的曲线名写成 `snappy/customBezier`，而实现是 `easeIn/springApprox`（无人发现）。
 //   ⇒ 说明书从 `packages/animation/src/rules.ts`（单一事实来源）生成，`--check` 接门禁。
@@ -51,18 +51,18 @@ const KIND_ORDER = ['preset', 'primitive', 'constraint', 'boundary']
 
 const lines = []
 lines.push('---')
-lines.push('title: Morpheus 动画声明项 AI 说明书')
+lines.push('title: Kairos 动画声明项 AI 说明书')
 lines.push('order: 92')
 lines.push('group: 框架能力')
 lines.push('generated: true')
 lines.push('---')
 lines.push('')
-lines.push('# Morpheus 动画声明项 AI 说明书')
+lines.push('# Kairos 动画声明项 AI 说明书')
 lines.push('')
 lines.push(`> **生成物，勿手改**：\`node scripts/gen-anim-manual.mjs\`（\`--check\` 接 CI，漂移即红）`)
 lines.push(`> **单一事实来源**：\`packages/animation/src/rules.ts\` 的 \`ANIM_RULES\`（${rules.length} 条）`)
 lines.push('>')
-lines.push('> 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——')
+lines.push('> 本表与编译器的 111 条规则**同构**（Kairos §13 第 11 条硬性要求）——')
 lines.push('> 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。')
 lines.push('>')
 lines.push('> **conformance**：本页生成前会跑 `runConformance()` 对账（预设真实存在 / 跨语言契约值一致 /')

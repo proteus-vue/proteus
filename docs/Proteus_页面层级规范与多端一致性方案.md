@@ -94,7 +94,7 @@
 
 CSS 的 stacking context 同理，但触发条件复杂得多（`opacity < 1`、`transform`、`filter`、`will-change`、`position: fixed` 等都创建新的 stacking context）。
 
-**后果**：Web 端一个 `transform` 动画会**意外创建 stacking context**，导致原本正确的层级被打乱——而这恰好与 Morpheus 动画叠加发生。
+**后果**：Web 端一个 `transform` 动画会**意外创建 stacking context**，导致原本正确的层级被打乱——而这恰好与 Kairos 动画叠加发生。
 
 **③ Android 的 `elevation` 语义不是"层级"而是"高度"**
 
@@ -180,7 +180,7 @@ CSS 的 stacking context 同理，但触发条件复杂得多（`opacity < 1`、
 | **编译期校验** | 声明了 popout/mask 却位于非根容器 → 编译期报错 |
 | **禁止在弹层祖先链上创建 stacking context** | 特别是 `transform` / `opacity < 1` / `filter` |
 
-> **第三条与 Morpheus 直接冲突**：动画常用 `transform` 和 `opacity`，而这两者都会创建 stacking context。
+> **第三条与 Kairos 直接冲突**：动画常用 `transform` 和 `opacity`，而这两者都会创建 stacking context。
 > **必须确保弹层不在任何动画节点的子树内。**
 
 ### 4.2 🔴 陷阱二：小程序原生组件层级最高
@@ -227,7 +227,7 @@ Web 端 `position: static` 时 `z-index` 静默失效，鸿蒙不需要。
 
 ### 4.6 陷阱六：转场期间的层级提升
 
-Morpheus 的**共享元素转场**需要把元素提升覆盖在两个页面之上。
+Kairos 的**共享元素转场**需要把元素提升覆盖在两个页面之上。
 
 这与层级规范直接相关，必须明确：
 
@@ -314,9 +314,9 @@ Morpheus 的**共享元素转场**需要把元素提升覆盖在两个页面之�
 
 ---
 
-## 8. 与 Morpheus 的接口
+## 8. 与 Kairos 的接口
 
-| Morpheus 能力 | 依赖本方案的项 |
+| Kairos 能力 | 依赖本方案的项 |
 |---|---|
 | 共享元素转场 | 需要 `layer-transition` 提升（§4.6） |
 | 转场期间弹层 | 需排队（§4.6） |
@@ -335,7 +335,7 @@ Morpheus 的**共享元素转场**需要把元素提升覆盖在两个页面之�
 | **LY2** | 各端映射表实现（Web / 小程序 / 鸿蒙 / Android / iOS） | LY0 | 1.5 人周 |
 | **LY3** | 弹层栈管理器（含栈深上限与泄漏检测） | LY0 | 1 人周 |
 | **LY4** | 小程序同层渲染适配 + `bindrendererror` 降级 | LY2 | 0.5 人周 |
-| **LY5** | `layer-transition` 与 Morpheus 转场对接 | LY2 / LY3 | 0.5 人周 |
+| **LY5** | `layer-transition` 与 Kairos 转场对接 | LY2 / LY3 | 0.5 人周 |
 | **LY6** | 层级一致性校验（并入一致性任务卡） | LY2 / LY3 | 0.5 人周 |
 
 **总估时：约 5.5 人周**
@@ -378,7 +378,7 @@ Morpheus 的**共享元素转场**需要把元素提升覆盖在两个页面之�
 3. **§4.1 是最高优先级陷阱**。弹层提升到根容器必须**编译期强制**，不能靠开发者自觉。
 4. **§4.4 必须用 `translationZ`**，用 `elevation` 会产生意外阴影——这是可见缺陷。
 5. **LY3 弹层栈必须有栈深上限与泄漏检测**。层级单调增长会溢出，且难复现。
-6. **§8 的 Morpheus 交叉风险必须两边都写**——`transform`/`opacity` 创建 stacking context 这件事，只用 Morpheus 的人想不到。
+6. **§8 的 Kairos 交叉风险必须两边都写**——`transform`/`opacity` 创建 stacking context 这件事，只用 Kairos 的人想不到。
 7. **本方案不修改任何已入库文档**。与《一致性校验任务卡清单》的对接通过新增 LY 系列卡片完成。
 8. §11 待核实第 3 项（Skyline stacking context）**应在 LY2 小程序端开工前确认**。
 9. 与《CSS Profile 规格》可能的重叠：**本方案管层级语义与跨端映射，CSS Profile 管属性支持度**。若出现冲突，以本方案的层级规则为准。
@@ -434,5 +434,5 @@ Morpheus 的**共享元素转场**需要把元素提升覆盖在两个页面之�
 | LY2 各端映射**驱动到内核/宿主** | ⬜ 未做 | ★**更正（2026-10-03 GP3-a 实测）**：原写「web/mp 由 CSS 生效」**与实测不符** —— `layer` 属性在 web 与 mp **都尚未产出 z-index**（MP：属性原样透传进 wxml 且 WXSS 无 z-index；Web：插件不处理；全仓 `layerValueFor()` 零消费者）⇒ **层内四层今天只有校验、没有效果**；App 两端待内核接入 zOrder（§13.1 边界） |
 | LY3 弹层栈管理器 | ⬜ 未做 | 契约已定（`popoutStackValue` / `POPOUT_STACK_LIMIT`），实现待做 |
 | LY4 小程序同层渲染 + `bindrendererror` 降级 | ⬜ 未做 | §4.2 |
-| LY5 `layer-transition` × Morpheus 转场 | ⬜ 未做 | §4.6；本仓 iOS 已有转场期 `zPosition` 提升（内部实现），与契约对接待做 |
+| LY5 `layer-transition` × Kairos 转场 | ⬜ 未做 | §4.6；本仓 iOS 已有转场期 `zPosition` 提升（内部实现），与契约对接待做 |
 | LY6 层级一致性校验（遮挡关系进 L2） | ⬜ 未做 | §7.2 的"遮挡关系"是最有价值项 |

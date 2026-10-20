@@ -1,4 +1,4 @@
-// hosts/shared/bridge/showcase-lights.ts —— ★★Morpheus 炫技场 · **第二个节目：舞台灯光秀**
+// hosts/shared/bridge/showcase-lights.ts —— ★★Kairos 炫技场 · **第二个节目：舞台灯光秀**
 //
 // 【这一场是什么（用户原话，2026-10-01 三轮打磨后的最终语义）】
 //   「我理解的灯光秀是**舞台上 800 个彩灯**，灯光秀都是通过**彩灯的亮灯和灭灯**完成，

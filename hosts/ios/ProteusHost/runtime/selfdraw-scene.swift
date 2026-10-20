@@ -3311,7 +3311,7 @@ final class SelfDrawView: UIView {
         // ★父 id 先取（下面会把表清掉）
         let rootParent = parentById[row.root] ?? (nodesById[row.root]?["parentId"] as? Int) ?? -1
         // 逆序回收（子先于父：避免父的 childrenById 被提前清空导致子找不到落点）
-        // ★★§7.3（Morpheus 方案）：**节点回收必须解绑动画**
+        // ★★§7.3（Kairos 方案）：**节点回收必须解绑动画**
         //
         // 【不做的后果（两重，都是静默错）】① 动画仍绑在旧 node id 上 ⇒ 该行重新物化时会
         //   显示"半路的变换"（错误位置）；② 动画永不结束 ⇒ 每帧白算。
@@ -5969,7 +5969,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     /// ★★**提交一次 ⇒ 平台自主插值**（MA0-RT 的核心入口）
     ///
     /// 流程：① 调内核拿**提交规格**（含合成属性判定 `plan` + 节点级采样）；
-    ///      ② `plan.composited=false` ⇒ **明确返回错误**（不静默降级——Morpheus §5-bis.2 要求）；
+    ///      ② `plan.composited=false` ⇒ **明确返回错误**（不静默降级——Kairos §5-bis.2 要求）；
     ///      ③ 逐 spec 构造 `CAKeyframeAnimation` 提交给 CoreAnimation render server；
     ///      ④ 交接：内核已把这些动画**摘出**（`detach_nodes`，见 FFI 注释）⇒ 之后 tick 不再碰它们。
     ///
@@ -6034,7 +6034,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// ★★**FLIP 布局动画**（招牌能力）：`op=capture` 记快照 / `op=start` 启动补间
     ///
-    /// ★为什么这是招牌（Morpheus §5）：几何本来就在内核 ⇒ 两次快照都是内部读，
+    /// ★为什么这是招牌（Kairos §5）：几何本来就在内核 ⇒ 两次快照都是内部读，
     ///   **零跨边界几何查询**（传统 FLIP 要前后各读一次）。
     func animFlip(_ json: String) -> String {
         guard handle != 0 else { return "{\"ok\":false,\"error\":\"未接入核心\"}" }

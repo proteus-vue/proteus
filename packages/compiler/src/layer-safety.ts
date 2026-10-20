@@ -147,7 +147,7 @@ export function validateLayerUsage(templateSource: string): LayerViolation[] {
         code: 'LY005',
         rule: LAYER_RULE_OF.LY005,
         message: `<${n.tag}> 声明了框架保留层 \`layer="${n.layer}"\`（转场期间由宿主内部提升/复位）`,
-        hint: '移除该声明；共享元素转场的层级由 Morpheus 转场通道处理（见规范 §8）',
+        hint: '移除该声明；共享元素转场的层级由 Kairos 转场通道处理（见规范 §8）',
         ...(n.rawZIndex ? { line: n.rawZIndex.line } : {}),
       })
       continue

@@ -1,4 +1,4 @@
-// hosts/shared/bridge/entry-showcase.ts —— ★★Morpheus 炫技场（真机性能演示）· **设备入口**
+// hosts/shared/bridge/entry-showcase.ts —— ★★Kairos 炫技场（真机性能演示）· **设备入口**
 //
 // 【这一场要证明什么（用户要求）】「该演示就是动画引擎炫技的存在，要求酷炫，吸睛，丝滑流畅不掉帧，
 //   而且还能考验动画引擎性能，**在其他跨端框架不敢轻易尝试的那种**」

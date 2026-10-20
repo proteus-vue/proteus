@@ -162,7 +162,7 @@ XComponent(type='surface') → OH_NativeWindow_* → EGL/OpenGL/Vulkan → 自�
 官方描述：用于"**update node attributes within the current frame, preventing
 flickering during component switching**"。
 
-这正好对应 Morpheus 里那个需求：**动画属性更新必须落在当前帧**，否则会闪烁。
+这正好对应 Kairos 里那个需求：**动画属性更新必须落在当前帧**，否则会闪烁。
 
 > 实现指令：**MA0-RT 的鸿蒙端必须用 API 21+ 的 InvalidateAttributes**，
 > 不得退化为"下一帧才生效"。
@@ -393,7 +393,7 @@ ArkUI 把 0.333 舍成 0.33，累计误差导致第三列错位）。
 
 ### 8.2 Slot 身份绑定
 
-《Morpheus 方案》§7 的陷阱在鸿蒙上同样成立，且更危险——
+《Kairos 方案》§7 的陷阱在鸿蒙上同样成立，且更危险——
 **NodeAdapter 的复用池会主动回收节点**。
 
 > 强制约束：**动画与状态必须绑定 Slot 身份，节点回收即解绑。**
@@ -468,7 +468,7 @@ RenderService 是**独立进程**，应用通过 **IPC** 提交渲染指令。
 - [ ] 与内核 Slot 身份绑定对齐
 - [ ] 复用率与内存实测
 
-### HM4 · Morpheus 鸿蒙端（≈1.5 人周）
+### HM4 · Kairos 鸿蒙端（≈1.5 人周）
 
 - [ ] 合成属性判定 → RenderNode 属性路径
 - [ ] **API 21+ InvalidateAttributes**（当前帧生效）

@@ -23,7 +23,7 @@
 //   默认 `nodeBudget: null` = 不冻结（全栈保留，返程永远保状态——对齐原生 App 预期）；
 //   超深栈超级应用可显式配预算。
 //
-// 【转场】命令流携带 `RouteTransition`（**声明**，不是平台动作），由执行器交给 Morpheus
+// 【转场】命令流携带 `RouteTransition`（**声明**，不是平台动作），由执行器交给 Kairos
 //   （`APP_TRANSITION_MAP` → 内核动画，平台零参与路径）。**本文件不产生任何平台调用**——
 //   纯逻辑（无 wx / DOM / native / 内核依赖），三端可单测；宿主接线见 runtime/执行器。
 // ─────────────────── 鸿蒙移植差异（唯一一处；sync-core.sh 双向校验）───────────────────
@@ -112,7 +112,7 @@ export interface AppScreen {
  *   pop        ：exit(旧顶, t) → unmount(旧顶, 'pop') → enter(新顶, t)
  *   批量 navigate：被弹屏仅原顶屏 exit（其余静默 unmount）；新增屏全部 mount；仅最终栈顶 enter
  *   reset/tab  ：unmount(全部, 'reset') → mount(根) → enter(根)
- *   ★退场方向（pop 的反向转场）由执行器/Morpheus 推导——本层不携带方向（动画知识不在 router）。
+ *   ★退场方向（pop 的反向转场）由执行器/Kairos 推导——本层不携带方向（动画知识不在 router）。
  */
 export type ScreenCommand =
   /** 建屏内容（首次挂载 rebuild=false；冻结后重建 rebuild=true）。执行器建完调 markRebuilt */

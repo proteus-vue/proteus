@@ -5,7 +5,7 @@
 > 定位：`proteus-performance-plan/` C 批续篇——`14-input-bridge-latency.md` 的**可证伪实验场与对外演示形态**。★**双层结构**：§3–§5 **验证层**（判据 / 刻度尺 / 天花板）+ §6 **炫技层**（四幕：立 / 剖 / 破 / 对）。
 > ★★★**身份（2026-10-10 用户定义）：本文件 = 「输入延迟 + 视觉反馈」专项的**全量验收标准**——专项「完成」的唯一判据 = Dactyl 的 D0–D5 DoD 全过（§11），而非 14 的 S1–S6 清单勾完。**
 > 一句话：**把"手指到像素"的延迟做成肉眼可见的几何量，再把负载一路推到框架崩裂的临界点。**
-> 关联：`14-input-bridge-latency.md`（S1–S6 六条腿）· `docs/Proteus_Benchmark案例规格.md`（主指标 work time / 三原则 / 三禁止）· `docs/对标Benchmark执行Checklist.md`（环境控制九条 / AOT 两组 / 5 次原始值）· `docs/Proteus_Playground设计方案.md`（IR 产物 + manifest 能力声明 + 扫码即玩）· `docs/Proteus_声明式动画引擎Morpheus方案.md`（合成属性走 RenderThread）
+> 关联：`14-input-bridge-latency.md`（S1–S6 六条腿）· `docs/Proteus_Benchmark案例规格.md`（主指标 work time / 三原则 / 三禁止）· `docs/对标Benchmark执行Checklist.md`（环境控制九条 / AOT 两组 / 5 次原始值）· `docs/Proteus_Playground设计方案.md`（IR 产物 + manifest 能力声明 + 扫码即玩）· `docs/Proteus_声明式动画引擎Kairos方案.md`（合成属性走 RenderThread）
 > 相关决策：**#772**（Dactyl 立项 + 采纳为专项验收标准；★原稿自编 #770 与"去 JSON 门禁 #770"撞号，重编 **#772**）· **#767**（专项立项）· #768/#769（S1/S2，本 demo 直接验证对象）…（逐项登记）
 > 批次：**C 批 · 编号 15 · 主攻 14 的验收载体**
 
@@ -25,7 +25,7 @@
 
 4. **天花板是一个容量数，不是一个耗时数。** 对外宣称不用"我们 P95 是 3ms"（没概念），而用 **"在 120Hz 下维持 P95 ≤ 1 帧，我们能扛 N 个节点 × M 触点的负载，对手在 N/4 处就崩"**。容量数比耗时数更难被质疑，也更能说明架构代差。
 
-5. **一条自洽性红线：美术不许成为瓶颈。** 所有装饰动效**必须走合成属性**（`translation / scale / alpha`，Morpheus §5-bis：编译期判定合成属性集合，RenderThread 直接更新 RenderNode，主线程零参与）——**否则 demo 自己就是压力源，测的是装饰而不是链路**。这是本方案与"**把炫技当目的**"的 demo 的分界线——**注意：本方案自己也做炫技（§6 四幕），但炫技必须寄生在骨骼上（V1 炫技即取证 · V2 炫技不动指标），不能反过来。**
+5. **一条自洽性红线：美术不许成为瓶颈。** 所有装饰动效**必须走合成属性**（`translation / scale / alpha`，Kairos §5-bis：编译期判定合成属性集合，RenderThread 直接更新 RenderNode，主线程零参与）——**否则 demo 自己就是压力源，测的是装饰而不是链路**。这是本方案与"**把炫技当目的**"的 demo 的分界线——**注意：本方案自己也做炫技（§6 四幕），但炫技必须寄生在骨骼上（V1 炫技即取证 · V2 炫技不动指标），不能反过来。**
 
 6. **交付形态**：一份源码（Vue）→ 三端 + Skyline 共用；产物必须是 **IR 产物**（非 VDOM bundle，`Proteus_Benchmark案例规格.md` §10.3）；挂入 Playground **扫码即玩**；量具与外部取证脚本落在 `hosts/shared/dactyl/`。
 
@@ -84,7 +84,7 @@
 
 ### 2.1 命名
 
-- **代号 `Dactyl`**（希腊神话 Δάκτυλοι，"手指"一族）——与本仓既有神话代号体系（Proteus / Vapor / Morpheus / Apollo）一致，且**字面就是"手指"**，寓意"把触摸当第一公民"。
+- **代号 `Dactyl`**（希腊神话 Δάκτυλοι，"手指"一族）——与本仓既有神话代号体系（Proteus / Vapor / Kairos / Apollo）一致，且**字面就是"手指"**，寓意"把触摸当第一公民"。
 - **中文名「触感穹顶」**——一顶由铁磁流体尖峰构成的穹顶，随手指的位置与压力立起、迁移、塌陷。
 - **视觉母题：铁磁流体（ferrofluid）**。选它的三层理由：
   1. **即时性隐喻**：铁磁流体是自然界对"输入"响应最即时的物质——手指即磁极，"磁极一动，尖峰立起"。**慢一拍就会立刻显得假**。
@@ -474,7 +474,7 @@ Proteus  ███████████████████████�
 | 帧格 | 极暗网格（静态底图）；丢帧格闪红 `#FF4D4D`（一次性，不进合成） |
 | 崩裂瞬间 | 全屏白闪 1 帧 + 液体径向炸开 + 冻结截图叠加崩裂点标注 |
 
-### 8.2 动效清单（全部声明式，Morpheus 语法）
+### 8.2 动效清单（全部声明式，Kairos 语法）
 
 | 动效 | 属性 | 类型 |
 |---|---|---|
@@ -486,7 +486,7 @@ Proteus  ███████████████████████�
 
 ### 8.3 ★ 自洽性红线（与"把炫技当目的"的分界）
 
-> **装饰动效只允许使用合成属性**（`translation / scale / alpha / rotation`），由 Morpheus 在**编译期判定合成属性集合**，RenderThread 直接更新 RenderNode、**主线程零参与每帧**（`Proteus_声明式动画引擎Morpheus方案.md` §5-bis.1/§5-bis.2）。
+> **装饰动效只允许使用合成属性**（`translation / scale / alpha / rotation`），由 Kairos 在**编译期判定合成属性集合**，RenderThread 直接更新 RenderNode、**主线程零参与每帧**（`Proteus_声明式动画引擎Kairos方案.md` §5-bis.1/§5-bis.2）。
 
 理由：若用需要逐帧重排/重绘的属性做装饰，**demo 自己就成了压力源**，测到的是"装饰有多贵"而不是"链路有多快"。两条附带约束：
 
@@ -568,7 +568,7 @@ scripts/check-dactyl-budget.mjs     ← 门禁（棘轮）
 | 需求 | 复用 | 出处 |
 |---|---|---|
 | 命中 | 内核 `hit.rs`（三端同一份） | 14 §2 ③ |
-| 动画求值 | `anim.rs` + Morpheus 声明层 | `Proteus_声明式动画引擎Morpheus方案.md` |
+| 动画求值 | `anim.rs` + Kairos 声明层 | `Proteus_声明式动画引擎Kairos方案.md` |
 | 指令通道 | Vapor IR 补丁（S2 零拷贝升级） | 14 §4 S2 |
 | 跨端几何一致 | `check-cross-end-geometry.py` 范式 | `hosts/shared/` |
 | 逐帧诊断 | TraceBus / DevTools | 决策 #676/#677 |
@@ -642,7 +642,7 @@ scripts/check-dactyl-budget.mjs     ← 门禁（棘轮）
 | `Proteus_Benchmark案例规格.md` | **口径母体**——三原则、主指标、三禁止、三强制对照全部沿用；Dactyl 补齐其 §10.1"挂进 Playground"的一环 |
 | `对标Benchmark执行Checklist.md` | **执行母体**——环境九条、AOT 两组、5 次原始值直接照搬 |
 | `Proteus_Playground设计方案.md` | **分发与挂载**——IR 产物 + manifest 能力声明 + 扫码即玩 |
-| `Proteus_声明式动画引擎Morpheus方案.md` | **美术自洽性底座**——合成属性判定（§5-bis）是 §8.3 红线的依据 |
+| `Proteus_声明式动画引擎Kairos方案.md` | **美术自洽性底座**——合成属性判定（§5-bis）是 §8.3 红线的依据 |
 | `Proteus_App端高性能渲染落地方案.md` | 渲染侧方案；Dactyl 覆盖**输入侧**，正交互补 |
 
 ## 附录 B · 一句话对外话术（分端）

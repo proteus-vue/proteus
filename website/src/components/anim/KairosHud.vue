@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// website/src/components/anim/MorpheusHud.vue —— ★★**活的徽记**（产品页的"灵魂元素"）
+// website/src/components/anim/KairosHud.vue —— ★★**活的徽记**（产品页的"灵魂元素"）
 //
 // 【它为什么存在（产品主张的字面实现）】
-//   Morpheus 的主张是「**一份声明 → 任意宿主**」。本组件就是这句话的现场演示：
+//   Kairos 的主张是「**一份声明 → 任意宿主**」。本组件就是这句话的现场演示：
 //   页面上**任何一处动效**在跑（入场/指针驱动/时间轴/曲线自画/开幕），本徽记的环形、
 //   核心与曲线谱就**跟着同一个数据流**动——数据来自 `engine-motion` 的演出总线
 //   （每帧上报"多少条指令在推进"），而不是另写一段装饰动画。
@@ -115,7 +115,7 @@ onUnmounted(() => {
   <div class="hud" :class="{ 'hud--open': open }" aria-hidden="true">
     <button class="hud-btn" type="button" @click="open = !open" :aria-expanded="open">
       <SigilSvg ref="sigil" :size="38" :stroke-scale="2.1" :spin="true" :dur-a="durA" :dur-b="durB" />
-      <span class="hud-tag">{{ open ? '演出监视器' : 'Morpheus' }}</span>
+      <span class="hud-tag">{{ open ? '演出监视器' : 'Kairos' }}</span>
     </button>
 
     <!-- 展开：真实读数 + 曲线谱（与引擎的编译产物同源） -->

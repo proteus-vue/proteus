@@ -48,6 +48,7 @@ Some divine names fit their domains beautifully, and we still dropped them — b
 
 | Rejected codename | Reason |
 |---|---|
+| **Morpheus** | The npm package `morpheus` is literally "A Brilliant Animator" (a JS animation library) — the exact same domain as this framework's animation engine; SVG-Morpheus and others are also well known |
 | **Iris** | Overlaps with a Rust + Vue3 animation engine in the same domain |
 | **Athena** | Strongly claimed by AWS Athena |
 | **Theia** | Eclipse Theia (an IDE framework), adjacent domain |
@@ -76,12 +77,13 @@ Every other internal subsystem **uses a functional description** in external doc
 
 > You may occasionally see a stray codename in the docs ahead of time — that is residue from our consolidation and will be cleaned up or promoted. **Until we explicitly say a codename is "named", treat the functional description as the source of truth.**
 
-Two of them need a separate note, because they are not "residue": they are **already in use as public product names while their search is still incomplete**:
+One of them needs a separate note, because it is not "residue": it is **already in use as a public product name while its search is still incomplete**:
 
-- The **animation engine** codename appears in the titles of the [animation section](/docs/animation/00-overview) (which has its own product page)
 - The **glass system-shell library** codename appears in the [liquid glass guide](/docs/31-liquid-glass) (that library is **still planned, not shipped**)
 
-These two are places where "consistency in public copy" and "search not yet complete" have not been reconciled — **by our own rule they should have completed the search before going public**. We are flagging them honestly rather than pretending they are not there.
+This is a place where "consistency in public copy" and "search not yet complete" have not been reconciled — **by our own rule it should have completed the search before going public**. We are flagging it honestly rather than pretending it is not there.
+
+> As of one self-audit in October 2026: the animation engine's former codename (which collided with a same-named animation library on npm) **has been renamed** — this is exactly the rule working as intended: **change the name when the collision is found, not after it becomes a problem.**
 
 ## Why this is worth writing down
 

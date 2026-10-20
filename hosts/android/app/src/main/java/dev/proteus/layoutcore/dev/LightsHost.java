@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * ★★★Morpheus 炫技场 · **第二个节目（灯光秀）的 Android 宿主**（2026-10-01）。
+ * ★★★Kairos 炫技场 · **第二个节目（灯光秀）的 Android 宿主**（2026-10-01）。
  *
  * 【它是什么】把「节目单（`hosts/shared/bridge/showcase-lights.ts`，800 灯颜色编舞）」
  *   在 Android 上驱动起来的宿主：JS 侧只交指令（每幕一批 `animStart`），

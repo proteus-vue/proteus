@@ -76,7 +76,7 @@ function rgbToCh(hex: string): number[] {
   return [r, g, b, a]
 }
 
-describe('Morpheus 炫技场 · 第二个节目（舞台灯光秀）', () => {
+describe('Kairos 炫技场 · 第二个节目（舞台灯光秀）', () => {
   it('整场能走完：15 幕名序齐全（standby … curtain）', () => {
     const { acts, plan } = walkAll()
     expect(acts.map((a) => a.name)).toEqual(plan)

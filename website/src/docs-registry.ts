@@ -56,7 +56,7 @@ const systemModules = import.meta.glob<{ default: DocsModule }>('../content/syst
 const pluginModules = import.meta.glob<{ default: DocsModule }>('../content/plugins/*.md', { eager: true })
 const referenceModules = import.meta.glob<{ default: DocsModule }>('../content/reference/*.md', { eager: true })
 const primitiveModules = import.meta.glob<{ default: DocsModule }>('../content/primitives/*.md', { eager: true })
-// ★Morpheus 动画引擎（招牌能力的独立分区——产品页 /animation 配一份正式文档）
+// ★Kairos 动画引擎（招牌能力的独立分区——产品页 /animation 配一份正式文档）
 const animationModules = import.meta.glob<{ default: DocsModule }>('../animation/*.md', { eager: true })
 // ★#468 英文内容变体（overlay：en/<分区目录>/<slug>.md——试点指南区；缺失变体 → 页面提示回中文）
 const enModules = import.meta.glob<{ default: DocsModule }>('../en/**/*.md', { eager: true })

@@ -118,7 +118,7 @@
 |---|---|---|---|
 | `title` | string | 标题（tabBar 文案缺省值 / 页面标题） | 三端 |
 | `isTab` | boolean | 是否 tab 根屏 | MP（`app.json.tabBar` 推导）/ App（`tabNames`） |
-| `transition` | `slideUp`/`slideDown`/`halfScreen`/`scaleDown`/`none` | 转场（**三端同一枚举**） | Web（Vue Transition）/ MP（routeType）/ App（Morpheus） |
+| `transition` | `slideUp`/`slideDown`/`halfScreen`/`scaleDown`/`none` | 转场（**三端同一枚举**） | Web（Vue Transition）/ MP（routeType）/ App（Kairos） |
 | `requiresAuth` | boolean | 登录拦截（Router 自动守卫） | 三端（`createRouter` 的 authGuard） |
 | `permissions` | string[] | 权限拦截（`resource:action`） | 三端（permissionGuard） |
 | `redirectTo` | string | 整栈替换目标（**构建期校验存在**） | 三端 |

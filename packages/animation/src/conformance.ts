@@ -1,5 +1,5 @@
 // packages/animation/src/conformance.ts
-// ★★Morpheus conformance —— **AI 说明书 ↔ 实现/内核的对账**（Morpheus §13 第 11 条后半句）
+// ★★Kairos conformance —— **AI 说明书 ↔ 实现/内核的对账**（Kairos §13 第 11 条后半句）
 //
 // 【为什么必须有（本仓的核心纪律：判据要落在结果上）】`ANIM_RULES` 是**自描述**——
 //   如果没人对账，它就会变成"文档说有一套、实现是另一套"（本仓已多次踩到：

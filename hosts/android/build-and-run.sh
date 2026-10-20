@@ -288,7 +288,7 @@ else
   echo "    ⚠ 未见 $BUNDLE_HR —— 缺它只影响 host-runtime 测试路径"
 fi
 
-# ★★灯光秀（Morpheus 第二个炫技节目 · 800 灯颜色编舞）——第四个 entry，同一构建脚本产出
+# ★★灯光秀（Kairos 第二个炫技节目 · 800 灯颜色编舞）——第四个 entry，同一构建脚本产出
 BUNDLE_LT="$HERE/bridge/dist/bundle-lights.js"
 ENTRY_LT="$HERE/bridge/entry-lights.ts"
 NEED_BUILD_LT=0
@@ -365,7 +365,7 @@ if [ "$LIGHTS" = "1" ]; then
   MANIFEST="$BUILD/AndroidManifest.lights.xml"
   # ★★★批次 44：launcher 现挂在 `.SuperappActivity`（不再 `.MainActivity`）⇒ 本 sed 改**.SuperappActivity**
   #   （把 launcher+theme 挪给 demo Activity）；MainActivity 保留为非 launcher 元素（无害）。
-  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.lights"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Lights"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.LightsDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.lights"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Kairos Lights"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.LightsDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
   grep -q 'dev.proteus.lights' "$MANIFEST" || { echo "✗ lights 清单生成失败（包名没换）"; exit 3; }
   grep -q 'LightsDemoActivity' "$MANIFEST" || { echo "✗ lights 清单生成失败（Activity 没换）"; exit 3; }
   if grep -q 'SuperappActivity' "$MANIFEST"; then echo "✗ lights 清单里 SuperappActivity 未替换（launcher 归属错）"; exit 3; fi
@@ -373,7 +373,7 @@ fi
 if [ "$FLIP" = "1" ]; then
   # ★★翻牌剧场独立应用（2026-10-01 · 第三个节目）：同 sed 生成法。
   MANIFEST="$BUILD/AndroidManifest.flip.xml"
-  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.flip"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Flip"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.FlipDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.flip"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Kairos Flip"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.FlipDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
   grep -q 'dev.proteus.flip' "$MANIFEST" || { echo "✗ flip 清单生成失败（包名没换）"; exit 3; }
   grep -q 'FlipDemoActivity' "$MANIFEST" || { echo "✗ flip 清单生成失败（Activity 没换）"; exit 3; }
   if grep -q 'SuperappActivity' "$MANIFEST"; then echo "✗ flip 清单里 SuperappActivity 未替换（launcher 归属错）"; exit 3; fi
@@ -381,7 +381,7 @@ fi
 if [ "$INKSCROLL" = "1" ]; then
   # ★★手卷探索独立应用（2026-10-01 · 长卷模式）：同 sed 生成法（点开即手指拖动展开）。
   MANIFEST="$BUILD/AndroidManifest.inkscroll.xml"
-  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.inkscroll"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Hand Scroll"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.InkScrollDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.inkscroll"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Kairos Hand Scroll"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.InkScrollDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
   grep -q 'dev.proteus.inkscroll' "$MANIFEST" || { echo "✗ inkscroll 清单生成失败（包名没换）"; exit 3; }
   grep -q 'InkScrollDemoActivity' "$MANIFEST" || { echo "✗ inkscroll 清单生成失败（Activity 没换）"; exit 3; }
   if grep -q 'SuperappActivity' "$MANIFEST"; then echo "✗ inkscroll 清单里 SuperappActivity 未替换（launcher 归属错）"; exit 3; fi
@@ -389,7 +389,7 @@ fi
 if [ "$INK" = "1" ]; then
   # ★★墨绘·山水卷独立应用（2026-10-01 · 第四个节目）：同 sed 生成法。
   MANIFEST="$BUILD/AndroidManifest.ink.xml"
-  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.ink"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Morpheus Ink"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.InkDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
+  sed -e 's/package="dev.proteus.layoutcore"/package="dev.proteus.ink"/'       -e 's/android:label="Proteus LayoutCore"/android:label="Kairos Ink"/'       -e 's/android:name="\.SuperappActivity"/android:name="dev.proteus.layoutcore.InkDemoActivity" android:theme="@android:style\/Theme.NoTitleBar.Fullscreen"/'       "$APP/src/main/AndroidManifest.xml" > "$MANIFEST"
   grep -q 'dev.proteus.ink' "$MANIFEST" || { echo "✗ ink 清单生成失败（包名没换）"; exit 3; }
   grep -q 'InkDemoActivity' "$MANIFEST" || { echo "✗ ink 清单生成失败（Activity 没换）"; exit 3; }
   if grep -q 'SuperappActivity' "$MANIFEST"; then echo "✗ ink 清单里 SuperappActivity 未替换（launcher 归属错）"; exit 3; fi

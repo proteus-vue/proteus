@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hosts/ios/check-showcase.py —— ★★Morpheus 炫技场判据（真机产物 showcase.json + 两张截图）
+"""hosts/ios/check-showcase.py —— ★★Kairos 炫技场判据（真机产物 showcase.json + 两张截图）
 
 【这一场要证明什么（用户要求）】「该演示就是动画引擎炫技的存在，要求酷炫，吸睛，丝滑流畅不掉帧，
   而且还能考验动画引擎性能，**在其他跨端框架不敢轻易尝试的那种**」
@@ -52,7 +52,7 @@ def main() -> int:
         print("  ⇒ 诚实跳过（跑真机后取回）：bash hosts/ios/run-selfdraw.sh --showcase")
         return 0
 
-    print(f"═══ Morpheus 炫技场判据（B7 口径）：{path} ═══")
+    print(f"═══ Kairos 炫技场判据（B7 口径）：{path} ═══")
     ok = True
     with open(path, encoding="utf-8") as f:
         d = json.load(f)
@@ -240,7 +240,7 @@ def main() -> int:
     # ── ⑥ 逃生口率（§4.2：真实消费面的首个采集点——2026-10-01 接入）──
     #   语义：率 = total / (declaratives + total)。炫技场是**真消费面**（整场 3 万+条声明式指令），
     #   `escapes.summary()` 由工程侧在 finalize 时快照进报告 ⇒ "待采数"变成可判定的数。
-    #   ★缺字段判红（不许"没数据就是绿"）；超 5% 目标判红（Morpheus §11 验收标准）。
+    #   ★缺字段判红（不许"没数据就是绿"）；超 5% 目标判红（Kairos §11 验收标准）。
     esc = d.get("escapes")
     if not isinstance(esc, dict):
         fail("缺逃生口率取证 `escapes`（工程侧未把 escapes.summary() 接入报告）")

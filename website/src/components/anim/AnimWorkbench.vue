@@ -68,7 +68,7 @@ function tryCompile(): { ok: true; batch: CompiledBatch; decls: AnimDecl[] } | {
     return { ok: true, batch, decls: [decl] }
   } catch (e) {
     const msg = String((e as Error).message ?? e)
-    // 引擎的报错形如：Morpheus 动画声明校验失败：[code] #0 message → hint; 若封闭集...
+    // 引擎的报错形如：Kairos 动画声明校验失败：[code] #0 message → hint; 若封闭集...
     const m = /\[([a-z-]+)\]\s*#(\d+)\s*([^→]+)→\s*([^;\n]+)/.exec(msg)
     return { ok: false, error: m ? `${m[3]!.trim()}` : msg.slice(0, 220), hint: m ? m[4]!.trim() : '' }
   }

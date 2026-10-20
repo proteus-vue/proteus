@@ -154,15 +154,15 @@ const LOCAL_ONLY = {
   'check:android-platform-anim': '需真机产物（adb pull 的 platform-anim*.json）；CI 无设备',
   // ★内核驱动动画判据（曲线/序列/滚动/共享元素/真帧循环）：同族——输入是真机产物，CI 无设备。
   'check:android-kernel-anim': '需真机产物（adb pull 的 kernel-anim.json）；CI 无设备',
-  // ★★Morpheus 灯光秀（第二个炫技节目 · 800 灯颜色编舞，2026-10-01）——需真机产物
+  // ★★Kairos 灯光秀（第二个炫技节目 · 800 灯颜色编舞，2026-10-01）——需真机产物
   //   （adb pull 的 lights.json：QuickJS 节目驱动 + Choreographer 帧循环读数）；CI 无设备。
   //   本机侧等价判据 = tests/showcase-lights.test.ts（11 幕 / 颜色链 / 7200 峰值，CI 覆盖）。
   'check:android-lights': '需真机产物（adb pull 的 lights.json）；CI 无设备（本机侧等价判据 = tests/showcase-lights.test.ts）',
-  // ★★Morpheus 翻牌剧场（第三个节目 · A/B 批新能力验收，2026-10-01）——需真机产物
+  // ★★Kairos 翻牌剧场（第三个节目 · A/B 批新能力验收，2026-10-01）——需真机产物
   //   （adb pull 的 flip.json：慢动作 wall/span 比值 + 3D 逐幕终态，CI 无设备无法复现）。
   //   本机侧等价判据 = tests/showcase-flip.test.ts（8 幕 / 能力计数 / 控制链，CI 覆盖）。
   'check:android-flip': '需真机产物（adb pull 的 flip.json）；CI 无设备（本机侧等价判据 = tests/showcase-flip.test.ts）',
-  // ★★Morpheus 墨绘·山水卷（第四个节目 · C1 裁剪揭示 × C2 SVG 描边，2026-10-01）——需真机产物
+  // ★★Kairos 墨绘·山水卷（第四个节目 · C1 裁剪揭示 × C2 SVG 描边，2026-10-01）——需真机产物
   //   （adb pull 的 ink.json：幕中描边"进行中"探针 + 裁剪逐幕揭示终态，CI 无设备无法复现）。
   //   本机侧等价判据 = tests/showcase-ink.test.ts（11 幕 / 双能力计数 / 裁剪链 / 构建态律，CI 覆盖）。
   'check:android-ink': '需真机产物（adb pull 的 ink.json）；CI 无设备（本机侧等价判据 = tests/showcase-ink.test.ts）',
@@ -177,7 +177,7 @@ const LOCAL_ONLY = {
   //   （adb pull 的 mount-layers.json：层容器数/树序/全屏@原点/零权限）。CI 无设备；
   //   本机侧等价判据 = tests/mount-layers.test.ts（16 组，纯契约可跑，CI 覆盖）。
   'check:mount-layers': '需真机产物（adb pull 的 mount-layers.json）；CI 无设备（本机侧等价判据 = tests/mount-layers.test.ts）',
-  // ★Morpheus 炫技场（800 瓦片三段编舞）——需**真机**产物（iOS 宿主帧循环 + CADisplayLink 读数）；
+  // ★Kairos 炫技场（800 瓦片三段编舞）——需**真机**产物（iOS 宿主帧循环 + CADisplayLink 读数）；
   //   CI 无设备。本机侧等价判据 = 单测（tests/showcase-*.test.ts，校验编舞指令的真编译产物）。
   'check:showcase': '需真机产物（iOS showcase.json + 收尾截图）；CI 无设备、无 Xcode',
   // ★★双端几何一致性判据（2026-10-01 新增，收「跨端视觉一致性」边界的可判定部分）：

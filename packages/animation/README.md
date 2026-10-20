@@ -1,6 +1,6 @@
 # @proteus-vue/animation
 
-Proteus **Morpheus 动画引擎的声明式表面**（MA1）——预设驱动的转场/布局动画声明、编译期校验、编译到内核指令。**零运行时依赖**：本包不引入任何曲线数学，宿主侧同样零曲线数学（曲线求值与物理积分在 Rust 内核 `layout-core-rust/src/anim.rs`，唯一实现）。
+Proteus **Kairos 动画引擎的声明式表面**（MA1）——预设驱动的转场/布局动画声明、编译期校验、编译到内核指令。**零运行时依赖**：本包不引入任何曲线数学，宿主侧同样零曲线数学（曲线求值与物理积分在 Rust 内核 `layout-core-rust/src/anim.rs`，唯一实现）。
 
 ## 三层分工
 
@@ -39,7 +39,7 @@ Rust 内核（曲线求值 + 物理 + FLIP） ← 唯一实现，每帧零 JS �
 | `scroll.sticky()` / `parallax()` / `fadeIn()` | **滚动联动**（吸顶 / 视差 / 渐显——滚动位置驱动，换算在内核；见下） |
 | `easing.snappy` / `easing.smooth` | 手感弹簧预设（**与内核 `SpringParams::snappy/smooth` 同值**，两侧各有测试钉住） |
 
-每个转场预设带 `wxRouteType` 字段与微信 routeType **语义对齐**——同一份源码在 MP 走 Skyline routeType、在 App 走 Morpheus 预设，降低双端认知差。
+每个转场预设带 `wxRouteType` 字段与微信 routeType **语义对齐**——同一份源码在 MP 走 Skyline routeType、在 App 走 Kairos 预设，降低双端认知差。
 
 ## 使用
 

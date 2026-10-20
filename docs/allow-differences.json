@@ -31,8 +31,8 @@
       "category": "animation",
       "title": "转场插值中间态",
       "reason": "中间帧由平台算（RenderThread / CoreAnimation 自主插值），跨端曲线不同——终态一致、过程不同。★标准 §14#5 要求「现在就登记」，否则会在一致性校验里变成难以归因的偶发失败",
-      "scope": "转场类动画只要求终态一致；需要过程一致的编排动画改回 Rust 侧自行求值（Morpheus §5-bis）",
-      "evidence": "标准 §9.2 / 《声明式动画引擎Morpheus方案》§5-bis"
+      "scope": "转场类动画只要求终态一致；需要过程一致的编排动画改回 Rust 侧自行求值（Kairos §5-bis）",
+      "evidence": "标准 §9.2 / 《声明式动画引擎Kairos方案》§5-bis"
     },
     {
       "id": "A-5",

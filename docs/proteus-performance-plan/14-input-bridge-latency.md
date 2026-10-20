@@ -365,7 +365,7 @@ Harmony 的渲染 ratio（0.106）看着最好，但那是"提交级/光栅级"�
 | `host-abi` 的「批处理红线」 | **S2 的统一目标**（一帧一次调用 + 二进制线格式） |
 | `packages/worklet` | **S3 的吸收对象**——从"仅 Skyline"提升为三端内核指令 |
 | `docs/Proteus_App端高性能渲染落地方案.md` | 覆盖**渲染**侧 T1/T2/T4；本篇覆盖**输入**侧，二者正交互补 |
-| `docs/Proteus_声明式动画引擎Morpheus方案.md` | `anim.rs` 是 S3 Tier 1 的执行底座 |
+| `docs/Proteus_声明式动画引擎Kairos方案.md` | `anim.rs` 是 S3 Tier 1 的执行底座 |
 | `docs/对标Benchmark执行Checklist.md` | **S6.3 直接沿用**其量法口径 |
 | `proteus-performance-plan/05-worklet.md`（30–45fps → ≥58fps） | 与本篇 S3 同一目标，本篇给出**App 三端**的落地路径（该篇偏 Skyline） |
 | CDP/DevTools 逐帧耗时（决策 #676/#677） | S6.4 的**补充**取证源（但不得替代外部 profiler） |

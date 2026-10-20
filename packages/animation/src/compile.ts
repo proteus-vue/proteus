@@ -1,5 +1,5 @@
 // packages/animation/src/compile.ts
-// ★★Morpheus（MA1）—— **声明 → 引擎指令**（编译期；曲线求值不在这里，在内核）
+// ★★Kairos（MA1）—— **声明 → 引擎指令**（编译期；曲线求值不在这里，在内核）
 //
 // 【为什么要"编译"这一步（而不是声明直接下发）】
 //   ① **声明与目标解耦**：预设是可复用的（同一个"滑入"用于任意页面），节点 id 只有运行时知道
@@ -51,9 +51,9 @@ export function compileAnimations(
   if (issues.length > 0) {
     const detail = issues.map((i) => `[${i.code}] #${i.index} ${i.message} → ${i.hint}`).join('; ')
     throw new Error(
-      `Morpheus 动画声明校验失败：${detail}` +
+      `Kairos 动画声明校验失败：${detail}` +
         '\n  ⇒ 若封闭集确实表达不了，走**显式逃生口**（`escapes.register({kind, detail, reason, behaviorRisk})`）' +
-        '——可用但必须登记并接受 degraded 风险（Morpheus §4.2），不要绕过框架。',
+        '——可用但必须登记并接受 degraded 风险（Kairos §4.2），不要绕过框架。',
     )
   }
   const anims = decls.flatMap((d) => compileOne(d, targets))

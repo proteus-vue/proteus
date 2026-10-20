@@ -144,7 +144,7 @@ iOS 独立 `UIWindow` + `windowLevel`：`normal < statusBar < alert`。
 - [ ] 实测 iOS 13+ 场景管理对自定义 window 的影响
 - [ ] 验证键盘弹出时是否需要重置 windowLevel（复现并记录）
 - [ ] 验证 `pointInside` 不重写时的点击拦截范围（是否全屏拦截）
-- [ ] 实测独立 window 内的动画是否走 CoreAnimation（与 Morpheus §5-bis 是否一致）
+- [ ] 实测独立 window 内的动画是否走 CoreAnimation（与 Kairos §5-bis 是否一致）
 
 ### 验收
 
@@ -195,7 +195,7 @@ Vue 3 `Teleport to="body"` 原生支持。Teleport **只移动 DOM，不移动�
 - [ ] 验证 Teleport 到 body 后，scoped 样式是否确仍生效
 - [ ] 验证 Teleport 内容与 Proteus 指令流的兼容（是否绕过指令流直接操作 DOM）
 - [ ] 若绕过指令流，给出替代方案（渲染树内挂载节点）
-- [ ] 验证 Teleport 内组件的动画是否仍走 Morpheus
+- [ ] 验证 Teleport 内组件的动画是否仍走 Kairos
 
 ### 验收
 

@@ -36,9 +36,9 @@
 
 | 候选 | 语义 | 查重结果 | 评估 |
 |---|---|---|---|
-| 🥇 **Morpheus** | 希腊梦神；词根 **morph-** = 形态变化（动画里 "morph" 本就是形变术语） | ⚠️ 有占用但**均不在同领域**：Ender 的老动画框架、Morpheus 2D game engine（NDS/GBA）、SVG-Morpheus、Morpheus Data（云管理公司） | **推荐**。语义最贴（morph ↔ protean），发音好、短、易记。风险是 Matrix 的文化联想 |
-| 🥈 **Thetis** | 海洋女神，**变形传说与 Proteus 高度平行**（被擒时不断变换形态） | ✅ 未发现同领域占用 | **最干净的备选**。同属海神体系，与 Proteus 的隐喻几乎成对 |
-| 🥉 **Kairos** | 时机之神，意为"恰当的时机"；动画的本质就是 **timing** | ✅ 未发现同领域占用 | 雅致备选。语义偏抽象，不如前两者直观 |
+| 🥇 **Kairos** | 时机之神 καιρός =「恰当的时机」；动画的本质就是 **在正确的时间产生正确的变化**（时间轴/缓动/编排） | ⚠️ npm 有 `kairos`（"A non date-based time calculator"，时间计算器）——**非动画/UI 域**，按规范 §2-4 不构成排除；GitHub 有同名项目但均非 UI/渲染框架 | **采用**（2026-10-20 · 决策 #1108）。语义直指动画的时间维度，短、易记；风险是"时机"比"形变"更抽象 |
+| 🥈 **Thetis** | 海洋女神，**变形传说与 Proteus 高度平行**（被擒时不断变换形态） | ✅ 未发现同领域占用（npm `thetis` = 模板生成器，2 次/周） | **最干净的备选**。同属海神体系，与 Proteus 的隐喻几乎成对；但神职与"动画/时间"无关，属"名字干净但语义硬套" |
+| ❌ ~~Morpheus~~ | 希腊梦神；词根 morph- = 形态变化 | ❌ **npm `morpheus` 就是「A Brilliant Animator」（JS 动画库），领域完全重合**；另有 `alexk111/SVG-Morpheus`（2.7k★）、`ded/morpheus`（501★） | **必须排除**（同 Iris 先例）。语义虽最贴，但用户搜 `morpheus animation` 会先撞上别人的库 |
 
 ### 1.3 ⚠️ 两个必须排除的名字（查重已确认占用）
 
@@ -51,9 +51,9 @@
 
 ### 1.4 建议
 
-**主推 `Morpheus`，备选 `Thetis`。**
+**主推 `Kairos`，备选 `Thetis`。**
 
-下文统一以 **Morpheus** 指代本引擎；如最终定名不同，全文替换即可。
+下文统一以 **Kairos** 指代本引擎；如最终定名不同，全文替换即可。
 
 > 定名前建议在 npm / crates.io / GitHub 再做一次商标与包名检索——本文档查重基于公开检索，不构成商标意见。
 
@@ -121,7 +121,7 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 
 它与 IME、Capability Hook 属于同一类问题——**必须设计边界，不能假装不存在。**
 
-### 4.1 Morpheus 的双层结构
+### 4.1 Kairos 的双层结构
 
 ```
 ┌─ 编译层（可收敛）─────────────────────────┐
@@ -148,7 +148,7 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 
 ## 5. ★ 你的超能力：布局动画（FLIP）
 
-这是 Morpheus 最值得单独拎出来的能力。
+这是 Kairos 最值得单独拎出来的能力。
 
 ### 5.1 传统 FLIP 的代价
 
@@ -177,7 +177,7 @@ Reanimated / Skyline 做 worklet 的动机是 **逃离 JS 线程**——
 
 ### 5.3 建议
 
-**把这个做成 Morpheus 的招牌能力。**
+**把这个做成 Kairos 的招牌能力。**
 它是"架构带来的差异化"，不是"又一个动画库功能"——这个区分很重要。
 
 ---
@@ -221,7 +221,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 
 ### 5-bis.2 ★ 关键机制：合成属性集合在编译期判定
 
-这一点是 Morpheus 相对 Flutter / RN 的结构性优势：
+这一点是 Kairos 相对 Flutter / RN 的结构性优势：
 
 ```
 编译期分析动画声明
@@ -244,7 +244,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 | **布局动画**（列表项让位） | ❌ 必须改布局 | **0.08ms 全量重排**（§5） |
 
 **两者合起来才是完整能力，而别人往往只有一半。**
-这也是 Morpheus 相对 Reanimated / Flutter 动画库的结构性覆盖优势。
+这也是 Kairos 相对 Reanimated / Flutter 动画库的结构性覆盖优势。
 
 ### 5-bis.4 两条实现约束
 
@@ -283,7 +283,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 微信小程序内置一批 routeType：`wx://bottom-sheet`、`wx://upwards`、`wx://zoom`、
 `wx://cupertino-modal`、`wx://cupertino-modal-inside`、`wx://modal-navigation`、`wx://modal`。
 
-**建议 Morpheus 的预设语义与之对齐**——降低开发者认知负担，且便于双端一致。
+**建议 Kairos 的预设语义与之对齐**——降低开发者认知负担，且便于双端一致。
 
 ---
 
@@ -317,7 +317,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 ## 8. 与 RT0 的解耦时序
 
 之前路由动画方案把 **RT0**（IR 指令路径 vs JS 路径的 spike）设为硬门禁。
-这里要修正：**Morpheus 不该整体被它拦住**。
+这里要修正：**Kairos 不该整体被它拦住**。
 
 | 步骤 | 内容 | 是否受 RT0 阻塞 |
 |---|---|---|
@@ -512,7 +512,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 
 ### MA2 · 运行时核心 —— ◐ **主体已落地并真机验证（2026-09-30）**
 
-> ★**与 RT2 合流**：Morpheus 的运行时核心与 RT2「动画指令」是同一件事（指令驱动、曲线求值在内核）；
+> ★**与 RT2 合流**：Kairos 的运行时核心与 RT2「动画指令」是同一件事（指令驱动、曲线求值在内核）；
 > 本轮一次做完，真机 26/26 判据全过（`hosts/ios/check-anim-rt2.py`）。
 > ★**未走"先 JS 兜底"**（原计划）——因为 RT0 已证明 Rust 侧可行且快得多（N=1000 每帧 2.38µs），
 > 直接落在内核反而**省掉一次迁移**。
@@ -577,7 +577,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 | 节点复用 | 长列表快速滚动**无错误项动画** | 专项回归通过 |
 | 布局动画 | 列表增删让位 | 60Hz **不掉帧** | ◐ 真机 215 节点补间通过（帧耗时 p95 0.7ms） |
 | **转场（合成属性）** | **主线程零参与**（Systrace / Instruments 实测） | 提交一次 | ◐ iOS 已落地：`CAKeyframeAnimation` 提交 + presentation 探针；★Instruments 级实测**未做** |
-| **转场（路由接线）** | 命令流 → 执行器 → Morpheus 批次 | 端上可跑 | ✅ **2026-09-30**：`routeTransitionBatches`（含 pop 反向的**镜像对**）+ `createScreenExecutor`（M5 命令流消费者）+ 真机 ⑦ 组 5 条全绿（`check-app-stack.py`）|
+| **转场（路由接线）** | 命令流 → 执行器 → Kairos 批次 | 端上可跑 | ✅ **2026-09-30**：`routeTransitionBatches`（含 pop 反向的**镜像对**）+ `createScreenExecutor`（M5 命令流消费者）+ 真机 ⑦ 组 5 条全绿（`check-app-stack.py`）|
 | **转场（误改布局属性）** | **编译期拦截**，不得静默降级 | 零静默失败 | ✅ 内核判定 + 宿主**明确拒绝**（真机 G4） |
 | 声明式覆盖 | 常见动画**无需逃生口** | 逃生口率 < 5% ← **口径已机器化**：`escapes.format()` 报率（常量 `ESCAPE_RATIO_TARGET`），超阈值给出提示（当前无业务用点，故如实为「装置就绪、待采数」） |
 | 性能 | 与 B1 benchmark 同口径实测 | 不掉帧 + 输入延迟达标 |
@@ -617,7 +617,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 7. **合成属性集合必须在编译期判定**：属性集 ⊆ {transform, opacity} 才走零参与路径；
    动了布局属性（width/height/margin）必须**编译期报错或显式降级**，不得静默。
 8. **预设优先于参数**——先做预设库，引擎够用就行。
-9. **不要把手势系统并进 Morpheus**，它是独立任务。
+9. **不要把手势系统并进 Kairos**，它是独立任务。
 10. **MA1–MA3 不等 RT0**；MA4 才应用 RT0 结论。
 11. 每个预设与声明项**必须配 conformance 断言 + AI 说明书**，与既有 111 条规则同构。
     —— ✅ **已落地**（22 条 `ANIM_RULES` + `runConformance` + `pnpm check:anim-manual`，见 MA1 节）。
@@ -627,7 +627,7 @@ iOS 同理：动 `transform` 是 GPU 加速，动 `frame` 触发布局重算。
 
 ---
 
-## 13-bis. ★★官网专栏：Morpheus 从"内部引擎"到"产品"（2026-09-30）
+## 13-bis. ★★官网专栏：Kairos 从"内部引擎"到"产品"（2026-09-30）
 
 用户判断：「**这个也是我们框架的招牌，肯定要打造成正式产品文档的**，这个最好做得专业产品的介绍，
 非常吸睛的、炫酷的那种」。⇒ 本轮做成**两层产品面**：
@@ -700,7 +700,7 @@ Dart 层求值。本仓：曲线/物理在 **Rust 内核**、每帧只跨一次�
 | **复用已有资产** | 三个转场预设已落地；B1 benchmark 即是展示场 |
 
 > **效率提示**：B1 benchmark 案例（万级列表 → 共享元素飞入 → 手势返回）
-> **就是 Morpheus 的展示场**。引擎做出来，benchmark 案例也就有了；
+> **就是 Kairos 的展示场**。引擎做出来，benchmark 案例也就有了；
 > 案例实测数据反过来就是引擎的验收标准。**比分开做省一半。**
 
 ---
@@ -709,7 +709,7 @@ Dart 层求值。本仓：曲线/物理在 **Rust 内核**、每帧只跨一次�
 
 | 名字 | 占用情况 |
 |---|---|
-| Morpheus | Ender 动画框架（历史项目）；Morpheus 2D game engine（NDS/GBA）；SVG-Morpheus；Morpheus Data（云管理平台）。**均不在跨端 UI 动画领域** |
+| Kairos | Ender 动画框架（历史项目）；Kairos 2D game engine（NDS/GBA）；SVG-Kairos；Kairos Data（云管理平台）。**均不在跨端 UI 动画领域** |
 | Thetis | 未发现同领域占用 |
 | Kairos | 未发现同领域占用 |
 | **Iris** | **iris-engine（Rust crate，Rust + Vue 3 运行时，含 AnimationEngine）**；Iris C++ 游戏引擎 —— **排除** |

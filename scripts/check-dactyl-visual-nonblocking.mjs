@@ -2,7 +2,7 @@
 // scripts/check-dactyl-visual-nonblocking.mjs —— ★★★Dactyl §7.3 **自洽性红线门禁**（2026-10-10 · 决策 #780）
 //
 // 【要证明什么（`15-dactyl-demo.md` §7.3）】Dactyl 的**全部装饰动效只允许使用合成属性**
-//   （`translation / scale / alpha / rotation`）——由 Morpheus 编译期判定、RenderThread 直接更新 RenderNode、
+//   （`translation / scale / alpha / rotation`）——由 Kairos 编译期判定、RenderThread 直接更新 RenderNode、
 //   **主线程零参与每帧**。否则**demo 自己就成了压力源**：测到的是"装饰有多贵"而非"输入链路有多快"
 //   （这正是本方案与"炫技 demo"的分界线）。
 //
@@ -15,7 +15,7 @@
 //   `:active`（L1 按下态）改 `background-color` 属**绘制通道**（S1.1 原生即时，非逐帧装饰），**不在禁令内**。
 //
 // 【诚实边界】本门禁只做**静态 AST/正则**判定（`.vue` 的 CSS 文本）；"合成属性 vs 布局属性"的**完整**
-//   判定由编译器（Morpheus §5-bis）负责——本门禁是**兜底红线**（防有人为"更炫"改用非合成属性）。
+//   判定由编译器（Kairos §5-bis）负责——本门禁是**兜底红线**（防有人为"更炫"改用非合成属性）。
 //   ★作用域 = **`demos/dactyl/src/pages/**`（Dactyl 场景）**——应用壳（`router/RouterView.vue`）是通用
 //     App 管道（与其它 Proteus 应用同款，含框架自带的入场动画），非 Dactyl 场景自持的装饰。
 //

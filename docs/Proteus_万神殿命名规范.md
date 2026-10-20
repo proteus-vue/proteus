@@ -23,9 +23,16 @@
 ### 1.1 命名轴：**神职即模块职责**
 
 > 权威原话（`docs/Proteus_OS级组件库方案.md:32`）：
-> 「框架名 **Proteus**（千变万化）、动画引擎 **Morpheus**（形变）、CSS 引擎 **Themis**（裁决与律法）、能力组件 **Hephaestus**（锻造）——本命名体系的**语义轴是「神职即模块职责」**。」
+> 「框架名 **Proteus**（千变万化）、动画引擎 **Kairos**（时机/时间轴）、CSS 引擎 **Themis**（裁决与律法）、能力组件 **Hephaestus**（锻造）——本命名体系的**语义轴是「神职即模块职责」**。」
+>
+> ★**代号更名记录（2026-10-20 · 决策 #1108）**：动画引擎原名 **Morpheus**（梦神，morph- 形变词根），
+> 但 npm 上 **`morpheus` 这个包正是「A Brilliant Animator」**（JS 动画库，与我们的领域完全重合），
+> 另有 `alexk111/SVG-Morpheus`（2.7k★，SVG 图标 morphing）——按 §2 第 4 问「相关领域有知名同名项目 ⇒ 排除」
+> （同 Iris/Athena 先例）**必须排除**。⇒ 改用 **Kairos**（καιρός，时机之神）：
+> 动画的本质是「在正确的时间产生正确的变化」——**时间轴、缓动、编排**都是"时机"问题，神职对得上且更贴切。
+> ★`Kairos` 的 npm 占用为 "A non date-based time calculator"（时间计算器，非动画/UI 域）⇒ 不构成排除。
 
-**选名方法**：先定位模块的**职责**，再找**神职**与之契合的神话名。例：动画引擎 = 形变 → **Morpheus**（梦神，morph- 形变词根）；CSS 引擎 = 裁决/律法 → **Themis**（正义女神）；图标库 = 传令 → **Keryx**（传令官）。
+**选名方法**：先定位模块的**职责**，再找**神职**与之契合的神话名。例：动画引擎 = 时间轴上的变化 → **Kairos**（时机之神，καιρός = 恰当时机）；CSS 引擎 = 裁决/律法 → **Themis**（正义女神）；图标库 = 传令 → **Keryx**（传令官）。
 
 ### 1.2 三条硬纪律
 
@@ -69,8 +76,8 @@
 
 | 代号 | 神职映射 | 模块 / 方案 | 状态 | 出处 |
 |---|---|---|---|---|
-| **Morpheus** | 梦神，morph- 形变（↔ protean） | 声明式动画引擎 | 🟡 | `docs/Proteus_声明式动画引擎Morpheus方案.md` |
-| **Themis** | 正义女神，天衡/律法 = 裁决 | 多端一致 CSS 引擎（G-61 产品白皮书） | 🟡 | `docs/Proteus_Themis多端一致CSS引擎产品白皮书.md` |
+| **Kairos** | καιρός「恰当时机」= 动画即「在正确的时间产生正确的变化」（时间轴/缓动/编排） | 声明式动画引擎（原 Morpheus，2026-10-20 因 npm 同名动画库排除） | 🟡 待正式商标检索（★npm 粗查：`kairos` = 时间计算器，非动画/UI 域） | `docs/Proteus_声明式动画引擎Kairos方案.md` |
+| **Themis** | 正义女神，天衡/律法 = 裁决 | 多端一致 CSS 引擎（G-61 产品白皮书） | 🟡 待正式商标检索（★npm 粗查 2026-10-20：`themis` = JSON Schema 校验器 67/周 · `wasm-themis` = 加密库 7.5k/周——**均非 CSS/样式/UI 引擎域**，不构成排除） | `docs/Proteus_Themis多端一致CSS引擎产品白皮书.md` |
 
 ### L3 · 能力 / 组件层
 
@@ -78,8 +85,8 @@
 |---|---|---|---|---|
 | **Hephaestus** | 火神/工匠 = 锻造开箱即用的原生能力 | 高频原生能力组件 | 🟡 | `docs/Proteus_高频原生能力组件方案.md` |
 | **Charites** | 美惠三女神 = 美与优雅的系统化 | OS 级组件库（对外品牌 **Proteus UI**） | 🟡 | `docs/Proteus_OS级组件库方案.md` |
-| **Keryx** | 传令官（Hermes 职能替代）= 图标即传令 | OS 级图标库 | 🟡 | `docs/Proteus_OS级图标库方案.md` |
-| **Aether** | 原初之神，澄澈上层天光/光之介质 = 通透的承光外壳 | 液态玻璃系统组件库（`lg-*`） | 🟡 | `docs/Proteus_液态玻璃系统组件库方案.md` |
+| **Keryx** | 传令官（Hermes 职能替代）= 图标即传令 | OS 级图标库 | 🟡 待正式商标检索（★npm 粗查 2026-10-20：`keryx` = MCP/API 全栈 TS 框架 182/周 · `@mrciphersmith/keryx` = AI 编码 agent 工具 3075/周——**均非图标/UI 图标库域**，不构成排除） | `docs/Proteus_OS级图标库方案.md` |
+| **Aether** | 原初之神，澄澈上层天光/光之介质 = 通透的承光外壳 | 液态玻璃系统组件库（`lg-*`） | 🟡 待正式商标检索（★npm 粗查 2026-10-20：`aether` = JS 教学转译工具 86/周 · GitHub 高星同名多为**网络/翻墙隧道**项目——**均非 UI/渲染/图形域**，不构成排除） | `docs/Proteus_液态玻璃系统组件库方案.md` |
 | **Janus** | 罗马双面门神（一面朝原生/一面朝 JS）= 双向复用 | 原生资产复用与统一开发体验 | ✅ | `docs/Proteus_原生资产复用与统一开发体验方案.md` |
 | **Dactyl** | Δάκτυλοι"手指一族" = 触摸当第一公民 | 交互视觉反馈极限压测 / 性能验收 | ✅ | `docs/proteus-performance-plan/15-dactyl-demo.md` |
 
@@ -87,7 +94,7 @@
 
 | 代号 | 神职映射 | 模块 / 方案 | 状态 | 出处 |
 |---|---|---|---|---|
-| **Apollo** | 光明与真理之神，兼管医药与预言 = 诊断 | 构建与编译错误语义化诊断 | 🟡 | `docs/Proteus_构建与编译错误语义化诊断方案.md` |
+| **Apollo** | 光明与真理之神，兼管医药与预言 = 诊断 | 构建与编译错误语义化诊断 | 🟡 待正式商标检索（★npm 粗查 2026-10-20：`@apollo/server` 等为 **GraphQL 生态**，150 万/周——**非编译诊断域**；但 Apollo 品牌认知极强 ⇒ 对外建议只用职能描述"诊断器"） | `docs/Proteus_构建与编译错误语义化诊断方案.md` |
 | **Helios** | 全视太阳神 = 编译期"看得见一切" | 业务代码跨端调试 | 🔵 暂定 | `docs/Proteus_业务代码跨端调试方案.md` |
 | **Clio** | 九缪斯之一，掌历史与记录 = 埋点/数据 | 业务埋点采集与多端口径统一 | 🟡 | `docs/Proteus_业务埋点采集与多端口径统一方案.md` |
 | **Mnemosyne** | 记忆女神 = 记账/归因/死前留档 | 全链路内存安全与可归因性 | 🟡 | `docs/Proteus_全链路内存安全与可归因性方案.md` |
@@ -112,10 +119,10 @@
 
 | 神名 | 排除原因 | 出处 |
 |---|---|---|
-| **Iris** | iris-engine（Rust+Vue3 动画引擎）领域高度重合 | Morpheus 方案 §1.3 · 图标库方案 |
-| **Kinesis** | Kinesis.js（前端动画库）两次占用 | Morpheus 方案 §1.3 |
-| **Triton** | NVIDIA Triton 跨领域强占用 | Morpheus 方案 §1.3 |
-| **Hermes** | Hermes JS 引擎重名 | Morpheus 方案 §1.3 · 图标库方案 |
+| **Iris** | iris-engine（Rust+Vue3 动画引擎）领域高度重合 | Kairos 方案 §1.3 · 图标库方案 |
+| **Kinesis** | Kinesis.js（前端动画库）两次占用 | Kairos 方案 §1.3 |
+| **Triton** | NVIDIA Triton 跨领域强占用 | Kairos 方案 §1.3 |
+| **Hermes** | Hermes JS 引擎重名 | Kairos 方案 §1.3 · 图标库方案 |
 | **Argus** | **仓内撞名**（已登记为 Mnemosyne 备选） | Themis 白皮书 §1 |
 | **Harmonia** | 与 **HarmonyOS** 谐音（鸿蒙语境致命混淆） | Charites 白皮书 §1 |
 | **Athena** | AWS Athena 强占用 | Charites 白皮书 §1 |
@@ -127,6 +134,7 @@
 | **Logos** | Logos Bible Software 强占用 + 泛词不可寻址 | 图标库方案 §1.3 |
 | **Hyaleos / Krystallos** | 玻璃/水晶 = **普通名词（材质），非神名**，破 N-1 | 玻璃方案 §1.3（#878） |
 | **Aegis / Vitreus / GlassUI** | 盾（非玻璃）/ 拉丁语破例 / 不可寻址 | 玻璃方案 §1.3 |
+| **Morpheus** | ★**npm 上 `morpheus` 这个包就是「A Brilliant Animator」（JS 动画库）**，与本仓"声明式动画引擎"领域**完全重合**；另有 `alexk111/SVG-Morpheus`（2.7k★ SVG morphing）、`ded/morpheus`（501★ 动画库）⇒ 按 §2-4 排除（同 Iris 先例）。**2026-10-20 改名 Kairos（决策 #1108）** | 命名规范 §3 更名记录 |
 
 ---
 
@@ -143,7 +151,7 @@
 
 | 主代号 | 备选 | 出处 |
 |---|---|---|
-| Morpheus | **Thetis**（最干净）· **Kairos** | Morpheus 方案 §1 |
+| Kairos | **Thetis**（最干净）· **Kairos** | Kairos 方案 §1 |
 | Themis | **Panoptes**（百眼巨人本名） | Themis 白皮书 §1 |
 | Hephaestus | **Talos**（青铜自动机） | 高频原生能力组件方案 §1 |
 | Charites | **Parthenon** · **Kallos** | OS 级组件库方案 §1 |

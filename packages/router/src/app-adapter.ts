@@ -56,7 +56,7 @@ export interface AppNavigationAdapterOptions {
  *   switchTab  → stack.tab（清栈换根，无转场）
  *   navigateBack → stack.pop(delta)（栈深保底 1 屏——`AppStack.pop` 自带夹取）
  * ★`routeType`（自定义路由）当前被忽略：App 端转场来自屏声明（`meta.transition`），
- *   由执行器经 Morpheus 播放——无需与 Skyline 的 routeType 同构（文档 §3.3「App 端可解除的硬限制」）。
+ *   由执行器经 Kairos 播放——无需与 Skyline 的 routeType 同构（文档 §3.3「App 端可解除的硬限制」）。
  *
  * ★★使用纪律（**测试实测踩到，必须知道**）：`router.push/replace/reLaunch` 是 **async**——
  *   内部 await 转场完成（App 转场是异步的：命令流 → 执行器 → 宿主帧循环播完 → 回推）。

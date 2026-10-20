@@ -53,7 +53,7 @@ function end3d(
   return last
 }
 
-describe('Morpheus 炫技场 · 第三个节目（维度折叠）', () => {
+describe('Kairos 炫技场 · 第三个节目（维度折叠）', () => {
   it('整场能走完：9 幕名序齐全（plane … finale）', () => {
     const { acts, plan } = walkAll()
     expect(acts.map((a) => a.name)).toEqual(plan)

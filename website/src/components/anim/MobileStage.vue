@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// website/src/components/anim/MobileStage.vue —— ★★Morpheus 手机舞台（真引擎指令驱动）
+// website/src/components/anim/MobileStage.vue —— ★★Kairos 手机舞台（真引擎指令驱动）
 //
 // 【与产品页的关系（这一块是招牌视觉）】产品页的"转场播放器"就是它：
 //   两页真实卡片叠放，由**引擎给出的指令**驱动——不是 CSS 手写动画、不是示意图。
@@ -150,7 +150,7 @@ defineExpose({ play, stop, playing })
       <p-view class="phone-screen">
         <!-- 下层页（列表）：back 时它是"返回目标"（播 incoming 的复位） -->
         <p-view class="pane pane--b" :style="{ ...paneStyle(listAnims, tMs), zIndex: 1 }">
-          <p-view class="bar"><span class="bar-title">Morpheus</span><span class="bar-dot" /></p-view>
+          <p-view class="bar"><span class="bar-title">Kairos</span><span class="bar-dot" /></p-view>
           <p-view class="hero-art" />
           <p-view class="list-row"><span class="row-line row-line--w1" /><span class="row-line row-line--w2" /></p-view>
           <p-view class="list-row"><span class="row-line row-line--w3" /><span class="row-line row-line--w2" /></p-view>
@@ -161,7 +161,7 @@ defineExpose({ play, stop, playing })
           <!-- sheet 形态：半屏面板（拖拽手柄 + 面板头 + 选项行 + 主按钮） -->
           <template v-if="shape === 'sheet'">
             <span class="sheet-handle" />
-            <p-view class="sheet-head"><span class="sheet-title">Share</span><span class="sheet-sub">Morpheus</span></p-view>
+            <p-view class="sheet-head"><span class="sheet-title">Share</span><span class="sheet-sub">Kairos</span></p-view>
             <p-view class="sheet-row"><span class="row-ic" /><span class="row-line row-line--w1" /></p-view>
             <p-view class="sheet-row"><span class="row-ic" /><span class="row-line row-line--w3" /></p-view>
             <p-view class="sheet-row"><span class="row-ic" /><span class="row-line row-line--w2" /></p-view>
@@ -170,7 +170,7 @@ defineExpose({ play, stop, playing })
           <!-- page 形态：全屏详情页 -->
           <template v-else>
             <p-view class="bar bar--brand"><span class="bar-back">‹</span><span class="bar-title">Detail</span><span class="bar-dot bar-dot--brand" /></p-view>
-            <p-view class="detail-art"><span class="art-chip">Morpheus</span></p-view>
+            <p-view class="detail-art"><span class="art-chip">Kairos</span></p-view>
             <p-view class="text-line text-line--title" />
             <p-view class="text-line" /><p-view class="text-line text-line--short" />
             <p-view class="cta-row"><span class="cta-pill" /></p-view>

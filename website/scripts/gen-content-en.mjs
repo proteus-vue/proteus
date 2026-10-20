@@ -1288,7 +1288,7 @@ export const LIFECYCLE_SRC_EN = {
     ready: { mp: 'Page.onReady (dispatched by compiled output)', web: 'first frame after load (rAF)', app: 'first frame of the screen' },
     hide: { mp: 'Page.onHide (dispatched by compiled output)', web: 'visibilitychange→hidden', app: 'stack exit command / shell pause' },
     unload: { mp: 'Page.onUnload (dispatched by compiled output)', web: 'beforeunload', app: 'stack unmount command' },
-    'route-done': { mp: 'Page.onRouteDone (base library 2.32.1+)', web: 'transitionend (pushed by the router layer)', app: 'Morpheus transition finished' },
+    'route-done': { mp: 'Page.onRouteDone (base library 2.32.1+)', web: 'transitionend (pushed by the router layer)', app: 'Kairos transition finished' },
     'pull-down-refresh': { mp: 'Page.onPullDownRefresh', web: null, app: 'host pull gesture' },
     'reach-bottom': { mp: 'Page.onReachBottom', web: 'scroll within 50px of bottom', app: 'scrolled to bottom' },
     'page-scroll': { mp: 'Page.onPageScroll', web: 'scroll (rAF-throttled)', app: 'scroll callbacks' },

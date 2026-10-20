@@ -1,5 +1,5 @@
 // packages/animation/src/escape.ts
-// ★★Morpheus §4.2 —— **逃生口**（编译层覆盖不了的，必须走显式通道且**可统计**）
+// ★★Kairos §4.2 —— **逃生口**（编译层覆盖不了的，必须走显式通道且**可统计**）
 //
 // 【为什么必须有（§4.2 原文）】"编译层覆盖不了的（自定义缓动、复杂编排），必须走**显式逃生口**，
 //   且逃生口要**可统计**（与 UC0 的漏点统计同构）：记为 `degraded`（行为可能不一致）——**最高危险度**；
@@ -157,7 +157,7 @@ export class EscapeRegistry {
   format(): string {
     const s = this.summary()
     const lines: string[] = []
-    lines.push('═══ Morpheus 逃生口报告 ═══')
+    lines.push('═══ Kairos 逃生口报告 ═══')
     lines.push(
       `声明式 ${s.declaratives} 条 · 逃生口 ${s.total} 条 · 率 ${
         s.total === 0 ? '0%' : `${(s.ratio * 100).toFixed(1)}%`

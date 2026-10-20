@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hosts/android/check-ink-scroll.py —— ★★Morpheus **手卷浏览**（宽卷横移）判据（真机 ink.json）
+"""hosts/android/check-ink-scroll.py —— ★★Kairos **手卷浏览**（宽卷横移）判据（真机 ink.json）
 
 【这一段是什么（用户："对就是你说的那种比较好，现在测试横屏体验有些差"→ 第二版设计）】
   画布 **3.2 屏宽**（`scrollCanvasWidth`），山水横向铺开；手指 1:1 跟手（宿主画布
@@ -45,7 +45,7 @@ def main() -> int:
         print("  ⇒ 诚实跳过（跑真机后取回）：bash hosts/android/run-ink-scroll.sh")
         return 0
 
-    print(f"═══ Morpheus 手卷浏览判据（宽卷横移 · 卷轴补偿 · 真机）：{path} ═══")
+    print(f"═══ Kairos 手卷浏览判据（宽卷横移 · 卷轴补偿 · 真机）：{path} ═══")
     ok = True
     with open(path, encoding="utf-8") as f:
         d = json.load(f)

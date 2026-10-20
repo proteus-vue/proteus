@@ -117,7 +117,7 @@ function clipFrom(
   return out.length > 0 ? out : null
 }
 
-describe('Morpheus 炫技场 · 第四个节目（墨绘·山水卷）', () => {
+describe('Kairos 炫技场 · 第四个节目（墨绘·山水卷）', () => {
   it('整场能走完：13 幕名序齐全（unfurl … close）', () => {
     const { acts, plan } = walkAll()
     expect(acts.map((a) => a.name)).toEqual(plan)

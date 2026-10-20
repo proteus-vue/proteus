@@ -1,4 +1,4 @@
-// hosts/shared/bridge/showcase-flip.ts —— ★★Morpheus 炫技场 · **第三个节目：维度折叠**
+// hosts/shared/bridge/showcase-flip.ts —— ★★Kairos 炫技场 · **第三个节目：维度折叠**
 //
 // 【这一场是什么（用户："从 3D 和 2D 之间不断转换的主题考虑，综合新增能力做到天花板"）】
 //   舞台是一屏 800 张"薄片"（20×40 网格）。整场演出 = **二维平面宇宙与三维立体空间的

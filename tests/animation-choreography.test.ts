@@ -1,6 +1,6 @@
 // tests/animation-choreography.test.ts —— ★★声明式编排层（choreograph）的单测
 //
-// 【为什么这些断言值钱（Morpheus 的"编排"主张）】编舞此前靠调用方**手写循环**算相位——
+// 【为什么这些断言值钱（Kairos 的"编排"主张）】编舞此前靠调用方**手写循环**算相位——
 //   而这个仓库的立场是：能收敛进引擎的，不留给调用方（手写相位错了不会报错，只是"有点不齐"）。
 //   ⇒ 本测试钉住三件事：
 //   ① 相位序是**可判定**的（名次、tie-break、同输入同输出）；
@@ -21,7 +21,7 @@ import type { AnimDecl } from '@proteus-vue/animation'
 /** 6 片、3 列的规整网格（行 0-1），便于手算名次 */
 const N6_COLS3 = 6
 
-describe('Morpheus 编排层 · 相位序（staggerRanks）', () => {
+describe('Kairos 编排层 · 相位序（staggerRanks）', () => {
   it('index：名次 = 序号（最朴素）', () => {
     expect(staggerRanks(5, 3, 'index')).toEqual([0, 1, 2, 3, 4])
   })
@@ -65,7 +65,7 @@ describe('Morpheus 编排层 · 相位序（staggerRanks）', () => {
   })
 })
 
-describe('Morpheus 编排层 · 编译（compileChoreography）', () => {
+describe('Kairos 编排层 · 编译（compileChoreography）', () => {
   const ids = [10, 11, 12, 13]
   const canvas = { cols: 2, view: { width: 400, height: 800 }, centers: ids.map((_, i) => ({ x: 50 + i * 100, y: 100 })) }
 
@@ -98,7 +98,7 @@ describe('Morpheus 编排层 · 编译（compileChoreography）', () => {
   })
 })
 
-describe('Morpheus 编排层 · 构型预设（真编译产物）', () => {
+describe('Kairos 编排层 · 构型预设（真编译产物）', () => {
   const ids = Array.from({ length: 6 }, (_, i) => 1000 + i)
   const canvas = {
     cols: 3,
@@ -246,7 +246,7 @@ describe('Morpheus 编排层 · 构型预设（真编译产物）', () => {
   })
 })
 
-describe('Morpheus 编排层 · 点阵字体（bitmap-font）', () => {
+describe('Kairos 编排层 · 点阵字体（bitmap-font）', () => {
   it('未知字符按空格处理（不抛错）；小写转大写', () => {
     const a = textBitmap('a~')
     const b = textBitmap('A ')
@@ -290,7 +290,7 @@ describe('Morpheus 编排层 · 点阵字体（bitmap-font）', () => {
   })
 })
 
-describe('Morpheus 编排层 · 聚字的点距与点大小（真机截图两轮打磨）', () => {
+describe('Kairos 编排层 · 聚字的点距与点大小（真机截图两轮打磨）', () => {
   const ids = Array.from({ length: 60 }, (_, i) => 4000 + i)
   const canvas = {
     cols: 10,

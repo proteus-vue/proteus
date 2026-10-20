@@ -1,5 +1,5 @@
 // packages/animation/src/bitmap-font.ts
-// ★★Morpheus —— **5×7 点阵字形表**（"文字构型"的数据源；供 `choreograph.text` 使用）
+// ★★Kairos —— **5×7 点阵字形表**（"文字构型"的数据源；供 `choreograph.text` 使用）
 //
 // 【为什么字体属于引擎而不是 demo 资产】"让一组元素聚成一个词"是**通用编排构型**
 //   （空状态引导语 / 加载完成提示 / 庆祝动画），不是某一场演示的私有视觉。

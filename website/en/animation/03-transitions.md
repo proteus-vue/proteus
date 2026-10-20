@@ -14,7 +14,7 @@ The same `meta: { transition: 'halfScreen' }` in the source is honoured three di
 |---|---|---|
 | Web | CSS transition name (`slide-up` / `slide-down` / `halfscreen` / `scale`) | `WEB_TRANSITION_MAP` |
 | WeChat Mini Program | `navigateTo({ routeType })` platform identifier | `MP_ROUTE_TYPE_MAP` |
-| App | **Morpheus drives it directly** (no name is handed to the platform) | `APP_TRANSITION_MAP` → kernel animation |
+| App | **Kairos drives it directly** (no name is handed to the platform) | `APP_TRANSITION_MAP` → kernel animation |
 
 The key sets of the three tables are **cross-checked per target** (a test loads all three and compares them) — if the enum grows and any target misses a member, the gate turns red immediately.
 

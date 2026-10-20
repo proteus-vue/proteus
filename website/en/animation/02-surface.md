@@ -6,7 +6,7 @@ group: Usage
 
 # Declaration surface
 
-Morpheus exposes exactly one package: **`@proteus-vue/animation`** (declare + validate + compile — pure functions, zero runtime dependencies). It deliberately does not do three things: it does not hold animation state, does not do curve math, and does not touch platform APIs.
+Kairos exposes exactly one package: **`@proteus-vue/animation`** (declare + validate + compile — pure functions, zero runtime dependencies). It deliberately does not do three things: it does not hold animation state, does not do curve math, and does not touch platform APIs.
 
 ## Loop: declare → validate → compile → instructions
 
@@ -112,7 +112,7 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
 
 ## Preset library (13 entries)
 
-Presets over parameters — common motions are one-liners. The full catalogue (with “when to use” and “how to verify”) lives in the the Morpheus declaration manual (repo artifact `docs/generated/anim-manual.md`).
+Presets over parameters — common motions are one-liners. The full catalogue (with “when to use” and “how to verify”) lives in the the Kairos declaration manual (repo artifact `docs/generated/anim-manual.md`).
 
 | Category | Presets | One-liner |
 |---|---|---|

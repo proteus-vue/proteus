@@ -455,7 +455,7 @@ public class MainActivity extends Activity {
             writeReport("layout-report.txt", sb.toString());
         } else if ("lights".equals(testPath) || "flip".equals(testPath) || "ink".equals(testPath)
                 || "inkScroll".equals(testPath)) {
-            // ★★Morpheus 炫技场：灯光秀 / 翻牌剧场 / 墨绘·山水卷 / **长卷探索（滚动驱动）**
+            // ★★Kairos 炫技场：灯光秀 / 翻牌剧场 / 墨绘·山水卷 / **长卷探索（滚动驱动）**
             //   ——同一宿主与 kernel-anim 同一时序纪律：重活让出主线程后再开演（见上一分支的注释）
             final boolean isFlip = "flip".equals(testPath);
             final boolean isInk = "ink".equals(testPath);
@@ -463,12 +463,12 @@ public class MainActivity extends Activity {
             final String prog = isFlip ? "flip" : isInk || isInkScroll ? (isInkScroll ? "inkScroll" : "ink") : "lights";
             final String rep = isFlip ? "flip.json" : isInk || isInkScroll ? "ink.json" : "lights.json";
             sb.append(isFlip
-                    ? "【Morpheus 翻牌剧场（任意缓动 × 3D 翻转 × 循环 × 慢动作）】\n"
+                    ? "【Kairos 翻牌剧场（任意缓动 × 3D 翻转 × 循环 × 慢动作）】\n"
                     : isInkScroll
-                        ? "【Morpheus 长卷探索（滚动驱动 · 手势横移整幅山水长卷）】\n"
+                        ? "【Kairos 长卷探索（滚动驱动 · 手势横移整幅山水长卷）】\n"
                         : isInk
-                            ? "【Morpheus 墨绘·山水卷（C1 裁剪揭示 × C2 SVG 描边——水墨长卷自己画出来）】\n"
-                            : "【Morpheus 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
+                            ? "【Kairos 墨绘·山水卷（C1 裁剪揭示 × C2 SVG 描边——水墨长卷自己画出来）】\n"
+                            : "【Kairos 灯光秀（800 灯颜色编舞 · QuickJS 驱动内核动画）】\n");
             new android.os.Handler(android.os.Looper.getMainLooper())
                     .postDelayed(new Runnable() { public void run() { lightsRun(prog, rep, false); } }, 300);
             // ★★长卷探索：**自驱动**（手势 + 收尾都在进程内——不依赖 `adb input` 注入，
@@ -1729,7 +1729,7 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * ★★**Morpheus 灯光秀**场景入口（第二个炫技节目 · 800 灯颜色编舞）。
+     * ★★**Kairos 灯光秀**场景入口（第二个炫技节目 · 800 灯颜色编舞）。
      *
      * 【链路】assets `bundle-lights.js`（真实 `showcase-lights.ts` 节目单打进 QuickJS）
      *   → `evalWithHost` 注入 `LightsHost`（动画桥）→ `__proteusLightsRun` 建树 + 建节目单

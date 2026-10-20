@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hosts/android/check-flip.py —— ★★Morpheus 第三个节目「翻牌剧场」判据（真机产物 flip.json）
+"""hosts/android/check-flip.py —— ★★Kairos 第三个节目「翻牌剧场」判据（真机产物 flip.json）
 
 【这一场验收什么（用户："从 3D 和 2D 之间不断转换的主题考虑，综合新增能力做到天花板"）】
   第三个节目「**维度折叠**」= 二维平面宇宙 ↔ 三维立体空间的反复穿越；**颜色 = 第三维度的
@@ -42,7 +42,7 @@ def main() -> int:
         print("  ⇒ 诚实跳过（跑真机后取回）：adb shell am broadcast -a dev.proteus.RUN --es path flip")
         return 0
 
-    print(f"═══ Morpheus 维度折叠判据（2D↔3D 穿越 × 任意缓动 × 循环 × 慢动作 · Android 真机）：{path} ═══")
+    print(f"═══ Kairos 维度折叠判据（2D↔3D 穿越 × 任意缓动 × 循环 × 慢动作 · Android 真机）：{path} ═══")
     ok = True
     with open(path, encoding="utf-8") as f:
         d = json.load(f)

@@ -167,7 +167,7 @@ onUnmounted(() => {
           <SigilSvg ref="sigil" :size="220" />
         </div>
         <div class="op-title-wrap">
-          <h1 ref="titleEl" class="op-title">Morpheus</h1>
+          <h1 ref="titleEl" class="op-title">Kairos</h1>
           <p ref="subEl" class="op-sub">声明式动画引擎 · 一份声明 → 任意宿主</p>
         </div>
       </div>

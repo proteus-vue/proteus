@@ -25,7 +25,7 @@
 
 > ★命名体系**完整规范 + 总览**见 **`docs/Proteus_万神殿命名规范.md`**（决策 #879）——本模块取名须符合其纳名纪律（N-1 只收神话神名 / N-2 体系内不得撞名 / N-3 定名前须商标检索）。
 
-框架神名体系：Proteus（千变万化）· Morpheus（形变/动画）· Themis（律法/CSS）· Hephaestus（锻造/能力）· Janus（双面/原生资产）· Keryx（传令/图标）· Charites（美惠/组件库）· Mnemosyne（记忆/可归因）· Helios（全视/调试）。
+框架神名体系：Proteus（千变万化）· Kairos（时机/动画）· Themis（律法/CSS）· Hephaestus（锻造/能力）· Janus（双面/原生资产）· Keryx（传令/图标）· Charites（美惠/组件库）· Mnemosyne（记忆/可归因）· Helios（全视/调试）。
 本方案 = **通透的承光外壳**——神职是"**让光透过、覆于万物而万物在其下可见的介质**"。主推 **Aether**（Αἰθήρ）。
 
 | 候选 | 语义 / 神职映射 | 评估 |
@@ -37,7 +37,7 @@
 | ❌ 排除 **Eos** | Ἠώς，黎明——"光漫开" | 外部撞名 EOS（区块链）/ EOS 相机 ⇒ 排除 |
 | ❌ 排除 **Metis** | Μῆτις，智慧/技艺 | 外部撞名 Metis JS 框架 ⇒ 排除 |
 | ❌ 排除 ~~Hyaleos / Krystallos~~ | ὕαλος / κρύσταλλος = 玻璃 / 水晶（**普通名词，非神名**） | **破万神殿命名纪律**（本体系全为神名/泰坦）；用户裁定改神名 ⇒ 弃用 |
-| ❌ 排除 ~~Iris / Hermes / Kinesis / Triton / Argus~~ | —— | 本仓**已裁定排除**（Iris=iris-engine 撞名 Rust+Vue3；Hermes=JS 引擎；Kinesis/Triton/Argus 见 Morpheus/Themis 白皮书） |
+| ❌ 排除 ~~Iris / Hermes / Kinesis / Triton / Argus~~ | —— | 本仓**已裁定排除**（Iris=iris-engine 撞名 Rust+Vue3；Hermes=JS 引擎；Kinesis/Triton/Argus 见 Kairos/Themis 白皮书） |
 | ❌ 排除 ~~Aegis / Vitreus / GlassUI~~ | 盾（非玻璃）/ 拉丁语系（破例）/ 不可寻址 | —— |
 
 > ★**Aether 的神职映射（一句话）**：Aether 是"**光得以穿行的高层澄澈之气**"——正如玻璃是"**光得以穿行、而背后万物可见的介质**"。`lg-*` 组件把应用"覆"在一层这样的介质之下（系统外壳），故取此名。

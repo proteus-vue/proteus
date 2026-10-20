@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hosts/android/check-ink.py —— ★★Morpheus 第四个节目「墨绘·山水卷」判据（真机产物 ink.json）
+"""hosts/android/check-ink.py —— ★★Kairos 第四个节目「墨绘·山水卷」判据（真机产物 ink.json）
 
 【这一场验收什么（用户："这个新增能力可以做单独的节目吗？"——C1 裁剪形变 × C2 SVG 描边）】
   一幅水墨长卷**自己画出来**：展卷 → 远山落笔 → 江水涨潮 → 明月升起 → 云海翻涌 →
@@ -43,7 +43,7 @@ def main() -> int:
         print("  ⇒ 诚实跳过（跑真机后取回）：adb shell am broadcast -a dev.proteus.RUN --es path ink")
         return 0
 
-    print(f"═══ Morpheus 墨绘·山水卷判据（C1 裁剪揭示 × C2 SVG 描边 · Android 真机）：{path} ═══")
+    print(f"═══ Kairos 墨绘·山水卷判据（C1 裁剪揭示 × C2 SVG 描边 · Android 真机）：{path} ═══")
     ok = True
     with open(path, encoding="utf-8") as f:
         d = json.load(f)

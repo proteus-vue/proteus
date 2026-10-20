@@ -7677,7 +7677,7 @@
     "anim_preset" : {
       "compiled_count" : 1,
       "composited" : true,
-      "dup_rejected" : "Morpheus 动画声明校验失败：[duplicate-kind] #1 同一批次里 `scale` 出现了多次（内核对同 (节点,属性) 是**替换**语义",
+      "dup_rejected" : "Kairos 动画声明校验失败：[duplicate-kind] #1 同一批次里 `scale` 出现了多次（内核对同 (节点,属性) 是**替换**语义",
       "end_ty" : 0,
       "mid_ty" : 150.37065124511719,
       "nodes" : [
@@ -7971,7 +7971,7 @@
       "bg200_ty" : -80,
       "bg400_ty" : -160,
       "bgSync_ty" : -40,
-      "degenerate_rejected" : "Morpheus 动画声明校验失败：[invalid-range] #0 滚动窗口退化（to=100 <= from=3",
+      "degenerate_rejected" : "Kairos 动画声明校验失败：[invalid-range] #0 滚动窗口退化（to=100 <= from=3",
       "last_active" : 3,
       "last_changed" : 2,
       "nodes" : [
@@ -8003,7 +8003,7 @@
         "parallax" : "scrollParallax",
         "sticky" : "scrollSticky"
       },
-      "scroll_spring_rejected" : "Morpheus 动画声明校验失败：[conflicting-easing] #0 滚动驱动与弹簧物理并存 —— 弹簧的",
+      "scroll_spring_rejected" : "Kairos 动画声明校验失败：[conflicting-easing] #0 滚动驱动与弹簧物理并存 —— 弹簧的",
       "start" : {
         "delayed" : 0,
         "keyframes" : 0,

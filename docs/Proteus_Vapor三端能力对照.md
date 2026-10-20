@@ -202,7 +202,7 @@ iOS 此前只有 `--vapor-ab`（跑 `mode:'ab'`，判据集 = A/B ④⑦），**
 
 现象：用户报"App 打开是白屏"。取证后发现设备前台跑的是 **`ProteusBench`**
 （bundle id = `dev.proteus.layoutcore`，**基准 App，界面本来就空白**——只写 JSON 报告）；
-而主 App 是 **`dev.proteus.experiments`**（Morpheus 炫技场）。
+而主 App 是 **`dev.proteus.experiments`**（Kairos 炫技场）。
 根因：调试命令用了 `dev.proteus.layoutcore`（以为是主 App），把它启动到前台并留着。
 ⇒ 终止误启进程 + 用正确 bundle id 启动，截图核验 MORPHEUS 动画正常（**主 App 无缺陷**）。
 ★教训：**同名/近名 App 的 bundle id 必须写死用途**（"哪个是面板、哪个是基准"），

@@ -1,4 +1,4 @@
-// hosts/shared/bridge/showcase-program.ts —— ★★Morpheus 炫技场 · **节目单**（声明式编排）
+// hosts/shared/bridge/showcase-program.ts —— ★★Kairos 炫技场 · **节目单**（声明式编排）
 //
 // 【这一场是什么（用户要求）】「演示结束太快了，做成开场语 + 几分钟演出 + 谢幕语，
 //   全部都是这 800 节点编舞完成」＋ 评审意见「那 800 片的相位关系，是手写循环算出来的，

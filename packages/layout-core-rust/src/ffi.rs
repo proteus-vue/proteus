@@ -3882,7 +3882,7 @@ pub extern "C" fn proteus_layout_anim_tick(handle: u64, dt_ms: f32) -> *mut c_ch
     }
 }
 
-/// ★★RT2 —— **按节点批量停动画**（Morpheus §7.3「节点回收必须解绑」的实现面）
+/// ★★RT2 —— **按节点批量停动画**（Kairos §7.3「节点回收必须解绑」的实现面）
 ///
 /// 入参 JSON：`{"nodeIds":[1,2,3]}`
 /// 返回：`{"ok":true,"removed":N}`（N = 实际移除的动画数，供宿主对账"真的解绑了"）
@@ -4098,12 +4098,12 @@ pub unsafe extern "C" fn proteus_layout_anim_commit_spec(handle: u64, json: *con
     }
 }
 
-/// ★★**FLIP 布局动画**（招牌能力，Morpheus §5）—— 记快照 / 启动补间
+/// ★★**FLIP 布局动画**（招牌能力，Kairos §5）—— 记快照 / 启动补间
 ///
 /// 入参：`{"op":"capture"}` 或 `{"op":"start","durMs":300,"curve":1,"staggerMs":0}`
 /// 返回：`{"ok":true,"captured":N}` 或 `{"ok":true,"animated":N,"maxDeltaPx":D}`
 ///
-/// 【为什么这是招牌（Morpheus §5）】传统 FLIP 要前后各读一次几何（**跨边界查询**，VDOM 框架里很贵）；
+/// 【为什么这是招牌（Kairos §5）】传统 FLIP 要前后各读一次几何（**跨边界查询**，VDOM 框架里很贵）；
 ///   而本仓几何**本来就在内核** ⇒ 两次快照都是内部读，**零跨边界、零 JS**。
 ///   「列表项增删时其他项平滑让位」这种效果因此几乎白送。
 ///

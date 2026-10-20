@@ -1,5 +1,5 @@
 // hosts/ios/ProteusHost/dev/showcase-scene.swift
-// ★★Morpheus 炫技场（iOS 宿主壳）—— `--showcase` 模式
+// ★★Kairos 炫技场（iOS 宿主壳）—— `--showcase` 模式
 //
 // 【这一场做什么（与 JS 侧分工）】
 //   JS 侧（`hosts/shared/bridge/showcase-program.ts` + `entry-showcase.ts`）负责"编舞"——

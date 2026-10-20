@@ -8,8 +8,8 @@
 // ★#389c 滚动上下文：顶部渐变进度条（scaleX 合成器）+ 导航滚动态（scrolled 投影）
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-// ★活的徽记：全站常驻的 Morpheus HUD（与页面动效**共演**同一批编译产物——见组件头注）
-import MorpheusHud from './components/anim/MorpheusHud.vue'
+// ★活的徽记：全站常驻的 Kairos HUD（与页面动效**共演**同一批编译产物——见组件头注）
+import KairosHud from './components/anim/KairosHud.vue'
 import DocSearch from './DocSearch.vue'
 import BrandMark from './components/BrandMark.vue'
 // ★#449 desktop 原语（豁免回收）：滚动进度/滚动态 = p-scroll-observer
@@ -35,8 +35,8 @@ const links: NavLink[] = [
   { to: '/ecosystem', label: '生态', key: 'ecosystem' },
   { to: '/playground', label: 'Playground', key: 'playground' },
 ]
-/** ★★★决策 #887：招牌「引擎/产品」页收进「引擎▾」下拉（Morpheus / Themis / Aether / 一致性 / Keryx）。
- *   引擎条码（Morpheus 等）为万神殿代号（决策 #879），双语同值；label 走 i18n。 */
+/** ★★★决策 #887：招牌「引擎/产品」页收进「引擎▾」下拉（Kairos / Themis / Aether / 一致性 / Keryx）。
+ *   引擎条码（Kairos 等）为万神殿代号（决策 #879），双语同值；label 走 i18n。 */
 interface EngineLink {
   to: string
   key: string
@@ -44,7 +44,7 @@ interface EngineLink {
   code: string
 }
 const ENGINES: EngineLink[] = [
-  { to: '/animation', key: 'animation', labelKey: 'app.animation', code: 'Morpheus' },
+  { to: '/animation', key: 'animation', labelKey: 'app.animation', code: 'Kairos' },
   { to: '/themis', key: 'themis', labelKey: 'app.themis', code: 'Themis' },
   { to: '/liquid-glass', key: 'liquid-glass', labelKey: 'app.liquidGlass', code: 'Aether' },
   { to: '/consistency', key: 'consistency', labelKey: 'app.consistency', code: 'CS6' },
@@ -258,7 +258,7 @@ watch(() => route.fullPath, () => {
     <main id="main-content" tabindex="-1" v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs, 'is-wide': isWide }">
       <router-view />
       <!-- ★全站常驻：活的徽记（演出监视器；点开看真实读数） -->
-      <MorpheusHud />
+      <KairosHud />
     </main>
 
     <p-view v-p-fluid="'padding(20, 28)'" class="footer">

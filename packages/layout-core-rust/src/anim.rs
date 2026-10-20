@@ -1,5 +1,5 @@
 // packages/layout-core-rust/src/anim.rs
-// ★★RT0/RT2 —— **指令驱动动画的引擎**（Proteus_App端路由与动画系统设计方案 §8 + Morpheus 方案 MA2）
+// ★★RT0/RT2 —— **指令驱动动画的引擎**（Proteus_App端路由与动画系统设计方案 §8 + Kairos 方案 MA2）
 //
 // 【它解决什么】JS 侧只发**指令**（启动/seek/停止），此后每帧由宿主调一次 `tick(dt)`：
 //   曲线求值、弹簧物理、字段写入**全在 Rust 侧**完成 —— 每帧零 JS 求值、零字符串解析。
@@ -1219,7 +1219,7 @@ pub fn reset_visuals(tree: &mut LayoutTree, node_ids: &[u32]) -> usize {
 ///
 /// 【它回答什么】一批动画能否走**平台渲染线程零参与**路径（提交一次 ⇒ 主线程不再每帧参与）？
 ///   · 全部属性 ∈ 合成集 ⇒ ✅ 可走（`platform_path = true`）
-///   · 含非合成属性 ⇒ ❌ 必须走每帧 tick 路径（或由上层在**编译期**就拦住 —— 见 Morpheus §5-bis.2）
+///   · 含非合成属性 ⇒ ❌ 必须走每帧 tick 路径（或由上层在**编译期**就拦住 —— 见 Kairos §5-bis.2）
 ///
 /// ★为什么判定要在**启动前**做（而不是每帧试探）：平台路径与 tick 路径是**两套提交机制**
 ///   （前者把动画描述交给系统，后者由我们每帧写值）——混用会导致同一属性被两处写（抖动）。
@@ -1880,7 +1880,7 @@ impl AnimEngine {
 
     /// ★★**批量按节点停动画**（RT2/§7.3 节点复用解绑）
     ///
-    /// 【为什么必须有（Morpheus 方案 §7 的架构不变量）】本仓列表复用率 0.997 ⇒ 节点（及其层）
+    /// 【为什么必须有（Kairos 方案 §7 的架构不变量）】本仓列表复用率 0.997 ⇒ 节点（及其层）
     ///   会被回收给**不同的数据项**用。若动画仍绑在旧 node id 上：
     ///   ① 该节点重新物化时会显示"半路的变换"（错误位置）；
     ///   ② 动画永不结束 ⇒ 每帧白算（CPU 浪费）+ 复用后错位。
@@ -2110,7 +2110,7 @@ impl AnimEngine {
 
     /// **记快照**：把当前所有节点的**绝对**矩形存进引擎（供布局变更后对比）
     ///
-    /// 【为什么这是"招牌"（Morpheus §5）】传统 FLIP 要前后各读一次几何（跨边界查询）；
+    /// 【为什么这是"招牌"（Kairos §5）】传统 FLIP 要前后各读一次几何（跨边界查询）；
     ///   而本仓几何**本来就在内核** ⇒ 两次快照都是内部读，零跨边界、零 JS。
     /// - Returns: 快照节点数
     pub fn flip_capture(&mut self, tree: &LayoutTree) -> usize {
@@ -3159,7 +3159,7 @@ mod tests {
     #[test]
     fn all_anim_kinds_are_composited() {
         // ★本引擎的设计选择：只做绘制层变换 ⇒ 全部属性都是合成属性
-        //   （这是"平台渲染线程零参与路径"可用的前提，见 Morpheus §5-bis）
+        //   （这是"平台渲染线程零参与路径"可用的前提，见 Kairos §5-bis）
         for k in [AnimKind::TranslateX, AnimKind::TranslateY, AnimKind::Scale, AnimKind::Rotate, AnimKind::Opacity] {
             assert!(k.is_composited(), "{k:?} 应为合成属性");
         }

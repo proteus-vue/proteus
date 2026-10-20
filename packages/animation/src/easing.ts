@@ -1,5 +1,5 @@
 // packages/animation/src/easing.ts
-// ★★Morpheus —— **手感预设（弹簧）的单一事实来源**
+// ★★Kairos —— **手感预设（弹簧）的单一事实来源**
 //
 // 【为什么独立成文件（2026-09-30 抽出的原因）】
 //   声明式编排层（`choreography.ts`）与预设库（`presets.ts`）都要用它。

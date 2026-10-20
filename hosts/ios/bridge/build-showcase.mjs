@@ -1,4 +1,4 @@
-// hosts/ios/bridge/build-showcase.mjs —— ★★Morpheus 炫技场 bundle（iOS）
+// hosts/ios/bridge/build-showcase.mjs —— ★★Kairos 炫技场 bundle（iOS）
 //
 // 【入口】`hosts/shared/bridge/entry-showcase.ts`（平台中立：只走 proteusSelfDraw 桥）
 // 【产物】hosts/ios/bridge/dist/bundle-showcase.js（被 .app 打包，JSC evaluateScript）

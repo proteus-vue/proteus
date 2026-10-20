@@ -7,7 +7,7 @@
 #   那整条链在 `hosts/ios/run-selfdraw.sh` 里已真机验证过（零轮询完成信号、新鲜度断言、
 #   build_id 断言），直接以 `--stress` 模式复用；这里只做「入库 + 防假绿探针」。
 #
-# 【★bundle id 复用 dev.proteus.experiments（设备上已装的 Morpheus）】
+# 【★bundle id 复用 dev.proteus.experiments（设备上已装的 Kairos）】
 #   免费开发者账号在设备上最多 3 个 dev.proteus.* 应用（实测设备已有 layoutcore/certprobe
 #   /experiments/calayer 多个描述文件与安装位）⇒ 新增 id 装不下；选 experiments：
 #   其描述文件有效（exp 2026-10-08）、且**覆盖安装不增计数**。换 id：

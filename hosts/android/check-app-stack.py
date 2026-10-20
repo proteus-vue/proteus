@@ -196,7 +196,7 @@ def main() -> int:
             except Exception as ex:  # noqa: BLE001
                 fail(f"⑦ 执行器报告读不出：{ex}")
     if need_executor:
-        # 【要证明什么】M5 计划文档自述的剩余工作 =「宿主执行器（真实建/销毁屏子树 + Morpheus 转场接线）」。
+        # 【要证明什么】M5 计划文档自述的剩余工作 =「宿主执行器（真实建/销毁屏子树 + Kairos 转场接线）」。
         #   本组证明**编排层**在真机 QuickJS 上跑通（真栈 + 真执行器 + 真 animation 规划器；
         #   端口是记录桩——真机上的树操作/平台动画由宿主实现，属另一条链，不在本组声称）。
         if d.get("e_pending") is True:

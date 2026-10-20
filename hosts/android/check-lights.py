@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hosts/android/check-lights.py —— ★★Morpheus 灯光秀判据（第二个炫技节目 · Android 真机产物）
+"""hosts/android/check-lights.py —— ★★Kairos 灯光秀判据（第二个炫技节目 · Android 真机产物）
 
 【这一场是什么（用户要求）】「800 个节点编排一场炫丽的灯光秀，考验刚加的颜色能力上限
   （底色 + 文字色双轨、颜色 keyframes），原则和第一个节目一样：炫丽吸睛、
@@ -43,7 +43,7 @@ def main() -> int:
         print("  ⇒ 诚实跳过（跑真机后取回）：adb shell am broadcast -a dev.proteus.RUN --es path lights")
         return 0
 
-    print(f"═══ Morpheus 灯光秀判据（800 灯颜色编舞 · Android 真机）：{path} ═══")
+    print(f"═══ Kairos 灯光秀判据（800 灯颜色编舞 · Android 真机）：{path} ═══")
     ok = True
     with open(path, encoding="utf-8") as f:
         d = json.load(f)

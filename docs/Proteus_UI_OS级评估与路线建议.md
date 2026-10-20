@@ -12,7 +12,7 @@
 
 | 问 | 答 |
 |---|---|
-| 整库从零造？ | ❌ **不成立**。真正稀缺的不是那 1.1 万行组件代码，而是它下面**四层别人凑不齐的底座**：三端一致性可证明（Themis 三层对拍）· 语义 IR 账本（187 原语 + audit 闭环）· 环境自适应与动效引擎（Fluid / Morpheus）· 原生材质与能力（glass / capabilities / gesture）。重写 = 这些全部重做，且**新库若不经过 IR 就失去唯一区分度**（MD3 / ArkUI 是平台自有、不提供"可证明"，我们能）。 |
+| 整库从零造？ | ❌ **不成立**。真正稀缺的不是那 1.1 万行组件代码，而是它下面**四层别人凑不齐的底座**：三端一致性可证明（Themis 三层对拍）· 语义 IR 账本（187 原语 + audit 闭环）· 环境自适应与动效引擎（Fluid / Kairos）· 原生材质与能力（glass / capabilities / gesture）。重写 = 这些全部重做，且**新库若不经过 IR 就失去唯一区分度**（MD3 / ArkUI 是平台自有、不提供"可证明"，我们能）。 |
 | 在 p-\* 上加样式？ | ❌ 也不够。OS 级缺的三样**在 p-\* 里长不出来**：① **两个内核**（弹层/滚动）② **L4 页面骨架/模式层** ③ **材质即身份的族**（玻璃外壳 / 图标）——就地长只会继续制造分叉。 |
 | 那到底做什么？ | ✅ **四件事**：**保留底座** → **把已落地的宪法接上并执法**（token 消费 + 裸值/A11y 门禁）→ **对 p-\* 做减法**（家族收口 79→约 65）**并默认化品质维度** → **对缺失件与材质族另起正交体系**（Aether/Keryx 已是先例）。 |
 | 本轮最重要的新事实 | ★**P0 的"执法载体"已经就位**：`@proteus-vue/tokens`（10-11 落地）+ `check:tokens` 门禁 + **ESLint 层（10-12 决策 #868）**——方案 v1（10-07）当时三者都还没有。窗口期成本最低。 |
@@ -35,7 +35,7 @@
 | 7 | OverlayKernel / ScrollKernel（两个内核） | ⬜ 待做 | ❌ **代码 0 命中**（`OverlayKernel`/`ScrollKernel` 只出现在 4 份 md 里） | ⬜ P0③ 未动 |
 | 8 | 家族分叉（滚动三胞胎 / 弹层五兄弟 / 加载三件 / 导航三件） | 5 组重复 | **14 个组件全在**（p-scroll 44 / p-scroll-view 157 / p-scrollable 82 · p-modal 239 / p-popup 192 / p-popover 186 / p-drawer 127 / p-mask 35 · p-loading 79 / p-loading-host 283 / p-loading-region 103 · p-nav 57 / p-nav-bar 148 / p-tabbar 104） | ⬜ P1 未动 |
 | 9 | A11y 门禁 | 0 门禁（22 文件零散 role/aria） | ❌ **`scripts/*.mjs` 零 a11y 判据、`eslint.config.mjs` 零 a11y 规则**；**23 个**组件文件有零散 role/aria | ⬜ P2 未动 |
-| 10 | 组件动效接 Morpheus 引擎 | 未接（CSS 手写） | ❌ **0 命中**；**19 个 `index.vue` 手写 `animation:`** | ⬜ P2 未动 |
+| 10 | 组件动效接 Kairos 引擎 | 未接（CSS 手写） | ❌ **0 命中**；**19 个 `index.vue` 手写 `animation:`** | ⬜ P2 未动 |
 | 11 | 组件规模 | 79 个 / 11,927 行 | **79 个目录（78 个已发布页）**；`index.vue` 合计 **10,261 行**，p-\* 全部源 **10,977 行** | ≈ 持平（未扩编） |
 | 12 | 材质族另起（Aether / `lg-*`） | —— | ✅ **已立项（决策 #878，10-13）+ 任务板 `T-glass-system-ui-g1`** | ✅ **新事实：先例已立** |
 
@@ -70,11 +70,11 @@
 
 | 处置 | 对象 | 依据 |
 |---|---|---|
-| **留（底座，一行不改）** | Themis 一致性管线 · Fluid 自适应 · Morpheus 动效引擎 · glass 材质 · capabilities（84 Hook）· gesture · PRIMITIVE_CATALOG（187 原语 + audit）· IR 编译链 · Web shim 13 件 · MP 词形对齐面 · `@proteus-vue/tokens` | 别人凑不齐；决策 #878 ⑨ 已立规矩：**引擎（底座）复用 vs 产品（组件体系）新建**要分清 |
+| **留（底座，一行不改）** | Themis 一致性管线 · Fluid 自适应 · Kairos 动效引擎 · glass 材质 · capabilities（84 Hook）· gesture · PRIMITIVE_CATALOG（187 原语 + audit）· IR 编译链 · Web shim 13 件 · MP 词形对齐面 · `@proteus-vue/tokens` | 别人凑不齐；决策 #878 ⑨ 已立规矩：**引擎（底座）复用 vs 产品（组件体系）新建**要分清 |
 | **留（新宪法）** | `@proteus-vue/tokens` + `check:tokens` + **ESLint 层** | 10-11 / 10-12 已落地，**执法载体就位**（这是与方案 v1 最大的环境差异） |
 | **升级 · 执法**（P0 收尾） | ① 组件全量接 `--sa-*`（今天 0）② **裸值 lint**（裸色值/字号/间距/圆角 ⇒ E 报错 + 存量棘轮，接 ESLint）③ `theme` prop 进 `BaseProps` 契约（`packages/components/contracts/props.ts` 现无） | 方案 §4 OS-1「设计语言成法」；`check:tokens` 已示范棘轮写法 |
 | **升级 · 做减法**（P1） | 家族收口：滚动 3 → `ScrollKernel` + `p-scroll-view`（MP 对齐面）· 弹层 5 → `OverlayKernel` 五预设 · 加载 3 → 职责重划（服务态/骨架态/宿主）· 导航 3 → 统一安全区与返回语义。**79 → 约 65** | 14 个组件里 4 组重复；被收编件走 deprecation 棘轮 |
-| **升级 · 品质默认化**（P2） | ① A11y：role/aria **必填清单** + 焦点管理接 fluid focus-nav（`scripts` 与 eslint 现在都是 0）② Motion：19 个手写 `animation:` 改**声明 motion token**（Morpheus 承接，今天 0 命中）③ 触达 44px / 键盘 / RTL 默认项化 ④ 深色截图并排留证 | 方案 §4 OS-2 + §8 验收 |
+| **升级 · 品质默认化**（P2） | ① A11y：role/aria **必填清单** + 焦点管理接 fluid focus-nav（`scripts` 与 eslint 现在都是 0）② Motion：19 个手写 `animation:` 改**声明 motion token**（Kairos 承接，今天 0 命中）③ 触达 44px / 键盘 / RTL 默认项化 ④ 深色截图并排留证 | 方案 §4 OS-2 + §8 验收 |
 | **新建（从零，但只新建该新建的）** | ① `OverlayKernel` / `ScrollKernel` ② L4 页面骨架/模式层 ③ **缺失族**（§5 清单）④ **Aether `lg-*`**（已立项 #878）⑤ **Keryx 图标**（`packages/icons` 已起：`set.ts`/`transform.ts`/`normalize.ts`） | 这些就地长会制造分叉；按 #878 的"**正交不重叠**"证成方式另起 |
 | **废弃** | `p-scroll`（方案已定淘汰，并入 ScrollKernel）· `p-icon` 的 unicode `GLYPHS` 表与 `built-in-components/icon.ts` 手绘集（Keryx 要淘汰）· Web shim 里字面 `#09BB07` 之类裸色 | Koine §8 / Keryx 方案 §淘汰关系 |
 
@@ -92,7 +92,7 @@
 | 手势 | Swipe-to-dismiss · Pull-to-refresh（独立语义）· Carousel/Swiper | 散在 `p-scroll*` 内 · MP 有原生 `swiper`（走词形层） | **缺/未组件化** |
 | 数据展示 | Data table · Tree · Timeline · Accordion | 无 | **缺** |
 | 交互基底 | **State layer / Ripple** · Elevation 语义体系 | 仅 3 档 shadow token（`--sa-shadow-sm/md/lg`） | **缺**（MD3 的"触摸反馈正确感"就靠这层） |
-| 动效 | Motion system（时长/缓动/弹簧 + 转场族） | `--sa-dur-*` / `--sa-ease-*` 3+2 档；**Morpheus 未接** | **半** |
+| 动效 | Motion system（时长/缓动/弹簧 + 转场族） | `--sa-dur-*` / `--sa-ease-*` 3+2 档；**Kairos 未接** | **半** |
 | 无障碍 | role/aria 必填清单 · 焦点环 · 44px 触达 · RTL | fluid `focus-nav` 有底，组件未默认接；门禁 0 | **缺** |
 | 自适应 | Window size classes / 断点体系 | Fluid 有底；但 `p-formfactor` 是 **1410 行 Web 单端**实现（DOM 强耦合，`querySelectorAll`/`getBoundingClientRect`） | **半**（见 `docs/fluid-system-gap-audit.md`） |
 
@@ -103,7 +103,7 @@
 ## §6 路线建议（与既有四条主线的关系）
 
 ```
-                ┌── 已有：Themis（一致性）· Fluid（自适应）· Morpheus（动效）· PRIMITIVE_CATALOG（IR）
+                ┌── 已有：Themis（一致性）· Fluid（自适应）· Kairos（动效）· PRIMITIVE_CATALOG（IR）
    底座（留）    └── 已有：glass（材质）· capabilities（84 Hook）· gesture · IR 编译链 · Web shim
                         │
    宪法（留）  @proteus-vue/tokens ✅ + check:tokens ✅ + ESLint 层 ✅（10-11/10-12 已落地）
@@ -111,7 +111,7 @@
    ┌────────────────────┼─────────────────────────┬──────────────────────┐
    │ U0 执法            │ U1 内核 + 做减法         │ U2 品质默认化         │ U3 扩编 / 新族
    │ p-* 接 token       │ OverlayKernel            │ A11y 门禁 + role/aria │ 缺失件（按需）
-   │ 裸值 lint（棘轮）  │ ScrollKernel             │ Motion → Morpheus     │ Aether lg-*（#878 ✅）
+   │ 裸值 lint（棘轮）  │ ScrollKernel             │ Motion → Kairos     │ Aether lg-*（#878 ✅）
    │ theme 进 BaseProps │ 79 → 约 65               │ 触达/键盘/深色留证    │ Keryx 图标（已起）
    └────────────────────┴─────────────────────────┴──────────────────────┘
    ←────────── p-* = Charites（通用 UI，材质无关）──────────→   ←── 新材料族（材质即身份）──→
@@ -173,7 +173,7 @@ wc -l packages/components/{p-scroll,p-scroll-view,p-scrollable}/index.vue \
 git grep -ln "aria-\|a11y" -- 'scripts/*.mjs'                      # → 空
 grep -nE "a11y|aria" eslint.config.mjs                             # → 空
 git grep -l "animation:" -- 'packages/components/*/index.vue' | wc -l   # → 19
-git grep -l "Morpheus\|morpheus" -- 'packages/components/*' | wc -l     # → 0
+git grep -l "Kairos\|morpheus" -- 'packages/components/*' | wc -l     # → 0
 
 # 5) 缺失件（全部无目录）
 for n in card chip badge tooltip search carousel table tree timeline accordion \

@@ -14,7 +14,7 @@ group: 使用
 |---|---|---|
 | Web | CSS 转场名（`slide-up` / `slide-down` / `halfscreen` / `scale`） | `WEB_TRANSITION_MAP` |
 | 微信小程序 | `navigateTo({ routeType })` 平台标识 | `MP_ROUTE_TYPE_MAP` |
-| App | **Morpheus 自己驱动**（不是报名字给平台） | `APP_TRANSITION_MAP` → 内核动画 |
+| App | **Kairos 自己驱动**（不是报名字给平台） | `APP_TRANSITION_MAP` → 内核动画 |
 
 三张表的键集**逐端交叉核对**（测试里同时加载三张表比对）——枚举增员时任何一端漏掉都会当场红。
 

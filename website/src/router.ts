@@ -25,7 +25,7 @@ export const router = createRouter({
     { path: '/playground', name: 'playground', component: Playground },
     { path: '/multi-device', name: 'multidev', component: MultiDevice },
     { path: '/ecosystem', name: 'ecosystem', component: Ecosystem },
-    // ★Morpheus 动画引擎旗舰页（招牌产品页——真跑演示 + 真机证据）
+    // ★Kairos 动画引擎旗舰页（招牌产品页——真跑演示 + 真机证据）
     { path: '/animation', name: 'animation', component: Animation },
     // ★★CS6 多端一致性标准页（对外展示：实时机器指标 + 三端真截图 + 与 Flutter 的诚实对照）
     { path: '/consistency', name: 'consistency', component: Consistency },

@@ -1,7 +1,7 @@
 # Proteus OS 级图标库方案
 
 > 代号 **Keryx**（κῆρυξ，传令官——图标是设计系统向用户传令的使者）。备选：Angelia（信使女神）、Semeion（σημεῖον，符号）。**定名前须做正式商标与包名检索。**
-> 版本 v1 · 关联：**Proteus UI**（OS 级组件库，内部代号 Charites——本方案是它的"方言层"）、Themis（G-61）、Morpheus（strokeProgress 画线动画）、`p-svg-canvas`（G-62 Canvas 通道）、内核 `svg_path.rs`
+> 版本 v1 · 关联：**Proteus UI**（OS 级组件库，内部代号 Charites——本方案是它的"方言层"）、Themis（G-61）、Kairos（strokeProgress 画线动画）、`p-svg-canvas`（G-62 Canvas 通道）、内核 `svg_path.rs`
 > 验收标准：沿用 Charites OS 级四判定 + Hephaestus 超级应用口径。
 
 ---
@@ -22,7 +22,7 @@
 
 ### 1.1 命名逻辑
 
-图标库的神职是**传令**：组件有话要说，图标是把语义送达用户的使者。 Hermes 是希腊神话里的传令神，但已被 JS 引擎占用（Morpheus 方案 §1.3 裁定）；本仓命名体系取 Hermes 职能的另一个名字——**Keryx**（κῆρυξ，传令官）。发音 /ˈkɛrɪks/，单音节尾，短、可寻址。
+图标库的神职是**传令**：组件有话要说，图标是把语义送达用户的使者。 Hermes 是希腊神话里的传令神，但已被 JS 引擎占用（Kairos 方案 §1.3 裁定）；本仓命名体系取 Hermes 职能的另一个名字——**Keryx**（κῆρυξ，传令官）。发音 /ˈkɛrɪks/，单音节尾，短、可寻址。
 
 ### 1.2 候选与查重结论
 
@@ -36,7 +36,7 @@
 
 | 名字 | 排除原因 |
 |---|---|
-| ~~**Iris**~~ | **本仓已裁定排除**（Morpheus 方案 §1.3：iris-engine 是 Rust + Vue 3 动画引擎，领域高度重合）——本方案同为 Rust + Vue3 语境，撞名风险加倍 |
+| ~~**Iris**~~ | **本仓已裁定排除**（Kairos 方案 §1.3：iris-engine 是 Rust + Vue 3 动画引擎，领域高度重合）——本方案同为 Rust + Vue3 语境，撞名风险加倍 |
 | ~~**Hermes**~~ | JS 引擎重名（既有裁定） |
 | ~~**Nike**~~ | 商标强占用 |
 | ~~**Logos**~~ | Logos Bible Software 强占用 + 泛词不可寻址（虽与 logo 双关诱人） |
@@ -67,7 +67,7 @@
 | OS-1 设计语言成法 | 图标**全部来自一套 path 数据**：`@proteus-vue/icons` 单一包，组件源码零内联 path（现状 built-in icon.ts 的手绘 path 即违例形态） |
 | OS-2 品质默认项 | 着色走 token（`currentColor` → `--sa-*`）、`aria-label` 必填（装饰图标显式 `aria-hidden`）、光学网格对齐 |
 | OS-3 一致性可证明 | 三端渲染同一份 path 数据——App 端归一化段序列在**内核唯一解析**（`svg_path.rs` 的"为什么在内核"注释即是本判定）；对拍 = path 归一化一致 + 截图并排 |
-| OS-4 平台融合 | stroke 图标天然接 Morpheus `strokeProgress`（内核弧长已备）；彩色/duotone 图标走 token 双色 |
+| OS-4 平台融合 | stroke 图标天然接 Kairos `strokeProgress`（内核弧长已备）；彩色/duotone 图标走 token 双色 |
 
 ---
 
@@ -133,7 +133,7 @@ p-icon 重写 = Keryx 渲染器（保留 name/type 官方别名 API——p-icon 
 
 - **Charites（宪法）**：图标着色禁字面值（CHARITES-001 lint 覆盖 path 属性）；`aria-label` 门禁（交互图标缺语义名 ⇒ E，装饰图标须显式 `aria-hidden`）；新图标先登记 `PRIMITIVE_CATALOG` 语义键（audit 闭环扩展）。
 - **Themis（一致性）**：图标几何对拍 = **path 归一化一致性**（三端消费同一份归一化数据，App 端由内核保证）+ 每图标截图并排（Web 基准）；深色模式截图成对留证。
-- **Morpheus（动效）**：线性图标接 `strokeProgress`（内核弧长已实现）——下载/加载/成功打勾等"画线"图标动效走声明，零手写 keyframes；`spin` 沿用现有 view 盒旋转（真机修复已沉淀）。
+- **Kairos（动效）**：线性图标接 `strokeProgress`（内核弧长已实现）——下载/加载/成功打勾等"画线"图标动效走声明，零手写 keyframes；`spin` 沿用现有 view 盒旋转（真机修复已沉淀）。
 
 ---
 
@@ -143,7 +143,7 @@ p-icon 重写 = Keryx 渲染器（保留 name/type 官方别名 API——p-icon 
 |---|---|---|
 | **P0 立词** | 转换器（A/S/T→C/Q、网格校验）+ `@proteus-vue/icons` 数据包 + 24 枚起步集 + p-icon 重写为 Keryx 渲染器（API 兼容） | 24 枚三端截图并排；p-icon 既有调用零迁移（`name`/`type` 全通） |
 | **P1 收口** | built-in Web 手绘集**淘汰**（对齐面改用 Keryx 渲染同一数据——消灭第二套视觉体系）；unicode GLYPHS 表标记 deprecated（warn 棘轮）；96 枚 | Web shim 与主组件**同源同形**；GLYPHS 命中即 warn |
-| **P2 品质** | strokeProgress 画线动效接入 Morpheus；duotone 双色槽；200+ 枚；品牌定制流程（token → 图标双色） | 画线动效真机 62fps（Path2D 引擎既有实测口径）；duotone 深浅两套截图 |
+| **P2 品质** | strokeProgress 画线动效接入 Kairos；duotone 双色槽；200+ 枚；品牌定制流程（token → 图标双色） | 画线动效真机 62fps（Path2D 引擎既有实测口径）；duotone 深浅两套截图 |
 | **P3 生态** | 图标目录页（类别/搜索/复制）+ 业务自定义集接入同一转换器（企业图标进宪法而非绕过宪法） | 自定义集过同一 lint/门禁 |
 
 ---
@@ -182,7 +182,7 @@ p-icon 重写 = Keryx 渲染器（保留 name/type 官方别名 API——p-icon 
 | 宪法四判定 / 裸值 lint / A11y 门禁 | `docs/Proteus_OS级组件库方案.md` §4、§8 |
 | 字体基础设施不自建（icon font 排除依据） | `docs/proteus-css-engine-plan/README.md` §7"诚实边界" |
 | 超级应用验收 / 真机矩阵 / 数字不粉饰 | `docs/Proteus_高频原生能力组件方案.md` 头部 |
-| Iris 排除先例 | `docs/Proteus_声明式动画引擎Morpheus方案.md` §1.3 |
+| Iris 排除先例 | `docs/Proteus_声明式动画引擎Kairos方案.md` §1.3 |
 
 ---
 

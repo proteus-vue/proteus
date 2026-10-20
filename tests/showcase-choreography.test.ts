@@ -50,7 +50,7 @@ function walkAll(soakMs: number): { acts: ShowcaseAct[]; plan: string[] } {
   return { acts, plan }
 }
 
-describe('Morpheus 炫技场 · 节目单（真模块驱动）', () => {
+describe('Kairos 炫技场 · 节目单（真模块驱动）', () => {
   it('整场能走完：acts 与 plan 逐项一致（act 名序 = 节目单序）', () => {
     const { acts, plan } = walkAll(1200)
     expect(acts.map((a) => a.name)).toEqual(plan)

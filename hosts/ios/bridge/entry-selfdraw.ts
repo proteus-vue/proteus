@@ -33,7 +33,7 @@
 import { h, ref, nextTick } from '@vue/runtime-core'
 import { createAppRenderer } from '@proteus-vue/renderer-app'
 import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdraw'
-// ★★MA1：Morpheus 声明式动画表面（预设库 + 编译期校验）——本相位验证"一句话写转场"端到端
+// ★★MA1：Kairos 声明式动画表面（预设库 + 编译期校验）——本相位验证"一句话写转场"端到端
 import { presets, compileRoute, compileAnimations, isComposited, validateAnimations, isPlatformEligible } from '@proteus-vue/animation'
 
 /* ────────────────────────── 宿主桥（Swift 经 JSExport 注入） ────────────────────────── */
@@ -1233,7 +1233,7 @@ const api = {
   },
 
   /**
-   * ★★**MA5：滚动联动**（吸顶 / 视差 / 渐显——Morpheus §6.1 预设库最后一项）
+   * ★★**MA5：滚动联动**（吸顶 / 视差 / 渐显——Kairos §6.1 预设库最后一项）
    *
    * 【要回答什么】
    *   ① **滚动位置 → 动画进度**端到端可用：滚动回调只报**原始位置**，视差/渐显当帧变化；
@@ -1358,7 +1358,7 @@ const api = {
   },
 
   /**
-   * ★★**MA0-RT 相位：平台渲染线程零参与路径**（Morpheus §5-bis）
+   * ★★**MA0-RT 相位：平台渲染线程零参与路径**（Kairos §5-bis）
    *
    * 【要回答什么】
    *   ① **合成属性判定**：全 transform/opacity 批次 ⇒ `plan.composited=true`；
@@ -1496,7 +1496,7 @@ const api = {
 
     // ③-b ★§7.3 节点复用解绑（专项判据）：起一条动画 → 停它 → 再 tick 必须**不再改动**
     //
-    // 【为什么单列（Morpheus §7 明确要求）】本仓复用率 0.997 ⇒ 节点会被回收给别的数据项。
+    // 【为什么单列（Kairos §7 明确要求）】本仓复用率 0.997 ⇒ 节点会被回收给别的数据项。
     //   若动画未解绑：重物化时显示"半路的变换"（错位）+ 每帧白算——两者都静默。
     // ★探针顺序修正（首版缺陷，真机抓出）：前一段的 tick(200) 已让 targetA 的动画**自然结束并被移除**
     //   ⇒ 那时再 stop 得到 stopped=0，**看着像"没调用 stop_nodes"**，实为"已无动画可停"（探针缺陷）。

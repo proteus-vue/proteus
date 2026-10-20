@@ -1,5 +1,5 @@
 // packages/animation/src/validate.ts
-// ★★Morpheus（MA1）—— **编译期校验**（Morpheus §5-bis.2：把"会不会掉帧"从运行时问题变成编译期问题）
+// ★★Kairos（MA1）—— **编译期校验**（Kairos §5-bis.2：把"会不会掉帧"从运行时问题变成编译期问题）
 //
 // 【为什么要有它（§5-bis.1 的工程陷阱）】动画属性分两类：
 //   · **合成属性**（translate/scale/rotate/opacity）⇒ 平台渲染线程可直接插值，主线程零参与；

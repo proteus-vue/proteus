@@ -6,7 +6,7 @@ group: 使用
 
 # 声明面
 
-Morpheus 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 + 校验 + 编译，纯函数、零运行时依赖）。它不做三件事——不持有动画状态、不做曲线数学、不碰平台 API。
+Kairos 的对外表面只有一个包：**`@proteus-vue/animation`**（声明 + 校验 + 编译，纯函数、零运行时依赖）。它不做三件事——不持有动画状态、不做曲线数学、不碰平台 API。
 
 ## 闭环：声明 → 校验 → 编译 → 指令
 
@@ -126,7 +126,7 @@ compileAnimations([{ kind: 'textColor', from: '#ffffff', to: '#00ff00',
 
 ## 预设库（13 条）
 
-预设优先于参数——常见演出都是一句话。全部条目（含"何时用/如何验证"）见 Morpheus 声明项说明书（仓内生成物 `docs/generated/anim-manual.md`，48 条逐条 what/why/when/示例/如何验证）。
+预设优先于参数——常见演出都是一句话。全部条目（含"何时用/如何验证"）见 Kairos 声明项说明书（仓内生成物 `docs/generated/anim-manual.md`，48 条逐条 what/why/when/示例/如何验证）。
 
 | 类别 | 预设 | 一句话 |
 |---|---|---|

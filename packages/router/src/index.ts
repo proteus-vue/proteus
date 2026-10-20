@@ -55,7 +55,7 @@ export type { MpPageConfig } from './codegen'
 
 // ★★路由规划 M5（App 端）：虚拟路由栈（屏 = 树内子树；无系统导航栈 / 无层数上限 / 内存预算冻结）
 //   设计对齐 Flutter Navigator——栈是纯逻辑对象，不可见层树保留（display:none）或按预算冻结（重建）。
-//   本层不产生平台调用：通过 ScreenCommand 命令流交给执行器（Morpheus 转场 + Host ABI）。
+//   本层不产生平台调用：通过 ScreenCommand 命令流交给执行器（Kairos 转场 + Host ABI）。
 export { createAppStack } from './app-stack'
 export type {
   AppStack,

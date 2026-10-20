@@ -312,7 +312,7 @@ export const PAGE_EVENT_META: Record<PageEvent, LifecycleEventMeta> = {
     doc: '路由动画完成（转场结束后）',
     mp: 'Page.onRouteDone（基础库 2.32.1+）',
     web: 'transitionend（由 router 层推）',
-    app: 'Morpheus 转场结束',
+    app: 'Kairos 转场结束',
     note: '基础库版本要求较高：低版本无此钩子（产物会生成，但不触发——诚实降级）',
   },
   'pull-down-refresh': {
@@ -961,8 +961,8 @@ export const PLATFORM_TOPICS: Record<string, Record<'mp' | 'web' | 'app', Platfo
         descEn: 'Page show/hide comes from virtual-stack enter/exit commands (not native Fragment/VC callbacks) — the G-39 + M5 combination',
       },
       {
-        title: '转场结束由 Morpheus 告知',
-        titleEn: 'Transition completion via Morpheus',
+        title: '转场结束由 Kairos 告知',
+        titleEn: 'Transition completion via Kairos',
         desc: 'route-done 在内核转场动画结束时触发（平台零参与路径）—— 与小程序 onRouteDone 同语义',
         descEn: 'route-done fires when the kernel transition animation finishes (platform-zero path) — same semantics as Mini Program onRouteDone',
       },

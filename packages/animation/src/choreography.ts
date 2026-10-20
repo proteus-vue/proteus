@@ -1,5 +1,5 @@
 // packages/animation/src/choreography.ts
-// ★★Morpheus —— **声明式编排层**（choreography）：把"几百个元素谁先动、各自去哪"变成声明
+// ★★Kairos —— **声明式编排层**（choreography）：把"几百个元素谁先动、各自去哪"变成声明
 //
 // 【它解决什么问题（与既有分层的关系）】
 //   · `compileAnimations` 已经能表达"**一个节点**做什么运动"（属性/曲线/时长/延迟）；

@@ -1,5 +1,5 @@
 // tests/animation-presets.test.ts
-// ★★Morpheus MA1：声明式表面 + 预设库（`@proteus-vue/animation`）
+// ★★Kairos MA1：声明式表面 + 预设库（`@proteus-vue/animation`）
 //
 // 【判据设计（本仓纪律：判据要能变红）】
 //   · **绿侧**：合法声明 → 编译出正确指令（含默认值归一、目标绑定、跨语言编号一致）；
@@ -451,7 +451,7 @@ describe('MA1 · 编号映射表（名字写错的类型级防线）', () => {
   })
 })
 
-describe('MA1 收尾 · AI 说明书 + conformance（Morpheus §13 第 11 条）', () => {
+describe('MA1 收尾 · AI 说明书 + conformance（Kairos §13 第 11 条）', () => {
   it('★说明书条目齐备且 ID 唯一（AI 要能可靠枚举）', () => {
     const ids = ANIM_RULES.map((r) => r.id)
     expect(new Set(ids).size).toBe(ids.length)
@@ -686,7 +686,7 @@ describe('跨属性共享时间轴（多属性共享停靠点 ⇒ 内核结构�
   })
 })
 
-describe('统一路由转场枚举的第三腿（App / Morpheus ⇄ RouteTransition）', () => {
+describe('统一路由转场枚举的第三腿（App / Kairos ⇄ RouteTransition）', () => {
   // 枚举的字面清单（与 @proteus-vue/contracts 的 RouteTransition 同源；此处写死用于**交叉核对**）
   const ENUM: readonly string[] = ['slideUp', 'slideDown', 'halfScreen', 'scaleDown', 'none']
 

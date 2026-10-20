@@ -1,7 +1,7 @@
 # Proteus OS 级组件库方案
 
 > 代号 **Charites**（美惠三女神——司美丽、优雅与装饰）。备选：Parthenon（帕特农神庙）、Kallos（καλλος，美且好）。**定名前须做正式商标与包名检索。**
-> 版本 v1 · 关联：Themis（G-61 CSS 引擎）、Morpheus（动画引擎）、Hephaestus（高频原生能力组件）、Janus（原生资产复用）、《超级应用视觉设计规范》
+> 版本 v1 · 关联：Themis（G-61 CSS 引擎）、Kairos（动画引擎）、Hephaestus（高频原生能力组件）、Janus（原生资产复用）、《超级应用视觉设计规范》
 > **验收标准（沿用用户 2026-10-03 为 Hephaestus 明示的口径）**：**超级应用标准，不是跨端框架 demo 级**。
 
 ---
@@ -10,7 +10,7 @@
 
 | 问题 | 结论 |
 |---|---|
-| 有没有"天然条件"做 OS 级组件库 | ✅ **有，而且条件是引擎级的**——样式一致性引擎（Themis）、动效引擎（Morpheus）、环境自适应层（Fluid）、原生材质/能力/手势、187 原语目录、设计规范草案，六件资产别人凑不齐 |
+| 有没有"天然条件"做 OS 级组件库 | ✅ **有，而且条件是引擎级的**——样式一致性引擎（Themis）、动效引擎（Kairos）、环境自适应层（Fluid）、原生材质/能力/手势、187 原语目录、设计规范草案，六件资产别人凑不齐 |
 | p-\* 现在到底差在哪 | 不是"组件少"（已有 **79 个 / 约 1.2 万行**），是**没有宪法**：0 个组件接设计 token（`--sa-*`）、0 个过 A11y 门禁（22 个仅零散 role/aria）、动效各写 CSS animation、同族组件三胞胎/五兄弟分叉 |
 | 方案核心 | **先立法，再执法，最后扩编**：P0 立宪法（token 收口 + 内核统一 + lint 门禁）→ P1 家族治理（做减法）→ P2 补品质维度 → P3 扩编 |
 | 与 Hephaestus 的分工 | Hephaestus 管**能力组件**（相机/定位/扫码…），本方案管 **UI 组件**（弹层/滚动/导航/表单/数据展示）——两轴正交，都不重写对方 |
@@ -29,7 +29,7 @@
 
 ### 1.1 命名逻辑
 
-框架名 **Proteus**（千变万化）、动画引擎 **Morpheus**（形变）、CSS 引擎 **Themis**（裁决与律法）、能力组件 **Hephaestus**（锻造）——本命名体系的语义轴是"神职即模块职责"。组件库的神职只有一个：**美与优雅的系统化**——这正是美惠三女神（Charites）的司掌。χάρις（kharis）词根即"恩惠"：设计系统是框架送给开发者的美之恩赐（cosmetic 一词与它同源，语义双关）。
+框架名 **Proteus**（千变万化）、动画引擎 **Kairos**（形变）、CSS 引擎 **Themis**（裁决与律法）、能力组件 **Hephaestus**（锻造）——本命名体系的语义轴是"神职即模块职责"。组件库的神职只有一个：**美与优雅的系统化**——这正是美惠三女神（Charites）的司掌。χάρις（kharis）词根即"恩惠"：设计系统是框架送给开发者的美之恩赐（cosmetic 一词与它同源，语义双关）。
 
 ### 1.2 候选与查重结论
 
@@ -58,7 +58,7 @@
 | # | 资产 | 给组件库的供给 | 证据 |
 |---|---|---|---|
 | ① | **Themis**（G-61，B0–B5 ✅） | 组件视觉一致性**可证明**：IR ≡ Chromium 逐属性、各端 ≡ Web ≤0.5dp、真截图并排——别的框架做组件库，"三端长得一样"靠肉眼；这里靠门禁 | `docs/proteus-css-engine-plan/README.md` §3 |
-| ② | **Morpheus**（动画引擎） | 系统动效：组件只声明 motion token（进出场/微反馈/转场），实现统一走引擎——现状组件各自手写 CSS animation（`p-popup`/`p-loading` 即如此） | `docs/Proteus_声明式动画引擎Morpheus方案.md` |
+| ② | **Kairos**（动画引擎） | 系统动效：组件只声明 motion token（进出场/微反馈/转场），实现统一走引擎——现状组件各自手写 CSS animation（`p-popup`/`p-loading` 即如此） | `docs/Proteus_声明式动画引擎Kairos方案.md` |
 | ③ | **Fluid System** | OS 级的"环境自适应"已有框架层：formfactor / breakpoint / safe-area / env-vars / focus-nav / scale / motion——组件的响应式与安全区避让**天然是系统行为**而非组件各自实现 | `packages/fluid/src/`（15 模块） |
 | ④ | **原生材质与能力层** | `glass`（系统玻璃材质与降级）+ `capabilities`（84 Hook）+ `gesture`（识别器）+ Janus（原生资产复用）——OS 级的"材质感"与原生融合有真后端 | `packages/glass/src`、`packages/capabilities/src`、`packages/gesture/src` |
 | ⑤ | **PRIMITIVE_CATALOG（187 原语）+ audit 闭环** | 组件有 **IR 级单一事实源**：每个 p-\* 是原语的语义化封装，目录一致性有审计（`auditCatalogConsistency`）——组件库不会漂成"第二套运行时" | `packages/component-ir/src/primitives.ts`（187 条） |
@@ -86,7 +86,7 @@
 
 ### 根因 C · 品质缺维度
 - **0 个组件过 A11y 门禁**：`aria-`/`role=` 在 p-\* 全目录**命中 22 个文件**（如 `p-switch` 有 `role="switch"` + `:aria-checked`、`p-button` 有 `:aria-label`），但**没有任何清单/门禁规定哪些交互组件必填**——OS 级的第一道门（"必备项"）还没过。
-- **动效未接引擎**：转场/微反馈全部 CSS animation 手写，Morpheus 未成为组件动效后端。
+- **动效未接引擎**：转场/微反馈全部 CSS animation 手写，Kairos 未成为组件动效后端。
 - **触达/键盘/RTL 无系统治理**：44px 触达、焦点环、键盘导航（fluid 的 focus-nav 已有）无一处成为组件默认项。
 - **双组件体系并存**：`built-in-components`（13 个小程序对齐 shim，1094 行）与 `components`（79 个）各自演化。
 
@@ -117,13 +117,13 @@
 │ L3 语义组件   p-*：升级面（本方案主战场）                 │
 │ L4 页面骨架   六种标准骨架（视觉规范 L3 收编为组件）       │
 └────────────────────────────────────────────────────────┘
-横切系统    Motion(Morpheus token 匾) · Gesture · A11y · FormFactor(p-adaptive 收编)
+横切系统    Motion(Kairos token 匾) · Gesture · A11y · FormFactor(p-adaptive 收编)
 两 个 内核  OverlayKernel（弹层）· ScrollKernel（滚动）
 ```
 
 **两个内核是本方案的杠杆点**——一次投入，五个/三个组件同时受益：
 
-- **OverlayKernel**：遮罩层级（三层挂载规范对齐）+ 智能锚定定位 + 形态自适应（`sheet/dialog/popover` 按 formfactor 自动切换——p-modal 已验证该 API 形状）+ 焦点陷阱 + 滚动锁定 + 进出场动效（走 Morpheus）。p-modal / p-popup / p-popover / p-drawer / p-mask 全部变成**同一内核的五个声明式预设**，行为差异只体现在 props 契约上。
+- **OverlayKernel**：遮罩层级（三层挂载规范对齐）+ 智能锚定定位 + 形态自适应（`sheet/dialog/popover` 按 formfactor 自动切换——p-modal 已验证该 API 形状）+ 焦点陷阱 + 滚动锁定 + 进出场动效（走 Kairos）。p-modal / p-popup / p-popover / p-drawer / p-mask 全部变成**同一内核的五个声明式预设**，行为差异只体现在 props 契约上。
 - **ScrollKernel**：滚动方向 + bounce + refresh + loadMore + 视口裁剪（对齐可停靠滚动/编排方案）+ 滚动锁定（弹层联动）。p-scroll-view 保留为**小程序对齐面**（微信语义），p-scrollable 并入内核实现，p-scroll 淘汰。
 
 ---
@@ -146,7 +146,7 @@
 |---|---|---|
 | **P0 宪法**（先行，不可跳过） | ① `@proteus-vue/tokens`：收口 `--sa-*`/`--pf-*` 为单一真源（含深色两套、语义状态色 AA 达标沿用既有）② **裸值 lint**：p-\* 源码裸色值/字号/间距 ⇒ E 报错，存量钉棘轮基线 ③ **OverlayKernel + ScrollKernel** 两个内核落地（存量组件行为回归对拍） | 内核组件过 Themis 三层对拍；lint 在 Web 构建链真实拦截 |
 | **P1 家族治理**（做减法） | 弹层五兄弟 → 内核五预设；滚动三胞胎 → p-scroll-view（对齐面）+ 内核；加载三件 → 职责重划（loading=服务态 / skeleton=骨架态 / host=宿主）；导航三件 → 统一安全区与返回语义；**deprecation 棘轮**（被收编组件先 warn 后 error） | 家族内行为差异全部登记进 `allow-differences.json` 或消除；组件总数**下降**（79 → 约 65） |
-| **P2 品质维度** | ① A11y：role/aria 必填清单 + 焦点管理接 fluid focus-nav ② Motion：组件动效全部改声明 motion token（Morpheus 承接）③ 触达 44px / 键盘 / RTL 默认项化 | A11y 门禁（缺失即 E）；动效零手写 CSS animation |
+| **P2 品质维度** | ① A11y：role/aria 必填清单 + 焦点管理接 fluid focus-nav ② Motion：组件动效全部改声明 motion token（Kairos 承接）③ 触达 44px / 键盘 / RTL 默认项化 | A11y 门禁（缺失即 E）；动效零手写 CSS animation |
 | **P3 扩编** | 补超级应用高频件（需求以现有最大组件为证：p-picker 429 行最大，picker 族值得官方分级；segmented / badge / cell / fab / 空态官方化——吸收 `.sa-*` 类成组件） | 新组件逐个过 §4 四条判据 + 真机矩阵（沿用 Hephaestus 超级应用验收） |
 
 ---
@@ -184,6 +184,6 @@
 | 滚动三胞胎/弹层五兄弟/加载三件/导航三件 | `packages/components/{p-scroll,p-scroll-view,p-scrollable}/{p-modal,p-popup,p-popover,p-drawer,p-mask}/{p-loading,p-loading-host,p-loading-region}/{p-nav,p-nav-bar,p-tabbar}` 头注释 |
 | p-modal p-adaptive 形态声明（内核 API 形状） | `packages/components/p-modal/index.vue` 头注释 |
 | 187 原语 + audit 闭环 | `packages/component-ir/src/primitives.ts`、`audit.ts` |
-| Themis 三层门禁 / 动效引擎 / fluid 模块清单 | `docs/proteus-css-engine-plan/README.md`、`docs/Proteus_声明式动画引擎Morpheus方案.md`、`packages/fluid/src/` |
+| Themis 三层门禁 / 动效引擎 / fluid 模块清单 | `docs/proteus-css-engine-plan/README.md`、`docs/Proteus_声明式动画引擎Kairos方案.md`、`packages/fluid/src/` |
 | 视觉规范 L1/L2/L3 与 --sa-\* | `docs/Proteus_超级应用视觉设计规范.md`、`superapp/styles/global.css` |
 | 超级应用验收口径（真机矩阵/基座列/单测） | `docs/Proteus_高频原生能力组件方案.md` 头部验收标准 |

@@ -1,7 +1,7 @@
 // packages/animation/src/index.ts
-// @proteus-vue/animation —— ★★**Morpheus 声明式动画引擎的表面层**（MA1）
+// @proteus-vue/animation —— ★★**Kairos 声明式动画引擎的表面层**（MA1）
 //
-// 【定位（Morpheus §0）】框架层内置的高性能动画引擎的**声明式表面**：
+// 【定位（Kairos §0）】框架层内置的高性能动画引擎的**声明式表面**：
 //   开发者一句话写转场/让位/入场，不必写动画算法；
 //   编译期校验把"会不会掉帧"变成**编译期问题**（§5-bis.2）。
 //
@@ -85,7 +85,7 @@ export type { ChoreoAttitude, ChoreoCanvas, ChoreoCtx, ChoreoPoint, ChoreoScene,
 // ★点阵字形（`choreograph.text` 的数据源；独立导出便于上层预览"这句会排成什么形状"）
 export { textBitmap, FONT_5X7, GLYPH_ADVANCE, GLYPH_HEIGHT } from './bitmap-font'
 export type { TextBitmap, GlyphRows } from './bitmap-font'
-// ★★统一路由转场枚举的**第三腿**（App / Morpheus；Web 与 MP 两腿在 @proteus-vue/router）
+// ★★统一路由转场枚举的**第三腿**（App / Kairos；Web 与 MP 两腿在 @proteus-vue/router）
 export { APP_TRANSITION_MAP, appTransition, appTransitions } from './route-transition'
 // ★★方向语义 + 执行器入口（2026-09-30：M5 虚拟栈命令流的消费者接线）
 export { reverseDecls, routeTransitionBatches } from './route-transition'

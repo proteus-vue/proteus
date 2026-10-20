@@ -659,10 +659,10 @@ const COVERED_PACKAGES = {
   'layout-core': '框架分区（framework/28-rust-layout-and-render-cmd：排版核心 + 绘制指令流）',
   'layout-core-rust': '框架分区（同 28——Rust 实现的同一核心，TS 侧为对拍参考）',
   'slot-runtime': '框架分区（framework/43-vapor-update-path：槽位运行时 + 指令流协议）',
-  // ★★2026-09-30 补登记（MA1 新建）：Morpheus 声明式动画表面（预设 + 编译期校验）
+  // ★★2026-09-30 补登记（MA1 新建）：Kairos 声明式动画表面（预设 + 编译期校验）
   //   它是**声明/校验/编译层**（曲线求值与物理在 Rust 内核）⇒ 归入框架分区的动画主题，
   //   非独立原语面（不逐条出页）。
-  animation: '框架分区（Morpheus 声明式动画表面：预设库 + 编译期校验——曲线/物理在内核）',
+  animation: '框架分区（Kairos 声明式动画表面：预设库 + 编译期校验——曲线/物理在内核）',
   // ★★2026-10-01 补登记（HA0–HA5 宿主接入线）：Host ABI 门面——`src/` 只有 `lib.rs`
   //   （Rust C ABI 八接口 + 版本协商），**无 TS 原语面** ⇒ 不逐条出页；
   //   架构面见框架分区 `framework/22-architecture.md`，接入流程见 `docs/proteus-host-abi-integration.md`。

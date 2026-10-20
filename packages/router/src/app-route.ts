@@ -65,7 +65,7 @@ export type {
   BackOutcome,
 } from './branch-navigator'
 
-// 转场映射（App 腿：枚举 → Morpheus 规格在 @proteus-vue/animation 的 appTransition；
+// 转场映射（App 腿：枚举 → Kairos 规格在 @proteus-vue/animation 的 appTransition；
 //   本入口只带**枚举与校验**——枚举收口 contracts，路由表与三端同源）
 export { isTransition } from './transforms/transform-transition'
 export type { RouteTransition } from './transforms/transform-transition'

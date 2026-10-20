@@ -1,16 +1,16 @@
 ---
-title: Morpheus 动画声明项 AI 说明书
+title: Kairos 动画声明项 AI 说明书
 order: 92
 group: 框架能力
 generated: true
 ---
 
-# Morpheus 动画声明项 AI 说明书
+# Kairos 动画声明项 AI 说明书
 
 > **生成物，勿手改**：`node scripts/gen-anim-manual.mjs`（`--check` 接 CI，漂移即红）
 > **单一事实来源**：`packages/animation/src/rules.ts` 的 `ANIM_RULES`（48 条）
 >
-> 本表与编译器的 111 条规则**同构**（Morpheus §13 第 11 条硬性要求）——
+> 本表与编译器的 111 条规则**同构**（Kairos §13 第 11 条硬性要求）——
 > 每条含 what / why / when / 示例 / 如何验证 / 实现位置，AI 可单独消费一条。
 >
 > **conformance**：本页生成前会跑 `runConformance()` 对账（预设真实存在 / 跨语言契约值一致 /
@@ -100,7 +100,7 @@ const spec = presets.route.cupertinoModal({ distance: 844 })
 - **是什么**：映射内核 FLIP 的三个参数（durationMs / curve / staggerMs）——变更前 `flipCapture`、变更后 `flipStart`。
 - **为什么**：本仓几何本来就在内核 ⇒ 两次快照都是内部读，**零跨边界、零 JS**（传统 FLIP 要前后各读一次几何）。这是招牌能力。
 - **何时用**：列表增删 / 排序 / 筛选导致的元素位移
-- **相关决策**：Morpheus §5（布局动画是超能力）
+- **相关决策**：Kairos §5（布局动画是超能力）
 - **如何验证**：hosts/ios/check-anim-rt2.py 的 F3；packages/layout-core-rust/src/anim.rs 的 `flip_zero_stagger_has_no_tail_delay`
 - **实现位置**：`packages/animation/src/presets.ts:list.shift`
 
@@ -224,7 +224,7 @@ const f = presets.scroll.fadeIn({ from: 100, to: 300, risePx: 12 })
 - **是什么**：每片从 `magnitude` 偏移处 spring 弹回布局位 + 淡入；相位序与错峰由 `order/staggerMs` 决定（`diagonal` = 斜向扫过，`dir: up` 则从下方托起）。
 - **为什么**：最通用的"群元素入场"：spring 是真物理积分（内核），相位是声明（引擎）——调用方零循环。
 - **何时用**：列表/网格/瓦片群的入场
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「wave：spring 物理 + 对角相位」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.wave`
 
@@ -239,7 +239,7 @@ presets.choreograph.wave({ ids, canvas, order: 'diagonal', staggerMs: 4, magnitu
 - **是什么**：scale/opacity 各一条两段 `keyframes` 序列（放大回弹 / 压暗回暖），`radialOut` 相位形成"一圈圈推出去"的节奏。
 - **为什么**：同节点同属性的"去了又回"必须走 `keyframes`（内核同 (节点,属性) 是替换语义）——预设把这条约束直接编进产物，调用方不会踩。
 - **何时用**：点击反馈的群体化 / 扩散动效
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「ripple：两段 keyframes」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.ripple`
 
@@ -254,7 +254,7 @@ presets.choreograph.ripple({ ids, canvas, order: 'radialOut', staggerMs: 12, pea
 - **是什么**：每片沿渐开线（`turns` 圈）收向视口中心，同时 rotate + scale——800 片四属性并发。位移量 = 目标 − **当前**（`canvas.centers` 从内核几何读回）。
 - **为什么**：★真机取证：位移必须用**当前**几何——FLIP 重排后位置全变，用旧几何会让漩涡偏出画面（`entry-showcase` 实测抓出并修复）。缺 `centers` 当场抛错，不静默退化。
 - **何时用**：收束/汇聚类高潮段（演示、庆祝、转场收尾）
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「spiral：位移 = 目标 − 当前」；hosts/ios/check-showcase.py（真机螺旋段终值真读层）
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.spiral`
 
@@ -269,7 +269,7 @@ presets.choreograph.spiral({ ids, canvas, turns: 3, toScale: 0.35, durationMs: 9
 - **是什么**：四变换（+透明度）收归基线（位移/旋转 → 0、缩放/透明度 → 1），按相位错峰。起始值取 `canvas.attitudes`（**必填**——见 `constraint/from-is-mandatory`）。
 - **为什么**：多幕编排的"幕间清理"是通用需求：把上一幕留下的姿态收干净再进下一幕。起点必须显式给当前值（内核 `from` 必填），否则会瞬移归零。
 - **何时用**：连续多幕演出的幕间；任何"先把姿态收干净"的场合
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「settle：…不给 ⇒ 抛错」+「terminalAttitudes…闭环」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.settle + terminalAttitudes`
 
@@ -285,7 +285,7 @@ presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durati
 - **是什么**：每片 rotate/scale 各一条两段序列（倒下 → 弹回，奇偶反向），`serpentine` 相位形成掠过感。
 - **为什么**：轻量"有生命感"的群体动效；两段序列由 `keyframes` 表达（同属性多段的唯一合法形态）。
 - **何时用**：图标墙/缩略图墙的趣味动效
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「domino：两段序列 + 奇偶反向」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.domino`
 
@@ -300,7 +300,7 @@ presets.choreograph.domino({ ids, canvas, order: 'serpentine', staggerMs: 6, til
 - **是什么**：每片就是一个"像素"：前 `lit.length` 片各就一个亮像素（`bitmap-font.ts` 的 5×7 字形），其余成为**星尘**（确定性伪随机散布在文字四周——同输入同画面）。亮像素数 > 元素数时按序取前几片（文字缺笔画——由调用方保证规模，判据端查"亮像素 ≤ 元素数"）。
 - **为什么**：★"让几百个元素聚成一个词"是**通用编排构型**（开场语/谢幕语/庆祝），不是某场演示的私有视觉⇒ 字库与构型进引擎（与其它构型同源可测）。演示因此能"说人话"：开场"800 片聚成 MORPHEUS"，谢幕"聚成 60 FPS"——全程同一批节点，零额外视图。
 - **何时用**：开场语/谢幕语/里程碑庆祝等"群元素成字"的场合
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「text：亮像素/星尘…」+「点阵字体数据自检」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.text + packages/animation/src/bitmap-font.ts`
 
@@ -315,7 +315,7 @@ presets.choreograph.text({ ids, canvas, text: 'MORPHEUS', pixelScale: 0.42, dura
 - **是什么**：每片从"屏心 → 自己"的径向外推 `spread` 倍处 spring 飞回原位（`spread ≥ 2` 时起点已在屏外）。
 - **为什么**：开场"星尘凝聚"：起点在屏外 ⇒ 画面从空到满，与 `text`（聚字）衔接自然。
 - **何时用**：演出开场 / 页面初始化（从空到满的凝聚感）
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「gather：起点沿径向外推」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.gather`
 
@@ -330,7 +330,7 @@ presets.choreograph.gather({ ids, canvas, spread: 2.6 })
 - **是什么**：位移抖动 + 大幅旋转 + 收放 + 呼吸，五属性并发（800×5 = 4000 条指令），`alternate` 相位两班倒。
 - **为什么**：压力上限的代表：每帧写层最多（五属性全动）——演示里用它回答"引擎的边际在哪"。确定性伪随机 ⇒ 同输入同画面（可复现，判据可对账）。
 - **何时用**：压力演示 / 需要"密度感"的场面
-- **相关决策**：Morpheus 编排层（2026-09-30）
+- **相关决策**：Kairos 编排层（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts「storm：五属性并发 + alternate 相位」
 - **实现位置**：`packages/animation/src/choreography.ts:choreograph.storm`
 
@@ -362,7 +362,7 @@ const batch = compileRoute(spec, { enter: nextId, exit: curId })
 **动画声明（封闭集的全部字段）** `[implemented]`
 
 - **是什么**：`kind`（动哪个属性，必填）+ `to`（终点，必填）+ 三者之一（`curve` / `spring` / `keyframes`） + `from` / `durationMs` / `delayMs` / `scroll` / `takeover`。
-- **为什么**：★**不开放任意 JS 动画函数**（Morpheus §13 第 3 条）——能声明的是**封闭集**；曲线求值与物理积分**只在 Rust 内核**（唯一实现，纪律 #22）。
+- **为什么**：★**不开放任意 JS 动画函数**（Kairos §13 第 3 条）——能声明的是**封闭集**；曲线求值与物理积分**只在 Rust 内核**（唯一实现，纪律 #22）。
 - **何时用**：所有动画声明的入口（预设最终也编译成它）
 - **如何验证**：tests/animation-presets.test.ts 编译段（绿侧 + 默认值归一 + 目标绑定）
 - **实现位置**：`packages/animation/src/types.ts:AnimDecl`
@@ -661,7 +661,7 @@ const c = compileTimeline({
 - **是什么**：`compileChoreography({ids, canvas, order, staggerMs, make})`——把"800 片按相位错峰、协同收束"从**调用方手写循环**收敛成声明：相位由 `StaggerOrder` 封闭集决定（index/diagonal/serpentine/radialOut/radialIn/alternate），构型由 `choreograph.*` 预设推导；逐片复用 `compileAnimations` 同一条编译链（同一份校验/线格式/内核求值）。`terminalAttitudes(anims, ids)` 提取终态供下一幕衔接。
 - **为什么**：手写相位算术**错了不报错**（只是"看起来有点不齐"——典型静默缺陷）；相位/构型是可枚举的封闭集，与曲线、属性同性质 ⇒ 按"能收敛的别留给调用方"收敛进引擎。★真机验证：800 片三段编舞全程由本层声明，宿主帧循环 58.29 FPS / 每帧 p95 2.476ms（iPhone 12，`check:showcase` 读数）。
 - **何时用**：元素数 ≥ 几十且要"有编排关系"（相位/错拍/协同收束）；单片动画直接用 `compileAnimations`
-- **相关决策**：Morpheus §6（预设优先）＋ 用户反馈"审视 demo 是手写还是声明式"（2026-09-30）
+- **相关决策**：Kairos §6（预设优先）＋ 用户反馈"审视 demo 是手写还是声明式"（2026-09-30）
 - **如何验证**：tests/animation-choreography.test.ts（相位序封闭集完备/编译片号定位/构型真编译产物）；hosts/ios/check-showcase.py（真机：800 片编舞帧率与终值）
 - **实现位置**：`packages/animation/src/choreography.ts:compileChoreography`
 
@@ -742,7 +742,7 @@ if (isPlatformEligible(batch)) engine.animCommit(JSON.stringify({ anims: batch.a
 - **是什么**：`escapes.register({kind, detail, reason, behaviorRisk, site?})`——封闭集表达不了时走这条（`custom-easing` / `external-driver` / `layout-property` / `cross-property-timeline` / `platform-mixing` / `other`）。
 - **为什么**：★§4.2 的三条硬要求：① 显式（不静默降级）② **可统计**（与 UC0 漏点统计同构）③ `degraded` **单列**（"最高危险度"）。★为什么不直接拦住：拦死会逼开发者绕过框架（脱离统计视野，比登记更糟）。
 - **何时用**：封闭集（5 曲线 / 5 属性 / 单段时间轴）确实表达不了，且补预设来不及
-- **相关决策**：Morpheus §4.2（MA0 第三项）
+- **相关决策**：Kairos §4.2（MA0 第三项）
 - **如何验证**：tests/animation-presets.test.ts 逃生口段 8 条（三要素必填 / 率分母含声明式 / 零副作用 / degraded 单列 / 类别恒输出 / 阈值提示 / 报错指向 / reset）
 - **实现位置**：`packages/animation/src/escape.ts:EscapeRegistry`
 
@@ -780,9 +780,9 @@ const settle = presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes:
 **Slot 身份绑定：经**节点回收解绑**实现（非直接绑 Slot）** `[limitation]`
 
 - **是什么**：动画绑定到 **node id**；节点被回收到别的数据项时，回收路径自动 `stop_nodes`（含清值）解绑。
-- **为什么**：Morpheus §7.3 要求"绑 Slot 身份，不是 Node 身份"。本仓的等价保护是**回收即解绑**（§7.3 的第二句"节点回收时动画状态必须一并解绑"）——真机 D 组判据守住。★**如实边界**：`VirtualRow.key`（行身份）在宿主侧**存了但尚未消费**，且 `setupVirtual` 只在挂载时调用（**没有"行数据重键"路径**）⇒ "同一 node id 换了数据、动画应随之失效"这一形态当前不可达。
+- **为什么**：Kairos §7.3 要求"绑 Slot 身份，不是 Node 身份"。本仓的等价保护是**回收即解绑**（§7.3 的第二句"节点回收时动画状态必须一并解绑"）——真机 D 组判据守住。★**如实边界**：`VirtualRow.key`（行身份）在宿主侧**存了但尚未消费**，且 `setupVirtual` 只在挂载时调用（**没有"行数据重键"路径**）⇒ "同一 node id 换了数据、动画应随之失效"这一形态当前不可达。
 - **何时用**：长列表快速滚动 / 行复用（当前由回收解绑覆盖）
-- **相关决策**：Morpheus §7.3（MA0 第二项）
+- **相关决策**：Kairos §7.3（MA0 第二项）
 - **如何验证**：hosts/ios/check-anim-rt2.py 的 D 组（回收已解绑 / 解绑后不再被 tick 改动）；packages/layout-core-rust/src/anim.rs 的 `stop_nodes_unbinds_animations_for_recycled_nodes`
 - **实现位置**：`packages/layout-core-rust/src/anim.rs:stop_nodes（含 reset_visuals）+ hosts/ios/ProteusHost/selfdraw-scene.swift:dematerializeRow`
 
@@ -796,9 +796,9 @@ view.onRowDematerialized = { ids in animStopNodes({ nodeIds: ids }) }
 **不开放任意 JS 动画函数（设计红线）** `[limitation]`
 
 - **是什么**：没有"让开发者写任意动画逻辑"的 API；能声明的只有封闭集。
-- **为什么**：Morpheus §13 第 3 条：那是"在第一王炸上开口子"（与"不开放任意原生调用"同理）。需要算不出来的东西时，走**显式逃生口**（§4.2：可用但必须登记，且被统计为 degraded）。
+- **为什么**：Kairos §13 第 3 条：那是"在第一王炸上开口子"（与"不开放任意原生调用"同理）。需要算不出来的东西时，走**显式逃生口**（§4.2：可用但必须登记，且被统计为 degraded）。
 - **何时用**：遇到"预设和字段都不够用"时（**不要**找后门，先看是否该补预设）
-- **相关决策**：Morpheus §13 第 3 条
+- **相关决策**：Kairos §13 第 3 条
 - **如何验证**：tests/animation-presets.test.ts 逃生口段（三要素必填 / 率统计 / degraded 单列 / 零副作用）
 - **实现位置**：`packages/animation/src/types.ts（封闭集定义）`
 

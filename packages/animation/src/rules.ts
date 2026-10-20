@@ -1,7 +1,7 @@
 // packages/animation/src/rules.ts
-// ★★Morpheus（MA1 收尾）—— **动画声明项的 AI 说明书**
+// ★★Kairos（MA1 收尾）—— **动画声明项的 AI 说明书**
 //
-// 【为什么必须有（Morpheus §13 执行指令第 11 条，原文硬性要求）】
+// 【为什么必须有（Kairos §13 执行指令第 11 条，原文硬性要求）】
 //   「每个预设与声明项**必须配 conformance 断言 + AI 说明书**，与既有 111 条规则同构。」
 //   本仓的透明定位（AI-native）：**能力必须自描述**——AI 要能枚举"这个引擎能做什么"、
 //   查单条的 what/why/when/how-verify、并由 `source` 直接跳读实现，而不是靠读散文猜。
@@ -137,7 +137,7 @@ engine.flipStart({ durMs: shift.durationMs, curve: 1, staggerMs: shift.staggerMs
     verify: 'hosts/ios/check-anim-rt2.py 的 F3；packages/layout-core-rust/src/anim.rs 的 `flip_zero_stagger_has_no_tail_delay`',
     status: 'implemented',
     source: 'packages/animation/src/presets.ts:list.shift',
-    decision: 'Morpheus §5（布局动画是超能力）',
+    decision: 'Kairos §5（布局动画是超能力）',
   },
   {
     id: 'preset/element.press',
@@ -264,7 +264,7 @@ const batch = compileRoute(spec, { enter: nextId, exit: curId })`,
     title: '动画声明（封闭集的全部字段）',
     description: '`kind`（动哪个属性，必填）+ `to`（终点，必填）+ 三者之一（`curve` / `spring` / `keyframes`）'
       + ' + `from` / `durationMs` / `delayMs` / `scroll` / `takeover`。',
-    why: '★**不开放任意 JS 动画函数**（Morpheus §13 第 3 条）——能声明的是**封闭集**；'
+    why: '★**不开放任意 JS 动画函数**（Kairos §13 第 3 条）——能声明的是**封闭集**；'
       + '曲线求值与物理积分**只在 Rust 内核**（唯一实现，纪律 #22）。',
     when: '所有动画声明的入口（预设最终也编译成它）',
     example: `compileAnimations(
@@ -692,7 +692,7 @@ console.log(escapes.format())   // degraded 单列 + 类别汇总 + 率对照 5%
     verify: 'tests/animation-presets.test.ts 逃生口段 8 条（三要素必填 / 率分母含声明式 / 零副作用 / degraded 单列 / 类别恒输出 / 阈值提示 / 报错指向 / reset）',
     status: 'implemented',
     source: 'packages/animation/src/escape.ts:EscapeRegistry',
-    decision: 'Morpheus §4.2（MA0 第三项）',
+    decision: 'Kairos §4.2（MA0 第三项）',
   },
 
   /* ────────────────────────── 诚实边界 ────────────────────────── */
@@ -743,7 +743,7 @@ node.animStart(JSON.stringify({ anims }))
       + 'hosts/ios/check-showcase.py（真机：800 片编舞帧率与终值）',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:compileChoreography',
-    decision: 'Morpheus §6（预设优先）＋ 用户反馈"审视 demo 是手写还是声明式"（2026-09-30）',
+    decision: 'Kairos §6（预设优先）＋ 用户反馈"审视 demo 是手写还是声明式"（2026-09-30）',
   },
   {
     id: 'constraint/from-is-mandatory',
@@ -778,7 +778,7 @@ const settle = presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes:
     verify: 'tests/animation-choreography.test.ts「wave：spring 物理 + 对角相位」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.wave',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.ripple',
@@ -793,7 +793,7 @@ const settle = presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes:
     verify: 'tests/animation-choreography.test.ts「ripple：两段 keyframes」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.ripple',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.spiral',
@@ -809,7 +809,7 @@ const settle = presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes:
       + 'hosts/ios/check-showcase.py（真机螺旋段终值真读层）',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.spiral',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.settle',
@@ -825,7 +825,7 @@ presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durati
     verify: 'tests/animation-choreography.test.ts「settle：…不给 ⇒ 抛错」+「terminalAttitudes…闭环」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.settle + terminalAttitudes',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.domino',
@@ -838,7 +838,7 @@ presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durati
     verify: 'tests/animation-choreography.test.ts「domino：两段序列 + 奇偶反向」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.domino',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.text',
@@ -855,7 +855,7 @@ presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durati
     verify: 'tests/animation-choreography.test.ts「text：亮像素/星尘…」+「点阵字体数据自检」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.text + packages/animation/src/bitmap-font.ts',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.gather',
@@ -868,7 +868,7 @@ presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durati
     verify: 'tests/animation-choreography.test.ts「gather：起点沿径向外推」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.gather',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'preset/choreograph.storm',
@@ -882,14 +882,14 @@ presets.choreograph.settle({ ids, canvas: { ...canvas, attitudes: atts }, durati
     verify: 'tests/animation-choreography.test.ts「storm：五属性并发 + alternate 相位」',
     status: 'implemented',
     source: 'packages/animation/src/choreography.ts:choreograph.storm',
-    decision: 'Morpheus 编排层（2026-09-30）',
+    decision: 'Kairos 编排层（2026-09-30）',
   },
   {
     id: 'boundary/slot-identity-binding',
     kind: 'boundary',
     title: 'Slot 身份绑定：经**节点回收解绑**实现（非直接绑 Slot）',
     description: '动画绑定到 **node id**；节点被回收到别的数据项时，回收路径自动 `stop_nodes`（含清值）解绑。',
-    why: 'Morpheus §7.3 要求"绑 Slot 身份，不是 Node 身份"。本仓的等价保护是**回收即解绑**'
+    why: 'Kairos §7.3 要求"绑 Slot 身份，不是 Node 身份"。本仓的等价保护是**回收即解绑**'
       + '（§7.3 的第二句"节点回收时动画状态必须一并解绑"）——真机 D 组判据守住。'
       + '★**如实边界**：`VirtualRow.key`（行身份）在宿主侧**存了但尚未消费**，且 `setupVirtual` '
       + '只在挂载时调用（**没有"行数据重键"路径**）⇒ "同一 node id 换了数据、动画应随之失效"这一形态当前不可达。',
@@ -900,14 +900,14 @@ view.onRowDematerialized = { ids in animStopNodes({ nodeIds: ids }) }`,
       + 'packages/layout-core-rust/src/anim.rs 的 `stop_nodes_unbinds_animations_for_recycled_nodes`',
     status: 'limitation',
     source: 'packages/layout-core-rust/src/anim.rs:stop_nodes（含 reset_visuals）+ hosts/ios/ProteusHost/selfdraw-scene.swift:dematerializeRow',
-    decision: 'Morpheus §7.3（MA0 第二项）',
+    decision: 'Kairos §7.3（MA0 第二项）',
   },
   {
     id: 'boundary/no-arbitrary-js-animation',
     kind: 'boundary',
     title: '不开放任意 JS 动画函数（设计红线）',
     description: '没有"让开发者写任意动画逻辑"的 API；能声明的只有封闭集。',
-    why: 'Morpheus §13 第 3 条：那是"在第一王炸上开口子"（与"不开放任意原生调用"同理）。'
+    why: 'Kairos §13 第 3 条：那是"在第一王炸上开口子"（与"不开放任意原生调用"同理）。'
       + '需要算不出来的东西时，走**显式逃生口**（§4.2：可用但必须登记，且被统计为 degraded）。',
     when: '遇到"预设和字段都不够用"时（**不要**找后门，先看是否该补预设）',
     example: `// ★先看有没有内建替代（2026-10-01 起多数缓动不用再走逃生口）：
@@ -922,7 +922,7 @@ escapes.register({
     verify: 'tests/animation-presets.test.ts 逃生口段（三要素必填 / 率统计 / degraded 单列 / 零副作用）',
     status: 'limitation',
     source: 'packages/animation/src/types.ts（封闭集定义）',
-    decision: 'Morpheus §13 第 3 条',
+    decision: 'Kairos §13 第 3 条',
   },
 ]
 
@@ -966,5 +966,5 @@ export function formatAnimCatalog(): string {
     const items = rules.map((r) => `- \`${r.id}\` \`[${r.status}]\` ${r.title}`).join('\n')
     return `### ${labels[kind]}（${rules.length} 条）\n\n${items}`
   })
-  return [`# Morpheus 动画声明项目录（共 ${ANIM_RULES.length} 条）`, '', ...blocks].join('\n')
+  return [`# Kairos 动画声明项目录（共 ${ANIM_RULES.length} 条）`, '', ...blocks].join('\n')
 }

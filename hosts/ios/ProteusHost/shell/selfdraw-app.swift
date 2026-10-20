@@ -193,7 +193,7 @@ final class SelfDrawViewController: UIViewController {
         //   ★决策 #873：`--glass-demo` = 玻璃**常驻可拖拽演示**（对齐 Android GlassActivity / 鸿蒙 glass-demo）
         let isGlassDemo = ProcessInfo.processInfo.arguments.contains("--glass-demo")
         let isGlass = ProcessInfo.processInfo.arguments.contains("--glass") || isGlassBench || isGlassDemo
-        // ★★Morpheus 炫技场（`--showcase`）——整场节目单编舞（开场语 → 演出 → 谢幕语）
+        // ★★Kairos 炫技场（`--showcase`）——整场节目单编舞（开场语 → 演出 → 谢幕语）
         //
         // 【判定规则（"点开即演示"的落地）】显式参数 > Info.plist 缺省场景。
         //   · 脚本跑实验：显式传 `--showcase` / `--bench` / `--selfdraw` / `--host-runtime` / `--app-stack`
@@ -289,9 +289,9 @@ final class SelfDrawViewController: UIViewController {
             AppStackScene.run(ctx: ctx, bundleURL: url)
             return
         }
-        // ★★Morpheus 炫技场：交独立模块驱动（建树 → 三段编舞 → 帧循环 → 读数 + 截图）
+        // ★★Kairos 炫技场：交独立模块驱动（建树 → 三段编舞 → 帧循环 → 读数 + 截图）
         if isShowcase {
-            NSLog("[proteus] Morpheus 炫技场启动")
+            NSLog("[proteus] Kairos 炫技场启动")
             ShowcaseScene.run(ctx: ctx, bundleURL: url)
             return
         }

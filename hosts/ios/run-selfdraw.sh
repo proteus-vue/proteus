@@ -254,7 +254,7 @@ if [ -f "$APP_CFG" ]; then
   cp "$APP_CFG" "$APP/app-config.json"
   echo "    app-config.json 已入 .app"
 fi
-# ★Morpheus 炫技场 bundle（`--showcase` 模式用）
+# ★Kairos 炫技场 bundle（`--showcase` 模式用）
 cp "$HERE/bridge/dist/bundle-showcase.js" "$APP/bundle-showcase.js"
 # ★★A/B（矩阵 #14 续）：与 Android **同一份** `bundle-vapor.js` + `vapor-artifacts.json`
 #   （零移植——JSVM/JSC 都直接 eval 同一份 IIFE；见 gen-fixtures 的同源复制纪律）。
@@ -287,7 +287,7 @@ cat > "$APP/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>ProteusSelfDraw</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleName</key><string>ProteusSelfDraw</string>
-  <key>CFBundleDisplayName</key><string>Morpheus</string>
+  <key>CFBundleDisplayName</key><string>Kairos</string>
   <!-- ★缺省场景（无参数启动 = 从桌面点开）：★批次 44（2026-10-05）改为 **superapp**——点图标即进
        superapp 真实应用（可切 tab）；用户原话「手机主屏图标点开 App 就能测完整体验」。
        脚本各模式用显式参数覆盖（--selfdraw/--bench/--host-runtime/--app-stack/--showcase/--superapp）。 -->
@@ -419,7 +419,7 @@ SNAP_FILE="selfdraw-final.png"
 if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
 # ★★六端 SFC 压力夹具 · iOS **真机**（2026-10-02）——宿主 `--stress` 驱动器
 #   （driveStress：renderStress → 截图 stress-sfc.png → 报告 stress-sfc.json → 自退）。
-#   设备上是**独立 app**（dev.proteus.layoutcore 的 Morpheus 包——见下方 BUNDLE_ID 处理），
+#   设备上是**独立 app**（dev.proteus.layoutcore 的 Kairos 包——见下方 BUNDLE_ID 处理），
 #   与既有 selfdraw/bench 场景同一宿主二进制、不同场景参数。
 if [ "$MODE" = "stress" ]; then REPORT_FILE="stress-sfc.json"; SNAP_FILE="stress-sfc.png"; fi
 if [ "$MODE" = "native-mix" ]; then REPORT_FILE="native-mix.json"; SNAP_FILE="native-mix.png"; fi
@@ -440,7 +440,7 @@ if [ "$MODE" = "glass" ]; then REPORT_FILE="glass-ios.json"; SNAP_FILE="glass-io
 if [ "$MODE" = "glass-bench" ]; then REPORT_FILE="glass-ios.json"; SNAP_FILE="glass-ios-bench.png"; fi
 # ★★★批次 44：superapp 真实应用——驱动模式落 `superapp.json`（与 Android SuperappActivity 同名）
 if [ "$MODE" = "superapp" ]; then REPORT_FILE="superapp.json"; SNAP_FILE="superapp.json"; fi
-# ★Morpheus 炫技场（一份报告 + 一张收尾截图）
+# ★Kairos 炫技场（一份报告 + 一张收尾截图）
 if [ "$MODE" = "showcase" ]; then
   REPORT_FILE="showcase.json"; SNAP_FILE="showcase-final.png"
   # ★长跑（压力测量）模式：设备端写的**仍是** showcase.json，本地**另存** showcase-soak.json——
@@ -477,7 +477,7 @@ LAUNCH_LOG="$(mktemp)"
 LAUNCH_RC=0
 echo "    启动 App（阻塞到报告落盘后自退——无轮询 / 无 sleep / 无超时；长跑请放后台）"
 if [ "$MODE" = "showcase" ]; then
-  # ★★Morpheus 炫技场：单段 launch（App 内部：建树 → **整场节目单**（开场语→演出→长跑→谢幕语，
+  # ★★Kairos 炫技场：单段 launch（App 内部：建树 → **整场节目单**（开场语→演出→长跑→谢幕语，
   #   帧循环驱动）→ 逐幕读数 + 内存采样 + 截图 → SHOWCASE_REPORT_READY → 自退）。脚本侧零轮询。
   #   ★长跑时长可由本机环境注入（冒烟用短值）：PROTEUS_SHOWCASE_SOAK_MS=3000 bash … --showcase
   #     默认 0 = 演出一遍到底（≈40 秒）；压力测量按需开启（如 300000 = 5 分钟）。
@@ -813,7 +813,7 @@ if [ "$MODE" = "host-runtime" ]; then
   exit $?
 fi
 
-# ★★Morpheus 炫技场：取两张截图（谢幕语收尾 + 漩涡中场面）+ 跑专属判据
+# ★★Kairos 炫技场：取两张截图（谢幕语收尾 + 漩涡中场面）+ 跑专属判据
 if [ "$MODE" = "showcase" ]; then
   if [ "$REPORT_FILE" = "showcase-soak.json" ]; then
     # ★长跑模式：截图/录屏**跳过取回**（避免用长跑那轮覆盖 canonical 产物——它们是「一轮到底」

@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/animation",
   "version": "0.3.0-beta.28",
-  "description": "Proteus Morpheus（声明式动画引擎表面）：预设驱动的转场/布局动画声明 + 编译期校验 + 编译到内核指令——零运行时依赖，宿主只做翻译不做曲线数学",
+  "description": "Proteus Kairos（声明式动画引擎表面）：预设驱动的转场/布局动画声明 + 编译期校验 + 编译到内核指令——零运行时依赖，宿主只做翻译不做曲线数学",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",

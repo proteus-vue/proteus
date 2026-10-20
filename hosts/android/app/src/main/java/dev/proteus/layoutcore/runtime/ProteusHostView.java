@@ -5277,7 +5277,7 @@ public class ProteusHostView extends ViewGroup {
     /* ══════════════ ★★MA0-RT：容器级平台动画（RenderThread 零参与） ══════════════ */
 
     /**
-     * ★★**容器级合成动画**（Morpheus §5-bis：提交一次 ⇒ RenderThread 自主插值）
+     * ★★**容器级合成动画**（Kairos §5-bis：提交一次 ⇒ RenderThread 自主插值）
      *
      * 【为什么 Android 的落点是"容器级"而不是像 iOS 那样的"逐层"】
      *   两端生产绘制形态不同（本轮实测确认）：

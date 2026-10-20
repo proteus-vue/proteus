@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// website/src/pages/Animation.vue —— ★★Morpheus 动画引擎（旗舰产品页 · v2 视觉精修）
+// website/src/pages/Animation.vue —— ★★Kairos 动画引擎（旗舰产品页 · v2 视觉精修）
 //
 // 【v2 相比 v1 的升级（用户：「产品页做得还是太粗糙了，视觉效果包括排版要大幅升级」）】
 //   · **Hero**：左文右真机（MobileStage）双栏构图 + 品牌光晕 + 网格底纹 + 数据 pills
@@ -43,7 +43,7 @@ const base = import.meta.env.BASE_URL || '/'
 
 const T = {
   zh: {
-    chip: 'Morpheus · 声明式动画引擎',
+    chip: 'Kairos · 声明式动画引擎',
     h1line1: '把动画变成',
     h1line2: '编译期问题',
     tagline: '会不会掉帧，编译期就知道。',
@@ -93,29 +93,29 @@ const T = {
     showcaseLead:
       '800 片瓦片同屏编舞的**整场演出**：星尘凝聚 → 聚字开场语 → 涟漪 → 多米诺 → 风暴（800×5 条指令并发）→ 全量重排 ×2 → 漩涡 → 聚字谢幕语，共 12 幕一幕到底、幕间零停顿。**全部由一句句声明式编排写出来**（相位序 + 构型预设，无一行手写循环），曲线与物理在 Rust 内核求值。这不是录屏特效，是 iPhone 12 上一次跑完的真实读数。',
     showcaseNote: '★为什么"别人不敢试"：Web/VDOM 框架 800 节点逐节点动画 = 每帧 800 次样式写入 + 布局失效；RN/小程序每个节点是原生视图，800 视图同屏是内存与桥接的双重灾难；Flutter 能跑但走 Dart 层求值。我们把曲线/物理放在内核，每帧只跨一次边界。★**路径披露**：整场走**内核驱动路径**（宿主帧循环 → 一次跨边界 tick → 曲线求值与写层全在内核；800×5 条并发指令下每帧 p50 2.37ms）；**平台零参与路径**（提交一条系统动画后主线程脱手）在路由转场与自绘场景单独验证——炫技场选前者，因为逐幕编舞需要每帧可接管与幕间连续，这里如实标注。',
-    showcaseImgAlt: 'Morpheus 炫技场真机录屏：800 片瓦片编排成 12 幕演出，收于点阵文字 800 TILES',
+    showcaseImgAlt: 'Kairos 炫技场真机录屏：800 片瓦片编排成 12 幕演出，收于点阵文字 800 TILES',
     showcaseCaption:
       '真机录屏（iPhone 12 · 60fps · 12 幕一遍到底，循环播放）：聚字开场 → 涟漪 → 风暴 → 全量重排 → 漩涡 → 谢幕语',
-    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase --record ｜ 演示 App：iPhone 上点开 Morpheus 即循环演出',
+    showcaseCmd: '复跑：bash hosts/ios/run-selfdraw.sh --showcase --record ｜ 演示 App：iPhone 上点开 Kairos 即循环演出',
     lightsTitle: '第二个节目 · 舞台灯光秀（800 彩灯 · 安卓真机）',
     lightsLead:
       '第二个炫技节目：**黑舞台上的 800 颗实体彩灯**——一颗不动，整场演出**只有亮灯与灭灯**（含文字：亮的灯组成字，灭的灯仍是可见暗盘）。15 幕：点火 → 跑马灯 → 彩虹流 → 呼吸 → 极光 → 光幕扫描 → 旋转光扇 → 棋盘翻转 → 星火 → 灯阵点字「800」「LIGHTS」→ 熄灯 → 全场亮灯 → 谢幕熄灯（可循环）。整场 **48004 条指令 100% 是颜色通道**——这是刚收口的颜色能力（底色四通道 + 多段 keyframes + 文字色轨道）被推到极限。Redmi（120Hz 屏）上 5187 帧 · vsync p50 8.333ms · 每帧 p95 2.03ms。',
     lightsNote: '★为什么"别人不敢试"：用 800 个节点做**逐灯颜色动画**（每颗灯独立多段色序列），意味着每帧要对 800 盏灯做通道求值 + 写层——曲线/插值全在 Rust 内核，每帧只跨一次边界（p95 2.03ms，帧预算 8.33ms 的 24%）。★**诚实口径**：节目标称"800 灯全可达"；文字幕的亮盘数由点阵字形决定（「800」= 41 颗亮盘），其余灯全部是可见的灭灯暗盘——这是"灯阵"语义，不是"隐藏"语义（判据逐帧断言 0 条 opacity 指令）。',
-    lightsImgAlt: 'Morpheus 灯光秀真机录屏：800 颗彩灯在黑舞台上完成 15 幕亮灭演出，中间灯阵点字 800 与 LIGHTS',
+    lightsImgAlt: 'Kairos 灯光秀真机录屏：800 颗彩灯在黑舞台上完成 15 幕亮灭演出，中间灯阵点字 800 与 LIGHTS',
     lightsCaption: '真机录屏（Redmi · 120Hz · 15 幕一遍到底，循环播放）：点火 → 跑马灯 → 彩虹流 → 光扇 → 灯阵点字 → 熄灯谢幕',
     lightsCmd: '复跑：bash hosts/android/build-and-run.sh --release --lights ｜ 分享版 APK：proteus-lights.apk（点开即循环演出）',
     foldTitle: '第三个节目 · 维度折叠（2D ↔ 3D 穿越 · 安卓真机）',
     foldLead:
       '800 张薄片在**二维平面与三维立体之间反复穿越**：拍平成地面 → 立起成墙 → 折扇 → 鳞片扭转 → 砸回平面 → 镜墙风浪 → 立体涟漪 → **镜面慢翻（0.3× 慢动作）** → 归位谢幕。**颜色 = 第三维度的语言**：平面世界是白纸（无色），每次"立起"色彩沿列涌现，每次"砸平"褪回白色——颜色本身证明了第三个维度存在。整场 24800 条指令 100% 声明式（3D 8800 条 · 自定义曲线 4800 条 · 循环 3200 条）。',
     foldNote: '★**本场是 2026-10-01 能力扩充的验收演出**：任意三次贝塞尔（`elastic` 一拍即平 / `backOut` 立起回弹 / `anticipate` 蓄力再砸）给三种"运动性格"；`rotateX/Y + perspective` 是所有维度转换本身；`repeat + alternate` 做折扇与鳞片的往复；`timeScale` 做 0.3× 慢翻与 1.6× 涟漪。真机判据端到端验证：slowYaw wall/span 3.34×（慢动作真的改变了时间推进）· ripple 0.63× · 其余精确 1.00× · 3D 逐幕终态钉死（-85°/0°/180°）。',
-    foldImgAlt: 'Morpheus 维度折叠真机录屏：800 张薄片在 2D 平面与 3D 立体间穿越，彩虹色沿列涌现',
+    foldImgAlt: 'Kairos 维度折叠真机录屏：800 张薄片在 2D 平面与 3D 立体间穿越，彩虹色沿列涌现',
     foldCaption: '真机录屏（Redmi · 120Hz · 9 幕一遍到底，循环播放）：拍平 → 立起涌现色彩 → 折扇 → 鳞片 → 砸平 → 慢翻 → 谢幕',
     foldCmd: '复跑：bash hosts/android/build-and-run.sh --release --flip ｜ 分享版 APK：proteus-flip.apk（点开即循环演出）',
     inkTitle: '第四个节目 · 墨绘·山水卷（水墨长卷自己画出来 · 安卓真机）',
     inkLead:
       '一幅水墨长卷**自己画出来**：展卷 → 远山三叠（晕团 + 湿/骨/枯三层落笔逐笔画出）→ 飞瀑（崖口 + 三笔 + 飞沫飞溅）→ 江水涨潮 → 明月升起（月晕先扩、月由缺到圆）→ 云海翻涌 → 松竹风摆（**从根部弯折**）→ 渔舟荡漾 → 飞鸟掠水（**翅膀逐帧变形**）→ 竖排题款逐字写出 → 落印 → **收卷**。13 幕 · 43.9 秒 · **326 条指令 100% 声明式 · 0 逃生口**。',
     inkNote: '★**这是一场"把 CSS 做不到的清单逐项做出来"的演出**：笔触逐笔画出 = `strokeProgress`（SVG 描边弧长进度，39 条）；远山晕染 = 渐变填充 + 月光晕呼吸 = 发光分层（25 条 `glowIntensity`）；山峦呼吸 = **路径变形**（两态峰数不同——内核自动重采样，9 条 `pathMorph`）；月晕扩散 = **渐变几何动画**（色标与几何同因子混合）；云海渗开 = 软边遮罩（`maskProgress`）；竹的风摆 = **倾斜 + 变换原点**（从根部弯折，9 条 `skewX`）；山/水/云的分段揭示 = 裁剪形变（185 条 clip 通道）。真机：5270 帧 · vsync p50 8.333ms · **每帧 p95 0.306ms**（帧预算的 3.7%）。',
-    inkImgAlt: 'Morpheus 墨绘·山水卷真机录屏：水墨长卷从空白纸上逐笔画出远山、飞瀑、江水、明月、竹舟，最后题款落印收卷',
+    inkImgAlt: 'Kairos 墨绘·山水卷真机录屏：水墨长卷从空白纸上逐笔画出远山、飞瀑、江水、明月、竹舟，最后题款落印收卷',
     inkCaption: '真机录屏（Redmi · 120Hz · 13 幕一遍到底，循环播放）：展卷 → 落笔远山 → 飞瀑 → 涨潮 → 月升 → 云海 → 竹风 → 渔舟 → 飞鸟 → 题款 → 落印 → 收卷',
     inkCmd: '复跑：bash hosts/android/build-and-run.sh --release --ink ｜ 分享版 APK：proteus-ink.apk（点开即循环演出）',
     demoTitle: '真机演示',
@@ -145,7 +145,7 @@ const T = {
     docCta: '完整文档：架构 / 声明面 / 转场 / 边界',
   },
   en: {
-    chip: 'Morpheus · Declarative Animation Engine',
+    chip: 'Kairos · Declarative Animation Engine',
     h1line1: 'Animation is a',
     h1line2: 'compile-time question',
     tagline: 'Will it jank? You know at compile time.',
@@ -195,15 +195,15 @@ const T = {
     showcaseLead:
       'A full 12-act show on 800 tiles at once: stardust gathering → a clocked opening title → ripples → dominoes → a storm (800×5 concurrent instructions) → two full re-layouts → a spiral → a clocked finale, running end to end with no pause between acts. Every act is written as one declarative choreography (phase order + formation presets, zero hand-written loops), with curves and physics evaluated in the Rust kernel. Not a filmed effect: these are readings from one run on an iPhone 12.',
     showcaseNote: '★Why others do not attempt it: in Web/VDOM frameworks, animating 800 nodes means 800 style writes and a layout invalidation every frame; in RN/mini-programs every node is a native view, so 800 views on screen is a memory and bridge disaster; Flutter can do it but evaluates in Dart. We keep curves and physics in the kernel and cross the boundary once per frame. ★**Path disclosure**: the show runs on the **kernel-driven path** (host frame loop → one boundary crossing per tick → curve evaluation and layer writes all inside the kernel; p50 2.37ms per frame even with 800×5 concurrent instructions). The **platform zero-involvement path** (one system animation committed, main thread disengages) is verified separately in route transitions and the self-drawn scene — the showcase picks the former because per-act choreography needs per-frame takeover and seamless act hand-off. Stated honestly.',
-    showcaseImgAlt: 'Morpheus showcase device recording: 800 tiles choreographed through 12 acts, ending as the pixel text 800 TILES',
+    showcaseImgAlt: 'Kairos showcase device recording: 800 tiles choreographed through 12 acts, ending as the pixel text 800 TILES',
     showcaseCaption:
       'Device recording (iPhone 12 · 60fps · 12 acts in one pass, looping): clocked title → ripples → storm → full re-layout → spiral → finale',
-    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase --record | Demo app: tap Morpheus on iPhone for a looping show',
+    showcaseCmd: 'Re-run: bash hosts/ios/run-selfdraw.sh --showcase --record | Demo app: tap Kairos on iPhone for a looping show',
     lightsTitle: 'Second show · Stage Light Show (800 lamps · Android device)',
     lightsLead:
       'The second showcase: **800 physical lamps on a black stage** — not one of them moves; the entire show is **lamps switching on and off** (text included: lit lamps form the letters, unlit lamps stay visible as dim discs). 15 acts: ignition → marquee chase → rainbow flow → breathing → aurora → light-curtain sweep → rotating fan → checkerboard → sparkle → matrix text "800" / "LIGHTS" → blackout → full-on finale → curtain call (loopable). All **48,004 instructions are 100% colour channels** — the freshly landed colour capability (four background channels + multi-segment keyframes + a text-colour track) pushed to its limit. On a 120 Hz Redmi: 5,187 frames · vsync p50 8.333 ms · per-frame p95 2.03 ms.',
     lightsNote: '★Why others hesitate: per-lamp colour animation across 800 nodes (each lamp its own multi-segment colour sequence) means evaluating 800 lamps every frame — curve and interpolation live in the Rust kernel, one boundary crossing per frame (p95 2.03 ms = 24% of the 8.33 ms budget). ★Honest note: the show is titled "800 lamps reachable"; the lit count in text acts follows the glyph bitmap ("800" = 41 lit), and every other lamp stays as a visible unlit disc — that is the lamp-matrix semantic, not hiding (the judge asserts 0 opacity instructions frame by frame).',
-    lightsImgAlt: 'Morpheus light-show device recording: 800 lamps on a black stage perform a 15-act on/off show, including the matrix texts 800 and LIGHTS',
+    lightsImgAlt: 'Kairos light-show device recording: 800 lamps on a black stage perform a 15-act on/off show, including the matrix texts 800 and LIGHTS',
     lightsCaption: 'Device recording (Redmi · 120 Hz · 15 acts in one pass, looping): ignition → marquee → rainbow → fan → matrix text → curtain',
     lightsCmd:
       'Re-run: bash hosts/android/build-and-run.sh --release --lights | Shareable APK: proteus-lights.apk (tap to loop the show)',
@@ -211,14 +211,14 @@ const T = {
     foldLead:
       '800 thin tiles travel **repeatedly between a 2D plane and 3D space**: flattened into a floor → lifted into a wall → accordion folds → scaled twist → slammed flat → mirror wall with wind waves → volumetric ripples → **mirror slow-turn (0.3× slow motion)** → reset finale. **Colour is the language of the third dimension**: the planar world is blank white, every lift makes colour emerge column by column, every slam fades back to white — colour itself proves the third dimension exists. All 24,800 instructions 100% declarative (8,800 3D · 4,800 custom curves · 3,200 looping).',
     foldNote: '★This show is the **acceptance performance of the 2026-10-01 capability expansion**: arbitrary cubic-bezier (`elastic` / `backOut` / `anticipate`) gives three motion personalities; `rotateX/Y + perspective` is every dimension change itself; `repeat + alternate` drives the accordion and scales; `timeScale` powers the 0.3× slow turn and 1.6× ripple. Device judge verifies end to end: slowYaw wall/span 3.34× (slow motion truly changed time advance) · ripple 0.63× · others exactly 1.00× · per-act 3D end states pinned (-85° / 0° / 180°).',
-    foldImgAlt: 'Morpheus dimensional-folding device recording: 800 tiles traversing between 2D plane and 3D space, rainbow colour emerging column by column',
+    foldImgAlt: 'Kairos dimensional-folding device recording: 800 tiles traversing between 2D plane and 3D space, rainbow colour emerging column by column',
     foldCaption: 'Device recording (Redmi · 120 Hz · 9 acts in one pass, looping): flatten → lift with emerging colour → accordion → scales → slam flat → slow turn → finale',
     foldCmd: 'Re-run: bash hosts/android/build-and-run.sh --release --flip | Shareable APK: proteus-flip.apk (tap to loop the show)',
     inkTitle: 'Fourth show · Ink Landscape Scroll (a Chinese ink painting that draws itself · Android device)',
     inkLead:
       'A Chinese ink handscroll **paints itself**: the scroll unfurls → three receding mountain stacks (a wash layer plus wet / bone / dry strokes, drawn stroke by stroke) → a waterfall (cliff lip + three falls + flying spray) → the river rises → the moon climbs (halo widens first, moon waxes from crescent to full) → clouds churn → bamboo and reeds sway (**bending from the root**) → a fishing boat bobs → birds skim the water (**wings morph frame by frame**) → a vertical title is written character by character → the seal is stamped → **the scroll rolls shut**. 13 acts · 43.9 s · **326 instructions, 100% declarative · 0 escapes**.',
     inkNote: '★**This show works through the list of things CSS cannot do, one by one**: strokes drawing themselves = `strokeProgress` (SVG arc-length progress, 39 of them); mountain washes = gradient fills, the moon halo breathing = layered glow (25 `glowIntensity`); the mountain breathing = **path morph** (the two states differ in peak count — auto-resampled in the kernel, 9 `pathMorph`); the halo expanding = **gradient geometry animation** (stops and geometry blend on one factor); clouds seeping out = soft mask (`maskProgress`); the bamboo sway = **skew + transform origin** (bending from the root, 9 `skewX`); the staged reveal of mountains / river / clouds = clip-path morph (185 clip channels). On device: 5270 frames · vsync p50 8.333 ms · **p95 0.306 ms per frame** (3.7% of the frame budget).',
-    inkImgAlt: 'Morpheus ink-landscape device recording: a handscroll draws mountains, waterfall, river, moon, bamboo and a boat stroke by stroke, then signs and seals itself',
+    inkImgAlt: 'Kairos ink-landscape device recording: a handscroll draws mountains, waterfall, river, moon, bamboo and a boat stroke by stroke, then signs and seals itself',
     inkCaption: 'Device recording (Redmi · 120 Hz · 13 acts in one pass, looping): unfurl → mountain strokes → waterfall → rising river → moonrise → clouds → bamboo wind → boat → birds → inscription → seal → roll shut',
     inkCmd: 'Re-run: bash hosts/android/build-and-run.sh --release --ink | Shareable APK: proteus-ink.apk (tap to loop the show)',
     demoTitle: 'Device demo',
@@ -550,7 +550,7 @@ const CODE = computed(() =>
     isEn.value
       ? `// Route level: one declaration, honoured per target
 meta: { transition: 'halfScreen' }
-// Web → CSS transition · Mini Program → routeType · App → kernel animation (Morpheus)
+// Web → CSS transition · Mini Program → routeType · App → kernel animation (Kairos)
 
 // Element level: one line
 const spec = presets.route.bottomSheet()          // half-screen sheet sliding up
@@ -559,7 +559,7 @@ const batch = compileRoute(spec, { enter: a, exit: b })
 //   the platform-commit path hands ONE CAKeyframeAnimation to the render server.`
       : `// 路由级：一行声明，三端各自兑现
 meta: { transition: 'halfScreen' }
-// Web → CSS 转场 · 小程序 → routeType · App → 内核动画（Morpheus）
+// Web → CSS 转场 · 小程序 → routeType · App → 内核动画（Kairos）
 
 // 元素级：一句话演出
 const spec = presets.route.bottomSheet()          // 半屏弹窗从底部滑入
@@ -1179,7 +1179,7 @@ onUnmounted(() => {
       <!-- ═══════════ CTA ═══════════ -->
       <p-view data-reveal class="cta">
         <p-view ref="ctaGlowEl" class="cta-glow" aria-hidden="true" />
-        <p-heading ref="ctaTitleEl" :level="3" v-p-fluid="'font-size(20, 26)'" class="cta-title">Morpheus</p-heading>
+        <p-heading ref="ctaTitleEl" :level="3" v-p-fluid="'font-size(20, 26)'" class="cta-title">Kairos</p-heading>
         <p-text class="cta-sub">{{ isEn ? 'Declarative animation engine' : '声明式动画引擎' }} · v0.3</p-text>
         <router-link to="/docs/animation/00-overview" class="btn btn-primary cta-btn">{{ C.docCta }}</router-link>
       </p-view>

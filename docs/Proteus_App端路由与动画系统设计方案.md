@@ -412,7 +412,7 @@ push 的是**项目真实页面**（非合成屏名）、返回命令序正确�
 - [x] **帧循环**：iOS `CADisplayLink`（真实 vsync；`.common` 模式不被滚动/手势掐停）→ 内核 tick
 - [x] **宿主变换应用**：`CATransform3D` 中心锚点缩放（等价 CSS 默认 origin）
 - [x] **每帧二进制通道**：`anim_tick_bin` **16B/条**（JSON 每帧 O(N) 编解码是白付——RT0 证明的主要收益来源）
-- [x] **§7.3 节点复用解绑**（Morpheus 方案要求）：`AnimEngine::stop_nodes` + FFI + 宿主 `dematerializeRow`
+- [x] **§7.3 节点复用解绑**（Kairos 方案要求）：`AnimEngine::stop_nodes` + FFI + 宿主 `dematerializeRow`
       成批解绑 + **层进池前重置 transform**（否则池里取出的层带旧变换 ⇒ 新内容错位）
 - [x] **真机证据**：位移中途 tx=**105.00**（=120×easeOutCubic(0.5)=120×0.875 **精确吻合**）·
       终值 **120.0000**（端点钉死）· seek 后 scale=**0.9500**（=0.6+0.4×0.875 **精确吻合**）·

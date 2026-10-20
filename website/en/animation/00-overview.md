@@ -4,7 +4,7 @@ order: 1
 group: Overview
 ---
 
-# Morpheus · Declarative Animation Engine
+# Kairos · Declarative Animation Engine
 
 Make “will it jank?” a **compile-time question**.
 
@@ -12,9 +12,9 @@ One line of declaration. Curve evaluation and spring physics live in the Rust co
 
 ## Why it exists
 
-Most approaches treat animation as a **continuous runtime task**: compute and write every frame — whether it janks depends on the device and the current load. Morpheus asks a different question: **what can already be decided at compile time?**
+Most approaches treat animation as a **continuous runtime task**: compute and write every frame — whether it janks depends on the device and the current load. Kairos asks a different question: **what can already be decided at compile time?**
 
-| Question | Conventional approach | Morpheus |
+| Question | Conventional approach | Kairos |
 |---|---|---|
 | Are the parameters valid | Only discovered at runtime (bad value → jump / crash) | **Compile-time validation** (closed set + 7 checks, invalid fails immediately) |
 | Will it jank | A tuning gamble on real devices | **Compile-time composited-property check** (transform / opacity ⊆ the set → zero-involvement path) |
@@ -26,13 +26,13 @@ Most approaches treat animation as a **continuous runtime task**: compute and wr
 
 ### ① Layout animation, nearly free
 
-Classic FLIP reads geometry twice (before and after the change) — both reads are expensive inside a VDOM framework. In Morpheus the geometry **already lives in the Rust layout core**: both snapshots are taken inside the kernel, which then emits the `Δ → 0` tween. Zero cross-boundary geometry queries.
+Classic FLIP reads geometry twice (before and after the change) — both reads are expensive inside a VDOM framework. In Kairos the geometry **already lives in the Rust layout core**: both snapshots are taken inside the kernel, which then emits the `Δ → 0` tween. Zero cross-boundary geometry queries.
 
 Combined with a `0.08ms` full relayout, motion like “other rows glide out of the way when a list item is added or removed” costs almost nothing.
 
 ### ② Transitions with zero main-thread involvement
 
-Morpheus **does not self-draw**, so transitions can land directly on the system render thread (Android RenderThread / iOS CoreAnimation render server): the kernel samples keyframes, the host commits **one** platform animation, and the system interpolates on its own from there.
+Kairos **does not self-draw**, so transitions can land directly on the system render thread (Android RenderThread / iOS CoreAnimation render server): the kernel samples keyframes, the host commits **one** platform animation, and the system interpolates on its own from there.
 
 > Flutter self-draws, so it had to build its own raster thread. We do not — the system’s pipeline is more mature, and it is free.
 
@@ -72,7 +72,7 @@ const batch = compileRoute(spec, { enter: a, exit: b })
 
 - **Interactive demos** (transition player / curve evaluator / preset catalogue): [Animation engine product page](/animation)
 - **Device evidence table** (every row points to a re-runnable script): [Evidence & honest boundaries](/docs/animation/04-boundaries)
-- **AI manual** (48 declaration entries with what / why / when / example / how to verify): the Morpheus declaration manual (repo artifact `docs/generated/anim-manual.md`)
+- **AI manual** (48 declaration entries with what / why / when / example / how to verify): the Kairos declaration manual (repo artifact `docs/generated/anim-manual.md`)
 
 ## Next
 
