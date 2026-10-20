@@ -2226,7 +2226,7 @@
         "T-app-fetch-cancel",
         "T-app-upload-stream"
       ],
-      "note": "门面证据已双端齐（#1122 Android 9/9 + #1126 iOS 9/9）。★仍待：Web/MP 实跑（目前只有静态判据）。"
+      "note": "门面证据双端齐（#1122 Android 9/9 + #1126 iOS 9/9）；Web/MP 腿逻辑已真跑验证（#1127：真 HTTP 服务器 + 假 wx），并挖出\"体读取阶段取消未包装\"的真缺陷。★仍待：真浏览器（test:e2e:web）/ 真容器（test:e2e:mp）层。"
     },
     {
       "id": "T-doc-generator-drift",

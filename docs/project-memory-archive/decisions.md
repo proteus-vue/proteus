@@ -10201,3 +10201,63 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      引擎无 `setTimeout` ⇒ 无等待窗口，见 #1121 边界①）；
   ③ 本轮只补 usefetch 一条，**落盘/上传/取消在 iOS 的门面路径**未单独跑
      （它们底层已验，门面只是透传；若将来门面再加字段，建议同批补跑）。
+
+1127. **★★Web / MP fetch 腿的**真实运行**判据（#1122 诚实边界②收口）——真跑挖出 1 个静态判据查不出的缺陷 · 决策**（2026-10-20 · 承接 #1122「下一步②：Web/MP 实跑」）：
+
+【为什么静态判据不够（#1122 只做了源码文本断言）】
+  #1122 给两条腿补了 timeout / 取消 / arraybuffer / 流式，判据却是"源码里有 `g.AbortController`"、
+  "源码里有 `getReader`"这类**文本断言**。文本在 ≠ 逻辑对：
+  · `setTimeout(() => ctl.abort(), ms)` 漏了或用错，文本照样在；
+  · 三元 `byUser ? 'fetch.aborted' : 'fetch.timeout'` 判反，静态断言查不出；
+  · 流式的 `seq` 递增、`done` 终止条件，只有真跑才知道。
+
+【★真跑挖出的真缺陷（静态判据永远查不到的那一类）】
+  **响应体读取阶段的取消/超时没有被包装**：
+  · 原 `try/catch` 只包了 `fetch()` 调用；
+  · 而 `reader.read()` / `resp.arrayBuffer()` / `resp.text()` 在取消或超时时**同样会抛 `AbortError`**
+    （原生 `DOMException`，**没有 `code` 字段**）；
+  · ⇒ 上层 `runFetch` 的码提取拿不到 `fetch.aborted`/`fetch.timeout`，只能判成 **`fetch.failed`**；
+  · ⇒ **业务失去了"用户取消 vs 网络失败"的区分**（而这正是 #1122 刚补上的能力）。
+  ★修法：抽一个 `abortAware(fn)` 把**体读取**纳入同一套错误归一（同一个 `isAbort` 判定，不复制逻辑），
+    包住流式循环、`arrayBuffer()`、`text()` 三处。
+  ★这条缺陷在 Android/iOS 真机上都**不会暴露**（它们的宿主侧自己管取消），
+    只在 **Web 腿**这条"平台原生 AbortSignal"路径上出现——再次说明"某端验过 ≠ 这套代码验过"。
+
+【装置设计（两套，都必须"真跑"）】
+  · **Web 腿**（`tests/fetch-web-leg-live.test.ts` 10/10）：
+    起**真 HTTP 服务器**（`hello` / `blob` / `slow` / `endless` / `big` 五个端点）+ 用 Node 22 内置的
+    **WHATWG fetch** 真跑 `webRequest`。覆盖：正常响应 · `arraybuffer` 逐字节 · **timeout 真的在 300ms 返回**
+    （而非等服务器 2500ms）· **取消后服务端观测到连接被掐断**（`req.on('close')` 事件，证明"真掐断"
+    而不是"JS 侧不管了"）· 流式 `seq` 连续 + 总字节正确 · `savePath`/`upload` 明确 unsupported。
+  · **MP 腿**（`tests/fetch-mp-leg-live.test.ts` 11/11）：
+    用**假 `wx`**（记录入参 + 按 `wx.request` 的真实回调契约回包）真跑 `mpRequest`。覆盖：
+    参数真的传下去（含 #1122 补的 `timeout`/`responseType` 映射）· `success` 映射 ·
+    **`fail` 里的 timeout ⇒ 独立错误码** · 四个 S3 语义 **unsupported 且"一个请求都不发"**
+    （★这条比"报错"更强：静默忽略的话请求会发出去）。
+
+【★破坏性验证（3 条，全部命中）】
+  ① Web 去掉 timeout ⇒ **2 条红**，报错直指 `promise resolved "too late"`（本该 reject）；
+  ② MP 的 `signal` 分支改 `if (false)` ⇒ 红，且报错显示**请求真的发出去了**（`resolved {data:'x'}`）；
+  ③ （过程中）静态断言切片不够长导致误红 ⇒ 修断言窗口——这也是"改实现要同步改判据"的常规动作。
+
+【诚实边界（两条都必须写清，别让人误以为"浏览器/微信已验证"）】
+  ① **Web 跑的是 Node 22 的 WHATWG fetch，不是真浏览器**。两者在 fetch/AbortSignal/ReadableStream 的
+     **标准语义**上一致，但浏览器还有 **CORS / 混合内容 / 缓存策略 / Service Worker** 等层——
+     那些不在本判据覆盖内；要覆盖必须走 `test:e2e:web`（真页面）。
+  ② **MP 用的是假 `wx`**，复刻的是**文档契约**（`success({data,statusCode,header})` / `fail({errMsg})`），
+     不是真容器。真容器还有**登录态 / 域名白名单 / 并发上限 10 / 真网络**等层——
+     要覆盖必须走 `test:e2e:mp`（真设备/模拟器）。
+  ⇒ 准确的说法是：**"两条腿的逻辑已被真跑验证；容器/浏览器层仍未验"**。
+
+【落地】
+  · `packages/api/src/capability-fetch-legs.ts`：抽 `abortAware`，包住体读取三处（真缺陷修复）
+  · `tests/fetch-web-leg-live.test.ts`（新，10/10）：真 HTTP 服务器 + WHATWG fetch 真跑
+  · `tests/fetch-mp-leg-live.test.ts`（新，11/11）：假 wx 按真实回调契约真跑
+  · `tests/useFetch-contract.test.ts`：切片窗口扩到 6000（实现变长后的同步）
+
+【门禁】file-size · safe-edit · script-compile · api 包类型检查 · 34/34 相关测试。
+
+【下一步】
+  ① **`test:e2e:web`**（真浏览器）覆盖 CORS / 混合内容层；
+  ② **`test:e2e:mp`**（真设备）覆盖登录态 / 域名白名单 / 并发上限；
+  ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）。

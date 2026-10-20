@@ -81,23 +81,45 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
     resp.headers.forEach((v, k) => {
       headers[k] = v
     })
+    // ★★★#1127 真运行挖出：**响应体读取阶段也会因取消/超时而抛 AbortError**，
+    //   而此前 try/catch 只包了 `fetch()` 调用 ⇒ 流式读取时取消，抛的是**原生 DOMException**
+    //   （`name === 'AbortError'`，没有 `code`）⇒ 上层 `runFetch` 只能判成 `fetch.failed`，
+    //   业务失去"用户取消 vs 网络失败"的区分。
+    //   ⇒ 把**体读取**也纳入同一套错误归一（同一个 `isAbort` 判定，不复制逻辑）。
+    const abortAware = async <T>(fn: () => Promise<T>): Promise<T> => {
+      try {
+        return await fn()
+      } catch (e) {
+        if ((e as { name?: string })?.name === 'AbortError') {
+          const byUser = (config.signal as { aborted?: boolean } | undefined)?.aborted === true
+          throw new ctx.CapError(
+            byUser ? 'fetch.aborted' : 'fetch.timeout',
+            byUser ? '请求已取消' : `请求超时（${timeoutMs}ms）`,
+          )
+        }
+        throw e
+      }
+    }
+
     // ★流式：ReadableStream 逐块推给 onChunk（**拉取式**节奏，与 App 的回推式不同）
     if (config.onChunk && resp.body && typeof resp.body.getReader === 'function') {
       const reader = resp.body.getReader()
       let seq = 0
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        if (value && value.length) config.onChunk(value instanceof Uint8Array ? value : new Uint8Array(value), seq++)
-      }
+      await abortAware(async () => {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value && value.length) config.onChunk(value instanceof Uint8Array ? value : new Uint8Array(value), seq++)
+        }
+      })
       // ★流式模式下 `data` 为空（字节已逐块给过；要聚合请自己在 onChunk 里做）
       return { data: undefined, status: resp.status, headers, config }
     }
     if (config.responseType === 'arraybuffer') {
-      const buf = await resp.arrayBuffer()
+      const buf = await abortAware(() => resp.arrayBuffer())
       return { data: new Uint8Array(buf), status: resp.status, headers, config }
     }
-    const text = await resp.text()
+    const text = await abortAware(() => resp.text())
     let data: unknown = text
     if (config.responseType !== 'text') {
       try {

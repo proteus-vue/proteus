@@ -138,7 +138,8 @@ describe('★#1122 Web / MP 腿 · 做不到的语义必须明确报 unsupported
   it('★Web：接原生 AbortSignal + timeout + responseType + 流式', () => {
     const s = read(LEGS)
     const start = s.indexOf('export function webRequest')
-    const seg = s.slice(start, start + 3600)
+    // ★#1127：Web 腿加 abortAware 包装后变长 ⇒ 切片窗口扩大（否则尾部断言查不到）
+    const seg = s.slice(start, start + 6000)
     expect(seg, '★Web 未用原生 AbortController（平台本来就有）').toMatch(/g\.AbortController/)
     expect(seg, '★Web 未实现 timeout（fetch 无此选项，需 AbortController）').toMatch(/setTimeout\(\(\) => ctl!?\.abort\(\), timeoutMs\)/)
     expect(seg, '★Web 未区分 AbortError 是"用户取消"还是"超时"').toMatch(/byUser[\s\S]{0,120}fetch\.aborted/)
