@@ -85,6 +85,12 @@ describe('★#1099 mount 相位耗时是可比读数（P1/P2 切片的依据）'
  *     ★这条最容易被"顺手填 0"毁掉：0 会被读成"采样耗时为零"，而真实情况是"没采样"。
  * ════════════════════════════════════════════════════════════════════════════ */
 const IOS_SELFDRAW = 'hosts/ios/ProteusHost/runtime/selfdraw-scene.swift'
+// ★#1103：玻璃遍已拆成独立文件（`applyGlassPass` 及其读数都在这里）。
+//   ★教训（本仓反复踩）：**代码搬家后判据必须跟着搬**——否则"判据绿了"其实是在扫一个
+//     已经不含该代码的文件（本组判据第一次跑就因此假红四条，正好证明它没失效、只是找错文件）。
+const IOS_GLASS = 'hosts/ios/ProteusHost/runtime/selfdraw-glass.swift'
+/** 玻璃相关代码所在的文件集合（判据两处都扫，避免"搬走即静默失效"） */
+const IOS_GLASS_SRC = `${IOS_SELFDRAW}\n${IOS_GLASS}`
 const IOS_RUNTIME_HOST = 'hosts/ios/ProteusHost/runtime/superapp-runtime-host.swift'
 const IOS_SUPERAPP_SCENE = 'hosts/ios/ProteusHost/shell/superapp-scene.swift'
 
@@ -190,8 +196,11 @@ describe('★#1100 iOS mount 相位与 Android 同口径', () => {
  *     ② 早退语义没被破坏——无玻璃时必须**零开销早退**（否则每个屏都白烧一次子相位）。
  * ════════════════════════════════════════════════════════════════════════════ */
 describe('★#1101 iOS 玻璃遍子相位', () => {
+  // ★#1103：玻璃遍已拆到 `selfdraw-glass.swift`——判据扫**两个文件**（字段声明在主类、方法在扩展）
+  const readGlass = () => read(IOS_SELFDRAW) + '\n' + read(IOS_GLASS)
+
   it('拆出 hide / raster / blur / metal / install 五段（+ 总量 / 捕获像素 / 玻璃块数）', () => {
-    const s = read(IOS_SELFDRAW)
+    const s = readGlass()
     for (const f of ['lastGlassHideMs', 'lastGlassRasterMs', 'lastGlassBlurMs',
                      'lastGlassMetalMs', 'lastGlassInstallMs', 'lastGlassTotalMs']) {
       expect(s.includes(f), `缺玻璃子相位字段 ${f}`).toBe(true)
@@ -202,7 +211,7 @@ describe('★#1101 iOS 玻璃遍子相位', () => {
   })
 
   it('★每段都有真实计时（不是只声明字段——删掉计时表达式必须红）', () => {
-    const s = read(IOS_SELFDRAW)
+    const s = readGlass()
     // ★关键：真实埋点是局部 `xxxMs = (CFAbsoluteTimeGetCurrent() - tXxx0) * 1000`，
     //   而不是末尾那次 `lastGlassXxxMs = xxxMs`。只查后者会被"删掉计时仍绿"骗过（本轮实测）。
     const SEGS: Array<[string, string]> = [
@@ -224,7 +233,7 @@ describe('★#1101 iOS 玻璃遍子相位', () => {
   })
 
   it('★无玻璃时仍零开销早退（子相位不得给每个屏都加一次全流程）', () => {
-    const s = read(IOS_SELFDRAW)
+    const s = readGlass()
     const fn = s.slice(s.indexOf('func applyGlassPass()'))
     const head = fn.slice(0, fn.indexOf('let size = bounds.size'))
     expect(head, 'applyGlassPass 首行必须是"无玻璃直接 return"').toMatch(/guard !glassSpecByNodeId\.isEmpty else \{ return \}/)
@@ -234,31 +243,73 @@ describe('★#1101 iOS 玻璃遍子相位', () => {
   })
 
   it('报告带出玻璃子相位（mount_history 逐次 + glass_phase 末次）', () => {
-    const s = read(IOS_SELFDRAW)
+    const s = readGlass()
     expect(s).toMatch(/for \(k, val\) in v\.glassPhaseStats\(\) \{ rec\["glass_" \+ k\] = val \}/)
     expect(read(IOS_SUPERAPP_SCENE)).toMatch(/o\["glass_phase"\]/)
   })
 
   it('★CIContext 必须复用（每帧新建 = 每帧付一次上下文初始化；真机模糊段 10.6ms）', () => {
-    const s = read(IOS_SELFDRAW)
+    const s = readGlass()
     // 只允许**声明处**一次构造；`applyGlassPass` 内不得再 `CIContext(options:)` 新建
     //   ★排除注释行（注释里会提到 `CIContext(options: nil)` 这个写法——按代码行判才准）
     const codeLines = s.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
     const ctor = codeLines.join('\n').match(/CIContext\(options:/g) ?? []
     expect(ctor.length, 'CIContext 被多次构造（应复用一份 sharedCIContext）').toBe(1)
-    expect(s).toMatch(/private static let sharedCIContext = CIContext\(options: nil\)/)
+    // 守「有共享实例 + 用的是它」，不守访问修饰符（跨文件访问需 `static` 而非 `private static`）
+    expect(s).toMatch(/(private )?static let sharedCIContext = CIContext\(options: nil\)/)
     // 守「用的是那份共享实例」，不守具体前缀（`Self.` / `SelfDrawView.` 都算对）
     expect(s).toMatch(/let ctx = (Self|SelfDrawView)\.sharedCIContext/)
   })
 
   it('★CIFilter 必须复用（半径扫描证据：半径 0 时构图仍 4.58ms = 与半径无关的固定开销）', () => {
-    const s = read(IOS_SELFDRAW)
+    const s = readGlass()
     const codeLines = s.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
     const code = codeLines.join('\n')
     // 只允许声明处构造一次；玻璃遍里不得再 CIFilter(name:)
     const ctor = code.match(/CIFilter\(name:/g) ?? []
     expect(ctor.length, 'CIFilter 被多次构造（应复用一份 sharedBlurFilter）').toBe(1)
-    expect(code).toMatch(/private static let sharedBlurFilter = CIFilter\(name: "CIGaussianBlur"\)/)
+    expect(code).toMatch(/(private )?static let sharedBlurFilter = CIFilter\(name: "CIGaussianBlur"\)/)
     expect(code).toMatch(/if let blur = (Self|SelfDrawView)\.sharedBlurFilter/)
+  })
+})
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ★★★#1103：**玻璃遍"每遍成本 vs 首次预热"必须可区分**（纠正 #1102 的结论）
+ *
+ * 【#1102 错在哪】半径扫描时每次进程**只跑 1 遍**玻璃遍，看到「radius=0 时 build 仍 4.58ms」
+ *   就写成"与半径无关的**固定成本**"——但"固定"有两种：每遍都付，还是进程首次付一次。
+ *   两者处置完全相反（前者值得优化，后者只付一次、不该优化）。
+ *
+ * 【真机实测（glass-nav 可滚页 · 同进程 8 遍）】
+ *   seq1 build=7.53ms；seq2–8 build=0.02–0.05ms ⇒ **是预热**，不是每遍固定成本。
+ *   稳态 total 只有 5.3–7.8ms（此前单遍测得的 18–21ms 里含预热）。
+ * ════════════════════════════════════════════════════════════════════════════ */
+describe('★#1103 玻璃遍历史环（区分首次预热 vs 每遍成本）', () => {
+  const GLASS = 'hosts/ios/ProteusHost/runtime/selfdraw-glass.swift'
+
+  it('每遍玻璃遍都进历史环，且环有上限（无界 = 内存泄漏）', () => {
+    const g = read(GLASS)
+    expect(g).toMatch(/glassPassHistory\.append\(rec\)/)
+    expect(g).toMatch(/glassPassHistory\.removeFirst\(glassPassHistory\.count - SelfDrawView\.glassHistoryCap\)/)
+    expect(read(IOS_SELFDRAW)).toMatch(/static let glassHistoryCap = 16/)
+    expect(g).toMatch(/func glassPassHistorySnapshot\(\)/)
+  })
+
+  it('历史记录含 build / readback / 半径 / 捕获面积（否则无法判断哪一段变快）', () => {
+    const g = read(GLASS)
+    for (const k of ['"build_ms"', '"readback_ms"', '"blur_ms"', '"radius_px"', '"crop_px"', '"seq"']) {
+      expect(g.includes(k), `历史记录缺 ${k}`).toBe(true)
+    }
+  })
+
+  it('★报告带出 glass_history（只能看到末次 = 又一次"单遍读数"陷阱）', () => {
+    expect(read(IOS_SUPERAPP_SCENE)).toMatch(/o\["glass_history"\]/)
+    expect(read(IOS_RUNTIME_HOST)).toMatch(/func glassPassHistory\(\)/)
+  })
+
+  it('采样次数由 env 控制且**默认 1**（不设 = 既有行为，取证开关不得改生产）', () => {
+    const sc = read(IOS_SUPERAPP_SCENE)
+    expect(sc).toMatch(/PROTEUS_GLASS_SAMPLES/)
+    expect(sc).toMatch(/max\(1, Int\(ProcessInfo\.processInfo\.environment\["PROTEUS_GLASS_SAMPLES"\] \?\? "1"\)/)
   })
 })

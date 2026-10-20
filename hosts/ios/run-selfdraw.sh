@@ -212,7 +212,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" \
   "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/device-capability.swift" "$HERE/ProteusHost/runtime/keyboard-watch.swift" "$HERE/ProteusHost/runtime/element-rect.swift" "$HERE/ProteusHost/runtime/capture-capability.swift" "$HERE/ProteusHost/runtime/websocket-capability.swift" "$HERE/ProteusHost/runtime/file-transfer-capability.swift" \
-  "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift" "$HERE/ProteusHost/runtime/host-tree-diff.swift" "$HERE/ProteusHost/runtime/host-abi.swift" "$HERE/ProteusHost/runtime/host-support.swift" "$HERE/ProteusHost/runtime/host-exports-protocol.swift" \
+  "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift" "$HERE/ProteusHost/runtime/host-tree-diff.swift" "$HERE/ProteusHost/runtime/host-abi.swift" "$HERE/ProteusHost/runtime/host-support.swift" "$HERE/ProteusHost/runtime/host-exports-protocol.swift" "$HERE/ProteusHost/runtime/selfdraw-glass.swift" \
   "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" \
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
   "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \
@@ -613,6 +613,10 @@ elif [ "$MODE" = "superapp" ]; then
   # ★#1102：玻璃模糊半径倍率（取证用——量「半径 vs 耗时」斜率；不设 = 1.0，生产行为不变）
   if [ -n "${PROTEUS_GLASS_BLUR_SCALE:-}" ]; then
     WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_BLUR_SCALE\":\"${PROTEUS_GLASS_BLUR_SCALE}\""
+  fi
+  # ★#1103：同进程内玻璃遍采样次数（取证用——区分"每遍都付"vs"首次预热"；不设 = 1）
+  if [ -n "${PROTEUS_GLASS_SAMPLES:-}" ]; then
+    WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_SAMPLES\":\"${PROTEUS_GLASS_SAMPLES}\""
   fi
   if [ "$DRIVE" = "1" ]; then SA_ARGS+=(--drive); fi
   if [ -n "$TAP" ]; then SA_ARGS+=("--tap=$TAP"); fi

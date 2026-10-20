@@ -48,7 +48,7 @@ final class SelfDrawView: UIView {
     /// 节点 id → **绝对原点**（用于把核心的绝对坐标换算为 CALayer 的父相对坐标）
     private var absOriginByNodeId: [Int: CGPoint] = [:]
     /// ★节点 id → 已建好的 CALayer（**增量更新的前提**：有它才能只改frame、不重建）
-    private var layersById: [Int: CALayer] = [:]
+    var layersById: [Int: CALayer] = [:]
 
     /* ══════════ ★★★交互视觉反馈（Dactyl 专项 · 与 Android ProteusHostView 同语义）══════════
      * 【三条能力在此共用的"写层基线"】场跟手只覆盖 scale/rotate、按下态只覆盖底色/描边/缩放/发光
@@ -529,224 +529,44 @@ final class SelfDrawView: UIView {
                                        overlay: CGFloat((g["overlay"] as? NSNumber)?.doubleValue ?? 0))  // ★#966：叠加层（shader offset 92）
     }
 
-    /// ★★★玻璃遍：捕获"无玻璃面"的内容帧 → 对每个玻璃节点装玻璃面层。
-    ///
-    /// 【与 Android 的模型对照（决策 #832 教训："背景采样"与"绘制位置"须同一变换空间）】
-    ///   Android 单画布：玻璃在 `onDraw` 出滚动 transform 后按**屏幕坐标**画（钉住）。iOS 是 CALayer 树：
-    ///   **玻璃面 = 节点层的子层** ⇒ 它天然与节点**同变换空间**（节点滚/节点被 fixed 钉住，玻璃都跟随）
-    ///   ——无需坐标补偿（这正是"层树"相对"单画布"的结构优势）。
-    ///   ★采样源：`self.layer.render(in:)` 渲染的是**当前屏上内容**（已含 `sublayerTransform` 滚动）
-    ///     ⇒ 玻璃采样"其屏幕位置背后"的内容；滚动后由 `applyContentOffset` 再触发本方法刷新 ⇒ 内容滑过玻璃。
-    ///
-    /// 【为什么必须"先摘旧玻璃面再捕获"】否则 backdrop 会把"上一帧玻璃面自身"也录进去 ⇒ 反复叠加
-    ///   （越滚越糊/越白）。⇒ 每帧先 `removeFromSuperlayer` 全部玻璃面，再捕获、再装。
-    func applyGlassPass() {
-        guard !glassSpecByNodeId.isEmpty else { return }
-        // ★★★#1101：玻璃遍子相位（#1100 实测 21.1ms = 带玻璃屏 mount 的 59%）——内部五段逐段计时，
-        //   混成一个数就只能猜"大概是 Metal"（本仓纪律：不靠推断）。
-        //     hide 隐藏玻璃自身层 / raster 栅格化 cropRect / blur CIGaussianBlur /
-        //     metal renderFaces（纹理上传+编码+提交+等待+读回） / install 建面并挂层
-        var capHideMs = 0.0, rasterMs = 0.0, blurMs = 0.0, metalMs = 0.0, installMs = 0.0
-        let size = bounds.size
-        guard size.width > 0, size.height > 0 else { return }
-        let scale = UIScreen.main.scale
-
-        // ★★★决策 #863（对齐 Android #837）：**背景捕获改为「玻璃并集包围盒」**——不再每帧整屏软件栅格化。
-        //   捕获成本 ∝ 栅格像素数；局部玻璃（tab/nav）收益最大。pad = 着色器会采到的最大背景位移 +
-        //   模糊采样半径 + 4px（与 Android 同一公式，保守：覆盖折射 + 模糊）。
-        var unionRect = CGRect.null
-        for (id, _) in glassSpecByNodeId {
-            guard let nodeLayer = layersById[id] else { continue }
-            unionRect = unionRect.union(nodeLayer.convert(nodeLayer.bounds, to: self.layer))
-        }
-        guard !unionRect.isNull, unionRect.width > 0, unionRect.height > 0 else { return }
-        // 每个玻璃按自身盒算 pad（更精确）：minDim*0.42（折射位移，对齐 Android/鸿蒙 #926）+ blur*0.88 + 4px
-        var padPts: CGFloat = 0
-        for (id, spec) in glassSpecByNodeId {
-            guard let nodeLayer = layersById[id] else { continue }
-            let r = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
-            padPts = max(padPts, min(r.width, r.height) * 0.42 + spec.blur * 0.55 * 1.6 + 4)
-        }
-        let cropRect = unionRect.insetBy(dx: -padPts, dy: -padPts).intersection(bounds)
-
-        // ★★★决策 #873 修（用户实测「玻璃不断闪烁」）：摘旧面/捕背景/渲面/装新面**全在一次 `CATransaction`**
-        //   （原子换面）。此前分两次 commit——中间那帧渲染服务器会刷出"无玻璃"态 ⇒ 闪。
-        //   `defer` 保证任何早退都 commit；`removeFromSuperlayer` 同步改模型树 ⇒ 下面 render 捕到的仍是纯内容。
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-        // ① 摘掉上一帧玻璃面（保证 backdrop = 纯内容；顺带清簿记，稍后重建）
-        for (_, l) in glassFaceByNodeId { l.removeFromSuperlayer() }
-        glassFaceByNodeId.removeAll(keepingCapacity: true)
-        // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
-        //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
-        //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
-        let capturePxPerPoint = max(1, scale / 2)   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / 鸿蒙 S=2 同口径）
-        let fmt = UIGraphicsImageRendererFormat()
-        fmt.scale = capturePxPerPoint
-        let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
-        // ★★★决策 #893（对齐 **iOS 液态玻璃基准** · 真机 App Store tab 栏取证）：**背景只取"玻璃背后"的内容**——
-        //   捕获前把**玻璃节点自身层（含其文本子层）临时隐藏** ⇒ backdrop 不含玻璃自身子树。
-        //   真 iOS `UIVisualEffectView` 语义：材质**只模糊背后**，`contentView` 里的内容**原样清晰**；
-        //   此前 `self.layer.render` 把玻璃节点自身子树也录进 backdrop ⇒ **自身文字被糊进材质**（8× 真机
-        //   取证：iOS 内文呈"均匀柔化"，偏离参照）。隐藏再捕获 = 从背景里精确剔除自身（CALayer.render 无跳过谓词）。
-        let glassNodeIds = Array(glassSpecByNodeId.keys)
-        var hiddenForCapture: [CALayer] = []
-        let tHide0 = CFAbsoluteTimeGetCurrent()
-        for id in glassNodeIds {
-            guard let l = layersById[id], !l.isHidden else { continue }
-            hiddenForCapture.append(l); l.isHidden = true
-        }
-        capHideMs = (CFAbsoluteTimeGetCurrent() - tHide0) * 1000
-        let tRaster0 = CFAbsoluteTimeGetCurrent()
-        let img = renderer.image { ctx in
-            ctx.cgContext.translateBy(x: -cropRect.minX, y: -cropRect.minY)
-            self.layer.render(in: ctx.cgContext)
-        }
-        rasterMs = (CFAbsoluteTimeGetCurrent() - tRaster0) * 1000
-        for l in hiddenForCapture { l.isHidden = false }   // 恢复（与 CATransaction 同帧，无闪）
-        guard let captured = img.cgImage else {
-            NSLog("[proteus-glass] backdrop 捕获失败——玻璃跳过")
-            return
-        }
-        // ★★★决策 #929：**轻霜**（对齐 iOS 逆向报告「表面磨砂 ~1-3px」；三端同法）——
-        //   对捕获的 backdrop 做一次**小半径高斯模糊**（内容柔化但可读；折射/镜像是主角、磨砂为配）。
-        //   放进宿主（而非 shader）：不破坏 check:glass-pixel-parity（shader 保持零采样）。
-        let backdrop: CGImage
-        let tBlur0 = CFAbsoluteTimeGetCurrent()
-        // ★★★#1102：blur 段再拆两半——**CIFilter 是惰性求值**：设参数 / 取 outputImage 只构图不干活，
-        //   真正的 GPU 渲染 + CPU 回读全在 `createCGImage` 里。两者分开计时，才能回答
-        //   "降半径能不能省"（省的是滤镜核 → 降半径有效；省的是回读 → 降半径白改）。
-        var blurBuildMs = 0.0, blurReadbackMs = 0.0
-        let radiusPx = capturePxPerPoint * 1.5 * Self.glassBlurScale
-        lastGlassBlurRadiusPx = Double(radiusPx)
-        if let blur = Self.sharedBlurFilter {
-            let ci = CIImage(cgImage: captured)
-            blur.setValue(ci, forKey: kCIInputImageKey)
-            blur.setValue(radiusPx, forKey: kCIInputRadiusKey)   // ≈2 逻辑px（与 Android BLUR_DOWN=4 同量级）
-            // ★★★#1101：**CIContext 复用**（此前每次玻璃遍 `CIContext(options: nil)` 新建一个）——
-            //   CIContext 持有 GPU/Metal 设备与命令队列，新建要付初始化成本；本方法在**每帧**都被调用
-            //   （玻璃交互时更是每 vsync 一次）⇒ 每帧白付一次。真机实测模糊段 10.6ms（玻璃遍的 57%）。
-            //   ★语义零变化：同一个 CIContext 可反复 createCGImage（它不持有渲染状态）。
-            let ctx = Self.sharedCIContext
-            let outImg = blur.outputImage
-            blurBuildMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
-            let tRb0 = CFAbsoluteTimeGetCurrent()
-            if let out = outImg,
-               let cg = ctx.createCGImage(out, from: ci.extent) {
-                backdrop = cg
-            } else { backdrop = captured }
-            blurReadbackMs = (CFAbsoluteTimeGetCurrent() - tRb0) * 1000
-        } else { backdrop = captured }
-        blurMs = (CFAbsoluteTimeGetCurrent() - tBlur0) * 1000
-        lastGlassBlurBuildMs = blurBuildMs; lastGlassBlurReadbackMs = blurReadbackMs
-
-        // ③ 逐玻璃节点装玻璃面（★作为**节点层的子层**：与节点同变换空间 ⇒ 自动跟随，含 fixed 钉住）
-        //   ★决策 #863：**批量渲染**——一次 `renderFaces`（共用 backdrop 纹理 + 一条命令缓冲 + 一次等待）。
-        //   ★决策 #864：**输出也半分辨率**（`glassOutScale = scale/2`）——玻璃被模糊/折射，放大无损观感
-        //     （与 Android `S=2` / 鸿蒙降采样同法）⇒ 每帧 Metal 渲染 + 回读像素量降到 1/4。
-        let glassOutScale = max(1, scale / 2)
-        var order: [Int] = []
-        var reqs: [(nodeRect: CGRect, spec: GlassMetalRenderer.Spec)] = []
-        var touchPress: [(t: CGPoint, press: CGFloat)] = []
-        for (id, spec) in glassSpecByNodeId {
-            guard let nodeLayer = layersById[id] else { continue }
-            // 节点在**屏幕**上的矩形（`convert(to:)` 穿过 sublayerTransform ⇒ 给出渲染位置）——采样用
-            let rb = nodeLayer.convert(nodeLayer.bounds, to: self.layer)
-            // ★★★决策 #905：交互玻璃的 touch/press——touch 记的是**盒局部逻辑点**（已由触摸路换算），
-            //   press 由帧循环 lerp。非交互玻璃恒 (0,0)（着色器钟形因子≈0，无影响）。
-            let st = interactStateById[id]
-            var nodeTouch = st?.touch ?? CGPoint(x: -1e6, y: -1e6)
-            var nodePress = st?.press ?? 0
-            // ★#966：选中胶囊（overlay 玻璃）通常 `interactive=false`（`pointer-events:none`）⇒ 自身无交互态；
-            //   若它落在**活动交互玻璃**的盒内，则继承 press + 用屏幕触点折算自身局部触点（⇒ 充气门控 press×overlay 生效）。
-            if interactActiveId >= 0, id != interactActiveId, spec.overlay > 0.001,
-               let active = interactStateById[interactActiveId], let al = layersById[interactActiveId],
-               al.convert(al.bounds, to: self.layer).intersects(rb) {
-                nodeTouch = CGPoint(x: interactTouchScreen.x - rb.minX, y: interactTouchScreen.y - rb.minY)
-                nodePress = active.press
-            }
-            order.append(id)
-            reqs.append((rb, spec))
-            touchPress.append((nodeTouch, nodePress))
-        }
-        let tMetal0 = CFAbsoluteTimeGetCurrent()
-        let faces = GlassMetalRenderer.shared.renderFaces(backdrop: backdrop, requests: reqs,
-                                                          scale: glassOutScale, cropOrigin: cropRect.origin,
-                                                          texPxPerPoint: capturePxPerPoint, touchPress: touchPress)
-        metalMs = (CFAbsoluteTimeGetCurrent() - tMetal0) * 1000
-        let tInstall0 = CFAbsoluteTimeGetCurrent()
-        for (i, id) in order.enumerated() {
-            guard i < faces.count, let face = faces[i], let nodeLayer = layersById[id] else { continue }
-            let spec = glassSpecByNodeId[id]!
-            let fl = CALayer()
-            fl.frame = nodeLayer.bounds        // 与节点**同本地坐标**（随节点变换）
-            fl.contents = face
-            fl.contentsScale = glassOutScale   // 半分辨率图 → CA 放大到节点尺寸（玻璃模糊 ⇒ 无损）
-            // ★★★决策 #971（对齐 workbuddy 09:05 取证）：**剪影恒为圆角矩形**——形状变化全在**盒几何**
-            //   （条盒不动 ⇒ 条边平直；胶囊盒已纵向放大 ⇒ 透镜轮廓）。不再用 `inflatedPillPath` 做凹口。
-            fl.cornerRadius = spec.radius
-            fl.masksToBounds = true
-            // ★★★决策 #893（对齐 iOS 液态玻璃基准）：玻璃面画在**自身内容之下**（zPosition < 自身子层默认 0）
-            //   ⇒ 玻璃节点自己的文本/子视图**清晰地浮在玻璃面之上**（真 iOS：材质只糊背后，自身内容原样）。
-            //   此前 `zPosition = 5000` 把自身子层盖住 ⇒ 自身文字被玻璃面糊掉（8× 真机取证偏离参照）。
-            fl.zPosition = -1
-            nodeLayer.addSublayer(fl)
-            glassFaceByNodeId[id] = fl
-        }
-        installMs = (CFAbsoluteTimeGetCurrent() - tInstall0) * 1000
-        // ★#1101：子相位读数写回（每次玻璃遍都覆盖；报告读它做下一刀决策）
-        lastGlassHideMs = capHideMs; lastGlassRasterMs = rasterMs; lastGlassBlurMs = blurMs
-        lastGlassMetalMs = metalMs; lastGlassInstallMs = installMs
-        lastGlassTotalMs = capHideMs + rasterMs + blurMs + metalMs + installMs
-        lastGlassCropPx = Double(cropRect.width * capturePxPerPoint) * Double(cropRect.height * capturePxPerPoint)
-        lastGlassCount = order.count
-    }
+    // ★#1103：玻璃遍（applyGlassPass）已搬到 `selfdraw-glass.swift`（同模块扩展）。
 
     /* ★#1101：玻璃遍子相位读数（-1 = 本轮未发生；0 = 该子段真的耗时为零/无玻璃早退） */
-    private(set) var lastGlassHideMs = -1.0     /// 隐藏玻璃自身层（避免把自己糊进 backdrop）
-    private(set) var lastGlassRasterMs = -1.0   /// `self.layer.render` 栅格化 cropRect（CPU 软件绘制）
-    private(set) var lastGlassBlurMs = -1.0     /// CIGaussianBlur（含**每次新建 CIContext**）
-    private(set) var lastGlassMetalMs = -1.0    /// renderFaces：纹理上传 + 编码 + 提交 + 等待 + 逐块读回
-    private(set) var lastGlassInstallMs = -1.0  /// 建 CALayer 面并挂到节点层
-    private(set) var lastGlassTotalMs = -1.0
-    private(set) var lastGlassCropPx = 0.0      /// 捕获像素数（裁剪面积 × 捕获密度）——解释栅格/模糊成本
-    private(set) var lastGlassCount = 0
+    internal(set) var lastGlassHideMs = -1.0     /// 隐藏玻璃自身层（避免把自己糊进 backdrop）
+    internal(set) var lastGlassRasterMs = -1.0   /// `self.layer.render` 栅格化 cropRect（CPU 软件绘制）
+    internal(set) var lastGlassBlurMs = -1.0     /// CIGaussianBlur（含**每次新建 CIContext**）
+    internal(set) var lastGlassMetalMs = -1.0    /// renderFaces：纹理上传 + 编码 + 提交 + 等待 + 逐块读回
+    internal(set) var lastGlassInstallMs = -1.0  /// 建 CALayer 面并挂到节点层
+    internal(set) var lastGlassTotalMs = -1.0
+    internal(set) var lastGlassCropPx = 0.0      /// 捕获像素数（裁剪面积 × 捕获密度）——解释栅格/模糊成本
+    internal(set) var lastGlassCount = 0
+    /// ★#1103：逐次玻璃遍读数（最近 16 次，旧在前）——**同进程内多条样本**，
+    ///   用来区分"某子段每遍都付"与"进程首次付一次"（#1102 的半径扫描每次进程只跑一遍，区分不了）。
+    var glassPassHistory: [[String: Double]] = []
+    static let glassHistoryCap = 16
     /// 玻璃模糊用的 `CIContext`——**进程内复用一份**。
     ///   此前每次玻璃遍新建（`CIContext(options: nil)`），而玻璃遍在交互时**每 vsync 调一次**
     ///   ⇒ 每帧都在付上下文初始化成本。CIContext 无渲染状态残留，复用不改变输出。
-    private static let sharedCIContext = CIContext(options: nil)
+    static let sharedCIContext = CIContext(options: nil)
     /// ★★★#1102：玻璃模糊滤镜**进程内复用一份**。
     ///   【证据】半径扫描（真机，4 档）显示 blur 的「构图」段在**半径 0 时仍需 4.58ms**，
     ///     而那时回读只要 0.09ms ⇒ 那 ~4.5ms 是 `CIFilter(name:)` 查表 + CIImage/图构建的**固定开销**，
     ///     与模糊半径无关。复用滤镜实例可把这部分从每次玻璃遍里消掉。
     ///   【为什么安全】CIGaussianBlur 无跨调用状态：每次只需重设 `inputImage`/`inputRadius`；
     ///     `applyGlassPass` 只在主线程调用（mount / 滚动 / 交互帧循环），无并发写。
-    private static let sharedBlurFilter = CIFilter(name: "CIGaussianBlur")
+    static let sharedBlurFilter = CIFilter(name: "CIGaussianBlur")
     /* ★#1102：blur 段的两半读数 + 实际半径（不记半径就没法做横比——样本混了不同半径就不可比） */
-    private(set) var lastGlassBlurBuildMs = -1.0      /// CIFilter 构图（惰性：实测应≈0）
-    private(set) var lastGlassBlurReadbackMs = -1.0   /// createCGImage：GPU 渲染 + CPU 回读（真开销在这）
-    private(set) var lastGlassBlurRadiusPx = -1.0
+    internal(set) var lastGlassBlurBuildMs = -1.0      /// CIFilter 构图（惰性：实测应≈0）
+    internal(set) var lastGlassBlurReadbackMs = -1.0   /// createCGImage：GPU 渲染 + CPU 回读（真开销在这）
+    internal(set) var lastGlassBlurRadiusPx = -1.0
     /// ★#1102：模糊半径倍率（默认 1）。用途：量「半径 vs 耗时」斜率——**只用于取证**，
     ///   环境变量 `PROTEUS_GLASS_BLUR_SCALE`（不设 = 1.0，生产行为不变）。
-    private static let glassBlurScale: CGFloat = {
+    static let glassBlurScale: CGFloat = {
         guard let raw = ProcessInfo.processInfo.environment["PROTEUS_GLASS_BLUR_SCALE"],
               let v = Double(raw) else { return 1 }
         return CGFloat(max(0, v))
     }()
-    /// 判据读数（native 直读——报告用）
-    func glassPhaseStats() -> [String: Double] {
-        ["hide_ms": lastGlassHideMs, "raster_ms": lastGlassRasterMs, "blur_ms": lastGlassBlurMs,
-         "blur_build_ms": lastGlassBlurBuildMs, "blur_readback_ms": lastGlassBlurReadbackMs,
-         "blur_radius_px": lastGlassBlurRadiusPx,
-         "metal_ms": lastGlassMetalMs, "install_ms": lastGlassInstallMs, "total_ms": lastGlassTotalMs,
-         "crop_px": lastGlassCropPx, "glass_count": Double(lastGlassCount)]
-    }
-
-    /// 玻璃节点数（判据用：证明"玻璃遍真的接管了节点"）。
-    var glassNodeCount: Int { glassSpecByNodeId.count }
-    /// 已装玻璃面数（判据用：>0 证明材质真出图、非降级跳过）。
-    var glassFaceCount: Int { glassFaceByNodeId.count }
+    // ★#1103：`glassPhaseStats` / `glassNodeCount` / `glassFaceCount` 已搬到 `selfdraw-glass.swift`。
 
     /* ══════════ ★★★决策 #905：玻璃触控形变（对齐 Apple `UIGlassEffect.isInteractive`）══════════
      *   【模型】交互玻璃（`style.glass.interactive==true`）响应点按/拖动：触点处的玻璃产生**液态流动**
@@ -756,11 +576,11 @@ final class SelfDrawView: UIView {
      */
     struct GlassInteract { var touch: CGPoint; var press: CGFloat }
     /// 触点必须命中某个交互玻璃的盒（局部逻辑点）；press 由目标 lerp。
-    private var interactStateById: [Int: GlassInteract] = [:]
+    var interactStateById: [Int: GlassInteract] = [:]
     private var interactPressTarget: CGFloat = 0
-    private var interactActiveId: Int = -1
+    var interactActiveId: Int = -1
     /// ★#966：活动玻璃的触点在**屏幕坐标**（供**选中胶囊**（其子玻璃）折算自身局部触点 ⇒ SDF 充气）。
-    private var interactTouchScreen: CGPoint = CGPoint(x: -1e6, y: -1e6)
+    var interactTouchScreen: CGPoint = CGPoint(x: -1e6, y: -1e6)
     /// ★#906：本次手势是否**归玻璃**（DOWN 命中交互玻璃）⇒ pan 接管后不滚动页面 + 触点出盒仍跟随。
     private var glassGestureActive = false
 
@@ -1232,9 +1052,9 @@ final class SelfDrawView: UIView {
      *   编译（不手写算法）。与 Android AGSL 同源（同一份 WGSL 落地）。
      * ★两张簿记必须与层树成对清理（本文件反复记的教训：新增一份层簿记就要在 clearLayers 里清）。 */
     /// 节点 id → 玻璃规格（`makeLayer` 登记；玻璃面在内容画完后由 `applyGlassPass()` 装）
-    private var glassSpecByNodeId: [Int: GlassMetalRenderer.Spec] = [:]
+    var glassSpecByNodeId: [Int: GlassMetalRenderer.Spec] = [:]
     /// 节点 id → 玻璃面层（`contents` = 采样背景得到的玻璃图）
-    private var glassFaceByNodeId: [Int: CALayer] = [:]
+    var glassFaceByNodeId: [Int: CALayer] = [:]
 
     /// ★★本地揭示色标（**仅用于建层静态初值**——动画期由内核逐帧下发；与内核 `reveal_stops` 同式）
     static func maskStopsLocal(softness: Double, progress: Double) -> (Double, Double, Double, Double) {
@@ -4841,6 +4661,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     func mountPhaseHistory() -> [[String: Double]] { mountHistoryMs }
     /// ★#1101：玻璃遍子相位（转给视图——玻璃遍是视图职责，读数不在 Bridge 上另存）
     func glassPhaseStats() -> [String: Double] { view?.glassPhaseStats() ?? [:] }
+    /// ★#1103：逐次玻璃遍读数（转发给视图——玻璃遍是视图职责）
+    func glassPassHistorySnapshot() -> [[String: Double]] { view?.glassPassHistorySnapshot() ?? [] }
     /// ★★上一次更新提交的几何快照（id → "x,y,w,h"）——用于**自检「几何真的变了吗」**
     ///
     /// 【为什么必须自检（本仓实测的第八个测量装置缺陷）】类B 基准树少了 `flexShrink: 0`，

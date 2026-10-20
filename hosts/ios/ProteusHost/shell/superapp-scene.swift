@@ -233,17 +233,32 @@ final class SuperappScene: NSObject {
                 _ = evalJs?("__proteusSuperappNav(\(jsonQuote(sName)))")
                 DispatchQueue.main.async {
                     renderCurrent()   // 新树 ⇒ offset 归零
-                    // ★注意：`onScrollDrag` **异步生效**（下一 runloop 才落 offset —— 探针读数错位一格已证）
-                    //   ⇒ 拖拽后**再等一个 runloop** 才读 offset + 截图（否则读到 0 / 截到未滚状态）。
-                    if let vw = bridgeRef?.view { _ = vw.driveScrollDrag(dx: 0, dy: CGFloat(dy)) }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        let offY = Double(bridgeRef?.view?.contentOffset.y ?? 0)
-                        takeSnapshot()   // 画当前（已滚动）状态
-                        switchLog.append(["scroll": sName, "dy": dy, "offset": offY, "current": currentName(), "ok": true, "via": "scroll-inject"])
-                        writeReport(reportBody())
-                        NSLog("[proteus] SUPERAPP_SCROLL_REPORT_READY page=%@ dy=%f offset=%f", sName, dy, offY)
-                        if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                    // ★#1103 取证：**同进程内多次玻璃遍**——用来区分"某子段每遍都付"还是"进程首次付一次"。
+                    //   #1102 的半径扫描每档只跑一遍玻璃遍，所以「radius=0 时 build 仍 4.58ms」
+                    //   既可读成"每遍固定成本"也可读成"首次预热"，两者处置完全不同。
+                    //   ⇒ 由 `PROTEUS_GLASS_SAMPLES`（默认 1 = 生产/既有行为）控制拖拽次数，
+                    //     正负交替来回拖（避免一路拖到边界后 offset 不再变 ⇒ 不再触发玻璃遍）。
+                    //   ★每次之间隔一个 runloop（`onScrollDrag` 异步生效——本文件已记过这个坑）。
+                    let samples = max(1, Int(ProcessInfo.processInfo.environment["PROTEUS_GLASS_SAMPLES"] ?? "1") ?? 1)
+                    func dragStep(_ i: Int) {
+                        guard let vw = bridgeRef?.view else { return }
+                        if i >= samples {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                let offY = Double(bridgeRef?.view?.contentOffset.y ?? 0)
+                                takeSnapshot()   // 画当前（已滚动）状态
+                                switchLog.append(["scroll": sName, "dy": dy, "offset": offY, "current": currentName(), "ok": true, "via": "scroll-inject"])
+                                writeReport(reportBody())
+                                NSLog("[proteus] SUPERAPP_SCROLL_REPORT_READY page=%@ dy=%f offset=%f", sName, dy, offY)
+                                if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                            }
+                            return
+                        }
+                        // 偶数步向下拖、奇数步向上拖（来回 ⇒ 每步都真的产生 offset 变化 ⇒ 每步都过玻璃遍）
+                        let step = (i % 2 == 0) ? dy : -dy
+                        _ = vw.driveScrollDrag(dx: 0, dy: CGFloat(step))
+                        DispatchQueue.main.async { dragStep(i + 1) }
                     }
+                    dragStep(0)
                 }
             }
         }
@@ -649,6 +664,8 @@ final class SuperappScene: NSObject {
             o["mount_history"] = rt.mountPhaseHistory()
             // ★#1101：玻璃遍子相位（hide/raster/blur/metal/install + 捕获像素数 + 玻璃块数）
             o["glass_phase"] = rt.glassPhaseStats()
+            // ★#1103：逐次玻璃遍读数（同进程内多条）——区分"每遍都付"vs"首次预热"
+            o["glass_history"] = rt.glassPassHistory()
         }
         // ★#1098：P0 长任务读数（字段名与 Android/perf 面板一致）
         if let jd = JsTaskSampler.statsJson().data(using: .utf8),
