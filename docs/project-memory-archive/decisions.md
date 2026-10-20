@@ -11255,3 +11255,78 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      `file-size` 补上视野，是当前最大的"通读成本"来源；
   ② `.workbuddy/salvage` 5449 个未跟踪截图纳入治理（污染 `git status` 与 diff 基统计）；
   ③ 继续 #1133 矩阵的 P2（条件请求缓存）。
+
+1142. **★★★代码结构大纲：C++ 巨型函数的最小读面（834 行 → 33 行）—— 但**不做拆分**，因为无设备无法验证 · 决策**（2026-10-20 · 承接 #1141「下一步①」）：
+
+【先纠正一个判断（本轮取证）】
+  #1141 说"7 个 C++ 巨型文件"，实测：**其中 3 个是 `prebuilt` 副本**（与真源逐字节一致）⇒
+  真实源只有 **4 个**。而**真正的认知瓶颈不是文件行数，是单函数行数**：
+    · `proteus_render.cpp::renderCommandsImpl` = **834 行单函数**（文件 3701 行）
+    · `proteus_host.cpp::AppScreenCommands`    = **562 行单函数**（文件 1068 行）
+  ★拆文件不解决"单函数 834 行"——要改其中一段仍须读整个函数。
+
+【★为什么本轮**不拆**（诚实边界，也是纪律）】
+  鸿蒙宿主的行为判据**只有真机**（hdc），而本机当前 **无 hdc 设备**（`hdc not found`）。
+  本仓纪律：**没有判据就不动行为**（"测得出才敢改"）。
+  ⇒ 拆函数是**行为重构**（哪怕看起来等价），无验证手段时做它是**拿不可验证的风险换行数**。
+  正确顺序：先让"改哪段读哪段"零风险可用 → 有设备时再拆（届时先用本工具定位，拆完三端重跑）。
+
+【落地：`scripts/outline-code.mjs`（零风险，只读源码）】
+  ```
+  $ pnpm outline:heavy
+      834 行  renderCommandsImpl   …/proteus_render.cpp:1714
+      562 行  AppScreenCommands    …/proteus_host.cpp:355
+      383 行  drawChannelsAndText  …/proteus_render.cpp:658
+      … 合计 18 个 >100 行的重块
+
+  $ pnpm outline:code <file> --fn renderCommandsImpl
+    ═══ renderCommandsImpl（834 行 @ L1714-2547）═══
+      内部段落（改哪段只读哪段）：
+        L1747  ★★★预扫描（CSS 父 transform 级联…）
+        L1771  ★决策 #842：自绘通道 …
+        L2459  ★★★批 A③ 修（吸顶后内容盖住）…
+        …共 8 段
+      ★若只改第一段：读 L1714-1746（33 行），不是 834 行
+  ```
+
+【★★★解析器踩的两个坑（都是"大纲会误导人"级）】
+  ① **必须先遮罩注释/字符串再数花括号**。该文件有条注释写着「首版用第一个 `}` 截断」——
+     那个 `}` 把配对**提前闭合** ⇒ `renderCommandsImpl` 被算成 **6 行**（实际 834）。
+     **若按那份大纲去改代码，会只读 6 行然后漏掉 830 行——比不给大纲更糟。**
+  ② **缩进基准要跳过声明行**。声明行缩进 0，若拿它当基准，段注释（缩进 4）就判不出来
+     ⇒ 834 行函数显示"无段落"（**假绿**：看着成功，实际没索引）。
+  ★第 13 次同族：**"给位置"的工具，其解析器必须先遮罩、再自证**。
+
+【判据（`tests/code-outline.test.ts` 5/5）】
+  ① 遮罩后配对：`renderCommandsImpl` 必须 >700 行（首版 6 行）；② 段落在函数内且递增；
+  ③ 块不重叠有序；④ `--list-heavy` 列出最大块；⑤ `--fn` 的"首段行数 < 总行数 20%"。
+  ★**破坏性验证 2 条全命中**：去遮罩 ⇒ **4 红**；缩进基准回退 ⇒ **2 红**。
+  ★另修一个装置缺陷：脚本被 `tests/` import 时 CLI 直接执行（报"用法错误"）⇒ 加 `import.meta.url` 主入口守卫。
+
+【接线】
+  `pnpm outline:code` / `pnpm outline:heavy` · `docs/contract-index.md` 附 3 节（含两坑与"为何不拆"）
+  · `AGENTS.md` 启动清单第 2 条补两条命令。
+
+【三类单元 + 大纲 = 四种"定位"能力】
+  | 用途 | 命令 | 读面 |
+  |---|---|---|
+  | 改文件要跑哪些门禁 | `--for <path>` | — |
+  | 改线格式 tag | `--unit tag:X` | 255 行（9%） |
+  | 改 useFetch 字段 | `--unit fetch-field:X` | ≈52 行 |
+  | 改 Vapor 槽位 | `--unit vapor-slot` | ≈408 行（4%） |
+  | 改巨型函数某段 | `outline:code … --fn X` | **33 行**（vs 834） |
+
+【诚实边界】
+  ① 大纲只识别**顶层块 + 缩进注释段落**（本仓注释风格刚好天然分段；若某函数没写段首注释，
+     大纲只会给"整块"——那说明该函数**本来就该拆**，是信号不是缺陷）；
+  ② 段落边界靠注释，**不是**语法树（嵌套块内的注释不会被当顶层段）；
+  ③ C++ 的 `#if` 分支不影响（按行数算）。
+
+【门禁】
+  `pnpm test` **6463 条全绿**（+5）· `check:contract-index`（顺带抓到索引里 `.h/.cpp` 被当成路径，已修）
+  · script-compile · gates-sync · file-size · doc-links · check:memory · check:decision-numbers
+
+【下一步】
+  ① **有 hdc 设备时**：用 `outline:code --fn renderCommandsImpl` 定位 → 拆成 3~4 个内聚函数 → 三端重跑；
+  ② `.workbuddy/salvage` 5449 个未跟踪截图纳入治理；
+  ③ 回到 #1133 矩阵 P2（条件请求缓存）。

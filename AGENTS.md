@@ -18,6 +18,8 @@
    pnpm check:contract-index -- --unit tag:Redirect                     # 只读哪几段行号（=9% 读面）
    pnpm check:contract-index -- --unit fetch-field:redirectManual       # 四层链各给 文件:行号（≈52 行）
    pnpm check:contract-index -- --unit vapor-slot                       # 五层 + 三端证据 + 指纹（★需真机，不能一条命令闭环）
+   pnpm outline:heavy                                                   # 哪些函数 >100 行（通读成本在哪）
+   pnpm outline:code <file> --fn <name>                                 # 该函数的内部段落 + 行号（改一段只读一段）
    ```
    ★「最小可闭环单元」（#1139）：改一个线格式 tag，五端合计 2734 行，但**每端只动三处**
      （常量 / encode / decode）⇒ 探针直接给行号区段，**读 255 行（9%）就能改对**。

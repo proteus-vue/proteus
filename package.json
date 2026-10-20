@@ -170,6 +170,8 @@
     "check:safe-edit": "node scripts/check-safe-edit.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "check:contract-index": "node scripts/check-contract-index.mjs",
+    "outline:code": "node scripts/outline-code.mjs",
+    "outline:heavy": "node scripts/outline-code.mjs --list-heavy",
     "check:script-compile": "node scripts/check-script-compile.mjs",
     "check:scroll-safety": "node scripts/check-scroll-safety.mjs",
     "check:scroll-fling": "node scripts/check-scroll-fling.mjs",
