@@ -23,7 +23,12 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { COMPOSITE_OK, REAL_TOUCH_OK, realTouchMissingField } from './lib/app-composite-verdict.mjs'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// ★★#1145：`--root <dir>` 让门禁可对**夹具**运行（破坏性验证用：夹具里删掉入库证据 ⇒ 必须判红）。
+//   照 check-env-vars.mjs 同一形态；'..' 缺省 = 真仓。
+const _argv = process.argv.slice(2)
+const _rootIdx = _argv.indexOf('--root')
+const _rootArg = _rootIdx >= 0 ? _argv[_rootIdx + 1] : null
+const ROOT = _rootArg ? path.resolve(_rootArg) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const requireFromRepo = createRequire(import.meta.url)
 
 /** 违规收集（★必须先于下方设备腿块声明——设备腿会 push；此前声明在文件后段，
@@ -82,7 +87,11 @@ const HEX_COLOR_RE = /^#[0-9a-f]{3}$|^#[0-9a-f]{6}$|^#[0-9a-f]{8}$/i
  *         （真逐帧转场）+ exec_errors 空。── */
 {
   const exFile = path.join(ROOT, 'hosts', 'harmony', 'results', 'app-stack-executor.json')
-  if (fs.existsSync(exFile)) {
+  // ★★#1145：产物**入库**（tracked）⇒ 缺失只能是"被删"，必须判红。原 `if (existsSync)` 静默跳过——
+  //   与 #1144 同族的"判据存在性跟着产物走"（删掉证据 ≠ 跳过验收）。
+  if (!fs.existsSync(exFile)) {
+    problems.push(`[hosts/harmony/results/app-stack-executor.json] 证据缺失——它是入库的真机读数（` + `exec_content_nodes 曾长期为 0，正是本条要守的东西` + `）；删掉它不等于跳过验收`)
+  } else {
     try {
       const d = JSON.parse(fs.readFileSync(exFile, 'utf-8'))
       const cn = Number(d.exec_content_nodes ?? 0)
@@ -115,7 +124,11 @@ for (const [label, rel] of [
   ['鸿蒙', 'hosts/harmony/results/app-screen-composite.json'],
 ]) {
   const cf = path.join(ROOT, rel)
-  if (!fs.existsSync(cf)) continue
+  // ★★#1145：三端产物均入库 ⇒ 缺失 = 被删，判红（原 `continue` 静默跳过 = 假绿）
+  if (!fs.existsSync(cf)) {
+    problems.push(`[${rel}] 证据缺失——它是入库的真机读数；删掉它不等于跳过验收`)
+    continue
+  }
   try {
     const d = JSON.parse(fs.readFileSync(cf, 'utf-8'))
     if (!COMPOSITE_OK[label](d)) {
@@ -136,7 +149,7 @@ for (const [label, rel] of [
   }
 }
 
-const files = process.argv.slice(2).filter((a) => !a.startsWith('-'))
+const files = _argv.filter((a) => !a.startsWith('-') && a !== _rootArg)
 const targets = files.length
   ? files
   : (() => {
@@ -149,9 +162,13 @@ const targets = files.length
         .filter((f) => fs.existsSync(f))
     })()
 
+// ★★★#1145：**不得在此 exit(0)**——此处在设备腿（executor / 三端视觉合成 / 鸿蒙屏内容）**之前**，
+//   而 `examples/dist` **未入库**（本地未构建 = 常态）⇒ 旧实现会让**整份判据被一次早退短路**：
+//   设备腿一条都不跑、门禁却显示绿。这正是 `exec_content_nodes=0` 能长期静默的入口级原因
+//   （#1144 修的是缺陷本身；这条修的是"为什么没被发现"）。
+//   正确语义：静态产物缺失 ⇒ 那一节无内容可查（如实打印）；**设备腿照跑**。
 if (targets.length === 0) {
-  console.log('App 屏内容产物门禁：未找到产物（examples/dist/app/*/screen-content.json）——跳过（无产物不判红）')
-  process.exit(0)
+  console.log('App 屏内容产物门禁：未找到静态产物（examples/dist/app/*/screen-content.json）——静态校验无内容可查（如需覆盖请先构建）；设备腿仍照跑')
 }
 
 let checkedPages = 0
@@ -162,7 +179,10 @@ let checkedNodes = 0
  *   判据：pages_mounted == pages（全部页建树成功）+ content_nodes_total > 0 + failed 为空。── */
 {
   const devFile = path.join(ROOT, 'hosts', 'harmony', 'results', 'app-screen-content.json')
-  if (fs.existsSync(devFile)) {
+  // ★★#1145：同上——入库证据缺失必须判红
+  if (!fs.existsSync(devFile)) {
+    problems.push('[hosts/harmony/results/app-screen-content.json] 证据缺失——它是入库的真机读数；删掉它不等于跳过验收')
+  } else {
     try {
       const d = JSON.parse(fs.readFileSync(devFile, 'utf-8'))
       const pages = Number(d.pages ?? 0)
