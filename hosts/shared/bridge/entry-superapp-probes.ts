@@ -450,3 +450,107 @@ export function appCancelProbe(base: string, chunks = 128, size = 16 * 1024, del
   return JSON.stringify({ phase: 'started', queued: true })
 }
 
+/**
+ * ★★★#1122：**走 `useFetch` 门面**的真机判据（不是打底层 `invokeHost*`）。
+ *
+ * `appUseFetchProbe(base, chunks, size, delayMs)` →
+ *   ① **流式**：`useFetch` 传 `onChunk` ⇒ 逐块到达（证明 `FetchConfig.onChunk` 真的下到了宿主）；
+ *   ② **取消**：第 4 块时 `createAbortController().abort()` ⇒ `fetch.aborted` + 后续块停止；
+ *   ③ **status/headers**：返回结果里**有** `status` 与 `headers`（此前只有 `data`）。
+ *
+ * 【为什么必须单独一条（它防的是本单修的那类缺陷）】
+ *   此前所有探针都打底层 ⇒ "底层 S3 做了、`useFetch` 门面只透传 6 字段"这类缺口**全绿**。
+ *   本探针只走 `createCapabilityHooks(...).useFetch`——业务真正看到的那个面。
+ */
+export function appUseFetchProbe(base: string, chunks = 128, size = 16 * 1024, delayMs = 20): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { chunks, size, delay_ms: delayMs }
+  g['__proteusHostUseFetchProbeResult'] = ''
+
+  const run = async (): Promise<void> => {
+    const cap = (await import('../../../packages/api/src/capability')) as unknown as {
+      createCapabilityHooks: (b: unknown, o?: unknown) => {
+        useFetch: <T>(u: string, c?: unknown) => Promise<unknown>
+      }
+      getSharedCapabilityBridge: () => unknown
+    }
+    const inv = (await import('../../../packages/api/src/capability-invoke')) as unknown as {
+      createAbortController: () => { signal: unknown; abort: () => void }
+    }
+    const hooks = cap.createCapabilityHooks(cap.getSharedCapabilityBridge(), {})
+
+    // ── ① 流式 + ③ status/headers，用**正常结束**的短流（不取消）──
+    let streamed = 0
+    let streamSeqOk = true
+    let lastSeq = -1
+    try {
+      const r = (await hooks.useFetch(`${base}/stream?chunks=8&size=${size}&delayMs=0`, {
+        onChunk: (_chunk: Uint8Array, seq: number) => {
+          if (seq !== lastSeq + 1) streamSeqOk = false
+          lastSeq = seq
+          streamed++
+        },
+        timeout: 30000,
+      })) as { ok?: boolean; status?: number; headers?: Record<string, string>; data?: unknown }
+      out['stream_ok_flag'] = r?.ok === true
+      out['stream_status'] = r?.status
+      out['stream_headers'] = r?.headers
+      out['has_status'] = typeof r?.status === 'number' && (r?.status ?? 0) > 0
+      out['has_headers'] = r?.headers !== null && typeof r?.headers === 'object'
+    } catch (e) {
+      out['stream_error'] = String((e as Error)?.message ?? e)
+    }
+    out['streamed_chunks'] = streamed
+    out['stream_seq_ok'] = streamSeqOk
+
+    // ── ② 取消：走 useFetch 的 signal ──
+    const ctl = inv.createAbortController()
+    let cancelChunks = 0
+    let cancelAbortedAt = -1
+    let cancelErrMsg = ''
+    // ★`useFetch` **不抛异常**（G-32.3：失败以 `ok:false` 返回）⇒ 必须看返回值，
+    //   不能像底层 `invokeHostStream` 那样只 catch（首版探针就栽在这里：取消生效了但探针判成"未 reject"）。
+    try {
+      const cr = (await hooks.useFetch(`${base}/stream?chunks=${chunks}&size=${size}&delayMs=${delayMs}`, {
+        signal: ctl.signal,
+        onChunk: () => {
+          cancelChunks++
+          if (cancelChunks === 4 && cancelAbortedAt < 0) {
+            cancelAbortedAt = 4
+            ctl.abort()
+          }
+        },
+        timeout: 60000,
+      })) as { ok?: boolean; error?: { code?: string; message?: string } }
+      const failed = cr?.ok === false
+      out['cancel_failed_flag'] = failed
+      out['cancel_code'] = cr?.error?.code ?? ''
+      cancelErrMsg = String(cr?.error?.code ?? cr?.error?.message ?? '')
+      out['cancel_rejected'] = failed
+    } catch (e) {
+      // 兜底：万一实现改成抛异常也接住
+      out['cancel_rejected'] = true
+      cancelErrMsg = String((e as Error)?.message ?? e)
+    }
+    // ★失败通过 capErr 返回（不抛）⇒ 也可能拿到 ok:false 的返回值
+    out['cancel_aborted_at'] = cancelAbortedAt
+    out['cancel_chunks'] = cancelChunks
+    out['cancel_err'] = cancelErrMsg
+    out['cancel_code_ok'] = /fetch\.aborted/.test(cancelErrMsg)
+
+    out['ok'] = out['has_status'] === true
+      && out['has_headers'] === true
+      && streamed >= 1
+      && streamSeqOk
+      && cancelAbortedAt === 4
+      && out['cancel_code_ok'] === true
+    g['__proteusHostUseFetchProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostUseFetchProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true })
+}
+

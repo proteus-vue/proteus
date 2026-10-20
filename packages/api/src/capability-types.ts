@@ -2947,19 +2947,9 @@ export interface CompatStorage {
   batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>
 }
 
-/** useFetch 配置（对齐 RequestConfig 高频字段） */
-export interface FetchConfig {
-  /** HTTP 方法（缺省 GET） */
-  method?: HttpMethod
-  /** 请求体（POST/PUT；对象自动 JSON 序列化） */
-  data?: unknown
-  /** URL 查询参数（拼接到 query string） */
-  params?: Record<string, unknown>
-  /** 自定义请求头 */
-  headers?: Record<string, string>
-  /** 超时（ms；超时 → Err） */
-  timeout?: number
-}
+// ★★★#1122：`FetchConfig` / `FetchResult` / `UploadSpec` / `AbortSignalLike` 已抽到
+//   `./capability-fetch-types`（本文件 3881 行超棘轮；那组类型是"网络请求专属"，与其它能力无耦合）。
+export type { FetchConfig, FetchOk, FetchResult, UploadSpec, AbortSignalLike } from './capability-fetch-types'
 
 /** 该能力是否可用（降级探测——G-32.3：缺失 → Err 非抛异常） */
 /** 运行时能力探测（probe() 返回——降级查询面：业务预判能力可用性，无需 try/catch） */

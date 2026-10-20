@@ -9897,3 +9897,79 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ★但仍要如实标的两条：
   ① **iOS 的取消判据强度弱半档**（无 setTimeout ⇒ 无等待窗口，靠宿主记账交叉验证）；
   ② **鸿蒙三项全部 `unsupported`**（VM 形态限制），所以严格说这是"**两端的 S3**"。
+
+1122. **★★★useFetch 门面开口：S3 能力真正可被业务使用（此前"底层做完、门面没接"）· Android 真机 9/9 · 决策**（2026-10-20 · 用户问「useFetch 能力完整了吗？」，取证后答**不完整**并授权补齐）：
+
+【问题（用户点名后取证，四类缺口全都有）】
+  ① **五个 S3 字段一个都没进 `FetchConfig`**：`responseType` / `savePath` / `onChunk` / `upload` / `signal`
+     全部只在内部 `AppRequestConfig` 里有 ⇒ **业务侧够不着**（#1118/#1119/#1120/#1121 的成果白做）。
+  ② **返回值丢掉 `status` / `headers`**：`useFetch` 是 `.then(r => r.data)` ⇒ 业务无法区分 404/500。
+  ③ **Web/MP 两条腿没用上平台真实能力**：Web 有原生 `AbortSignal` 却不用、`timeout` 传了被忽略、
+     `responseType: arraybuffer` 没实现、流式（ReadableStream）没实现；MP 的 `timeout` 也被丢。
+  ④ **零条走门面的测试**：此前 122 条测试全在打底层（`invokeHost*` / `createAppDownload` …），
+     **`useFetch` 这个公共入口一条都没有** ⇒ 上述三类缺口能在"全绿"下长期存活。
+     ★这是本轮最该记的：**测试打错了层，等于给底层发合格证、给门面发免检证。**
+
+【落地】
+  · **类型**：`FetchConfig` 加 5 字段（抽到 `capability-fetch-types.ts`，主文件超棘轮）；
+    新增 `FetchResult<T> = FetchOk<T> | {ok:false, error}`——`{ data }` 解构**保持兼容**，新增 `status`/`headers`。
+    `packages/types` 的 `RequestConfig` 同步扩（桥层都吃它）。
+  · **门面**：`useFetch` 实现抽到 `capability-fetch.ts`（`runFetch`），**逐字段透传** + 回 status/headers。
+    ★错误码归一：**自带 `code` > 消息前缀 > failed**——此前 `capability-app.ts` 的 catch
+    除 `tooLarge`/`unsupported` 外**一律压成 `fetch.failed`** ⇒ 取消和超时在门面上不可区分。
+  · **App 腿**：`request` 实现抽到 `capability-app-request.ts`；**五个字段全部进 args**
+    （此前 args 只带旧 6 个 ⇒ 门面传下来也在这里被吞）。
+  · **Web 腿**（抽到 `capability-fetch-legs.ts`）：接原生 `AbortController` 做**取消 + timeout**，
+    区分 `fetch.aborted` / `fetch.timeout`；实现 `responseType: arraybuffer` 与 ReadableStream 流式；
+    `savePath`/`upload` 明确 `unsupported`（Web 无沙箱）。
+  · **MP 腿**（同文件）：`timeout` 真传给 `wx.request` + `responseType` 映射 + 超时单列错误码；
+    `savePath`/`onChunk`/`upload`/`signal` **明确 `unsupported`**——静默忽略比报错更糟。
+  · `createAbortController` 从公共面导出（App 引擎无原生 AbortController）。
+
+【真机判据（走门面，Android 9/9）】
+  新探针 `appUseFetchProbe` + `UseFetchProbe.java` + `run-usefetch-probe.sh`：
+  · 流式 **24 块**逐块到达 · 块序号连续 · `status=200` · `headers` 齐全
+  · 第 4 块取消 ⇒ **`fetch.aborted`** · 宿主 `http.cancel` **hits=1**
+  ★这是第一次**只走 `createCapabilityHooks(...).useFetch`** 的真机判据。
+
+【★★★本轮排查暴露的三个"装置级"缺陷（都不是框架逻辑，但每个都让真机白跑）】
+  ① **bundle 不重建**：`build-and-run.sh` 的 `NEED_BUILD` 只比"依赖包 dist"，
+     改 `entry-superapp*.ts` / `hosts/shared/bridge/**` / `packages/api/src/**` 都**不触发重建**
+     ⇒ 真机跑旧 bundle（现象：新探针 hook 缺失 → 探针超时）。
+     ⇒ 已补两轮判据（入口与共享桥、以及 `packages/{api,shared}/src`）。
+  ② **`packages/types` dist 陈旧**：改了 `RequestConfig` 但 bundle 构建读的是 `dist/*.d.ts`
+     ⇒ 类型检查报"没有 savePath"。
+  ③ **探针自己写错**（两处）：`useFetch` **不抛异常**（失败以 `ok:false` 返回）而我按"会 reject"写；
+     以及把 `error.code` 当 message 读 ⇒ 看不到真实错误。
+
+【★破坏性验证（4 条，全部命中；第 3 条第一版漏网）】
+  ① `runFetch` 不透传 `onChunk` ⇒ 2 条红；② 丢 `status`/`headers` ⇒ 红；
+  ③ MP 的 `signal` 分支改 `if (false)` ⇒ **第一版仍全绿**（断言只查文案「取消是 App/Web 语义」，
+    而注释里也有这句）⇒ 改成断言**真正的 `reject(new CapError('fetch.unsupported'` 语句**后才红。
+  ★这是本仓**第 5 次**同族（#1115/#1118/#1119/#1120/#1122）：**断言"名字/文案存在"等于没断言**。
+  ④ Web 去掉 timeout ⇒ 红。
+
+【诚实边界】
+  · **只在 Android 真机验过**（iOS 的同一套底层已验过 #1118-#1121，但**门面这条路 iOS 未单独跑**）；
+  · **Web/MP 腿只有静态判据**（无浏览器/开发者工具实跑）——如实登记，不宣称"三端已验"；
+  · Web 的流式是**拉取式**（ReadableStream），与 App 的**回推式**节奏不同，回调时序不等价；
+  · MP 明确不支持流式/落盘/上传/取消（`wx.request` 能力边界），已用 `unsupported` 显式拒绝。
+
+【落地清单】
+  · 新文件：`capability-fetch-types.ts`（类型）/ `capability-fetch.ts`（门面实现）/
+    `capability-fetch-legs.ts`（Web+MP 腿）/ `capability-app-request.ts`（App 腿）
+  · 改：`capability.ts`（useFetch 委托）/ `capability-app.ts`（request 委托 + AbortController 导出）/
+    `capability-types.ts`（移除已抽类型 + re-export）/ `types/api-types.ts`（RequestConfig 扩）/ `index.ts`（导出）
+  · 判据：`tests/useFetch-contract.test.ts` **13/13**（走门面 + 四类缺口各自的反向断言）
+  · 任务板：`T-app-usefetch-surface`（done）
+
+【门禁】
+  file-size（capability-app 2076 · capability 1087 · bridges 3954 · types 3834，全部**低于**基线）·
+  no-blind-wait · safe-edit · script-compile · Android 编译 · 122/122 相关测试。
+
+【下一步】
+  ① **iOS 真机跑同一条门面判据**（底层已验，门面这条路未验）；
+  ② **Web/MP 实跑**（浏览器 + 微信开发者工具），把"静态判据"升级为"真机证据"；
+  ③ `FetchConfig` 的 `baseURL` / `retry` / `retryDelay` / `skipAuth` 仍只在 `RequestConfig` 里
+     （`useFetch` 未开放——它们属于 API 层的拦截器/重试体系，不是单次请求能力）；
+  ④ 按 #1113 硬指标继续体检其它能力（文件/媒体/socket）。

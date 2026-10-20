@@ -25,6 +25,8 @@
 //   **字节**承载（#903 已登记的边界：不为每种能力定义 TLV schema）；大载荷（HTTP 响应/文件）走裸字节。
 
 import { utf8Decode, utf8Encode } from '@proteus-vue/shared'
+// ★#1122：取消契约的**单一来源**（`capability-fetch-types`）
+import type { AbortSignalLike } from './capability-fetch-types'
 import {
   decodeResolveFrame,
   encodeInvokeFrame,
@@ -318,20 +320,22 @@ function tryInvokeHostBytesSync(
  * 【★诚实边界】`abort()` 之后 `signal.aborted` 恒为 true；**单个消费者**（只支持一个 onabort
  *   回调，不支持 addEventListener 多订阅）——够 `useFetch` 用，超出范围请自行包一层。
  */
-export interface AbortSignalLike {
-  readonly aborted: boolean
+// ★#1122：契约面在 `capability-fetch-types`（只要求 `aborted` 可读 ⇒ 兼容原生 AbortSignal）；
+//   这里有 `onabort` 是实现所需（单消费者）。⇒ 用 extend 保证"实现满足契约"。
+export interface AbortSignalImpl extends AbortSignalLike {
   /** 取消时触发（单消费者） */
   onabort?: () => void
 }
 
 export interface AbortControllerLike {
-  readonly signal: AbortSignalLike
+  /** ★#1122：返回**实现版**（带 `onabort`）——调用方 `attachAbort` 要挂回调 */
+  readonly signal: AbortSignalImpl
   abort(): void
 }
 
 export function createAbortController(): AbortControllerLike {
   let aborted = false
-  const signal: AbortSignalLike = {
+  const signal: AbortSignalImpl = {
     get aborted(): boolean {
       return aborted
     },
@@ -428,7 +432,7 @@ const PENDING_HOST_CALLS_MAX = 1024
  *   但**后端传输不会停**——这是能力位差异，不是本函数能兜住的（已在能力页登记）。
  */
 function attachAbort(
-  signal: AbortSignalLike | undefined,
+  signal: AbortSignalImpl | undefined,
   reqId: string,
   fn: HostInvokeBytesFn,
   timer: TimerHandle,
@@ -452,7 +456,11 @@ function attachAbort(
       /* 宿主不支持取消：如实不处理（JS 侧已 reject） */
     }
     // ① 立即 reject（**在通知宿主之后**——先通知能让宿主尽快停，减少白跑）
-    reject(new Error(`fetch.aborted: 请求已取消（${reqId}）`))
+    // ★#1122：**必须带 `code`**——`capability-fetch.runFetch` 从 `e.code` 取错误码，
+    //   只给 message 前缀的话会被判成 `fetch.failed`（本轮真机实测：取消生效了但码不对）。
+    const abortErr = new Error(`fetch.aborted: 请求已取消（${reqId}）`) as Error & { code?: string }
+    abortErr.code = 'fetch.aborted'
+    reject(abortErr)
     // ★② pending 已删；timer 已清
   }
   if (signal.aborted) {

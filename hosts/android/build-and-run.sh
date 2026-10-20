@@ -182,6 +182,20 @@ if [ -f "$ENTRY" ] && [ -f "$BUNDLE" ] && [ "$ENTRY" -nt "$BUNDLE" ]; then NEED_
 for dep in packages/render-backend/dist/index.js packages/slot-runtime/dist/index.js; do
   if [ -f "$BUNDLE" ] && [ "$ROOT/$dep" -nt "$BUNDLE" ]; then NEED_BUILD=1; fi
 done
+# ★★★#1122：**入口本身与共享桥源码也要比**——此前只比"依赖包 dist"，
+#   于是改 `entry-superapp.ts` / `entry-superapp-probes.ts` / `hosts/shared/bridge/**` 后
+#   bundle **不会重建** ⇒ 真机跑的是旧探针（本轮实测：新加的 useFetch 探针 bundle 里根本没有，
+#   表现为 hook 缺失 → 探针超时，而构建全绿）。
+for srcf in "$HERE/bridge/entry-superapp.ts" "$HERE/bridge/entry-superapp-probes.ts"; do
+  if [ -f "$BUNDLE" ] && [ "$srcf" -nt "$BUNDLE" ]; then NEED_BUILD=1; fi
+done
+if [ -f "$BUNDLE" ] && [ -n "$(find "$ROOT/hosts/shared/bridge" -newer "$BUNDLE" -name "*.ts" -print -quit 2>/dev/null)" ]; then NEED_BUILD=1; fi
+# ★★★#1122（第二半）：bundle 的源码面**还包括 packages/api / packages/shared 的 src**——
+#   本轮实测：改了 `capability-invoke.ts` / `capability-fetch.ts` 后 bundle 没重建 ⇒
+#   真机跑的还是旧逻辑（取消码一直 fetch.failed，两轮排查才发现是"改了没进包"）。
+for pkgdir in "$ROOT/packages/api/src" "$ROOT/packages/shared/src"; do
+  if [ -f "$BUNDLE" ] && [ -n "$(find "$pkgdir" -newer "$BUNDLE" -name "*.ts" -print -quit 2>/dev/null)" ]; then NEED_BUILD=1; fi
+done
 if [ "$NEED_BUILD" = "1" ]; then
   echo "    构建 bundle（缺产物 或 入口更新）…"
   if ! node "$HERE/bridge/build-batch.mjs" 2>&1 | sed 's/^/    /'; then

@@ -10,8 +10,8 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
-import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe } from './entry-superapp-probes'
-export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe } from './entry-superapp-probes'
+import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe } from './entry-superapp-probes'
+export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe } from './entry-superapp-probes'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -921,6 +921,10 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppCancelProbe?: (b: string, c?: number, s?: number, d?: number) => string
 }).__proteusHostAppCancelProbe = (b: string, c?: number, s?: number, d?: number) => appCancelProbe(b, c, s, d)
+// ★★★#1122：**走 useFetch 门面**的探针（验证门面真的透传 S3 字段）
+;(globalThis as unknown as {
+  __proteusHostAppUseFetchProbe?: (b: string, c?: number, s?: number, d?: number) => string
+}).__proteusHostAppUseFetchProbe = (b: string, c?: number, s?: number, d?: number) => appUseFetchProbe(b, c, s, d)
 // ★★★决策 #1115：响应体上限探针（宿主按中性名调；结果填 __proteusHostFetchLimitProbeResult）
 ;(globalThis as unknown as { __proteusHostAppFetchLimitProbe?: (b: string, m?: number) => string })
   .__proteusHostAppFetchLimitProbe = (b: string, m?: number) => appFetchLimitProbe(b, m)

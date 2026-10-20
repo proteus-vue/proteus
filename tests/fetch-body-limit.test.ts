@@ -145,9 +145,13 @@ describe('★#1115 两端实现同值同语义（防"换端就成败不同"）',
   })
 
   it('★JS 侧把 `fetch.tooLarge` 映射成**专用错误码**（不能混进 fetch.failed）', () => {
-    const s = read(APP)
-    expect(s, 'JS 侧未识别 fetch.tooLarge 前缀').toMatch(/\^fetch\\\.tooLarge:/)
-    expect(s, '未抛 CapError("fetch.tooLarge")').toMatch(/CapError\(\s*'fetch\.tooLarge'/)
+    // ★#1122：错误码归一已抽到 `capability-app-request.ts`（从 capability-app.ts 移出）
+    const s = read('packages/api/src/capability-app-request.ts')
+    // ★#1122：实现改为"自带 code > 消息前缀 > failed"的**通用**归一（不再为 tooLarge 单开分支）
+    //   ⇒ 断言验证**机制**：通用前缀提取存在，且能产出 fetch.* 码。
+    // 源码里是 `const byPrefix = /^(fetch\.[a-zA-Z]+):/.exec(msg)?.[1] ?? ''`
+    expect(s.includes('^(fetch\\.'), '★未实现 fetch.* 消息前缀提取（tooLarge 会退化成 failed）').toBe(true)
+    expect(s, '★未按前缀产出错误码').toMatch(/byPrefix \|\|/)
   })
 })
 

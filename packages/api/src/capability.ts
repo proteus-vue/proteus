@@ -11,7 +11,9 @@ import { makeCapabilityRuntime } from './capability-runtime'; import type { Capa
 import { getSharedCapabilityBridge, registerBridgeFactory } from './capability-bridge-shared'
 import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
-import type { ARAPI, AdAPI, AlbumAPI, AppLifecycle, ArchiveOptions, AudioController, AuthState, BackgroundAPI, BatteryInfo, BeaconAPI, BiometricOptions, BluetoothAPI, CacheManagerHandle, CalendarAPI, CalendarEvent, CameraController, CanvasController, CapDeviceInfo, CapResult, CapabilityBridge, CapabilityProbe, CompatStorage, Contact, CookieJar, Coords, DataChannelHandle, DataChannelOptions, DeviceCapabilityAPI, DownloadOptions, DownloadResult, ElementQuery, FSAdapter, FetchConfig, FileSystemBridge, HostContext, IAPReceipt, IdleAPI, ImageEditAPI, IntersectionHandle, IntersectionOptions, KeyboardLifecycle, LivePusherController, LiveRoomHandle, LiveRoomOptions, LocalServiceAPI, Logger, LoginResult, MapController, MediaAccess, MediaProcessingAPI, MediaQueryObserver, MessageSubscription, MiniProgramAPI, NFCAPI, NavigationGuardAPI, NetworkType, OrientationInfo, PageLifecycle, PaymentConfig, PaymentReceipt, PerformanceAPI, PermissionState, PosterAPI, PreloadAPI, PrivacyAPI, ProgressCallback, RecorderController, ScreenCaptureAPI, ScreenInfo, SensorKind, SensorSample, SensorStream, ShareOptions, ShippingAddress, SocketTaskHandle, TCPSocketConnectOptions, TCPSocketHandle, TrackAPI, TranslationAPI, UDPSocketHandle, UpdateManagerAPI, UploadOptions, UploadResult, VideoController, WeRunData, WebAssemblyAPI, WebSocketConnection, WifiAPI, WindowAPI, WorkerHandle, WxLike } from './capability-types'
+// ★#1122：useFetch 实现（抽到独立文件，本文件超棘轮）
+import { runFetch } from './capability-fetch'
+import type { ARAPI, AdAPI, AlbumAPI, AppLifecycle, ArchiveOptions, AudioController, AuthState, BackgroundAPI, BatteryInfo, BeaconAPI, BiometricOptions, BluetoothAPI, CacheManagerHandle, CalendarAPI, CalendarEvent, CameraController, CanvasController, CapDeviceInfo, CapResult, CapabilityBridge, CapabilityProbe, CompatStorage, Contact, CookieJar, Coords, DataChannelHandle, DataChannelOptions, DeviceCapabilityAPI, DownloadOptions, DownloadResult, ElementQuery, FSAdapter, FetchConfig, FetchResult, FileSystemBridge, HostContext, IAPReceipt, IdleAPI, ImageEditAPI, IntersectionHandle, IntersectionOptions, KeyboardLifecycle, LivePusherController, LiveRoomHandle, LiveRoomOptions, LocalServiceAPI, Logger, LoginResult, MapController, MediaAccess, MediaProcessingAPI, MediaQueryObserver, MessageSubscription, MiniProgramAPI, NFCAPI, NavigationGuardAPI, NetworkType, OrientationInfo, PageLifecycle, PaymentConfig, PaymentReceipt, PerformanceAPI, PermissionState, PosterAPI, PreloadAPI, PrivacyAPI, ProgressCallback, RecorderController, ScreenCaptureAPI, ScreenInfo, SensorKind, SensorSample, SensorStream, ShareOptions, ShippingAddress, SocketTaskHandle, TCPSocketConnectOptions, TCPSocketHandle, TrackAPI, TranslationAPI, UDPSocketHandle, UpdateManagerAPI, UploadOptions, UploadResult, VideoController, WeRunData, WebAssemblyAPI, WebSocketConnection, WifiAPI, WindowAPI, WorkerHandle, WxLike } from './capability-types'
 import { webBridge, wxBridge } from './capability-bridges'
 // ★决策 #870：类型契约整体转发——保持 @proteus-vue/api 公共面（含 index.ts 的 capOk/capErr/CapError/各类型）不变
 export * from './capability-types'
@@ -47,7 +49,8 @@ export interface CapabilityHooks {
   useShare(options: ShareOptions): Promise<CapResult<void>>
   // ★G-32 B3 续：通信/权限/存储
   /** C26 useFetch：网络请求（成功 .data = 载荷——migration.md `const { data } = await useFetch(url)` 解构兼容） */
-  useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
+  /** ★#1122：返回 `FetchResult<T>`——`{ data }` 解构兼容，新增 `status` / `headers` */
+  useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>>
   /** C16 usePermission：权限状态（web Permissions API） */
   usePermission(name: string): Promise<CapResult<PermissionState>>
   /** C15 useStorage：存储句柄（响应式增强见 createReactiveStorage） */
@@ -261,14 +264,9 @@ export function createCapabilityHooks(
     useBattery: () => wrap(bridge.getBattery()),
     useOrientation: () => wrap(bridge.getOrientation()),
     useShare: (options) => wrap(bridge.share(options)),
-    // ★G-32 B3 续：通信/权限/存储（缺桥 → Err 非抛异常——G-32.3 降级语义）
-    useFetch: <T>(url: string, config?: FetchConfig) =>
-      wrap(
-        (() => {
-          if (!bridge.request) return Promise.reject(new CapError('fetch.unsupported', '桥未提供 request（useFetch 不可用）'))
-          return bridge.request({ url, method: config?.method, data: config?.data, params: config?.params, headers: config?.headers, timeout: config?.timeout }).then((r) => r.data as T)
-        })(),
-      ),
+    // ★★★#1122：**门面开口**——实现抽到 `capability-fetch.ts`（本文件 1092 行超棘轮）；
+    //   此前只透传 6 字段、且只回 `data` ⇒ S3 能力业务够不着、status/headers 被丢弃。
+    useFetch: <T>(url: string, config?: FetchConfig): Promise<FetchResult<T>> => runFetch<T>(bridge, url, config),
     usePermission: (name) =>
       wrap(
         (() => {

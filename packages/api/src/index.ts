@@ -71,6 +71,9 @@ export type {
   ReactiveStorage,
   ReactiveFactory,
   FetchConfig,
+
+  FetchResult,
+  FetchOk,
   Coords,
   NetworkType,
   BatteryInfo,

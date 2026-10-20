@@ -6,6 +6,8 @@
 import { detectRuntime } from '@proteus-vue/shared'
 import { createAppLifecycleCapabilities, detectAppHost, getHostLifecycleBus, installAppEventSource, installPageEmitBridge, installWebEventSources, installWxAppEventBridge } from './capability-app'
 import { BRIDGE_DECLS } from './bridge-decls/index'
+// ★#1122：Web / MP 的 fetch 腿（同一条 useFetch 的两个平台后端）
+import { webRequest, mpRequest } from './capability-fetch-legs'
 import type { RequestResponse } from '@proteus-vue/types/api-types'
 import { CapError, capErr, capOk, wrap } from './capability-types'
 import { createWxBeacon } from './capability-beacon'
@@ -498,25 +500,8 @@ export function wxBridge(wx: WxLike): CapabilityBridge {
       if (!wx.shareAppMessage) throw new CapError('share.unsupported', 'wx.shareAppMessage 缺失')
       wx.shareAppMessage({ title: options.title })
     },
-    // ★G-32 B3 续：request → wx.request 回调桥
-    request: (config) =>
-      new Promise((resolve, reject) => {
-        if (!wx.request) return reject(new CapError('fetch.unsupported', 'wx.request 缺失'))
-        wx.request({
-          url: config.url,
-          method: config.method,
-          data: config.data,
-          header: config.headers,
-          success: (r) =>
-            resolve({
-              data: r.data,
-              status: r.statusCode,
-              headers: r.header ?? {},
-              config,
-            }),
-          fail: (e) => reject(new CapError('fetch.failed', 'wx.request 失败', e)),
-        })
-      }),
+    // ★#1122：MP 腿抽到 `capability-fetch-legs.ts`（本文件超棘轮 + 两条腿应并排看）
+    request: (config) => mpRequest({ CapError, encodedUrl }, wx as never, config),
     getStorage: () => wxStorage(wx),
     // ★G-32 B3 三期：新增能力（wx → Result；缺能力 → CapError 降级）
     readSensor: (kind) =>
@@ -2631,28 +2616,8 @@ export function webBridge(g: typeof globalThis & { navigator?: Navigator & { get
       await share({ title: options.title, text: options.text, url: options.url })
     },
     // ★G-32 B3 续：request → fetch 桥（RequestResponse 契约）
-    request: async (config) => {
-      if (typeof g.fetch !== 'function') throw new CapError('fetch.unsupported', 'fetch 不支持（Node<18/SSR）')
-      const url = encodedUrl(config.url, config.params)
-      const resp = await g.fetch(url, {
-        method: config.method ?? 'GET',
-        headers: config.headers as Record<string, string> | undefined,
-        body: config.data !== undefined ? JSON.stringify(config.data) : undefined,
-      })
-      if (!resp.ok) throw new CapError('fetch.failed', `HTTP ${resp.status}`)
-      const text = await resp.text()
-      let data: unknown = text
-      try {
-        data = JSON.parse(text)
-      } catch {
-        /* 非 JSON 原样 */
-      }
-      const headers: Record<string, string> = {}
-      resp.headers.forEach((v, k) => {
-        headers[k] = v
-      })
-      return { data, status: resp.status, headers, config }
-    },
+    // ★#1122：Web 腿抽到 `capability-fetch-legs.ts`
+    request: (config) => webRequest({ CapError, encodedUrl }, g as never, config),
     getPermission: async (permission) => {
       const perms = nav?.permissions
       if (!perms?.query) throw new CapError('permission.unsupported', 'navigator.permissions 不支持')

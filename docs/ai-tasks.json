@@ -2205,6 +2205,28 @@
         "T-app-save-to-file"
       ],
       "note": "四条请求路径（整包/流式/落盘/上传）全部注册；判据钉住\"注册点必须=4\"。★iOS 判据强度弱半档（无 setTimeout ⇒ 无等待窗口），靠宿主记账交叉验证。"
+    },
+    {
+      "id": "T-app-usefetch-surface",
+      "title": "#1122 useFetch 门面开口：S3 能力真正可被业务使用（此前底层做完、门面没接）",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-fetch.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "packages/api/src/capability-fetch-legs.ts",
+        "packages/api/src/capability-app-request.ts",
+        "tests/useFetch-contract.test.ts"
+      ],
+      "decision": 1122,
+      "verification": "npx vitest run tests/useFetch-contract.test.ts && bash hosts/android/run-usefetch-probe.sh",
+      "branch": null,
+      "related": [
+        "T-app-fetch-cancel",
+        "T-app-upload-stream"
+      ],
+      "note": "四类缺口：5 字段没进 FetchConfig / status+headers 被丢 / Web+MP 腿没用平台能力 / 零条走门面测试。★iOS 与 Web/MP 的实际运行未验（只有静态判据），如实登记。"
     }
   ]
 }
