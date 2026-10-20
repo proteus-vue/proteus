@@ -2304,6 +2304,25 @@
         "T-app-usefetch-surface"
       ],
       "note": "★最大结构性缺口：其它 26 个能力页没有可机读的\"实现侧 SSOT\"，上不了同款门禁（API 数据表手写）。"
+    },
+    {
+      "id": "T-demo-all-parity",
+      "title": "#1129 27 个 showcase 能力页「文档 vs 实现」对齐门禁 + 正确的 TS 接口抽取器",
+      "type": "docs",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "website/scripts/lib/ts-ifaces.mjs",
+        "website/scripts/lib/demo-page-type-ssot.mjs",
+        "tests/demo-page-all-parity.test.ts"
+      ],
+      "decision": 1129,
+      "verification": "npx vitest run tests/demo-page-all-parity.test.ts && node scripts/gen-capability-demo-pages.mjs --check",
+      "branch": null,
+      "related": [
+        "T-demo-api-parity"
+      ],
+      "note": "★抽取器首版有贪婪正则 bug ⇒ 8 处假红（把真实字段判成不存在）。教训：判据的解析器必须先自证。7 页 data 结构显式不覆盖（null）。"
     }
   ]
 }

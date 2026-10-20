@@ -38,7 +38,13 @@ const SKIP_SEG = /(^|\/)(node_modules|dist|build|\.proteus|generated|\.tools|ass
 const SKIP_NAME = /(\.generated\.|\.min\.|bundle-.*\.js$|\.d\.ts$)/
 
 /** 具名豁免（path → 理由）。默认空；每一项 = 一个登记在案的例外（须写明不可拆理由）。 */
-const ALLOW = {}
+const ALLOW = {
+  // ★#1129：能力 demo 页生成器 = 27 页的**数据表** + 一套固定骨架，职责单一、无分支可拆。
+  //   已把「页→实现侧类型」映射抽到 lib/demo-page-type-ssot.mjs（那是本轮新增的最大一块）；
+  //   剩下的是 27 组手写 API/compat 行，拆开只会让"改一页要跨两文件"，反而更容易漏。
+  //   ★这不是"为过门禁而豁免"：文件确实只有 1 个职责（渲染能力详情页），且 1000 行来自**数据**不是逻辑。
+  'scripts/gen-capability-demo-pages.mjs': '单职责（27 页数据表 + 固定骨架）；映射表已抽出，剩余为纯数据行',
+}
 
 function walk(dir, out = []) {
   let entries

@@ -26,7 +26,7 @@ async function onNetwork(): Promise<void> {
 
 const apiRows = ref([
   ["useNetwork()", "当前网络状态；返回 Promise<CapResult<NetworkType>>", "CapResult<NetworkType>"],
-  ["data.online", "是否在线", "boolean"],
+  ["data.online", "是否联网", "boolean"],
   ["data.type", "网络类型：'unknown' | 'wifi' | 'cellular' | 'none'（web 无细分 → unknown）", "string"],
   ["error.code", "机器码：network.unsupported 等", "string"],
 ])

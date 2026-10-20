@@ -10330,3 +10330,69 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      这是本轮暴露的最大结构性缺口；
   ② 真浏览器（`test:e2e:web`）/ 真容器（`test:e2e:mp`）层仍未验（#1127 遗留）；
   ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）。
+
+1129. **★★★27 个 showcase 能力页的「文档 vs 实现」对齐门禁落地（#1128 暴露的最大结构性缺口）· 决策**（2026-10-20 · 承接 #1128「下一步①」）：
+
+【缺口（#1128 只做了一页）】
+  #1128 给 `fetch` 页加了"数据表 vs 实现"判据，但**只此一页**——因为它有 `FetchConfig` 这样的
+  可机读类型源。其它 26 页的 API 数据表是手写的 ⇒ **无人校验**，可以任意落后于实现。
+  ★这正是 #1128 那类"演示页教用户做不到"缺陷的温床。
+
+【本单做的三件事（每个都先取证再动手）】
+  ① **写一个正确的 TS 接口抽取器**（`website/scripts/lib/ts-ifaces.mjs`）——★这是本单最关键的产出；
+  ② **建「页 → 实现侧类型」映射表**（`lib/demo-page-type-ssot.mjs`，27 项，其中 7 项显式 `null`）；
+  ③ **门禁**（`tests/demo-page-all-parity.test.ts` 6/6）用三类可机读源覆盖全部 27 页。
+
+【★★抽取器：我先写出了 8 处假红，这条教训比门禁本身重要】
+  首版正则：`(?:\/\*\*[\s\S]*?\*\/\s*)?export interface (\w+)[^{;]*\{`
+  ——那个**可选**的 JSDoc 前缀是贪婪的：`[\s\S]*?` 会**跨越前一个接口**去凑匹配，
+  于是 181 个接口里有一批取错体 ⇒ 实测把
+  `NetworkType.online` / `CapDeviceInfo.platform|model|os` / `BatteryInfo.level|charging` /
+  `OrientationInfo.angle` / `ScreenInfo.dpr` ——**8 个真实存在的字段判成"不存在"**。
+  ★**如果我当时直接"修文档"，就会把 8 处正确的文档改错**（去给不存在的缺陷打补丁）。
+  ⇒ 修法：**不匹配 JSDoc**，只定位 `export interface NAME`，再从其后第一个 `{` 做花括号配对；
+    且先 `maskNonCode()` 把注释/字符串打成空格（否则 `'{'` 字面量会把配对带偏）。
+  ★这是本仓第 **7** 次同族：**判据的解析器必须先自证**——解析器错了，它报的每条红都是噪音。
+  ⇒ 所以门禁的**第一条 describe 就是抽取器自检**（钉住那 8 个曾假红的字段 + 接口总数 >150）。
+
+【映射表的诚实设计（7 项 null）】
+  `PAGE_TYPE_SSOT` 里 `storage` / `fetch` / `element-query` / `device-capability` / `log` /
+  `biometric` 等是 `null`（void / 句柄型 / 联合型，**没有单一返回接口**）。
+  ★**显式写 null 而不是猜一个接口名**——猜错会让门禁"用错误的标准去要求正确的实现"。
+    对 null 页只查 hook 存在性。
+
+【★顺带修掉抽取器的第二个盲区：type alias】
+  `AppLifecycle` / `PageLifecycle` 是 `export type X = XHandle`（**alias，不是 interface**）
+  ⇒ 首版只认 `interface`，两页被判"接口不存在"（又是假红）。
+  ⇒ 抽取器加 alias 收集 + `resolveAlias()`（支持**跨文件**解析：alias 在 `capability-types.ts`、
+    真 interface 在 `capability-app.ts`）。
+  ★这里也有个陷阱：alias 解析若在**单文件** extractInterfaces 内部做，跨文件就解析不到——
+    必须由调用方把多文件结果**合并后**再解析。
+
+【门禁覆盖（6/6）】
+  ① 抽取器自检（8 个曾假红字段 + 接口数 >150）；
+  ② **每页声称的 hook 必须在 `CapabilityHooks` 里**（27 页全过：95 个声明，0 缺失）；
+  ③ `PAGE_TYPE_SSOT` 声明的接口必须真实存在（含 alias 解析）；
+  ④ **页面声称的 `data.X` 字段必须在该页接口里存在**（17 处 `data.X` 全过）；
+  ⑤ **每个 demo 页都必须登记在映射表**（新增页不能绕过门禁）。
+
+【★破坏性验证（2 条，全部命中）】
+  ① 把 `data.online` 改成 `data.online_TYPO` ⇒ 红，报出**该页 + 缺失字段 + 该接口实际有哪些**；
+  ② 把 `useNetwork()` 改成 `useNetwork_TYPO()` ⇒ 红，"声称了不存在的 hook"。
+
+【诚实边界】
+  ① 判据只保证"**名字存在**"，不保证"**描述准确**"（`data.online` 写"是否联网"还是"在线状态"，
+     机器不管）——语义质量仍需人看；
+  ② `null` 的 7 页只受 hook 存在性保护，`data` 结构无校验（如实登记，不假装覆盖）；
+  ③ 抽取器是**文本扫描**（非真 TS 解析），对极端写法（嵌套泛型里的 interface）可能漏；
+     已用"接口数 >150"兜底防静默缩小覆盖面；
+  ④ 本轮**没有改动任何文档内容**——27 页的 hook/接口/字段本来就全对（8 处假红是我的解析器问题）。
+     ★这条本身就是价值：**先证明"没问题"，再谈"要不要改"**。
+
+【门禁】`check:capability-demo --check` OK（27 页与数据表一致）· file-size（生成器 1000 行 + 具名 ALLOW，
+理由已写）· safe-edit · 11/11 相关测试。
+
+【下一步】
+  ① 描述准确性（语义层）——目前完全无判据，需要另一类方法（人工/LLM 抽查）；
+  ② 真浏览器（`test:e2e:web`）/ 真容器（`test:e2e:mp`）层仍未验（#1127 遗留）；
+  ③ 英文文档类型引用段（#1124 遗留）· 内容缩水阈值标定（#1125 遗留）。

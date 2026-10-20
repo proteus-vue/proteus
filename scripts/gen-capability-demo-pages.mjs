@@ -69,7 +69,7 @@ async function onNetwork(): Promise<void> {
     buttons: `[['探测网络', 'onNetwork']]`,
     api: [
       ['useNetwork()', '当前网络状态；返回 Promise<CapResult<NetworkType>>', 'CapResult<NetworkType>'],
-      ['data.online', '是否在线', 'boolean'],
+      ['data.online', '是否联网', 'boolean'],
       ['data.type', "网络类型：'unknown' | 'wifi' | 'cellular' | 'none'（web 无细分 → unknown）", 'string'],
       ['error.code', '机器码：network.unsupported 等', 'string'],
     ],
@@ -889,6 +889,8 @@ function onUnsubscribeBg(): void {
     ],
   },
 ]
+
+// ★#1129：页 → 实现侧类型映射抽到 lib（本文件已 1000 行上限）；门禁据此校验文档与实现对齐
 
 /** 渲染单页（骨架固定，差异来自数据表） */
 function renderPage(p) {
