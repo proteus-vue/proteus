@@ -305,6 +305,24 @@ export function createFetchPipeline(
   ): Promise<FetchResult<T>> {
     const retryCfg = normalizeRetry(config, opts.retry)
     const maxAttempts = (retryCfg.attempts ?? 0) + 1
+    // ★★★#1135：**总时限**（deadline）——从**入队**起算的墙钟预算。
+    //   【为什么 `timeout` 不够】`timeout` 是**单轮**语义（每次尝试/每一跳各自计时）：
+    //     重试 3 次 + 每轮 15s ⇒ 最坏 ~60s；多跳重定向同理。业务要的常常是"20s 内给我结果"，
+    //     而不是"每一轮 20s"。⇒ deadline 计入**排队 + 重试退避 + 每一跳**。
+    //   ★锚点是入队时刻（startedAt - queuedMs），排队等待也算消耗预算——
+    //     否则并发打满时"排队 30s + 请求 1s"会突破 20s 预算而业务毫不知情。
+    const deadlineMs = config.deadline
+    const anchor = startedAt - queuedMs
+    const remaining = (): number => (deadlineMs === undefined ? Number.POSITIVE_INFINITY : deadlineMs - (now() - anchor))
+    /** deadline 已耗尽 ⇒ 统一的失败结果（码 `fetch.deadline`，与超时/取消区分开）。 */
+    const deadlineFail = (spent: number): FetchResult<T> => ({
+      ok: false,
+      error: {
+        code: 'fetch.deadline',
+        message: `请求超出总时限 ${deadlineMs}ms（已用 ${Math.round(spent)}ms，含排队与重试）`,
+      } as never,
+      meta: { id, attempts: attemptMs.length, queuedMs, totalMs: Math.round(now() - anchor), attemptMs, deduped: false, priority, deadlineMs, deadlineHit: true } as never,
+    })
     const ctx: FetchRequestContext = { id, url, config, attempt: 0, elapsedMs: 0 }
     const attemptMs: number[] = []
     let retryDelaySkipped = false
@@ -336,7 +354,20 @@ export function createFetchPipeline(
       const wantManual = cfg.redirect === 'manual' || typeof cfg.onRedirect === 'function'
       const max = cfg.maxRedirects ?? 5
       for (;;) {
-        const sent: FetchConfig = wantManual ? { ...cfg, redirectManual: true } : cfg
+        // ★#1135：**每一跳都消耗 deadline 预算**（多跳重定向同样受总时限约束）
+        if (remaining() <= 0) {
+          trace.exceeded = trace.exceeded || false
+          redirectTrace = trace
+          return deadlineFail(now() - anchor) as FetchResult<unknown>
+        }
+        // ★单轮 timeout clamp：剩余预算比 `timeout` 更紧时，按预算收敛
+        //   （否则"预算 5s、timeout 15s"的单次请求会突破总时限）
+        const rem = remaining()
+        const clamped: FetchConfig =
+          Number.isFinite(rem) && (cfg.timeout === undefined || rem < cfg.timeout)
+            ? { ...cfg, timeout: Math.max(1, Math.floor(rem)) }
+            : cfg
+        const sent: FetchConfig = wantManual ? { ...clamped, redirectManual: true } : clamped
         const r = await runFetch<unknown>(bridge, url, { ...sent, signal: linkedSig })
         if (!r.ok) {
           redirectTrace = trace
@@ -432,6 +463,10 @@ export function createFetchPipeline(
     let linkedSig: LinkedSignal | undefined = buildSignal()
     let linkedFrom = curConfig.signal
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // ★deadline：开新轮之前先看还剩多少（排队/上一轮/退避都已消耗）
+      if (remaining() <= 0) {
+        return deadlineFail(now() - anchor)
+      }
       if (task.aborted) {
         last = {
           ok: false,
@@ -479,7 +514,12 @@ export function createFetchPipeline(
       //   status（不是异常）⇒ 先 break 就永远不重试。判定交给 `retryOn`（默认对 429/5xx 返 true）。
       const shouldRetry = (retryCfg.retryOn ?? DEFAULT_RETRY_ON)(res, attempt)
       if (!task.aborted && attempt + 1 < maxAttempts && shouldRetry) {
-        const waited = await delay(backoffOf(retryCfg, attempt))
+        // ★deadline：退避等待前先算"等完还够不够一轮最小预算"——不够就别等了（早失败比空等有用）
+        const waitMs = backoffOf(retryCfg, attempt)
+        if (remaining() - waitMs <= 0) {
+          return deadlineFail(now() - anchor)
+        }
+        const waited = await delay(waitMs)
         if (!waited) retryDelaySkipped = true
         continue
       }
@@ -495,6 +535,7 @@ export function createFetchPipeline(
       deduped,
       priority,
       ...(retryDelaySkipped ? { retryDelaySkipped: true } : {}),
+      ...(deadlineMs !== undefined ? { deadlineMs } : {}),
       ...(traceHops.length || traceExceeded || traceStopped
         ? {
             redirects: {

@@ -136,8 +136,8 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 | 能力 | 现状 |
 |---|---|
 | 单轮超时 | ✅ 已有（App `setConnectTimeout`/`setReadTimeout`；Web `AbortController`；MP `wx.request.timeout`） |
-| **总时限**（跨重试的 deadline） | ❌ 未做。`timeout` 是**单轮**，重试 3 次可能总耗时 = 4×timeout |
-| 超时分级（连接 / 首字节 / 空闲） | ❌ 未做（App 只有 connect/read 两档，Web 只有一档） |
+| **总时限**（跨重试的 deadline） | ✅ **已做（#1135）**：`deadline` 从**入队**起算，跨排队/退避/多跳；耗尽 ⇒ `fetch.deadline`（与 `fetch.timeout` 分开）；单轮 timeout 自动**收敛到剩余预算** |
+| 超时分级（连接 / 首字节 / 空闲） | ❌ 未做（App 只有 connect/read 两档，Web 只有一档）——**属宿主传输层** |
 
 ★`FetchMeta` 已经能暴露"总耗时"，所以**P3 的判据可以先写**（断言 `totalMs ≤ deadline`），实现随后。
 
@@ -172,7 +172,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 ## 6. 下一步（按优先级）
 
 1. ~~P1 重定向可拦~~ ⇒ ✅ **已完成（#1134）**；
-2. **P3 总时限 deadline**（判据已可写，纯框架层：断言 `totalMs ≤ deadline`）；
+2. ~~P3 总时限 deadline~~ ⇒ ✅ **已完成（#1135）**；
 3. **P2 条件请求缓存**（`If-None-Match`/`If-Modified-Since` + `Cache-Control`；App 三端不会自动做）；
 4. **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引入 OkHttp，独立大单，先评估 APK 体积与包体影响）；
 5. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。

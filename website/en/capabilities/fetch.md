@@ -36,6 +36,7 @@ Param,Type,Required,Doc
 | `params` | `Record<string, unknown>` | No | URL query parameters (appended to the query string) |
 | `headers` | `Record<string, string>` | No | Custom request headers |
 | `timeout` | `number` | No | Timeout in ms (timeout → Err) |
+| `deadline` | `number` | No | — |
 | `responseType` | `'text' \| 'json' \| 'arraybuffer'` | No | — |
 | `savePath` | `string` | No | — |
 | `onChunk` | `(chunk: Uint8Array, seq: number) => void` | No | — |

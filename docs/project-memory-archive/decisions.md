@@ -10807,3 +10807,54 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① **P3 总时限 deadline**（纯框架层，`meta.totalMs` 已可断言）；
   ② **P2 条件请求缓存**（`If-None-Match`/`Last-Modified`；App 三端不会自动做 304）；
   ③ **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引 OkHttp，独立大单）。
+
+1135. **★★总时限 `deadline`（矩阵 P3 收口）—— 补上"单轮 timeout 表达不了"的那一类需求 · 决策**（2026-10-20 · 承接 #1134「下一步②」）：
+
+【为什么需要（超级应用最常踩的坑）】
+  `timeout` 是**单轮**语义：`retry.attempts=3` + `timeout=15000` ⇒ 最坏 ~60s；多跳重定向同理。
+  业务说"20 秒内给我结果"时，`timeout: 20000` **表达不了**这个意思——它只保证"每一轮不超过 20s"，
+  整体可以远超。这就是线上"接口设了 20s 超时却转了 1 分钟"的典型根因。
+
+【落地（纯框架层，三端同一份）】
+  · `deadline`（ms）：从**入队**起算的墙钟预算——排队、重试退避、重定向每一跳**都计入**。
+  · 耗尽 ⇒ `fetch.deadline`（★与 `fetch.timeout` **分开**：前者"整体没时间了"，后者"这一轮等太久"，
+    业务据此决定要不要报警/降级）。
+  · ★**单轮 timeout 自动收敛到剩余预算**：不会让某一次尝试突破总时限
+    （实测 `attemptMs=[174, 32]`——第二轮只剩 ~30ms 预算时被 clamp）。
+  · 退避等待**前**就判断"等完还够不够"——不够就早失败，不空等（避免"预算已尽仍在 sleep"）。
+  · `FetchMeta` 加 `deadlineMs` / `deadlineHit`（未设则不出现，老业务零影响）。
+
+【判据（`tests/fetch-deadline.test.ts` 8/8）】
+  ① 基线：未设 deadline ⇒ 行为不变、meta 无该字段；
+  ② **跨轮次**（每轮 150ms / 预算 200ms ⇒ `attempts≤2`、`totalMs<450`、**最后一轮被 clamp < 120ms**）；
+  ③ **排队计入预算**（并发 1 + 前一个占 120ms + 预算 100ms ⇒ `fetch.deadline` 且 `meta.queuedMs` 证明排队被计）；
+  ④ 退避前早退（预算 150ms + 2s 退避 ⇒ 不被拖住）；
+  ⑤ 多跳每跳消耗预算；
+  ⑥ **单轮 clamp**（timeout 10s + deadline 200ms ⇒ 实际 < 600ms）；
+  ⑦ `fetch.deadline` 与 `fetch.timeout` 是两个码；
+  ⑧ 预算充裕不误伤。
+  ★破坏性验证 4 条全部命中：clamp 失效 ⇒ **3 红**（含跨轮次）；`remaining()` 预算检查缺失 ⇒ 排队条红；
+    `anchor` 不含排队 ⇒ 排队条红。
+
+【★判据自己修了三处（都是"判据错"而非"实现错"）】
+  ① 首版跨轮次用例让服务端回 200 ⇒ **200 不触发重试**（只有失败才重试）⇒ 用例根本没进重试分支。
+     修：服务端支持 `?status=500` 造可重试失败。
+  ② 排队用例拿"总耗时 < 80ms"当"没有空跑"的证据——但**总耗时必然 ≥ 排队时间（~110ms）**。
+     修：改断言 `meta.queuedMs > 60`（这才是"排队被计入"的直接证据）。
+  ③ 跨轮次用例原用 `attempts≤2 + totalMs<450`，在"`anchor=now()`"破坏下仍绿（因为 clamp 兜住了）。
+     修：补 **`attemptMs` 最后一轮 < 120ms** —— 这是 clamp 生效的硬证据。
+
+【诚实边界】
+  ① **超时分级**（连接 / 首字节 / 空闲）**未做**——属宿主传输层（App 只有 connect/read 两档，Web 只有一档）；
+  ② deadline 是**墙钟**预算，不感知"设备休眠"等时钟跳变（与浏览器 `AbortSignal.timeout` 同口径）；
+  ③ 排队时间计入 ⇒ 并发打满时**同样的 deadline 会更早失败**（这是有意的：业务要的是端到端时限）。
+
+【门禁】
+  `fetch-deadline` 8/8 · `fetch-redirect` 16/16 · `fetch-pipeline` 23/23 · `fetch-wire-fields` 5/5
+  · `pnpm test` **6447 条全绿** · gen-content 84 页（`deadline` 字段与 `deadlineMs/deadlineHit` 自动进文档）
+  · gen-capability-demo 27 页 · file-size 绿。
+
+【下一步（矩阵 §6）】
+  ① **P2 条件请求缓存**（`If-None-Match`/`If-Modified-Since` + `Cache-Control`；App 三端不会自动做 304）；
+  ② **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引 OkHttp，独立大单）；
+  ③ 超时分级（宿主层，与 P1 同批）。

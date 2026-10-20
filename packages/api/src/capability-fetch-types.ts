@@ -45,6 +45,18 @@ export interface FetchConfig {
   headers?: Record<string, string>
   /** 超时（ms；超时 → Err）。★单轮语义：重试时每轮各自计时 */
   timeout?: number
+  /**
+   * ★★★#1135 **总时限**（ms）：从**入队**起算的墙钟预算，跨排队/重试退避/重定向多跳。
+   *
+   * 【与 `timeout` 的区别（这是超级应用最常踩的坑）】
+   *   · `timeout` 是**单轮**语义：重试 3 次 × 15s ⇒ 最坏 ~60s；多跳重定向同理；
+   *   · `deadline` 是**总预算**：排队、退避、每一跳都计入，耗尽 ⇒ `fetch.deadline`。
+   * ⇒ 业务要"20s 内给我结果"时必须用 `deadline`，`timeout: 20000` 表达不了这个意思。
+   *
+   * ★超预算时框架会把**单轮 timeout 收敛到剩余预算**（不会让某一次尝试突破总时限）。
+   * ★`fetch.deadline` 与 `fetch.timeout` 分开：前者"整体没时间了"，后者"这一轮等太久"。
+   */
+  deadline?: number
   /** ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 */
   responseType?: 'text' | 'json' | 'arraybuffer'
   /** ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 */
@@ -148,6 +160,10 @@ export interface FetchMeta {
   retryDelaySkipped?: boolean
   /** ★#1134：重定向轨迹（仅在发生过跳转/被拦截/超限时出现）。`hops` 是逐跳审计记录。 */
   redirects?: RedirectTrace
+  /** ★#1135：本次请求的总时限预算（ms；未设置则不出现）。 */
+  deadlineMs?: number
+  /** ★#1135：是否因总时限耗尽而失败（`fetch.deadline`）。 */
+  deadlineHit?: boolean
 }
 
 /** ★#1122：`useFetch` 成功结果（`data` 解构保持兼容；`status`/`headers` 为新增）。 */
