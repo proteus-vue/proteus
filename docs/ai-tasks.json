@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-19",
+  "updated_at": "2026-10-20",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -2013,6 +2013,111 @@
         "T-app-element-selector-web-parity"
       ],
       "note": "【done · 决策 #1086（2026-10-19）】#1081 把 useIntersection 判为 unsupported，理由是\"缺帧级几何变化通知\"。本轮取证发现理由**过严**：element.rect 已返回视口坐标、视口尺寸可知、三端滚动入口都是单点 ⇒ 只要一个\"几何可能变了\"的 tick 就够，相交计算可全放 JS。\n【实现】语义对齐 Web IntersectionObserver：relativeToViewport/relativeTo(margins)/observe/disconnect/thresholds/observeAll；**初始回调**（observe 后立即评估）· **阈值跨档才回调**（同档内不刷）· 比例 = 相交面积/目标面积 · disconnect 只清本句柄 · 拿不到几何跳过（不伪造 0）· 参照不存在**不静默退回视口**。索引侧新增 resolveAllElements（与 resolveElement 同一解析器+同一文档序）。\n【三端】Android 在 SuperappRuntimeHost.mount 接 setScrollPosListener → view.post → tick（放在 runtime 里，与 pullPumpsDeferred 同一纪律：换壳不漏接；post 避免 QuickJS 嵌套 eval）；iOS onScrollDrag 后 DispatchQueue.main.async 调 tick；**鸿蒙不支持**（一次性 VM，观察者无法跨渲染存活）。\n【判据】10/10 + 破坏性 2 条（摘跨档判断 ⇒ 1 红；比例改用参照面积 ⇒ 4 红）。\n【诚实边界】① 只在\"几何变了\"时评估（滚动 tick + observe 时刻），**不监听**纯布局变化/动画位移——那需真正的帧级通知，属后续批次；② 鸿蒙不支持；③ **Android 真机已闭环**（2026-10-19 补测）：观察者注册成功、**初始回调 2 次、比例 [100,100]**、`isect_rect_probe` 证明几何腿可取；`isect_after_scroll` 与初始相同是因为目标始终在视口内（比例未跨档 ⇒ 不回调，**符合 Web 语义**）。**iOS 也已真机闭环**（`isect_register={ok:true}` · `isect_initial=[100]` · `isect_retick=0` 证明 tick 被真的调到 · `isect_after=[100]` 未跨档不回调 · `isect_rect_probe={ok:true,nodeId:16}`）；鸿蒙 unsupported（一次性 VM）。★真机抓到**装置缺陷**：ElementProbe 的 `mini_mount`（挂 1 节点小树做自检）跑在几何探针之前 ⇒ **换掉整棵树** ⇒ 之后所有 `element.rect` 都\"无几何\"；已挪到所有几何探针之后。教训：同一宿主上的多个探针，顺序就是依赖。"
+    },
+    {
+      "id": "T-tv-key-input-android",
+      "title": "TV B1：Android 宿主遥控按键归一（remote key → 语义键 → __proteusHostAppEvent）",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/SuperappRuntimeHost.java",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "packages/api/src/capability-app-remote.ts",
+        "tests/capability-app-remote.test.ts"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/capability-app-remote.test.ts && bash hosts/android/acceptance.sh --preflight",
+      "branch": null,
+      "related": [
+        "T-tv-focus-engine",
+        "T-tv-focus-ring-app"
+      ],
+      "note": "【planned · 方案 docs/proteus-tv-focus-plan/05-batches.md B1】现状：hosts/** 对 onKeyDown/dispatchKeyEvent/KEYCODE_DPAD **grep 命中 0** ⇒ 遥控按键 App 收不到。交付：dispatchKeyEvent 覆写 + 归一表（03-host-input-contract.md §2：★confirm 必须同时认 DPAD_CENTER(23) 与 ENTER(66)）+ 复用既有 __proteusHostAppEvent 通道 + useRemote() 能力契约（三端诚实降级）。判据 D1-D4：8 个键码逐项映射 / 删 ENTER 必红 / 未订阅时 key_push_dropped 不静默 / 100 连发不丢。★不做：tvOS/鸿蒙（B5）、repeat 合成（装置 B，按需）。"
+    },
+    {
+      "id": "T-tv-focus-engine",
+      "title": "TV B2：焦点引擎原语化（Hestia）——nextFocus/ensureVisible 纯函数 + 状态机 + TV001/003 校验",
+      "type": "framework-feature",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/focus/src",
+        "packages/fluid/src/focus-nav.ts",
+        "packages/components/p-formfactor/index.vue",
+        "tests/focus-engine.test.ts",
+        "tests/focus-ensure-visible.test.ts"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/focus-engine.test.ts tests/focus-ensure-visible.test.ts && pnpm check:pkg && pnpm check:stats",
+      "branch": null,
+      "related": [
+        "T-tv-key-input-android",
+        "T-tv-focus-ring-app"
+      ],
+      "note": "【planned · 方案 02-focus-primitive.md】现状：navigateFocus 已在 packages/fluid/src/focus-nav.ts:50（吃矩形、纯函数），但归属是**组件配套**、没有原则约束。交付：新包 @proteus-vue/focus（nextFocus 转导出 + ensureVisible + createFocusEngine 状态机）+ TV001/TV003 校验器。ensureVisible 三契约：E1 已可见则不动（防每次跳）/ E2 就近对齐（同 scrollIntoView block:nearest）/ E3 钳到内容范围。★零行为变化证据三项：fluid 改纯转导出不留第二份 / 既有单测一行不改 / p-formfactor 焦点行为截图 A/B。★风险：包数 +1，需同步 check:pkg 与官网数字。"
+    },
+    {
+      "id": "T-tv-focus-ring-app",
+      "title": "TV B3：App 端焦点视觉——渲染器按 focusId 绘制期描边（App 无 :focus 伪类）",
+      "type": "end-alignment",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/VaporRenderHost.java",
+        "hosts/ios/ProteusHost/runtime/selfdraw-scene.swift",
+        "hosts/harmony/host-app/entry/src/main/ets",
+        "tests/focus-ring-contract.test.ts"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/focus-ring-contract.test.ts && pnpm check:app-css-surface",
+      "branch": null,
+      "related": [
+        "T-tv-focus-engine",
+        "T-tv-focus-scroll-follow"
+      ],
+      "note": "【planned · 方案 02-focus-primitive.md §4】约束来源：App 能力表 features[40] `selector-pseudo-state = absent`（含 :focus）⇒ 焦点环**不能靠 CSS**。三方案择一，选①绘制期描边（对 id==focusId 的节点追加描边指令；零额外节点，与\"坐标舍入只在核内\"同源）；②内核 focus overlay 节点（语义污染，否）；③独立图层（两套坐标要同步，#832 教训，否）。参数：宽按 formfactor.tv.baseFont 18 比例、颜色取 visual.brand/accent、不得被 overscan(96,54) 裁掉。判据 P3：位置 ±2px + **环色与背景对比度 ≥3:1**（防\"画了看不见\"）。另含 p-formfactor 的 @container 降级路径（App 无 container query）。"
+    },
+    {
+      "id": "T-tv-focus-scroll-follow",
+      "title": "TV B4：焦点滚动跟随（ensureVisible 端到端）——焦点永不出屏",
+      "type": "framework-feature",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "packages/focus/src/ensure-visible.ts",
+        "packages/api/src/capability-app-element.ts",
+        "tests/focus-scroll-follow.test.ts"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/focus-scroll-follow.test.ts",
+      "branch": null,
+      "related": [
+        "T-tv-focus-ring-app",
+        "T-tv-focus-crossend"
+      ],
+      "note": "【planned · 方案 05-batches.md B4】★不得推迟（04-tv.md §9 已点名）：缺它会出现\"焦点跑到屏幕外\"，比没有焦点更糟。交付：handleKey 后置钩子调 ensureVisible → 宿主 setScroll（复用内核既有范围钳制，与 applyContentOffset 同语义）。判据 P4：连按 60 次**正向 + 60 次反向**全在容器内（只测单向是常见漏测）。破坏性 B-3：ensureVisible 恒返回 0 ⇒ P4 必红。"
+    },
+    {
+      "id": "T-tv-focus-crossend",
+      "title": "TV B5：焦点跨端一致性（同一 SFC + 同一 rects ⇒ 四端 focusSequence 指纹一致）",
+      "type": "verification",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/ios/ProteusHost",
+        "hosts/harmony/host-app/entry/src/main/ets",
+        "tests/focus-crossend-golden.test.ts",
+        "docs/generated/focus-sequence-golden.json"
+      ],
+      "decision": null,
+      "verification": "npx vitest run tests/focus-crossend-golden.test.ts",
+      "branch": null,
+      "related": [
+        "T-tv-focus-scroll-follow"
+      ],
+      "note": "【planned · 方案 05-batches.md B5（S2）】这是本方案的**差异化证据**：同一组矩形喂进纯函数，四端焦点序列必须逐项一致（sha256 指纹）。前置：tvOS 设备与签名成本**未评估**，需独立 spike。判据 P2 可进 CI（rects 可造假数据，不需真机）。破坏性：改任一端 crossWeight ⇒ 指纹不一致必红。★诚实边界：三端都还没接遥控输入，\"同一 rects → 同一序列\"目前是**待验证假设**，不是已证结论。"
     }
   ]
 }
