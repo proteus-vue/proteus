@@ -15,7 +15,8 @@ source "$HERE/lib/xcode-env.sh"
 PORT_A="${1:-8801}"
 PORT_B="${2:-8802}"
 MAX_REDIRECTS="${PROTEUS_REDIRECT_PROBE_MAX:-2}"
-LOCAL_REPORT="$HERE/results/redirect-probe.json"
+# ★iOS 报告是**单槽** `superapp.json`（探针读数在 `redirect_probe` 字段里，不是独立文件）
+LOCAL_REPORT="$HERE/results/superapp.json"
 SERVER_LOG="$HERE/results/redirect-probe-server-ios.log"
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 
@@ -44,7 +45,7 @@ fi
 echo "    两个服务已就绪"
 
 echo "==> 构建 + 安装 + 启动（superapp --redirect-probe，max=${MAX_REDIRECTS}）"
-bash "$HERE/run-selfdraw.sh" --superapp "--redirect-probe=${CROSS},${MAX_REDIRECTS}" 2>&1 | tail -12
+bash "$HERE/run-selfdraw.sh" --superapp "--redirect-probe=${BASE},${CROSS},${MAX_REDIRECTS}" 2>&1 | tail -12
 
 [ -f "$LOCAL_REPORT" ] || { echo "✗ 报告未取回（${LOCAL_REPORT}）"; exit 4; }
 

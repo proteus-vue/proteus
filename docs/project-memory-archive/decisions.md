@@ -10773,10 +10773,22 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   修：改用 `useFetch(responseType:'json')` 读。★与 #1071「无 TextDecoder」、#1095「无 TextEncoder」同族：
   **探针装置本身也必须遵守目标端的运行时约束**。
 
+【★第三个真机缺陷（装置层）：iOS 探针登记漏了「三处」⇒ 连跑两轮空转】
+  给 iOS 加探针要在 `hosts/ios/run-selfdraw.sh` 改**三处正交位置**：
+  ① 参数解析分支（`--xxx-probe=*`）② `case "$PN"` 赋值 ③ 转发清单 `for pv in ...` + `ANY_PROBE`。
+  `redirect-probe` **三处全漏** ⇒ 参数根本没到 App ⇒ App 走**常驻模式永不退出** ⇒
+  **现象是"报告永远是旧的"**（不报错），连续两轮各 ≈5 分钟跑空。
+  ★定位方式：查服务端 `/__seen` 发现**只有我自己 curl 的那一条** ⇒ App 一个请求都没发。
+  ⇒ 新判据 `tests/host-probe-registry.test.ts`（6/6）：三处抽出的探针名集合必须**相等**，
+    且 `ANY_PROBE` 必须覆盖每个转发项（漏一个 ⇒ 该探针不加 `--console` ⇒ 永不退出）。
+    ★判据自己修两轮（都是假红）：`fetch-limit-probe` 的正则 `[a-z-]+` 不含数字 /
+      变量名不一定是 `*_PROBE_ARG`（它是 `FETCH_LIMIT_ARG`）⇒ 放宽为 `[A-Z_]+ARG=`。
+
 【真机结果】
   · **Android 11/11 全绿**：manual⇒302+Location · 两跳回调 2 次（301→302）· stop⇒redirectStopped 且只调 1 次 ·
     环+max=2⇒tooManyRedirects · **跨域终点收到空 Authorization**
-  · iOS：宿主编译通过、描述文件有效（10-26），本次运行见下一条说明。
+  · **iOS 11/11 全绿（同判据同结论）**：manual⇒302+Location · 两跳回调 2 次 · stop⇒redirectStopped 且只调 1 次 · 环+max=2⇒tooManyRedirects · **跨域终点收到空 Authorization**。
+    ★过程中还修了两处装置缺陷：① `--redirect-probe` 三处登记全漏（见上）② 参数形态错把 `parts[0]`（base）当 crossBase ⇒ 全部请求打到 B 端口 ⇒ ③ iOS 报告是单槽 `superapp.json`（读数在 `redirect_probe` 字段），脚本原先找独立文件名。
 
 【诚实边界】
   ① **MP 端做不到**（`wx.request` 隐式跟随、不可关）⇒ 如实 `fetch.unsupported`；

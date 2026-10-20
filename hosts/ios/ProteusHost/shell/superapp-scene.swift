@@ -443,10 +443,11 @@ final class SuperappScene: NSObject {
                 let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 20) : 20
                 extra = "\(chunks),\(size),\(delayMs)"
             case "--redirect-probe=":
-                // ★#1134：`--redirect-probe=<crossBase>[,<maxRedirects>]`
-                //   ★跨域目标必须由调用方给（iOS 侧不像 Android 有固定端口约定）
-                let crossBase = parts.count >= 1 ? parts[0] : ""
-                let maxRedirects = parts.count >= 2 ? (Int(parts[1]) ?? 2) : 2
+                // ★#1134：参数形态 `--redirect-probe=<base>,<crossBase>[,<maxRedirects>]`
+                //   ★★`parts[0]` 是 **base**（runner 统一取首参当前缀），所以 crossBase 在 parts[1]。
+                //     本轮实测踩过：把 parts[0] 当 crossBase ⇒ base 也被写成 crossBase ⇒ 全部请求打到 B 端口。
+                let crossBase = parts.count >= 2 ? parts[1] : ""
+                let maxRedirects = parts.count >= 3 ? (Int(parts[2]) ?? 2) : 2
                 extra = "\(SuperappScene.jsonQuote(crossBase)),\(maxRedirects)"
             default:
                 extra = ""
