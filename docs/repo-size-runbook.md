@@ -96,7 +96,84 @@ git push --force --all
 **② 仍待评估**：`git verify-pack -v .git/objects/pack/*.idx | sort -k3 -rn | head -20`
 看 pack 内实际占用（.aar 是已压缩的 zip ⇒ 二次压缩率低，接近原体积）。
 
-## 5. 决策记录
+## 5. 决策记录与执行结果
 
-- [x] 2026-10-20 · **已完成 §1**（安全部分 + 门禁）
-- [ ] 历史重写：**待用户决定**（A / B / C）——因为它改写全部 sha 且对外，不可逆
+### 2026-10-20 · §1 已完成（安全部分 + 门禁）
+修 `.gitignore` 根因 · `rm --cached` 727 文件 · `check:repo-hygiene` 门禁 · `scripts/*.mjs` 语法检查。
+
+### 2026-10-20 · **选项 A 已执行**（用户决定）
+
+```bash
+# ① 备份（必做，已验证可回滚）
+git clone --mirror . ../proteus-pre-filter.git   # 418MB · 2491 提交 · 101 tag · HEAD 一致
+
+# ② 重写
+brew install git-filter-repo
+git filter-repo --path spike/target-qjs --path .cdp-shots --invert-paths --force
+
+# ③ 清本地残留（不做这步 .git 会回到 1.2G——reflog 仍持有旧对象）
+git reflog expire --expire=now --all && git gc --prune=now --aggressive
+
+# ④ 强推（filter-repo 会移除 origin，需先恢复）
+git remote add origin git@github.com:proteus-vue/proteus.git
+git push --force origin main
+git push --force origin --tags        # 101 个 tag 的 sha 也全变了，必须一起推
+```
+
+**实测结果（2026-10-20）**：
+
+| 指标 | 重写前 | 重写后 | 备注 |
+|---|---|---|---|
+| **远端全新 clone** | ~839 MB | **371 MB** | 实测（clone 后 du -sh .git），回收 **468 MB** |
+| 本地 `.git` | 1.2 GB | **826 MB** | 含 reflog 清理后 |
+| `size-pack` | 526 MiB | **337.6 MiB** | |
+| `main` 提交数 | 1812 | **1812** | 不变 |
+| tag 数 | 101 | **101** | 不变 |
+| 垃圾目录在 HEAD/历史 | 727 文件 | **0** | |
+| `pnpm test` | 6447 | **6447 全绿** | 重写后复跑 |
+
+**比估算多回收了 ~280MB**（估 182MB，实收 468MB）：因为 `.rlib`/二进制在 pack 里是
+独立存储、几乎不可压缩，而估算按文件大小算没算进它们对 pack 的完整占用。
+
+**踩到的坑（已写进上面的脚本注释）**：
+1. `git filter-repo` 会**移除 origin remote**（防止误推到旧历史）⇒ 必须重新 `remote add`；
+2. 重写后本地 `.git` 一度回到 1.2GB——**reflog 仍持有旧历史**（`git reflog --all` 里 2 条引用）
+   ⇒ 必须 `reflog expire --expire=now --all` + `gc --prune=now`；
+3. **tag 的 sha 也全变了** ⇒ 只推 `main` 不够，必须 `--tags`（否则 101 个 tag 指向旧对象）；
+4. 全新克隆里 `git rev-list --all --count` 是 **2489** 而本地 2491——差异是**游离 tag 独有的提交**，
+   `main` 上 1812 两边完全一致 ⇒ 克隆完整，不是丢提交。
+
+### 其他人/其他机器需要做什么（必须告知团队）
+
+因为历史被重写，**所有已有克隆都失效**（旧的 `main` 与远端已无共同祖先）：
+
+```bash
+# 方式一（推荐）：重新克隆
+cd .. && rm -rf proteus && git clone git@github.com:proteus-vue/proteus.git
+
+# 方式二（保留本地未提交改动）：
+git fetch origin && git reset --hard origin/main
+git remote prune origin
+git tag -l | xargs -n 1 git tag -d && git fetch --tags --force   # 旧 tag 必须删后重取
+```
+
+**影响面（如实）**：所有 PR/issue 里引用的旧 commit sha 失效；fork 需重新同步；
+CI 的历史缓存全部作废（下一次 CI 会重新拉全量）。
+
+### 备份保留
+
+`/Volumes/data1/work/office/debug/proteus-pre-filter.git`（418MB，mirror）——
+**确认一切正常后再删**。回滚方式：
+
+```bash
+cd .. && mv proteus proteus-broken && git clone proteus-pre-filter.git proteus
+cd proteus && git push --force origin main && git push --force origin --tags
+```
+
+### 仍未做的
+
+- **选项 B（LFS）**：可再回收 ~190 MB，但需评估 GitHub LFS 配额
+  （免费 1GB 存储 / 1GB 月流量，而 `.aar` 几乎每个能力改动都重编）。
+- **根治 574MB 产品产物**：需先回答"外部用户只装 CLI 如何拿到预编译运行时"（#666 的初衷）。
+  已取证：历史的 138 个 `.aar` **不是同内容重复副本**（相邻两版解包后 `classes.jar` 里 7 个 class
+  确实不同，正是 #1080/#1069 改的文件）⇒ 去重/LFS 都只能原样存，**唯一根治是不提交构建产物**。
