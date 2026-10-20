@@ -75,6 +75,8 @@ public final class InvokeWire {
     public static final int TAG_STREAM = 8;
     /** ★#1119：落盘路径（宿主直写沙箱，JS 不碰字节） */
     public static final int TAG_SAVE_PATH = 9;
+    /** ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart） */
+    public static final int TAG_UPLOAD_PATH = 10;
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     public static final int RTAG_HTTP_STATUS = 16;
@@ -93,6 +95,46 @@ public final class InvokeWire {
     private static final byte[] EMPTY = new byte[0];
 
     /* ────────────────────────── 数据形态 ────────────────────────── */
+
+    /** ★★★#1120：流式上传规格（宿主据此自读文件 + 自拼 multipart；字段与 TS `UploadSpec` 逐一对应）。 */
+    public static final class UploadSpec {
+        public String path;
+        public String fieldName;
+        public String filename;
+        public String boundary;
+        /** 普通表单字段（`LinkedHashMap` 保插入序——编码顺序是契约的一部分）。 */
+        public LinkedHashMap<String, String> formData;
+    }
+
+    private static void writeUploadSpec(Writer w, UploadSpec u) {
+        w.str(u.path == null ? "" : u.path);
+        w.str(u.fieldName == null ? "" : u.fieldName);
+        w.str(u.filename == null ? "" : u.filename);
+        w.str(u.boundary == null ? "" : u.boundary);
+        int n = u.formData == null ? 0 : u.formData.size();
+        w.u16(n);
+        if (u.formData != null) {
+            for (Map.Entry<String, String> e : u.formData.entrySet()) {
+                w.str(e.getKey());
+                w.str(e.getValue() == null ? "" : e.getValue());
+            }
+        }
+    }
+
+    private static UploadSpec readUploadSpec(Reader r) {
+        UploadSpec u = new UploadSpec();
+        u.path = r.str();
+        u.fieldName = r.str();
+        u.filename = r.str();
+        u.boundary = r.str();
+        int n = r.u16();
+        u.formData = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) {
+            String k = r.str();
+            u.formData.put(k, r.str());
+        }
+        return u;
+    }
 
     /** 去程帧（`PINV`）解码结果——业务无关的"请求元数据 + 裸字节体"。 */
     public static final class InvokeFrame {
@@ -115,6 +157,8 @@ public final class InvokeWire {
         public Boolean stream;
         /** ★#1119：非 null ⇒ 宿主把响应体直接写进该沙箱路径 */
         public String savePath;
+        /** ★#1120：非 null ⇒ 宿主边读文件边拼 multipart 边发 */
+        public UploadSpec upload;
         public byte[] body = EMPTY;
 
         /** 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可空字段。 */
@@ -312,6 +356,7 @@ public final class InvokeWire {
                 case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
                 case TAG_STREAM: f.stream = p.u8() != 0; break;
                 case TAG_SAVE_PATH: f.savePath = p.str(); break;
+                case TAG_UPLOAD_PATH: f.upload = readUploadSpec(p); break;
                 // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
                 default: break;
             }
@@ -351,6 +396,7 @@ public final class InvokeWire {
         // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐；false/null 都不写）
         if (Boolean.TRUE.equals(f.stream)) writeTlv(w, TAG_STREAM, () -> w.u8(1));
         if (f.savePath != null) writeTlv(w, TAG_SAVE_PATH, () -> w.str(f.savePath));
+        if (f.upload != null) writeTlv(w, TAG_UPLOAD_PATH, () -> writeUploadSpec(w, f.upload));
         return w.done();
     }
 

@@ -59,15 +59,6 @@ function bytesFromReply(d: unknown): Uint8Array | null {
  *   JS 侧不再"收整包 → 转字节 → 调 fs.writeBytes"（那条路让 JS 堆随文件大小增长）。
  *   `fs.writeBytes` 仍保留（业务仍可能用它写小文件）。
  */
-
-/** 从宿主沙箱读字节。 */
-async function readFromHost(path: string): Promise<Uint8Array> {
-  const r = await invokeHostAsync(APP_TRANSFER_METHODS.readBytes, { path }, 30000)
-  const bytes = bytesFromReply(r)
-  if (!bytes) throw errOf('upload.failed', `fs.readBytes 未返回字节（收到 ${JSON.stringify(r)}）`)
-  return bytes
-}
-
 /** 从 `filePath` 推断 multipart 的 filename（取最后一段；无则 'file'）。 */
 function filenameOf(path: string): string {
   const seg = path.split('/').filter(Boolean)
@@ -75,59 +66,10 @@ function filenameOf(path: string): string {
 }
 
 /**
- * UTF-8 编码（★**不依赖 TextEncoder**）。
- *
- * 【为什么手写（真机实测抓出）】App 三端 JS 引擎（QuickJS / JSC 精简版 / JSVM）**没有 TextEncoder**
- *   ⇒ `new TextEncoder()` 直接 ReferenceError，上传整个失败。
- *   这与本仓既有的「App 无 TextDecoder」同族（#1071 曾为此手写 utf8Decode）。
- *   本实现覆盖 BMP + 代理对（与标准 UTF-8 一致），仅对孤立代理项按 U+FFFD 处理（标准也这么做）。
+ * ★#1120：`readFromHost` / `buildMultipart` / `utf8Encode` 已删除——
+ *   upload 改由**宿主边读文件边拼 multipart 边发**（`upload` meta），JS 侧不再碰文件字节。
+ *   ★与 #1119 的 download 对称：一侧"宿主直写响应体"，另一侧"宿主直读请求体"。
  */
-function utf8Encode(str: string): Uint8Array {
-  const out: number[] = []
-  for (let i = 0; i < str.length; i++) {
-    let cp = str.charCodeAt(i)
-    if (cp >= 0xd800 && cp <= 0xdbff && i + 1 < str.length) {
-      const lo = str.charCodeAt(i + 1)
-      if (lo >= 0xdc00 && lo <= 0xdfff) { cp = 0x10000 + ((cp - 0xd800) << 10) + (lo - 0xdc00); i++ }
-      else cp = 0xfffd
-    } else if (cp >= 0xd800 && cp <= 0xdfff) {
-      cp = 0xfffd
-    }
-    if (cp < 0x80) out.push(cp)
-    else if (cp < 0x800) out.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f))
-    else if (cp < 0x10000) out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))
-    else out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))
-  }
-  return Uint8Array.from(out)
-}
-
-/** 最小 multipart/form-data 组包（RFC 7578）。★只支持单文件——与 wx 同限制。 */
-function buildMultipart(
-  boundary: string,
-  fieldName: string,
-  filename: string,
-  fileBytes: Uint8Array,
-  formData?: Record<string, string>,
-): Uint8Array {
-  const parts: Uint8Array[] = []
-  // ① 普通字段（先放，与浏览器 FormData 的常见顺序一致）
-  for (const k of Object.keys(formData ?? {})) {
-    parts.push(utf8Encode(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${(formData as Record<string, string>)[k]}\r\n`))
-  }
-  // ② 文件字段
-  parts.push(utf8Encode(
-    `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\n` +
-    `Content-Type: application/octet-stream\r\n\r\n`,
-  ))
-  parts.push(fileBytes)
-  parts.push(utf8Encode(`\r\n--${boundary}--\r\n`))
-  let total = 0
-  for (const p of parts) total += p.length
-  const out = new Uint8Array(total)
-  let off = 0
-  for (const p of parts) { out.set(p, off); off += p.length }
-  return out
-}
 
 /**
  * App 端**下载**（C30）。
@@ -200,21 +142,34 @@ export function createAppUpload(): (options: UploadOptions, onProgress?: Progres
     if (!options.filePath) {
       throw errOf('upload.failed', '上传需要 filePath（wx 同语义：临时文件路径）')
     }
-    const fileBytes = await readFromHost(options.filePath)
+    // ★★★#1120（S3）：**流式上传**——宿主自己读文件、拼 multipart、边读边发。
+    //   此前是 `fs.readBytes` 把整文件读进 JS 再拼 body ⇒ **文件多大 JS 堆就吃多大**
+    //   （再乘 multipart 拼接副本，峰值 ×2）。
     const boundary = `----ProteusBoundary${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-    const body = buildMultipart(boundary, options.name ?? 'file', filenameOf(options.filePath), fileBytes, options.formData)
     const headers: Record<string, string> = {
       ...(options.headers ?? {}),
+      // ★boundary 只生成**一次**（两次生成必然对不上）
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
     }
     onProgress?.(0)
     const d = await invokeHostAsync(
       'http.request',
-      // ★★★#1095 真机抓出的契约陷阱：`encodeBody`（capability-invoke）只把
-      //   Uint8Array / ArrayBuffer / ArrayBufferView 当**原始字节**；普通 `number[]` 会落到
-      //   `JSON.stringify` ⇒ body 变成 `"[1,2,3]"` 文本（服务端解析出 0 字节）。
-      //   ⇒ 必须传 Uint8Array 本体，不能传 toByteArray(...)。
-      { url: options.url, method: 'POST', headers, data: body, timeout: options.timeout, responseType: 'text' },
+      {
+        url: options.url,
+        method: 'POST',
+        headers,
+        // ★不给 data：文件字节由宿主读（`data` 一旦给了就是整包）
+        upload: {
+          path: options.filePath,
+          fieldName: options.name ?? 'file',
+          filename: filenameOf(options.filePath),
+          boundary,
+          formData: options.formData,
+        },
+        timeout: options.timeout,
+        responseType: 'text',
+      },
+
       (options.timeout ?? 15000) + 2000,
     )
     const r = (d ?? {}) as { data?: unknown; status?: number }

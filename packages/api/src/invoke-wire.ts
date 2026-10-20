@@ -84,7 +84,28 @@ export const MetaTagInvoke = {
    *   复用同一套 `resolve()` 校验，不在这里另写一份（两套校验 = 迟早分叉）。
    */
   SavePath: 9,
+  /**
+   * ★★★#1120 **流式上传**（结构体）：让宿主**边读沙箱文件边拼 multipart 边发**，
+   * JS 侧完全不碰文件字节。
+   *
+   * 【payload 布局（TLV 内部再套一层定长前缀 + 变长字段）】
+   *   `str path` · `str fieldName` · `str filename` · `str boundary`
+   *   · `u16 fieldCount` + (`str name` · `str value`) × fieldCount
+   *
+   * 【为什么是一个 tag 装结构体，而不是 5 个独立 tag】
+   *   ★这 5 个字段**必须同时出现才有意义**（缺任一都无法拼出合法的 multipart）⇒
+   *     拆成独立 tag 会制造"只给了一半"的非法中间态，宿主还得各自校验组合完整性。
+   *   同理 `NameValues` 的编码在同一文件里已有实现，复用它省掉一套新编解码。
+   *
+   * 【为什么 boundary / fieldName / filename 由 **JS** 决定而不是宿主】
+   *   ① boundary 必须写进 `Content-Type` 头，而头是 JS 组好传下来的 ⇒ 两边各生成一次必然不一致；
+   *   ② 字段名/文件名是业务语义（wx 的 `name` / `filePath` 末段），宿主不该猜。
+   *
+   * 【与 `SavePath`（#1119）对称】一个是"宿主直写响应体"，一个是"宿主直读请求体"——同一思路的两面。
+   */
+  UploadPath: 10,
 } as const
+
 
 
 /** 回程 meta 的 TLV tag（★16 起留给回程，两段不重叠 ⇒ 同一 tag 号在两侧含义稳定） */
@@ -113,6 +134,43 @@ const RESPONSE_KIND_NAME: readonly ResponseKind[] = ['text', 'json', 'arraybuffe
 
 const EMPTY = new Uint8Array(0)
 
+/** ★★★#1120：流式上传规格（宿主据此自己读文件 + 拼 multipart）。 */
+export interface UploadSpec {
+  /** 沙箱相对路径（与 `fs.readBytes` 同一套校验：拒绝绝对路径与 `..`） */
+  path: string
+  /** multipart 字段名（如 `file`） */
+  fieldName: string
+  /** 上传文件名（进 `Content-Disposition` 的 filename） */
+  filename: string
+  /** multipart 边界串——**必须与 `Content-Type` 头里的一致**（由 JS 生成一次、两边共用） */
+  boundary: string
+  /** 普通表单字段（按插入序编码，与既有 `buildMultipart` 一致） */
+  formData?: Record<string, string>
+}
+
+/** 编码 `UploadSpec`：`path` · `fieldName` · `filename` · `boundary` · `count` + (name,value)×n */
+function writeUploadSpec(w: ByteWriter, u: UploadSpec): void {
+  w.str(u.path)
+  w.str(u.fieldName)
+  w.str(u.filename)
+  w.str(u.boundary)
+  const entries = Object.entries(u.formData ?? {})
+  if (entries.length > 65535) throw new Error(`表单字段过多（>65535）：${entries.length}`)
+  w.u16(entries.length)
+  for (const [k, v] of entries) { w.str(k); w.str(v) }
+}
+
+function readUploadSpec(r: ByteReader): UploadSpec {
+  const path = r.str()
+  const fieldName = r.str()
+  const filename = r.str()
+  const boundary = r.str()
+  const n = r.u16()
+  const formData: Record<string, string> = {}
+  for (let i = 0; i < n; i++) { const k = r.str(); formData[k] = r.str() }
+  return { path, fieldName, filename, boundary, formData }
+}
+
 /** 去程元数据（业务无关的"请求元数据"——宿主只执行，不解释业务） */
 export interface InvokeMeta {
   url?: string
@@ -130,6 +188,11 @@ export interface InvokeMeta {
    * 给出本字段 ⇒ 回程的 `data` 是**落盘路径**，不再有 body 字节。
    */
   savePath?: string
+  /**
+   * ★★★#1120：**流式上传**（见 `MetaTagInvoke.UploadPath`）。
+   * 给出本字段 ⇒ 宿主自己从沙箱读文件、拼 multipart、边读边发；JS 完全不碰字节。
+   */
+  upload?: UploadSpec
   /** ★#1118：要求宿主分块回推（见 `MetaTagInvoke.Stream`）；缺省 = 整包 */
   stream?: boolean
 }
@@ -221,6 +284,8 @@ function encodeInvokeMeta(meta: InvokeMeta): Uint8Array {
   if (meta.stream === true) writeTlv(w, MetaTagInvoke.Stream, () => w.u8(1))
   const savePath = meta.savePath
   if (savePath !== undefined) writeTlv(w, MetaTagInvoke.SavePath, () => w.str(savePath))
+  const up = meta.upload
+  if (up !== undefined) writeTlv(w, MetaTagInvoke.UploadPath, () => writeUploadSpec(w, up))
   return w.done()
 }
 
@@ -281,6 +346,9 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeMeta): void {
         break
       case MetaTagInvoke.SavePath:
         into.savePath = p.str()
+        break
+      case MetaTagInvoke.UploadPath:
+        into.upload = readUploadSpec(p)
         break
       // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
       default:

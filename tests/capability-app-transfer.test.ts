@@ -104,13 +104,12 @@ describe('★#1095 ① 下载：path 落盘 / text 原样 / 进度只有两端',
   })
 })
 
-describe('★#1095 ② 上传：multipart 组包逐段可验证', () => {
+describe('★#1120 上传：流式（宿主自读文件 + 自拼 multipart）', () => {
   beforeEach(() => { clearHost() })
   afterEach(() => { clearHost() })
 
-  it('请求头带 boundary；body 含字段段、文件段与结尾', async () => {
+  it('★走 upload meta（不再读字节进 JS、不再传 data）', async () => {
     const calls = installFakeHost((m) => {
-      if (m === APP_TRANSFER_METHODS.readBytes) return { bytes: [65, 66], size: 2 } // "AB"
       if (m === 'http.request') return { status: 201, data: 'ok' }
       return undefined
     })
@@ -118,22 +117,29 @@ describe('★#1095 ② 上传：multipart 组包逐段可验证', () => {
     const r = await up({ url: 'https://x/upload', filePath: 'tmp/a.txt', name: 'doc', formData: { k: 'v' } })
     expect(r.status).toBe(201)
     const http = calls.find((c) => c.method === 'http.request')!
+    // ★核心：必须带 upload 规格（宿主据此自读文件）
+    const u = http.args.upload as { path: string; fieldName: string; filename: string; boundary: string; formData?: Record<string, string> }
+    expect(u, '未声明 upload ⇒ 仍会把整文件读进 JS').toBeTruthy()
+    expect(u.path).toBe('tmp/a.txt')
+    expect(u.fieldName).toBe('doc')
+    expect(u.filename).toBe('a.txt')
+    expect(u.formData).toEqual({ k: 'v' })
+    // ★不得再传 data（一旦传了就是整包）
+    expect(http.args.data, '★仍传了 data ⇒ 文件字节进了 JS 堆').toBeUndefined()
+    // ★不得再调 fs.readBytes
+    expect(calls.some((c) => c.method === APP_TRANSFER_METHODS.readBytes), '★仍在读整文件进 JS').toBe(false)
+  })
+
+  it('boundary 只生成一次，且与 Content-Type 头一致（两次生成必然对不上）', async () => {
+    const calls = installFakeHost((m) => (m === 'http.request' ? { status: 200, data: '' } : undefined))
+    await createAppUpload()({ url: 'https://x/u', filePath: 'a.bin' })
+    const http = calls.find((c) => c.method === 'http.request')!
     const headers = http.args.headers as Record<string, string>
-    expect(headers['Content-Type']).toMatch(/^multipart\/form-data; boundary=/)
-    const boundary = headers['Content-Type'].split('boundary=')[1]
-    // ★args 经 JSON 序列化后 Uint8Array 变成 {"0":..} 形态 ⇒ 测试侧归一成字节数组
-    const raw = http.args.data as unknown
-    const bytes = raw instanceof Uint8Array ? Array.from(raw) : Object.values(raw as Record<string, number>)
-    const text = Buffer.from(bytes).toString('utf8')
-    expect(text).toContain(`--${boundary}`)
-    expect(text).toContain('Content-Disposition: form-data; name="k"')
-    expect(text).toContain('Content-Disposition: form-data; name="doc"; filename="a.txt"')
-    expect(text).toContain('Content-Type: application/octet-stream')
-    expect(text.endsWith(`--${boundary}--\r\n`)).toBe(true)
-    // ★文件字节逐字节在 body 里（在文件段的头之后）
-    const idx = text.indexOf('Content-Type: application/octet-stream')
-    const after = text.slice(idx)
-    expect(after).toContain('AB')
+    const ct = headers['Content-Type']
+    expect(ct).toMatch(/^multipart\/form-data; boundary=/)
+    const boundary = ct.split('boundary=')[1]
+    const u = http.args.upload as { boundary: string }
+    expect(u.boundary, '★头里的 boundary 与 meta 里的不一致 ⇒ 服务端永远解析不出文件').toBe(boundary)
   })
 
   it('App 无 Blob ⇒ options.file 如实 unsupported（不静默走别的路）', async () => {
@@ -148,15 +154,44 @@ describe('★#1095 ② 上传：multipart 组包逐段可验证', () => {
     await expect(createAppUpload()({ url: 'https://x' })).rejects.toMatchObject({ code: 'upload.failed' })
   })
 
-  it('进度只有 0 与 100', async () => {
-    installFakeHost((m) => {
-      if (m === APP_TRANSFER_METHODS.readBytes) return { bytes: [1], size: 1 }
-      if (m === 'http.request') return { status: 200, data: '' }
-      return undefined
-    })
+  it('进度只有 0 与 100（不伪造中间值）', async () => {
+    installFakeHost((m) => (m === 'http.request' ? { status: 200, data: '' } : undefined))
     const seen: number[] = []
     await createAppUpload()({ url: 'https://x', filePath: 'a' }, (p) => seen.push(p))
     expect(seen).toEqual([0, 100])
+  })
+})
+
+describe('★#1120 上传 · 宿主侧自己拼 multipart（JS 不再拼）', () => {
+  const ANDROID = fs.readFileSync(path.join(ROOT, 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java'), 'utf8')
+
+  it('Android：边读文件边写连接（不 readAll 文件、不整包）', () => {
+    const start = ANDROID.indexOf('private static InvokeWire.ResolveFrame performStreamUpload')
+    expect(start, '找不到 performStreamUpload').toBeGreaterThan(0)
+    const seg = ANDROID.slice(start, start + 6000)
+    expect(seg, '★未用 FileInputStream 边读边写').toMatch(/new java\.io\.FileInputStream\(src\)/)
+    expect(seg, '★未边读边写（应在循环里 os.write）').toMatch(/while \(\(n = in\.read\(buf\)\) > 0\)/)
+    expect(seg, '缺峰值块记账').toMatch(/peakChunkBytes/)
+    // ★定长流式（不是 chunked）：multipart 长度可预知
+    expect(seg, '未用 setFixedLengthStreamingMode（应能预知总长）').toMatch(/setFixedLengthStreamingMode\(total\)/)
+    // ★必须复用沙箱校验
+    expect(seg, '未复用沙箱路径校验').toMatch(/FileTransferCapability\.resolve/)
+  })
+
+  it('Android：multipart 段顺序与 JS 旧实现一致（普通字段在前、文件字段在后、结尾 --）', () => {
+    const start = ANDROID.indexOf('private static String normalFieldsHead')
+    expect(start).toBeGreaterThan(0)
+    const seg = ANDROID.slice(start, start + 1600)
+    expect(seg, '普通字段段格式不符').toMatch(/Content-Disposition: form-data; name=/)
+    expect(ANDROID, '文件字段段格式不符').toMatch(/filename=\\"|filename=" /)
+    expect(ANDROID, '缺结尾分隔').toMatch(/"--"/)
+  })
+
+  it('JS 侧不再有 multipart 组包实现（已移交宿主）', () => {
+    const s = fs.readFileSync(path.join(ROOT, 'packages/api/src/capability-transfer.ts'), 'utf8')
+    const code = s.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n')
+    expect(code, '★JS 侧仍在拼 multipart（应移交宿主）').not.toMatch(/function buildMultipart/)
+    expect(code, '★JS 侧仍在读整文件（readFromHost）').not.toMatch(/function readFromHost/)
   })
 })
 
@@ -165,27 +200,13 @@ describe('★#1095 ②b App 引擎无 TextEncoder（真机抓出）', () => {
 
   it('实现里不得引用 TextEncoder（App 三端引擎都没有它）', () => {
     // ★真机实测：QuickJS 里 `new TextEncoder()` 直接 ReferenceError ⇒ 上传整条失败。
-    //   与本仓既有「App 无 TextDecoder」同族（#1071 曾为此手写 utf8Decode）。
+    //   ★#1120 后 multipart 组包已移交宿主，本文件不再需要 UTF-8 编码器——
+    //     但**约束仍在**（将来若有人再引入手写编码，也不许用 TextEncoder）。
     const code = SRC.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(code.includes('TextEncoder'), '不得依赖 TextEncoder——须用内置 utf8Encode').toBe(false)
-    expect(code.includes('function utf8Encode'), '缺内置 UTF-8 编码器').toBe(true)
-  })
-
-  it('utf8Encode 能编码中文与 emoji（行为级）', async () => {
-    // 通过上传路径间接验证：字段值含中文/emoji 时 body 里应是合法 UTF-8
-    const calls = installFakeHost((m) => {
-      if (m === APP_TRANSFER_METHODS.readBytes) return { bytes: [1], size: 1 }
-      if (m === 'http.request') return { status: 200, data: '' }
-      return undefined
-    })
-    await createAppUpload()({ url: 'https://x', filePath: 'a', formData: { note: '中文🚀' } })
-    const http = calls.find((c) => c.method === 'http.request')!
-    const raw = http.args.data as unknown
-    const bytes = raw instanceof Uint8Array ? Array.from(raw) : Object.values(raw as Record<string, number>)
-    const text = Buffer.from(bytes).toString('utf8')
-    expect(text).toContain('中文🚀')
+    expect(code.includes('TextEncoder'), '不得依赖 TextEncoder（App 三端引擎都没有）').toBe(false)
   })
 })
+
 
 describe('★#1095 ③ 资源账本：进行中登记，结束销账（成功与失败都销）', () => {
   beforeEach(() => { clearHost() })

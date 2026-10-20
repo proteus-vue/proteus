@@ -9712,3 +9712,99 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② **取消通道**：`http.request` 目前无 abort ⇒ 用户中途取消会留半截文件（现在是部分兜住，不是解决）；
   ③ 落盘上限按真实业务标定；
   ④ 鸿蒙待 VM 支持可重入后补 `savePath` 与流式。
+
+1120. **★★★upload 流式落地（S3 收口）：`upload` meta + 宿主自读文件自拼 multipart · **双真机全绿**（Android 13/13 · iOS 9/9）· 决策**（2026-10-20 · 承接 #1119「下一步①：upload 流式」，用户「继续」）：
+
+【问题（#1119 如实留的缺口）】
+  upload 原链路是「`fs.readBytes` 把整文件读进 JS → JS 拼 multipart → 作为 body 发」
+  ⇒ **文件多大，JS 堆就吃多大**（再乘 multipart 拼接副本，峰值 ×2）。与 download 同源（#1119）。
+
+【线格式（向后兼容，五端逐字节等价）】
+  · 去程 `MetaTagInvoke.UploadPath = 10`，payload 是**结构体**：
+    `path` · `fieldName` · `filename` · `boundary` · `u16 count + (name,value)×n`
+  · ★**为什么一个 tag 装结构体而不是 5 个独立 tag**：这 5 个字段**必须同时出现**才有意义
+    （缺任一就拼不出合法 multipart）⇒ 拆开会制造"只给了一半"的非法中间态，宿主还得各自校验组合完整性。
+  · ★**为什么 boundary/fieldName/filename 由 JS 决定**：boundary 必须写进 `Content-Type`（头是 JS 组好传的），
+    两边各生成一次必然不一致；字段名/文件名是业务语义，宿主不该猜。
+  · 与 `SavePath`（#1119）**对称**：一个"宿主直写响应体"，一个"宿主直读请求体"。
+  · 黄金向量 **31 → 33 条**（+带 formData / +空 formData——空也要写 count=0，不能省略该项）。
+
+【实现】
+  · **Android**：`FileInputStream` + 16 KiB 缓冲，边读边 `os.write`；
+    `setFixedLengthStreamingMode(total)`（multipart 各部分长度可预知 ⇒ 定长，比 chunked 兼容性好）；
+    沙箱校验复用 `FileTransferCapability.resolve`。
+  · **iOS**：★见下面"四轮失败"——最终用**拼临时文件 + `uploadTask(with:fromFile:)`**。
+  · **路径校验两端同一份规则**（复用 #1119 的 `sandboxFile` / `resolve`）。
+
+【★★★本轮最值得记的：iOS 自定义 `InputStream` 连试 4 轮全败 → 换方案】
+  尝试序列（每轮都是真机，不是本地猜）：
+  ① `req.httpBodyStream = 自写 MultipartStream` ⇒ **`signal 6` 崩溃**：
+     `NSInvalidArgumentException: -streamStatus only defined for abstract class`。
+     ⇒ `InputStream` 是**抽象类**，`streamStatus`/`streamError`/`getBuffer` 必须全部重写——**编译期查不出**。
+  ② 补齐抽象成员 ⇒ 不崩了，但**请求发出后服务端收不到**、最后 `The request timed out.`。
+  ③ 去掉显式 `Content-Length`（怀疑与 httpBodyStream 冲突）+ 改 `uploadTask(withStreamedRequest:)` ⇒ 同样超时。
+  ④ 补 `needNewBodyStream`（uploadTask 要求重建 body 流）⇒ **仍然超时**。
+  ⇒ **判断：停手换方案**。理由不是"再试一次也许能成"，而是：
+    · 每轮都是**一次真机构建 + 装机 + 等待**（约 3–5 分钟），已烧 4 轮；
+    · 失败形态始终是"请求发出但服务端零字节"，说明问题在 NSURLSession 对自定义 body 流的
+      **未文档化约束**（长度协商 / 重试重建 / 抽象成员语义），**不是我能靠猜收敛的**；
+    · 同样的"内存有界"性质可以用**官方可靠路径**达到。
+  ⇒ 最终方案：**先拼 multipart 到临时文件**（内存只用一个 16 KiB 块），
+    再用 `uploadTask(with:req, fromFile:)`（系统自己流式读文件发送），**收尾删除临时文件**。
+  ★**诚实登记**：这不是"零拷贝流式"，而是"**内存有界 + 官方可靠路径**"；
+    代价是多一次磁盘写（临时文件 ≈ 文件大小 + 头部）。
+    ★**性质没变**：内存占用与文件大小**无关**——这才是 S3 要的那个性质。
+
+【真机判据（双端）】
+  Android **13/13**：8 MiB 完整往返 · `server_bytes=8388608` · first=0 · last=255 · fields={tag:probe} ·
+    ★`peak_chunk_bytes=16384`（与 8 MiB 文件无关）· 512 块 · `total_bytes=8388911 > 8388608`（含头尾）
+  iOS **9/9**：8 MiB 完整往返 · 服务端 `bytes=8388608` · first=0 · last=255 · fields 正确 · sum 采样 512 点
+  ★**判据设计要点**：先**下载**一份大文件（走 #1119 的 `savePath`，JS 不碰字节）再上传它——
+    `fs.writeBytes` 造不出 8 MiB 文件（`number[]` 会 OOM）。
+    **这两件事拼起来才是完整的"大文件迁移"链路**。
+
+【★★iOS 真机抓出的另外两个真缺陷（都是"两端各写一遍"必然漏的差异）】
+  ① `FileManager.createFile` **不创建父目录** ⇒ `download/xxx` 这类带子目录的路径在 iOS 必然失败
+     （Android 侧显式 `mkdirs` 了）。现象：`无法打开落盘文件`，而同路径在 Android 一切正常。
+  ② 落盘回给 JS 的 `path` 用了 `lastPathComponent` ⇒ **丢掉 `download/` 前缀** ⇒
+     后续 `fs.readBytes` / 上传路径解析全部找不到文件。
+     ⇒ 改 `relativePath()`（沙箱根下相对路径）。
+  ★这两条已加判据（`createDirectory` 与 `relativePath` 都要在测试里锁住）。
+
+【★破坏性验证（3 条，全部命中；第 1 条又双叒暴露了断言漏洞——第 4 次）】
+  ① Android `upload` 分支改 `if (false)` ⇒ **第一版仍全绿**（只断言 `performStreamUpload` 符号存在）。
+     改成断言**分发调用点**后才红。
+     ★本仓第 **4** 次同族（#1115 `stripComments` / #1118 `gateInstalled` / #1119 `savePath`）：
+       **断言"名字存在"等于没断言**。
+  ② boundary 重复生成 ⇒ 红。
+  ③ iOS 不挂 body 流 ⇒ 红。
+
+【诚实边界】
+  ① **鸿蒙不支持** `upload` 流式（一次性 VM 无回推接收方）⇒ `unsupported`；
+  ② **iOS 不是零拷贝**（多一次磁盘写，见上）——但内存性质达标；
+  ③ 上传进度仍只有 0/100（流式写出过程无回推进度；要做需另开通道，本单不做）；
+  ④ 只支持**单文件**（与 wx 一致）；
+  ⑤ 上限 1 GiB（与 download 侧同值，两端同口径）；
+  ⑥ 未测并发上传 / 断点续传 / 磁盘满；
+  ⑦ **未测取消**（`http.request` 仍无 abort 通道——这是 #1119 就留下的边界，仍未解决）。
+
+【落地清单】
+  · 五端线格式（`UploadSpec` 结构体）：TS / Java / Swift / ArkTS / C++ · 黄金向量 33 条
+  · JS：`capability-invoke.ts`（`upload` 进 `splitFramePayload` + `AppRequestConfig.upload`）·
+    `capability-transfer.ts`（`createAppUpload` 走 meta；删 `readFromHost`/`buildMultipart`/`utf8Encode`）
+  · 宿主：`HttpCapability.performStreamUpload` + `UploadStats` · iOS `packMultipartToTemp` + `uploadTask(fromFile:)`
+  · 探针：`appUploadProbe`（先下载再上传）· `UploadProbe.java` · `run-upload-probe.sh`（Android/iOS）
+  · 服务端 `/upload` 大文件改**采样摘要**（整份 `reduce` 在 8 MiB 上要几十秒）
+  · 判据：`tests/upload-stream.test.ts` **11/11** · `capability-app-transfer.test.ts` 18/18
+  · 任务板：`T-app-upload-stream`（done）
+
+【门禁】
+  parity 33 条五端 · file-size · no-blind-wait · no-json-wire · safe-edit ·
+  三端编译（Android javac / iOS swiftc / 鸿蒙 C++）· prebuilt 副本 · 79/79 相关测试。
+
+【S3 收口结论（如实）】
+  · fetch：S2 + 流式 + 背压（#1118），**资源回收未单独验证**；
+  · download：S3（#1119，内存与文件大小无关，真机证实）；
+  · upload：S3（本单，Android 边读边发 / iOS 内存有界 + 官方 fromFile，真机证实）；
+  · ★三者共同的**未解决项**：**取消通道**（`http.request` 无 abort）⇒
+    "中途取消"这个 S3 的回收维度仍未闭环，不能宣称"三项全 S3"。

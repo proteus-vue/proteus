@@ -84,6 +84,8 @@ enum InvokeWire {
     static let TAG_STREAM: UInt8 = 8
     /// ★#1119：落盘路径（宿主直写沙箱，JS 不碰字节）
     static let TAG_SAVE_PATH: UInt8 = 9
+    /// ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart）
+    static let TAG_UPLOAD_PATH: UInt8 = 10
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     static let RTAG_HTTP_STATUS: UInt8 = 16
@@ -104,6 +106,45 @@ enum InvokeWire {
     /// name-value 的**有序**容器（见文件头坑①——不要换成 Dictionary）。
     typealias NameValues = [(String, String)]
 
+    /// ★★★#1120：流式上传规格（与 TS `UploadSpec` 逐一对应）。
+    struct UploadSpec {
+        var path = ""
+        var fieldName = ""
+        var filename = ""
+        var boundary = ""
+        /// ★有序键值对（与 `NameValues` 同理：编码顺序是契约的一部分，不能用 Dictionary）
+        var formData: [(String, String)] = []
+    }
+
+    private static func writeUploadSpec(_ w: Writer, _ u: UploadSpec) throws {
+        try w.str(u.path)
+        try w.str(u.fieldName)
+        try w.str(u.filename)
+        try w.str(u.boundary)
+        guard u.formData.count <= 65535 else { throw InvokeWireError("表单字段过多（>65535）：\(u.formData.count)") }
+        w.u16(u.formData.count)
+        for (k, v) in u.formData {
+            try w.str(k)
+            try w.str(v)
+        }
+    }
+
+    private static func readUploadSpec(_ r: Reader) throws -> UploadSpec {
+        var u = UploadSpec()
+        u.path = try r.str()
+        u.fieldName = try r.str()
+        u.filename = try r.str()
+        u.boundary = try r.str()
+        let n = try r.u16()
+        var fd: [(String, String)] = []
+        for _ in 0..<n {
+            let k = try r.str()
+            fd.append((k, try r.str()))
+        }
+        u.formData = fd
+        return u
+    }
+
     /// 去程帧（`PINV`）解码结果——业务无关的"请求元数据 + 裸字节体"。
     struct InvokeFrame {
         var method: String = ""
@@ -121,6 +162,8 @@ enum InvokeWire {
         var stream: Bool?
         /// ★#1119：非 nil ⇒ 宿主把响应体直接写进该沙箱路径
         var savePath: String?
+        /// ★#1120：非 nil ⇒ 宿主边读文件边拼 multipart 边发
+        var upload: UploadSpec?
         var body: [UInt8] = []
 
         /// 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可选字段。
@@ -308,6 +351,7 @@ enum InvokeWire {
             case TAG_CONTENT_TYPE: f.contentType = try p.str()
             case TAG_STREAM: f.stream = try p.u8() != 0
             case TAG_SAVE_PATH: f.savePath = try p.str()
+            case TAG_UPLOAD_PATH: f.upload = try readUploadSpec(p)
             // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
             default: break
             }
@@ -347,6 +391,7 @@ enum InvokeWire {
         // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
         if f.stream == true { try writeTlv(w, TAG_STREAM) { w.u8(1) } }
         if let sp = f.savePath { try writeTlv(w, TAG_SAVE_PATH) { try w.str(sp) } }
+        if let up = f.upload { try writeTlv(w, TAG_UPLOAD_PATH) { try writeUploadSpec(w, up) } }
         return w.done()
     }
 

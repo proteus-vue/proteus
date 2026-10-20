@@ -98,6 +98,16 @@ describe('★#1119 宿主实现 · 边收边写', () => {
     expect(s, '★未注入 appContext ⇒ setAppContext 是死代码').toMatch(/HttpCapability\.setAppContext\(activity\)/)
   })
 
+  it('★★落盘前必须建父目录（createFile 不会建目录 —— iOS 真机抓出）', () => {
+    // 真实踩到（#1120 iOS 首跑）：同一条 `download/xxx` 路径在 Android 正常（显式 mkdirs）、
+    //   iOS 失败（`createFile` **不创建父目录**）⇒ 报 "无法打开落盘文件"。
+    //   ★这是"两端各写一遍"必然会漏的那类差异——所以判据要**两端都查**。
+    const ios = read(IOS_HTTP)
+    expect(ios, '★iOS 落盘前未建父目录').toMatch(/createDirectory\(at: parent, withIntermediateDirectories: true\)/)
+    const droid = read(ANDROID_HTTP)
+    expect(droid, '★Android 落盘前未建父目录').toMatch(/parent\.mkdirs\(\)/)
+  })
+
   it('iOS：边收边写 + 同样的路径校验规则', () => {
     const s = read(IOS_HTTP)
     expect(s, '缺落盘注册').toMatch(/registerSaving/)

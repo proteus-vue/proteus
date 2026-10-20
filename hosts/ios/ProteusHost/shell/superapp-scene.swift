@@ -518,6 +518,50 @@ final class SuperappScene: NSObject {
             for (delay, step) in steps { DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: step) }
             DispatchQueue.main.asyncAfter(deadline: .now() + max(finishAt, 0.2)) { finish() }
         }
+        // ★★★#1120：流式上传探针（S3）——`--upload-probe=<base>[,sizeMiB]`
+        if let upArg = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--upload-probe=") }) {
+            Self.tapMode = true
+            let body = String(upArg.dropFirst("--upload-probe=".count))
+            let parts = body.split(separator: ",").map(String.init)
+            let base = parts.first ?? ""
+            let sizeMiB = parts.count >= 2 ? (Int(parts[1]) ?? 8) : 8
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                _ = evalJs?("__proteusHostAppUploadProbe(\(jsonQuote(base)),\(sizeMiB))")
+                let deadline = Date().addingTimeInterval(240)
+                var rounds = 0
+                var lastRaw = ""
+                func poll() {
+                    rounds += 1
+                    let raw = evalJs?("String(globalThis.__proteusHostUploadProbeResult || '')") ?? ""
+                    if raw.isEmpty || raw == "null" || raw == "undefined" {
+                        if Date() < deadline {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+                            return
+                        }
+                    } else {
+                        lastRaw = raw
+                    }
+                    var o = reportBody()
+                    o["upload_base"] = base
+                    o["upload_size_mib"] = sizeMiB
+                    o["upload_probe_rounds"] = rounds
+                    o["upload_probe"] = lastRaw.isEmpty ? "null" : lastRaw
+                    if let d = lastRaw.data(using: .utf8),
+                       let po = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] {
+                        o["upload_ok"] = (po["ok"] as? Bool) ?? false
+                    } else {
+                        o["upload_ok"] = false
+                        if lastRaw.isEmpty { o["upload_error"] = "探针超时（240s 内无结果）" }
+                    }
+                    takeSnapshot()
+                    switchLog.append(["upload": base, "size_mib": sizeMiB, "rounds": rounds, "ok": o["upload_ok"] ?? false, "via": "upload-probe"])
+                    writeReport(o)
+                    NSLog("[proteus] SUPERAPP_UPLOAD_REPORT_READY ok=%@ rounds=%d", String(describing: o["upload_ok"] ?? false), rounds)
+                    if ProcessInfo.processInfo.environment["PROTEUS_EXIT_AFTER_REPORT"] == "1" { exit(0) }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { poll() }
+            }
+        }
         NSLog("[proteus] SUPERAPP_LAUNCHER_READY")
     }
 

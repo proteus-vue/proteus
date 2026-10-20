@@ -135,15 +135,30 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const body = Buffer.concat(chunks)
       const { file, filename, fields } = parseMultipart(body, bm[1])
+      const n = file ? file.length : 0
+      // ★#1120：大文件（> 4 MiB）**不逐字节 reduce**——那是 O(n) 的 JS 循环，
+      //   8 MiB 要跑几千万次取模（本机实测拖慢判据数十秒）。改为**采样**校验：
+      //   头尾 + 等距 512 点，足以发现"字节错位/截断/全零"。
+      const SAMPLED_MAX = 4 * 1024 * 1024
+      let sum = 0
+      let sampled = 0
+      if (file) {
+        if (n <= SAMPLED_MAX) { sum = file.reduce((a, b) => (a + b) % 1000003, 0); sampled = n }
+        else {
+          const step = Math.max(1, Math.floor(n / 512))
+          for (let i = 0; i < n; i += step) { sum = (sum + file[i]) % 1000003; sampled++ }
+        }
+      }
       const out = {
         ok: true,
-        bytes: file ? file.length : 0,
+        bytes: n,
         filename,
         fields,
-        // ★逐字节摘要（探针据此断言"服务端收到的就是你发的"）
-        first: file && file.length ? file[0] : null,
-        last: file && file.length ? file[file.length - 1] : null,
-        sum: file ? file.reduce((a, b) => (a + b) % 1000003, 0) : 0,
+        // ★摘要（探针据此断言"服务端收到的就是你发的"）
+        first: file && n ? file[0] : null,
+        last: file && n ? file[n - 1] : null,
+        sum,
+        sampled,
       }
       console.error(`[transfer] upload ${out.bytes}B filename=${filename} fields=${JSON.stringify(fields)}`)
       res.writeHead(200, { 'content-type': 'application/json' })

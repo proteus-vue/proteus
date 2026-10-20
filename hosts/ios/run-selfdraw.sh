@@ -136,6 +136,8 @@ for a in "$@"; do
     --fetch-limit-probe=*) FETCH_LIMIT_ARG="${a#--fetch-limit-probe=}" ;;
     # ★★★#1118：流式通道探针——`--stream-probe=<base>[,chunks,size,delayMs,slowMs]`
     --stream-probe=*) STREAM_PROBE_ARG="${a#--stream-probe=}" ;;
+    # ★★★#1120：流式上传探针——`--upload-probe=<base>[,sizeMiB]`
+    --upload-probe=*) UPLOAD_PROBE_ARG="${a#--upload-probe=}" ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -647,9 +649,10 @@ elif [ "$MODE" = "superapp" ]; then
   # ★#1115：响应体上限探针（自动化验证 ⇒ 同样用 --console 阻塞到报告落盘自退）
   if [ -n "${FETCH_LIMIT_ARG:-}" ]; then SA_ARGS+=("--fetch-limit-probe=$FETCH_LIMIT_ARG"); fi
   if [ -n "${STREAM_PROBE_ARG:-}" ]; then SA_ARGS+=("--stream-probe=$STREAM_PROBE_ARG"); fi
+  if [ -n "${UPLOAD_PROBE_ARG:-}" ]; then SA_ARGS+=("--upload-probe=$UPLOAD_PROBE_ARG"); fi
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
-  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "${FETCH_LIMIT_ARG:-}" ] || [ -n "${STREAM_PROBE_ARG:-}" ]; then
+  if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "${FETCH_LIMIT_ARG:-}" ] || [ -n "${STREAM_PROBE_ARG:-}" ] || [ -n "${UPLOAD_PROBE_ARG:-}" ]; then
     xcrun devicectl device process launch --console --terminate-existing \
       --environment-variables "{\"PROTEUS_EXIT_AFTER_REPORT\":\"1\"${WS_PROBE_ENV}}" \
       --device "$UDID" "$BUNDLE_ID" "${SA_ARGS[@]}" > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?

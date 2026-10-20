@@ -49,6 +49,8 @@ export const TAG_CONTENT_TYPE: number = 7
 export const TAG_STREAM: number = 8
 /** ★#1119：落盘路径（宿主直写沙箱） */
 export const TAG_SAVE_PATH: number = 9
+/** ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart） */
+export const TAG_UPLOAD_PATH: number = 10
 
 /** 回程 TLV tag（16 起；与去程段不重叠） */
 export const RTAG_HTTP_STATUS: number = 16
@@ -262,6 +264,42 @@ export function utf8Decode(bytes: Uint8Array): string {
   return out
 }
 
+/** ★★★#1120：流式上传规格（与 TS `UploadSpec` 逐一对应）。 */
+export class UploadSpec {
+  path: string = ''
+  fieldName: string = ''
+  filename: string = ''
+  boundary: string = ''
+  /** 普通表单字段（`Map` 保插入序——编码顺序是契约的一部分）。 */
+  formData: Map<string, string> | undefined = undefined
+}
+
+function writeUploadSpec(w: Writer, u: UploadSpec): void {
+  w.str(u.path)
+  w.str(u.fieldName)
+  w.str(u.filename)
+  w.str(u.boundary)
+  const fd = u.formData
+  const n = fd === undefined ? 0 : fd.size
+  w.u16(n)
+  if (fd !== undefined) {
+    fd.forEach((v: string, k: string) => { w.str(k); w.str(v) })
+  }
+}
+
+function readUploadSpec(r: Reader): UploadSpec {
+  const u: UploadSpec = new UploadSpec()
+  u.path = r.str()
+  u.fieldName = r.str()
+  u.filename = r.str()
+  u.boundary = r.str()
+  const n = r.u16()
+  const fd: Map<string, string> = new Map<string, string>()
+  for (let i = 0; i < n; i++) { const k = r.str(); fd.set(k, r.str()) }
+  u.formData = fd
+  return u
+}
+
 /* ────────────────────────── 数据形态 ────────────────────────── */
 
 /** 去程帧（`PINV`）解码结果。`undefined` = **未指定**（对应 TS 的 `=== undefined`）。 */
@@ -279,6 +317,8 @@ export class InvokeFrame {
   stream: boolean | undefined = undefined
   /** ★#1119：非 undefined ⇒ 宿主把响应体直接写进该沙箱路径 */
   savePath: string | undefined = undefined
+  /** ★#1120：非 undefined ⇒ 宿主边读文件边拼 multipart 边发 */
+  upload: UploadSpec | undefined = undefined
   body: Uint8Array = EMPTY
 
   /** 取值语义（缺省 = text）。 */
@@ -380,6 +420,7 @@ function encodeInvokeMeta(f: InvokeFrame): Uint8Array {
   // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
   if (f.stream === true) writeTlv(w, TAG_STREAM, (x: Writer) => x.u8(1))
   if (f.savePath !== undefined) writeTlv(w, TAG_SAVE_PATH, (x: Writer) => x.str(f.savePath as string))
+  if (f.upload !== undefined) writeTlv(w, TAG_UPLOAD_PATH, (x: Writer) => writeUploadSpec(x, f.upload as UploadSpec))
   return w.done()
 }
 
@@ -418,6 +459,7 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeFrame): void {
     else if (tag === TAG_CONTENT_TYPE) into.contentType = p.str()
     else if (tag === TAG_STREAM) into.stream = p.u8() !== 0
     else if (tag === TAG_SAVE_PATH) into.savePath = p.str()
+    else if (tag === TAG_UPLOAD_PATH) into.upload = readUploadSpec(p)
     // 未知 tag 跳过（版本演进）
   }
 }

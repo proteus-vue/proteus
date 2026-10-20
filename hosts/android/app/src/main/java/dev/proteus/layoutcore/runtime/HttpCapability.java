@@ -94,6 +94,30 @@ public final class HttpCapability {
         final String method = f.httpMethod != null ? f.httpMethod : "GET";
         final int timeoutMs = f.timeoutOrDefault();
 
+        // ★★★#1120：声明了流式上传 ⇒ 宿主**边读文件边拼 multipart 边发**（JS 不碰文件字节）
+        if (f.upload != null && f.upload.path != null && !f.upload.path.isEmpty()) {
+            NET.execute(new Runnable() {
+                @Override public void run() {
+                    InvokeWire.ResolveFrame out;
+                    try {
+                        out = performStreamUpload(f, url, method, timeoutMs);
+                    } catch (SocketTimeoutException e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "timeout: " + e.getMessage());
+                    } catch (java.net.UnknownHostException e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage());
+                    } catch (java.net.ConnectException e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage());
+                    } catch (UploadFileTooLarge e) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, e.getMessage());
+                    } catch (Throwable t) {
+                        out = InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: " + t);
+                    }
+                    push(out);
+                }
+            });
+            return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.pending(f.reqId));
+        }
+
         // ★★★#1119：声明了落盘路径 ⇒ 宿主**边收边写盘**（JS 不碰字节 ⇒ 内存与文件大小解耦）
         if (f.savePath != null && !f.savePath.isEmpty()) {
             NET.execute(new Runnable() {
@@ -237,6 +261,175 @@ public final class HttpCapability {
         } finally {
             if (conn != null) conn.disconnect();
         }
+    }
+
+    /* ══════════════════ ★★★#1120 流式上传（S3） ══════════════════ */
+
+    /**
+     * **边读文件边拼 multipart 边发**（JS 侧完全不碰文件字节）。
+     *
+     * 【问题】原链路是「`fs.readBytes` 把整文件读进 JS → JS 拼 multipart → 作为 body 发」
+     *   ⇒ **文件多大，JS 堆就吃多大**（再乘上 multipart 拼接的临时副本，峰值 ×2）。
+     *
+     * 【本方法】宿主直接从沙箱读文件，按 multipart 格式**流式写出**到连接：
+     *   内存占用 = 一个 16 KiB 缓冲块，**与文件总大小无关**。
+     *
+     * 【★为什么能算 Content-Length（不用 chunked）】
+     *   multipart 的每个部分长度都是**可预知**的（头部字节数 + 文件长度 + 尾部）⇒
+     *   先算总数再 `setFixedLengthStreamingMode(total)`，比 chunked 更兼容（部分服务器不收 chunked）。
+     *   ★文件长度用 `File.length()` 取，不读一遍文件去数。
+     *
+     * 【★路径校验】走 `FileTransferCapability.resolve`（**同一份**沙箱规则，不另写）。
+     *
+     * 【诚实边界】
+     *   · 只支持**单文件**（与 wx / 现有 JS 实现一致）；
+     *   · 上传进度仍只有 0 / 100（流式写出过程中没有回推进度——要做需另开回推通道，
+     *     本单不假装有）；
+     *   · 超 1 GiB 拒绝（与下载侧 `MAX_SAVE_BYTES` 同值，避免"上/下两个口径"）。
+     */
+    private static InvokeWire.ResolveFrame performStreamUpload(
+            InvokeWire.InvokeFrame f, String url, String method, int timeoutMs) throws Exception {
+        final UploadStats stats = new UploadStats();
+        lastUploadStats = stats;
+        InvokeWire.UploadSpec up = f.upload;
+        stats.path = up.path;
+
+        android.content.Context ctx = appContext();
+        if (ctx == null) {
+            return InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: 宿主上下文不可用（无法解析沙箱路径）");
+        }
+        java.io.File src = FileTransferCapability.resolve(ctx, up.path);
+        if (!src.isFile()) {
+            return InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: 上传文件不存在 " + up.path);
+        }
+        long fileLen = src.length();
+        stats.fileBytes = fileLen;
+        if (fileLen > MAX_SAVE_BYTES) throw new UploadFileTooLarge(fileLen);
+
+        // ── 预算 multipart 各段字节数（不读文件）──
+        byte[] headNormal = utf8Bytes(normalFieldsHead(up));
+        byte[] headFile = utf8Bytes(fileFieldHead(up));
+        byte[] tail = utf8Bytes("\r\n--" + up.boundary + "--\r\n");
+        long total = headNormal.length + headFile.length + fileLen + tail.length;
+        stats.totalBytes = total;
+
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod(method);
+            conn.setConnectTimeout(timeoutMs);
+            conn.setReadTimeout(timeoutMs);
+            conn.setInstanceFollowRedirects(true);
+            conn.setDoOutput(true);
+            // ★定长流式（不是 chunked）：multipart 长度可预知
+            conn.setFixedLengthStreamingMode(total);
+            if (f.headers != null) {
+                for (Map.Entry<String, String> e : f.headers.entrySet()) {
+                    conn.setRequestProperty(e.getKey(), e.getValue());
+                }
+            }
+            // ★G-46 会话共享（与其余路径同口径：调用方显式设了 Cookie 就不覆盖）
+            String jarCookie = null;
+            try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
+                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
+            }
+            if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
+                conn.setRequestProperty("Cookie", jarCookie);
+            }
+            // ★Content-Type 必须带 boundary（JS 组好传下来；这里只兜底，不覆盖调用方）
+            if (!containsKeyIgnoreCase(f.headers, "content-type")) {
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + up.boundary);
+            }
+
+            java.io.OutputStream os = new java.io.BufferedOutputStream(conn.getOutputStream(), STREAM_CHUNK);
+            try {
+                os.write(headNormal);
+                os.write(headFile);
+                // ★★核心：边读文件边写，内存只有缓冲块
+                java.io.InputStream in = new java.io.FileInputStream(src);
+                try {
+                    byte[] buf = new byte[STREAM_CHUNK];
+                    int n;
+                    long sent = 0;
+                    while ((n = in.read(buf)) > 0) {
+                        os.write(buf, 0, n);
+                        sent += n;
+                        stats.sentBytes = sent;
+                        stats.chunks++;
+                        if (n > stats.peakChunkBytes) stats.peakChunkBytes = n;
+                        if (sent > MAX_SAVE_BYTES) throw new UploadFileTooLarge(sent);
+                    }
+                } finally {
+                    closeQuietly(in);
+                }
+                os.write(tail);
+                os.flush();
+            } finally {
+                closeQuietly(os);
+            }
+
+            int status = conn.getResponseCode();
+            Map<String, List<String>> fields = conn.getHeaderFields();
+            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
+            storeCookies(url, rawSetCookie(fields));
+            // 读响应（服务器通常回一小段 JSON；仍按整包但受 32 MiB 上限约束）
+            InputStream ris = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            byte[] respBody = ris != null ? readAll(ris) : new byte[0];
+
+            InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
+            rf.status = status;
+            rf.headers = respHeaders;
+            rf.body = respBody;
+            stats.completed = true;
+            return rf;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** 上传记账（判据读它证明"内存只与块大小相关"）。 */
+    static final class UploadStats {
+        volatile long fileBytes = 0;
+        volatile long totalBytes = 0;
+        volatile long sentBytes = 0;
+        volatile int chunks = 0;
+        volatile int peakChunkBytes = 0;
+        volatile boolean completed = false;
+        volatile String path = null;
+        volatile String error = null;
+    }
+    private static UploadStats lastUploadStats = new UploadStats();
+    public static UploadStats lastUploadStats() { return lastUploadStats; }
+
+    /** 上传文件超限（与下载侧同值）。 */
+    static final class UploadFileTooLarge extends Exception {
+        UploadFileTooLarge(long atLeast) {
+            super("fetch.tooLarge: 上传文件超过上限 " + MAX_SAVE_BYTES + "B（" + atLeast + "B）");
+        }
+    }
+
+    /** 普通表单字段的 multipart 头（与 JS `buildMultipart` **逐字节同序**：先普通字段，再文件字段）。 */
+    private static String normalFieldsHead(InvokeWire.UploadSpec up) {
+        StringBuilder sb = new StringBuilder();
+        if (up.formData != null) {
+            for (Map.Entry<String, String> e : up.formData.entrySet()) {
+                sb.append("--").append(up.boundary).append("\r\n")
+                  .append("Content-Disposition: form-data; name=\"").append(e.getKey()).append("\"\r\n\r\n")
+                  .append(e.getValue() == null ? "" : e.getValue()).append("\r\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 文件字段的头（`filename` 与 `Content-Type` 与 JS 侧一致）。 */
+    private static String fileFieldHead(InvokeWire.UploadSpec up) {
+        return "--" + up.boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"" + up.fieldName + "\"; filename=\"" + up.filename + "\"\r\n"
+                + "Content-Type: application/octet-stream\r\n\r\n";
+    }
+
+    private static byte[] utf8Bytes(String s) {
+        return s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /* ══════════════════ ★★★#1119 download 流式落盘（S3） ══════════════════ */

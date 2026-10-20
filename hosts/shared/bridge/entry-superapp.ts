@@ -10,8 +10,8 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
-import { appFetchLimitProbe, appStreamProbe, appSaveProbe } from './entry-superapp-probes'
-export { appFetchLimitProbe, appStreamProbe, appSaveProbe } from './entry-superapp-probes'
+import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe } from './entry-superapp-probes'
+export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe } from './entry-superapp-probes'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -914,6 +914,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 // ★★★#1119：download 流式落盘探针（宿主按中性名调；结果填 __proteusHostSaveProbeResult）
 ;(globalThis as unknown as { __proteusHostAppSaveProbe?: (b: string, m?: number) => string })
   .__proteusHostAppSaveProbe = (b: string, m?: number) => appSaveProbe(b, m)
+// ★★★#1120：流式上传探针（宿主按中性名调；结果填 __proteusHostUploadProbeResult）
+;(globalThis as unknown as { __proteusHostAppUploadProbe?: (b: string, m?: number) => string })
+  .__proteusHostAppUploadProbe = (b: string, m?: number) => appUploadProbe(b, m)
 // ★★★决策 #1115：响应体上限探针（宿主按中性名调；结果填 __proteusHostFetchLimitProbeResult）
 ;(globalThis as unknown as { __proteusHostAppFetchLimitProbe?: (b: string, m?: number) => string })
   .__proteusHostAppFetchLimitProbe = (b: string, m?: number) => appFetchLimitProbe(b, m)

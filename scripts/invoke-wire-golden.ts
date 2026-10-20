@@ -219,6 +219,34 @@ addInvoke('invoke-stream-false-no-tag', {
   meta: { url: 'https://api.example.cn/v1/events', stream: false },
 })
 
+// ⑨f ★#1120 流式上传：宿主自读文件 + 自拼 multipart（字段名/boundary/formData 都由 JS 决定）
+addInvoke('invoke-upload-path', {
+  method: 'http.request',
+  reqId: 'r-up-1',
+  meta: {
+    url: 'https://api.example.cn/upload',
+    method: 'POST',
+    contentType: 'multipart/form-data; boundary=----B1',
+    upload: {
+      path: 'upload/a.bin',
+      fieldName: 'file',
+      filename: 'a.bin',
+      boundary: '----B1',
+      formData: { tag: 'probe', 中文: '值' },
+    },
+  },
+})
+
+// ⑨g ★#1120 空 formData（必须是 count=0，不是省略该项——否则两端解码分叉）
+addInvoke('invoke-upload-no-fields', {
+  method: 'http.request',
+  reqId: 'r-up-2',
+  meta: {
+    url: 'https://api.example.cn/upload',
+    upload: { path: 'upload/b.bin', fieldName: 'file', filename: 'b.bin', boundary: '----B2' },
+  },
+})
+
 /* ══════════════════ 回程向量 ══════════════════ */
 
 // ⑩ 受理回执（pending）—— 决定 JS 侧"保持挂起"的那一帧

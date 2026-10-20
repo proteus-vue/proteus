@@ -272,3 +272,80 @@ export function appSaveProbe(base: string, sizeMiB = 8): string {
   })
   return JSON.stringify({ phase: 'started', queued: true, url, bytes })
 }
+
+/**
+ * ★★★#1120：**流式上传探针**（S3 真机判据入口）。
+ *
+ * `appUploadProbe(base, sizeMiB)` →
+ *   ① 造一个 `sizeMiB` 的确定序列文件（`fs.writeBytes`，小文件才这么做——见下）；
+ *   ② 走 `createAppUpload`（`upload` meta ⇒ 宿主自读文件、自拼 multipart、边读边发）；
+ *   ③ 校验服务端收到的字节数 / 头尾 / 采样摘要。
+ *
+ * 【★为什么造文件要分两档】`fs.writeBytes` 收 `number[]` ⇒ 8 MiB 会变成 8M 个 JS number（>64 MiB 堆）⇒ OOM。
+ *   ⇒ 大文件让**服务端**生成（`/stream` 落到沙箱？不行，落盘是响应体）。
+ *   ⇒ 实际做法：先下载一份（download 流式落盘，JS 不碰字节）拿到大文件，再上传它。
+ *     **这正好复用 #1119 的 `savePath`**——两件事拼起来才是完整的"大文件迁移"。
+ *
+ * 【要证明什么（缺一不算 S3）】
+ *   ① `upload` meta 真的被送下去（`fs.readBytes` 没被调用）；
+ *   ② 服务端收到的**字节数与内容**正确（`first`/`last`/`sum`）；
+ *   ③ 宿主记账 `peak_chunk_bytes` ≈ 16 KiB，与文件大小**无关**。
+ */
+export function appUploadProbe(base: string, sizeMiB = 8): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { size_mib: sizeMiB }
+  g['__proteusHostUploadProbeResult'] = ''
+  const bytes = sizeMiB * 1024 * 1024
+
+  const run = async (): Promise<void> => {
+    const transfer = (await import('../../../packages/api/src/capability-transfer')) as unknown as {
+      createAppDownload: () => (url: string, o?: Record<string, unknown>) => Promise<{ path?: string }>
+      createAppUpload: () => (o: Record<string, unknown>) => Promise<{ status?: number; data?: unknown }>
+    }
+    try {
+      // ① 先下载一份大文件（走 #1119 的 savePath，JS 不碰字节）
+      const dl = await transfer.createAppDownload()(`${base}/download?size=${bytes}`, { responseType: 'path', timeout: 120000 })
+      const filePath = dl.path ?? ''
+      out['download_path'] = filePath
+      out['download_ok'] = filePath.length > 0
+      if (!filePath) { out['ok'] = false; out['error'] = '下载未拿到路径（savePath 未生效）'; g['__proteusHostUploadProbeResult'] = JSON.stringify(out); return }
+
+      // ② 上传它（走 upload meta，宿主自读）
+      const up = await transfer.createAppUpload()({
+        url: `${base}/upload`,
+        filePath,
+        name: 'file',
+        formData: { tag: 'probe' },
+        timeout: 180000,
+      })
+      out['upload_status'] = up.status
+      const d = up.data
+      const reply = typeof d === 'string' ? JSON.parse(d) : d
+      out['upload_reply'] = reply
+      const o = (reply ?? {}) as { bytes?: number; first?: number; last?: number; fields?: Record<string, string> }
+      out['server_bytes'] = o.bytes
+      out['server_first'] = o.first
+      out['server_last'] = o.last
+      out['server_fields'] = o.fields
+      // 服务端 /download 的序列：buf[i] = i % 256
+      out['bytes_ok'] = o.bytes === bytes
+      out['first_ok'] = o.first === 0
+      out['last_ok'] = o.last === ((bytes - 1) % 256)
+      out['fields_ok'] = o.fields?.['tag'] === 'probe'
+      out['ok'] = Number(up.status) === 200 && out['bytes_ok'] === true && out['first_ok'] === true
+        && out['last_ok'] === true && out['fields_ok'] === true
+    } catch (e) {
+      out['ok'] = false
+      out['code'] = String((e as { code?: string })?.code ?? '')
+      out['error'] = String((e as Error)?.message ?? e)
+    }
+    g['__proteusHostUploadProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostUploadProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true, bytes })
+}
+

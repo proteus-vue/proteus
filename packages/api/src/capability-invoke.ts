@@ -202,6 +202,9 @@ function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array 
       meta.timeoutMs = v
     } else if (META_ENUM[k]?.(v)) {
       if (k === 'responseType') meta.responseType = v as ResponseKind
+    } else if (k === 'upload' && v !== null && typeof v === 'object') {
+      // ★#1120：流式上传规格——**不能落到 body**（否则整个结构会被 JSON 编进请求体）
+      meta.upload = v as InvokeMeta['upload']
     } else if (k === 'data' || k === 'body') {
       rest[k] = v
     } else {
@@ -798,6 +801,18 @@ export interface AppRequestConfig {
   skipAuth?: boolean
   /** ★S2（#903）：响应体解释方式——`arraybuffer` 时 `data` 是**裸 `Uint8Array`**（不做文本解码） */
   responseType?: ResponseKind
+  /**
+   * ★★★#1120 **流式上传**（S3）：宿主自己从沙箱读文件、拼 multipart、边读边发。
+   * 给出本字段 ⇒ **不要**再传 `data`（文件字节由宿主读，JS 不碰）。
+   * ★只支持单文件（与 wx 一致）；`boundary` 必须与请求头 `Content-Type` 里的一致。
+   */
+  upload?: {
+    path: string
+    fieldName: string
+    filename: string
+    boundary: string
+    formData?: Record<string, string>
+  }
   /**
    * ★★★#1119 **落盘路径**（S3）：让**宿主自己**把响应体写进沙箱文件。
    *

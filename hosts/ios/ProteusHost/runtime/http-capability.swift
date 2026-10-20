@@ -67,6 +67,33 @@ final class HttpCapability {
         }
 
         let reqId = f.reqId
+        // ★★★#1120：声明了流式上传 ⇒ 宿主**自己拼 multipart 并发送**（JS 不碰文件字节）
+        //
+        // 【★为什么用"拼成临时文件再 uploadTask(fromFile:)"而不是自定义 InputStream】
+        //   本仓真机连试 4 轮自定义 `InputStream` 子类（`httpBodyStream` / `uploadTask(withStreamedRequest:)`
+        //   / 补 `streamStatus` / 补 `needNewBodyStream`），**全部卡在"请求发出但服务端收不到"**。
+        //   NSURLSession 对自定义 body 流有大量未文档化约束（抽象类成员、重试重建、长度协商）。
+        //   ⇒ 改为：**先拼到临时文件**（内存只有一个 16 KiB 块，与文件大小无关），
+        //     再用官方 `uploadTask(with:fromFile:)`（成熟路径，系统自己流式读文件发）。
+        //   ★诚实登记：这不是"零拷贝流式"，而是"**内存有界** + 官方可靠路径"；
+        //     多一次磁盘写（临时文件 ≈ 文件大小 + 头部），发送完即删。
+        if let up = f.upload, !up.path.isEmpty {
+            guard let src = sandboxSource(up.path) else {
+                return try InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: 上传路径非法或文件不存在：\(up.path)"))
+            }
+            guard let packed = packMultipartToTemp(spec: up, fileURL: src) else {
+                return try InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: 无法建立上传体（拼装临时文件失败）"))
+            }
+            if req.value(forHTTPHeaderField: "Content-Type") == nil {
+                req.setValue("multipart/form-data; boundary=\(up.boundary)", forHTTPHeaderField: "Content-Type")
+            }
+            NSLog("[proteus] UPLOAD_PACKED total=%lld file=%@", packed.bytes, up.path)
+            let task = session.uploadTask(with: req, fromFile: packed.url)
+            BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url)
+            task.resume()
+            return try InvokeWire.encodeResolve(.makePending(reqId))
+        }
+
         // ★★★#1119：声明了落盘路径 ⇒ 宿主**边收边写盘**（JS 不碰字节 ⇒ 内存与文件大小解耦）
         if let savePath = f.savePath, !savePath.isEmpty {
             guard let target = sandboxFile(savePath) else {
@@ -96,6 +123,65 @@ final class HttpCapability {
         return try InvokeWire.encodeResolve(.makePending(reqId))
     }
 
+    /// ★#1120：沙箱相对路径 → 文件 URL（要求**是文件**；与 `sandboxFile` 同一套校验）。
+    static func sandboxSource(_ path: String) -> URL? {
+        guard let u = sandboxFile(path) else { return nil }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: u.path, isDirectory: &isDir), !isDir.boolValue else { return nil }
+        return u
+    }
+
+    /// ★★★#1120：把 multipart **拼成临时文件**（内存只用一个 16 KiB 块，与文件大小无关）。
+    ///
+    /// 【为什么是"拼临时文件"而不是"边读边发"】
+    ///   iOS 侧连试 4 轮自定义 `InputStream` 全部失败（详见上传分支注释）⇒ 改用官方
+    ///   `uploadTask(with:fromFile:)`。**内存性质不变**：拼装时只持有一个块；发送由系统流式读文件。
+    ///
+    /// 【临时文件位置】`FileManager.default.temporaryDirectory`（系统可回收），
+    ///   文件名带 reqId 前缀避免并发冲突；**发送完在 `didComplete` 里删除**（成败都删）。
+    static func packMultipartToTemp(spec: InvokeWire.UploadSpec, fileURL: URL, chunkSize: Int = 16 * 1024) -> (url: URL, bytes: Int64)? {
+        var normal = ""
+        for (k, v) in spec.formData {
+            normal += "--\(spec.boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n"
+        }
+        let fileHead = "--\(spec.boundary)\r\n"
+            + "Content-Disposition: form-data; name=\"\(spec.fieldName)\"; filename=\"\(spec.filename)\"\r\n"
+            + "Content-Type: application/octet-stream\r\n\r\n"
+        let end = "\r\n--\(spec.boundary)--\r\n"
+        let headData = Data((normal + fileHead).utf8)
+        let tailData = Data(end.utf8)
+
+        guard let inStream = InputStream(url: fileURL),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let fileLen = (attrs[.size] as? NSNumber)?.int64Value else { return nil }
+        let total = Int64(headData.count) + fileLen + Int64(tailData.count)
+
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("proteus-upload-\(UUID().uuidString).tmp")
+        FileManager.default.createFile(atPath: tmp.path, contents: nil)
+        guard let out = FileHandle(forWritingAtPath: tmp.path) else { return nil }
+        defer { try? out.close() }
+
+        out.write(headData)
+        inStream.open()
+        defer { inStream.close() }
+        var buf = [UInt8](repeating: 0, count: chunkSize)
+        var written = Int64(headData.count)
+        while true {
+            let n = inStream.read(&buf, maxLength: chunkSize)
+            if n <= 0 { break }
+            out.write(Data(buf[0..<n]))
+            written += Int64(n)
+            // ★超 1 GiB 拒绝（与 Android 同值口径）——避免拼出超大临时文件
+            if written > Int64(HttpCapability.MAX_SAVE_BYTES) {
+                try? FileManager.default.removeItem(at: tmp)
+                return nil
+            }
+        }
+        out.write(tailData)
+        return (tmp, total)
+    }
+
     /// ★#1119：把沙箱相对路径解析成文件 URL（与 Android `FileTransferCapability.resolve` **同规则**）。
     ///
     /// 【规则】只接受**沙箱相对路径**；拒绝绝对路径与任何 `..` 段（防目录穿越）。
@@ -112,6 +198,18 @@ final class HttpCapability {
         let rootPath = docs.standardizedFileURL.path
         guard url.standardizedFileURL.path.hasPrefix(rootPath) else { return nil }
         return url
+    }
+
+    /// ★#1120：文件 URL → **沙箱相对路径**（回给 JS 用；与传下来的 `savePath` 同形）。
+    ///   ★为什么不能直接用 `lastPathComponent`：那会丢掉子目录前缀（`download/x` → `x`），
+    ///     而 JS 侧后续（读回校验 / 上传）都用相对路径找文件 ⇒ 找不到。
+    static func relativePath(_ url: URL) -> String {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].standardizedFileURL.path
+        let full = url.standardizedFileURL.path
+        guard full.hasPrefix(docs) else { return url.lastPathComponent }
+        var rel = String(full.dropFirst(docs.count))
+        if rel.hasPrefix("/") { rel.removeFirst() }
+        return rel.isEmpty ? url.lastPathComponent : rel
     }
 
     /// ★#1119：落盘总字节上限（1 GiB，与 Android `MAX_SAVE_BYTES` **同值**）——
@@ -280,6 +378,8 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         var savedBytes = 0
         var savedHandle: FileHandle?
         var savePath: String?
+        /// ★#1120：拼好的 multipart 临时文件（收尾要删）
+        var uploadTemp: URL?
         /// ★#1119：落盘失败原因（写盘失败 / 超限）
         var saveError: String?
         var seq = 0
@@ -322,8 +422,20 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         lock.lock(); defer { lock.unlock() }
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.saveTo = target
-        st.savePath = target.lastPathComponent
+        // ★★★#1120 真机抓出：回给 JS 的必须是**相对路径**（与传下来的 `savePath` 同形），
+        //   不能用 `lastPathComponent`（那会丢掉 `download/` 前缀 ⇒ 后续 fs.readBytes / 上传路径解析全找不到文件）。
+        st.savePath = HttpCapability.relativePath(target)
         st.status = 0
+        states[task.taskIdentifier] = st
+    }
+
+    /// ★#1120：登记一个**流式上传** task（响应侧仍走普通累积路径，只是请求侧是流式）。
+    /// ★#1120：登记一个**上传** task（响应侧走普通累积；请求体已由 `uploadTask(fromFile:)` 自行读取）。
+    ///   `tempFile` 只用于**收尾删除**（拼好的 multipart 临时文件，发送完即删）。
+    func registerUpload(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, tempFile: URL) {
+        lock.lock(); defer { lock.unlock() }
+        var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
+        st.uploadTemp = tempFile
         states[task.taskIdentifier] = st
     }
 
@@ -340,6 +452,13 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 st.headers = HttpCapability.headerPairsForDelegate(http)
             }
             if st.savedHandle == nil {
+                // ★★★#1120 真机抓出：`createFile` **不会创建父目录** ⇒ `download/xxx` 这类带子目录的
+                //   路径在 iOS 上必然失败（Android 侧显式 mkdirs 了，这里漏了）。
+                //   现象：`无法打开落盘文件：...`，而同一路径在 Android 上一切正常。
+                let parent = target.deletingLastPathComponent()
+                if !FileManager.default.fileExists(atPath: parent.path) {
+                    try? FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+                }
                 FileManager.default.createFile(atPath: target.path, contents: nil)
                 st.savedHandle = FileHandle(forWritingAtPath: target.path)
                 if st.savedHandle == nil {
@@ -426,10 +545,12 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         lock.unlock()
         guard let st else { return }   // ★先摘表 ⇒ 保证恰好回推一次
         let reqId = st.reqId
+        // ★#1120：上传用的 multipart 临时文件，无论成败都删（不留在沙箱里占空间）
+        if let tmp = st.uploadTemp { try? FileManager.default.removeItem(at: tmp) }
         // ★★★#1119：落盘收尾——回 path/size 摘要（不回字节），并处理写文件失败/超限
         if let target = st.saveTo {
             try? st.savedHandle?.close()
-            let path = target.lastPathComponent
+            let path = st.savePath ?? HttpCapability.relativePath(target)
             var frame: [UInt8]
             if let se = st.saveError {
                 frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, se))) ?? []

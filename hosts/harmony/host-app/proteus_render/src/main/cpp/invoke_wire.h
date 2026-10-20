@@ -63,6 +63,8 @@ constexpr uint8_t TAG_CONTENT_TYPE = 7;
 constexpr uint8_t TAG_STREAM = 8;
 /** ★#1119：落盘路径（宿主直写沙箱） */
 constexpr uint8_t TAG_SAVE_PATH = 9;
+/** ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart） */
+constexpr uint8_t TAG_UPLOAD_PATH = 10;
 
 /* 回程 TLV tag（16 起；与去程段不重叠） */
 constexpr uint8_t RTAG_HTTP_STATUS = 16;
@@ -99,6 +101,15 @@ struct Opt {
 using NameValues = std::vector<std::pair<std::string, std::string>>;
 
 /** 去程帧（`PINV`）解码结果——业务无关的"请求元数据 + 裸字节体"。 */
+/** ★★★#1120：流式上传规格（与 TS `UploadSpec` 逐一对应）。 */
+struct UploadSpec {
+  bool has = false;
+  std::string path;
+  std::string fieldName;
+  std::string filename;
+  std::string boundary;
+  NameValues formData;  // ★有序（编码顺序是契约的一部分）
+};
 struct InvokeFrame {
   std::string method;
   std::string reqId;
@@ -115,6 +126,8 @@ struct InvokeFrame {
   Opt<bool> stream;
   /** ★#1119：宿主把响应体直接写进该沙箱路径 */
   Opt<std::string> savePath;
+  /** ★#1120：非空 ⇒ 宿主边读文件边拼 multipart 边发 */
+  UploadSpec upload;
   std::vector<uint8_t> body;
 
   int responseKind() const { return responseType ? static_cast<int>(*responseType) : RESPONSE_TEXT; }
@@ -246,6 +259,34 @@ class Reader {
   size_t pos_ = 0;
 };
 
+
+inline void writeUploadSpec(Writer& w, const UploadSpec& u) {
+  w.str(u.path);
+  w.str(u.fieldName);
+  w.str(u.filename);
+  w.str(u.boundary);
+  w.u16(static_cast<uint32_t>(u.formData.size()));
+  for (const auto& kv : u.formData) {
+    w.str(kv.first);
+    w.str(kv.second);
+  }
+}
+
+inline UploadSpec readUploadSpec(Reader& r) {
+  UploadSpec u;
+  u.has = true;
+  u.path = r.str();
+  u.fieldName = r.str();
+  u.filename = r.str();
+  u.boundary = r.str();
+  const uint32_t n = r.u16();
+  for (uint32_t i = 0; i < n; i++) {
+    std::string k = r.str();
+    u.formData.emplace_back(std::move(k), r.str());
+  }
+  return u;
+}
+
 /* ────────────────────────── TLV ────────────────────────── */
 
 template <typename F>
@@ -293,6 +334,7 @@ inline std::vector<uint8_t> encodeInvokeMeta(const InvokeFrame& f) {
   // ★#1118：只在**显式 true** 时写（与 TS `meta.stream === true` 逐字对齐）
   if (f.stream && *f.stream) writeTlv(w, TAG_STREAM, [&](Writer& x) { x.u8(1u); });
   if (f.savePath) writeTlv(w, TAG_SAVE_PATH, [&](Writer& x) { x.str(*f.savePath); });
+  if (f.upload.has) writeTlv(w, TAG_UPLOAD_PATH, [&](Writer& x) { writeUploadSpec(x, f.upload); });
   return w.take();
 }
 
@@ -330,6 +372,7 @@ inline void decodeInvokeMeta(const std::vector<uint8_t>& bytes, InvokeFrame& f) 
       case TAG_CONTENT_TYPE: f.contentType = p.str(); break;
       case TAG_STREAM: f.stream = (p.u8() != 0); break;
       case TAG_SAVE_PATH: f.savePath = p.str(); break;
+      case TAG_UPLOAD_PATH: f.upload = readUploadSpec(p); break;
       default: break;  // 未知 tag 跳过（版本演进）
     }
   }
