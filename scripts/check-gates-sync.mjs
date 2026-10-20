@@ -112,6 +112,13 @@ const LOCAL_ONLY = {
   //   在产物**全部入库**后已不成立：缺失只剩"被删/损坏"⇒ git rm 一下门禁就变绿。
   //   ★需 git 工作树（判 tracked）⇒ 归开发机；CI 的 checkout 亦满足，但按本族先例归本地。
   'check:evidence-tracked': '真机证据入库完整性门禁（19 条被 check:* 引用的产物：存在 + tracked）——与 check:app-screen-content 同族（开发机跑，需 git 工作树判 tracked）',
+  // ★★★流式通道双端真机证据门禁（2026-10-20 · #1148）：Android/iOS 的 stream-probe.json
+  //   必须都在库 + 内容达标（逐块到达/字节数/错位 0/seq 连续）+ **背压必须真触发过**。
+  //   背景：#1118 的 commit 写着「双真机全绿 · iOS 11/11」，但 iOS 读数写进了 superapp.json
+  //   （任何一次 superapp 运行都会覆盖、且未入库）⇒ 结论只在 commit message 文字里，无法复核。
+  //   ★鸿蒙流式 unsupported（一次性 VM 限制）⇒ 只要求两端，不拿做不到的端当判据。
+  //   与 check:evidence-tracked 同族（开发机跑：需真机产物 + git 工作树）。
+  'check:stream-evidence': '流式通道双端真机证据门禁（逐块/字节/错位/seq + 背压真触发）——与 check:evidence-tracked 同族（开发机跑，需真机产物）',
   // ★★★hosts 关注点分层门禁（2026-10-07 · 用户「宿主里项目信息与项目无关抽象混在一起」）：
   //   校验三端 runtime/shell/dev 三层齐备 + runtime 无反向依赖 + 无被跟踪产物。
   //   与 check:host-rounding / check:host-kernel-keys 同族：宿主侧门禁，开发机跑（CI 无宿主源码语境）。

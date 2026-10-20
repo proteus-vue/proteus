@@ -1771,7 +1771,7 @@
       "id": "T-harmony-device-reverify",
       "title": "鸿蒙真机复验（用户纠正\"有设备\"）+ 子路径导入构建修复",
       "type": "verification",
-      "status": "blocked",
+      "status": "done",
       "owner": "session:zcode-invoke-bytes-20261019",
       "scope": [
         "hosts/shared/bridge/entry-host-runtime.ts",
@@ -1784,7 +1784,7 @@
         "T-keyboard-android-probe",
         "T-app-fetch"
       ],
-      "note": "【blocked · 决策 #1076（2026-10-19）】【Handoff】做到哪：① 纠正误判——设备确实在（`hdc list targets -v` 可见 69F9K26126005311；ioreg USB 层也可见 HDC Device），我上次只看无 -v 的输出（它过滤 offline）就下了\"无设备\"结论；② **已取得鸿蒙 HTTP 二进制腿真机证据**：{ok:true,bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:2443}（真实 baidu.com）；③ 修掉构建缺陷：entry-host-runtime 的包名子路径 TS2307 → 改相对路径。★未做：① 鸿蒙 **superapp 回归 / 键盘推送** 未跑（设备在启动时 Connected→Offline→Empty 反复掉线）；② 无法重签 HAP（SignHap 报 00303242，p12 口令是另一台机加密的）⇒ run-http-probe/run-superapp 都要求 signed hap + install。★下一步（可照做）：用户在 DevEco → Project Structure → Signing Configs 勾「Automatically generate signature」重签一次；设备连接稳定后跑 build-host-app.sh + run-superapp.sh + run-http-probe.sh。★坑：`hdc list targets`（无 -v）会过滤 offline 设备，必须用 `-v` 并交叉 ioreg；设备 Connected 时可 shell（KLE-AL00U）。"
+      "note": "【done · 决策 #1076（2026-10-19）→ #1148 结项（2026-10-20）】原 blocked 两项现已解除：① **签名**——`build-host-app.sh` 本机可直接产出 `entry-default-signed.hap`（13.4 MB，本轮 #1143–#1148 多次构建装机验证）；② **设备稳定**——`hdc.sh list targets -v` 持续显示 69F9K26126005311 USB Connected，本轮跑完 run-host-app.sh（含 executor 修复复验）与 run-http-probe.sh。★复验读数：HTTP 二进制腿 `{ok:true,bridge:invokeBytes,frameSource:arkts,status:200,bodyBytes:306}`（httpbin.org）+ 闸门 `{gateInstalled:true,cap:33554432,kept:306}`。★历史结论仍成立：③ 修掉构建缺陷 entry-host-runtime 包名子路径 TS2307 → 相对路径。★坑：`hdc list targets`（无 -v）会过滤 offline 设备，必须用 `-v` 并交叉 ioreg；设备 Connected 时可 shell（KLE-AL00U）。"
     },
     {
       "id": "T-harmony-keyboard-probe",
@@ -2123,7 +2123,7 @@
       "id": "T-app-stream-channel",
       "title": "#1118 流式通道（S3：分块回推 + 真背压）——fetch 从 S2 升到 S3 的第一块拼图",
       "type": "capability",
-      "status": "in_progress",
+      "status": "done",
       "owner": "zcode",
       "scope": [
         "packages/api/src/invoke-wire.ts",
@@ -2135,12 +2135,12 @@
         "tests/stream-channel.test.ts"
       ],
       "decision": 1118,
-      "verification": "npx vitest run tests/stream-channel.test.ts && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && bash hosts/android/run-stream-probe.sh",
+      "verification": "npx vitest run tests/stream-channel.test.ts && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh && node scripts/check-stream-evidence.mjs",
       "branch": null,
       "related": [
         "T-app-fetch"
       ],
-      "note": "S3 四项必答已齐（上限/背压/回收/并发）：#1118 流式+背压 · #1119 download · #1120 upload · #1121 取消通道。★鸿蒙三项均 unsupported（VM 形态限制）⇒ 严格说是\"两端的 S3\"。"
+      "note": "S3 四项必答已齐（上限/背压/回收/并发）：#1118 流式+背压 · #1119 download · #1120 upload · #1121 取消通道。★鸿蒙三项均 unsupported（VM 形态限制）⇒ 严格说是\"两端的 S3\"。★#1148 结项：原状态停在 in_progress（做完没回写）；且 iOS 证据当时写进 superapp.json（会被任何 superapp 运行覆盖、未入库）⇒ 已改独立 stream-probe.json 并重跑（92 块 / 4 MiB / 错位 0 / 背压 81 次），新增 check:stream-evidence 守两端（含「背压必须真触发过」这条 S3 核心命题）。"
     },
     {
       "id": "T-app-save-to-file",

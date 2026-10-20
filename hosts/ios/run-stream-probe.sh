@@ -19,7 +19,10 @@ CHUNKS="${PROTEUS_STREAM_PROBE_CHUNKS:-256}"
 SIZE="${PROTEUS_STREAM_PROBE_SIZE:-16384}"
 DELAY_MS="${PROTEUS_STREAM_PROBE_DELAY_MS:-3}"
 SLOW_MS="${PROTEUS_STREAM_PROBE_SLOW_MS:-5}"
-LOCAL_REPORT="$HERE/results/superapp.json"
+// ★★#1148：读数必须落成**独立**证据文件（原写 superapp.json = 任何一次 superapp 运行都会覆盖它
+//   ⇒ #1118 的 iOS 11/11 读数**根本没留下可复核产物**，commit 里只有一行文字声明）。
+//   对齐 Android 侧同名文件（hosts/android/results/stream-probe.json），两端同形态。
+LOCAL_REPORT="$HERE/results/stream-probe.json"
 SERVER_LOG="$HERE/results/stream-probe-server-ios.log"
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 
@@ -48,7 +51,11 @@ echo "==> 构建 + 安装 + 启动（superapp --stream-probe，chunks=${CHUNKS} 
 #   带上 `--drive` 时 steps 会与探针抢收尾（宿主已把 tapMode 判断挪到探针之后，但这里保持最小耦合）
 bash "$HERE/run-selfdraw.sh" --superapp "--stream-probe=${BASE},${CHUNKS},${SIZE},${DELAY_MS},${SLOW_MS}" 2>&1 | tail -12
 
-[ -f "$LOCAL_REPORT" ] || { echo "✗ 报告未取回（${LOCAL_REPORT}）"; exit 4; }
+# run-selfdraw 的产物是 superapp.json（通用报告名）——原样留一份为**独立证据**，供事后复核。
+SUPERAPP_REPORT="$HERE/results/superapp.json"
+[ -f "$SUPERAPP_REPORT" ] || { echo "✗ 报告未取回（${SUPERAPP_REPORT}）"; exit 4; }
+cp -f "$SUPERAPP_REPORT" "$LOCAL_REPORT"
+echo "    证据已落盘：$LOCAL_REPORT"
 
 echo "==> 判定"
 node - "$LOCAL_REPORT" "$CHUNKS" "$SIZE" <<'NODE'
