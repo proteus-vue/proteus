@@ -1,0 +1,1 @@
+{"ok":false,"host":"harmony","bridge":"invokeBytes","frameSource":"arkts","reqId":"probe-http-arkts-1","status":0,"bodyBytes":0,"reason":"fetch.tooLarge: 响应体超过 32 MiB 上限（已中止读取；实际到达 41943040 字节）","limit":{"gateInstalled":true,"chunks":3236,"seen":41943040,"exceeded":true,"cancelCalled":true,"cancelRc":0,"kept":33554432,"cap":33554432},"preview":""}
