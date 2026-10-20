@@ -77,8 +77,25 @@ extension SelfDrawView {
         glassFaceByNodeId.removeAll(keepingCapacity: true)
         // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
         //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
-        //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
-        let capturePxPerPoint = max(0.5, scale / Self.glassCaptureDiv)   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / 鸿蒙 S=2 同口径）
+        //   捕获栅格化与纹理上传的像素量都降到 1/4。
+        //
+        // ★★★决策 #1111（纠正一处口径错误，2026-10-20）：原注释写「与 Android DIV=2 / 鸿蒙 S=2 **同口径**」——
+        //   **这是错的**（而且是"数字看起来像、实际不是一回事"的典型）。决定织纹风险的量是
+        //   **有效放大倍率 = glassOutScale / capturePxPerPoint**，不是"除数"本身：
+        //     | 端 | 捕获 | 输出 | 放大 | 结果 |
+        //     |---|---|---|---|---|
+        //     | iOS div=2（**现值·默认**）| 1.5 px/pt | 1.5 px/pt | **1.00x** | 无放大 ✅ |
+        //     | iOS div=3 | 1.0 | 1.5 | **1.50x** | 落在 Android 已否决区间的下沿 ⚠️ |
+        //     | iOS div=4 | 0.75 | 1.5 | **2.00x** | 等于 Android DIV=2（**已被用户肉眼否决**）❌ |
+        //     | Android DIV=1（#1013 采用·默认）| 全分辨率 | 全分辨率 | 1.00x | 无放大 ✅ |
+        //     | Android DIV=2（#1013 否决）| 一半 | 全分辨率 | 2.00x | 网格状织纹 |
+        //     | 鸿蒙（默认**不传** `--ps glassS`）| 全分辨率 | 全分辨率 | 1.00x | 无放大 ✅ |
+        //   ⇒ **三端默认的有效放大倍率都是 1:1**，只是"除数"写法不同（iOS 2 / Android 1 / 鸿蒙不设）。
+        //     所以原注释说"同口径"在**结果层面**碰巧成立，在**数字层面**是错的——而按数字去对齐会出事：
+        //     「把 iOS 对齐成 Android 的 DIV=1」= 抓 4 倍像素（1.5→3 px/pt），纯浪费；
+        //     「把 iOS 调到 div=3」= 引入 1.5x 放大，正是 Android 明确否决的方向。
+        //   ⇒ 结论：**保持 div=2 不动**。判据见 `scripts/glass-weave-metric.mjs`（决策 #1111）。
+        let capturePxPerPoint = max(0.5, scale / Self.glassCaptureDiv)   // 默认 div=2 ⇒ 与输出 1:1（见上表）
         lastGlassCapturePxPerPoint = Double(capturePxPerPoint)
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = capturePxPerPoint
