@@ -65,6 +65,8 @@ constexpr uint8_t TAG_STREAM = 8;
 constexpr uint8_t TAG_SAVE_PATH = 9;
 /** ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart） */
 constexpr uint8_t TAG_UPLOAD_PATH = 10;
+// ★#1134：重定向控制（1 = 宿主不跟随，把 3xx + Location 回给 JS；缺省 = 跟随）
+constexpr uint8_t TAG_REDIRECT = 11;
 
 /* 回程 TLV tag（16 起；与去程段不重叠） */
 constexpr uint8_t RTAG_HTTP_STATUS = 16;
@@ -128,6 +130,8 @@ struct InvokeFrame {
   Opt<std::string> savePath;
   /** ★#1120：非空 ⇒ 宿主边读文件边拼 multipart 边发 */
   UploadSpec upload;
+  /** ★#1134：true ⇒ 不跟随重定向（未指定 = 跟随，与老行为一致） */
+  Opt<bool> redirectManual;
   std::vector<uint8_t> body;
 
   int responseKind() const { return responseType ? static_cast<int>(*responseType) : RESPONSE_TEXT; }
@@ -335,6 +339,8 @@ inline std::vector<uint8_t> encodeInvokeMeta(const InvokeFrame& f) {
   if (f.stream && *f.stream) writeTlv(w, TAG_STREAM, [&](Writer& x) { x.u8(1u); });
   if (f.savePath) writeTlv(w, TAG_SAVE_PATH, [&](Writer& x) { x.str(*f.savePath); });
   if (f.upload.has) writeTlv(w, TAG_UPLOAD_PATH, [&](Writer& x) { writeUploadSpec(x, f.upload); });
+  // ★#1134：只在**显式 true** 时写（与 TS `meta.redirectManual === true` 逐字对齐）
+  if (f.redirectManual && *f.redirectManual) writeTlv(w, TAG_REDIRECT, [&](Writer& x) { x.u8(1u); });
   return w.take();
 }
 
@@ -373,6 +379,7 @@ inline void decodeInvokeMeta(const std::vector<uint8_t>& bytes, InvokeFrame& f) 
       case TAG_STREAM: f.stream = (p.u8() != 0); break;
       case TAG_SAVE_PATH: f.savePath = p.str(); break;
       case TAG_UPLOAD_PATH: f.upload = readUploadSpec(p); break;
+      case TAG_REDIRECT: f.redirectManual = p.u8() != 0; break;
       default: break;  // 未知 tag 跳过（版本演进）
     }
   }
