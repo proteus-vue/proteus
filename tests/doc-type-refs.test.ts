@@ -131,6 +131,32 @@ describe('★#1124 悬空引用检查 · 不假红也不漏', () => {
   })
 })
 
+describe('★★#1133 第 5 个引用来源：结果的属性类型', () => {
+  it('★FetchOk.meta?: FetchMeta ⇒ 必须被收进 refs（否则页面报"未解释的类型"）', async () => {
+    const ifaces = {
+      FetchOk: { props: [{ name: 'ok', type: 'true', optional: false, doc: '' }, { name: 'meta', type: 'FetchMeta', optional: true, doc: '' }], methods: [] },
+      FetchMeta: { props: [{ name: 'totalMs', type: 'number', optional: false, doc: '' }], methods: [] },
+    }
+    const names = (await lib()).collectPageTypeRefs({
+      sigLine: 'useFetch<T>(url: string, config?: FetchConfig): Promise<FetchResult<T>>',
+      ifaces,
+      allMethods: [],
+      allProps: [],
+    })
+    // ★FetchOk 是联合别名 FetchResult<T> 的成功支 ⇒ 按命名约定展开后必须看到 FetchMeta
+    expect(names, '★结果属性类型未收集 ⇒ 页面会出现未解释类型').toContain('FetchMeta')
+  })
+
+  it('返回值没有 *Result ⇒ 不多收（避免把无关接口拖进页面）', async () => {
+    const ifaces = {
+      Something: { props: [{ name: 'x', type: 'Other', optional: false, doc: '' }], methods: [] },
+      Other: { props: [], methods: [] },
+    }
+    const names = (await lib()).collectPageTypeRefs({ sigLine: 'doIt(): Promise<void>', ifaces })
+    expect(names).toEqual([])
+  })
+})
+
 describe('★#1124 门禁接线（生成器真的会判红）', () => {
   const GEN = 'website/scripts/gen-content.mjs'
 

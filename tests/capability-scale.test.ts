@@ -210,16 +210,31 @@ describe('④ UTF-8 解码（ASCII 快路径 + 严格性不丢）', () => {
 
   it('★ASCII 快路径确实生效（1MB ASCII 明显快于纯 CJK 同尺寸——量级判据，不锁绝对值）', () => {
     const ascii = utf8Encode('x'.repeat(1024 * 1024))
-    const cjk = utf8Encode('中'.repeat(1024 * 1024 / 3))
+    const cjk = utf8Encode('中'.repeat(Math.floor((1024 * 1024) / 3)))
+    /**
+     * ★★★#1132：**必须取 min-of-N，不能单次计时**。
+     *   全量套件 4 worker 并行 + 系统负载下，单次墙钟被调度噪声主导——
+     *   实测同一条判据：单次测出"ASCII 46.1ms 慢于 CJK 37.7ms"（假红，全量里翻车），
+     *   而 **min-of-7** 的真实值是 **ASCII 4.2ms / CJK 14.6ms（3.5 倍差）**。
+     *   最小值滤掉"被抢占的轮次"，剩下的才接近这段代码的真成本。
+     *   ★与 #1131 的 runtime-profiler 判据是**同一族**：时间类判据必须对噪声免疫
+     *     （那里是"把时钟变成输入"，这里是"取最小值"——两者都避免让调度器决定判据结果）。
+     */
     const time = (b: Uint8Array): number => {
+      let best = Infinity
+      // 预热一次（JIT 与分支预测），再取 7 轮最小值
       utf8Decode(b)
-      const t = process.hrtime.bigint()
-      utf8Decode(b)
-      return Number(process.hrtime.bigint() - t) / 1e6
+      for (let r = 0; r < 7; r++) {
+        const t = process.hrtime.bigint()
+        utf8Decode(b)
+        best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6)
+      }
+      return best
     }
+    // ★交替测两轮（避免"先跑的吃亏/后跑的占便宜"）：各取 min 已经是各自的真实成本
     const tAscii = time(ascii)
     const tCjk = time(cjk)
-    // ★判据取宽区间（不同机器/负载差异大）：ASCII 应明显快于 CJK 逐码点路径
+    // 判据取宽区间（只要求"明显快"，不锁绝对倍数）
     expect(tAscii, `ASCII ${tAscii.toFixed(1)}ms 应快于 CJK ${tCjk.toFixed(1)}ms`).toBeLessThan(tCjk * 0.8)
   })
 })

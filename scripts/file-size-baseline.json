@@ -42,12 +42,12 @@
   "packages/layout-core-rust/src/style.rs": 1115,
   "website/src/pages/Home.vue": 1108,
   "packages/cli/src/index.ts": 1102,
-  "packages/api/src/capability.ts": 1092,
   "packages/plugin-vite/src/gen-routes.ts": 1039,
   "packages/layout-core-rust/tests/conformance.rs": 1038,
   "hosts/android/check-vapor-device.py": 1036,
   "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/LightsHost.java": 1035,
   "hosts/ios/experiments/device/main-device.swift": 1026,
   "packages/fluid/src/formfactor.ts": 1024,
-  "packages/compiler/src/vapor/deps.ts": 1015
+  "packages/compiler/src/vapor/deps.ts": 1015,
+  "packages/api/src/capability.ts": 1012
 }

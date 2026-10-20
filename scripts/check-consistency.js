@@ -21,7 +21,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// ★★★#1132：`--root=<dir>` 可覆盖扫描根——**判据自测**用（见 tests/consistency-scope.test.ts）。
+//   【为什么必须可覆盖】该测试要验证"规则本身对不对"，此前只能往真仓写探针再**扫全仓**：
+//   每次 ~6 秒 × 7 次 = **45 秒**，独占全量套件 1/3 的墙钟（实测：498 文件里它一个占 45.5s）。
+//   根因不是"扫描慢"，而是**判据用全仓当夹具**——规则自证只需要"一个探针文件"的目录。
+//   ⇒ 加 --root：自测扫临时夹具（毫秒级），真仓那一条仍扫全仓（它验的就是"真仓干净"）。
+const ROOT = (() => {
+  const arg = process.argv.slice(2).find((a) => a.startsWith('--root='));
+  return arg ? path.resolve(process.cwd(), arg.slice('--root='.length)) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+})();
 const FACADE_DIR = path.join(ROOT, 'docs', 'proteus-architecture-facade-plan');
 const FACADE_FILES = ['00-architecture.md', 'ARCHITECTURE.md', '01-optimization-log.md'];
 

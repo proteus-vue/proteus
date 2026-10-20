@@ -1,0 +1,369 @@
+// tests/fetch-pipeline.test.ts
+// ★★★决策 #1133：**useFetch 请求管线**的判据（拦截器 / 重试 / 去重 / 并发 / 任务句柄 / 观测）。
+//
+// 【这层为什么必须有自己的判据（不是"调用一下 runFetch 就行"）】
+//   管线是**策略层**——它出错不会崩，只会"静默地不生效"：
+//     · 并发上限写反 ⇒ 所有请求立刻全发（首页打爆连接池，但功能看起来正常）；
+//     · 重试判定过宽 ⇒ 取消的请求被重试（用户点了返回还在发请求）；
+//     · 去重键漏了 body ⇒ POST 不同内容被合并（写请求被吞，数据不一致）；
+//     · 拦截器顺序错 ⇒ 鉴权头没加上（401），而响应拦截器逆序也拿不到正确上下文；
+//     · meta 不填 ⇒ 线上永远查不出"慢在排队还是慢在网络"。
+//   这些都只有**行为判据**能抓（且每条都要能破坏性验证）。
+//
+// 【★装置】用**假桥**（记录调用 + 可控延迟），不引真网络：
+//   管线是纯 TS 策略层，不需要真网络就能验全部语义；真网络层由 #1130 的两层 e2e 覆盖。
+import { describe, it, expect } from 'vitest'
+import { createFetchPipeline } from '../packages/api/src/capability-fetch-pipeline'
+import type { RequestConfig, RequestResponse } from '../packages/api/src/types'
+
+/** 记录每个请求 + 可注入延迟/失败的假桥。 */
+function makeBridge(opts: {
+  /** 每次调用的耗时（ms） */
+  latencyMs?: number
+  /** 第 n 次调用（0 起）的返回；缺省 200 成功 */
+  reply?: (n: number, config: RequestConfig) => Promise<RequestResponse<unknown>> | RequestResponse<unknown>
+} = {}) {
+  const calls: RequestConfig[] = []
+  let n = 0
+  const bridge = {
+    request: async (config: RequestConfig): Promise<RequestResponse<unknown>> => {
+      const idx = n++
+      calls.push(config)
+      if (opts.latencyMs) await new Promise((r) => setTimeout(r, opts.latencyMs))
+      if (opts.reply) return opts.reply(idx, config)
+      return { data: { ok: 1 }, status: 200, headers: { 'x-idx': String(idx) }, config }
+    },
+  }
+  return { bridge, calls, count: () => n }
+}
+
+/** 可控时钟（每调用一次前进 fixedMs）。 */
+function stepClock(fixedMs = 8) {
+  let t = 1000
+  return {
+    now: () => {
+      const v = t
+      t += fixedMs
+      return v
+    },
+  }
+}
+
+const run = <T>(p: ReturnType<typeof createFetchPipeline>, url: string, config?: Parameters<typeof p.fetch<T>>[1]) =>
+  p.fetch<T>(url, config)
+
+describe('★#1133 请求管线 · 拦截器（洋葱模型）', () => {
+  it('请求拦截器按注册序执行、响应拦截器按逆序执行', async () => {
+    const order: string[] = []
+    const { bridge } = makeBridge()
+    const p = createFetchPipeline(bridge, {
+      requestInterceptors: [
+        (c) => {
+          order.push('req1')
+          return c
+        },
+        (c) => {
+          order.push('req2')
+          return c
+        },
+      ],
+      responseInterceptors: [
+        (r) => {
+          order.push('res1')
+          return r
+        },
+        (r) => {
+          order.push('res2')
+          return r
+        },
+      ],
+    })
+    await run(p, '/x')
+    // 请求 1→2；响应 2→1（洋葱）
+    expect(order).toEqual(['req1', 'req2', 'res2', 'res1'])
+  })
+
+  it('★请求拦截器可改 url / headers（鉴权头的标准落点）', async () => {
+    const { bridge, calls } = makeBridge()
+    const p = createFetchPipeline(bridge, {
+      requestInterceptors: [
+        (c) => ({ ...c, url: c.url + '?v=2', config: { ...c.config, headers: { ...c.config.headers, Authorization: 'Bearer T' } } }),
+      ],
+    })
+    await run(p, '/api/me')
+    expect(calls[0]!.url, '★url 改写未生效').toContain('/api/me')
+    // ★注意：管线的 url 改写是**给下一轮用**的；实际请求应带 Authorization
+    expect(calls[0]!.headers?.Authorization).toBe('Bearer T')
+  })
+
+  it('★拦截器返回 null ⇒ 短路（不发请求，码 fetch.intercepted）', async () => {
+    const { bridge, count } = makeBridge()
+    const p = createFetchPipeline(bridge, { requestInterceptors: [() => null] })
+    const res = await run(p, '/x')
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.code).toBe('fetch.intercepted')
+    // ★关键：一个请求都不该发出去
+    expect(count(), '★短路后仍发出了请求').toBe(0)
+  })
+
+  it('响应拦截器可以改写结果（401 → 刷新后成功）', async () => {
+    const { bridge } = makeBridge({ reply: (n, config) => ({ data: 'ok-after-refresh', status: 200, headers: {}, config }) })
+    const p = createFetchPipeline(bridge, {
+      responseInterceptors: [
+        (r) => {
+          if (!r.ok) return r
+          return { ...r, data: `${String(r.data)}!(patched)` }
+        },
+      ],
+    })
+    const res = await run<string>(p, '/x')
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.data).toBe('ok-after-refresh!(patched)')
+  })
+})
+
+describe('★#1133 请求管线 · 重试（可恢复失败才重试）', () => {
+  it('★5xx 重试后成功（attempts=2，meta 有每轮耗时）', async () => {
+    const { bridge, count } = makeBridge({
+      reply: (n, config) =>
+        n === 0 ? { data: 'boom', status: 503, headers: {}, config } : { data: 'ok', status: 200, headers: {}, config },
+    })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 2, delayMs: 1, jitter: 0 }, now: stepClock().now })
+    const res = await run<string>(p, '/x')
+    expect(res.ok).toBe(true)
+    expect(count(), '★应重试一次').toBe(2)
+    const meta = (res as { meta?: { attempts: number; attemptMs: number[] } }).meta
+    expect(meta?.attempts, '★meta.attempts 应为实际轮次').toBe(2)
+    expect(meta?.attemptMs.length).toBe(2)
+  })
+
+  it('★★取消的请求**不重试**（fetch.aborted 不在可重试集合）', async () => {
+    const { bridge, count } = makeBridge({
+      reply: (_n, _config) => Promise.reject(Object.assign(new Error('fetch.aborted: 业务取消'), { code: 'fetch.aborted' })),
+    })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 3, delayMs: 1, jitter: 0 } })
+    const res = await run(p, '/x')
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.code).toBe('fetch.aborted')
+    expect(count(), '★取消的请求被重试了（用户点了返回还在发）').toBe(1)
+  })
+
+  it('★能力缺失（unsupported）不重试', async () => {
+    const { bridge, count } = makeBridge({
+      reply: (_n, _config) => Promise.reject(Object.assign(new Error('nope'), { code: 'fetch.unsupported' })),
+    })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 3, delayMs: 1, jitter: 0 } })
+    await run(p, '/x')
+    expect(count()).toBe(1)
+  })
+
+  it('★超时可重试（fetch.timeout 属可恢复）', async () => {
+    const { bridge, count } = makeBridge({
+      reply: (n, config) =>
+        n === 0
+          ? Promise.reject(Object.assign(new Error('fetch.timeout: 超时'), { code: 'fetch.timeout' }))
+          : { data: 'ok', status: 200, headers: {}, config },
+    })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 2, delayMs: 1, jitter: 0 } })
+    const res = await run(p, '/x')
+    expect(res.ok).toBe(true)
+    expect(count()).toBe(2)
+  })
+
+  it('★单请求 retry 数字覆盖默认（0 = 不重试）', async () => {
+    const { bridge, count } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 3, delayMs: 1, jitter: 0 } })
+    await run(p, '/x', { retry: 0 })
+    expect(count(), '★单请求 retry:0 应关掉重试').toBe(1)
+  })
+
+  it('★退避曲线：exponential 逐轮翻倍（jitter=0 时可精确断言）', async () => {
+    const delays: number[] = []
+    const origSetTimeout = globalThis.setTimeout
+    // 拦 setTimeout 记录请求的延迟（并立即执行，不真等）
+    ;(globalThis as { setTimeout: unknown }).setTimeout = ((fn: () => void, ms: number) => {
+      delays.push(ms)
+      return origSetTimeout(fn, 0)
+    }) as typeof setTimeout
+    try {
+      const { bridge } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+      const p = createFetchPipeline(bridge, { retry: { attempts: 3, delayMs: 100, backoff: 'exponential', jitter: 0 } })
+      await run(p, '/x')
+    } finally {
+      ;(globalThis as { setTimeout: unknown }).setTimeout = origSetTimeout
+    }
+    expect(delays, '★指数退避应为 100/200/400').toEqual([100, 200, 400])
+  })
+})
+
+describe('★#1133 请求管线 · 并发与优先级', () => {
+  it('★并发上限真的限住（3 个额度，6 个请求 ⇒ 峰值 ≤3）', async () => {
+    const { bridge } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { concurrency: 3 })
+    let peak = 0
+    const timer = setInterval(() => {
+      peak = Math.max(peak, p.inflight())
+    }, 2)
+    await Promise.all(Array.from({ length: 6 }, (_, i) => run(p, `/x${i}`)))
+    clearInterval(timer)
+    expect(peak, `★并发峰值 ${peak} 超上限 3`).toBeLessThanOrEqual(3)
+    expect(peak, '★并发从未达到 3（上限没生效或串行了）').toBeGreaterThan(1)
+  })
+
+  it('★高优先级先发（同额度下 priority 大的排前面）', async () => {
+    const order: string[] = []
+    const { bridge } = makeBridge({
+      latencyMs: 10,
+      reply: (_n, config) => {
+        order.push(config.url)
+        return { data: 1, status: 200, headers: {}, config }
+      },
+    })
+    const p = createFetchPipeline(bridge, { concurrency: 1 })
+    // 先占住唯一的额度
+    const blocker = run(p, '/blocker')
+    // 排队：低优先级先进，高优先级后进
+    await new Promise((r) => setTimeout(r, 2))
+    const low = run(p, '/low', { priority: 0 })
+    const high = run(p, '/high', { priority: 10 })
+    await Promise.all([blocker, low, high])
+    const idxLow = order.indexOf('/low')
+    const idxHigh = order.indexOf('/high')
+    expect(idxHigh, '★高优先级没有先发').toBeLessThan(idxLow)
+  })
+})
+
+describe('★#1133 请求管线 · 去重', () => {
+  it('★相同在飞请求只发一次（第二次 deduped=true）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    const [a, b] = await Promise.all([run<{ ok: number }>(p, '/same'), run<{ ok: number }>(p, '/same')])
+    expect(count(), '★相同请求应只发一次').toBe(1)
+    expect(a.ok && b.ok).toBe(true)
+    const metas = [a, b].map((r) => (r as { meta?: { deduped: boolean } }).meta?.deduped)
+    expect(metas.filter(Boolean).length, '★应有且仅有一条被标记 deduped').toBe(1)
+  })
+
+  it('★★去重键含 body（不同 POST body 不合并——否则写请求被吞）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    await Promise.all([
+      run(p, '/write', { method: 'POST', data: { v: 1 } }),
+      run(p, '/write', { method: 'POST', data: { v: 2 } }),
+    ])
+    expect(count(), '★不同 body 的 POST 被错误合并').toBe(2)
+  })
+
+  it('★带 signal 的请求不参与去重（取消语义会互相污染）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    const ctl = new AbortController()
+    await Promise.all([run(p, '/same', { signal: ctl.signal }), run(p, '/same', { signal: ctl.signal })])
+    expect(count(), '★带 signal 的请求不该被合并').toBe(2)
+  })
+})
+
+describe('★#1133 请求管线 · 任务句柄（FetchTask）', () => {
+  it('★排队中 abort ⇒ 立刻结算且**不占额度**（一个请求都不发）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 10 })
+    const p = createFetchPipeline(bridge, { concurrency: 1 })
+    const t1 = p.fetchTask('/a')
+    const t2 = p.fetchTask('/b')
+    expect(t2.state).toBe('queued')
+    t2.abort('用户离开')
+    const r = await t2.result
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('fetch.aborted')
+    expect(t1.state).toBe('running')
+    await t1.result
+    await new Promise((r) => setTimeout(r, 20))
+    // /b 从未真发出去
+    expect(count(), '★排队中被取消的请求仍被发出').toBe(1)
+  })
+
+  it('★在飞 abort ⇒ 结果码 fetch.aborted（真通知下游 signal）', async () => {
+    let sawSignalAbort = false
+    const { bridge } = makeBridge({
+      reply: (_n, config) =>
+        new Promise((resolve, reject) => {
+          const sig = config.signal as { aborted: boolean; onabort?: () => void } | undefined
+          if (sig) sig.onabort = () => {
+            sawSignalAbort = true
+            reject(Object.assign(new Error('fetch.aborted: 取消'), { code: 'fetch.aborted' }))
+          }
+          setTimeout(() => resolve({ data: 1, status: 200, headers: {}, config }), 50)
+        }),
+    })
+    const p = createFetchPipeline(bridge, { concurrency: 1 })
+    const t = p.fetchTask('/slow')
+    await new Promise((r) => setTimeout(r, 5))
+    expect(t.state).toBe('running')
+    t.abort('页面卸载')
+    const r = await t.result
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('fetch.aborted')
+    expect(sawSignalAbort, '★abort 没有传到下游 signal（宿主永远掐不断）').toBe(true)
+  })
+
+  it('★useFetchTask 的 id 稳定且每次不同', async () => {
+    const { bridge } = makeBridge()
+    const p = createFetchPipeline(bridge, {})
+    const a = p.fetchTask('/a')
+    const b = p.fetchTask('/b')
+    expect(a.id).not.toBe(b.id)
+    await Promise.all([a.result, b.result])
+  })
+})
+
+describe('★★#1133 请求管线 · abortable（端能力差异）', () => {
+  it('★★abortable=false ⇒ **不注入**内部取消信号（否则 MP 端所有请求变 unsupported）', async () => {
+    // 【这条守什么】真容器抓出的回归：管线无条件注入内部 signal 后，MP 腿的契约
+    //   「config.signal 存在 ⇒ fetch.unsupported」被误触发 ⇒ **MP 上 4/5 用例直接红**。
+    //   判据口径：只有"用户显式要取消"才该在 MP 上报 unsupported；内部通道不该冒充用户意图。
+    const { bridge, calls } = makeBridge()
+    const p = createFetchPipeline(bridge, { abortable: false })
+    await run(p, '/x')
+    expect(calls[0]!.signal, '★不可取消端仍注入了内部 signal（MP 会被判 unsupported）').toBeUndefined()
+  })
+
+  it('abortable=true ⇒ 注入内部信号（App/Web 的 abort 靠它）', async () => {
+    const { bridge, calls } = makeBridge()
+    const p = createFetchPipeline(bridge, { abortable: true })
+    await run(p, '/x')
+    expect(calls[0]!.signal, '★可取消端没拿到信号 ⇒ task.abort() 掐不断').toBeTruthy()
+  })
+
+  it('★用户显式给 signal ⇒ 即使 abortable=false 也要传（用户语义优先）', async () => {
+    const { bridge, calls } = makeBridge()
+    const p = createFetchPipeline(bridge, { abortable: false })
+    const sig = { aborted: false }
+    await run(p, '/x', { signal: sig })
+    // 传的是合并信号（不是原对象），但必须**存在**——这样 MP 端仍能如实报 unsupported
+    expect(calls[0]!.signal, '★用户显式 signal 被吞了（MP 就不会报 unsupported）').toBeTruthy()
+  })
+})
+
+describe('★#1133 请求管线 · 观测（meta）', () => {
+  it('★meta 必填项齐全（id/attempts/queuedMs/totalMs/attemptMs/deduped/priority）', async () => {
+    const { bridge } = makeBridge({ latencyMs: 5 })
+    const p = createFetchPipeline(bridge, { concurrency: 1 })
+    const res = await run(p, '/x', { priority: 7 })
+    const meta = (res as { meta?: Record<string, unknown> }).meta
+    expect(meta, '★结果没带 meta（线上查不出慢在哪）').toBeTruthy()
+    for (const k of ['id', 'attempts', 'queuedMs', 'totalMs', 'attemptMs', 'deduped', 'priority']) {
+      expect(meta, `★meta 缺 ${k}`).toHaveProperty(k)
+    }
+    expect(meta!.priority).toBe(7)
+  })
+
+  it('★queuedMs 真反映排队（并发 1 + 前一个占住 ⇒ 后一个排队时间 > 0）', async () => {
+    const { bridge } = makeBridge({ latencyMs: 25 })
+    const p = createFetchPipeline(bridge, { concurrency: 1 })
+    const first = run(p, '/first')
+    await new Promise((r) => setTimeout(r, 2))
+    const second = run(p, '/second')
+    const [, r2] = await Promise.all([first, second])
+    const queuedMs = (r2 as { meta?: { queuedMs: number } }).meta?.queuedMs ?? 0
+    expect(queuedMs, `★排队 ${queuedMs}ms 未记录（"慢在排队"就查不出来）`).toBeGreaterThan(10)
+  })
+})

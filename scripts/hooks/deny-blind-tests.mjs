@@ -104,12 +104,35 @@ function vitestFullSuite(s) {
   return false
 }
 
-/** 包管理器全量脚本：`pnpm test` / `pnpm run test` / `npm test`（**带额外参数则放行**——视为定向） */
+/**
+ * 剥掉**不影响"跑什么"**的 shell 尾巴：重定向（`> f` / `2>&1` / `< f`）与管道后的过滤命令。
+ *
+ * ★★★#1132 修（用户点名「这次前后跑了好几轮全量测试，测试占用的时间太久了」）：
+ *   原判据把 `pnpm test` 之后的**任何**尾巴都当"额外参数 ⇒ 定向跑"放行——
+ *   于是最常见两种写法全部漏网：
+ *     `pnpm test > /tmp/x.log 2>&1`   （落盘看日志——本会话就是这么跑的）
+ *     `pnpm test 2>&1 | grep FAIL`     （过滤看失败）
+ *   实测：同一代码状态连喂 4 条，带 `cd && ` 的被拦、带重定向/管道的**全放行**。
+ *   ★这是「门禁覆盖面必须跟着实际形态走」的第 N 次复发：判据要认**命令语义**，
+ *     不是认"字符串后面还有没有东西"。
+ *
+ * 判据：`>`/`>>`/`<`/数字+重定向 及其目标、`|` 之后的部分，都**不属于** test 脚本的参数。
+ */
+function stripShellTails(s) {
+  // 管道之后整段丢掉（`pnpm test | grep x` 跑的仍是全量）
+  let out = s.split('|')[0]
+  // 重定向（含 `2>&1` `2>` `>>` `<`）——连目标一起剥
+  out = out.replace(/\s*\d?>>?\s*\S+/g, ' ').replace(/\s*\d?>&\d+/g, ' ').replace(/\s*<\s*\S+/g, ' ')
+  return out.trim()
+}
+
+/** 包管理器全量脚本：`pnpm test` / `pnpm run test` / `npm test`（**带真实额外参数则放行**——视为定向） */
 function pkgManagerFullSuite(s) {
-  const m = s.match(/(?:^|[\s;&|(])(pnpm|npm|yarn|bun)\s+(?:run\s+)?test(?:\s+(.*))?$/)
+  const stripped = stripShellTails(s)
+  const m = stripped.match(/(?:^|[\s;&|(])(pnpm|npm|yarn|bun)\s+(?:run\s+)?test(?:\s+(.*))?$/)
   if (!m) return false
   const extra = (m[2] ?? '').trim()
-  if (extra) return false // 有参数 ⇒ 交给 vitest 规则或视为定向
+  if (extra) return false // 真参数 ⇒ 交给 vitest 规则或视为定向
   return true
 }
 

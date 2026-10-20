@@ -2323,6 +2323,51 @@
         "T-demo-api-parity"
       ],
       "note": "★抽取器首版有贪婪正则 bug ⇒ 8 处假红（把真实字段判成不存在）。教训：判据的解析器必须先自证。7 页 data 结构显式不覆盖（null）。"
+    },
+    {
+      "id": "T-test-cost",
+      "title": "#1132 测试耗时治理：hook 重定向/管道盲区 + 判据拿全仓当夹具 + safe-edit 改不了 ESM",
+      "type": "governance",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "scripts/hooks/deny-blind-tests.mjs",
+        "scripts/check-consistency.js",
+        "scripts/safe-edit.mjs",
+        "tests/consistency-scope.test.ts",
+        "tests/deny-blind-tests-hook.test.ts"
+      ],
+      "decision": 1132,
+      "verification": "npx vitest run tests/deny-blind-tests-hook.test.ts tests/consistency-scope.test.ts && node scripts/check-no-blind-wait.mjs",
+      "branch": null,
+      "related": [],
+      "note": "★根因三层：① hook 把 `pnpm test` 之后的任何尾巴当参数 ⇒ 重定向/管道全放行（本会话就是这么跑的全量）；② consistency-scope 6 条用例每条扫全仓（45.5s = 全量墙钟 1/3）⇒ 加 --root 扫临时夹具（0.039s vs 6.17s）；③ safe-edit 临时副本落 /tmp 无 type:module ⇒ 本仓所有 ESM .js 改不了。全量墙钟 137s→120s。★元教训：工具层红线的覆盖面必须有自己的判据。"
+    },
+    {
+      "id": "T-fetch-pipeline",
+      "title": "#1133 useFetch 升级为超级应用级请求管线（拦截器/重试/并发/去重/任务句柄/观测）",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-fetch-pipeline.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "packages/api/src/capability-probe.ts",
+        "packages/api/src/capability.ts",
+        "packages/api/src/capability-hooks-options.ts",
+        "packages/api/src/index.ts",
+        "tests/fetch-pipeline.test.ts",
+        "tests/useFetch-contract.test.ts",
+        "tests/doc-type-refs.test.ts",
+        "website/scripts/lib/type-refs.mjs",
+        "scripts/gen-capability-demo-pages.mjs",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": 1133,
+      "verification": "npx vitest run tests/fetch-pipeline.test.ts tests/useFetch-contract.test.ts && pnpm test:e2e:fetch-browser && PROTEUS_MP_E2E_WXIDE=1 npx vitest run tests/e2e-mp-fetch-leg.test.ts",
+      "branch": null,
+      "related": [],
+      "note": "★九项对账：本轮落地 4 项（请求拦截/RequestTask/并发优先级重试/观测），5 项属传输层未做（HTTPDNS/HTTP2/高性能模式/重定向可拦/缓存）⇒ 准确说法是\"请求治理层达到超级应用可用，传输层仍是平台默认\"，矩阵见 docs/proteus-network-plan/00-capability-matrix.md。★自己踩两个坑都被判据抓到：① linkSignals 单信号返回包装对象 ⇒ 取消静默失效（真浏览器超时暴露）；② 管线无条件注入内部 signal ⇒ MP 全站 unsupported（真容器 4/5 红）⇒ 加 abortable 开关。"
     }
   ]
 }

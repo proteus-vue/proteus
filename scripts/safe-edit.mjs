@@ -132,7 +132,14 @@ if (flagVal('--replace')) {
 }
 
 // ── ① 写入临时文件（源文件此刻未动） ────────────────────────────────────────
-const tmp = path.join(os.tmpdir(), `safe-edit-${path.basename(file)}-${Date.now()}${path.extname(file)}`)
+// ★★★#1132 修：`.js` 临时文件落在 `os.tmpdir()`（/tmp）→ 那里没有 `"type":"module"`
+//   ⇒ `node --check` 按 CJS 解析 ⇒ **本仓任何 ESM 的 .js 都改不了**（实测：改 check-consistency.js
+//   被"SyntaxError: Cannot use import statement outside a module"挡住，而源文件本身完全合法）。
+//   ⇒ 语法检查用的临时副本一律用 `.mjs`（扩展名即 ESM 判定，不依赖目录里的 package.json）；
+//     diff 展示仍是同一个文件内容，不影响任何判据。
+const tmpExt = ['.ts', '.js', '.mjs', '.mts', '.cts'].includes(path.extname(file).toLowerCase())
+  ? '.mjs' : path.extname(file)
+const tmp = path.join(os.tmpdir(), `safe-edit-${path.basename(file)}-${Date.now()}${tmpExt}`)
 fs.writeFileSync(tmp, next, 'utf-8')
 
 // ── ② diff（先行取证） ──────────────────────────────────────────────────────
@@ -217,7 +224,7 @@ const syntaxCheck = () => {
       authoritativeChecked = true
       return null
     }
-    if (ext === '.mjs' || ext === '.js') {
+    if (ext === '.mjs' || ext === '.js' || ext === '.mts' || ext === '.cts') {
       execFileSync('node', ['--check', tmp], { encoding: 'utf-8', stdio: 'pipe' })
       authoritativeChecked = true
       return null

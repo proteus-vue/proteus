@@ -11,8 +11,10 @@ import { makeCapabilityRuntime } from './capability-runtime'; import type { Capa
 import { getSharedCapabilityBridge, registerBridgeFactory } from './capability-bridge-shared'
 import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
-// ★#1122：useFetch 实现（抽到独立文件，本文件超棘轮）
-import { runFetch } from './capability-fetch'
+import { probeOf } from './capability-probe'   // ★#1133 探测面（90 行映射表，独立职责）
+// ★#1133：请求管线（拦截器 / 重试 / 去重 / 并发 / 任务句柄）——平台无关策略层
+import { createFetchPipeline } from './capability-fetch-pipeline'
+import type { FetchTask } from './capability-fetch-pipeline'
 import type { ARAPI, AdAPI, AlbumAPI, AppLifecycle, ArchiveOptions, AudioController, AuthState, BackgroundAPI, BatteryInfo, BeaconAPI, BiometricOptions, BluetoothAPI, CacheManagerHandle, CalendarAPI, CalendarEvent, CameraController, CanvasController, CapDeviceInfo, CapResult, CapabilityBridge, CapabilityProbe, CompatStorage, Contact, CookieJar, Coords, DataChannelHandle, DataChannelOptions, DeviceCapabilityAPI, DownloadOptions, DownloadResult, ElementQuery, FSAdapter, FetchConfig, FetchResult, FileSystemBridge, HostContext, IAPReceipt, IdleAPI, ImageEditAPI, IntersectionHandle, IntersectionOptions, KeyboardLifecycle, LivePusherController, LiveRoomHandle, LiveRoomOptions, LocalServiceAPI, Logger, LoginResult, MapController, MediaAccess, MediaProcessingAPI, MediaQueryObserver, MessageSubscription, MiniProgramAPI, NFCAPI, NavigationGuardAPI, NetworkType, OrientationInfo, PageLifecycle, PaymentConfig, PaymentReceipt, PerformanceAPI, PermissionState, PosterAPI, PreloadAPI, PrivacyAPI, ProgressCallback, RecorderController, ScreenCaptureAPI, ScreenInfo, SensorKind, SensorSample, SensorStream, ShareOptions, ShippingAddress, SocketTaskHandle, TCPSocketConnectOptions, TCPSocketHandle, TrackAPI, TranslationAPI, UDPSocketHandle, UpdateManagerAPI, UploadOptions, UploadResult, VideoController, WeRunData, WebAssemblyAPI, WebSocketConnection, WifiAPI, WindowAPI, WorkerHandle, WxLike } from './capability-types'
 import { webBridge, wxBridge } from './capability-bridges'
 // ★决策 #870：类型契约整体转发——保持 @proteus-vue/api 公共面（含 index.ts 的 capOk/capErr/CapError/各类型）不变
@@ -48,9 +50,10 @@ export interface CapabilityHooks {
   useOrientation(): Promise<CapResult<OrientationInfo>>
   useShare(options: ShareOptions): Promise<CapResult<void>>
   // ★G-32 B3 续：通信/权限/存储
-  /** C26 useFetch：网络请求（成功 .data = 载荷——migration.md `const { data } = await useFetch(url)` 解构兼容） */
-  /** ★#1122：返回 `FetchResult<T>`——`{ data }` 解构兼容，新增 `status` / `headers` */
+  /** C26 useFetch：网络请求（`{ data }` 解构兼容；#1122 加 status/headers；#1133 走请求管线） */
   useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>>
+  /** ★#1133 带句柄的请求（`useFetch` = 它的 `.result`；要"能真停"就用这个） */
+  useFetchTask<T = unknown>(url: string, config?: FetchConfig): FetchTask<T>
   /** C16 usePermission：权限状态（web Permissions API） */
   usePermission(name: string): Promise<CapResult<PermissionState>>
   /** C15 useStorage：存储句柄（响应式增强见 createReactiveStorage） */
@@ -248,6 +251,7 @@ export function createCapabilityHooks(
   }
   const scope = createSubscriptionScope() // ★#1071 订阅回收袋
   const res = makeCapabilityRuntime(opts)   // ★#1094 边界资源账本（G-43；不传 = 旧行为）
+  const fpipe = createFetchPipeline(bridge, { ...opts.fetch, abortable: opts.fetch?.abortable ?? detectRuntime() !== 'mp' })   // ★#1133
 
   // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
   const listeners: Array<(s: SensorSample) => void> = []
@@ -264,11 +268,10 @@ export function createCapabilityHooks(
     useBattery: () => wrap(bridge.getBattery()),
     useOrientation: () => wrap(bridge.getOrientation()),
     useShare: (options) => wrap(bridge.share(options)),
-    // ★★★#1122：**门面开口**——实现抽到 `capability-fetch.ts`（本文件 1092 行超棘轮）；
-    //   此前只透传 6 字段、且只回 `data` ⇒ S3 能力业务够不着、status/headers 被丢弃。
-    // ★#1122：`bridge.request` 显式出现（文档探测靠它判该端是否接线）
+    // ★#1122 门面开口 · #1133 走请求管线；`bridge.request` 显式出现（文档探测靠它判该端是否接线）
     useFetch: <T>(url: string, config?: FetchConfig): Promise<FetchResult<T>> =>
-      bridge.request ? runFetch<T>(bridge, url, config) : Promise.resolve(capErr<T>('fetch.unsupported', '桥未提供 request（useFetch 不可用）') as FetchResult<T>),
+      bridge.request ? fpipe.fetch<T>(url, config) : Promise.resolve(capErr<T>('fetch.unsupported', '桥未提供 request（useFetch 不可用）') as FetchResult<T>),
+    useFetchTask: <T>(url: string, config?: FetchConfig): FetchTask<T> => fpipe.fetchTask<T>(url, config),
     usePermission: (name) =>
       wrap(
         (() => {
@@ -953,90 +956,7 @@ export function createCapabilityHooks(
       return bridge.getWebAssembly()
     }),
     dispose: () => { res.dispose(scope) },   // ★#1094 = 资源释放（G-43.6）+ 订阅回收（#1071）
-    probe: async () => ({
-      location: bridge.getLocation !== undefined,
-      vibrate: bridge.vibrate !== undefined,
-      network: bridge.getNetwork !== undefined,
-      clipboardRead: bridge.readClipboard !== undefined,
-      clipboardWrite: bridge.setClipboard !== undefined,
-      screen: bridge.getScreen !== undefined,
-      device: bridge.getDevice !== undefined,
-      battery: bridge.getBattery !== undefined,
-      orientation: bridge.getOrientation !== undefined,
-      share: bridge.share !== undefined,
-      fetch: bridge.request !== undefined,
-      permission: bridge.getPermission !== undefined,
-      storage: bridge.getStorage !== undefined,
-      sensor: bridge.readSensor !== undefined,
-      brightness: bridge.getBrightness !== undefined,
-      phoneCall: bridge.makePhoneCall !== undefined,
-      biometric: bridge.checkBiometricSupport !== undefined,
-      payment: bridge.requestPayment !== undefined,
-      login: bridge.login !== undefined,
-      qrCode: bridge.scanQR !== undefined,
-      auth: bridge.login !== undefined && bridge.getStorage !== undefined,
-      websocket: bridge.connectWebSocket !== undefined,
-      upload: bridge.upload !== undefined,
-      download: bridge.download !== undefined,
-      analytics: bridge.track !== undefined,
-      log: bridge.log !== undefined,
-      fileSystem: bridge.getFileSystem !== undefined,
-      notification: bridge.subscribeMessage !== undefined,
-      contact: bridge.chooseContact !== undefined,
-      calendar: bridge.addCalendarEvent !== undefined,
-      appLifecycle: bridge.getAppLifecycle !== undefined,
-      archive: bridge.compressFile !== undefined,
-      shortcut: bridge.addShortcut !== undefined,
-      pageLifecycle: bridge.getPageLifecycle !== undefined,
-      bluetooth: bridge.getBluetooth !== undefined,
-      nfc: bridge.getNfc !== undefined,
-      camera: bridge.getCamera !== undefined,
-      microphone: bridge.getMicrophone !== undefined,
-      keyboard: bridge.getKeyboard !== undefined,
-      map: bridge.createMap !== undefined,
-      sms: bridge.sendSMS !== undefined,
-      background: bridge.getBackground !== undefined,
-      socketTask: bridge.createSocketTask !== undefined,
-      dataChannel: bridge.openDataChannel !== undefined,
-      cookie: bridge.getCookieJar !== undefined,
-      faceId: bridge.authenticateFaceID !== undefined,
-      inAppPurchase: bridge.requestIAP !== undefined,
-      miniProgram: bridge.navigateMiniProgram !== undefined,
-      embedded: bridge.getHostContext !== undefined,
-      live: bridge.joinLiveRoom !== undefined,
-      extension: bridge.loadExtension !== undefined,
-      album: bridge.getAlbum !== undefined,
-      worker: bridge.createWorker !== undefined,
-      address: bridge.chooseAddress !== undefined,
-      wifi: bridge.getWifi !== undefined,
-      weRun: bridge.getWeRunData !== undefined,
-      canvas: bridge.createCanvas !== undefined,
-      element: bridge.createElementQuery !== undefined,
-      intersection: bridge.createIntersection !== undefined,
-      mediaQuery: bridge.createMediaQuery !== undefined,
-      video: bridge.createVideo !== undefined,
-      audio: bridge.createAudio !== undefined,
-      livePusher: bridge.createLivePusher !== undefined,
-      ad: bridge.getAd !== undefined,
-      privacy: bridge.getPrivacy !== undefined,
-      performance: bridge.getPerformance !== undefined,
-      preload: bridge.getPreload !== undefined,
-      imageEdit: bridge.getImageEdit !== undefined,
-      socket: bridge.getSocket !== undefined,
-      mediaProcessing: bridge.getMediaProcessing !== undefined,
-      screenCapture: bridge.getScreenCapture !== undefined,
-      cacheManager: bridge.createCacheManager !== undefined,
-      idle: bridge.getIdle !== undefined,
-      window: bridge.getWindow !== undefined,
-      navigationGuard: bridge.getNavigationGuard !== undefined,
-      ar: bridge.getAR !== undefined,
-      beacon: bridge.getBeacon !== undefined,
-      localService: bridge.getLocalService !== undefined,
-      translation: bridge.getTranslation !== undefined,
-      poster: bridge.getPoster !== undefined,
-      deviceCapability: bridge.getDeviceCapability !== undefined,
-      webAssembly: bridge.getWebAssembly !== undefined,
-    }),
+    probe: async () => probeOf(bridge),
   }
 }
 

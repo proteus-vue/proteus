@@ -12,4 +12,9 @@ export interface CapabilityHooksOptions {
   resources?: CapabilityResourceRegistry
   /** 资源归属标签（缺省 'capability'；多页面场景传页面 id——G-43「边界资源归属某个 Owner」） */
   owner?: string
+  /**
+   * ★#1133：**请求管线**（拦截器 / 重试 / 去重 / 并发上限 / 优先级）。
+   * ★不传 ⇒ 默认并发 10（与 `wx.request` 一致）、无重试、无去重、无拦截器——既有行为不变。
+   */
+  fetch?: import('./capability-fetch-pipeline').FetchPipelineOptions
 }

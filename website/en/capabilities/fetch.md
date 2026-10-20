@@ -41,6 +41,8 @@ Param,Type,Required,Doc
 | `onChunk` | `(chunk: Uint8Array, seq: number) => void` | No | — |
 | `upload` | `UploadSpec` | No | — |
 | `signal` | `AbortSignalLike` | No | — |
+| `retry` | `number \| RetryPolicy` | No | — |
+| `priority` | `number` | No | — |
 
 ## Returns
 

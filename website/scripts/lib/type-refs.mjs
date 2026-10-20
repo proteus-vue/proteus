@@ -81,6 +81,23 @@ export function collectPageTypeRefs({ sigLine = '', ifaces = {}, allMethods = []
   for (const m of allMethods) found.push(...namesIn(m?.sig ?? '', ifaces))
   for (const p of allProps) found.push(...namesIn(p?.type ?? '', ifaces))
 
+  // ⑤ 返回值**结构的属性类型**（★#1133 补：与 #1124 第②源同族）
+  //   背景：`FetchResult<T>` 的成功支 `FetchOk` 有 `meta?: FetchMeta`，页面渲染返回值表时会打出
+  //   `FetchMeta`（反引号包裹）⇒ 悬空引用门禁合理报「未解释」，但收集器根本没看过这一层。
+  //   ★为什么不能只靠 namesIn(sigLine)：FetchResult 是**联合别名**，extractInterfaces 不收
+  //     ⇒ 按生成器的同一命名约定（`XxxResult` → 成功支 `XxxOk`）再展开一层。
+  const retPart0 = sigLine.replace(/^\([^)]*\)/, '')
+  const retCandidates = new Set(namesIn(retPart0, ifaces))
+  for (const m of retPart0.matchAll(/\b([A-Z][A-Za-z0-9]*Result)\b/g)) {
+    const base = m[1].replace(/Result$/, '')
+    for (const k of [`${base}Ok`, `${m[1]}Ok`]) if (ifaces[k]) retCandidates.add(k)
+  }
+  for (const n of retCandidates) {
+    const ti = ifaces[n]
+    if (!ti?.props?.length) continue
+    for (const pr of ti.props) found.push(...namesIn(pr.type, ifaces))
+  }
+
   return [...new Set(found)]
 }
 

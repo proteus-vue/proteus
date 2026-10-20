@@ -11,6 +11,18 @@ export type { HttpMethod, IRequestAdapter, RequestConfig, RequestResponse, ApiOp
 export type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from './types'
 // ★G-32 B3：useXxx 能力 Hook 层（无回调/无全局对象/全类型/Result<T>）
 export { createCapabilityHooks, createCapabilityBridge, createReactiveStorage, capOk, capErr, CapError } from './capability'
+// ★#1133：请求管线（拦截器 / 重试 / 去重 / 并发 / 任务句柄）——超级应用级 `useFetch` 策略层
+export { createFetchPipeline } from './capability-fetch-pipeline'
+export type {
+  FetchPipelineOptions,
+  FetchPipelineConfigExt,
+  FetchRequestContext,
+  FetchTask,
+  FetchTaskState,
+  RequestInterceptor,
+  ResponseInterceptor,
+  PipelineBridge,
+} from './capability-fetch-pipeline'
 // ★决策 #1071：能力实例的订阅回收接线（注入式，零 vue 依赖）
 export { createSubscriptionScope, installCapabilityDisposeHook } from './capability-hooks-scope'
 // ★#1094：能力层边界资源账本（G-43 治理在能力侧的落点）

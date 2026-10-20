@@ -68,7 +68,22 @@ describe('★#1122 useFetch 门面 · 五个 S3 字段真的传下去了', () =>
     expect(got.upload, '★upload 未透传').toEqual({
       path: 'u/a.bin', fieldName: 'file', filename: 'a.bin', boundary: 'B1',
     })
-    expect(got.signal, '★signal 未透传 ⇒ 取消够不着').toBe(signal)
+    // ★★#1133 改判据：原断言是**对象同一性**（`toBe(signal)`），而管线必须把
+    //   「用户信号 ∪ 任务内部信号」合并成一条（否则 `useFetchTask().abort()` 到不了下游）
+    //   ⇒ 同一性不再成立。但**真正的契约**是"用户的取消能传到下游"——
+    //   这里直接断言该语义（比同一性更强：同一性成立但 relay 断了照样是缺陷）。
+    expect(got.signal, '★signal 未透传（下游拿不到取消信号）').toBeTruthy()
+    const down = got.signal as { aborted: boolean; onabort?: () => void }
+    expect(down.aborted, '初始应为未取消').toBe(false)
+    let relayed = false
+    down.onabort = () => {
+      relayed = true
+    }
+    // 用户的 signal 触发取消 ⇒ 下游的 onabort 必须被调到（宿主靠它发 http.cancel）
+    ;(signal as { aborted: boolean }).aborted = true
+    ;(signal as { onabort?: () => void }).onabort?.()
+    expect(relayed, '★用户 signal 的取消没有 relay 到下游（App 端掐不断请求）').toBe(true)
+    expect(down.aborted, '★下游读到的 aborted 应为 true').toBe(true)
   })
 
   it('旧字段仍然照传（不因新增而回归）', async () => {

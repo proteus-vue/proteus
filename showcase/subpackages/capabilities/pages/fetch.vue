@@ -38,6 +38,7 @@ const apiRows = ref([
   ["config.signal", "取消：abort() 后立即以 fetch.aborted 结束（App 用 createAbortController）", "{ readonly aborted: boolean }?"],
   ["config.onChunk", "流式消费：每块回调一次，内存不随响应体增长（App 回推 / Web ReadableStream；MP 不支持）", "(chunk, seq) => void?"],
   ["config.savePath / upload", "★仅 App：宿主直写沙箱 / 宿主自读文件上传（Web、MP 明确 unsupported）", "string? / UploadSpec?"],
+  ["config.retry / priority", "★#1134 请求治理：失败重试（指数退避，只重试可恢复失败）/ 并发队列优先级（越大越先发）", "number | RetryPolicy / number?"],
 ])
 const compatRows = ref([
   ["Web SPA", "fetch + AbortController（timeout/取消）+ ReadableStream（流式）", "✅"],

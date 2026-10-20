@@ -85,7 +85,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'plans',
-    value: '89',
+    value: '90',
     label: 'plan 文档',
     labelEn: 'plan documents',
     source: 'docs/*-plan 目录（board-inventory 全景索引）',

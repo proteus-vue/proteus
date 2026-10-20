@@ -12,7 +12,7 @@ order: 1
 
 > 技术标识：能力原语 C26 · `capability.fetch` · 返回 `Promise<T>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
-★#1122：`bridge.request` 显式出现（文档探测靠它判该端是否接线）
+★#1122 门面开口 · #1133 走请求管线；`bridge.request` 显式出现（文档探测靠它判该端是否接线）
 
 ## 签名
 
@@ -35,12 +35,14 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `data` | `unknown` | 否 | 请求体（POST/PUT；对象自动 JSON 序列化） |
 | `params` | `Record<string, unknown>` | 否 | URL 查询参数（拼接到 query string） |
 | `headers` | `Record<string, string>` | 否 | 自定义请求头 |
-| `timeout` | `number` | 否 | 超时（ms；超时 → Err） |
+| `timeout` | `number` | 否 | 超时（ms；超时 → Err）。★单轮语义：重试时每轮各自计时 |
 | `responseType` | `'text' \| 'json' \| 'arraybuffer'` | 否 | ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 |
 | `savePath` | `string` | 否 | ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 |
 | `onChunk` | `(chunk: Uint8Array, seq: number) => void` | 否 | ★#1122 流式消费：每块回调一次，内存不随响应体增长。**回调同步**（宿主回推的 JS 线程上）。 App 逐块回推；Web 用 ReadableStream（节奏不同）；**MP 不支持** ⇒ unsupported。 |
 | `upload` | `UploadSpec` | 否 | ★#1122 流式上传（仅 App）：宿主自读文件、自拼 multipart、边读边发。Web/MP 用各自上传 API ⇒ unsupported。 |
 | `signal` | `AbortSignalLike` | 否 | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
+| `retry` | `number \| RetryPolicy` | 否 | ★#1133 重试：数字 = 额外次数；对象 = 覆盖管线默认策略。 ★只对**可恢复**失败生效（网络错误 / 超时 / 429 / 5xx）——取消与能力缺失不重试。 |
+| `priority` | `number` | 否 | ★#1133 排队优先级（越大越先发；默认 0）。并发打满时用于"首屏关键请求优先"。 |
 
 ## 返回值
 
@@ -53,6 +55,7 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 | `status` | `number` | ★此前被 `useFetch` 丢弃 ⇒ 业务无法区分 404/500 |
 | `headers` | `Record<string, string>` | — |
+| `meta` | `FetchMeta` | ★#1133 观测元数据（走管线时才有；直接调 `runFetch` 时不带） |
 
 ## 类型引用
 
@@ -66,12 +69,14 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `data` | `unknown` | — | 请求体（POST/PUT；对象自动 JSON 序列化） |
 | `params` | `Record<string, unknown>` | — | URL 查询参数（拼接到 query string） |
 | `headers` | `Record<string, string>` | — | 自定义请求头 |
-| `timeout` | `number` | — | 超时（ms；超时 → Err） |
+| `timeout` | `number` | — | 超时（ms；超时 → Err）。★单轮语义：重试时每轮各自计时 |
 | `responseType` | `'text' \| 'json' \| 'arraybuffer'` | — | ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 |
 | `savePath` | `string` | — | ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 |
 | `onChunk` | `(chunk: Uint8Array, seq: number) => void` | — | ★#1122 流式消费：每块回调一次，内存不随响应体增长。**回调同步**（宿主回推的 JS 线程上）。 App 逐块回推；Web 用 ReadableStream（节奏不同）；**MP 不支持** ⇒ unsupported。 |
 | `upload` | `UploadSpec` | — | ★#1122 流式上传（仅 App）：宿主自读文件、自拼 multipart、边读边发。Web/MP 用各自上传 API ⇒ unsupported。 |
 | `signal` | `AbortSignalLike` | — | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
+| `retry` | `number \| RetryPolicy` | — | ★#1133 重试：数字 = 额外次数；对象 = 覆盖管线默认策略。 ★只对**可恢复**失败生效（网络错误 / 超时 / 429 / 5xx）——取消与能力缺失不重试。 |
+| `priority` | `number` | `0` | ★#1133 排队优先级（越大越先发；默认 0）。并发打满时用于"首屏关键请求优先"。 |
 
 ### `UploadSpec`
 
@@ -94,6 +99,36 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | 属性 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `aborted` | `boolean` | — | 是否已取消。`useFetch` 在请求期间读它；取消后 Promise 以 `fetch.aborted` 结束。 |
+
+### `RetryPolicy`
+
+重试策略（与 `capability-fetch-pipeline.ts` 的 `RetryPolicy` 同构）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `attempts` | `number` | `0` | 额外重试次数（默认 0 = 不重试） |
+| `delayMs` | `number` | `300` | 首次退避（ms，默认 300） |
+| `backoff` | `'fixed' \| 'linear' \| 'exponential'` | ``exponential`` | 退避曲线（默认 `exponential`） |
+| `jitter` | `number` | `0.2` | 抖动比例 0~1（默认 0.2；避免重试风暴同步打点） |
+| `retryOn` | `(res: FetchResult<unknown>, attempt: number) => boolean` | `网络类失败` | 判定是否重试（默认：网络类失败 + 429/5xx；**不重试** aborted/unsupported/tooLarge/intercepted） |
+
+### `FetchMeta`
+
+★#1133：单次请求的**观测元数据**（超级应用排障的底座）。
+
+【为什么必须有】没有它就只能得到"成功/失败"，无法回答"慢在排队、慢在网络、还是慢在重试"。
+这些数字**全部在框架层可得**（不依赖宿主），所以三端语义一致。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `id` | `string` | — | 请求 id（与 `FetchTask.id` 一致；日志/埋点用它串起来） |
+| `attempts` | `number` | — | 实际发出的轮次（含首次；1 = 没重试） |
+| `queuedMs` | `number` | — | 在并发队列里等待的时间（ms）——**慢在排队**还是慢在网络，看这个 |
+| `totalMs` | `number` | — | 从入队到结算的总墙钟（ms） |
+| `attemptMs` | `number[]` | — | 每轮耗时（ms；下标 = 轮次） |
+| `deduped` | `boolean` | — | 是否命中去重（本次没真发请求，用的是别人在飞的结果） |
+| `priority` | `number` | — | 排队优先级（观测用） |
+| `retryDelaySkipped` | `boolean` | — | ★App 精简引擎无 `setTimeout` ⇒ 重试未等待（如实标记，不谎称退避过） |
 
 ## 错误码
 
