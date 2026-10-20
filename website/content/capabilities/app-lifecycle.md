@@ -128,6 +128,36 @@ onAudioInterruptionEnd(cb: () => void): () => void
 
 **返回值**：`() => void`
 
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `phase` | `AppLifecyclePhase` | 是 | — |
+
+## 类型引用
+
+### `AppLifecycle`
+
+★★C23 应用生命周期句柄（**扩展为完整事件面**——2026-09-30）。
+
+【类型收口（防漂移）】定义在 `capability-app.ts` 的 `AppLifecycleHandle`，
+此处仅做别名导出——**单一事实源**。三端（MP/Web/App）共用同一句柄形状：
+MP 走 wx 全局 API + 产物派发；Web 走 visibilitychange/resize/scroll；
+App 走壳（G-39 运行时）转发。事件面 SSOT 见 `APP_EVENTS`（11 个事件）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `phase` | `AppLifecyclePhase` | — | — |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onLaunch` | `onLaunch(cb: () => void): () => void` | 应用启动（**恰好一次**，先于首个 show；冷启动自动补发——壳只需转发 show/hide） |
+| `onShow` | `onShow(cb: () => void): () => void` | 应用进入前台 |
+| `onHide` | `onHide(cb: () => void): () => void` | 应用退到后台 |
+| `onPageNotFound` | `onPageNotFound(cb: (e: { path: string }) => void): () => void` | 路由未命中（可跳兜底页） |
+| `onAudioInterruptionBegin` | `onAudioInterruptionBegin(cb: () => void): () => void` | 音频被系统中断开始（来电等） |
+| `onAudioInterruptionEnd` | `onAudioInterruptionEnd(cb: () => void): () => void` | 音频中断结束（可恢复播放） |
+
 ## 错误码
 
 | code | 说明 |

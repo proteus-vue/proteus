@@ -33,7 +33,7 @@ useCanvas(id: string): CapResult<CanvasController>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `CanvasController` | 成功载荷（方法结构见下） |
+| `data` | `CanvasController` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
 ## 方法
@@ -110,7 +110,32 @@ offscreen(width: number, height: number, type?: '2d' | 'webgl'): CapResult<Offsc
 
 **返回值**：`CapResult<OffscreenCanvasHandle>`
 
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | `string` | 是 | 画布标识（wx canvas-id；web 选择器/id，已去 `#` 前缀） |
+
 ## 类型引用
+
+### `CanvasController`
+
+★组件实例 API 对齐：C57 画布控制器（`useCanvas(id)`）。
+wx：`wx.createCanvasContext(id)` + `createSelectorQuery().fields({node:true})` +
+`wx.canvasToTempFilePath` + `wx.createOffscreenCanvas`；
+web：`document` 中按 id/选择器定位 `HTMLCanvasElement` + 标准 2D 上下文适配 + OffscreenCanvas 降级。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `id` | `string` | — | 画布标识（wx canvas-id；web 选择器/id，已去 `#` 前缀） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `createContext` | `createContext(): CapResult<CanvasContext>` | 创建旧版 2D 绘图上下文（方法名对齐官方 CanvasContext） |
+| `node` | `node(): Promise<CapResult<CanvasNode>>` | 取画布节点（`<canvas type="2d">` node——用于 requestAnimationFrame / 标准 getContext） |
+| `toTempFilePath` | `toTempFilePath(options?: CanvasExportOptions): Promise<CapResult<string>>` | 导出为临时文件路径（wx.canvasToTempFilePath；web 返回 data URL） |
+| `toDataURL` | `toDataURL(options?: CanvasExportOptions): Promise<CapResult<string>>` | 导出为 data URL（web 原生；wx 经临时文件读为 base64） |
+| `offscreen` | `offscreen(width: number, height: number, type?: '2d' \| 'webgl'): CapResult<OffscreenCanvasHandle>` | 创建离屏画布（Skyline 高频渲染 / 离屏合成） |
 
 ### `CanvasContext`
 

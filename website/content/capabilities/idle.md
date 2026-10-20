@@ -68,6 +68,16 @@ cancel(id: number): Promise<CapResult<void>>
 
 ## 类型引用
 
+### `IdleAPI`
+
+★权威标尺缺口 C73：空闲调度（`useIdle()`）。
+wx：`wx.requestIdleCallback` / `wx.cancelIdleCallback`；web：`requestIdleCallback`（Safari 缺省 → setTimeout 兜底）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `request` | `request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResult<number>>` | 在浏览器/宿主空闲时执行回调。 |
+| `cancel` | `cancel(id: number): Promise<CapResult<void>>` | 取消待执行的空闲回调。 |
+
 ### `IdleDeadline`
 
 空闲回调截止信息（requestIdleCallback 回调载荷子集）

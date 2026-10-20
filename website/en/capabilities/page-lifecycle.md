@@ -272,6 +272,12 @@ setSaveExitStateProvider(fn: () => Record<string, unknown>): void
 
 **Returns**: `void`
 
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `phase` | `PageLifecyclePhase` | Yes | — |
+
 ## Error codes
 
 | code | Doc |

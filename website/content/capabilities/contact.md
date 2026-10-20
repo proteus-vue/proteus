@@ -38,6 +38,18 @@ useContact(): Promise<CapResult<Contact[]>>
 | `phone` | `string` | 否 | 电话号码 |
 | `email` | `string` | 否 | 邮箱 |
 
+## 类型引用
+
+### `Contact`
+
+C19 联系人（wx.chooseContact / web 无标准 → 降级 undefined）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `name` | `string` | — | 联系人姓名 |
+| `phone` | `string` | — | 电话号码 |
+| `email` | `string` | — | 邮箱 |
+
 ## 错误码
 
 | code | 说明 |

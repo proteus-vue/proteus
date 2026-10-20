@@ -38,6 +38,18 @@ useCamera(): Promise<CapResult<MediaAccess>>
 | `supported` | `boolean` | 是 | 平台能力/设备存在 |
 | `granted` | `boolean` | 是 | 用户已授权 |
 
+## 类型引用
+
+### `MediaAccess`
+
+C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `kind` | `'camera' \| 'microphone'` | — | 媒体设备类型 |
+| `supported` | `boolean` | — | 平台能力/设备存在 |
+| `granted` | `boolean` | — | 用户已授权 |
+
 ## 错误码
 
 | code | 说明 |

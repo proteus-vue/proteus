@@ -53,6 +53,17 @@ setSize(width: number, height: number): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
+## 类型引用
+
+### `WindowAPI`
+
+★权威标尺缺口 C74：窗口（`useWindow()`）。
+wx：`wx.setWindowSize`（PC 端调整窗口）；web：无标准 → Err 诚实降级。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `setSize` | `setSize(width: number, height: number): Promise<CapResult<void>>` | 调整窗口大小（PC 端）。 |
+
 ## 错误码
 
 | code | 说明 |

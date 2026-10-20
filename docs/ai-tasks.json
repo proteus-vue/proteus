@@ -2246,6 +2246,25 @@
         "T-app-usefetch-surface"
       ],
       "note": "★下一步：给生成器加\"内容缩水\"门禁（记录各能力页关键区块行数，骤降即红）——本轮 5 个缺陷的共同形态都是\"文档静默退化而无人发现\"。"
+    },
+    {
+      "id": "T-doc-type-refs",
+      "title": "#1124 文档类型引用：四来源收集 + 悬空引用门禁（UploadSpec/AbortSignalLike 必须有说明段）",
+      "type": "docs",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "website/scripts/lib/type-refs.mjs",
+        "website/scripts/gen-content.mjs",
+        "tests/doc-type-refs.test.ts"
+      ],
+      "decision": 1124,
+      "verification": "npx vitest run tests/doc-type-refs.test.ts && cd website && npx tsx scripts/gen-content.mjs --check",
+      "branch": null,
+      "related": [
+        "T-doc-generator-drift"
+      ],
+      "note": "根因：原收集只扫方法签名，漏了参数类型/参数对象属性类型/返回值类型。加检查后暴露 66 页有未解释类型；修复后 71 页净增 1174 行。★仍待：生成器\"内容缩水\"门禁（#1123 下一步）。"
     }
   ]
 }

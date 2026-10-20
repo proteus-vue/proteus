@@ -45,6 +45,16 @@ track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
+## 类型引用
+
+### `TrackAPI`
+
+C34 TrackAPI（useAnalytics 句柄）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
+
 ## 错误码
 
 | code | 说明 |

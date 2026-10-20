@@ -121,6 +121,20 @@ batch(selectors: string[]): Promise<CapResult<Array<ElementRect | null>>>
 
 ## 类型引用
 
+### `ElementQuery`
+
+★组件实例 API 对齐：C58 元素查询句柄（`useElement(id?)`）。
+wx：`wx.createSelectorQuery()`（rect / scrollOffset / fields + node/rect/size）+ `createIntersectionObserver`；
+web：`querySelector` + `getBoundingClientRect()`。★App 选择器支持面见各方法 `@param selector`（#1082）；坐标为视口坐标（同 Web）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `boundingClientRect` | `boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>` | 查询元素几何。 |
+| `scrollOffset` | `scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>` | 查询元素滚动位置。 |
+| `fields` | `fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<ElementFieldsResult>>` | 按需查询元素字段（node/rect/size/scrollOffset/computedStyle）。 |
+| `size` | `size(selector?: string): Promise<CapResult<{ width: number; height: number }>>` | 查询元素尺寸（boundingClientRect 的常用投影）。 |
+| `batch` | `batch(selectors: string[]): Promise<CapResult<Array<ElementRect \| null>>>` | 批量查询（同一查询内选择器数组——对齐官方 selectAll 的批量语义）。 |
+
 ### `ElementRect`
 
 元素几何（SelectorQuery.boundingClientRect 结果——对齐官方字段）

@@ -63,6 +63,17 @@ instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapRe
 
 ## 类型引用
 
+### `WebAssemblyAPI`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `supportsStreaming` | `boolean` | — | 能力位：是否支持流式/字节编译（Web/App-JSC true；MP **false**——只收路径） |
+| `supportsPathLoad` | `boolean` | — | 能力位：是否支持从代码包路径加载（MP true；Web/App **false**） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `instantiate` | `instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapResult<WasmModuleHandle>>` | 实例化 WASM 模块（**跨端归一的唯一入口**）。 不可用平台 / 来源形态不匹配 → `Err('webassembly.unsupported')`（不抛异常）。 |
+
 ### `WasmInstantiateOptions`
 
 | 属性 | 类型 | 默认值 | 说明 |

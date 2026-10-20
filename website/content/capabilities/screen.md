@@ -39,6 +39,17 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | `dpr` | `number` | 是 | 设备像素比（物理像素 / CSS 像素） |
 | `orientation` | `'portrait' \| 'landscape'` | 是 | 当前方向 |
 
+## 类型引用
+
+### `ScreenInfo`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `width` | `number` | — | 屏幕宽度（px，CSS 像素） |
+| `height` | `number` | — | 屏幕高度（px，CSS 像素） |
+| `dpr` | `number` | — | 设备像素比（物理像素 / CSS 像素） |
+| `orientation` | `'portrait' \| 'landscape'` | — | 当前方向 |
+
 ## 错误码
 
 | code | 说明 |

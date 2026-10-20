@@ -111,6 +111,16 @@ disconnect(): void
 
 ## 类型引用
 
+### `IntersectionOptions`
+
+交叉观察配置（wx.createIntersectionObserver options）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `thresholds` | `number[]` | `[0]` | 相交阈值数组（缺省 [0]） |
+| `initialRatio` | `number` | — | 初始相交比例（用于立即上报初始态） |
+| `observeAll` | `boolean` | — | 是否同时观察所有满足选择器的元素 |
+
 ### `IntersectionHandle`
 
 交叉观察句柄（IntersectionHandle.observe / relativeTo* / disconnect）

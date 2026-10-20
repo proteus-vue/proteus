@@ -59,8 +59,13 @@ export interface UploadSpec {
   formData?: Record<string, string>
 }
 
-/** 最小取消信号契约（兼容原生 `AbortSignal` 与 `createAbortController()` 的产物）。 */
+/**
+ * 最小取消信号契约（兼容原生 `AbortSignal` 与 `createAbortController()` 的产物）。
+ * ★只要求 `aborted` 可读 ⇒ 浏览器原生 `AbortSignal` 与 App 侧 `createAbortController().signal`
+ *   都能直接传入 `useFetch(url, { signal })`，无需适配层。
+ */
 export interface AbortSignalLike {
+  /** 是否已取消。`useFetch` 在请求期间读它；取消后 Promise 以 `fetch.aborted` 结束。 */
   readonly aborted: boolean
 }
 

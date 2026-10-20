@@ -44,6 +44,16 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 | `data` | `void` | 成功时无载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
+## 类型引用
+
+### `ShareOptions`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `title` | `string` | — | 分享标题 |
+| `text` | `string` | — | 分享文本（Web navigator.share 用；MP 缺省） |
+| `url` | `string` | — | 分享链接（web 必传 HTTPS URL） |
+
 ## 错误码
 
 | code | 说明 |

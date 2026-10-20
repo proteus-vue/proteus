@@ -163,6 +163,23 @@ on(event: 'play' | 'pause' | 'ended' | 'timeupdate' | 'error' | 'fullscreenchang
 
 ## 类型引用
 
+### `VideoController`
+
+★组件实例 API 对齐：C61 视频控制器（`useVideo(id)`）。
+wx：`wx.createVideoContext(id)`；web：`document` 中按 id 定位 `<video>` 元素并归一化控制/事件。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `play` | `play(): Promise<CapResult<void>>` | 播放 |
+| `pause` | `pause(): Promise<CapResult<void>>` | 暂停 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止（回到起点） |
+| `seek` | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定位置。 |
+| `playbackRate` | `playbackRate(rate: number): Promise<CapResult<void>>` | 设置播放倍速。 |
+| `requestFullScreen` | `requestFullScreen(options?: VideoFullScreenOptions): Promise<CapResult<void>>` | 进入全屏 |
+| `exitFullScreen` | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
+| `sendDanmu` | `sendDanmu(danmu: { text: string; color?: string }): Promise<CapResult<void>>` | 发送弹幕 |
+| `on` | `on(event: 'play' \| 'pause' \| 'ended' \| 'timeupdate' \| 'error' \| 'fullscreenchange', cb: (payload: unknown) => void): () => void` | 订阅视频事件（play / pause / ended / timeupdate / error / fullscreenchange）。 |
+
 ### `VideoFullScreenOptions`
 
 视频全屏方向（VideoContext.requestFullScreen）

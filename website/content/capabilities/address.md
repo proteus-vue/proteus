@@ -43,6 +43,23 @@ useAddress(): Promise<CapResult<ShippingAddress>>
 | `nationalCode` | `string` | 否 | — |
 | `telNumber` | `string` | 是 | — |
 
+## 类型引用
+
+### `ShippingAddress`
+
+★颗粒度对齐 C3：C54 收货地址（wx.chooseAddress）——对齐小程序收货地址 API
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `userName` | `string` | — | — |
+| `postalCode` | `string` | — | — |
+| `provinceName` | `string` | — | — |
+| `cityName` | `string` | — | — |
+| `countyName` | `string` | — | — |
+| `detailInfo` | `string` | — | — |
+| `nationalCode` | `string` | — | — |
+| `telNumber` | `string` | — | — |
+
 ## 错误码
 
 | code | 说明 |

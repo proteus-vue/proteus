@@ -82,6 +82,20 @@ terminate(): void
 
 **返回值**：`void`
 
+## 类型引用
+
+### `WorkerHandle`
+
+★颗粒度对齐 C3：C53 多线程 Worker（wx.createWorker）
+创建 Worker 线程 + postMessage 收发 + terminate——对齐小程序 Worker API。
+Web 端：new Worker(...)（同源脚本）∪ 缺省 Err（诚实降级）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `postMessage` | `postMessage(message: unknown): void` | 主线程 → Worker 发消息 |
+| `onMessage` | `onMessage(cb: (message: unknown) => void): () => void` | 订阅 Worker → 主线程消息（返回取消） |
+| `terminate` | `terminate(): void` | 终止 Worker 线程 |
+
 ## 错误码
 
 | code | 说明 |

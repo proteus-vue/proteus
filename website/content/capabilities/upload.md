@@ -57,6 +57,32 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 | `data` | `unknown` | 是 | 响应体（文本/JSON 由服务端决定） |
 | `progress` | `number` | 否 | 进度（0-100，若平台支持 onProgressUpdate） |
 
+## 类型引用
+
+### `UploadOptions`
+
+C29 上传选项（wx.uploadFile / web fetch FormData）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `url` | `string` | — | 上传目标 URL（HTTPS） |
+| `filePath` | `string` | — | wx 临时文件路径（wx.chooseMedia/chooseImage 等产出） |
+| `file` | `Blob` | — | web 文件对象 |
+| `name` | `string` | `'file'` | 表单字段名（缺省 'file'） |
+| `formData` | `Record<string, string>` | — | 附加表单字段 |
+| `headers` | `Record<string, string>` | — | 自定义请求头 |
+| `timeout` | `number` | — | 超时（ms；超时 → Err） |
+
+### `UploadResult`
+
+C29 上传结果
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `status` | `number` | — | HTTP 状态码 |
+| `data` | `unknown` | — | 响应体（文本/JSON 由服务端决定） |
+| `progress` | `number` | — | 进度（0-100，若平台支持 onProgressUpdate） |
+
 ## 错误码
 
 | code | 说明 |

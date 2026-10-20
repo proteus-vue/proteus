@@ -33,7 +33,7 @@ Param,Type,Required,Doc
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `AudioController` | Success payload (methods below) |
+| `data` | `AudioController` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
 ## Methods
@@ -133,6 +133,14 @@ on(event: 'canplay' | 'play' | 'pause' | 'stop' | 'ended' | 'timeupdate' | 'erro
 | `cb` | `(payload: unknown) => void` | Yes | 事件处理器 |
 
 **Returns**: `() => void` -- 取消订阅函数
+
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `currentTime` | `number` | Yes | 当前播放进度（秒） |
+| `duration` | `number` | Yes | 音频时长（秒） |
+| `paused` | `boolean` | Yes | 是否暂停 |
 
 ## Error codes
 

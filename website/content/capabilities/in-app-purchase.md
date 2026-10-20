@@ -44,6 +44,18 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 | `transactionId` | `string` | 否 | 交易单号（商店返回） |
 | `state` | `'purchased' \| 'restored'` | 是 | 交易状态（purchased 新购 / restored 恢复购买） |
 
+## 类型引用
+
+### `IAPReceipt`
+
+C46 内购回执（wx 无公开 IAP API——宿主桥接；web 无标准 → Err）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `productId` | `string` | — | 内购商品 ID（应用商店登记） |
+| `transactionId` | `string` | — | 交易单号（商店返回） |
+| `state` | `'purchased' \| 'restored'` | — | 交易状态（purchased 新购 / restored 恢复购买） |
+
 ## 错误码
 
 | code | 说明 |

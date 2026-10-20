@@ -111,6 +111,21 @@ report(id: number, value: number, dimensions?: string | unknown[]): Promise<CapR
 
 ## 类型引用
 
+### `PerformanceAPI`
+
+★权威标尺缺口 C66：性能（wx.getPerformance / wx.reportPerformance）。
+条目读取（navigation 导航 / render 渲染 / script 脚本）+ 实时观察 + 自定义指标上报
+（上报需在小程序后台配置指标 id）。
+web：`performance.getEntries*` 承接条目读取；`report` 无对等上报后端 → Err。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `getEntries` | `getEntries(entryType?: 'navigation' \| 'render' \| 'script'): Promise<CapResult<PerformanceEntry[]>>` | 读取性能条目（可按类型过滤） |
+| `getEntriesByName` | `getEntriesByName(name: string, entryType?: string): Promise<CapResult<PerformanceEntry[]>>` | 按名字读取性能条目 |
+| `createObserver` | `createObserver(): PerformanceObserverHandle` | 创建观察器（实时推送新条目） |
+| `setBufferSize` | `setBufferSize(size: number): void` | 设置性能缓冲区大小（条目数上限） |
+| `report` | `report(id: number, value: number, dimensions?: string \| unknown[]): Promise<CapResult<void>>` | 上报自定义性能指标（微信性能监控平台——需后台配置 id）。 |
+
 ### `PerformanceEntry`
 
 性能条目（wx PerformanceEntry 子集——navigation 导航 / render 渲染 / script 脚本）

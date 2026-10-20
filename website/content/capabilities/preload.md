@@ -89,6 +89,19 @@ subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>
 
 ## 类型引用
 
+### `PreloadAPI`
+
+★权威标尺缺口 C67：预加载（wx.preloadAssets / preloadSkylineView / preloadWebview / preDownloadSubpackage）。
+「用空间换时间」——提前拉取资源 / 视图 / 分包，降低首屏与页面切换等待。
+web：无标准预加载 API（可用 `<link rel=preload>` 或动态 import 替代）→ 各方法 Err 诚实降级。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `assets` | `assets(data: PreloadAsset[]): Promise<CapResult<void>>` | 预加载资源（字体 / 图片）。 |
+| `skylineView` | `skylineView(): Promise<CapResult<void>>` | 预加载 Skyline 视图（配合 Skyline 渲染器的页面预载） |
+| `webview` | `webview(): Promise<CapResult<void>>` | 预加载 WebView 页面 |
+| `subpackage` | `subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>` | 预下载分包（目前仅 workers 分包）。 |
+
 ### `PreloadAsset`
 
 预加载资源项（wx.preloadAssets——字体/图片）

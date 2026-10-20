@@ -128,6 +128,12 @@ onAudioInterruptionEnd(cb: () => void): () => void
 
 **Returns**: `() => void`
 
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `phase` | `AppLifecyclePhase` | Yes | — |
+
 ## Error codes
 
 | code | Doc |

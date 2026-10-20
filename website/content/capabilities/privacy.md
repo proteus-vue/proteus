@@ -88,6 +88,15 @@ onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => v
 
 ## 类型引用
 
+### `PrivacyAPI`
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `getSetting` | `getSetting(): Promise<CapResult<PrivacySetting>>` | 查询隐私授权状态（wx.getPrivacySetting） |
+| `openContract` | `openContract(): Promise<CapResult<void>>` | 打开隐私协议页面（wx.openPrivacyContract） |
+| `requireAuthorize` | `requireAuthorize(): Promise<CapResult<boolean>>` | 主动触发隐私授权弹窗（wx.requirePrivacyAuthorize）。 |
+| `onNeedAuthorization` | `onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void` | 订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。 用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。 |
+
 ### `PrivacySetting`
 
 ★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract /

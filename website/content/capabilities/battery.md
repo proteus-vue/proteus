@@ -39,6 +39,17 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 | `chargingTime` | `number` | 否 | 充满所需秒数（充电中才有；不支持缺省） |
 | `dischargingTime` | `number` | 否 | 剩余可用秒数（放电中才有；不支持缺省） |
 
+## 类型引用
+
+### `BatteryInfo`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `level` | `number` | — | 电量（0-1，浮点） |
+| `charging` | `boolean` | — | 是否充电中 |
+| `chargingTime` | `number` | — | 充满所需秒数（充电中才有；不支持缺省） |
+| `dischargingTime` | `number` | — | 剩余可用秒数（放电中才有；不支持缺省） |
+
 ## 错误码
 
 | code | 说明 |

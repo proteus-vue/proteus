@@ -262,6 +262,45 @@ setSaveExitStateProvider(fn: () => Record<string, unknown>): void
 
 **返回值**：`void`
 
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `phase` | `PageLifecyclePhase` | 是 | — |
+
+## 类型引用
+
+### `PageLifecycle`
+
+★★C24 页面生命周期句柄（**扩展为完整事件面**——2026-09-30）。
+
+【类型收口】定义在 `capability-app.ts` 的 `PageLifecycleHandle`，此处仅别名导出。
+覆盖 15 个页面事件（`PAGE_EVENTS`）：阶段事件（load/show/ready/hide/unload）+
+页面事件（route-done/pull-down-refresh/reach-bottom/page-scroll/resize/tab-item-tap）+
+决策型（share-app-message/share-timeline/add-to-favorites/save-exit-state——单处理器）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `phase` | `PageLifecyclePhase` | — | — |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onLoad` | `onLoad(cb: () => void): () => void` | — |
+| `onShow` | `onShow(cb: () => void): () => void` | — |
+| `onReady` | `onReady(cb: () => void): () => void` | — |
+| `onHide` | `onHide(cb: () => void): () => void` | — |
+| `onUnload` | `onUnload(cb: () => void): () => void` | — |
+| `onRouteDone` | `onRouteDone(cb: (e: PageEventPayloads['route-done']) => void): () => void` | 路由动画完成（MP `onRouteDone` / App 转场结束 / Web transitionend） |
+| `onPullDownRefresh` | `onPullDownRefresh(cb: () => void): () => void` | 下拉刷新（MP `onPullDownRefresh` / App 宿主手势；★Web 无原生——诚实不触发） |
+| `onReachBottom` | `onReachBottom(cb: () => void): () => void` | 触底（MP `onReachBottom` / Web 滚动到底 / App 滚动到底） |
+| `onPageScroll` | `onPageScroll(cb: (e: PageEventPayloads['page-scroll']) => void): () => void` | 页面滚动（★**高频**：微信文档明确会引起两线程通信 ⇒ MP 端仅"声明过 onPageScroll"才派发） |
+| `onResize` | `onResize(cb: (e: PageEventPayloads['resize']) => void): () => void` | 尺寸变化（MP `onResize` / Web resize / App 旋转分屏） |
+| `onTabItemTap` | `onTabItemTap(cb: (e: PageEventPayloads['tab-item-tap']) => void): () => void` | tab 点击（MP `onTabItemTap` / App tab 栏） |
+| `setShareAppMessageProvider` | `setShareAppMessageProvider(fn: () => ShareContent): void` | 转发给好友（返回分享内容；MP 端声明后右上角出现"转发"入口） |
+| `setShareTimelineProvider` | `setShareTimelineProvider(fn: () => ShareContent): void` | 分享到朋友圈（同上；声明后才显示入口） |
+| `setAddToFavoritesProvider` | `setAddToFavoritesProvider(fn: () => ShareContent): void` | 收藏（同上） |
+| `setSaveExitStateProvider` | `setSaveExitStateProvider(fn: () => Record<string, unknown>): void` | 保存退出状态（MP `onSaveExitState`——返回需保存的状态对象） |
+
 ## 错误码
 
 | code | 说明 |

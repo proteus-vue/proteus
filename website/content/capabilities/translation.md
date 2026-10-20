@@ -67,6 +67,19 @@ onOff(cb: () => void): () => void
 
 **返回值**：`() => void`——取消订阅函数
 
+## 类型引用
+
+### `TranslationAPI`
+
+★权威标尺缺口 C79：翻译（`useTranslation()`）。
+wx：`wx.onUserTriggerTranslation` / `wx.onUserOffTranslation`（用户主动/取消翻译菜单）；
+web：无对等（可用 Translation API）→ Err 诚实降级。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onTrigger` | `onTrigger(cb: (res: { locale: string; type: string }) => void): () => void` | 订阅用户主动翻译。 |
+| `onOff` | `onOff(cb: () => void): () => void` | 订阅用户取消翻译。 |
+
 ## 错误码
 
 | code | 说明 |

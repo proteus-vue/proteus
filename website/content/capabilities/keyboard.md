@@ -52,6 +52,18 @@ onChange(cb: (info: KeyboardInfo) => void): () => void
 
 ## 类型引用
 
+### `KeyboardLifecycle`
+
+C14 键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `info` | `KeyboardInfo` | — | 当前键盘状态（高度/可见性快照） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | 订阅键盘高度变化（返回取消） |
+
 ### `KeyboardInfo`
 
 C14 键盘信息（高度 px + 可见性）

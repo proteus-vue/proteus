@@ -46,6 +46,17 @@ supportsHevc(): Promise<CapResult<boolean>>
 
 **返回值**：`Promise<CapResult<boolean>>`
 
+## 类型引用
+
+### `DeviceCapabilityAPI`
+
+★权威标尺缺口 C81：设备能力探测（`useDeviceCapability()`）。
+wx：`wx.checkDeviceSupportHevc`（HEVC 硬解支持）；web：`MediaSource.isTypeSupported` 兜底。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `supportsHevc` | `supportsHevc(): Promise<CapResult<boolean>>` | 查询设备是否支持 HEVC（H.265）硬解码 |
+
 ## 错误码
 
 | code | 说明 |

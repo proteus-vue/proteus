@@ -55,6 +55,29 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 | `path` | `string` | 否 | wx tempFilePath（responseType=path） |
 | `progress` | `number` | 否 | 进度（0-100） |
 
+## 类型引用
+
+### `DownloadOptions`
+
+C30 下载选项
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `headers` | `Record<string, string>` | — | 自定义请求头 |
+| `timeout` | `number` | — | 超时（ms；超时 → Err） |
+| `responseType` | `'blob' \| 'path' \| 'text' \| 'json'` | — | 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json |
+
+### `DownloadResult`
+
+C30 下载结果
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `status` | `number` | — | HTTP 状态码 |
+| `data` | `unknown` | — | 响应体（形态由 responseType 决定） |
+| `path` | `string` | — | wx tempFilePath（responseType=path） |
+| `progress` | `number` | — | 进度（0-100） |
+
 ## 错误码
 
 | code | 说明 |

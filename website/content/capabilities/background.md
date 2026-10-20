@@ -166,6 +166,23 @@ getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
 
 ## 类型引用
 
+### `BackgroundAPI`
+
+★能力颗粒度对齐：C25 后台/宿主生命周期 API（原仅 onEvent（visible/hidden）→ 全事件面）
+各订阅返回取消函数；未实现的事件 → 返回 no-op 取消（诚实边界）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | 订阅前后台切换（返回取消） |
+| `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | 内存警告（wx.onMemoryWarning） |
+| `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | 主题变化（wx.onThemeChange，深色/浅色） |
+| `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（wx.onWindowResize / web resize） |
+| `onError` | `onError(cb: (error: string) => void): () => void` | 小程序错误（wx.onError） |
+| `onUnhandledRejection` | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | 未处理的 Promise rejection（wx.onUnhandledRejection） |
+| `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | 网络状态变化（wx.onNetworkStatusChange） |
+| `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | 启动参数（wx.getLaunchOptionsSync） |
+| `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | 当前进入参数（wx.getEnterOptionsSync） |
+
 ### `BackgroundEvent`
 
 C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）

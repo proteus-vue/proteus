@@ -46,6 +46,18 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 | `granted` | `boolean` | 是 | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
 | `status` | `string` | 否 | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
 
+## 类型引用
+
+### `MessageSubscription`
+
+C17 可订阅的消息模板（wx.requestSubscribeMessage / web Notification）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `templateId` | `string` | — | 模板 id（wx 需要先在公众平台申请） |
+| `granted` | `boolean` | — | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
+| `status` | `string` | — | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
+
 ## 错误码
 
 | code | 说明 |

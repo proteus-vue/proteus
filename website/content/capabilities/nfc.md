@@ -128,6 +128,25 @@ getAdapter(): NfcAdapter
 
 ## 类型引用
 
+### `NFCAPI`
+
+★能力颗粒度对齐：C37 NFC 操作接口（原仅 getHCEState 状态探测 → HCE 卡模拟 + 消息收发）
+HCE = Host Card Emulation（手机模拟卡）；APDU 收发 + 事件订阅。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | — | 平台是否支持 NFC |
+| `available` | `boolean` | — | NFC 当前可用（已开启） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `startHCE` | `startHCE(aidList: string[]): Promise<CapResult<void>>` | 启动 HCE（模拟卡；aidList 应用标识） |
+| `stopHCE` | `stopHCE(): Promise<CapResult<void>>` | 停止 HCE |
+| `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | 发送 APDU 响应（收到 onHCEMessage 后回） |
+| `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | 订阅 HCE 消息（返回取消） |
+| `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | 订阅 HCE 状态变化（返回取消） |
+| `getAdapter` | `getAdapter(): NfcAdapter` | ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 |
+
 ### `NfcAdapter`
 
 ★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接）

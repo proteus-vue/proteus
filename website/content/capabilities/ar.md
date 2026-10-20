@@ -69,6 +69,13 @@ isSupported(version?: 'v1' | 'v2'): Promise<CapResult<boolean>>
 
 ## 类型引用
 
+### `ARAPI`
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `createSession` | `createSession(options?: AROptions): ARSessionHandle` | 创建视觉算法会话 |
+| `isSupported` | `isSupported(version?: 'v1' \| 'v2'): Promise<CapResult<boolean>>` | 查询设备是否支持视觉算法。 |
+
 ### `AROptions`
 
 | 属性 | 类型 | 默认值 | 说明 |

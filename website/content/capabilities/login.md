@@ -44,6 +44,18 @@ useLogin(provider?: string): Promise<CapResult<LoginResult>>
 | `code` | `string` | 否 | 登录凭证（wx code，服务端换 session 用） |
 | `token` | `string` | 否 | 令牌（第三方 provider 直接下发 token 时） |
 
+## 类型引用
+
+### `LoginResult`
+
+C41 登录结果（wx.login → code；web/其它 provider → token/授权信息）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `provider` | `string` | — | 登录渠道（wechat / host-provider …） |
+| `code` | `string` | — | 登录凭证（wx code，服务端换 session 用） |
+| `token` | `string` | — | 令牌（第三方 provider 直接下发 token 时） |
+
 ## 错误码
 
 | code | 说明 |

@@ -61,6 +61,19 @@ disable(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
+## 类型引用
+
+### `NavigationGuardAPI`
+
+★权威标尺缺口 C75：导航卸载拦截（`useNavigationGuard()`）。
+wx：`wx.enableAlertBeforeUnload` / `disableAlertBeforeUnload`（返回/关闭时弹确认）；
+web：`beforeunload` 事件承接（浏览器原生行为）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `enable` | `enable(message: string): Promise<CapResult<void>>` | 开启卸载前确认弹窗。 |
+| `disable` | `disable(): Promise<CapResult<void>>` | 关闭卸载前确认弹窗 |
+
 ## 错误码
 
 | code | 说明 |

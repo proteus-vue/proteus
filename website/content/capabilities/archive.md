@@ -44,6 +44,18 @@ useArchive(options: ArchiveOptions): Promise<CapResult<void>>
 | `data` | `void` | 成功时无载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
+## 类型引用
+
+### `ArchiveOptions`
+
+C44 压缩选项（wx.compressFile / web 无标准 → 降级 undefined）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `src` | `string` | — | 源文件路径 |
+| `dest` | `string` | — | 目标路径（缺省同目录） |
+| `quality` | `number` | — | 图片压缩质量 0-100（wx 支持） |
+
 ## 错误码
 
 | code | 说明 |

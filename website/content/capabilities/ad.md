@@ -82,6 +82,18 @@ banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle
 
 ## 类型引用
 
+### `AdAPI`
+
+★组件实例 API 对齐：C64 广告句柄（`useAd()`）。
+wx：`wx.createRewardedVideoAd` / `createInterstitialAd` / `createBannerAd`；
+web：无广告联盟标准 API → 创建时抛 `ad.unsupported`（诚实降级，宿主可注入自建广告桥）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `rewardedVideo` | `rewardedVideo(adUnitId: string): RewardedVideoAdHandle` | 创建激励视频广告（按 adUnitId 缓存实例——同 id 复用） |
+| `interstitial` | `interstitial(adUnitId: string): InterstitialAdHandle` | 创建插屏广告 |
+| `banner` | `banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle` | 创建横幅广告 |
+
 ### `RewardedVideoAdHandle`
 
 激励视频广告句柄（wx.createRewardedVideoAd）

@@ -40,6 +40,18 @@ useWeRun(): Promise<CapResult<WeRunData>>
 | `iv` | `string` | 是 | — |
 | `cloudID` | `string` | 否 | cloudID（小程序云开发场景免解密） |
 
+## 类型引用
+
+### `WeRunData`
+
+★颗粒度对齐 C3：C56 微信运动（wx.getWeRunData → 加密数据需后端解密）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `encryptedData` | `string` | — | 加密的步数数据（wx.getWeRunData 返回的 cloudID/encryptedData；需业务后端解密） |
+| `iv` | `string` | — | — |
+| `cloudID` | `string` | — | cloudID（小程序云开发场景免解密） |
+
 ## 错误码
 
 | code | 说明 |

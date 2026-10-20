@@ -98,6 +98,19 @@ isConnected(): boolean
 
 **返回值**：`boolean`
 
+## 类型引用
+
+### `SocketTaskHandle`
+
+C28 useSocketTask 句柄（Hook 层——方法包 CapResult，G-32.4）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| `close` | `close(code?: number, reason?: string): Promise<CapResult<void>>` | 关闭连接（code/reason 透传给对端） |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+| `isConnected` | `isConnected(): boolean` | 连接是否已建立 |
+
 ## 错误码
 
 | code | 说明 |

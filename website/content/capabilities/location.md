@@ -40,6 +40,18 @@ useLocation(): Promise<CapResult<Coords>>
 | `altitude` | `number` | 否 | 海拔（米；平台不支持时缺省） |
 | `speed` | `number` | 否 | 速度（米/秒；平台不支持时缺省） |
 
+## 类型引用
+
+### `Coords`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `latitude` | `number` | — | 纬度（WGS84，浮点度数） |
+| `longitude` | `number` | — | 经度（WGS84，浮点度数） |
+| `accuracy` | `number` | — | 定位精度（米，半径；越小越准） |
+| `altitude` | `number` | — | 海拔（米；平台不支持时缺省） |
+| `speed` | `number` | — | 速度（米/秒；平台不支持时缺省） |
+
 ## 错误码
 
 | code | 说明 |

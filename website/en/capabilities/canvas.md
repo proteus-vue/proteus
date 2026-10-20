@@ -33,7 +33,7 @@ Param,Type,Required,Doc
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `CanvasController` | Success payload (methods below) |
+| `data` | `CanvasController` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
 ## Methods
@@ -99,6 +99,12 @@ offscreen(width: number, height: number, type?: '2d' | 'webgl'): CapResult<Offsc
 | `type` | `'2d' \| 'webgl'` | No | — |
 
 **Returns**: `CapResult<OffscreenCanvasHandle>`
+
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `id` | `string` | Yes | 画布标识（wx canvas-id；web 选择器/id，已去 `#` 前缀） |
 
 ## Referenced types
 

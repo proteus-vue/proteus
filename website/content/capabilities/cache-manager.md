@@ -182,6 +182,29 @@ on(event: 'request' | 'enterWeakNetwork' | 'exitWeakNetwork', cb: (payload: unkn
 
 ## 类型引用
 
+### `CacheManagerHandle`
+
+★权威标尺缺口 C72：缓存管理（`useCacheManager(options?)`）。
+wx：`wx.createCacheManager`（HTTP 请求缓存——规则/启停/清理/删除 + 事件）；
+web：无对等（可用 Service Worker / Cache Storage）→ 创建时 throw 诚实降级。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `rules` | `CacheRule[]` | — | 缓存规则（可读写） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `addRules` | `addRules(rules: CacheRule[]): Promise<CapResult<string[]>>` | 添加缓存规则。 |
+| `deleteRules` | `deleteRules(ids: string[]): Promise<CapResult<void>>` | 删除缓存规则。 |
+| `clearRules` | `clearRules(): Promise<CapResult<void>>` | 清空全部规则 |
+| `start` | `start(): Promise<CapResult<void>>` | 启动缓存 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止缓存 |
+| `deleteCache` | `deleteCache(id: string): Promise<CapResult<void>>` | 删除指定 URL 的缓存。 |
+| `deleteCaches` | `deleteCaches(ids: string[]): Promise<CapResult<void>>` | 批量删除缓存。 |
+| `clearCaches` | `clearCaches(): Promise<CapResult<void>>` | 清空全部缓存 |
+| `getState` | `getState(): CacheManagerState` | 读取当前配置 |
+| `on` | `on(event: 'request' \| 'enterWeakNetwork' \| 'exitWeakNetwork', cb: (payload: unknown) => void): () => void` | 订阅缓存事件。 |
+
 ### `CacheRule`
 
 缓存规则（wx.addRules 的字符串 / 正则形态简化为声明式）

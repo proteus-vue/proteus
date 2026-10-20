@@ -70,6 +70,16 @@ audioPlayer(): MediaAudioPlayerHandle
 
 ## 类型引用
 
+### `MediaProcessingAPI`
+
+★权威标尺缺口 C70：媒体处理句柄（`useMediaProcessing()`）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `container` | `container(): MediaContainerHandle` | 创建视频轨道合成容器 |
+| `videoDecoder` | `videoDecoder(): VideoDecoderHandle` | 创建视频解码器（取帧） |
+| `audioPlayer` | `audioPlayer(): MediaAudioPlayerHandle` | 创建多音源混音播放器 |
+
 ### `MediaContainerHandle`
 
 | 方法 | 签名 | 说明 |

@@ -52,6 +52,17 @@ onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void
 
 **返回值**：`() => void`——取消订阅函数
 
+## 类型引用
+
+### `PosterAPI`
+
+★权威标尺缺口 C80：分享海报（`usePoster()`）。
+wx：`wx.onGeneratePoster`（分享海报生成事件）；web：无对等 → Err 诚实降级。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onGenerate` | `onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void` | 订阅海报生成事件。 |
+
 ## 错误码
 
 | code | 说明 |

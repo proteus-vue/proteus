@@ -64,6 +64,16 @@ disconnect(): void
 
 ## 类型引用
 
+### `MediaQueryObserver`
+
+★组件实例 API 对齐：C60 媒体查询句柄（`useMediaQuery()`）。
+wx：`wx.createMediaQueryObserver()`；web：`window.matchMedia`（条件 → media query 串）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `observe` | `observe(condition: MediaQueryCondition, cb: (result: MediaQueryResult) => void): void` | 开始观察媒体查询条件。 |
+| `disconnect` | `disconnect(): void` | 停止观察（释放） |
+
 ### `MediaQueryCondition`
 
 媒体查询条件（wx MediaQueryObserver.observe options——对齐官方字段）

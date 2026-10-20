@@ -37,6 +37,15 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | `online` | `boolean` | 是 | 是否联网（navigator.onLine / wx.getNetworkType 归一） |
 | `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | 是 | 网络类型（web 无细分 → unknown；离线 → none） |
 
+## 类型引用
+
+### `NetworkType`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `online` | `boolean` | — | 是否联网（navigator.onLine / wx.getNetworkType 归一） |
+| `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | — | 网络类型（web 无细分 → unknown；离线 → none） |
+
 ## 错误码
 
 | code | 说明 |

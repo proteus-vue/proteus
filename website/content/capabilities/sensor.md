@@ -47,6 +47,21 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 | `heading` | `number` | 否 | 罗盘方位（0-360°，参考正北；仅 compass） |
 | `timestamp` | `number` | 否 | 采样时间戳（ms） |
 
+## 类型引用
+
+### `SensorSample`
+
+C5 传感器采样（一次性读取当前值；compass 带 heading）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `kind` | `SensorKind` | — | 传感器类型（回显请求的 kind） |
+| `x` | `number` | — | X 轴加速度/分量（accelerometer/gyroscope） |
+| `y` | `number` | — | Y 轴加速度/分量 |
+| `z` | `number` | — | Z 轴加速度/分量 |
+| `heading` | `number` | — | 罗盘方位（0-360°，参考正北；仅 compass） |
+| `timestamp` | `number` | — | 采样时间戳（ms） |
+
 ## 错误码
 
 | code | 说明 |

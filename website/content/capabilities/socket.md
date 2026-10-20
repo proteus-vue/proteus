@@ -30,6 +30,59 @@ useSocket(): CapResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectO
 | `data` | `{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectOptions): TCPSocketHandle }` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
+## 类型引用
+
+### `UDPSocketHandle`
+
+★权威标尺缺口 C69-a：UDP Socket（`useUDPSocket()`）。
+wx：`wx.createUDPSocket()`；web：无 UDP 标准 API（浏览器不支持裸 UDP）→ Err 诚实降级。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `bind` | `bind(port?: number): Promise<CapResult<void>>` | 绑定本地端口（缺省系统分配） |
+| `connect` | `connect(address: string, port: number): Promise<CapResult<void>>` | 预连目标地址（配合 write）。 |
+| `send` | `send(address: string, port: number, message: string \| ArrayBuffer, broadcast?: boolean): Promise<CapResult<void>>` | 发送消息。 |
+| `write` | `write(address: string, port: number, message: string \| ArrayBuffer): Promise<CapResult<void>>` | 向已 connect 的地址发送（少写地址；需先 connect）。 |
+| `onMessage` | `onMessage(cb: (msg: UdpMessage) => void): () => void` | 订阅收到的消息。 |
+| `onError` | `onError(cb: (err: { errMsg: string }) => void): () => void` | 订阅错误 |
+| `close` | `close(): Promise<CapResult<void>>` | 关闭 socket（释放） |
+
+### `TCPSocketConnectOptions`
+
+TCP Socket 连接选项
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `address` | `string` | — | 目标地址 |
+| `port` | `number` | — | 目标端口 |
+| `timeout` | `number` | `2000` | 连接超时（ms，缺省 2000） |
+
+### `TCPSocketHandle`
+
+★权威标尺缺口 C69-b：TCP Socket（`useTCPSocket(options?)`）。
+wx：`wx.createTCPSocket()`；web：无原始 TCP 标准 API（浏览器不支持）→ Err 诚实降级。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `connect` | `connect(options: TCPSocketConnectOptions): Promise<CapResult<void>>` | 连接目标地址。 |
+| `write` | `write(data: string \| ArrayBuffer): Promise<CapResult<void>>` | 写入数据。 |
+| `onMessage` | `onMessage(cb: (res: { message: ArrayBuffer; localInfo?: unknown; remoteInfo?: unknown }) => void): () => void` | 订阅收到的消息。 |
+| `onConnect` | `onConnect(cb: () => void): () => void` | 订阅连接建立成功 |
+| `onError` | `onError(cb: (err: { errMsg: string }) => void): () => void` | 订阅错误 |
+| `onClose` | `onClose(cb: () => void): () => void` | 订阅连接关闭 |
+| `close` | `close(): Promise<CapResult<void>>` | 关闭连接（释放） |
+
+### `UdpMessage`
+
+UDP 收到的消息（wx UDPSocket onMessage）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `message` | `ArrayBuffer` | — | 消息载荷（ArrayBuffer） |
+| `remoteAddress` | `string` | — | 发送端地址 |
+| `remotePort` | `number` | — | 发送端端口 |
+| `family` | `string` | — | 发送端协议族（IPv4 / IPv6） |
+
 ## 错误码
 
 | code | 说明 |

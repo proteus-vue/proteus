@@ -40,6 +40,18 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 | `version` | `string` | 是 | 系统版本号（如 17.4） |
 | `browser` | `string` | 否 | 浏览器/容器名（web 端有；MP 缺省） |
 
+## 类型引用
+
+### `CapDeviceInfo`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `platform` | `string` | — | 平台标识（ios / android / devtools / desktop …） |
+| `model` | `string` | — | 设备型号（如 iPhone 15 Pro） |
+| `os` | `string` | — | 操作系统名（iOS / Android / Windows / macOS） |
+| `version` | `string` | — | 系统版本号（如 17.4） |
+| `browser` | `string` | — | 浏览器/容器名（web 端有；MP 缺省） |
+
 ## 错误码
 
 | code | 说明 |

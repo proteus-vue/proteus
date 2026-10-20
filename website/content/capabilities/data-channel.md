@@ -79,6 +79,23 @@ onMessage(cb: (data: string) => void): () => void
 
 **返回值**：`() => void`
 
+## 类型引用
+
+### `DataChannelOptions`
+
+C31 数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `channelId` | `string` | — | 通道标识（业务自定义，跨端路由用） |
+
+### `DataChannelHandle`
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+
 ## 错误码
 
 | code | 说明 |

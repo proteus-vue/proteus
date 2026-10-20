@@ -54,6 +54,12 @@ navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
 
 ## 类型引用
 
+### `MiniProgramAPI`
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | 跳转到其他小程序 |
+
 ### `MiniProgramNavOptions`
 
 C47 小程序跳转（wx.navigateToMiniProgram）

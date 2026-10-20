@@ -89,6 +89,21 @@ isPictureInPictureActive(): Promise<CapResult<boolean>>
 
 **返回值**：`Promise<CapResult<boolean>>`
 
+## 类型引用
+
+### `ScreenCaptureAPI`
+
+★权威标尺缺口 C71：录屏 / 截屏（`useScreenCapture()`）。
+wx：`getScreenRecordingState`/`onScreenRecordingStateChanged`/`onUserCaptureScreen`/`checkIsPictureInPictureActive`；
+web：无标准 → Err 诚实降级。★App 三端**逐方法独立分档**（#1083）：查不了 ⇒ `unsupported`，**绝不伪造 `false`**。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `getRecordingState` | `getRecordingState(): Promise<CapResult<'on' \| 'off'>>` | 查询当前系统录屏状态（on 录制中 / off 未录制） |
+| `onRecordingStateChange` | `onRecordingStateChange(cb: (state: 'on' \| 'off') => void): () => void` | 订阅系统录屏状态变化。 |
+| `onUserCapture` | `onUserCapture(cb: () => void): () => void` | 订阅用户主动截屏事件。 |
+| `isPictureInPictureActive` | `isPictureInPictureActive(): Promise<CapResult<boolean>>` | 查询当前是否处于画中画（Picture-in-Picture）状态 |
+
 ## 错误码
 
 | code | 说明 |

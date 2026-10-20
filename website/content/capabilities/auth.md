@@ -92,6 +92,24 @@ subscribe(cb: (token: string | null) => void): () => void
 | `token` | `string \| null` | 是 | 当前令牌（未登录 null；响应式——UI 直接绑定） |
 | `isAuthenticated` | `boolean` | 是 | 是否已登录（token 非空即真） |
 
+## 类型引用
+
+### `AuthState`
+
+C33 认证状态（组合：createAuth 凭证托管 + login 桥 + 存储桥；业务只读 AuthState 不读 raw token——铁律 2）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `token` | `string \| null` | — | 当前令牌（未登录 null；响应式——UI 直接绑定） |
+| `isAuthenticated` | `boolean` | — | 是否已登录（token 非空即真） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `login` | `login(provider?: string): Promise<CapResult<string>>` | 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） |
+| `logout` | `logout(): Promise<CapResult<void>>` | 登出：清 token |
+| `setToken` | `setToken(token: string \| null): void` | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
+| `subscribe` | `subscribe(cb: (token: string \| null) => void): () => void` | 订阅登录态变化（响应式 UI 联动） |
+
 ## 错误码
 
 | code | 说明 |

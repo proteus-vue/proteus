@@ -93,6 +93,19 @@ list(): Record<string, string>
 
 **返回值**：`Record<string, string>`
 
+## 类型引用
+
+### `CookieJar`
+
+C32 Cookie 罐（web document.cookie / wx storage 兜底）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `get` | `get(name: string): string \| undefined` | 读取 cookie |
+| `set` | `set(name: string, value: string, maxAge?: number): void` | 写入 cookie（maxAge 秒；缺省会话级） |
+| `remove` | `remove(name: string): void` | 删除 cookie |
+| `list` | `list(): Record<string, string>` | 列出全部 cookie |
+
 ## 错误码
 
 | code | 说明 |

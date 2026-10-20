@@ -77,6 +77,18 @@ error(message: string, data?: unknown): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
+## 类型引用
+
+### `Logger`
+
+C35 Logger（useLog 句柄——console + 上报）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `log` | `log(message: string, data?: unknown): Promise<CapResult<void>>` | 普通日志 |
+| `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
+| `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
+
 ## 错误码
 
 | code | 说明 |

@@ -33,7 +33,7 @@ useAudio(src?: string): CapResult<AudioController>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `AudioController` | 成功载荷（方法结构见下） |
+| `data` | `AudioController` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
 ## 方法
@@ -149,6 +149,38 @@ on(event: 'canplay' | 'play' | 'pause' | 'stop' | 'ended' | 'timeupdate' | 'erro
 | `cb` | `(payload: unknown) => void` | 是 | 事件处理器 |
 
 **返回值**：`() => void`——取消订阅函数
+
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `currentTime` | `number` | 是 | 当前播放进度（秒） |
+| `duration` | `number` | 是 | 音频时长（秒） |
+| `paused` | `boolean` | 是 | 是否暂停 |
+
+## 类型引用
+
+### `AudioController`
+
+★组件实例 API 对齐：C62 音频控制器（`useAudio(options?)`）。
+wx：`wx.createInnerAudioContext()`；web：`Audio` 元素（HTMLAudioElement）适配。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `currentTime` | `number` | — | 当前播放进度（秒） |
+| `duration` | `number` | — | 音频时长（秒） |
+| `paused` | `boolean` | — | 是否暂停 |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `play` | `play(src?: string): Promise<CapResult<void>>` | 播放。 |
+| `pause` | `pause(): Promise<CapResult<void>>` | 暂停 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止 |
+| `seek` | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定位置。 |
+| `setVolume` | `setVolume(volume: number): void` | 设置音量（0–1） |
+| `setLoop` | `setLoop(loop: boolean): void` | 设置是否循环 |
+| `destroy` | `destroy(): void` | 释放音频资源 |
+| `on` | `on(event: 'canplay' \| 'play' \| 'pause' \| 'stop' \| 'ended' \| 'timeupdate' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅音频事件（canplay / play / pause / stop / ended / timeupdate / error）。 |
 
 ## 错误码
 

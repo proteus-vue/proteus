@@ -154,6 +154,24 @@ batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void
 
 **返回值**：`Promise<CapResult<void>>`
 
+## 类型引用
+
+### `CompatStorage`
+
+存储契约（useStorage / reactive storage 底座）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `set` | `set(key: string, value: unknown): void` | 同步写入 |
+| `remove` | `remove(key: string): void` | 同步删除 |
+| `clear` | `clear(): void` | 同步清空 |
+| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | 异步写入（大值不阻塞主线程） |
+| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | 异步删除 |
+| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | 异步清空 |
+| `info` | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | 存储信息（keys / 已用 / 上限） |
+| `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
+| `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
+
 ## 错误码
 
 | code | 说明 |

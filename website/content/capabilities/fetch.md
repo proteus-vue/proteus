@@ -54,6 +54,47 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `status` | `number` | ★此前被 `useFetch` 丢弃 ⇒ 业务无法区分 404/500 |
 | `headers` | `Record<string, string>` | — |
 
+## 类型引用
+
+### `FetchConfig`
+
+useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底层做完但**门面没开口**——现已全部开放。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `method` | `HttpMethod` | `GET` | HTTP 方法（缺省 GET） |
+| `data` | `unknown` | — | 请求体（POST/PUT；对象自动 JSON 序列化） |
+| `params` | `Record<string, unknown>` | — | URL 查询参数（拼接到 query string） |
+| `headers` | `Record<string, string>` | — | 自定义请求头 |
+| `timeout` | `number` | — | 超时（ms；超时 → Err） |
+| `responseType` | `'text' \| 'json' \| 'arraybuffer'` | — | ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 |
+| `savePath` | `string` | — | ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 |
+| `onChunk` | `(chunk: Uint8Array, seq: number) => void` | — | ★#1122 流式消费：每块回调一次，内存不随响应体增长。**回调同步**（宿主回推的 JS 线程上）。 App 逐块回推；Web 用 ReadableStream（节奏不同）；**MP 不支持** ⇒ unsupported。 |
+| `upload` | `UploadSpec` | — | ★#1122 流式上传（仅 App）：宿主自读文件、自拼 multipart、边读边发。Web/MP 用各自上传 API ⇒ unsupported。 |
+| `signal` | `AbortSignalLike` | — | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
+
+### `UploadSpec`
+
+★#1122：流式上传规格（宿主据此自读文件 + 自拼 multipart）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `path` | `string` | — | 沙箱相对路径（与 `fs.readBytes` 同一套校验：拒绝绝对路径与 `..`） |
+| `fieldName` | `string` | — | multipart 字段名（如 `file`） |
+| `filename` | `string` | — | 上传文件名（进 `Content-Disposition` 的 filename） |
+| `boundary` | `string` | — | multipart 边界串——**必须与 `Content-Type` 头里的一致** |
+| `formData` | `Record<string, string>` | — | 普通表单字段（按插入序编码） |
+
+### `AbortSignalLike`
+
+最小取消信号契约（兼容原生 `AbortSignal` 与 `createAbortController()` 的产物）。
+★只要求 `aborted` 可读 ⇒ 浏览器原生 `AbortSignal` 与 App 侧 `createAbortController().signal`
+都能直接传入 `useFetch(url, { signal })`，无需适配层。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `aborted` | `boolean` | — | 是否已取消。`useFetch` 在请求期间读它；取消后 Promise 以 `fetch.aborted` 结束。 |
+
 ## 错误码
 
 | code | 说明 |

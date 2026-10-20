@@ -149,6 +149,25 @@ on(event: 'statechange' | 'netstatus' | 'error', cb: (payload: unknown) => void)
 
 **返回值**：`() => void`——取消订阅函数
 
+## 类型引用
+
+### `LivePusherController`
+
+★组件实例 API 对齐：C63 直播推流控制器（`useLivePusher(id)`）。
+wx：`wx.createLivePusherContext(id)`；web：无标准推流 API → 各方法 Err 诚实降级（宿主桥）。
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `start` | `start(): Promise<CapResult<void>>` | 开始推流 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止推流 |
+| `pause` | `pause(): Promise<CapResult<void>>` | 暂停推流 |
+| `resume` | `resume(): Promise<CapResult<void>>` | 恢复推流 |
+| `switchCamera` | `switchCamera(): Promise<CapResult<void>>` | 切换前后摄像头 |
+| `toggleTorch` | `toggleTorch(): Promise<CapResult<void>>` | 开启/关闭闪光灯 |
+| `snapshot` | `snapshot(): Promise<CapResult<string>>` | 推流截图（返回临时文件路径 / data URL） |
+| `sendMessage` | `sendMessage(msg: string): Promise<CapResult<void>>` | 发送 SEI 消息 |
+| `on` | `on(event: 'statechange' \| 'netstatus' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅推流事件（statechange / netstatus / error）。 |
+
 ## 错误码
 
 | code | 说明 |

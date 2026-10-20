@@ -75,6 +75,14 @@ connect(SSID: string, password?: string): Promise<CapResult<void>>
 
 ## 类型引用
 
+### `WifiAPI`
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `getConnected` | `getConnected(): Promise<CapResult<WifiInfo>>` | 当前连接的 WiFi（wx.getConnectedWifi） |
+| `list` | `list(): Promise<CapResult<WifiInfo[]>>` | 已扫描到的 WiFi 列表（需 wx.startWifi + onGetWifiList 授权；wx.getWifiList → onGetWifiList） |
+| `connect` | `connect(SSID: string, password?: string): Promise<CapResult<void>>` | 连接指定 WiFi（wx.connectWifi——Android 支持；iOS/部分基础库 → Err） |
+
 ### `WifiInfo`
 
 ★颗粒度对齐 C3：C55 WiFi（wx.getConnectedWifi / getWifiList / connectWifi——Android 连接）

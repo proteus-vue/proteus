@@ -436,6 +436,43 @@ appendFileSync(path: string, data: string): CapResult<void>
 
 ## 类型引用
 
+### `FSAdapter`
+
+C43 FSAdapter（useFileSystem 句柄——方法均返回 Result<T>）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | — | 能力可用性（内存降级也算可用；false = 完全不可用） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `readFile` | `readFile(path: string): Promise<CapResult<string>>` | 读取文本文件（UTF-8）。 |
+| `writeFile` | `writeFile(path: string, data: string): Promise<CapResult<void>>` | 写入文件（覆盖；不存在则创建）。 |
+| `appendFile` | `appendFile(path: string, data: string): Promise<CapResult<void>>` | 追加写入（在文件尾部追加）。 |
+| `copyFile` | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | 复制文件。 |
+| `rename` | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | 重命名 / 移动。 |
+| `remove` | `remove(path: string): Promise<CapResult<void>>` | 删除文件。 |
+| `exists` | `exists(path: string): Promise<CapResult<boolean>>` | 文件 / 目录是否存在。 |
+| `stat` | `stat(path: string): Promise<CapResult<FileStat>>` | 获取文件 / 目录信息（大小 / 时间 / 类型）。 |
+| `mkdir` | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 创建目录。 |
+| `rmdir` | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 删除目录。 |
+| `readdir` | `readdir(path: string): Promise<CapResult<string[]>>` | 读取目录，返回条目名列表。 |
+| `getFileInfo` | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | 获取文件摘要（大小 + 摘要值）。 |
+| `saveFile` | `saveFile(tempPath: string): Promise<CapResult<string>>` | 保存临时文件到本地（返回持久路径）。 |
+| `getSavedFileList` | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | 已保存文件列表 |
+| `removeSavedFile` | `removeSavedFile(path: string): Promise<CapResult<void>>` | 删除已保存文件。 |
+| `unzip` | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | 解压 zip。 |
+| `readFileSync` | `readFileSync(path: string): CapResult<string>` | 同步读文件（阻塞主线程——仅小文件/启动期用） |
+| `writeFileSync` | `writeFileSync(path: string, data: string): CapResult<void>` | 同步写文件（阻塞主线程） |
+| `existsSync` | `existsSync(path: string): CapResult<boolean>` | 同步判断存在 |
+| `statSync` | `statSync(path: string): CapResult<FileStat>` | 同步取文件信息 |
+| `readdirSync` | `readdirSync(path: string): CapResult<string[]>` | 同步读目录 |
+| `mkdirSync` | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | 同步创建目录 |
+| `renameSync` | `renameSync(oldPath: string, newPath: string): CapResult<void>` | 同步重命名 |
+| `unlinkSync` | `unlinkSync(path: string): CapResult<void>` | 同步删除 |
+| `copyFileSync` | `copyFileSync(src: string, dest: string): CapResult<void>` | 同步复制 |
+| `appendFileSync` | `appendFileSync(path: string, data: string): CapResult<void>` | 同步追加 |
+
 ### `FileStat`
 
 文件/目录信息（wx.Stats 子集）

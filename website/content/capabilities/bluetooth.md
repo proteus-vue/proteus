@@ -291,6 +291,38 @@ getRSSI(deviceId: string): Promise<CapResult<number>>
 
 ## 类型引用
 
+### `BluetoothAPI`
+
+★能力颗粒度对齐（docs/capability-granularity-alignment.md）：C36 蓝牙 BLE 操作接口
+计划 BluetoothAPI 的落地——连接/服务/特征值/通知/发现/断开全套（原实现只有状态探测）。
+方法统一返回 Promise<CapResult<T>>（G-32.4）；订阅类返回取消函数；不支持 → web/缺桥 Err。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | — | 平台是否支持蓝牙 |
+| `available` | `boolean` | — | 适配器已打开（可用） |
+| `devices` | `string[]` | — | 已配对/发现的设备名（wx.getBluetoothDevices；web 需用户手势不列） |
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `close` | `close(): Promise<CapResult<void>>` | 关闭蓝牙适配器（释放系统资源；后续操作需重新 openBluetoothAdapter） |
+| `getAdapterState` | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | 获取适配器状态（available 是否可用 / discovering 是否在搜索） |
+| `startDiscovery` | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | 开始搜索附近 BLE 设备。 |
+| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止搜索附近设备 |
+| `onDeviceFound` | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | 订阅「发现新设备」事件。 |
+| `getDevices` | `getDevices(): Promise<CapResult<BleDevice[]>>` | 获取已发现设备列表 |
+| `getConnectedDevices` | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | 获取已连接设备列表 |
+| `connect` | `connect(deviceId: string): Promise<CapResult<void>>` | 连接指定设备。 |
+| `disconnect` | `disconnect(deviceId: string): Promise<CapResult<void>>` | 断开指定设备。 |
+| `onConnectionStateChange` | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | 订阅「连接状态变化」事件。 |
+| `getServices` | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | 获取设备的服务（Service）列表。 |
+| `getCharacteristics` | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | 获取服务下的特征值（Characteristic）列表。 |
+| `read` | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | 读特征值。 |
+| `write` | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | 写特征值。 |
+| `setNotify` | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | 订阅 / 取消订阅特征值通知。 |
+| `onCharacteristicValueChange` | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | 订阅「特征值变化」通知数据。 |
+| `getRSSI` | `getRSSI(deviceId: string): Promise<CapResult<number>>` | 读取设备信号强度（RSSI）。 |
+
 ### `BleDevice`
 
 BLE 设备（wx.BluetoothDevice 子集）

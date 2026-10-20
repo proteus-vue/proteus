@@ -37,6 +37,15 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 | `type` | `'portrait' \| 'landscape'` | 是 | 屏幕方向 |
 | `angle` | `number` | 是 | 旋转角度（0/90/180/-90 度） |
 
+## 类型引用
+
+### `OrientationInfo`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `type` | `'portrait' \| 'landscape'` | — | 屏幕方向 |
+| `angle` | `number` | — | 旋转角度（0/90/180/-90 度） |
+
 ## 错误码
 
 | code | 说明 |
