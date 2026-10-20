@@ -104,3 +104,61 @@ final class ProteusTextLayer: CATextLayer {
         ctx.restoreGState()
     }
 }
+
+/* ────────────────────────── 像素格式自检（诊断） ────────────────────────── */
+
+/// ★#1105：像素格式/方向自检——从 `selfdraw-scene.swift` 机械搬迁。
+///   自包含（只用 UIKit + CGContext），不依赖视图或内核状态 ⇒ 独立成扩展。
+///   ★它属于 `SelfDrawBridge`（`SelfDrawExports` 协议成员），不是 `SelfDrawView`。
+///   用途：证明「栅格化 → 读回」这条链的字节序与 y 方向与预期一致
+///   （本仓实测过：方向反了会让像素判据全绿但图是上下颠倒的）。
+extension SelfDrawBridge {
+    func pixelFormatSelfTest() -> String {
+        var probes: [String: Any] = [:]
+        var allOk = true
+        for (name, color) in [("red", UIColor.red), ("green", UIColor.green), ("blue", UIColor.blue)] {
+            let w = 4, h = 4, bpr = 16
+            var buf = [UInt8](repeating: 0, count: bpr * h)
+            buf.withUnsafeMutableBytes { raw in
+                guard let base = raw.baseAddress,
+                      let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
+                                          bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                              | CGBitmapInfo.byteOrder32Big.rawValue) else { return }
+                ctx.setFillColor(color.cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+            }
+            let got = String(format: "#%02X%02X%02X", buf[0], buf[1], buf[2])
+            let expect = name == "red" ? "#FF0000" : (name == "green" ? "#00FF00" : "#0000FF")
+            let pass = got == expect
+            allOk = allOk && pass
+            probes[name] = ["expect": expect, "got": got, "pass": pass]
+        }
+        // ★方向自检：上红下蓝（用与 samplePixels **完全同一条**建上下文+翻转代码路径）
+        let w = 4, h = 8, bpr = 16
+        var buf2 = [UInt8](repeating: 0, count: bpr * h)
+        buf2.withUnsafeMutableBytes { raw in
+            guard let base = raw.baseAddress,
+                  let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
+                                      bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                          | CGBitmapInfo.byteOrder32Big.rawValue) else { return }
+            // ★与 samplePixels 一致的翻转（漏了这步 ⇒ 上下颠倒）
+            ctx.translateBy(x: 0, y: CGFloat(h))
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.setFillColor(UIColor.red.cgColor)                 // UIKit 上半（y 小）
+            ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+            ctx.setFillColor(UIColor.blue.cgColor)                // UIKit 下半（y 大）
+            ctx.fill(CGRect(x: 0, y: 4, width: 4, height: 4))
+        }
+        let top = String(format: "#%02X%02X%02X", buf2[0], buf2[1], buf2[2])
+        let bottom = String(format: "#%02X%02X%02X", buf2[(h - 1) * bpr], buf2[(h - 1) * bpr + 1], buf2[(h - 1) * bpr + 2])
+        let orientOk = top == "#FF0000" && bottom == "#0000FF"
+        allOk = allOk && orientOk
+        probes["orientation"] = ["expect": "top=#FF0000 bottom=#0000FF",
+                                 "got": "top=\(top) bottom=\(bottom)", "pass": orientOk,
+                                 "note": "栅格 y 递增必须对应 UIKit y 递增（上红下蓝）"]
+        return jsonString(["ok": allOk, "probes": probes,
+                           "format": "byteOrder32Big|premultipliedLast + CTM 翻转（显式声明）"])
+    }
+}

@@ -414,3 +414,56 @@ describe('★#1104 backdrop 缓存（正确性优先）', () => {
     expect(g).toMatch(/"cache_hits": cacheHits, "cache_enabled": Self\.glassBackdropCacheEnabled/)
   })
 })
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ★★★#1105：**捕获降采样密度**（滚动时唯一可调的杠杆——缓存必然失效、每次都重捕）
+ *
+ * 【真机斜率（交互 12 帧中位，缓存关闭强制每帧重捕）】
+ *   | div | px/pt | crop_px | readback | raster | metal | total |
+ *   |---|---|---|---|---|---|---|
+ *   | 2（旧默认）| 1.5 | 113220 | 1.60 | 1.24 | 1.45 | 4.37 |
+ *   | 3         | 1.0 |  50320 | 1.05 | 0.89 | 1.29 | 3.28 |（省 25%）
+ *   | 4         | 0.75|  28305 | 0.85 | 0.80 | 1.18 | 2.90 |（省 34%）
+ *   ⇒ readback+raster 随**面积**近线性降；**metal 几乎不随输入密度变**（它受输出分辨率控）
+ *     ⇒ 继续降密度收益递减。
+ *
+ * 【画质（像素级量化，同一屏同一次按住态截图）】
+ *   · glass-nav（玻璃覆盖纯色内容）：div2 vs div4 **逐像素完全一致（0 差异）**
+ *   · mine（玻璃覆盖渐变+文字）：div2 vs div4 仅 **0.086% 像素**有差异，**最大差 2/255**，
+ *     无任何像素超过 8/255 ⇒ 肉眼不可辨
+ *   ⇒ 玻璃本身是模糊材质，降采样后再放大看不出差别（这正是 #863 就采用的思路，
+ *     本轮只是把"降到多少"用数据钉住）。
+ * ════════════════════════════════════════════════════════════════════════════ */
+describe('★#1105 玻璃捕获降采样密度', () => {
+  it('密度由单一常量控制（不是散落的魔法数）+ 有取证开关', () => {
+    const s = read(IOS_SELFDRAW)
+    expect(s).toMatch(/static let glassCaptureDiv/)
+    expect(s).toMatch(/PROTEUS_GLASS_CAPTURE_DIV/)
+    // 默认值 = 2（**本轮不改**）：div=3 虽省 25%，但"逐点最大差"测不出 Android #1013
+    // 记录过的**网格状插值织纹**（空间频率伪影）⇒ 证据标准不够，先留既有行为。
+    expect(s).toMatch(/guard let raw = ProcessInfo\.processInfo\.environment\["PROTEUS_GLASS_CAPTURE_DIV"\][\s\S]{0,120}?else \{ return 2 \}/)
+  })
+
+  it('捕获密度用该常量（不得再有写死的输入密度）', () => {
+    const g = read(IOS_GLASS)
+    expect(g).toMatch(/scale \/ Self\.glassCaptureDiv/)
+    // ★只约束**输入捕获密度**：`glassOutScale = max(1, scale / 2)` 是**输出**分辨率，
+    //   与捕获密度是两个量（金属着色受输出控、捕获受输入控，本轮实测 metal 不随密度变）。
+    //   ⇒ 判据不能笼统禁 `scale / 2`，那会误伤输出那一处。
+    const captureLines = g.split('\n')
+      .filter((l) => /capturePxPerPoint\s*=/.test(l))
+      .filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))   // 排除注释（注释里会引历史写法）
+    expect(captureLines.length, '找不到 capturePxPerPoint 的代码赋值').toBeGreaterThan(0)
+    for (const l of captureLines) {
+      expect(l, `捕获密度仍是写死的：${l.trim()}`).toMatch(/glassCaptureDiv/)
+    }
+  })
+
+  it('★实际密度写进读数（不记密度就没法横比——样本混了不同密度不可比）', () => {
+    const g = read(IOS_GLASS)
+    expect(g).toMatch(/lastGlassCapturePxPerPoint = Double\(capturePxPerPoint\)/)
+    expect(g).toMatch(/"px_per_pt": lastGlassCapturePxPerPoint/)
+    // 每遍历史与末次读数都要带
+    expect(g).toMatch(/"px_per_pt": lastGlassCapturePxPerPoint,/)
+  })
+})

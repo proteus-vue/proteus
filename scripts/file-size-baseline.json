@@ -1,5 +1,5 @@
 {
-  "hosts/ios/ProteusHost/runtime/selfdraw-scene.swift": 8220,
+  "hosts/ios/ProteusHost/runtime/selfdraw-scene.swift": 8192,
   "packages/layout-core-rust/src/ffi.rs": 7213,
   "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java": 6618,
   "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ProteusHostView.java": 5596,

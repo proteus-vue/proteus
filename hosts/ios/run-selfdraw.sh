@@ -626,6 +626,10 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${PROTEUS_GLASS_BACKDROP_CACHE:-}" ]; then
     WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_BACKDROP_CACHE\":\"${PROTEUS_GLASS_BACKDROP_CACHE}\""
   fi
+  # ★#1105：捕获降采样除数（量「密度 vs 耗时」斜率；不设 = 2 既有行为）
+  if [ -n "${PROTEUS_GLASS_CAPTURE_DIV:-}" ]; then
+    WS_PROBE_ENV="${WS_PROBE_ENV},\"PROTEUS_GLASS_CAPTURE_DIV\":\"${PROTEUS_GLASS_CAPTURE_DIV}\""
+  fi
   if [ "$DRIVE" = "1" ]; then SA_ARGS+=(--drive); fi
   if [ -n "$TAP" ]; then SA_ARGS+=("--tap=$TAP"); fi
   if [ -n "${PUMP:-}" ]; then SA_ARGS+=("--pump=$PUMP"); fi

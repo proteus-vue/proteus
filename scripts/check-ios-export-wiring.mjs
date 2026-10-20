@@ -51,15 +51,28 @@ function protoMethods(src) {
   return [...new Set([...m[1].matchAll(/^\s*func (\w+)\(/gm)].map((x) => x[1]))].sort()
 }
 
-/** 从 `final class SelfDrawBridge` 抽实现的方法名 */
-function bridgeMethods(src) {
-  const start = src.indexOf('final class SelfDrawBridge')
-  if (start < 0) throw new Error('未找到 `final class SelfDrawBridge`')
-  // 类体到下一个顶层 `final class` 之前（同文件内）
-  const rest = src.slice(start)
-  const next = rest.indexOf('\nfinal class ', 1)
-  const body = next > 0 ? rest.slice(0, next) : rest
-  return [...new Set([...body.matchAll(/^\s*(?:@discardableResult\s+)?func (\w+)\(/gm)].map((x) => x[1]))].sort()
+/** 从 `final class SelfDrawBridge` 及其**扩展**抽实现的方法名。
+ *  ★#1105：实现可以分散在多个文件（Swift 扩展）——`pixelFormatSelfTest` 迁到 host-support.swift
+ *    后，只扫主文件会误报"协议声明了但 Bridge 未实现"。⇒ 接收文件数组，跨文件合并。 */
+function bridgeMethods(sources) {
+  const files = Array.isArray(sources) ? sources : [sources]
+  const names = new Set()
+  for (const src of files) {
+    const start = src.indexOf('final class SelfDrawBridge')
+    const extRe = /extension SelfDrawBridge \{([\s\S]*?)\n\}/g
+    const bodies = []
+    if (start >= 0) {
+      const rest = src.slice(start)
+      const next = rest.indexOf('\nfinal class ', 1)
+      bodies.push(next > 0 ? rest.slice(0, next) : rest)
+    }
+    for (const m of src.matchAll(extRe)) bodies.push(m[1])
+    for (const body of bodies) {
+      for (const m of body.matchAll(/^\s*(?:@discardableResult\s+)?func (\w+)\(/gm)) names.add(m[1])
+    }
+  }
+  if (names.size === 0) throw new Error('未找到 `final class SelfDrawBridge` 或其扩展的实现')
+  return [...names].sort()
 }
 
 // ── 第二对：宿主运行时桥（HR） ──
@@ -114,8 +127,12 @@ function main() {
   const ts = fs.readFileSync(TS_FILE, 'utf-8')
   const swift = fs.readFileSync(SWIFT_FILE, 'utf-8')
   const swiftProto = fs.readFileSync(SWIFT_PROTO_FILE, 'utf-8')
-  errs.push(...checkPair('自绘桥', jsMethods(ts), protoMethods(swiftProto), bridgeMethods(swift),
-    'hosts/ios/ProteusHost/runtime/host-exports-protocol.swift（协议）+ selfdraw-scene.swift（实现）', 'SelfDrawExports'))
+  // ★#1105：实现也可能在扩展文件里（`pixelFormatSelfTest` 已迁到 host-support.swift）
+  const swiftSupport = fs.readFileSync(
+    path.join(ROOT, 'hosts/ios/ProteusHost/runtime/host-support.swift'), 'utf-8')
+  errs.push(...checkPair('自绘桥', jsMethods(ts), protoMethods(swiftProto),
+    bridgeMethods([swift, swiftSupport]),
+    'hosts/ios/ProteusHost/runtime/host-exports-protocol.swift（协议）+ selfdraw-scene.swift / host-support.swift（实现）', 'SelfDrawExports'))
   // ② 宿主运行时桥（2026-09-30 续）
   const hrTs = fs.readFileSync(HR_TS_FILE, 'utf-8')
   const hrSwift = fs.readFileSync(HR_SWIFT_FILE, 'utf-8')

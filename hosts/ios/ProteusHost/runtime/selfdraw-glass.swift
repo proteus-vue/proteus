@@ -78,7 +78,8 @@ extension SelfDrawView {
         // ② 只栅格化 cropRect 区域（translate 使 cropRect 原点映射到 (0,0)）
         //   ★决策 #863：背景按**半分辨率**捕获（玻璃被模糊/折射，背景采样不必全分辨率）——
         //   捕获栅格化与纹理上传的像素量都降到 1/4（`capturePxPerPoint = scale/2`）。
-        let capturePxPerPoint = max(1, scale / 2)   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / 鸿蒙 S=2 同口径）
+        let capturePxPerPoint = max(0.5, scale / Self.glassCaptureDiv)   // ★三端对齐：输入降采样 =2（与 Android DIV=2 / 鸿蒙 S=2 同口径）
+        lastGlassCapturePxPerPoint = Double(capturePxPerPoint)
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = capturePxPerPoint
         let renderer = UIGraphicsImageRenderer(size: cropRect.size, format: fmt)
@@ -225,6 +226,7 @@ extension SelfDrawView {
             "total_ms": lastGlassTotalMs, "radius_px": lastGlassBlurRadiusPx,
             "crop_px": lastGlassCropPx, "count": Double(order.count),
             "cache_hit": lastGlassBackdropCacheHit ? 1 : 0,   // ★#1104：命中率必须可观测
+            "px_per_pt": lastGlassCapturePxPerPoint,          // ★#1105：捕获密度（横比前提）
         ]
         rec["seq"] = Double(glassPassHistory.count + 1)
         glassPassHistory.append(rec)
@@ -238,7 +240,8 @@ extension SelfDrawView {
          "blur_build_ms": lastGlassBlurBuildMs, "blur_readback_ms": lastGlassBlurReadbackMs,
          "blur_radius_px": lastGlassBlurRadiusPx,
          "metal_ms": lastGlassMetalMs, "install_ms": lastGlassInstallMs, "total_ms": lastGlassTotalMs,
-         "crop_px": lastGlassCropPx, "glass_count": Double(lastGlassCount)]
+         "crop_px": lastGlassCropPx, "glass_count": Double(lastGlassCount),
+         "px_per_pt": lastGlassCapturePxPerPoint]   // ★#1105
     }
 
     /// ★#1103：逐次玻璃遍的读数（**同进程内**多条）——用于区分"每遍都付"与"进程首次付一次"。

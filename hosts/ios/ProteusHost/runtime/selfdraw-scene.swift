@@ -568,6 +568,25 @@ final class SelfDrawView: UIView {
     static let glassBackdropCacheEnabled: Bool = {
         (ProcessInfo.processInfo.environment["PROTEUS_GLASS_BACKDROP_CACHE"] ?? "1") != "0"
     }()
+    /// ★★★#1105：**捕获降采样除数**（**默认 2 = 既有行为，本轮不改**）。
+    ///   为什么保留 2 而不取 3（尽管 3 省 25%）——**证据标准不够，不是数据不好**：
+    ///   · 我的画质判据是"逐点最大通道差"：mine 页 div2→3 只有 0.053% 像素差、最大 **2/255**；
+    ///     div4 为 0.086%/2；glass-nav 甚至完全一致。
+    ///   · 但 **Android #1013 记录了一个这类判据根本测不出的缺陷**：DIV=2 时「蓝色笔画周围出现
+    ///     **网格状插值织纹**（周期 ≈5-6px 斜向条纹，自相关峰 lag 2/4/6）」，用户肉眼描述
+    ///     「获取的映射感觉有点儿脏」⇒ 最终把 Android 的 DIV 从 2 改回 **1（全分辨率）**。
+    ///   · 织纹是**空间频率伪影**；"最大通道差"会把周期性小偏差平均掉 ⇒
+    ///     **不能用"最大差 2/255"证明"没有织纹"**。而且 iOS 现在要取的是 3，比当年出问题的 2 更激进。
+    ///   ⇒ 在补上"自相关 / 频域"级别的画质判据之前，**不动默认值**（宁可留着已知的 25% 性能）。
+    ///   ★设 `PROTEUS_GLASS_CAPTURE_DIV=3` 可手动试（取证用）。
+    ///   ★斜率数据仍有效、已记入决策 #1105：div 2/3/4 = 4.37/3.28/2.90ms（面积 113220/50320/28305）。
+    static let glassCaptureDiv: CGFloat = {
+        guard let raw = ProcessInfo.processInfo.environment["PROTEUS_GLASS_CAPTURE_DIV"],
+              let v = Double(raw), v > 0 else { return 2 }
+        return CGFloat(v)
+    }()
+    /// ★#1105：实际用的捕获密度（写进读数——不记密度就没法横比，样本混了不同密度不可比）
+    internal(set) var lastGlassCapturePxPerPoint = -1.0
     /// 玻璃模糊用的 `CIContext`——**进程内复用一份**。
     ///   此前每次玻璃遍新建（`CIContext(options: nil)`），而玻璃遍在交互时**每 vsync 调一次**
     ///   ⇒ 每帧都在付上下文初始化成本。CIContext 无渲染状态残留，复用不改变输出。
@@ -5684,54 +5703,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     ///   会让"通道全对、位置全错"——现象是"每个点都取到了另一个位置的合法颜色"
     ///   （本轮实测：期望行 24/28/32 读到 30/26/22）。
     ///   ⇒ 加一块"上红下蓝"的竖条：栅格 y=0 必须是红、y=h-1 必须是蓝。
-    func pixelFormatSelfTest() -> String {
-        var probes: [String: Any] = [:]
-        var allOk = true
-        for (name, color) in [("red", UIColor.red), ("green", UIColor.green), ("blue", UIColor.blue)] {
-            let w = 4, h = 4, bpr = 16
-            var buf = [UInt8](repeating: 0, count: bpr * h)
-            buf.withUnsafeMutableBytes { raw in
-                guard let base = raw.baseAddress,
-                      let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
-                                          bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
-                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                                              | CGBitmapInfo.byteOrder32Big.rawValue) else { return }
-                ctx.setFillColor(color.cgColor)
-                ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-            }
-            let got = String(format: "#%02X%02X%02X", buf[0], buf[1], buf[2])
-            let expect = name == "red" ? "#FF0000" : (name == "green" ? "#00FF00" : "#0000FF")
-            let pass = got == expect
-            allOk = allOk && pass
-            probes[name] = ["expect": expect, "got": got, "pass": pass]
-        }
-        // ★方向自检：上红下蓝（用与 samplePixels **完全同一条**建上下文+翻转代码路径）
-        let w = 4, h = 8, bpr = 16
-        var buf2 = [UInt8](repeating: 0, count: bpr * h)
-        buf2.withUnsafeMutableBytes { raw in
-            guard let base = raw.baseAddress,
-                  let ctx = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
-                                      bytesPerRow: bpr, space: CGColorSpaceCreateDeviceRGB(),
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                                          | CGBitmapInfo.byteOrder32Big.rawValue) else { return }
-            // ★与 samplePixels 一致的翻转（漏了这步 ⇒ 上下颠倒）
-            ctx.translateBy(x: 0, y: CGFloat(h))
-            ctx.scaleBy(x: 1, y: -1)
-            ctx.setFillColor(UIColor.red.cgColor)                 // UIKit 上半（y 小）
-            ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-            ctx.setFillColor(UIColor.blue.cgColor)                // UIKit 下半（y 大）
-            ctx.fill(CGRect(x: 0, y: 4, width: 4, height: 4))
-        }
-        let top = String(format: "#%02X%02X%02X", buf2[0], buf2[1], buf2[2])
-        let bottom = String(format: "#%02X%02X%02X", buf2[(h - 1) * bpr], buf2[(h - 1) * bpr + 1], buf2[(h - 1) * bpr + 2])
-        let orientOk = top == "#FF0000" && bottom == "#0000FF"
-        allOk = allOk && orientOk
-        probes["orientation"] = ["expect": "top=#FF0000 bottom=#0000FF",
-                                 "got": "top=\(top) bottom=\(bottom)", "pass": orientOk,
-                                 "note": "栅格 y 递增必须对应 UIKit y 递增（上红下蓝）"]
-        return jsonString(["ok": allOk, "probes": probes,
-                           "format": "byteOrder32Big|premultipliedLast + CTM 翻转（显式声明）"])
-    }
+    // ★#1105：`pixelFormatSelfTest` 已搬到 `host-support.swift`（自包含诊断，不依赖视图/内核状态）。
 
     /// 见协议声明（`clearTree`）
     func clearTree() -> String {
