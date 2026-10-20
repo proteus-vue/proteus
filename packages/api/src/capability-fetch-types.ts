@@ -15,6 +15,7 @@
 
 import type { HttpMethod } from '@proteus-vue/types/api-types'
 import type { CapError } from './capability-types'
+import type { RedirectDecision, RedirectHop, RedirectTrace } from './capability-fetch-redirect'
 
 /** 重试策略（与 `capability-fetch-pipeline.ts` 的 `RetryPolicy` 同构）。 */
 export interface RetryPolicy {
@@ -67,6 +68,35 @@ export interface FetchConfig {
   retry?: number | RetryPolicy
   /** ★#1133 排队优先级（越大越先发；默认 0）。并发打满时用于"首屏关键请求优先"。 */
   priority?: number
+  /**
+   * ★#1134 重定向策略：
+   *   · `follow`（默认）= 平台跟随（老行为，宿主自己跟）；
+   *   · `manual` = **不跟随**，3xx 原样返回（`status` + `headers.location` 可直接读）；
+   *   · `error` = 遇到 3xx 直接失败（`fetch.redirectForbidden`）。
+   * ★给出 `onRedirect` 时会**自动**走逐跳拦截（无需显式写本字段）。
+   * ★MP 端不支持 `manual`/`error`/`onRedirect` ⇒ `fetch.unsupported`（`wx.request` 无此能力）。
+   */
+  redirect?: 'follow' | 'manual' | 'error'
+  /**
+   * ★#1134 最多跟随几跳（默认 5）。超过 ⇒ `fetch.tooManyRedirects`（真实错误）。
+   * ★只在 `manual` / `onRedirect`（即框架层在跟）时生效。
+   */
+  maxRedirects?: number
+  /**
+   * ★#1134 **逐跳拦截**：每遇到一次重定向调一次；返回 `{action:'stop'}` 可拒绝。
+   *
+   * 【为什么这是超级应用必须的】重定向是**框架看不见的跳转**：API 302 到第三方域时，
+   *   宿主会把 `Authorization` 带过去（open-redirect 凭据泄露）。有了本回调，业务能看见每一跳
+   *   并决定跟不跟；**跨域时框架还会自动剥离凭据头**（不经业务决策，安全底线）。
+   *
+   * ★回调里 `hop.from/to/status/methodChanged` 都是可记录的审计信息。
+   */
+  onRedirect?: (hop: RedirectHop) => RedirectDecision | Promise<RedirectDecision>
+  /**
+   * ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。
+   * ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。
+   */
+  redirectManual?: boolean
 }
 
 /** ★#1122：流式上传规格（宿主据此自读文件 + 自拼 multipart）。 */
@@ -116,6 +146,8 @@ export interface FetchMeta {
   priority: number
   /** ★App 精简引擎无 `setTimeout` ⇒ 重试未等待（如实标记，不谎称退避过） */
   retryDelaySkipped?: boolean
+  /** ★#1134：重定向轨迹（仅在发生过跳转/被拦截/超限时出现）。`hops` 是逐跳审计记录。 */
+  redirects?: RedirectTrace
 }
 
 /** ★#1122：`useFetch` 成功结果（`data` 解构保持兼容；`status`/`headers` 为新增）。 */

@@ -86,6 +86,11 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
         headers: config.headers as Record<string, string> | undefined,
         body: config.data !== undefined ? JSON.stringify(config.data) : undefined,
         signal: ctl ? ctl.signal : undefined,
+        // ★★#1134：浏览器原生支持 'manual'（不跟随、把 3xx + Location 交回 JS）——
+        //   比"让宿主不跟随再在 JS 里逐跳重发"省一次完整往返。
+        //   ★管线在有 onRedirect 时也会走逐跳（它需要看到每一跳才能拦截），
+        //     那时本选项同样生效（每跳都是 manual，由 JS 决定下一跳）。
+        ...(config.redirect === 'manual' || config.redirectManual === true ? { redirect: 'manual' as const } : {}),
       })
     } catch (e) {
       // ★区分"用户取消"与"超时"（对业务意义完全不同：一个不该重试、一个可以）
@@ -185,6 +190,12 @@ export function mpRequest(
     }
     if (config.signal) {
       return reject(new ctx.CapError('fetch.unsupported', '取消是 App/Web 语义——wx.request 返回的 RequestTask 才有 abort'))
+    }
+    // ★★#1134：重定向控制是 App/Web 语义——`wx.request` **隐式跟随且不可关**，无法暴露每一跳。
+    //   ★只有"业务显式要求"才报 unsupported：管线内部置的 `redirectManual` 不算用户意图
+    //     （与 #1133 的 `abortable` 同判据——否则内部实现细节会让普通请求变 unsupported）。
+    if (config.redirect === 'manual' || config.redirect === 'error' || typeof config.onRedirect === 'function') {
+      return reject(new ctx.CapError('fetch.unsupported', '重定向控制（manual/error/onRedirect）是 App/Web 语义——wx.request 隐式跟随', ))
     }
     wx.request({
       // ★★★#1130 真容器抓出：`params` 此前**整段丢弃**（只有 Web 腿用了 `encodedUrl`）——

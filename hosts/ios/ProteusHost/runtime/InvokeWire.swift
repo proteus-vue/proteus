@@ -86,6 +86,8 @@ enum InvokeWire {
     static let TAG_SAVE_PATH: UInt8 = 9
     /// ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart）
     static let TAG_UPLOAD_PATH: UInt8 = 10
+    /// ★#1134：重定向控制（1 = 宿主**不跟随**，把 3xx + Location 回给 JS；nil = 跟随）
+    static let TAG_REDIRECT: UInt8 = 11
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     static let RTAG_HTTP_STATUS: UInt8 = 16
@@ -164,6 +166,8 @@ enum InvokeWire {
         var savePath: String?
         /// ★#1120：非 nil ⇒ 宿主边读文件边拼 multipart 边发
         var upload: UploadSpec?
+        /// ★#1134：true ⇒ 不跟随重定向（nil = 跟随，与老行为一致）
+        var redirectManual: Bool?
         var body: [UInt8] = []
 
         /// 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可选字段。
@@ -352,6 +356,7 @@ enum InvokeWire {
             case TAG_STREAM: f.stream = try p.u8() != 0
             case TAG_SAVE_PATH: f.savePath = try p.str()
             case TAG_UPLOAD_PATH: f.upload = try readUploadSpec(p)
+            case TAG_REDIRECT: f.redirectManual = try p.u8() != 0
             // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
             default: break
             }
@@ -392,6 +397,8 @@ enum InvokeWire {
         if f.stream == true { try writeTlv(w, TAG_STREAM) { w.u8(1) } }
         if let sp = f.savePath { try writeTlv(w, TAG_SAVE_PATH) { try w.str(sp) } }
         if let up = f.upload { try writeTlv(w, TAG_UPLOAD_PATH) { try writeUploadSpec(w, up) } }
+        // ★#1134：只在**显式要求不跟随**时写（缺省 = 平台跟随）
+        if f.redirectManual == true { try writeTlv(w, TAG_REDIRECT) { w.u8(1) } }
         return w.done()
     }
 

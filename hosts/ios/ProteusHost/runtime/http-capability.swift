@@ -90,7 +90,7 @@ final class HttpCapability {
             NSLog("[proteus] UPLOAD_PACKED total=%lld file=%@", packed.bytes, up.path)
             let task = session.uploadTask(with: req, fromFile: packed.url)
             registerInflight(reqId, task)   // ★#1121：可取消
-            BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url)
+            BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url, manualRedirect: f.redirectManual == true)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
         }
@@ -102,7 +102,7 @@ final class HttpCapability {
             }
             let task = session.dataTask(with: req)
             registerInflight(reqId, task)   // ★#1121：可取消
-            BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target)
+            BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target, manualRedirect: f.redirectManual == true)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
         }
@@ -111,7 +111,7 @@ final class HttpCapability {
         if f.stream == true {
             let task = session.dataTask(with: req)
             registerInflight(reqId, task)   // ★#1121：可取消
-            BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push)
+            BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
         }
@@ -121,7 +121,7 @@ final class HttpCapability {
         //     那时再判上限等于"洪水过后才关闸"（#1114 的取证结论就是这一点）。
         let task = session.dataTask(with: req)
         registerInflight(reqId, task)   // ★#1121：可取消
-        BodyLimitDelegate.shared.register(task, reqId: reqId, push: push)
+        BodyLimitDelegate.shared.register(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true)
         task.resume()
 
         return try InvokeWire.encodeResolve(.makePending(reqId))
@@ -445,6 +445,8 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         var gate: StreamGate
         var status: Int32 = 0
         var headers: InvokeWire.NameValues = []
+        /// ★#1134：true ⇒ 本 task **不跟随**重定向（3xx 原样回给 JS，由框架层决定跟不跟）
+        var manualRedirect = false
     }
 
     /// ★key = taskIdentifier；只在该 task 的生命周期内存在
@@ -454,23 +456,26 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
     private let lock = NSLock()
 
     /// 登记一个新 task（必须在 `resume()` **之前**调用——否则可能先收到数据、后登记，丢块）
-    func register(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void) {
-        states[task.taskIdentifier] = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
+    func register(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, manualRedirect: Bool = false) {
+        var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
+        st.manualRedirect = manualRedirect
+        states[task.taskIdentifier] = st
     }
 
     /// ★#1118：登记一个**流式** task（同样必须在 `resume()` 之前）。
     ///   ★为什么复用本类而不是另建 `StreamDelegate`：`URLSession` 的 delegate 在**创建时固定**，
     ///     另建一个类根本收不到回调（实测：服务端发完 256 块、宿主记账全 0、Promise 永不结算）。
-    func registerStreaming(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void) {
+    func registerStreaming(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, manualRedirect: Bool = false) {
         lock.lock(); defer { lock.unlock() }
         BodyLimitDelegate.lastStreamStats = StreamStats()
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.streaming = true
+        st.manualRedirect = manualRedirect
         states[task.taskIdentifier] = st
     }
 
     /// ★#1119：登记一个**落盘** task（边收边写文件，不累积 body）。
-    func registerSaving(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, target: URL) {
+    func registerSaving(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, target: URL, manualRedirect: Bool = false) {
         lock.lock(); defer { lock.unlock() }
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.saveTo = target
@@ -478,16 +483,18 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         //   不能用 `lastPathComponent`（那会丢掉 `download/` 前缀 ⇒ 后续 fs.readBytes / 上传路径解析全找不到文件）。
         st.savePath = HttpCapability.relativePath(target)
         st.status = 0
+        st.manualRedirect = manualRedirect
         states[task.taskIdentifier] = st
     }
 
     /// ★#1120：登记一个**流式上传** task（响应侧仍走普通累积路径，只是请求侧是流式）。
     /// ★#1120：登记一个**上传** task（响应侧走普通累积；请求体已由 `uploadTask(fromFile:)` 自行读取）。
     ///   `tempFile` 只用于**收尾删除**（拼好的 multipart 临时文件，发送完即删）。
-    func registerUpload(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, tempFile: URL) {
+    func registerUpload(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, tempFile: URL, manualRedirect: Bool = false) {
         lock.lock(); defer { lock.unlock() }
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.uploadTemp = tempFile
+        st.manualRedirect = manualRedirect
         states[task.taskIdentifier] = st
     }
 
@@ -589,6 +596,33 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
             return
         }
         lock.lock(); states[dataTask.taskIdentifier] = st; lock.unlock()
+    }
+
+    /// ★★★#1134：**重定向拦截点**（iOS 的原生钩子）。
+    ///
+    /// 【语义】`completionHandler(request)` = 跟随（可改写目标）；`completionHandler(nil)` = **不跟随**——
+    ///   系统会把 3xx 响应（含 `Location` 头）正常走完 `didReceive`/`didComplete`，JS 侧拿到 status=302。
+    ///
+    /// 【为什么由**去程帧**决定而不是宿主写死】跟随/不跟随是**业务策略**（可拦域名、可记每一跳）；
+    ///   宿主只执行最小动作，策略在 `capability-fetch-pipeline.ts`（跨端同一份）。
+    ///   ★缺省（`manualRedirect == false`）⇒ 原样跟随，与改造前行为完全一致。
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        lock.lock()
+        let manual = states[task.taskIdentifier]?.manualRedirect ?? false
+        lock.unlock()
+        if manual {
+            // ★不跟随：把当前 3xx 当成最终响应（status/Location 会进 `didReceive response` 与 `didComplete`）
+            NSLog("[proteus] REDIRECT_STOP status=%d to=%@", response.statusCode, request.url?.absoluteString ?? "<nil>")
+            completionHandler(nil)
+        } else {
+            completionHandler(request)
+        }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

@@ -43,7 +43,11 @@ export async function runFetch<T>(
     return capErr<T>('fetch.unsupported', '桥未提供 request（useFetch 不可用）') as FetchResult<T>
   }
   try {
-    // ★五个 S3 字段全部透传（此前一个都没传 ⇒ 底层做了也白做）
+    // ★S3 字段全部透传（此前一个都没传 ⇒ 底层做了也白做）
+    // ★★#1134：新增字段必须**同步加进本清单**——本函数是 useFetch 的唯一出口，
+    //   漏一个就是"底层做了但业务够不着"（#1122 的原缺陷形态）。
+    //   ★这条写成注释不够：`tests/fetch-redirect.test.ts` 用真 HTTP 服务断言 manual 真的不跟随，
+    //     漏透传会当场红（这正是本轮抓到的：先漏了 redirect/redirectManual，4 条判据变红）。
     const r = await bridge.request({
       url,
       method: config?.method,
@@ -56,6 +60,11 @@ export async function runFetch<T>(
       onChunk: config?.onChunk,
       upload: config?.upload,
       signal: config?.signal,
+      // ★retry / priority 是**管线字段**，不下传桥（桥只执行一次请求；重试与排队由管线负责）
+      redirect: config?.redirect,
+      maxRedirects: config?.maxRedirects,
+      onRedirect: config?.onRedirect,
+      redirectManual: config?.redirectManual,
     })
     return { ok: true, data: r.data as T, status: r.status, headers: r.headers }
   } catch (e) {

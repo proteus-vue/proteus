@@ -20,14 +20,15 @@
 | 2 | **高性能模式** | **无此概念**。Android `HttpURLConnection` 默认连接池；iOS `URLSessionConfiguration.default` 复用会话 | 宿主传输 | ❌ 见 §3 |
 | 3 | **HTTP/2** | **走平台默认**（Android `HttpCapability.java:30` / iOS `http-capability.swift:30` 均注明"HTTP/2、压缩、连接池全走平台默认，不自造"） | 宿主传输 | ❌ 见 §3 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
-| 5 | **重定向拦截** | **跟随但不可拦**：Android `setInstanceFollowRedirects(true)`（4 处）/ iOS `URLSession` 默认跟随；**没有 `redirect:'manual'`，也没有 `onRedirect` 回调** | 宿主传输 + 策略 | ❌ 见 §3 |
+| 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `setInstanceFollowRedirects(!manual)`（4 条路径统一 helper）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
 | 6 | **请求缓存** | **HTTP 语义零实现**（无 `If-None-Match`/`If-Modified-Since`/`Cache-Control` 处理） | 框架策略 + 宿主 | ❌ 见 §3（L2 已有 `04-cache-layers.md` 设计） |
 | 7 | **RequestTask** | ★**本轮做了**：`useFetchTask()` → `FetchTask`（`result` / `state` / `abort(reason)`）。★形状是 Promise + abort，**不复刻** wx 的回调对象 | **框架策略（TS）** | ✅ |
 | 8 | **网络调优** | **无**：无并发上限（本轮前）、无优先级、无超时分级、无弱网退避 | **框架策略（TS）** | ✅ 并发/优先级/退避已做；**连接参数调优仍属宿主（未做）** |
 | 9 | **观测/排障** | ★**本轮做了**：`FetchMeta`（`queuedMs` / `attemptMs[]` / `attempts` / `deduped` / `priority`） | **框架策略（TS）** | ✅ |
 
-**结论（一句话）**：**9 项里 4 项本轮落地（4/5/7/8 的策略部分 + 9）**；
-**5 项属宿主传输层（1/2/3/5 的"拦"），本轮未做**——它们是**真缺口**，不是"不需要"。
+**结论（一句话）**：**9 项里 5 项已落地**（4 请求拦截 · 5 重定向拦截 · 7 RequestTask ·
+8 网络调优的策略部分 · 9 观测）；**4 项属宿主传输层，仍未做**（1 HTTPDNS · 2 高性能模式 ·
+3 HTTP/2 · 6 请求缓存）——它们是**真缺口**，不是"不需要"。
 
 ---
 
@@ -65,6 +66,33 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 ---
 
+### 2.3 重定向已落地（#1134 · 本轮）
+
+**做了什么**：
+
+| 能力 | 入口 | 语义 |
+|---|---|---|
+| `redirect: 'manual'` | `useFetch(url, { redirect: 'manual' })` | **不跟随**，拿回 `status` + `headers.location` |
+| `redirect: 'error'` | 同上 | 遇 3xx 直接失败（`fetch.redirectForbidden`） |
+| `maxRedirects` | 同上（默认 5） | 超过 ⇒ `fetch.tooManyRedirects`（真实错误，不静默成功） |
+| `onRedirect` | `useFetch(url, { onRedirect(h) })` | **逐跳回调**：`{status, from, to, methodChanged}`；返回 `{action:'stop'}` 可拒绝 |
+| ★**跨域剥离凭据** | 自动（无需业务决策） | 跳转到**不同 origin** ⇒ 剥离 `Authorization` / `Cookie` / `Proxy-Authorization` |
+
+**架构取舍（为什么宿主只做一小块）**：宿主只执行"**不跟随**"（线格式 `Redirect=11` tag）；
+跟随循环 / 限额 / 拦截 / 凭据剥离 / RFC 方法改写全在 `capability-fetch-redirect.ts`（跨端同一份）。
+理由：这些都是**策略**，放宿主就要"网络线程回调 JS"（违反线程纪律）或两端各写一套（必然分叉）。
+
+**端差异（如实）**：
+
+| 端 | 实现 | 状态 |
+|---|---|---|
+| Android | `setInstanceFollowRedirects(!manual)`（四条请求路径统一 `applyRedirectPolicy`） | ✅ |
+| iOS | `URLSessionTaskDelegate.willPerformHTTPRedirection` ⇒ manual 时 `completionHandler(nil)` | ✅ |
+| Web | 原生 `fetch(url, { redirect: 'manual' })`（比 JS 逐跳重发省一次往返） | ✅ |
+| **MP** | `wx.request` **隐式跟随且不可关** | **❌ `fetch.unsupported`**（如实） |
+
+**RFC 语义（基准 = 标准真值，不是各端看着办）**：
+303 ⇒ 一律改 `GET` 并丢 body；301/302 ⇒ **仅 POST** 改 `GET`；307/308 ⇒ 保持方法与 body。
 ## 3. 缺口分期（按"能交付什么"切，不按"想做多少"）
 
 ### P0 · 本轮已交付（框架策略层，三端同一份）
@@ -80,9 +108,11 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 ### P1 · 传输层（需换栈，**独立立项**）
 
+> ★**重定向可拦截已从本表移出**（它**不需要换栈**——两端都有原生钩子）⇒
+> 见上方"§2.3 重定向已落地"；执行证据见 §4。
+
 | 能力 | 落点 | 前置 | 判据设计（可执行） |
 |---|---|---|---|
-| 重定向**可拦截**（`redirect: 'manual'` + `onRedirect`） | Android OkHttp `followRedirects(false)` / iOS `URLSessionTaskDelegate.willPerformHTTPRedirection` | 无（**不需换整栈**——两端都有原生钩子） | 真机：3xx 响应回 `status=302` + `location` 头，不自动跟随；回调收到 (from, to) 链 |
 | HTTPDNS | Android OkHttp `Dns` 接口 / iOS `NWConnection` 自定义解析 | **Android 需引入 OkHttp**（APK +Δ） | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
 | HTTP/2 + 连接池参数 | 同上 | 同 HTTPDNS | 断言：服务端记录 `HTTP/2` 协商结果 + 复用连接数（单连接多请求） |
 | 证书 pinning | 同栈 | 同 HTTPDNS | 断言：错误证书 ⇒ 明确 `fetch.tlsError`（不是笼统 failed） |
@@ -132,7 +162,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 1. **本轮没有做任何传输层优化**：HTTPDNS / HTTP/2 / 连接池调优 / 证书 pinning **全部未做**（§3 P1）。
    ⇒ 准确说法：**"请求治理层达到超级应用可用"；"传输层仍是平台默认"**。
 2. **没有做 HTTP 缓存**（§3 P2）。App 端因此**没有** 304 复用——这与浏览器/小程序不同，是**真差异**。
-3. **重定向仍不可拦**（只能跟随）。这在超级应用里是真实痛点（埋点重定向、登录跳转要观测），列入 P1。
+3. ~~重定向仍不可拦~~ ⇒ ★**已收口（本轮 #1134）**：manual / onRedirect / 限额 / 跨域剥离凭据全落地，Android+iOS 真机验过。**剩一个端差异**：MP 端 `wx.request` 隐式跟随且不可关 ⇒ 如实 `fetch.unsupported`。
 4. 管线的**并发额度是按 `CapabilityHooks` 实例**计的，不跨页面/不全局。多页面场景要全局额度需另建实例共享
    （本仓尚无"全局请求管理器"，属 P2/P3）。
 5. `retry` 的等待依赖 `setTimeout`；App 精简引擎无定时器 ⇒ **立即重试**（`meta.retryDelaySkipped` 标记，不谎称退避过）。
@@ -141,7 +171,8 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 ## 6. 下一步（按优先级）
 
-1. **P1 重定向可拦**（不需换栈，两端都有原生钩子）——性价比最高；
-2. **P3 总时限 deadline**（判据已可写，纯框架层）；
-3. **P2 条件请求缓存**（框架层 + L2 落地）；
-4. **P1 HTTPDNS/HTTP/2**（需 Android 引入 OkHttp，独立大单，先做 APK 体积与包体影响评估）。
+1. ~~P1 重定向可拦~~ ⇒ ✅ **已完成（#1134）**；
+2. **P3 总时限 deadline**（判据已可写，纯框架层：断言 `totalMs ≤ deadline`）；
+3. **P2 条件请求缓存**（`If-None-Match`/`If-Modified-Since` + `Cache-Control`；App 三端不会自动做）；
+4. **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引入 OkHttp，独立大单，先评估 APK 体积与包体影响）；
+5. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。

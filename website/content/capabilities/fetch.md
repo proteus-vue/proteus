@@ -43,6 +43,10 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `signal` | `AbortSignalLike` | 否 | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
 | `retry` | `number \| RetryPolicy` | 否 | ★#1133 重试：数字 = 额外次数；对象 = 覆盖管线默认策略。 ★只对**可恢复**失败生效（网络错误 / 超时 / 429 / 5xx）——取消与能力缺失不重试。 |
 | `priority` | `number` | 否 | ★#1133 排队优先级（越大越先发；默认 0）。并发打满时用于"首屏关键请求优先"。 |
+| `redirect` | `'follow' \| 'manual' \| 'error'` | 否 | ★#1134 重定向策略： · `follow`（默认）= 平台跟随（老行为，宿主自己跟）； · `manual` = **不跟随**，3xx 原样返回（`status` + `headers.location` 可直接读）； · `error` = 遇到 3xx 直接失败（`fetch.redirectForbidden`）。 ★给出 `onRedirect` 时会**自动**走逐跳拦截（无需显式写本字段）。 ★MP 端不支持 `manual`/`error`/`onRedirect` ⇒ `fetch.unsupported`（`wx.request` 无此能力）。 |
+| `maxRedirects` | `number` | 否 | ★#1134 最多跟随几跳（默认 5）。超过 ⇒ `fetch.tooManyRedirects`（真实错误）。 ★只在 `manual` / `onRedirect`（即框架层在跟）时生效。 |
+| `onRedirect` | `(hop: RedirectHop) => RedirectDecision \| Promise<RedirectDecision>` | 否 | ★#1134 **逐跳拦截**：每遇到一次重定向调一次；返回 `{action:'stop'}` 可拒绝。  【为什么这是超级应用必须的】重定向是**框架看不见的跳转**：API 302 到第三方域时， 宿主会把 `Authorization` 带过去（open-redirect 凭据泄露）。有了本回调，业务能看见每一跳 并决定跟不跟；**跨域时框架还会自动剥离凭据头**（不经业务决策，安全底线）。  ★回调里 `hop.from/to/status/methodChanged` 都是可记录的审计信息。 |
+| `redirectManual` | `boolean` | 否 | ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。 ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。 |
 
 ## 返回值
 
@@ -77,6 +81,10 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `signal` | `AbortSignalLike` | — | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
 | `retry` | `number \| RetryPolicy` | — | ★#1133 重试：数字 = 额外次数；对象 = 覆盖管线默认策略。 ★只对**可恢复**失败生效（网络错误 / 超时 / 429 / 5xx）——取消与能力缺失不重试。 |
 | `priority` | `number` | `0` | ★#1133 排队优先级（越大越先发；默认 0）。并发打满时用于"首屏关键请求优先"。 |
+| `redirect` | `'follow' \| 'manual' \| 'error'` | — | ★#1134 重定向策略： · `follow`（默认）= 平台跟随（老行为，宿主自己跟）； · `manual` = **不跟随**，3xx 原样返回（`status` + `headers.location` 可直接读）； · `error` = 遇到 3xx 直接失败（`fetch.redirectForbidden`）。 ★给出 `onRedirect` 时会**自动**走逐跳拦截（无需显式写本字段）。 ★MP 端不支持 `manual`/`error`/`onRedirect` ⇒ `fetch.unsupported`（`wx.request` 无此能力）。 |
+| `maxRedirects` | `number` | `5` | ★#1134 最多跟随几跳（默认 5）。超过 ⇒ `fetch.tooManyRedirects`（真实错误）。 ★只在 `manual` / `onRedirect`（即框架层在跟）时生效。 |
+| `onRedirect` | `(hop: RedirectHop) => RedirectDecision \| Promise<RedirectDecision>` | — | ★#1134 **逐跳拦截**：每遇到一次重定向调一次；返回 `{action:'stop'}` 可拒绝。  【为什么这是超级应用必须的】重定向是**框架看不见的跳转**：API 302 到第三方域时， 宿主会把 `Authorization` 带过去（open-redirect 凭据泄露）。有了本回调，业务能看见每一跳 并决定跟不跟；**跨域时框架还会自动剥离凭据头**（不经业务决策，安全底线）。  ★回调里 `hop.from/to/status/methodChanged` 都是可记录的审计信息。 |
+| `redirectManual` | `boolean` | — | ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。 ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。 |
 
 ### `UploadSpec`
 
@@ -112,6 +120,17 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `jitter` | `number` | `0.2` | 抖动比例 0~1（默认 0.2；避免重试风暴同步打点） |
 | `retryOn` | `(res: FetchResult<unknown>, attempt: number) => boolean` | `网络类失败` | 判定是否重试（默认：网络类失败 + 429/5xx；**不重试** aborted/unsupported/tooLarge/intercepted） |
 
+### `RedirectHop`
+
+单跳记录（`onRedirect` 的入参、`FetchResult.redirects` 的元素）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `status` | `number` | — | 本跳的状态码（301 / 302 / 303 / 307 / 308…） |
+| `from` | `string` | — | 本跳请求的 URL（跳转**前**） |
+| `to` | `string` | — | 目标 URL（来自 `Location`，已按 RFC 3986 相对解析） |
+| `methodChanged` | `boolean` | — | 方法是否被改写（303 ⇒ 通常改 GET；301/302 按浏览器惯例也改 GET） |
+
 ### `FetchMeta`
 
 ★#1133：单次请求的**观测元数据**（超级应用排障的底座）。
@@ -129,6 +148,18 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `deduped` | `boolean` | — | 是否命中去重（本次没真发请求，用的是别人在飞的结果） |
 | `priority` | `number` | — | 排队优先级（观测用） |
 | `retryDelaySkipped` | `boolean` | — | ★App 精简引擎无 `setTimeout` ⇒ 重试未等待（如实标记，不谎称退避过） |
+| `redirects` | `RedirectTrace` | — | ★#1134：重定向轨迹（仅在发生过跳转/被拦截/超限时出现）。`hops` 是逐跳审计记录。 |
+
+### `RedirectTrace`
+
+跟随循环的记账（放进 `FetchMeta`，让业务/排障能看到跳了几跳）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `hops` | `RedirectHop[]` | — | — |
+| `exceeded` | `boolean` | — | 是否因为超过 `maxRedirects` 而停（真实错误，不是成功） |
+| `stopped` | `boolean` | — | 是否被 `onRedirect` 主动停止 |
+| `stopReason` | `string` | — | — |
 
 ## 错误码
 

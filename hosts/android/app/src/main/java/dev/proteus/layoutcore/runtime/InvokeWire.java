@@ -77,6 +77,8 @@ public final class InvokeWire {
     public static final int TAG_SAVE_PATH = 9;
     /** ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart） */
     public static final int TAG_UPLOAD_PATH = 10;
+    /** ★#1134：重定向控制（1 = 宿主**不跟随**，把 3xx + Location 回给 JS；缺省/null = 跟随） */
+    public static final int TAG_REDIRECT = 11;
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     public static final int RTAG_HTTP_STATUS = 16;
@@ -159,6 +161,8 @@ public final class InvokeWire {
         public String savePath;
         /** ★#1120：非 null ⇒ 宿主边读文件边拼 multipart 边发 */
         public UploadSpec upload;
+        /** ★#1134：true ⇒ 不跟随重定向（缺省 = 跟随，与老行为一致） */
+        public Boolean redirectManual;
         public byte[] body = EMPTY;
 
         /** 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可空字段。 */
@@ -357,6 +361,7 @@ public final class InvokeWire {
                 case TAG_STREAM: f.stream = p.u8() != 0; break;
                 case TAG_SAVE_PATH: f.savePath = p.str(); break;
                 case TAG_UPLOAD_PATH: f.upload = readUploadSpec(p); break;
+                case TAG_REDIRECT: f.redirectManual = p.u8() != 0; break;
                 // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
                 default: break;
             }
@@ -397,6 +402,8 @@ public final class InvokeWire {
         if (Boolean.TRUE.equals(f.stream)) writeTlv(w, TAG_STREAM, () -> w.u8(1));
         if (f.savePath != null) writeTlv(w, TAG_SAVE_PATH, () -> w.str(f.savePath));
         if (f.upload != null) writeTlv(w, TAG_UPLOAD_PATH, () -> writeUploadSpec(w, f.upload));
+        // ★#1134：只在**显式要求不跟随**时写（缺省 = 平台跟随）
+        if (Boolean.TRUE.equals(f.redirectManual)) writeTlv(w, TAG_REDIRECT, () -> w.u8(1));
         return w.done();
     }
 

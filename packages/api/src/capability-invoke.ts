@@ -207,6 +207,10 @@ function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array 
     } else if (k === 'upload' && v !== null && typeof v === 'object') {
       // ★#1120：流式上传规格——**不能落到 body**（否则整个结构会被 JSON 编进请求体）
       meta.upload = v as InvokeMeta['upload']
+    } else if (k === 'redirectManual' && typeof v === 'boolean') {
+      // ★#1134：重定向不跟随开关（宿主侧最小能力；跟随/拦截策略在 JS 管线）
+      //   ★必须在此归类：落到 body 会被 JSON 编进请求体（与 upload 同一个坑）
+      meta.redirectManual = v
     } else if (k === 'data' || k === 'body') {
       rest[k] = v
     } else {
@@ -943,6 +947,13 @@ export interface AppRequestConfig {
    * ★诚实边界：宿主未实现 `http.cancel` 时 JS 侧仍会 reject，但**后台传输不会停**。
    */
   signal?: AbortSignalLike
+  /**
+   * ★★★#1134 **重定向不跟随**（宿主侧最小能力）：true ⇒ 宿主不跟随 3xx，
+   *   把 `status` + `headers.location` 原样回给 JS（跟随/拦截策略在 fetch 管线）。
+   *
+   * ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务一般不直接用。
+   */
+  redirectManual?: boolean
 }
 
 /** 请求响应（对齐 `RequestResponse`） */

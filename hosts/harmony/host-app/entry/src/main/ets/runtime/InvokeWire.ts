@@ -51,6 +51,8 @@ export const TAG_STREAM: number = 8
 export const TAG_SAVE_PATH: number = 9
 /** ★#1120：流式上传规格（宿主自读文件 + 自拼 multipart） */
 export const TAG_UPLOAD_PATH: number = 10
+// ★#1134：重定向控制（1 = 宿主不跟随，把 3xx + Location 回给 JS；undefined = 跟随）
+export const TAG_REDIRECT: number = 11
 
 /** 回程 TLV tag（16 起；与去程段不重叠） */
 export const RTAG_HTTP_STATUS: number = 16
@@ -317,6 +319,8 @@ export class InvokeFrame {
   stream: boolean | undefined = undefined
   /** ★#1119：非 undefined ⇒ 宿主把响应体直接写进该沙箱路径 */
   savePath: string | undefined = undefined
+  /** ★#1134：true ⇒ 不跟随重定向（undefined = 跟随，与老行为一致） */
+  redirectManual: boolean | undefined = undefined
   /** ★#1120：非 undefined ⇒ 宿主边读文件边拼 multipart 边发 */
   upload: UploadSpec | undefined = undefined
   body: Uint8Array = EMPTY
@@ -421,6 +425,8 @@ function encodeInvokeMeta(f: InvokeFrame): Uint8Array {
   if (f.stream === true) writeTlv(w, TAG_STREAM, (x: Writer) => x.u8(1))
   if (f.savePath !== undefined) writeTlv(w, TAG_SAVE_PATH, (x: Writer) => x.str(f.savePath as string))
   if (f.upload !== undefined) writeTlv(w, TAG_UPLOAD_PATH, (x: Writer) => writeUploadSpec(x, f.upload as UploadSpec))
+  // ★#1134：只在**显式 true** 时写（与 TS `meta.redirectManual === true` 逐字对齐）
+  if (f.redirectManual === true) writeTlv(w, TAG_REDIRECT, (x: Writer) => x.u8(1))
   return w.done()
 }
 
@@ -460,6 +466,7 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeFrame): void {
     else if (tag === TAG_STREAM) into.stream = p.u8() !== 0
     else if (tag === TAG_SAVE_PATH) into.savePath = p.str()
     else if (tag === TAG_UPLOAD_PATH) into.upload = readUploadSpec(p)
+    else if (tag === TAG_REDIRECT) into.redirectManual = p.u8() !== 0
     // 未知 tag 跳过（版本演进）
   }
 }

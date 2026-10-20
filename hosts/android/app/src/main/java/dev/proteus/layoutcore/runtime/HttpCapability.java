@@ -57,6 +57,7 @@ public final class HttpCapability {
 
     private HttpCapability() { }
 
+
     /** 单次读取块（读响应体用）。★注意：这是**单次读的缓冲量**，不是响应体总上限（见 {@link #MAX_BODY_BYTES}）。 */
     private static final int READ_CHUNK = 16 * 1024;
 
@@ -270,8 +271,8 @@ public final class HttpCapability {
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
-            // 跟随重定向由平台默认处理（见文件头「诚实边界」）
-            conn.setInstanceFollowRedirects(true);
+            // ★#1134：重定向跟随策略由去程帧决定（manual ⇒ 交回 JS 逐步处理）
+            RedirectPolicy.apply(conn, f);
 
             if (f.headers != null) {
                 for (Map.Entry<String, String> e : f.headers.entrySet()) {
@@ -314,7 +315,7 @@ public final class HttpCapability {
             //   ★这里取**原始 List**（不经 `collectHeaders` 的逗号合并）——合并后的 Set-Cookie 无法可靠还原逐条
             storeCookies(url, rawSetCookie(fields));
 
-            InputStream is = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            InputStream is = RedirectPolicy.bodyStream(status, conn);
             // ★#1115 第一道闸：Content-Length 预判（有声明就直接拒，避免白读一遍再丢）
             long declared = -1;
             try {
@@ -393,7 +394,7 @@ public final class HttpCapability {
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
-            conn.setInstanceFollowRedirects(true);
+            RedirectPolicy.apply(conn, f);
             conn.setDoOutput(true);
             // ★定长流式（不是 chunked）：multipart 长度可预知
             conn.setFixedLengthStreamingMode(total);
@@ -447,7 +448,7 @@ public final class HttpCapability {
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
             storeCookies(url, rawSetCookie(fields));
             // 读响应（服务器通常回一小段 JSON；仍按整包但受 32 MiB 上限约束）
-            InputStream ris = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            InputStream ris = RedirectPolicy.bodyStream(status, conn);
             byte[] respBody = ris != null ? readAll(ris) : new byte[0];
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
@@ -567,7 +568,7 @@ public final class HttpCapability {
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
-            conn.setInstanceFollowRedirects(true);
+            RedirectPolicy.apply(conn, f);
             if (f.headers != null) {
                 for (Map.Entry<String, String> e : f.headers.entrySet()) {
                     conn.setRequestProperty(e.getKey(), e.getValue());
@@ -596,7 +597,7 @@ public final class HttpCapability {
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
             storeCookies(url, rawSetCookie(fields));
 
-            InputStream is = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            InputStream is = RedirectPolicy.bodyStream(status, conn);
             // ★边收边写：内存占用 = 单个缓冲块，与文件大小无关
             os = new java.io.BufferedOutputStream(new java.io.FileOutputStream(out, false), STREAM_CHUNK);
             byte[] buf = new byte[STREAM_CHUNK];
@@ -750,7 +751,7 @@ public final class HttpCapability {
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
-            conn.setInstanceFollowRedirects(true);
+            RedirectPolicy.apply(conn, f);
             if (f.headers != null) {
                 for (Map.Entry<String, String> e : f.headers.entrySet()) {
                     conn.setRequestProperty(e.getKey(), e.getValue());
@@ -779,7 +780,7 @@ public final class HttpCapability {
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
             storeCookies(url, rawSetCookie(fields));
 
-            InputStream is = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            InputStream is = RedirectPolicy.bodyStream(status, conn);
             byte[] buf = new byte[STREAM_CHUNK];
             int n;
             if (is != null) {

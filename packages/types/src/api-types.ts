@@ -13,7 +13,7 @@ export interface RequestConfig {
   headers?: Record<string, string>
   /** ms，默认 15000 */
   timeout?: number
-  /** 自动重试次数 */
+  /** 自动重试次数（★#1133：策略对象由 fetch 管线消费，**不下传到桥**） */
   retry?: number
   /** 重试间隔 ms */
   retryDelay?: number
@@ -36,6 +36,18 @@ export interface RequestConfig {
   }
   /** 取消信号（兼容原生 `AbortSignal` 与 App 侧 `createAbortController()` 的产物） */
   signal?: { readonly aborted: boolean }
+  // ── ★★★#1134：重定向控制（宿主只执行"不跟随"；跟随/拦截策略在 fetch 管线）──
+  /**
+   * 重定向策略：`follow`（缺省，平台跟随）/ `manual`（不跟随，3xx 原样返回）/ `error`（遇 3xx 失败）。
+   * ★MP 端 `wx.request` 隐式跟随且不可关 ⇒ `manual`/`error`/`onRedirect` 一律 `fetch.unsupported`。
+   */
+  redirect?: 'follow' | 'manual' | 'error'
+  /** 最多跟随几跳（缺省 5）。超过 ⇒ `fetch.tooManyRedirects`。 */
+  maxRedirects?: number
+  /** 逐跳拦截（每遇一次重定向调一次；可拒绝或改写目标）。★跨域时框架自动剥离凭据头。 */
+  onRedirect?: (hop: { status: number; from: string; to: string; methodChanged: boolean }) => unknown
+  /** 宿主级开关：true ⇒ 宿主不跟随（由管线在 manual / 有 onRedirect 时自动置位）。 */
+  redirectManual?: boolean
 }
 
 export interface RequestResponse<T> {

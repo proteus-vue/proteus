@@ -462,6 +462,137 @@ export function appCancelProbe(base: string, chunks = 128, size = 16 * 1024, del
  *   此前所有探针都打底层 ⇒ "底层 S3 做了、`useFetch` 门面只透传 6 字段"这类缺口**全绿**。
  *   本探针只走 `createCapabilityHooks(...).useFetch`——业务真正看到的那个面。
  */
+/**
+ * ★★★#1134 `appRedirectProbe(base, crossBase, maxRedirects)` →
+ *   ① **manual**：`useFetch(url, { redirect: "manual" })` ⇒ 拿到 **302 + Location**（不是跳到终点）；
+ *   ② **onRedirect 逐跳**：两跳链 ⇒ 回调被调 2 次，且 from/to/status 可读；
+ *   ③ **stop**：回调返回 stop ⇒ `fetch.redirectStopped` 且不再发下一跳；
+ *   ④ **限额**：环 + `maxRedirects=2` ⇒ `fetch.tooManyRedirects`；
+ *   ⑤ **跨域剥离凭据**：302 到另一 origin ⇒ 终点收到的 `authorization` 为空（服务端视角取证）。
+ *
+ * 【为什么这些必须在真机验（Web 层已绿）】宿主侧是**另一套实现**：
+ *   Android 靠 `setInstanceFollowRedirects(false)`、iOS 靠 `willPerformHTTPRedirection`。
+ *   两者都可能"看起来没跟随"但实际已发了两跳（凭据已经泄露出去）——
+ *   所以判据不仅看客户端结果，还要看**服务端 `/__seen` 里到底收到了什么**。
+ */
+export function appRedirectProbe(base: string, crossBase: string, maxRedirects = 2): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { base, cross_base: crossBase, max_redirects: maxRedirects }
+  g['__proteusHostRedirectProbeResult'] = ''
+
+
+  const run = async (): Promise<void> => {
+    const cap = (await import('../../../packages/api/src/capability')) as unknown as {
+      createCapabilityHooks: (b: unknown, o?: unknown) => {
+        useFetch: <T>(u: string, c?: unknown) => Promise<{ ok: boolean; status?: number; headers?: Record<string, string>; data?: unknown; error?: { code?: string; message?: string }; meta?: { redirects?: { hops?: unknown[]; exceeded?: boolean; stopped?: boolean } } }>
+      }
+      getSharedCapabilityBridge: () => unknown
+    }
+    const hooks = cap.createCapabilityHooks(cap.getSharedCapabilityBridge(), {})
+
+    // ── ① manual：不跟随 ──
+    try {
+      const r = await hooks.useFetch(`${base}/one`, { redirect: 'manual', timeout: 20000 })
+      out['manual_status'] = r.status
+      out['manual_ok'] = r.ok === true && r.status === 302
+      const loc = Object.entries(r.headers ?? {}).find(([k]) => k.toLowerCase() === 'location')?.[1]
+      out['manual_location'] = loc ?? ''
+      out['manual_has_location'] = typeof loc === 'string' && loc.length > 0
+    } catch (e) {
+      out['manual_error'] = String((e as Error)?.message ?? e)
+    }
+
+    // ── ② onRedirect 逐跳 ──
+    const hops: Array<{ status: number; from: string; to: string }> = []
+    try {
+      const r = await hooks.useFetch(`${base}/two`, {
+        onRedirect: (h: { status: number; from: string; to: string }) => {
+          hops.push(h)
+          return { action: 'follow', }
+        },
+        timeout: 30000,
+      })
+      out['hop_count'] = hops.length
+      out['hop_statuses'] = hops.map((h) => h.status)
+      out['hop_from_to_ok'] = hops.length > 0 && !!hops[0]!.from && !!hops[0]!.to && hops[0]!.from !== hops[0]!.to
+      out['hop_final_ok'] = r.ok === true
+    } catch (e) {
+      out['hop_error'] = String((e as Error)?.message ?? e)
+    }
+
+    // ── ③ stop ──
+    let stopCalls = 0
+    try {
+      const r = await hooks.useFetch(`${base}/two`, {
+        onRedirect: () => {
+          stopCalls++
+          return { action: 'stop', reason: 'probe-stop' }
+        },
+        timeout: 20000,
+      })
+      out['stop_code'] = r.ok === false ? (r.error?.code ?? '') : 'NO_ERROR'
+      out['stop_ok'] = r.ok === false && r.error?.code === 'fetch.redirectStopped'
+    } catch (e) {
+      out['stop_error'] = String((e as Error)?.message ?? e)
+    }
+    out['stop_calls'] = stopCalls
+    out['stop_single_call'] = stopCalls === 1
+
+    // ── ④ 限额（环） ──
+    try {
+      const r = await hooks.useFetch(`${base}/loop1`, {
+        onRedirect: () => ({ action: 'follow', }),
+        maxRedirects,
+        timeout: 30000,
+      })
+      out['limit_code'] = r.ok === false ? (r.error?.code ?? '') : 'NO_ERROR'
+      out['limit_ok'] = r.ok === false && r.error?.code === 'fetch.tooManyRedirects'
+    } catch (e) {
+      out['limit_error'] = String((e as Error)?.message ?? e)
+    }
+
+    // ── ⑤ 跨域剥离凭据（服务端视角） ──
+    const crossTo = `${crossBase}/final`
+    try {
+      await hooks.useFetch(`${base}/cross?to=${encodeURIComponent(crossTo)}`, {
+        headers: { Authorization: 'Bearer PROBE_SECRET', 'X-Trace': 'redirect-probe' },
+        onRedirect: () => ({ action: 'follow', }),
+        timeout: 30000,
+      })
+      // ★★必须用 `useFetch` 读，**不能用全局 `fetch`**：App 精简引擎（QuickJS/JSC 精简版）
+      //   没有 `fetch` ⇒ 原写法在此静默失败 ⇒ `cross_seen_count=0`（真机实测抓出）。
+      const seenRes = await hooks.useFetch<Array<Record<string, unknown>>>(`${crossBase}/__seen`, {
+        responseType: 'json',
+        timeout: 15000,
+      })
+      const seen = seenRes.ok && Array.isArray(seenRes.data) ? seenRes.data : []
+      const finals = seen.filter((s) => s['path'] === '/final')
+      const lastAuth = finals.length ? String(finals[finals.length - 1]!['auth'] ?? '') : ''
+      out['cross_final_auth'] = lastAuth
+      out['cross_stripped'] = finals.length > 0 && lastAuth === ''
+      out['cross_seen_count'] = finals.length
+    } catch (e) {
+      out['cross_error'] = String((e as Error)?.message ?? e)
+    }
+
+    out['ok'] = out['manual_ok'] === true
+      && out['manual_has_location'] === true
+      && out['hop_count'] === 2
+      && out['hop_from_to_ok'] === true
+      && out['stop_ok'] === true
+      && out['stop_single_call'] === true
+      && out['limit_ok'] === true
+      && out['cross_stripped'] === true
+    g['__proteusHostRedirectProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostRedirectProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true })
+}
+
 export function appUseFetchProbe(base: string, chunks = 128, size = 16 * 1024, delayMs = 20): string {
   const g = globalThis as Record<string, unknown>
   const out: Record<string, unknown> = { chunks, size, delay_ms: delayMs }

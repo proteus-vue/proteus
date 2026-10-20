@@ -29,11 +29,18 @@ export function appHttpRequest(
   CapError: new (code: string, message: string) => Error,
   config: AppRequestConfig,
 ): Promise<AppRequestResponse<unknown>> {
-  // ★五个 S3 字段必须全部透传（此前只带旧 6 个 ⇒ 上层传下来也在此丢掉）
+  // ★★字段必须**逐个显式列出**（不能 spread config）：
+  //   未列出的字段会被 `splitFramePayload` 当"业务体"塞进请求 body（静默污染请求）。
+  //   ★★而"逐字段白名单"必然漏——#1134 真机抓到第 4 层漏传：`redirectManual` 在
+  //     `useFetch`→管线→`runFetch` 三层都加了，**唯独这一层没加** ⇒ 宿主照旧跟随、
+  //     跨域请求直接打到第三方（判据读数 `manual_status=200` / `cross_seen_count=0`）。
+  //   ⇒ 本清单是**唯一维护点**，并由 `tests/fetch-wire-fields.test.ts` 断言它与 `FetchConfig`
+  //     的线上字段逐项对齐（新增字段忘了加 ⇒ 判据红）。
   const args = {
     url: config.url, method: config.method, data: config.data, params: config.params,
     headers: config.headers, timeout: config.timeout, responseType: config.responseType,
     savePath: config.savePath, onChunk: config.onChunk, upload: config.upload, signal: config.signal,
+    redirectManual: config.redirectManual,
   }
   const budget = (config.timeout ?? 15000) + 2000
   // 有 `onChunk` ⇒ 流式（内存不随响应体增长）；否则整包（受 32 MiB 上限）

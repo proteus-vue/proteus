@@ -302,6 +302,8 @@ async function onFetch(): Promise<void> {
       ['config.onChunk', '流式消费：每块回调一次，内存不随响应体增长（App 回推 / Web ReadableStream；MP 不支持）', '(chunk, seq) => void?'],
       ['config.savePath / upload', '★仅 App：宿主直写沙箱 / 宿主自读文件上传（Web、MP 明确 unsupported）', 'string? / UploadSpec?'],
       ['config.retry / priority', '★#1133 请求治理：失败重试（指数退避，只重试可恢复失败）/ 并发队列优先级（越大越先发）', 'number | RetryPolicy / number?'],
+      ['config.redirect / maxRedirects / onRedirect', '★#1134 重定向：follow/manual/error + 上限（默认 5）+ 逐跳回调（可 stop）；★跨域自动剥离 Authorization/Cookie', "'follow' | 'manual' | 'error' / number? / (hop) => decision?"],
+      ['config.redirectManual', '★#1134 内部字段（管线在 manual/有 onRedirect 时自动置位）：宿主不跟随重定向；业务一般不直接用', 'boolean?'],
     ],
     compat: [
       ['Web SPA', 'fetch + AbortController（timeout/取消）+ ReadableStream（流式）', '✅'],

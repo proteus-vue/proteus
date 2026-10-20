@@ -442,6 +442,12 @@ final class SuperappScene: NSObject {
                 let size = parts.count >= 3 ? (Int(parts[2]) ?? 16384) : 16384
                 let delayMs = parts.count >= 4 ? (Int(parts[3]) ?? 20) : 20
                 extra = "\(chunks),\(size),\(delayMs)"
+            case "--redirect-probe=":
+                // ★#1134：`--redirect-probe=<crossBase>[,<maxRedirects>]`
+                //   ★跨域目标必须由调用方给（iOS 侧不像 Android 有固定端口约定）
+                let crossBase = parts.count >= 1 ? parts[0] : ""
+                let maxRedirects = parts.count >= 2 ? (Int(parts[1]) ?? 2) : 2
+                extra = "\(SuperappScene.jsonQuote(crossBase)),\(maxRedirects)"
             default:
                 extra = ""
             }

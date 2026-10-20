@@ -1217,9 +1217,10 @@ function capContext(ir) {
     'capability-types.ts', 'capability.ts', 'capability-bridges.ts',
     // #1122 抽出（网络能力专属）：类型 / 门面实现 / 两端腿 / App 腿
     'capability-fetch-types.ts', 'capability-fetch.ts', 'capability-fetch-legs.ts', 'capability-app-request.ts',
-    // ★#1122：**通道层也有 fetch.* 错误码**（取消 `fetch.aborted` / 超时 `fetch.timeout` 在
-    //   `capability-invoke.ts` 里抛）⇒ 错误码表的「全文件扫描」必须覆盖它，否则官网只列出 1 条。
+    // ★#1122：通道层也有 fetch.* 错误码（取消/超时在 invoke 里抛）⇒ 错误码扫描必须覆盖
     'capability-invoke.ts',
+    // ★#1134：重定向/管线类型（RedirectHop/RedirectDecision/RedirectTrace）在独立文件 ⇒ 不登记会 DANGLING_TYPES 红
+    'capability-fetch-redirect.ts', 'capability-fetch-pipeline.ts',
   ]
   let apiSrc = API_SRC_FILES.map((f) => fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', f), 'utf8')).join('\n') // ★#876 三文件拼接（#870 拆分）；types 在前——下游 bridgeIface=slice(CapabilityBridge,CapabilityHooks) 靠此序
   // ★★类型别名解析（2026-09-30）：句柄类型已**收口**到 `capability-app.ts`（单一事实源），

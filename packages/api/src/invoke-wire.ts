@@ -104,6 +104,23 @@ export const MetaTagInvoke = {
    * 【与 `SavePath`（#1119）对称】一个是"宿主直写响应体"，一个是"宿主直读请求体"——同一思路的两面。
    */
   UploadPath: 10,
+  /**
+   * ★★★#1134 **重定向控制**（uint8：1 = **宿主不要跟随**，0/缺省 = 跟随）。
+   *
+   * 【为什么需要（超级应用的真实安全问题）】
+   *   重定向是**框架看不见的跳转**：API 返回 302 到第三方域时，宿主会带着 Authorization 头跟过去
+   *   —— 这正是 open-redirect 攻击的形态（凭据泄露到攻击者域）。而业务侧完全无感（只拿到最终响应）。
+   *   ⇒ 必须能"不跟随"，把 3xx + Location 交回 JS，由**框架层**决定跟不跟、跟到哪、记不记录。
+   *
+   * 【★为什么"跟随策略"在 JS 而不在宿主】
+   *   业务要的是**拦截**（看到每一跳、可按域名/协议拒绝），那是策略，必须能在 JS 里跑。
+   *   若放宿主，要么走"网络线程回调 JS"（违反线程纪律），要么在宿主里再实现一套规则（两端各一份 ⇒ 分叉）。
+   *   ⇒ 宿主只做**一条**最小能力：给了本 tag 就**不跟随**；跟随/拦截循环在 capability-fetch-pipeline.ts。
+   *
+   * 【★缺省不写 tag】既有行为**完全不变**（宿主照旧跟随）——不写 tag 是"平台默认"，
+   *   只有业务显式要 redirect:manual 或提供 onRedirect 时才写。
+   */
+  Redirect: 11,
 } as const
 
 
@@ -195,6 +212,11 @@ export interface InvokeMeta {
   upload?: UploadSpec
   /** ★#1118：要求宿主分块回推（见 `MetaTagInvoke.Stream`）；缺省 = 整包 */
   stream?: boolean
+  /**
+   * ★★★#1134：true ⇒ **宿主不跟随重定向**，把 3xx + Location 原样回给 JS
+   * （见 `MetaTagInvoke.Redirect`）。跟随/拦截策略由框架层执行。
+   */
+  redirectManual?: boolean
 }
 
 export interface InvokeFrame {
@@ -286,6 +308,8 @@ function encodeInvokeMeta(meta: InvokeMeta): Uint8Array {
   if (savePath !== undefined) writeTlv(w, MetaTagInvoke.SavePath, () => w.str(savePath))
   const up = meta.upload
   if (up !== undefined) writeTlv(w, MetaTagInvoke.UploadPath, () => writeUploadSpec(w, up))
+  // ★#1134：只在**显式要求不跟随**时写（缺省 = 平台跟随，老宿主行为不变）
+  if (meta.redirectManual === true) writeTlv(w, MetaTagInvoke.Redirect, () => w.u8(1))
   return w.done()
 }
 
@@ -349,6 +373,9 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeMeta): void {
         break
       case MetaTagInvoke.UploadPath:
         into.upload = readUploadSpec(p)
+        break
+      case MetaTagInvoke.Redirect:
+        into.redirectManual = p.u8() !== 0
         break
       // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
       default:

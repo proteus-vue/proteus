@@ -88,6 +88,17 @@ enum SuperappProbes {
         return ["host_cancel_stats": ["calls": cs.calls, "hits": cs.hits, "misses": cs.misses]]
       },
     ),
+    // ★★★#1134：**重定向拦截**判据（manual / 逐跳 / stop / 限额 / 跨域剥离凭据）
+    //   ★与 Web 层判据的区别：宿主侧是另一套实现（iOS 走 `willPerformHTTPRedirection`），
+    //     且"没跟随"可能与"已经跳了两跳"在客户端看起来一样 ⇒ 判据同时读**服务端 /__seen**。
+    ProbeConfig(
+      argPrefix: "--redirect-probe=",
+      kickFormat: "__proteusHostAppRedirectProbe(%@)",
+      resultKey: "__proteusHostRedirectProbeResult",
+      reportPrefix: "redirect",
+      deadlineSeconds: 180,
+      extraReadings: { _ in [:] },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

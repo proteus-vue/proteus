@@ -43,6 +43,10 @@ Param,Type,Required,Doc
 | `signal` | `AbortSignalLike` | No | — |
 | `retry` | `number \| RetryPolicy` | No | — |
 | `priority` | `number` | No | — |
+| `redirect` | `'follow' \| 'manual' \| 'error'` | No | — |
+| `maxRedirects` | `number` | No | — |
+| `onRedirect` | `(hop: RedirectHop) => RedirectDecision \| Promise<RedirectDecision>` | No | — |
+| `redirectManual` | `boolean` | No | — |
 
 ## Returns
 

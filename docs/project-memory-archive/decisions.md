@@ -10721,3 +10721,77 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② **P3 总时限 deadline**（纯框架层，判据已可写）；
   ③ **P2 条件请求缓存**（框架层 + `04-cache-layers` 的 L2）；
   ④ **P1 HTTPDNS / HTTP/2**（需 Android 引 OkHttp，独立大单，先评估 APK 体积）。
+
+1134. **★★★重定向可拦截落地（矩阵 P1 第一优先）—— 真机抓出「第 4 层字段漏传」并在判据层面根治 · 决策**（2026-10-20 · 承接 #1133「下一步①」）：
+
+【为什么这条排第一（#1133 矩阵 §6 的结论）】
+  它是九项缺口里**唯一"不需换传输栈"**的：Android `setInstanceFollowRedirects(false)` 与
+  iOS `willPerformHTTPRedirection` 都是原生钩子。而它的危害等级最高：
+  **重定向是框架看不见的跳转**——API 302 到第三方域时，宿主会带着 `Authorization` 跟过去，
+  这正是 open-redirect 凭据泄露的形态，而业务侧**完全无感**（只拿到最终响应）。
+
+【架构取舍（★宿主只做一小块，策略全在 JS）】
+  宿主只执行一条最小能力：**给 `redirectManual` 就不跟随**（线格式新增 `Redirect=11` tag）。
+  跟随循环 / 限额 / 逐跳拦截 / **跨域剥离凭据** / RFC 方法改写全在
+  `capability-fetch-redirect.ts` + 管线（跨端同一份）。
+  ★理由：这些是**策略**，放宿主就要"网络线程回调 JS"（违反线程纪律）或两端各写一套（必然分叉）。
+
+【落地清单】
+  · 线格式：`MetaTagInvoke.Redirect = 11`（u8，1 = 不跟随），**五端**同步
+    （TS / Java / Swift / ArkTS / C++）+ 黄金向量 **3 条**（manual / false-不写 tag / 与落盘组合）
+  · Android：新 `runtime/RedirectPolicy.java`（`apply` + `bodyStream`），四条请求路径统一调用
+    （★漏一条 = 该路径静默跟随）；3xx 走 `getErrorStream`（`getInputStream` 在部分实现会抛）
+  · iOS：`BodyLimitDelegate.urlSession(_:task:willPerformHTTPRedirection:newRequest:completionHandler:)`
+    ⇒ manual 时 `completionHandler(nil)`；四个 register 变体各加 `manualRedirect` 参数
+  · 框架层：`redirect: follow|manual|error` · `maxRedirects`（默认 5）· `onRedirect`（可 stop / 改写目标）
+    · **跨域自动剥离** `Authorization`/`Cookie`/`Proxy-Authorization`（不经业务决策，安全底线）
+    · RFC 语义：303 ⇒ GET+丢 body；301/302 ⇒ 仅 POST 改 GET；307/308 ⇒ 保持方法与 body
+  · Web 腿：用原生 `fetch(url, { redirect: 'manual' })`（比 JS 逐跳重发省一次往返）
+  · MP 腿：`redirect:manual|error|onRedirect` ⇒ `fetch.unsupported`（`wx.request` 隐式跟随且不可关）
+  · 文档：矩阵新增 §2.3（端差异表 + RFC 语义）· fetch 演示页数据表 +1 行 ·
+    `gen-content` 自动生成 `### RedirectHop` / `### RedirectTrace` 两段（含属性表）
+
+【★★★真机抓出的真缺陷：`redirectManual` 在**第 4 层**被吃掉】
+  第一轮 Android 真机读数：`manual_status=200`（宿主照旧跟随）、`hop_count=0`（回调没触发）、
+  `cross_seen_count=0`（跨域请求根本没发）。**但定向判据（Web 层 16/16）全绿。**
+  根因：`useFetch` 的配置要穿**四层白名单**才到宿主：
+    ① `FetchConfig` ② `runFetch` 的桥参数 ③ **`appHttpRequest` 的 args** ④ `splitFramePayload` 的 meta 归类
+  我在 ①②④ 都加了，**唯独漏了 ③** ⇒ 宿主永远收不到 `redirectManual`。
+  ★每层都不能 spread（未识别字段会被当业务体塞进请求 body）⇒ **逐层显式白名单必然漏**。
+
+【★根治不是"这次补上"，而是补一条判据（`tests/fetch-wire-fields.test.ts` 5/5）】
+  断言 `WIRE_FIELDS`（12 个线上字段）在 ①②③④ 四层都出现，且**管线字段**（retry/priority/
+  maxRedirects/onRedirect）**不得**出现在 App 线格式 args（线格式没有这些 tag）。
+  ★破坏性验证：删掉 `appHttpRequest` 里的 `redirectManual` ⇒ 判据红并直指
+    「appHttpRequest 漏传：redirectManual（功能会静默失效）」——**正是真机那个缺陷**。
+  ★判据自己修了三轮（都是假红）：`url` 是 shorthand 抽取不到 / `onChunk`·`signal` 由
+    `invokeHostStream` 分派而非 meta 归类 / `runFetch` **必须**传管线字段（只有 App 腿不该有）。
+
+【★第二个真机缺陷：探针自己踩了「App 引擎没有 fetch」】
+  跨域段要读服务端 `/__seen` 取证，探针写了 `await fetch(u)` —— App 精简引擎**没有 fetch**
+  ⇒ 静默失败 ⇒ `cross_seen_count=0`（差点被当成"跨域没发"）。
+  修：改用 `useFetch(responseType:'json')` 读。★与 #1071「无 TextDecoder」、#1095「无 TextEncoder」同族：
+  **探针装置本身也必须遵守目标端的运行时约束**。
+
+【真机结果】
+  · **Android 11/11 全绿**：manual⇒302+Location · 两跳回调 2 次（301→302）· stop⇒redirectStopped 且只调 1 次 ·
+    环+max=2⇒tooManyRedirects · **跨域终点收到空 Authorization**
+  · iOS：宿主编译通过、描述文件有效（10-26），本次运行见下一条说明。
+
+【诚实边界】
+  ① **MP 端做不到**（`wx.request` 隐式跟随、不可关）⇒ 如实 `fetch.unsupported`；
+  ② 每跳 = 一次完整请求（含排队）；`maxRedirects` 计**跳数**不计时长；
+  ③ 3xx 的 body 不保留（业务要 status + Location）；
+  ④ 跨域剥离只覆盖凭据**头**；cookie jar 里的会话 cookie 由宿主 `CookieManager` 管，
+     跨域时是否带取决于平台策略（未额外干预——如实登记）。
+
+【门禁】
+  `check:invoke-wire-parity` **36 条五端全过**（含 3 条新向量；破坏验证：Java 抄错 tag ⇒ 2 红）
+  · `fetch-redirect` 16/16 · `fetch-pipeline` 23/23 · `fetch-wire-fields` 5/5 · `fetch-mp-leg-live` 18/18
+  · Android 零设备编译 ✅ · iOS 类型检查 ✅ · file-size（`HttpCapability` 抽出 `RedirectPolicy` 回 985 行）
+  · gen-content 84 页 OK · gen-capability-demo 27 页 OK
+
+【下一步（矩阵 §6 更新后）】
+  ① **P3 总时限 deadline**（纯框架层，`meta.totalMs` 已可断言）；
+  ② **P2 条件请求缓存**（`If-None-Match`/`Last-Modified`；App 三端不会自动做 304）；
+  ③ **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引 OkHttp，独立大单）。

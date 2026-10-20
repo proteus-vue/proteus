@@ -25,6 +25,9 @@
 
 import { runFetch } from './capability-fetch'
 import type { AbortSignalLike, FetchConfig, FetchMeta, FetchResult, RetryPolicy } from './capability-fetch-types'
+// ★#1134 重定向策略（跟随循环 / RFC 规则 / 跨域剥离凭据）——与宿主解耦，跨端同一份
+import { headerOf, isRedirectStatus, methodAfterRedirect, nextHopConfig, resolveLocation } from './capability-fetch-redirect'
+import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
 import { createAbortController } from './capability-invoke'
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
@@ -306,6 +309,103 @@ export function createFetchPipeline(
     const attemptMs: number[] = []
     let retryDelaySkipped = false
     const deduped = false
+    // ★#1134 重定向记账（跨重试累计）
+    const traceHops: RedirectHop[] = []
+    let traceExceeded = false
+    let traceStopped = false
+    let traceStopReason: string | undefined
+    let redirectTrace: RedirectTrace = { hops: [], exceeded: false, stopped: false }
+
+    /**
+     * **一次尝试内的重定向跟随循环**（#1134）。
+     *
+     * 【为什么循环在 JS 而不是宿主】宿主只负责"不跟随"（`redirectManual` tag）；跟随是**策略**：
+     *   · 每一跳要能被业务看见/拒绝（`onRedirect`）；
+     *   · 跨域必须**剥离 Authorization/Cookie**（open-redirect 凭据泄露的核心防线）；
+     *   · 方法改写按 RFC（303 ⇒ GET；301/302 仅 POST ⇒ GET；307/308 不变）；
+     *   · 要能限额（`maxRedirects`，防跳转环）。
+     *   这些必须跨端一致 ⇒ 放在 JS 管线，不放宿主。
+     *
+     * ★诚实边界：每跳都算一次独立请求（含排队），`maxRedirects` 计跳数不计时长。
+     */
+    async function dispatchWithRedirects(url0: string, config0: FetchConfig): Promise<FetchResult<unknown>> {
+      const trace: RedirectTrace = { hops: [], exceeded: false, stopped: false }
+      let url = url0
+      let cfg = config0
+      // 只有"要能拦截"或"显式 manual"时，才让宿主不跟随
+      const wantManual = cfg.redirect === 'manual' || typeof cfg.onRedirect === 'function'
+      const max = cfg.maxRedirects ?? 5
+      for (;;) {
+        const sent: FetchConfig = wantManual ? { ...cfg, redirectManual: true } : cfg
+        const r = await runFetch<unknown>(bridge, url, { ...sent, signal: linkedSig })
+        if (!r.ok) {
+          redirectTrace = trace
+          return r
+        }
+        // 不需要拦截（没给 onRedirect 且不是 manual）⇒ 宿主已跟随完，直接返回
+        if (!wantManual) {
+          redirectTrace = trace
+          return r
+        }
+        if (!isRedirectStatus(r.status)) {
+          redirectTrace = trace
+          return r
+        }
+        const location = headerOf(r.headers, 'location')
+        if (!location) {
+          // 3xx 但没 Location ⇒ 当普通响应（不猜）
+          redirectTrace = trace
+          return r
+        }
+        const to = resolveLocation(url, location)
+        const { method, changed } = methodAfterRedirect(r.status, cfg.method ?? 'GET')
+        const h: RedirectHop = { status: r.status, from: url, to, methodChanged: changed }
+        // ★业务拦截点：能看到每一跳，可拒绝/改写目标
+        if (typeof cfg.onRedirect === 'function') {
+          const decision = await cfg.onRedirect(h)
+          if (decision && decision.action === 'stop') {
+            trace.stopped = true
+            trace.stopReason = decision.reason
+            redirectTrace = trace
+            const why = decision.reason ? '：' + decision.reason : ''
+            return {
+              ok: false,
+              error: {
+                code: 'fetch.redirectStopped',
+                message: `重定向被拦截停止（${h.status} → ${to}）${why}`,
+              } as never,
+              meta: { redirects: trace } as never,
+            }
+          }
+          if (decision && decision.action === 'follow' && decision.url) {
+            // 业务改写目标（仍按同源判定决定是否剥离凭据）
+            h.to = decision.url
+          }
+        }
+        trace.hops.push(h)
+        // manual 语义：只回 3xx 不跟随（业务自己处理）
+        if (cfg.redirect === 'manual' && typeof cfg.onRedirect !== 'function') {
+          redirectTrace = trace
+          return r
+        }
+        // 限额：防跳转环（真实错误，不静默当成功）
+        if (trace.hops.length > max) {
+          trace.exceeded = true
+          redirectTrace = trace
+          return {
+            ok: false,
+            error: {
+              code: 'fetch.tooManyRedirects',
+              message: `重定向超过上限 ${max} 跳（最后一跳 ${h.status} → ${to}）`,
+            } as never,
+            meta: { redirects: trace } as never,
+          }
+        }
+        cfg = nextHopConfig(cfg, h, h.to)
+        cfg.method = method as never
+        url = h.to
+      }
+    }
 
     // ① 请求拦截器（洋葱入口）
     let curUrl = url
@@ -341,17 +441,28 @@ export function createFetchPipeline(
       }
       const t0 = now()
       // ② 分发（信号 = 任务内部信号 ∪ 拦截器改写后的用户信号）
+      //    ★★#1134：这里不再是一次 runFetch，而是**重定向跟随循环**。
+      //    每一跳 = 一次完整请求；跳数、每跳 from/to、方法是否被改写都记进 meta.redirects。
       let res: FetchResult<unknown>
       try {
         if (curConfig.signal !== linkedFrom) {
           linkedSig = buildSignal()
           linkedFrom = curConfig.signal
         }
-        res = await runFetch<unknown>(bridge, curUrl, { ...curConfig, signal: linkedSig })
+        res = await dispatchWithRedirects(curUrl, curConfig)
       } catch (e) {
         res = { ok: false, error: { code: 'fetch.failed', message: e instanceof Error ? e.message : String(e) } as never }
       }
       attemptMs.push(Math.round(now() - t0))
+      if (redirectTrace.hops.length || redirectTrace.exceeded || redirectTrace.stopped) {
+        // 本轮发生过跳转 ⇒ 累计进任务级 trace（重试会累加，如实反映总跳数）
+        traceHops.push(...redirectTrace.hops)
+        if (redirectTrace.exceeded) traceExceeded = true
+        if (redirectTrace.stopped) {
+          traceStopped = true
+          traceStopReason = redirectTrace.stopReason
+        }
+      }
       // ③ 响应拦截器（逆序，洋葱出口）
       for (let i = resInterceptors.length - 1; i >= 0; i--) {
         res = await resInterceptors[i]!(res, {
@@ -384,6 +495,16 @@ export function createFetchPipeline(
       deduped,
       priority,
       ...(retryDelaySkipped ? { retryDelaySkipped: true } : {}),
+      ...(traceHops.length || traceExceeded || traceStopped
+        ? {
+            redirects: {
+              hops: traceHops,
+              exceeded: traceExceeded,
+              stopped: traceStopped,
+              ...(traceStopReason ? { stopReason: traceStopReason } : {}),
+            },
+          }
+        : {}),
     }
     const body: FetchResult<T> = last ?? {
       ok: false,

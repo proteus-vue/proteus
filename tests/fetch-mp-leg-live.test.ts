@@ -20,7 +20,9 @@
 //   ③ `fail` 里的 `timeout` ⇒ **独立错误码** `fetch.timeout`（不是笼统 failed）；
 //   ④ `fail` 其他 ⇒ `fetch.failed`；
 //   ⑤ **四个 S3 语义明确 unsupported**（savePath/onChunk/upload/signal）——不静默忽略；
-//   ⑥ `params` 真的拼进 URL。
+//   ⑥ `params` 真的拼进 URL；
+//   ⑦ ★#1134 重定向控制（manual/error/onRedirect）在 MP **明确 unsupported**——
+//      `wx.request` 隐式跟随且不可关，业务看不见每一跳（与 savePath/onChunk 同类的端能力差异）。
 //
 // 【★★#1130 教训：判据把被测行为桩掉了】本文件原先把 `ctx.encodedUrl` 桩成**恒等函数**
 //   （`(url) => url`），于是 `params` 是否真的拼进 URL **永远测不出来**——而真实的 MP 腿当时
@@ -150,6 +152,14 @@ describe('★#1127 MP 腿真运行 · 回调契约映射', () => {
     })
   })
 
+  it('★#1134 缺省跟随 / redirect=follow ⇒ **不**判 unsupported（内部 redirectManual 不冒充用户意图）', async () => {
+    const { wx, calls } = wxStub({ ok: true, data: 'x' })
+    await mpRequest(ctx, wx, { url: 'https://x.cn/a' })
+    expect(calls.length).toBe(1)
+    await mpRequest(ctx, wx, { url: 'https://x.cn/a', redirect: 'follow' })
+    expect(calls.length).toBe(2)
+  })
+
   it('缺 wx.request ⇒ `fetch.unsupported`（不抛别的）', async () => {
     await expect(mpRequest(ctx, {}, { url: 'https://x.cn/a' })).rejects.toMatchObject({
       code: 'fetch.unsupported',
@@ -163,6 +173,10 @@ describe('★#1127 MP 腿真运行 · 四个 S3 语义必须明确拒绝', () =>
     ['onChunk', { onChunk: (): void => {} }],
     ['upload', { upload: { path: 'a', fieldName: 'f', filename: 'a', boundary: 'B' } }],
     ['signal', { signal: { aborted: false } }],
+    // ★#1134：重定向控制三类「业务显式要求」都必须拒绝（wx.request 隐式跟随、不可关）
+    ['redirect=manual', { redirect: 'manual' }],
+    ['redirect=error', { redirect: 'error' }],
+    ['onRedirect', { onRedirect: (): unknown => ({ action: 'follow' }) }],
   ]
 
   for (const [name, extra] of CASES) {

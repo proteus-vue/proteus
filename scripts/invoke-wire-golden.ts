@@ -247,6 +247,34 @@ addInvoke('invoke-upload-no-fields', {
   },
 })
 
+// ⑨h ★#1134 重定向不跟随：redirectManual=true 必须写 tag 11（值 1）
+//      ★语义：宿主据此**不跟随** 3xx，把 status + Location 原样回给 JS 由框架层决定。
+addInvoke('invoke-redirect-manual', {
+  method: 'http.request',
+  reqId: 'r-redir-1',
+  meta: { url: 'https://api.example.cn/v1/login', responseType: 'text', redirectManual: true },
+})
+
+// ⑨i ★#1134 判据配对：redirectManual=false / 缺省 ⇒ **都不写** tag 11（往返后 tag 消失）
+//      ★只测 true 的话，"把 false 也写成 tag"的实现会漏网（与 ⑨c 的 stream:false 同款配对）。
+addInvoke('invoke-redirect-false-no-tag', {
+  method: 'http.request',
+  reqId: 'r-redir-0',
+  meta: { url: 'https://api.example.cn/v1/login', redirectManual: false },
+})
+
+// ⑨j ★#1134 redirectManual 与保存/流式同帧（真实组合：下载链接 302 到 CDN + 要落盘）
+addInvoke('invoke-redirect-save-path', {
+  method: 'http.request',
+  reqId: 'r-redir-2',
+  meta: {
+    url: 'https://api.example.cn/v1/pkg.apk',
+    responseType: 'arraybuffer',
+    savePath: 'download/pkg.apk',
+    redirectManual: true,
+  },
+})
+
 /* ══════════════════ 回程向量 ══════════════════ */
 
 // ⑩ 受理回执（pending）—— 决定 JS 侧"保持挂起"的那一帧
