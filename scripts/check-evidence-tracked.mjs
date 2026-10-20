@@ -79,6 +79,8 @@ function inGitRepo() {
 const gitOk = inGitRepo()
 const problems = []
 const rows = []
+/** ② 组：docs/ai-tasks.json 引用的验收证据条数（0 = 未解析/已清理） */
+let evidenceDocRows = 0
 
 for (const rel of [...owners.keys()].sort()) {
   const abs = path.join(ROOT, rel)
@@ -100,11 +102,67 @@ for (const rel of [...owners.keys()].sort()) {
   }
 }
 
+/* ═══════════ ② 文档里被引用的验收证据（docs/ai-tasks.json 的 verification 字段）═══════════
+ * 【为什么单独一组】上一组（被 check:* 命令引用）只覆盖**代码里**的判据输入；
+ *   而 `docs/ai-tasks.json` 的 `verification` 字段会写"真机终版：亮条 255 / 胶囊 237（.workbuddy/salvage/...）"
+ *   —— 那些截图是**验收证据**，被引用了却不在库 = 结论无法复核（与"提交 ≠ 交付"同族）。
+ *   ★背景（#1147）：.workbuddy/salvage 是迭代草稿区（5447 个/6 GB），已整目录 gitignore；
+ *     但其中**被引用的 106 个文件已入库**——忽略规则不作用于已跟踪文件，所以两者可以共存。
+ *     本组的职责就是把"共存"钉死：**草稿可以忽略，被引用的证据不能少**。
+ * 【解析口径】取引用路径的**目录锚点**（去掉 `{light,dark}` 这类花括号展开），
+ *   断言该目录/文件存在**且至少有一个文件已入库**（目录内部分文件未入库属正常——草稿与证据混杂）。
+ * 【诚实边界】只校验"引用到的证据在不在库里"，不校验内容（图对不对由人/visual 判据看）。 */
+{
+  const tasksFile = path.join(ROOT, 'docs/ai-tasks.json')
+  if (!fs.existsSync(tasksFile)) {
+    problems.push('docs/ai-tasks.json 缺失——它是验收证据引用的 SSOT（无法核对引用是否可复核）')
+  } else if (gitOk) {
+    const text = fs.readFileSync(tasksFile, 'utf-8')
+    const refs = [...new Set([...text.matchAll(/\.workbuddy\/salvage\/[A-Za-z0-9._/{}-]+/g)].map((m) => m[0]))]
+    if (refs.length === 0) {
+      // ★"一条都没有"是可疑信号（解析口径腐化 ⇒ 静默空跑），不是"无需校验"
+      problems.push('docs/ai-tasks.json 里没解析出任何 .workbuddy/salvage 引用——若确已全部清理，请同步本判据的口径')
+    }
+    for (const raw of refs) {
+      const anchorPath = (raw.includes('{') ? raw.slice(0, raw.indexOf('{')) : raw).replace(/[\/]+$/, '')
+      const abs = path.join(ROOT, anchorPath)
+      if (!fs.existsSync(abs)) {
+        problems.push(`${anchorPath} 被 docs/ai-tasks.json 引用但**不存在**——验收结论无法复核`)
+        continue
+      }
+      const trackedCount = Number(
+        String(
+          execFileSync('git', ['ls-files', anchorPath], { cwd: ROOT, encoding: 'utf-8' })
+        )
+          .split('\n')
+          .filter(Boolean).length
+      )
+      if (trackedCount === 0) {
+        problems.push(
+          `${anchorPath} 被 docs/ai-tasks.json 引用但**一个文件都没入库**——` +
+            `.workbuddy/salvage/ 已整目录 gitignore（#1147），新增证据须显式 \`git add -f <path>\``
+        )
+      }
+    }
+    if (!problems.some((p) => p.includes('.workbuddy/salvage'))) {
+      evidenceDocRows = refs.length
+    }
+  }
+}
+
 if (LIST_ONLY) {
   console.log(`真机证据清单（从 package.json 的 check:* 命令自动推导，共 ${rows.length} 条）`)
   for (const r of rows) {
     const mark = !r.exists ? '✗ 缺失' : r.tracked === false ? '⚠ 未入库' : '✓ 已入库'
     console.log(`  ${mark.padEnd(9)} ${r.rel}  ← ${r.by}`)
+  }
+  // ★#1147：② 组（docs/ai-tasks.json 引用的验收证据）也须在 --list 里如实报出——
+  //   原实现把它只打在**成功分支**，而 --list 在此之前就 exit(0) ⇒ 清单看不到这一组，
+  //   等于"核对覆盖面"时漏掉一半（且 0 条时无法与"解析口径腐化"区分）。
+  console.log(`  ── ② 文档引用证据（docs/ai-tasks.json 的 verification 字段）：${evidenceDocRows} 条可复核`)
+  if (problems.length > 0) {
+    console.log(`  ⚠ 另有 ${problems.length} 条问题（--list 只报告，不判红）：`)
+    for (const p of problems) console.log(`     · ${p}`)
   }
   process.exit(0)
 }
@@ -116,5 +174,6 @@ if (problems.length > 0) {
 }
 console.log(
   `✅ 真机证据齐备（${rows.length} 个被 check:* 引用的产物 · 全部存在${gitOk ? '且已入库' : ''}）` +
-    (gitOk ? '' : '——注意：非 git 环境，未校验入库状态')
+    (gitOk ? '' : '——注意：非 git 环境，未校验入库状态') +
+    (evidenceDocRows > 0 ? ` · 文档引用证据 ${evidenceDocRows} 条可复核` : '')
 )

@@ -66,6 +66,38 @@ describe('★真机证据「入库即不得缺失」门禁（#1146）', () => {
     }
   })
 
+  it('⑤ 文档引用的 salvage 验收证据：全部可复核（存在 + 已入库）', () => {
+    // ★#1147：.workbuddy/salvage 已整目录 gitignore（5447 个/6GB 草稿），但其中被
+    //   docs/ai-tasks.json 的 verification 字段引用的 106 个文件**已入库**——
+    //   本用例锁住"草稿可忽略、被引用的证据不能少"这条共存关系。
+    const out = runGate(['--list'])
+    expect(out.ok, out.out).toBe(true)
+    expect(out.out, '应报出文档引用证据条数（0 说明解析口径腐化 ⇒ 静默空跑）').toMatch(/文档引用证据[^\n]*?\d+ 条可复核/)
+    const m = /文档引用证据[^\n]*?(\d+) 条可复核/.exec(out.out)
+    expect(Number(m![1]), '引用条数应 >= 10（当前 15）').toBeGreaterThanOrEqual(10)
+  })
+
+  it('⑥ .workbuddy/salvage 草稿已忽略，但已入库证据仍在版本控制里', () => {
+    // 两条独立事实，缺一不可：
+    //   · 草稿被忽略 ⇒ git status 不再常驻 5450 条（否则 test:coupled 的"改动文件数"被撑爆）
+    //   · 已入库证据仍在 ⇒ 被引用的验收结论仍可复核
+    const gitignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf-8')
+    expect(gitignore, '应含 .workbuddy/salvage/ 忽略规则').toMatch(/^\.workbuddy\/salvage\/$/m)
+
+    const tracked = execFileSync('git', ['ls-files', '.workbuddy/salvage'], { cwd: ROOT, encoding: 'utf-8' })
+      .split('\n')
+      .filter(Boolean)
+    expect(tracked.length, '已入库的验收证据应保留（当前 106 个）').toBeGreaterThanOrEqual(50)
+
+    const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard', '.workbuddy/salvage'], {
+      cwd: ROOT,
+      encoding: 'utf-8',
+    })
+      .split('\n')
+      .filter(Boolean)
+    expect(untracked.length, '草稿应被忽略（未跟踪项应为 0）').toBe(0)
+  })
+
   it('④ 恢复后 ⇒ 绿（证明 ③ 的红来自删除，不是环境噪声）', () => {
     const r = runGate()
     expect(r.ok, `恢复后应通过：\n${r.out}`).toBe(true)

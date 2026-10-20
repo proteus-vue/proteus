@@ -139,6 +139,19 @@ spike/target-qjs/
 # CDP 调试截图（website/cdp-*.mjs 的**产出**，151 张 PNG / 26 MB；无任何消费方）
 .cdp-shots/
 
+# ★★WorkBuddy 抢救区（2026-10-20 · #1147）
+#   【它是什么】真机视觉迭代过程的**中间草稿**：每轮截图/差异图/渲染脚本，实测 **5447 个文件 · 6.0 GB**
+#     （5413 PNG + 69 py + 17 npy + 10 mp4…），与 .cdp-shots 同族（调试产出，无程序消费方）。
+#   【为什么要忽略】它让 git status 常驻 5450 条未跟踪项，且 test:coupled 用
+#     `git ls-files --others --exclude-standard` 统计"改动文件" ⇒ 实测报「改动 **5464** 个文件」
+#     ⇒ 配套断言表的精化匹配**永远命中不了**（工具退化为"无命中"）。这不是噪音，是功能失效。
+#   ★**已入库的 106 个文件不受影响**（gitignore 不作用于已跟踪文件）：它们是**被 docs/ai-tasks.json
+#     的 verification 字段引用**的验收证据（liquid-glass 的 13 个编号目录 + 若干对照图）。
+#   ★**以后新增验收证据**：`git add -f <path>`（机器判据见 scripts/check-evidence-tracked.mjs
+#     第 ② 组——它解析 ai-tasks.json 的 salvage 引用，断言"存在且已入库"，漏加会当场红）。
+#   ⇒ 忽略的是**草稿**，不是**证据**；两者的判据在门禁里，不靠自觉。
+.workbuddy/salvage/
+
 # Python 字节码缓存（脚本自测产生；不入库）
 __pycache__/
 
