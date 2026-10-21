@@ -17,9 +17,21 @@
 //
 // 用法：node scripts/check-gates-sync.mjs
 // 退出码：0 通过 / 1 存在缺口
+//
+// ★★★2026-10-21 收紧（缺陷来自 #1153 ⑩ 的顺手取证）：原判据有一条**假绿通道**——
+//   「命令里的脚本路径出现在 CI 文本里」就算接线。后果两类：
+//     ① **共享入口**：`packages/cli/src/index.ts` 被 CI 广泛提及（不同子命令各一行）⇒
+//        经它实现的 `check:*`（如 `npx tsx packages/cli/src/index.ts knowledge check`）
+//        **在真加 CI 步骤前就判"已接线"**；
+//     ② **注释提及**：`CI_TEXT.includes(name)` 会把注释里的 `check:foo` 当接线证据——
+//        实测 `check:baseline-freshness` 就是靠 ci.yml 那行「**非门禁**（…不入 CI）」的注释
+//        被判已接线（而它的脚本头也写明"退出码恒 0，非门禁"）。
+//   ⇒ 判定逻辑抽到 `scripts/lib/gates-sync.mjs`（纯函数、可测），口径见该文件头。
+//     本脚本只负责 IO + 报告。CI 侧「关键步骤存在性」也改判 **run 命令**（注释不算）。
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { extractRunCommands, isCovered, refsOf } from './lib/gates-sync.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WF_DIR = path.join(ROOT, '.github', 'workflows')
@@ -250,50 +262,44 @@ const LOCAL_ONLY = {
   //     这些**只有真跑一次才暴露**，静态 grep 判据（check:no-json-wire）证明不了。
   //   · 需 macOS + Swift 工具链（CI 为 ubuntu-latest ⇒ 不接 CI；与 check:ios-cli-host-compile 同族）。
   'check:ios-invoke-bytes': '需 macOS + Swift 工具链（xcrun swiftc + 真实 JavaScriptCore）；CI 为 ubuntu-latest，无 Swift',
+  // ★★★基准腐化检测（2026-10-21 补登）：**脚本自身声明"非门禁"**——判据是"活体 Web 重采集
+  //   与入仓基准比对"，需要真浏览器；CI 共享 runner 的浏览器版本天然与基准指纹不一致
+  //   ⇒ 每次提交都报"环境漂移"，而**退出码恒 0**（除非自身出错）⇒ 接 CI 也不能拦任何东西。
+  //   ★它此前是怎么"绿"的：CI 里那行注释 `# ——腐化检测（check:baseline-freshness）**非门禁**…不入 CI`
+  //     被旧口径当成接线证据（`CI_TEXT.includes(name)`）——本轮收紧后如实归入"仅本地"。
+  'check:baseline-freshness': '脚本自身声明非门禁（活体 Web 重采集 + 退出码恒 0）；CI 共享 runner 浏览器指纹天然漂移 ⇒ 接 CI 拦不住任何东西（G-61 B5 plan 明示不入 CI）',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 const scripts = pkg.scripts ?? {}
 
 /** 读取所有 workflow 文本（含 pages.yml / consistency.yml 等） */
-function workflowText() {
-  if (!fs.existsSync(WF_DIR)) return ''
+function workflowFiles() {
+  if (!fs.existsSync(WF_DIR)) return []
   return fs
     .readdirSync(WF_DIR)
     .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
-    .map((f) => fs.readFileSync(path.join(WF_DIR, f), 'utf8'))
-    .join('\n')
+    .map((f) => path.join(WF_DIR, f))
 }
-const CI_TEXT = workflowText()
-
-/** 从一条 npm script 命令里提取它调用的脚本文件 + 内联 check: 引用 */
-function refsOf(cmd) {
-  // ★2026-09-29 扩面：原正则只认 `scripts/` 与 `website/scripts/` 前缀 ⇒
-  //   `hosts/**/*.mjs` 这类脚本**结构性无法被识别为"已接线"**（实测：新增
-  //   `check:acceptance-stub`（`node hosts/android/acceptance-stub.mjs`）明明写进了 ci.yml，
-  //   本门禁仍报"未接线"）。⇒ 改为匹配**任意相对路径**下的 .mjs/.ts/.js 脚本。
-  const files = cmd.match(/(?:^|\s)(?:npx\s+tsx\s+)?(?:[\w.-]+\/)+[\w.-]+\.(?:mjs|ts|js)/g) ?? []
-  const sub = cmd.match(/pnpm run (check:[\w-]+)/g)?.map((m) => m.replace('pnpm run ', '')) ?? []
-  return { files: files.map((f) => f.trim()), sub }
-}
-
-/** 某 check:* 或脚本文件是否真被 CI 引用 */
-function coveredByCi(name, cmd) {
-  if (CI_TEXT.includes(name)) return true
-  const { files, sub } = refsOf(cmd)
-  if (files.some((f) => CI_TEXT.includes(f))) return true
-  // 经 pnpm run 间接引用：递归查子脚本
-  return sub.some((s) => scripts[s] && coveredByCi(s, scripts[s]))
-}
+/** ★只认**会被执行**的 run 命令（注释 / name 字段 / env 值一律不算，见 lib 文件头） */
+const RUN_COMMANDS = workflowFiles().flatMap((f) => extractRunCommands(fs.readFileSync(f, 'utf8')))
+const RUN_TEXT = RUN_COMMANDS.join('\n')
 
 const failures = []
 const notes = []
 
 /* ---------- ① 每个 check:* 必须接线（CI 或 LOCAL_ONLY 声明） ---------- */
 const checkNames = Object.keys(scripts).filter((k) => k.startsWith('check:'))
+const viaCount = { name: 0, file: 0, sub: 0 }
+const localOnlyInEffect = []
 for (const name of checkNames) {
-  if (coveredByCi(name, scripts[name])) continue
+  const r = isCovered({ name, cmd: scripts[name], runCommands: RUN_COMMANDS, scripts })
+  if (r.covered) {
+    viaCount[r.via] += 1
+    continue
+  }
   if (name in LOCAL_ONLY) {
+    localOnlyInEffect.push(name)
     notes.push(`仅本地（已声明）：${name} —— ${LOCAL_ONLY[name]}`)
     continue
   }
@@ -301,6 +307,10 @@ for (const name of checkNames) {
     `${name} 未接入任何 workflow，也未在 LOCAL_ONLY 声明理由（新增门禁必须接线，或写明为何 CI 跑不了）`,
   )
 }
+// ★声明失效审计（信息位）：LOCAL_ONLY 里登记了、但 package.json 已没有的脚本——
+//   它们会让"仅本地 N 个"的统计虚高，也让读者以为某门禁还在。
+const staleLocalOnly = Object.keys(LOCAL_ONLY).filter((k) => !(k in scripts))
+for (const k of staleLocalOnly) notes.push(`⚠ LOCAL_ONLY 声明已失效（package.json 无此脚本）：${k}`)
 
 /* ---------- ② verify 链与 CI 的覆盖差集 ---------- */
 // verify 里的形态门禁（脚本文件维度）：CI 缺则报；反方向由 ① 覆盖（CI 有的未必在 verify）
@@ -320,6 +330,8 @@ if (!/vue-tsc/.test(verifyCmd)) {
 }
 
 /* ---------- ③ CI 侧关键步骤存在性（防被误删） ---------- */
+// ★2026-10-21：判据从「CI 全文含该串」收紧为「某条 **run 命令**含该串」——
+//   注释里写一句"这一步很关键"不该算步骤存在（同 ① 的假绿通道）。
 const CI_MUST_HAVE = [
   { pat: 'vue-tsc', why: '根类型检查' },
   { pat: 'build-packages', why: '包构建' },
@@ -328,20 +340,24 @@ const CI_MUST_HAVE = [
   { pat: 'check-consistency.js', why: '跨层一致性' },
 ]
 for (const { pat, why } of CI_MUST_HAVE) {
-  if (!CI_TEXT.includes(pat)) failures.push(`CI 缺关键步骤 ${pat}（${why}）——被误删或未接线`)
+  if (!RUN_TEXT.includes(pat)) failures.push(`CI 缺关键步骤 ${pat}（${why}）——被误删或未接线（注释里提到不算）`)
 }
 
 /* ---------- 报告 ---------- */
 console.log('门禁通道一致性检查（CI ⟷ verify）')
 console.log(`  package.json 的 check:* 共 ${checkNames.length} 个`)
+console.log(`  CI 实际 run 命令 ${RUN_COMMANDS.length} 行（注释/name 字段不计）`)
 for (const n of notes) console.log(`  ℹ ${n}`)
 if (failures.length) {
   console.error(`\n❌ 发现 ${failures.length} 处接线缺口：`)
   for (const f of failures) console.error(`  - ${f}`)
   process.exit(1)
 }
-console.log(`  ✅ 全部 check:* 已接线（CI 覆盖 ${checkNames.length - Object.keys(LOCAL_ONLY).length} 个` +
-  `${Object.keys(LOCAL_ONLY).length ? ` + 声明仅本地 ${Object.keys(LOCAL_ONLY).length} 个` : ''}）`)
+console.log(
+  `  ✅ 全部 check:* 已接线（CI 覆盖 ${checkNames.length - localOnlyInEffect.length} 个` +
+    `：名字命中 ${viaCount.name} · 脚本命中 ${viaCount.file} · 子脚本 ${viaCount.sub}` +
+    `${localOnlyInEffect.length ? `；声明仅本地 ${localOnlyInEffect.length} 个` : ''}）`,
+)
 console.log('  ✅ verify 链含 build-packages + 根 vue-tsc（本地与 CI 无覆盖盲区）')
 console.log('  ✅ CI 关键步骤齐备')
 console.log('\n✅ 门禁通道一致（接线不再依靠人工记忆）')

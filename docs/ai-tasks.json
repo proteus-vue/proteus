@@ -2635,7 +2635,7 @@
       "id": "T-gates-sync-false-green",
       "title": "收紧 check:gates-sync 的接线判据：只认真执行的 run 命令 + 位置参数（关掉共享入口/注释提及的假绿通道）",
       "type": "bugfix",
-      "status": "in_progress",
+      "status": "done",
       "owner": "session:wb-gates-sync",
       "scope": [
         "scripts/lib/gates-sync.mjs",
@@ -2644,11 +2644,11 @@
         "docs/ai-tasks.json",
         "docs/project-memory-archive/decisions.md"
       ],
-      "decision": null,
-      "verification": null,
+      "decision": 1157,
+      "verification": "npx vitest run tests/gates-sync.test.ts && node scripts/check-gates-sync.mjs && node scripts/check-ai-tasks.mjs --check && node scripts/check-file-size.mjs && node scripts/check-script-compile.mjs",
       "branch": null,
       "related": [],
-      "note": "【in_progress】缺陷（#1153 ⑩ 顺手挖出）：coveredByCi() 拿「脚本路径出现在 CI 文本」当接线证据 ⇒ ① 共享入口 packages/cli/src/index.ts 被 CI 广泛提及，任何经它的 check:* 在真加 CI 步骤前就假绿（当前仅 check:knowledge 命中）；② CI 里的**注释提及**也算 name 命中（实测 check:baseline-freshness 就是靠 ci.yml:228 那行注释被判已接线，而该行明说『非门禁，不入 CI』）。★口径：只认 run: 命令（含 | 块标量），文件命中还要求位置参数按序命中（不同子命令不得互相冒充），name 命中要求词边界。"
+      "note": "【done · 决策 #1157（2026-10-21）】缺陷（#1153 ⑩ 顺手挖出）：coveredByCi() 拿「脚本路径出现在 CI 文本」当接线证据 ⇒ ① 共享入口 packages/cli/src/index.ts 被 CI 广泛提及，任何经它的 check:* 在真加 CI 步骤前就假绿；② CI 里的**注释提及**也算 name 命中——实测 check:baseline-freshness 就是靠 ci.yml:228「非门禁…不入 CI」那行注释绿的。★新口径：只认 run: 命令（含 | / |2 块标量）；按 && || | ; **切段**再判；echo/grep/cat 等非执行段跳过；名字命中要求包管理器形态（pnpm run check:x）；文件命中要求同段内位置参数按序 + flag 子集；**多个脚本引用每个都得到场**。★独立验证（异会话子代理）打回四处真缺陷并已修：a) 多命令任一命中即放行（删主脚本仍绿）⇒ 改 every；b) `&&` 尾巴被当位置参数（首脚本结构性永不匹配）⇒ splitSegments；c) echo/grep/`--note=` 里的名字算接线 ⇒ 非执行段过滤 + 形态匹配；d) refsOf 把 `app-stack.json` 当成 `app-stack.js`（**2026-09-29 起的既有 bug**）⇒ 扩展名加 (?!\\w)。★判据 37/37；9 个变异全部命中（不切段 / 关非执行段过滤 / 任一文件放行 / 扩展名不断词 / 忽略 flag / 丢词边界 / 名字裸子串 / 删 CI 步骤 / 改成 knowledge layers）。★影响面：159 个 check:* = CI 覆盖 101（名字 50 · 脚本 51 · 子脚本 0）+ 声明仅本地 58；覆盖集与 LOCAL_ONLY 无重叠；唯一需处理项 check:baseline-freshness 补 LOCAL_ONLY（它本就不该进 CI，理由照抄脚本头）。★诚实边界（残余通道）：LOCAL_ONLY 自证（58/159，含若干约定性豁免）；语义级参数只做词匹配（`knowledge --check` 仍会被判命中，已写进测试显式化）；9 条 `cd website && pnpm run check:*` 跑的是子包同名脚本；check:live 只在 [deploy] 后跑而判据不看 if:/分支；.sh/.py 不在文件识别范围（23 个）；YAML 行级解析（锚点/复合 action 未建模，用到时假红）。"
     }
   ]
 }
