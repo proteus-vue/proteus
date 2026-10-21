@@ -58,6 +58,16 @@ export default class EntryAbility extends UIAbility {
     // ★T-app-fetch：HTTP 探针目标 URL（`--ps url https://…`）
     const probeUrl = want?.parameters?.['url'];
     AppStorage.setOrCreate('proteusProbeUrl', typeof probeUrl === 'string' ? probeUrl : '');
+    // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
+    //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
+    //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。
+    const tUrl = want?.parameters?.['transportUrl'];
+    AppStorage.setOrCreate('proteusTransportUrl', typeof tUrl === 'string' ? tUrl : '');
+    const tRounds = want?.parameters?.['rounds'];
+    AppStorage.setOrCreate('proteusTransportRounds', typeof tRounds === 'string' ? tRounds : (typeof tRounds === 'number' ? String(tRounds) : ''));
+    // ★#1156：sync / async 取证模式（见 transport_probe.h 的 async 分支注释）
+    const tMode = want?.parameters?.['mode'];
+    AppStorage.setOrCreate('proteusTransportMode', typeof tMode === 'string' ? tMode : '');
     const scroll = want?.parameters?.['scroll'];
     AppStorage.setOrCreate('proteusScroll', typeof scroll === 'string' ? scroll : '');
     const ms = want?.parameters?.['ms'];

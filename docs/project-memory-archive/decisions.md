@@ -11846,11 +11846,86 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② **明文基线只作读数**：`HttpURLConnection` 连接池会因空闲超时/请求间隔新建连接，硬断言会间歇假红。
   ③ 传输读数**尚未接进 `FetchMeta`**（矩阵 §3 末尾要的 `transport:{protocol,dnsMs,connectMs,tlsMs,reused}`
      仍只是探针形态）⇒ "可观测字段"只完成了一半（**取证**完成、**产品化**未做）。
-  ④ **鸿蒙端未跑**（RCP 栈形态未取证）⇒ 三端里只有两端有读数，文档明确写"两端"。
+  ④ ~~**鸿蒙端未跑**（RCP 栈形态未取证）~~ ⇒ ✅ **已补齐并抓出真缺陷（#1156）**：真实原因是 `hdc`
+     不在 PATH 被误判成无设备；补齐后测得鸿蒙**零连接复用**（3 请求/3 TCP），已修（见 #1156）。
   ⑤ h2 服务端是**取证装置**，不进框架运行时（无生产依赖）。
 
 【下一步】
   ① **HTTPDNS + Android HTTP/2 合并立项**（同一笔栈改动的两个收益；先量 OkHttp 的 APK 增量）；
   ② 把 `transport` 读数接进 `FetchMeta`（探针已证明可度量，缺的是产品化路径）；
-  ③ 鸿蒙端传输形态取证（补齐第三端读数）；
+  ③ ~~鸿蒙端传输形态取证~~（⇒ ✅ #1156）；
   ④ SIE 的逐跳判定；⑤ pinning 密钥轮换辅助。
+
+1156. **★★★鸿蒙传输层补齐：抓出「零连接复用」真缺陷并修复（session 生灭 + 同步 FetchSync 不池化）；顺带立"napi 四方注册"判据 · 决策**（2026-10-21 · 承接 #1155「下一步③」）:
+
+【★先纠正自己的错判（这条教训本身比缺陷值钱）】
+  #1155 在诚实边界里写「**鸿蒙端未跑**（RCP 栈形态未取证）」，隐含理由是"没有可用工具"。
+  用户点名「**鸿蒙设备一直在线的**」——取证后发现：**`hdc` 不在 PATH**（在 DevEco Studio 内），
+  而我没跑 `bash hosts/harmony/hdc.sh list targets` 就下了否定结论。
+  ★这正是 AGENTS.md 记过的那条：「**下否定结论前先跑一条取证命令**」——
+    2026-09-29 我说过两次"本机做不到"而设备一直连着、Xcode 也一直在。**同类错误复发一次。**
+
+【★★先读源码再动手（它决定了这轮值不值得做）】
+  `proteus_http.h` 的 `handle()` 是「**建 session → 发请求 → 关 session**」⇒ 每请求一个新 RCP session。
+  若 RCP 的连接池随 session 生灭 ⇒ 鸿蒙端**完全没有连接复用**。
+  ⇒ 这不是"补个读数"，是**可能存在的真缺陷** ⇒ 造探针实测。
+
+【★★★缺陷与归因（每层都有独立证据，不靠推断）】
+  ① **现象**：真机（HUAWEI KLE-AL00U）`3 请求 / 3 TCP`，三个**不同源端口**；而同轮
+     `statuses=[200,200,200]`、`ms=[58,19,19]` —— **功能全绿、零日志**（本仓反复记的形态）。
+  ② **第一层根因（session 生灭）**：修成**进程级 session**（`SessionSlot` + mutex）
+     后 `sessionsCreated=1`，但**连接仍是 3 条** ⇒ **session 复用不是充分条件**。
+  ③ **第二层根因（取数 API）**：服务端日志显示客户端**没发** `Connection: close`（`conn=-`）
+     ⇒ 不是"客户端要求关"。造 `mode=async` 对照分支：同一 session、同一连接池配置
+     （`maxCacheConnections=8`）、**只改取数 API**：
+       · `HMS_Rcp_FetchSync` ⇒ **3 请求 / 3 TCP**
+       · `HMS_Rcp_Fetch`     ⇒ **3 请求 / 1 TCP** ✅
+     ⇒ **连接池只在异步路径生效**；同步包装每请求新建底层连接。
+     ★"同一能力两个 API、语义不同"——**文档看不出来，只能实测**。
+  ④ 另修一处陷阱：`Rcp_SessionConfiguration sc{}` 零值初始化 ⇒ `maxCacheConnections = 0`
+     ⇒ 池容量 0（**缺省值即关闭**，不是"用平台默认"）。虽非本次根因，仍显式配 8/8/8。
+
+【修复（生产路径 `proteus_http.h`）】
+  · **进程级 session**（`sessionSlot()`；锁只护"取/建"，**不**覆盖整段请求 ⇒ 不串行化并发）；
+  · **异步 `HMS_Rcp_Fetch` + 有界等待**：完成信号 = 回调置位 + notify；上限 = 请求超时 + 5s；
+    超时 ⇒ **主动 cancel** + 回 `http.timeout`（不无限等——无限等会把 UI 线程永久挂死，比超时更糟）；
+    ★**迟到回调自我清理**（`abandoned` ⇒ 由回调 destroy 响应对象，防泄漏）；
+  · 老版本库缺异步符号 ⇒ 退化同步并记 `stats().syncFallback++`（不静默）；
+  · **原生 napi 仍同步返回**（一次性 VM 约束未变）⇒ 调用线程仍被阻塞（诚实边界，已登记矩阵）。
+
+【★★判据（都真跑，且破坏性验证过）】
+  · `tests/harmony-session-reuse.test.ts` **5/5**：SessionSlot + mutex / `pCreateSession` 仅 1 次且在
+    "槽为空"分支 / **必须写回共享槽** / `handle()` 内**无** `pCloseSession` / 锁不覆盖整段请求。
+    ★**破坏性验证抓出判据自己的两个缺陷**：a) 首版只查"`sessionSlot()` 出现"，把
+    `slot.session = session;` 注释掉**仍全绿**（缓存恒空 = 行为回退）⇒ 补「写回共享槽」断言；
+    b) 补完仍全绿——正则命中了**注释里的**那串字符 ⇒ 断言前必须**去行注释**（本仓第 N 次
+    "断言名字/文案存在等于没断言"，#1115/#1118/#1122 同族）。
+  · `tests/harmony-napi-registry.test.ts` **7/7**：napi 导出 ⇄ `d.ts` ⇄ HAR `Index.ets` 重导出 ⇄
+    ArkTS import **四方同集**。★当场抓到真遗漏：`Index.ets` 漏重导出 `hostTransportProbe` ⇒
+    **hvigor 构建才报**「has no exported member」（实测白跑一轮 20s 构建；静态判据 2ms 抓到）。
+    ★判据自己的解析器也修了一次：`export {…} from` 用 `[^}]*` 会在注释 `（{} ⇒ 还原）` 处提前截断
+    ⇒ 误报 7 个"未重导出"假红（**先证解析器有效**再谈结论）。
+  · `check:cache-evidence` 扩到**三端**：鸿蒙打**明文**通道（宿主未接自定义 CA，无法信任自签），
+    通道按端选、判据不变；`http2_ok: null` 显示「**未测**」而非「未协商」（`null`=没测，`false`=测了没有）；
+    失败提示按端给**可执行**归因。破坏性验证：`conn_reused_ok` 改 false ⇒ 门禁红并指名鸿蒙。
+
+【顺带固化的两条纪律（工具化）】
+  · **`hdc` 包装是唯一入口**：`bash hosts/harmony/hdc.sh …`（PATH 里没有）——已写进 runner 头注与本文，
+    避免下次"因为找不到命令就判定做不了"。
+  · **`test:coupled` 新增跨端契约条目**：改 `proteus_http.h` / `transport_probe.h` / `Index.ets` / napi d.ts
+    ⇒ 真跑 `check:harmony-runtime-prebuilt` + `check:cache-evidence` + 两个新判据
+    （prebuilt 副本不同步 ⇒ 外部用户拿到"每请求新建 session"的旧运行时）。
+
+【诚实边界】
+  ① **HTTP/2 未测**（鸿蒙）：h2 需 TLS+ALPN，而宿主未接自定义 CA/pinning ⇒ 证据 `http2_ok: null`
+     （不把"没测"说成"没有"）；
+  ② **session 复用的语义外溢**：RCP session 可能自带 cookie/认证状态 ⇒ 现在会**跨请求保留**，
+     该行为**未取证** ⇒ **不宣称**"鸿蒙端已具备会话共享"；
+  ③ **调用线程仍阻塞**（原生 napi 同步返回，仅内部改异步等待）；
+  ④ 未做"session 失效后重建并重试"的自动兜底（`sessionsRecreated` 字段已留，逻辑未接）；
+  ⑤ `hdc` 只在 DevEco 安装位可寻（包装脚本已覆盖三处候选路径）。
+
+【下一步】
+  ① **HTTPDNS + HTTP/2（Android + 鸿蒙）合并立项**（先量 OkHttp APK 增量；鸿蒙需先接 CA/pinning）；
+  ② `transport` 读数接进 `FetchMeta`（三端探针已证明可度量，缺产品化路径）；
+  ③ 鸿蒙 session 的 cookie/认证语义取证；④ session 失效重建兜底；⑤ SIE 逐跳判定。

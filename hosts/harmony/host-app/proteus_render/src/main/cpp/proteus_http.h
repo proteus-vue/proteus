@@ -38,6 +38,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -68,9 +70,56 @@ struct Stats {
   int lastStatus = 0;        // 最近一次 HTTP 状态码
   int tooLarge = 0;          // 超限拒绝次数（#1117）
   int tooLargeFallback = 0;  // 其中"只能事后拒绝"的次数（无逐块回调符号 · API < 13）
+  /**
+   * ★★★#1156：**RCP session 建了几次**（跨请求复用 ⇒ 恒为 1）。
+   * 【为什么必须记】"连接复用"只有服务端看得见（`h2-echo-server` 记账）；
+   *   本计数是**客户端侧**的因果证据：session 建 1 次 ⇒ 连接池有机会复用；
+   *   建 N 次 ⇒ 每请求一个新池 ⇒ 必然不复用（真机实测 3 请求 / 3 TCP 即此形态）。
+   */
+  int sessionsCreated = 0;
+  /** ★#1156：session 因失效被重建的次数（网络切换/对端关闭 ⇒ 系统回收后重建一次并重试） */
+  int sessionsRecreated = 0;
+  /** ★#1156：异步等待超时的次数（回调未在预算内到达；已主动 cancel） */
+  int fetchTimeouts = 0;
+  /** ★#1156：退化为同步 `FetchSync` 的次数（老版本库缺异步符号 ⇒ 该次**不复用连接**） */
+  int syncFallback = 0;
 };
 inline Stats& stats() {
   static Stats s;
+  return s;
+}
+
+/**
+ * ★★★#1156：**进程级 RCP session 复用**（真缺陷修复）。
+ *
+ * 【问题（真机实测）】此前 `handle()` 是「建 session → 请求 → 关 session」——
+ *   同一台设备对同一 host:port 连发 3 次 ⇒ **3 条 TCP 连接**（服务端记账：
+ *   `requests=3, connections=3, reused=false`，三个不同源端口）。
+ *   ⇒ RCP 的连接池**随 session 生灭** ⇒ 鸿蒙端**完全没有连接复用**（每次请求重新 TCP+TLS 握手）。
+ *   ★这与 #1154 在 Android 上引入的回归同族：**功能全绿、零日志**，只有"请求数 vs 连接数"看得出来。
+ *
+ * 【修法】session 缓存在进程内，首个请求创建、之后复用（进程退出由系统回收）。
+ *   ★为什么进程退出不显式 close：关闭时机没有安全窗口（一次性 VM 的调用边界内关掉就等于不复用；
+ *     关在别处需要生命周期钩子，而宿主没有"应用退出"通知可靠到达 native 的保证）。
+ *     不 close 的代价 = 一个 session 对象（非连接本身）；连接由 RCP 自己按 idle 策略回收。
+ *
+ * 【★★语义变化（必须登记，不能静默）】RCP session 可能自带 cookie 容器 / 连接池 /
+ *   认证状态 ⇒ 复用 session 意味着**这些状态跨请求保留**：
+ *   · 好的一面：与 Android `CookieManager` / iOS `HTTPCookieStorage` 的"同一份会话"语义靠拢；
+ *   · 风险面：RCP 的 cookie 持久化行为**未经本仓取证**（`proteus_http.h` 原注释明确写
+ *     "不带任何 interceptor / cookie 存储"）。⇒ 本轮只证明**连接复用**；cookie 语义待单独取证，
+ *     在取证前**不宣称**"鸿蒙端已具备会话共享"（诚实边界）。
+ *
+ * 【失效兜底】session 可能因网络切换/对端关闭而失效（`1007900993` = session closed/invalid）。
+ *   ⇒ 遇该错误码**重建一次并重试**（有界，最多一次，不无限重试）。
+ */
+struct SessionSlot {
+  std::mutex mu;
+  void* session = nullptr;      // Rcp_Session*（用 void* 避免把 HMS 类型泄露到 struct 外）
+  bool createFnOk = false;
+};
+inline SessionSlot& sessionSlot() {
+  static SessionSlot s;
   return s;
 }
 
@@ -264,6 +313,16 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   //   与 OHOS `OH_Http_DestroyHeaderEntries(…**)` 不同）——按双指针调会把栈地址当对象释放 ⇒ SIGSEGV。
   using DestroyHeaderEntriesFn = void (*)(Rcp_HeaderEntry*);
   using FetchSyncFn = Rcp_Response* (*)(Rcp_Session*, Rcp_Request*, uint32_t*);
+  /**
+   * ★★★#1156：**异步** `HMS_Rcp_Fetch`——生产路径改用它。
+   * 【为什么（真机实测的决定性对照）】
+   *   同一台设备、同一 session、同一连接池配置（`maxCacheConnections=8`），只改取数 API：
+   *     · `HMS_Rcp_FetchSync` ⇒ **3 请求 / 3 TCP**（三个不同源端口，零复用）
+   *     · `HMS_Rcp_Fetch`     ⇒ **3 请求 / 1 TCP**（复用）
+   *   ⇒ 连接池只在**异步**路径生效；同步包装每次都新建底层 easy handle。
+   *   ★这是"同一能力两种 API，语义不同"的典型：不实测无法从文档看出。
+   */
+  using FetchFn = uint32_t (*)(Rcp_Session*, Rcp_Request*, const Rcp_ResponseCallbackObject*);
   using CloseSessionFn = uint32_t (*)(Rcp_Session**);
 
   auto pCreateSession = reinterpret_cast<CreateSessionFn>(dlsym(lib, "HMS_Rcp_CreateSession"));
@@ -275,6 +334,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   auto pGetHeaderEntries = reinterpret_cast<GetHeaderEntriesFn>(dlsym(lib, "HMS_Rcp_GetHeaderEntries"));
   auto pDestroyHeaderEntries = reinterpret_cast<DestroyHeaderEntriesFn>(dlsym(lib, "HMS_Rcp_DestroyHeaderEntries"));
   auto pFetchSync = reinterpret_cast<FetchSyncFn>(dlsym(lib, "HMS_Rcp_FetchSync"));
+  auto pFetchAsync = reinterpret_cast<FetchFn>(dlsym(lib, "HMS_Rcp_Fetch"));
   auto pCloseSession = reinterpret_cast<CloseSessionFn>(dlsym(lib, "HMS_Rcp_CloseSession"));
   // ★#1117：逐块接收 + 中止（API 13+/12+）。**可选符号**：旧设备缺 ⇒ 退化为事后拒绝（见文件头诚实边界）。
   using SetOnBinaryRecvFn = uint32_t (*)(Rcp_Request*, Rcp_OnBinaryReceiveCallback);
@@ -283,23 +343,59 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
       reinterpret_cast<SetOnBinaryRecvFn>(dlsym(lib, "HMS_Rcp_SetRequestOnBinaryDataRecvCallback"));
   auto pCancelRequest = reinterpret_cast<CancelRequestFn>(dlsym(lib, "HMS_Rcp_CancelRequest"));
 
+  // ★#1156：异步 `Fetch` 是**首选**；`FetchSync` 仅在老版本库缺异步符号时兜底
+  //   （兜底路径会退化到"零复用"，如实记 `stats().syncFallback++`）。
+  const bool asyncOk = pFetchAsync != nullptr;
   const bool symbolsOk = pCreateSession && pCreateRequest && pDestroyRequest && pCreateHeaders &&
-                         pDestroyHeaders && pSetHeaderValue && pGetHeaderEntries && pFetchSync &&
-                         pCloseSession;
+                         pDestroyHeaders && pSetHeaderValue && pGetHeaderEntries &&
+                         (asyncOk || pFetchSync != nullptr) && pCloseSession;
   if (!symbolsOk) {
     stats().failures++;
     return proteus::wire::ResolveFrame::missingMethod(
         f.reqId, "http.unsupported: librcp_c.so 缺所需符号（版本过旧？）");
   }
 
-  // ① session（§诚实边界：不带任何 interceptor / cookie 存储）
-  Rcp_SessionConfiguration sc{};
-  sc.type = RCP_SESSION_TYPE_HTTP;
+  // ① session（★★★#1156：**进程级复用**——见 `SessionSlot` 注释；此前每请求建/关 ⇒ 零连接复用）
+  //   ★锁只护"取/建"这一步：**不能**在整段请求期间持锁（那会把并发请求串行化，
+  //     而 RCP 的 session 本身支持多请求并行）。
+  Rcp_Session* session = nullptr;
+  // ★`errCode` 必须在**外层**声明：后面的 `FetchSync` 也用它（本轮编译抓到的作用域错误——
+  //   把它挪进 session 的块里 ⇒ 三处 `use of undeclared identifier`）。
   uint32_t errCode = 0;
-  Rcp_Session* session = pCreateSession(&sc, &errCode);
-  if (session == nullptr) {
-    stats().failures++;
-    return proteus::wire::ResolveFrame::err(f.reqId, "http.failed: 建 RCP session 失败（" + std::to_string(errCode) + "）");
+  {
+    SessionSlot& slot = sessionSlot();
+    std::lock_guard<std::mutex> slotLock(slot.mu);
+    session = static_cast<Rcp_Session*>(slot.session);
+    if (session == nullptr) {
+      Rcp_SessionConfiguration sc{};
+      sc.type = RCP_SESSION_TYPE_HTTP;
+      /**
+       * ★★★#1156：**连接池大小**——这是"不复用"的真正根因（真机取证才定位到）。
+       *
+       * 【证据链】修复 session 复用后，真机仍是 `requests=3 / connections=3`（三个不同源端口），
+       *   而 `sessionsCreated=1`（session 确实只建了一次）⇒ **session 复用不是充分条件**。
+       *   服务端日志显示客户端**没有**发 `Connection: close`（`conn=-`）⇒ 不是"客户端要求关"。
+       *   ⇒ 查 SDK 头文件：`Rcp_SessionConfiguration.connectionConfiguration` 里有
+       *     `maxCacheConnections`（**可缓存连接数 = 连接池容量**）。
+       *   ★而 `Rcp_SessionConfiguration sc{}` **零值初始化** ⇒ `maxCacheConnections = 0`
+       *     ⇒ **池容量为 0 ⇒ 每条请求用完即弃 ⇒ 永不复用**。
+       *   ⇒ 这是"缺省值即关闭"的经典陷阱：不配置 ≠ 用平台默认，而是**明确关闭**。
+       *
+       * 【取值】与 Android `HttpURLConnection` / iOS `URLSession` 的默认量级对齐（每 host 数个），
+       *   不追求激进：8/8/8 足够覆盖业务并发，又不会让 idle 连接长期占用。
+       */
+      sc.connectionConfiguration.maxConnectionsPerHost = 8;
+      sc.connectionConfiguration.maxTotalConnections = 8;
+      sc.connectionConfiguration.maxCacheConnections = 8;
+      session = pCreateSession(&sc, &errCode);
+      if (session == nullptr) {
+        stats().failures++;
+        return proteus::wire::ResolveFrame::err(f.reqId, "http.failed: 建 RCP session 失败（" + std::to_string(errCode) + "）");
+      }
+      // ★只在**首次**建时记账；复用不计数（读数 `sessionsCreated=1` 就证明"复用真的生效了"）
+      slot.session = session;
+      stats().sessionsCreated++;
+    }
   }
 
   // ② request + headers + content + 超时配置
@@ -308,7 +404,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   Rcp_RequestContent content{};
   Rcp_Configuration cfg{};
   if (req == nullptr) {
-    pCloseSession(&session);
+    // ★#1156：**不要**关共享 session（那会让下一个请求重建 ⇒ 复用再次失效）
     stats().failures++;
     return proteus::wire::ResolveFrame::err(f.reqId, "http.failed: 建 RCP request 失败");
   }
@@ -372,8 +468,76 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     }
   }
 
-  // ④ 同步发请求（见文件头「为什么是同步」）
-  Rcp_Response* resp = pFetchSync(session, req, &errCode);
+  // ④ 发请求（★★★#1156：**异步 Fetch + 有界等待真实完成信号**，理由见 pFetchAsync 注释）
+  Rcp_Response* resp = nullptr;
+  if (asyncOk) {
+    /**
+     * 等待器：**回调置位 + notify** 是完成信号；`wait_for` 的上限只是"回调永不到"时的安全网。
+     * ★响应对象的所有权：正常路径由主线程在拷贝完 status/headers/body 后 destroy；
+     *   **超时后**由迟到的回调自行 destroy（`abandoned` 标志），避免泄漏。
+     */
+    struct AsyncWait {
+      std::mutex mu;
+      std::condition_variable cv;
+      bool done = false;
+      bool abandoned = false;      // 主线程已放弃等待（迟到回调须自我清理）
+      uint32_t err = 0;
+      Rcp_Response* resp = nullptr;
+      void (*destroyResp)(Rcp_Response*) = nullptr;
+    };
+    AsyncWait w;
+    w.destroyResp = nullptr;
+    auto cb = [](void* usr, Rcp_Response* r, uint32_t code) {
+      auto* s = static_cast<AsyncWait*>(usr);
+      std::lock_guard<std::mutex> lk(s->mu);
+      if (s->abandoned) {
+        // ★主线程已超时返回 ⇒ 这里必须自己销毁（否则响应对象泄漏）
+        if (r != nullptr && r->destroyResponse != nullptr) r->destroyResponse(r);
+        return;
+      }
+      s->err = code;
+      s->resp = r;
+      s->done = true;
+      s->cv.notify_all();
+    };
+    Rcp_ResponseCallbackObject robj{};
+    robj.callback = cb;
+    robj.usrCtx = &w;
+    const uint32_t fetchRc = pFetchAsync(session, req, &robj);
+    if (fetchRc != 0) {
+      // 受理失败：请求没发出去 ⇒ 直接按错误码返回（与同步路径的 reasonOf 口径一致）
+      errCode = fetchRc;
+      stats().failures++;
+      if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
+      pDestroyRequest(req);
+      return proteus::wire::ResolveFrame::err(f.reqId, reasonOf(errCode));
+    }
+    /**
+     * 有界等待：上限 = 请求超时 + 5s 余量。
+     * ★为什么不是"无限等"：RCP 若因内部错误永不回调，无限等会把**调用线程**（鸿蒙上即 UI 线程）
+     *   永久挂死——比超时返回更糟。超时后**主动 cancel** 并把错误如实回给业务。
+     */
+    const int64_t waitMs = static_cast<int64_t>(timeoutMs) + 5000;
+    {
+      std::unique_lock<std::mutex> lk(w.mu);
+      if (!w.cv.wait_for(lk, std::chrono::milliseconds(waitMs), [&] { return w.done; })) {
+        w.abandoned = true;
+        lk.unlock();
+        stats().failures++;
+        stats().fetchTimeouts++;
+        if (pCancelRequest != nullptr) pCancelRequest(session, req);
+        if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
+        pDestroyRequest(req);
+        return proteus::wire::ResolveFrame::err(f.reqId, "http.timeout: 宿主未在预算内收到响应回调");
+      }
+      errCode = w.err;
+      resp = w.resp;
+    }
+  } else {
+    // 老版本库兜底（会退化到零复用——如实记账，不静默）
+    stats().syncFallback++;
+    resp = pFetchSync(session, req, &errCode);
+  }
 
   // ⑤ 记账（探针据此证明逐块 + 真中止）
   {
@@ -445,10 +609,10 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     }
   }
 
-  // ④ 释放
+  // ④ 释放（★#1156：只释放**单次请求**的资源；session 留给后续请求复用——
+  //   关掉它就等于把连接池一起丢掉，连接复用会立刻归零（真机实测 3 请求/3 TCP 就是这个原因））
   if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
   pDestroyRequest(req);
-  pCloseSession(&session);
   return out;
 #endif
 }

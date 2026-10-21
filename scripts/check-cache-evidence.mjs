@@ -434,6 +434,16 @@ for (const { id, rel, key } of TLS_ENDS) {
 const TRANSPORT_ENDS = [
   { id: 'android', rel: 'hosts/android/results/transport-probe.json', key: 'transport_probe' },
   { id: 'ios', rel: 'hosts/ios/results/transport-probe.json', key: 'transport_probe' },
+  /**
+   * ★★★#1156：**鸿蒙（第三端）**——`#1155` 曾把它登记为"鸿蒙端未跑"，真实原因是
+   *   `hdc` 不在 PATH 被误判成无设备（设备一直连着）。本轮补齐，并在此之前抓出真缺陷：
+   *   生产路径每请求建/关 RCP session + 用同步 `HMS_Rcp_FetchSync` ⇒ **零连接复用**
+   *   （真机 `3 请求 / 3 TCP`）；改用异步 `HMS_Rcp_Fetch` + 进程级 session 后 `3 请求 / 1 TCP`。
+   * ★形态差异（如实）：鸿蒙证据是**平铺**的（`server_requests` 在顶层，不是 `transport_probe` 子对象），
+   *   因为它的 runner 把服务端记账直接并进同一份 JSON；`probeOf` 找不到 `transport_probe` 时
+   *   会回落到文档本身（见下方 `p = probeOf(...) ?? doc`）。`http2_ok` 为 `null`（本轮未测）。
+   */
+  { id: 'harmony', rel: 'hosts/harmony/results/transport-probe.json', key: 'transport_probe' },
 ]
 
 const transportRows = []
@@ -445,9 +455,12 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
     continue
   }
   if (!isTracked(rel)) problems.push(`${id}: 证据 ${rel} 存在但未入库——git add -f ${rel}`)
+  let doc = null
   let p = null
   try {
-    p = probeOf(JSON.parse(fs.readFileSync(abs, 'utf-8')), key)
+    doc = JSON.parse(fs.readFileSync(abs, 'utf-8'))
+    // ★#1156：鸿蒙证据是**平铺**的（runner 把服务端记账并进同一份 JSON）⇒ 找不到子对象就用文档本身
+    p = probeOf(doc, key) ?? doc
   } catch (e) {
     problems.push(`${id}: ${rel} 解析失败：${e.message}`)
     transportRows.push({ id, rel, state: '解析失败' })
@@ -461,12 +474,17 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
 
   // ① 请求必须真的成功（否则"连接数"是在测连不上）
   if (p.first_ok !== true) problems.push(`${id}: 传输层探针首轮请求失败（${p.req_error || '?'}）`)
-  // ② ★**连接复用必须成立**（这是 #1154 引入过的性能回归，必须守住）
+  // ② ★**连接复用必须成立**（这是 #1154/#1156 两次实测抓出的性能回归，必须守住）
   if (p.conn_reused_ok !== true) {
-    problems.push(
-      `${id}: **连接未被复用**（请求 ${p.server_requests} / TCP ${p.server_connections}）——` +
-        `若刚改过 pinning，检查是否每次请求都新建 SSLContext（连接池按 factory 分桶）`,
-    )
+    // ★按端给出**可执行的**归因线索（同一个现象，两端的成因完全不同——写混了会把人带错方向）
+    const hint =
+      id === 'harmony'
+        ? '鸿蒙的成因是 **RCP session 生灭 + 取数 API**：`HMS_Rcp_CreateSession/FetchSync` 组合' +
+          '每条请求都新建底层连接（真机实测 3 请求/3 TCP）。修法：session 进程级复用 + 改用**异步** ' +
+          '`HMS_Rcp_Fetch`（`proteus_http.h`）；静态判据 `tests/harmony-session-reuse.test.ts`'
+        : '若刚改过 pinning，检查是否每次请求都新建 SSLContext（连接池按 factory 分桶；' +
+          '静态判据 `tests/tls-pinning-reuse.test.ts`）'
+    problems.push(`${id}: **连接未被复用**（请求 ${p.server_requests} / TCP ${p.server_connections}）——${hint}`)
   }
   /**
    * ③ ★★★**证据必须由修正后的计量产出**（否则旧口径的绿色会冒充新结论）。
@@ -476,27 +494,32 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
    *   b) 首版连接身份用 `req.socket` ⇒ h2 兼容层**每流一个 socket 包装** ⇒ 同一条 TCP 连接被数成 3 条
    *      （iOS 的 `perConnection` 出现 c2/c3/c4 各 1 次，而 `connections` 只计到 2 ⇒ "3 > 2" 判成复用 = 巧合）。
    *   现口径：按通道分账（`channels.tls` / `channels.plain`）+ 连接身份 = **对端 socket**。
-   *   ⇒ 证据里必须出现 `channels`，且 TLS 通道的 `connections` 要对得上 `conns` 的键数；
-   *     没有这两个字段 ⇒ 该证据是旧装置产出（跑 `bash hosts/{android,ios}/run-transport-probe.sh` 重生成）。
+   *   ⇒ 证据里必须出现 `channels`，且所选通道的 `connections` 要对得上 `conns` 的键数；
+   *     没有这两个字段 ⇒ 该证据是旧装置产出（重跑 `bash hosts/<端>/run-transport-probe.sh`）。
+   *
+   * ★#1156：**通道按端选**——Android/iOS 打 TLS 通道（自签 + `tlsPinOnly`，顺带验 pinning），
+   *   鸿蒙打**明文**通道（宿主未接自定义 CA ⇒ 无法信任自签）。判据本身与通道无关：
+   *   "请求数 vs 连接数"在两个通道上是同一个性质。
    */
   const channels = (p.server_stats || {}).channels
-  const tlsCh = (channels || {}).tls
-  if (!channels || !tlsCh) {
+  const chanTag = id === 'harmony' ? 'plain' : 'tls'
+  const ch = (channels || {})[chanTag]
+  if (!channels || !ch) {
     problems.push(
-      `${id}: 证据缺少按通道的记账（\`server_stats.channels.tls\`）——**旧装置产出**，` +
+      `${id}: 证据缺少按通道的记账（\`server_stats.channels.${chanTag}\`）——**旧装置产出**，` +
         `判据已修正（连接身份 = 对端 socket、只算 /__whoami）⇒ 必须重跑 \`bash hosts/${id}/run-transport-probe.sh\``,
     )
   } else {
-    const connKeys = Object.keys(tlsCh.conns || {}).length
-    if (connKeys !== Number(tlsCh.connections)) {
+    const connKeys = Object.keys(ch.conns || {}).length
+    if (connKeys !== Number(ch.connections)) {
       problems.push(
-        `${id}: 记账自相矛盾——\`connections=${tlsCh.connections}\` 但 \`conns\` 有 ${connKeys} 个键` +
+        `${id}: 记账自相矛盾——\`connections=${ch.connections}\` 但 \`conns\` 有 ${connKeys} 个键` +
           `（连接身份必须按对端 socket 聚合：h2 下同一连接的所有流共享它）`,
       )
     }
-    if (Number(tlsCh.requests) !== Number(p.server_requests)) {
+    if (Number(ch.requests) !== Number(p.server_requests)) {
       problems.push(
-        `${id}: 顶层 \`server_requests\`(${p.server_requests}) 与通道记账(${tlsCh.requests}) 不一致——` +
+        `${id}: 顶层 \`server_requests\`(${p.server_requests}) 与通道记账(${ch.requests}) 不一致——` +
           `说明证据来自"跨通道混算"的旧口径`,
       )
     }
@@ -518,7 +541,12 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
     )
   }
   // ⑤ HTTP/2 只作**读数**（未协商是已取证结论，不是缺陷；换栈属独立大单）
+  //   ★#1156：鸿蒙 `http2_ok === null` = **本轮未测**（明文端口 + 宿主未接 CA/pinning）——
+  //     必须与"未协商"分开显示：`null` 是"没测"，`false` 是"测了但没有"。混为一谈会把
+  //     "未知"当"已知不足"，也会让后续有了 pinning 之后仍显示旧的错误结论。
   const protos = p.server_protocols || {}
+  const http2Text =
+    p.http2_ok === true ? '已协商' : p.http2_ok === null || p.http2_ok === undefined ? '未测' : '未协商（需换栈）'
   transportRows.push({
     id,
     rel,
@@ -526,7 +554,7 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
     reused: p.conn_reused_ok,
     httpsConns: p.server_connections,
     httpsReqs: p.server_requests,
-    http2: p.http2_ok === true ? '已协商' : '未协商（需换栈）',
+    http2: http2Text,
     protos,
   })
 }
@@ -583,5 +611,7 @@ console.log(
   `✅ 条件请求缓存双端证据齐备（基础：${rows
     .map((r) => `${r.id} 命中 hits ${r.freshHits}/平台缓存介入=${r.platformCache}`)
     .join(' · ')}；RFC 5861：${staleRows.map((r) => `${r.id} SWR=${r.swr} ver=${r.ver}`).join(' · ')}；` +
-    `持久层：${persistRows.map((r) => `${r.id} ${r.backend} 重启命中 ageMs=${r.ageMs}`).join(' · ')}）`,
+    `持久层：${persistRows.map((r) => `${r.id} ${r.backend} 重启命中 ageMs=${r.ageMs}`).join(' · ')}；` +
+    // ★#1156：传输层的三端读数也要出现在**成功摘要**里——否则"绿色"看不出鸿蒙是否真跑了
+    `传输层：${transportRows.map((r) => `${r.id} 复用=${r.reused}（${r.httpsReqs}/${r.httpsConns}）h2=${r.http2}`).join(' · ')}）`,
 )

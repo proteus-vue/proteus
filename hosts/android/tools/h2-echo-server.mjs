@@ -138,7 +138,12 @@ function makeHandler(tag) {
       ch.protocols[proto] = (ch.protocols[proto] ?? 0) + 1
       ch.conns[peer] = (ch.conns[peer] ?? 0) + 1
     }
-    console.log(`[h2-req] ${new Date().toISOString()} ${tag} ${proto} peer=${peer} sid=${sid}${isSample ? ' SAMPLE' : ' ctl'} ${req.method} ${u.pathname}`)
+    // ★★★#1156：把 `connection` 头与协议一起记进日志——用来区分
+    //   「客户端要求关闭（`Connection: close`）」与「服务端/中间层提前关」。
+    //   真机实测：鸿蒙 3 请求 / 3 TCP（源端口各不同），而 session 只建了 1 次 ⇒ 需要这条证据判断
+    //   是 RCP 主动关连接，还是它根本没池化。
+    const connHdr = req.headers['connection'] ?? '-'
+    console.log(`[h2-req] ${new Date().toISOString()} ${tag} ${proto} peer=${peer} sid=${sid}${isSample ? ' SAMPLE' : ' ctl'} conn=${connHdr} ${req.method} ${u.pathname}`)
 
     if (u.pathname === '/__stats') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })

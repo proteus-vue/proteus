@@ -1,0 +1,121 @@
+// tests/harmony-session-reuse.test.ts
+// ★★★决策 #1156：**鸿蒙 RCP session 必须跨请求复用**——静态判据（防回归）。
+//
+// 【它守的是一个真机实测抓出的**真缺陷**（不是推断）】
+//   `hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h` 的 `handle()` 原本是
+//   「建 session → 发请求 → **关 session**」⇒ 每个 `http.request` 都是全新 RCP session。
+//   RCP 的连接池随 session 生灭 ⇒ **鸿蒙端完全没有连接复用**。
+//
+//   ★真机证据（2026-10-21 · HUAWEI KLE-AL00U · `bash hosts/harmony/run-transport-probe.sh 3`）：
+//     修复前：服务端记账 `requests=3, connections=3, reused=false`，
+//             三个**不同源端口**（`192.168.0.163:55588/55600/55608`）⇒ 3 条独立 TCP。
+//             而同轮设备侧 `statuses=[200,200,200]`、`ms=[58,19,19]` —— **功能全绿**
+//             （这正是本仓反复记的形态：**功能对、性能错、零日志**）。
+//     对照：Android/iOS 同一判据下均为 `3 请求 / 1 连接`。
+//
+// 【为什么用静态判据】这段逻辑要 HMS RCP 头 + 设备才能真跑（CI 无 SDK、无设备）；
+//   而"是否每请求关 session"是**结构性形态**，静态就能守。真机行为判据是
+//   `hosts/harmony/results/transport-probe.json` + `check:cache-evidence` 的 transport 段。
+//
+// 【★★诚实边界（本判据不看的东西）】
+//   · 不看 session **内容语义**（cookie / 认证状态是否随 session 跨请求保留）——
+//     RCP 的 cookie 持久化行为**尚未取证**，本轮只证连接复用，不宣称"会话共享已具备"。
+//   · 不看"进程退出时是否 close"：刻意不 close（关闭时机没有安全窗口，见源码 `SessionSlot` 注释）。
+import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+
+const ROOT = path.resolve(__dirname, '..')
+const HTTP_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h'
+const src = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), 'utf8')
+
+describe('★★★#1156 鸿蒙 RCP session 必须跨请求复用（真机抓出的零复用缺陷）', () => {
+  const h = src(HTTP_H)
+
+  /** `handle()` 的函数体（从签名到文件末尾的 `#endif` 前的闭合）——够用且稳定 */
+  function handleBody(): string {
+    const start = h.indexOf('ResolveFrame handle(')
+    expect(start, `没找到 handle()（${H_INCLUDE_HINT}）`).toBeGreaterThan(0)
+    return h.slice(start)
+  }
+
+  /**
+   * ★★★**去行注释后再断言**（本轮破坏性验证逼出来的第二课）。
+   *
+   * 【为什么必须去注释】首版直接对原文做正则：把 `slot.session = session;` 注释掉之后
+   *   `/slot\.session\s*=\s*session/` **仍然命中注释里的那串字符** ⇒ 判据全绿而行为已回退。
+   *   这是本仓记过多次的同族缺陷：**断言"名字/文案存在"等于没断言**
+   *   （#1115/#1118/#1122 都栽在"注释里也有这句"）。
+   *   ⇒ 只看**活代码**：去掉 `//` 行注释（本文件注释全用行注释；不含 `http://` 之类需保护的内容）。
+   */
+  function code(src: string): string {
+    return src
+      .split('\n')
+      .map((line) => {
+        const i = line.indexOf('//')
+        return i >= 0 ? line.slice(0, i) : line
+      })
+      .join('\n')
+  }
+
+  const H_INCLUDE_HINT = `${HTTP_H} 形态变了？`
+
+  it('① 存在**进程级** session 缓存容器（含互斥锁）', () => {
+    expect(h, '★没有 SessionSlot（session 仍是每请求局部变量 ⇒ 必然零复用）').toMatch(/struct\s+SessionSlot/)
+    expect(h, '★SessionSlot 缺 mutex（并发请求会竞争建/取）').toMatch(/std::mutex/)
+    expect(h, '★没有进程序仓 `sessionSlot()` 单例').toMatch(/inline\s+SessionSlot&\s+sessionSlot\(\)/)
+  })
+
+  it('★★② `handle()` 里 session 从**共享槽**取，不是每请求 `pCreateSession` 直建', () => {
+    const body = code(handleBody())
+    expect(body, '★handle() 里没有取共享槽（sessionSlot()）').toMatch(/sessionSlot\(\)/)
+    // ★允许 `pCreateSession` 存在，但必须在"槽为空"的分支里——否则又变成每请求新建
+    const createCount = (body.match(/pCreateSession\(/g) ?? []).length
+    expect(createCount, `★handle() 里 pCreateSession 出现 ${createCount} 次（应恰好 1 次，且在槽为空时）`).toBe(1)
+    // ★窗口要容下"槽为空 ⇒ 配连接池 ⇒ 建 session"这几步（#1156 加 `connectionConfiguration` 后变长）。
+    //   窗口定太窄会因"代码挪了几行"而假红——脆弱断言等于引入噪音。
+    expect(body, '★pCreateSession 不在 `session == nullptr` 的分支里（每请求都会新建）').toMatch(
+      /session\s*==\s*nullptr[\s\S]{0,1200}pCreateSession\(/,
+    )
+    /**
+     * ★★★**必须真的写回共享槽**——只"查"不"写"等于缓存恒空 ⇒ 每请求照样新建。
+     * 【这条是破坏性验证逼出来的（本轮实测）】首版判据只查了 `sessionSlot()` 出现、
+     *   `pCreateSession` 只出现一次、没有 `pCloseSession`——把 `slot.session = session;`
+     *   注释掉之后**5 条全绿**（缓存永不命中，行为与修复前完全一致）。
+     *   ⇒ 「查缓存」与「写缓存」必须各有一条断言（与 `tls-pinning-reuse` 的 get/put 配对同源）。
+     */
+    expect(body, '★建完 session 没有写回共享槽（`slot.session = session`）⇒ 缓存恒空，每请求仍新建').toMatch(
+      /slot\.session\s*=\s*session/,
+    )
+  })
+
+  it('★★③ `handle()` **不得**关闭共享 session（关了 ⇒ 下个请求重建 ⇒ 复用再次归零）', () => {
+    const body = code(handleBody())
+    expect(body, '★handle() 里仍有 pCloseSession —— 关掉共享 session 等于丢掉连接池').not.toMatch(/pCloseSession\(/)
+  })
+
+  it('④ 建 session 的次数有记账（`sessionsCreated`，供探针回执当因果证据）', () => {
+    expect(h, '★Stats 没有 sessionsCreated 字段').toMatch(/int\s+sessionsCreated\s*=\s*0/)
+    expect(h, '★sessionsCreated 从未自增（读数永远是 0 ⇒ 无法证明复用）').toMatch(/stats\(\)\.sessionsCreated\+\+/)
+  })
+
+  it('★⑤ 锁只护"取/建"，不覆盖整段请求（否则并发请求被串行化）', () => {
+    const body = code(handleBody())
+    /**
+     * ★★★断言要**精确到 session 槽的锁**，而不是"文件里有没有 unique_lock"。
+     *
+     * 【为什么改（#1156 实测假红）】首版用 `not.toMatch(/std::unique_lock<std::mutex>\s+\w+\(/)` 扫整个
+     *   `handle()` —— 而**异步等待**（`cv.wait_for` 必须配 `unique_lock`）也在同一个函数里
+     *   ⇒ 判据把"等待响应的锁"误判成"session 槽持锁"，红得毫无道理。
+     *   ★这与上文 ③ 同源：**判据要盯住它真正想守的东西**，否则会被无关代码形态带偏。
+     * ⇒ 只看 session 那一段块（`sessionSlot()` 到该块结束附近）里是否用了函数级锁。
+     */
+    const slotAt = body.indexOf('sessionSlot()')
+    expect(slotAt, '没找到 sessionSlot() 段').toBeGreaterThan(0)
+    const slotSeg = body.slice(Math.max(0, slotAt - 400), slotAt + 1200)
+    expect(slotSeg, '★session 槽用了函数级 unique_lock（会持锁到请求结束 ⇒ 并发被串行化）').not.toMatch(
+      /std::unique_lock<std::mutex>\s+\w+\(/,
+    )
+    expect(slotSeg, '★session 槽没有 lock_guard（取/建之间无保护）').toMatch(/std::lock_guard<std::mutex>/)
+  })
+})

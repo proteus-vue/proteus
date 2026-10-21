@@ -118,12 +118,16 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 > 真机实测 Android `3 请求 / 1 TCP 连接`、iOS `3 请求 / 1 TCP 连接`（证据
 > `hosts/{android,ios}/results/transport-probe.json`，门禁 `check:cache-evidence`）。
 > 本轮反而抓出**我们自己**破坏它的真回归（见下方"P1 · 已落地"的 pinning 行）。
-> ⇒ **P1 只剩两项**：HTTPDNS（两端都需要自定义解析）与 **HTTP/2（只有 Android 缺）**。
+> ★★★**鸿蒙也已补齐（#1156）**——`#1155` 曾记成"鸿蒙端未跑"，**真实原因是 `hdc` 不在 PATH
+> 被误判成无设备**（设备一直连着）。补齐过程中抓出**鸿蒙端零连接复用的真缺陷**：
+> 生产路径每请求建/关 RCP session + 用同步 `HMS_Rcp_FetchSync` ⇒ 真机 `3 请求 / 3 TCP`；
+> 修为「进程级 session + **异步** `HMS_Rcp_Fetch`」后 `3 请求 / 1 TCP`。
+> ⇒ **P1 只剩两项**：HTTPDNS（两端都需要自定义解析）与 **HTTP/2（Android 与鸿蒙都缺）**。
 
 | 能力 | 落点 | 前置 | 判据设计（可执行） |
 |---|---|---|---|
 | HTTPDNS | Android OkHttp `Dns` 接口 / iOS `NWConnection` 自定义解析 | **Android 需引入 OkHttp**（APK +Δ）；iOS 需自建解析或 `Network.framework` | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
-| **HTTP/2（仅 Android）** | Android 同上（OkHttp `Protocol.HTTP_2`） | 同 HTTPDNS | 断言：服务端记录 `h2` 协商（**判据已现成**：`bash hosts/android/run-transport-probe.sh`，现读数 `http2_ok=false`） |
+| **HTTP/2（Android + 鸿蒙）** | Android 同上（OkHttp `Protocol.HTTP_2`）；鸿蒙 RCP 需先接自定义 CA/pinning 才可能协商 | 同 HTTPDNS（鸿蒙另需 TLS 信任配置） | 断言：服务端记录 `h2` 协商（**判据已现成**：`bash hosts/android/run-transport-probe.sh`，现读数 `http2_ok=false`；鸿蒙为 `null`＝未测） |
 
 ★**为什么"HTTP/2 只剩 Android"这条很重要（它改变了工程量判断）**：
 矩阵原先写"HTTP/2 + 连接池：需 Android 引入 OkHttp"，读起来像"三端都要补"。
@@ -139,14 +143,17 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 |---|---|---|
 | **TLS 证书 pinning** | ✅ **#1154**：`tlsPins`（**SPKI** 指纹，换行/逗号/数组都接受）+ `tlsPinOnly`（`true`=替代系统信任；缺省=**叠加**）。宿主：Android `TlsPinning`（`X509TrustManager` 代理默认信任 + 逐证书 `SHA-256(getPublicKey().getEncoded())`）· iOS `TlsPinningIos`（challenge 回调 + `SecKeyCopyExternalRepresentation` **补 SPKI 头**再哈希）。线格式 `Pins=12` / `PinOnly=13`（五端 40 向量逐字节等价） | 真机双端各 **11/10 条**：pin 命中⇒成功 / 未命中⇒**`fetch.tlsError`** / **叠加模式真的叠加**（pin 对但不开 pinOnly ⇒ 自签被系统信任拒） / 无 pin⇒自签被拒 / 宿主记账确有 challenge。`bash hosts/{android,ios}/run-tls-probe.sh` |
 | **连接复用（连接池）** | ✅ **本来就具备**（#1155 取证，无需换栈）：Android `HttpURLConnection` 的 keep-alive 池 · iOS `URLSessionConfiguration.default` 的进程级单例会话。★但 **#1154 的 pinning 首版把它弄坏了**（每次请求新建 `SSLContext` ⇒ 连接池按 `SSLSocketFactory` 分桶 ⇒ 复用归零），#1155 修为**进程内缓存 factory** | 真机双端各 **3 请求 / 1 TCP 连接**（服务端按**对端 socket**记账）；静态判据 `tests/tls-pinning-reuse.test.ts`（缓存入口唯一 + 命中即返回）+ 计量判据 `tests/transport-probe-accounting.test.ts`（h2 的多个流算 1 条连接、控制端点不计样本） |
+| **连接复用（鸿蒙）** | ✅ **#1156 修出来的**（原本零复用）：根因两层——① `handle()` 每请求建/关 `Rcp_Session`；② **同步 `HMS_Rcp_FetchSync` 不池化**（同一 session、同一连接池配置下，只改取数 API 即从 3/3 变 3/1）。修法：**进程级 session**（`SessionSlot` + mutex）+ 生产路径改用**异步** `HMS_Rcp_Fetch` + **有界等待**（回调为完成信号，超时则 cancel 并回 `http.timeout`）。原生 napi 仍是同步返回（一次性 VM 约束未变） | 真机 **3 请求 / 1 TCP**（`hosts/harmony/results/transport-probe.json`，`check:cache-evidence` 第三端）；静态判据 `tests/harmony-session-reuse.test.ts`（session 缓存 get/put 配对 + 无 per-request close + 锁不覆盖整段请求）；四方注册判据 `tests/harmony-napi-registry.test.ts` |
 
 ★**pinning 的两条诚实边界**：① `pinOnly` 只替代**信任锚**，**不**替代主机名校验
 （放宽主机名会打开 MITM 的门，属另一个策略开关）；② 钉 SPKI 而非整张证书——后者在证书**续期**（同一密钥）时指纹就变。
 
 ★**#1155 的另一半产出：把"看不见的传输层"变成可观测读数**。
-`bash hosts/{android,ios}/run-transport-probe.sh` 现在产出
+`bash hosts/{android,ios,harmony}/run-transport-probe.sh` 现在产出
 `{client_protos, client_peers, server_protocols, server_requests, server_connections, http2_ok, conn_reused_ok}`
 ——这正是本节末尾"P1 共同前提"里 `transport` 可观测字段的**雏形**（尚未接进 `FetchMeta`）。
+★**三端读数（2026-10-21 真机）**：Android `http/1.1 · 3/1 复用` · iOS `h2 · 3/1 复用` ·
+鸿蒙 `http/1.1 · 3/1 复用（修后）· h2=未测`。
 
 ★**P1 的共同前提**：三端要有**同一套可观测字段**（`transport`：`{ protocol, dnsMs, connectMs, tlsMs, reused }`），
 否则判据只能各端各写、无法比对——这与本仓"三端同判据"纪律冲突。
@@ -223,8 +230,15 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
    ~~L2 磁盘层~~ ⇒ ✅ **已完成（#1151 · `persist:true`，Web/MP=KV、App=文件）**；
 4. ~~P1 证书 pinning~~ ⇒ ✅ **已完成（#1154，不需要换栈）**；
    ~~P1 连接池~~ ⇒ ✅ **#1155 取证：两端本来就在工作**（各 3 请求 / 1 连接；并修掉 #1154 引入的复用回归）；
+   ~~P1 连接池（鸿蒙）~~ ⇒ ✅ **#1156：原本零复用（3/3），修为 3/1**（进程级 session + 异步 `Rcp_Fetch`）；
    ~~P1 HTTP/2（iOS 侧）~~ ⇒ ✅ **平台默认已具备**（真机 h2 已协商）；
-   **P1 剩余两项**：① **HTTP/2 仅 Android 缺**（需引 OkHttp `Protocol.HTTP_2`，独立大单，先评估 APK 体积）；
+   **P1 剩余两项**：① **HTTP/2（Android 与鸿蒙）**——Android 需引 OkHttp `Protocol.HTTP_2`；
+   鸿蒙需先给 RCP 接自定义 CA/pinning（否则 h2 的 TLS+ALPN 无从验证），独立大单，先评估 APK 体积；
    ② **HTTPDNS 全端缺**（Android 需 OkHttp `Dns`；iOS 需自建解析或 `Network.framework`）。
    ★两者都属"换/扩传输栈"，应**合并为一个独立立项**评估（同一笔栈改动的两个收益）。
-5. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。
+5. **鸿蒙传输层的两处状态变化要单独记（#1156）**：
+   ① **session 现在跨请求复用** ⇒ RCP 的 cookie / 认证状态**可能随之跨请求保留**——该行为**尚未取证**，
+   在取证前**不宣称**"鸿蒙端已具备会话共享"（与 Android `CookieManager` / iOS `HTTPCookieStorage` 对齐是目标，不是现状）；
+   ② **原生 napi 仍是同步返回**（一次性 VM 约束未变），但内部改为"异步 Fetch + 有界等待" ⇒
+   请求期间**调用线程仍被阻塞**（与 Android/iOS 的"受理即返、完成回推"语义不同，如实登记）。
+6. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。

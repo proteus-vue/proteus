@@ -123,6 +123,17 @@ const COUPLING = [
     why: 'pinning 的 socketFactory 必须**进程内缓存**（连接池按 factory 分桶；每请求新建 ⇒ 复用归零，性能回归且无任何报错）；探针登记两方同集；证据必须由修正后的计量产出（连接身份 = 对端 socket，样本只算 /__whoami）',
   },
   {
+    // ⑫ ★★★#1156：鸿蒙宿主 HTTP 腿（RCP）——**连接复用**与**四方注册一致性**
+    //   · `proteus_http.h` 若每请求建/关 session、或用同步 `HMS_Rcp_FetchSync` ⇒ **零连接复用**
+    //     （真机实测 3 请求 / 3 TCP；改异步 Fetch + 进程级 session 后 3/1）；
+    //   · 新增 napi 导出漏 d.ts / 漏 HAR 重导出 ⇒ ArkTS 编译期才报（白跑一轮构建，已实测一次）。
+    match:
+      /hosts\/harmony\/host-app\/proteus_render\/src\/main\/cpp\/(proteus_http|transport_probe)\.h$|hosts\/harmony\/host-app\/proteus_render\/(Index\.ets|src\/main\/cpp\/types\/)/,
+    gates: ['pnpm check:harmony-runtime-prebuilt', 'pnpm check:cache-evidence'],
+    tests: ['tests/harmony-session-reuse.test.ts', 'tests/harmony-napi-registry.test.ts'],
+    why: '鸿蒙 RCP 的 session 生命周期与取数 API 决定连接复用（同步 FetchSync 不池化）；napi 导出必须四方一致（实现 ⇄ d.ts ⇄ HAR Index.ets ⇄ ArkTS import）；prebuilt 副本须同步（否则外部用户拿旧运行时）',
+  },
+  {
     // ⑨ 文档生成器源集合（拆文件后源集合找不到 ⇒ 整段文档消失）
     match: /^packages\/api\/src\//,
     gates: ['pnpm check:content'],

@@ -21,6 +21,9 @@ export const appScreenFollowField: (json: string) => string;
 export const hostRtShellInstall: (json: string) => string;
 /** ★T-app-fetch 真机判据：空 VM + 真实 `invokeBytes` + 真网络（入参 {url}）→ JSON 回执 */
 export const hostHttpProbe: (json: string) => string;
+/** ★★★#1156 鸿蒙传输层事实取证：同一 VM 连发 N 轮同 host:port（入参 {url, rounds}）→ JSON 读数。
+ *  ★**复用结论不在这里判**——协议/连接数只有服务端知道，由 runner 读 `/__stats` 判（同判据三端可比）。 */
+export const hostTransportProbe: (json: string) => string;
 /** ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 → C++ 侧回答 device.* 读类能力 */
 export const setDeviceSnapshot: (json: string) => string;
 /** ★★设备与系统域（决策 #1067）：取走 C++ 入队的设备动作（渲染后执行） */

@@ -19,17 +19,17 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe } from 'proteus_render';
+import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe, hostTransportProbe } from 'proteus_render';
 // ★T-app-fetch：ArkTS 侧编解码器（本端唯一实现）——真机判据用它**自己编码**一帧交给 C++，
 //   验的就是「ArkTS 编的字节 → C++ 解」这条真实跨语言契约（parity 门禁在本机验同一性质）。
 import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 // ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
+import { runTransportProbeScene } from '../runtime/TransportProbe';   // ★★★#1156 传输层取证（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
 import { readElementProbes, elementReportFragment, measureElementRect, ElementProbeReadout } from '../runtime/ElementProbe';
-// ★决策 #1077：键盘探针要主动收键盘（IMEKit 的输入会话控制）
-import { inputMethod } from '@kit.IMEKit';
+import { inputMethod } from '@kit.IMEKit';   // ★决策 #1077：键盘探针主动收键盘（IMEKit 输入会话控制）
 
 const DOMAIN = 0x0002;
 const TAG = 'ProteusSuperapp';
@@ -122,10 +122,10 @@ struct Superapp {
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'SUPERAPP_PAGE_APPEAR scene=%{public}s', this.scene);
-    // ★T-app-fetch：HTTP 通路判据场景（不依赖应用 bundle —— 应用层故障时仍可独立判定网络腿）
-    if (this.scene === 'superapp-http') {
-      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* filesDir 取不到时报告写 /tmp 之外会失败 */ }
-      this.runHttpProbe();
+    // ★T-app-fetch / #1156：探针场景（传输层取证逻辑在 `runtime/TransportProbe.ets`——本文件已到行数上限）
+    if (this.scene === 'superapp-http' || this.scene === 'superapp-transport') {
+      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
+      if (this.scene === 'superapp-transport') runTransportProbeScene(this.filesDir); else this.runHttpProbe();
       return;
     }
     // ★★★C14 键盘推送判据场景（决策 #1077）：真实系统键盘 → keyboardHeightChange → env
