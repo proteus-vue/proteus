@@ -92,6 +92,12 @@ public final class InvokeWire {
     public static final int RTAG_HEADERS = 20;
     /** ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算） */
     public static final int RTAG_STREAM_SEQ = 21;
+    /**
+     * ★★★#1158：传输层读数（name-values：`proto`/`reused`/`dnsMs`/`connectMs`/`tlsMs`/`ttfbMs`）。
+     * ★**缺的键不出现**（Android 只有 `proto` + `ttfbMs`：`HttpURLConnection` 不暴露
+     *   DNS/连接/TLS 分段时间与连接复用标记）——不填 0/false 冒充"已知"。
+     */
+    public static final int RTAG_TRANSPORT = 22;
 
     /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
     public static final int RESPONSE_TEXT = 0;
@@ -195,6 +201,8 @@ public final class InvokeWire {
         /** HTTP 状态码（网络类回程） */
         public Integer status;
         public LinkedHashMap<String, String> headers;
+        /** ★#1158：传输层读数（null = 本次没测到任何项 ⇒ 不写 tag） */
+        public LinkedHashMap<String, String> transport;
         public byte[] body = EMPTY;
 
         public static ResolveFrame ok(String reqId) {
@@ -393,6 +401,7 @@ public final class InvokeWire {
                 case RTAG_PENDING: f.pending = p.u8() != 0; break;
                 case RTAG_HEADERS: f.headers = readNameValues(p); break;
                 case RTAG_STREAM_SEQ: f.streamSeq = p.u32(); break;
+                case RTAG_TRANSPORT: f.transport = readNameValues(p); break;
                 default: break;
             }
         }
@@ -427,6 +436,8 @@ public final class InvokeWire {
         if (f.pending != null) writeTlv(w, RTAG_PENDING, () -> w.u8(f.pending ? 1 : 0));
         if (f.headers != null) writeTlv(w, RTAG_HEADERS, () -> writeNameValues(w, f.headers));
         if (f.streamSeq != null) writeTlv(w, RTAG_STREAM_SEQ, () -> w.u32(f.streamSeq));
+        // ★#1158：传输读数（**非空才写**——空表不写 tag，老宿主/无读数端行为不变）
+        if (f.transport != null && !f.transport.isEmpty()) writeTlv(w, RTAG_TRANSPORT, () -> writeNameValues(w, f.transport));
         return w.done();
     }
 

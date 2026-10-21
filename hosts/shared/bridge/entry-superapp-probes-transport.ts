@@ -88,11 +88,22 @@ export function appTransportProbe(base: string, pin: string, rounds = 3, plainBa
     // ① 连 rounds 次（每次都不同 path ⇒ 避开 HTTP 缓存/去重，但**同 host:port** ⇒ 可复用连接）
     const protos: string[] = []
     const peers: string[] = []
+    /**
+     * ★★★#1158：**每一轮的 `meta.transport`**（这是"产品化链路"的判据）。
+     * 【为什么探针必须读 `meta.transport` 而不是直连宿主】本字段的链路有五段，
+     *   探针若绕过 `useFetch` 去问宿主，就只能证明"宿主能测"，**证明不了业务拿得到**——
+     *   本仓栽过多次「底层做完、门面没接」（#1122 五个 S3 字段没进 `FetchConfig`）。
+     *   ⇒ 这里走**真实 `useFetch`**，读 `r.meta.transport`。
+     */
+    const transportPerRound: unknown[] = []
     let firstOk = false
     for (let i = 0; i < rounds; i++) {
       progress('req', { i })
       const r = await mk().useFetch<{ proto?: string; peer?: string }>(`${base}/__whoami?i=${i}`, cfg)
       if (i === 0) firstOk = r.ok === true
+      // ★`meta` 只在**走管线**时才有（`useFetch` 门面会带）；直接 `runFetch` 不带
+      const meta = (r as { meta?: { transport?: unknown } }).meta
+      transportPerRound.push(meta?.transport ?? null)
       if (r.ok && r.data && typeof r.data === 'object') {
         const d = r.data as { proto?: string; peer?: string }
         if (d.proto) protos.push(d.proto)
@@ -107,6 +118,30 @@ export function appTransportProbe(base: string, pin: string, rounds = 3, plainBa
     out['client_peers'] = peers
     out['client_same_conn'] = peers.length > 1 && new Set(peers).size < peers.length
     out['first_ok'] = firstOk
+    // ★#1158：三端"业务能拿到什么"的逐项读数（首轮 + 末轮：首轮常无复用、末轮应复用）
+    out['transport_per_round'] = transportPerRound
+    out['transport_first'] = transportPerRound[0] ?? null
+    out['transport_last'] = transportPerRound[transportPerRound.length - 1] ?? null
+
+    /**
+     * ★★★#1158：**宿主侧记账**——`http.tlsStats` 现在也带 `metrics`
+     * （`collecting_calls` / `before_complete` / `after_complete`）。
+     *
+     * 【为什么要读它（真机实测驱动）】iOS 首跑 `transport_first/last` 全是 `null`，而 Android 有值。
+     *   两种可能：① `didFinishCollecting` 没被调用；② 被调用了但**晚于** `didComplete`
+     *   （完成帧发出后才到 ⇒ 那一帧永远带不上）。
+     *   ⇒ 用 `after_complete > 0` 区分这两种情形——**不给"平台不给"这种笼统结论**。
+     */
+    try {
+      progress('stats:request')
+      const inv = (await import('../../../packages/api/src/capability-invoke')) as unknown as {
+        invokeHostAsync: (m: string, a?: unknown, t?: number) => Promise<unknown>
+      }
+      const st = (await inv.invokeHostAsync('http.tlsStats', {}, 10000)) as Record<string, unknown> | null
+      out['host_stats'] = st ?? null
+    } catch (e) {
+      out['host_stats_error'] = String((e as Error)?.message ?? e)
+    }
 
     // ② 读服务端记账（服务端视角 = 事实）
     progress('stats')

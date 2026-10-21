@@ -11938,3 +11938,93 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑤ 影响面（实测，无隐藏红）**：`check:*` 159 = **CI 覆盖 101**（名字 50 · 脚本 51 · 子脚本 0）+ **声明仅本地 58**；覆盖集与 LOCAL_ONLY **无重叠**；新增唯一需要处理的真实项是 `check:baseline-freshness`——它不是"漏接线"，而是本来就**不该进 CI**，故补 LOCAL_ONLY 声明（理由照抄脚本头）。`pnpm verify` / ci.yml 未改。
 **⑥ 诚实边界（残余通道，逐条具名）**：1) **LOCAL_ONLY 是自证的**——判据不校验"CI 真跑不了"，36%（58/159）走这条路，其中若干条理由写着"本可接 CI/按族归本地"（约定性豁免，非能力性）；2) **语义级参数**只做词匹配 ⇒ `knowledge --check` 仍会被判命中（已写进测试，让口径显式可见）；3) **9 条 `cd website && pnpm run check:*`** 的名字命中实际跑的是子包同名脚本（今天语义等价，根脚本将来分叉即假绿）；4) **`check:live` 只在 `[deploy]` 门之后跑**，判据完全不看 `if:`/分支/matrix；5) `.sh`/`.py` 不在文件识别范围（23 个 `check:*`），只能靠名字或 LOCAL_ONLY；6) YAML 仍是**行级解析**：锚点/别名、`uses:` 复合 action、可复用 workflow 未建模（用到时会**假红**，安全方向）；7) 测试里丢了又补回旧版对"CI 真跑 build-packages + vue-tsc"的断言。
 **⑦ 下一步**：① LOCAL_ONLY 增一档"约定性豁免"子类（区别于"CI 跑不了"），把统计口径分开；② `cd website` 的 9 条按"根脚本 ↔ 子包脚本同源"加校验；③ 判据接 `if:`/`branches` 语义（`check:live`）；④ `.sh/.py` 纳入文件识别。
+
+1158. **★★★传输读数产品化：`FetchMeta.transport`（三端宿主采集 + 线格式 `Transport=22`）——把"网络慢"从**一个总数**拆成 DNS/建连/TLS/首字节；并抓出「文档说毫秒、实际是微秒」 · 决策**（2026-10-21 · 承接 #1155/#1156「下一步②」）:
+
+【★这件事为什么算"补完"而不是"加功能"】
+  #1155/#1156 证明了"宿主能测"（服务端记账 + 探针直连），但那是**取证**——
+  矩阵 §3 末尾写的 `transport:{proto,dnsMs,connectMs,tlsMs,reused}` 一直是**愿景**。
+  业务侧只有一个 `meta.totalMs` ⇒ 慢的时候分不清**排队 / DNS / 建连 / TLS / 首字节**。
+  本轮把它做成**已交付的 API**：`res.meta.transport`。
+
+【★★●三端可得性不同——这不是缺陷，是平台事实（缺键不填 0）】
+  | 端 | proto | reused | dnsMs | connectMs | tlsMs | ttfbMs | 采集来源 |
+  |---|---|---|---|---|---|---|---|
+  | iOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `URLSessionTaskMetrics` |
+  | Android | ✅ | — | — | — | — | ✅ | 状态行（`getHeaderFields()` 的 **null 键**）+ 自量 TTFB |
+  | 鸿蒙 | — | — | ✅ | ✅ | ✅ | ✅ | `Rcp_TimeInfo`（★单位修正见 ③） |
+  | Web | ✅ | — | — | — | — | — | `PerformanceResourceTiming.nextHopProtocol` |
+  | MP | （整项不出现：`wx.request` 不暴露任何传输读数） |
+
+  ★**"缺键 = 不可得"是硬约定**：宿主测不到的项**不出现**，绝不填 `0`/`false`。
+    否则业务会把"没测到"读成"DNS 花了 0ms"——**假数据比缺数据更糟**（本仓反复踩）。
+  ★Web 只取 `nextHopProtocol`：`PerformanceResourceTiming` 的 DNS/连接时间戳对**跨源**资源
+    受 **Timing-Allow-Origin** 限制（默认全 0）；把 0 填进去就是假数据 ⇒ 只回不受该限制的那一项。
+
+【★★★① 判据当场抓出的真缺陷：空串被 `Number('')` 变成 0】
+  `parseTransportReadout` 首版用 `Number(s)` 解析毫秒 ⇒ `Number('') === 0`（JS 经典陷阱）
+  ⇒ 宿主把"没测到"写成空串时，业务会读到 `dnsMs: 0`。
+  ★这是 `fetch-transport-meta.test.ts` ⑤ **当场抓出**的（断言里含 `''` 与 `'  '`）。
+  修法：`s.trim() === '' ⇒ undefined`。★这类"缺省值冒充已知"正是本仓第 N 次同族缺陷。
+
+【★★★② 判据抓出的第二处：五段链路断在 `runFetch`】
+  `fetch-pipeline.test.ts` 的「宿主读数经管线进入 meta.transport」**首跑红**——
+  因为 `runFetch` 是"挑三个字段重新拼对象"（`{ok,data,status,headers}`）的形态
+  ⇒ 新字段 `transport` **默认被丢掉**。
+  ★与 #1134 `redirectManual` 漏在中间层、#1122 五个 S3 字段没进门面**同一类**：
+    "底层做完、上层没用"。⇒ `runFetch` 显式透传 + 判据断言到这一层（不是只测纯函数与线格式）。
+
+【★★★③ 鸿蒙 `Rcp_TimeInfo` 的真实单位是**微秒**，SDK 头注释写的是毫秒】
+  · 首跑直接把 `timeInfo` 当毫秒写出去 ⇒ `ttfbMs=26785`、`connectMs=12542`；
+    而同轮**探针墙钟**是 `39ms/16ms/9ms` ⇒ 若真是毫秒，TTFB 比整轮耗时还长 **26 倍**（不可能）。
+  · 按 **µs** 换算后：`26785/1000 = 26.8ms`（占墙钟 39ms 的 69%）、`7.3/16`、`6.7/9` —— **三次都自洽**。
+  ⇒ 结论：`Rcp_TimeInfo` 各字段实际为微秒；**SDK 头文件的 "milliseconds" 与实现不符**。
+  ★这类"文档说 A、实际是 B"只能靠**跟独立读数对账**发现——单看返回值永远看不出来。
+  ★顺带修：`tlsMs` 在明文/复用连接上会算出 0 ⇒ 曾被写成 `tlsMs:"0.0"`；
+    而"没有握手"与"握手耗时 0ms"是两件事 ⇒ 现在 `tlsHandshakeTime <= 0` 时**不写该键**。
+
+【线格式（五端 43 向量逐字节等价）】回程 TLV `MetaTagResolve.Transport = 22`（name-values）。
+  · **为什么不塞进 `Headers`**：`Headers` 是**服务端**响应头（业务会拿到 `FetchOk.headers`）——
+    混进去会让业务把它当服务端头转发/落库，且与真实同名头（如 `proto`）互相覆盖。
+    判据 ⑫ 专门断言两者互不污染。
+  · **为什么用 name-values 而不是每字段一个 tag**：三端可得性不同 ⇒ 缺键天然表达"不可得"；
+    若每字段一 tag，就要为"测不到"与"没实现"造两种缺失表达（重蹈"用缺省值冒充已知"）。
+  · **空对象/缺省 ⇒ 不写 tag**（判据 ⑩ 配对：只测"有值"的话，把 `{}` 写成空 tag 的实现会漏网）。
+  · 解码侧**只保留已知键**（未知键丢弃——宿主实现细节不该被业务依赖）。
+
+【判据（都真跑 + 破坏性验证）】
+  · `tests/fetch-transport-meta.test.ts` **12/12**：iOS 全字段 / Android partial **不得凭空多键** /
+    鸿蒙四毫秒键 / `reused` 只认 "1"/"0"（`'false'` 是非空串但语义假）/ NaN/负数/空串丢弃 /
+    全项不可解析 ⇒ `undefined` / 未知键忽略 / 线格式往返 / 空对象不写 tag / headers 与 transport 互不污染。
+  · `tests/fetch-pipeline.test.ts` **25/25**（+2）：五段链路端到端 + 无读数时不出现字段。
+  · `check:cache-evidence` 新增第 ⑥ 条「**业务侧 `meta.transport` 真的拿到了读数**」
+    （三端证据的 `transport_first/last` 至少一轮非空）。破坏性验证：清空 ⇒ 红并指名五段链路。
+  · `check:invoke-wire-parity` **43 向量**（新增 3 条：全字段 / partial / 空对象不写）。
+  · 真机三端：Android `{proto:"HTTP/1.1", ttfbMs:16}`（末轮 ttfb 1ms，复用生效）·
+    iOS `{proto:"h2", reused:false, dnsMs:0, connectMs:41, tlsMs:32, ttfbMs:11.5}` → 末轮 `{h2, reused:true, ttfbMs:11.1}` ·
+    鸿蒙 `{dnsMs:"0.2", connectMs:"26.7", ttfbMs:"37.9"}` → 末轮 `{dnsMs:"0.1", ttfbMs:"6.1"}`
+    （★后两轮**没有 connectMs** —— 复用连接的独立印证，与上一轮的"3 请求/1 TCP"一致）。
+
+【顺带：两次"按纪律拆文件"（不抬基线）】
+  · `packages/api/src/capability-invoke.ts` 998 → **937 行**：把 `AppRequestConfig`/`AppRequestResponse`
+    抽到 `capability-app-request-types.ts`（它们本就是"线格式字段归类"的契约描述，与 `splitFramePayload` 同源）。
+  · `HttpCapability.java` 990 → **998 行**：把传输采集抽到 `TransportReadout.java`
+    （★抽的时候把 `collectHeaders` 的 Javadoc 误删了，已补回——"移动代码要看清边界"）。
+  · `hosts/ios/ProteusHost/runtime/http-capability.swift` 也加了 `metrics` 到达顺序记账
+    （`collecting_calls`/`before_complete`/`after_complete`）——实测 `before_complete=3, after_complete=0`
+    ⇒ 顺序不是问题，读数确实写进了 state（★这条记账让"为什么没有读数"可归因，而不是笼统怪平台）。
+
+【诚实边界】
+  ① **Android 的 TTFB 含连接建立+响应头**（`HttpURLConnection` 不细分）——不是纯首字节，已写明；
+  ② **鸿蒙的探针不经过 JS `useFetch`**（`hostTransportProbe` 是 C++ napi，一次性 VM 无异步回推）⇒
+    那条读数证明「宿主采集 + 线格式编码」，**不**证明 JS 侧 `meta.transport` 拿得到
+    （后者由 Android/iOS 的 JS 探针 + `check:cache-evidence` 断言）；
+  ③ Web 只 `proto`（TAO 限制）；MP 完全无读数；
+  ④ 鸿蒙 `proto`/`reused` 不可得（RCP 不暴露）⇒ `http2_ok` 仍是 `null`（未测）；
+  ⑤ `Rcp_TimeInfo` 的单位结论来自**三次墙钟对账**，不是 SDK 文档；若未来 SDK 改了实现，需重跑该对账。
+
+【下一步】
+  ① HTTPDNS + HTTP/2（Android + 鸿蒙）合并立项（先量 OkHttp APK 增量；鸿蒙需先接 CA/pinning）；
+  ② 鸿蒙 session 的 cookie/认证语义取证；③ session 失效重建兜底；④ SIE 逐跳判定；
+  ⑤ 把 `transport` 接进性能预算门禁（如"首字节 P95 > N ms 报警"，需先积累基线）。
+

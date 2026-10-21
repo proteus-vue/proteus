@@ -94,6 +94,8 @@ final class HostCapabilities: NSObject {
             // ★#1153：附带"最近一次网络错误"的 domain/code（归因依据；排障用）
             var tls = BodyLimitDelegate.tlsStatsSnapshot()
             tls["last_network_error"] = HttpCapability.lastNetworkError
+            // ★★★#1158：metrics 到达顺序（"为什么没有 transport 读数"的归因依据）
+            tls["metrics"] = BodyLimitDelegate.metricsStatsSnapshot()
             return ok(tls)
         case "window.setSize":
             return ok(windowSetSize(args))

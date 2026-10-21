@@ -449,6 +449,14 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   cfg.transferConfiguration.autoRedirect = true;
   cfg.transferConfiguration.timeout.connectMs = timeoutMs;
   cfg.transferConfiguration.timeout.transferMs = timeoutMs;
+  /**
+   * ★★★#1158：打开**分段计时采集**（`resp->timeInfo` 只有在打开后才有值）。
+   * 【为什么不总是开】RCP 文档注明"是否采集由 `collectTimeInfo` 决定"——采集本身有成本
+   *   （每次请求多记一组时间点）。但本仓要的就是**可观测性**，且读数会进 `FetchMeta.transport`
+   *   供业务排障 ⇒ 默认打开。★若将来要关，必须同时把 `transport` 的对应键**不写**
+   *   （不能留着上一次的读数 —— 那会成为"用旧值冒充新值"，本仓记过的形态）。
+   */
+  cfg.tracingConfiguration.collectTimeInfo = true;
   req->configuration = &cfg;
 
   // ③ 逐块闸：越线即中止（#1117）
@@ -583,6 +591,56 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
       }
       if (pDestroyHeaderEntries != nullptr && entries != nullptr) pDestroyHeaderEntries(entries);
       out.headers = std::move(nv);
+    }
+    /**
+     * ★★★#1158：传输层读数（`Rcp_TimeInfo`）。
+     *
+     * 【鸿蒙能测什么】`timeInfo` 提供 `nameLookUpTime` / `connectTime` / `tlsHandshakeTime` /
+     *   `startTransferTime`（各自是从请求开始算的**累计毫秒**，不是区间）⇒ 必须**转成区间**：
+     *     dnsMs     = nameLookUpTime
+     *     connectMs = connectTime − nameLookUpTime      （TCP 建连本身）
+     *     tlsMs     = tlsHandshakeTime − connectTime    （握手本身）
+     *     ttfbMs    = startTransferTime
+     *   ★不做这个减法就直接回传 ⇒ `connectMs` 里含 DNS、`tlsMs` 里含 DNS+TCP——
+     *     与 iOS 的区间语义**不一致**，三端读数就没法横向比（本仓"三端同判据"的前提）。
+     *   ★差值为负/异常 ⇒ **该键不写**（不写 0，不写负）。
+     *
+     * 【鸿蒙测不到什么】`proto` / `reused`：RCP 不暴露协议版本与连接复用标记 ⇒ 键不出现。
+     *   （连接复用另有证据：`hosts/harmony/results/transport-probe.json` 的服务端记账。）
+     */
+    if (resp->timeInfo != nullptr) {
+      const Rcp_TimeInfo* ti = resp->timeInfo;
+      proteus::wire::NameValues tp;
+      /**
+       * ★★★#1158：**单位是微秒，不是 SDK 头注释写的毫秒**（真机交叉验证得出的结论）。
+       *
+       * 【证据（不是推断）】真机首跑直接把 `timeInfo` 的值当毫秒写出去，得到
+       *   `ttfbMs = 26785`、`connectMs = 12542`；而同轮的**探针墙钟**是 `39ms` / `16ms` / `9ms`
+       *   ⇒ 若真是毫秒，TTFB 比整轮耗时还长 26 倍（不可能）。
+       *   按 **µs** 换算后：`26785/1000 = 26.8ms`（占墙钟 39ms 的 69%）、
+       *   `7340/1000 = 7.3ms`（对 16ms）、`6670/1000 = 6.7ms`（对 9ms）——**三次都自洽**。
+       * ⇒ `Rcp_TimeInfo` 各字段实际为**微秒**；SDK 头注释（"The time in milliseconds"）与实现不符。
+       * ★这类"文档说 A、实际是 B"只能靠**跟独立读数对账**发现——单看返回值永远看不出来。
+       */
+      constexpr double US_PER_MS = 1000.0;
+      auto putMs = [&tp](const char* k, double vUs) {
+        const double v = vUs / US_PER_MS;
+        if (!(vUs > 0.0) || vUs != vUs) return;   // 0 / NaN / 负数 ⇒ 不写（0 = 该阶段没发生）
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.1f", v);
+        tp.emplace_back(k, buf);
+      };
+      putMs("dnsMs", ti->nameLookUpTime);
+      putMs("connectMs", ti->connectTime - ti->nameLookUpTime);
+      /**
+       * ★`tlsMs`：`tlsHandshakeTime <= 0` ⇒ **不写**。
+       * 【为什么】明文 HTTP 上 `tlsHandshakeTime` 恒 0 ⇒ `0 - connectTime` 会算出负数（被 putMs 挡掉），
+       *   但**复用连接**时两者都是 0 ⇒ 减出来是 0，会被写成 `tlsMs: "0.0"`。
+       *   而"没有握手"与"握手耗时 0ms"是两件事——后者会让业务以为"TLS 很快"，实际是**没走 TLS**。
+       */
+      if (ti->tlsHandshakeTime > 0.0) putMs("tlsMs", ti->tlsHandshakeTime - ti->connectTime);
+      putMs("ttfbMs", ti->startTransferTime);
+      if (!tp.empty()) out.transport = std::move(tp);
     }
     // 响应体原样回字节（不解析）
     // ★#1117：逐块闸生效时用它累计的 body（resp->body 可能是同一份数据的二次副本）；

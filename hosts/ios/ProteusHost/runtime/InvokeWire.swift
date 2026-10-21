@@ -101,6 +101,9 @@ enum InvokeWire {
     static let RTAG_HEADERS: UInt8 = 20
     /// ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算）
     static let RTAG_STREAM_SEQ: UInt8 = 21
+    /// ★★★#1158：传输层读数（name-values：proto/reused/dnsMs/connectMs/tlsMs/ttfbMs；缺键 = 不可得）
+    /// ★iOS 是**全字段可得**的一端（`URLSessionTaskMetrics` 提供 DNS/连接/TLS/TTFB 分段 + 复用标记）
+    static let RTAG_TRANSPORT: UInt8 = 22
 
     /// 响应体解释方式（与 `RequestConfig.responseType` 同语义）
     static let RESPONSE_TEXT: UInt8 = 0
@@ -200,6 +203,8 @@ enum InvokeWire {
         var headers: NameValues?
         /// ★#1118：非 nil ⇒ 本帧是流式数据块（不结算）；nil 且 pending != true ⇒ 最终帧
         var streamSeq: UInt32?
+        /// ★★★#1158：传输层读数（nil 或空 ⇒ 不写 tag；宿主测不到任何项时不伪造）
+        var transport: NameValues?
         var body: [UInt8] = []
 
         /// ★工厂名与 Java 的 `ok/err/missingMethod/pending` 对应（Swift 侧加 `make` 前缀以免与
@@ -388,6 +393,7 @@ enum InvokeWire {
             case RTAG_PENDING: f.pending = try p.u8() != 0
             case RTAG_HEADERS: f.headers = try readNameValues(p)
             case RTAG_STREAM_SEQ: f.streamSeq = try p.u32()
+            case RTAG_TRANSPORT: f.transport = try readNameValues(p)
             default: break
             }
         }
@@ -423,6 +429,8 @@ enum InvokeWire {
         if let p = f.pending { try writeTlv(w, RTAG_PENDING) { w.u8(p ? 1 : 0) } }
         if let h = f.headers { try writeTlv(w, RTAG_HEADERS) { try writeNameValues(w, h) } }
         if let sq = f.streamSeq { try writeTlv(w, RTAG_STREAM_SEQ) { w.u32(sq) } }
+        // ★#1158：传输读数（**非空才写** —— 空数组不写 tag，老宿主/无读数端行为不变）
+        if let t = f.transport, !t.isEmpty { try writeTlv(w, RTAG_TRANSPORT) { try writeNameValues(w, t) } }
         return w.done()
     }
 

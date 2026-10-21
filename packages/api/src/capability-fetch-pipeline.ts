@@ -24,7 +24,8 @@
 //   ④ 拦截器短路（返回 null）时给 `fetch.intercepted`——**不伪造成功响应**。
 
 import { runFetch } from './capability-fetch'
-import type { AbortSignalLike, FetchConfig, FetchMeta, FetchResult, RetryPolicy } from './capability-fetch-types'
+import type { AbortSignalLike, FetchConfig, FetchMeta, FetchResult, RetryPolicy, TransportMeta } from './capability-fetch-types'
+import { parseTransportReadout } from './capability-fetch-types'
 // ★#1134 重定向策略（跟随循环 / RFC 规则 / 跨域剥离凭据）——与宿主解耦，跨端同一份
 import { headerOf, isRedirectStatus, methodAfterRedirect, nextHopConfig, resolveLocation } from './capability-fetch-redirect'
 import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
@@ -617,6 +618,7 @@ export function createFetchPipeline(
 
     let last: FetchResult<T> | null = null
     let cacheMeta: FetchCacheMeta | undefined
+    let transportMeta: TransportMeta | undefined
     // ★信号链只在"用户信号变了"时重建（拦截器每轮可能改 config.signal）——
     //   每轮重建会不断 chain 上一层的 relay ⇒ 重试多次后 onabort 回调堆积。
     // ★★无用户信号时：只有 `abortable` 端才注入内部信号（MP 注入会被判 unsupported，见 options 说明）
@@ -678,6 +680,13 @@ export function createFetchPipeline(
         })
       }
       last = res as FetchResult<T>
+      /**
+       * ★★★#1158：记录**最后一轮**的宿主传输读数。
+       * 【为什么取最后一轮】重试时"哪一轮的读数算数"必须明确——取最后一轮（即最终结算那次），
+       *   与 `attemptMs` 的语义一致（业务关心的是"这次成功/失败的那次花了多久"）。
+       *   ★不累加、不平均：跨轮的 DNS/连接是可复用的，平均出来的数**不对应任何一次真实请求**。
+       */
+      transportMeta = parseTransportReadout((res as { transport?: Record<string, string> }).transport)
       // ④ 可重试判定      //   ★★★这里**不能写 `if (last.ok) break`**：HTTP 429/5xx 在 `runFetch` 里是 `ok:true` +
       //   status（不是异常）⇒ 先 break 就永远不重试。判定交给 `retryOn`（默认对 429/5xx 返 true）。
       const shouldRetry = (retryCfg.retryOn ?? DEFAULT_RETRY_ON)(res, attempt)
@@ -705,6 +714,8 @@ export function createFetchPipeline(
       ...(retryDelaySkipped ? { retryDelaySkipped: true } : {}),
       ...(deadlineMs !== undefined ? { deadlineMs } : {}),
       ...(cacheMeta ? { cache: cacheMeta } : {}),
+      // ★★★#1158：宿主侧传输读数（解析成类型化形态；一项都解析不出 ⇒ 字段不出现）
+      ...(transportMeta ? { transport: transportMeta } : {}),
       ...(traceHops.length || traceExceeded || traceStopped
         ? {
             redirects: {

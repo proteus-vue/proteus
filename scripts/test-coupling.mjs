@@ -134,6 +134,18 @@ const COUPLING = [
     why: '鸿蒙 RCP 的 session 生命周期与取数 API 决定连接复用（同步 FetchSync 不池化）；napi 导出必须四方一致（实现 ⇄ d.ts ⇄ HAR Index.ets ⇄ ArkTS import）；prebuilt 副本须同步（否则外部用户拿旧运行时）',
   },
   {
+    // ⑬ ★★★#1158：**传输读数 `FetchMeta.transport`**（宿主采集 ⇄ 线格式 `Transport=22` ⇄ 五段链路）
+    //   · 线格式加 tag ⇒ 五端必须逐字节等价（`check:invoke-wire-parity` 真跑）；
+    //   · 宿主的采集实现（iOS metrics / Android 状态行 / 鸿蒙 `Rcp_TimeInfo`）改口径 ⇒ 读数失真；
+    //   · **五段链路**（宿主 → 帧 → settleFromFrame → appHttpRequest → runFetch → 管线）任一段漏透传
+    //     ⇒ 业务拿不到，而底层全绿（#1122「底层做完、门面没接」同族）。
+    match:
+      /packages\/api\/src\/(invoke-wire|capability-invoke|capability-app-request|capability-app-request-types|capability-fetch-types|capability-fetch-pipeline|capability-fetch-legs|capability-fetch)\.ts$|runtime\/(TransportReadout\.java|HttpCapability\.java|http-capability\.swift|proteus_http\.h)$|entry-superapp-probes-transport\.ts$/,
+    gates: ['pnpm check:invoke-wire-parity', 'pnpm check:cache-evidence'],
+    tests: ['tests/fetch-transport-meta.test.ts', 'tests/fetch-pipeline.test.ts', 'tests/fetch-wire-fields.test.ts'],
+    why: '传输读数要穿五段才到业务手里（宿主→线格式→settleFromFrame→appHttpRequest→runFetch→管线）；任一段漏传 ⇒ 业务拿不到而底层全绿。★"缺键 = 不可得"（不填 0/false），空串不得被 Number() 变成 0',
+  },
+  {
     // ⑨ 文档生成器源集合（拆文件后源集合找不到 ⇒ 整段文档消失）
     match: /^packages\/api\/src\//,
     gates: ['pnpm check:content'],

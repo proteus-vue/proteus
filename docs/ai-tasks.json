@@ -2649,6 +2649,51 @@
       "branch": null,
       "related": [],
       "note": "【done · 决策 #1157（2026-10-21）】缺陷（#1153 ⑩ 顺手挖出）：coveredByCi() 拿「脚本路径出现在 CI 文本」当接线证据 ⇒ ① 共享入口 packages/cli/src/index.ts 被 CI 广泛提及，任何经它的 check:* 在真加 CI 步骤前就假绿；② CI 里的**注释提及**也算 name 命中——实测 check:baseline-freshness 就是靠 ci.yml:228「非门禁…不入 CI」那行注释绿的。★新口径：只认 run: 命令（含 | / |2 块标量）；按 && || | ; **切段**再判；echo/grep/cat 等非执行段跳过；名字命中要求包管理器形态（pnpm run check:x）；文件命中要求同段内位置参数按序 + flag 子集；**多个脚本引用每个都得到场**。★独立验证（异会话子代理）打回四处真缺陷并已修：a) 多命令任一命中即放行（删主脚本仍绿）⇒ 改 every；b) `&&` 尾巴被当位置参数（首脚本结构性永不匹配）⇒ splitSegments；c) echo/grep/`--note=` 里的名字算接线 ⇒ 非执行段过滤 + 形态匹配；d) refsOf 把 `app-stack.json` 当成 `app-stack.js`（**2026-09-29 起的既有 bug**）⇒ 扩展名加 (?!\\w)。★判据 37/37；9 个变异全部命中（不切段 / 关非执行段过滤 / 任一文件放行 / 扩展名不断词 / 忽略 flag / 丢词边界 / 名字裸子串 / 删 CI 步骤 / 改成 knowledge layers）。★影响面：159 个 check:* = CI 覆盖 101（名字 50 · 脚本 51 · 子脚本 0）+ 声明仅本地 58；覆盖集与 LOCAL_ONLY 无重叠；唯一需处理项 check:baseline-freshness 补 LOCAL_ONLY（它本就不该进 CI，理由照抄脚本头）。★诚实边界（残余通道）：LOCAL_ONLY 自证（58/159，含若干约定性豁免）；语义级参数只做词匹配（`knowledge --check` 仍会被判命中，已写进测试显式化）；9 条 `cd website && pnpm run check:*` 跑的是子包同名脚本；check:live 只在 [deploy] 后跑而判据不看 if:/分支；.sh/.py 不在文件识别范围（23 个）；YAML 行级解析（锚点/复合 action 未建模，用到时假红）。"
+    },
+    {
+      "id": "T-fetch-transport-readout",
+      "title": "#1158 传输读数产品化：FetchMeta.transport（三端宿主采集 + 线格式 Transport=22）",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/invoke-wire.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "packages/api/src/capability-fetch-pipeline.ts",
+        "packages/api/src/capability-fetch.ts",
+        "packages/api/src/capability-fetch-legs.ts",
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/capability-app-request.ts",
+        "packages/api/src/capability-app-request-types.ts",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/ios/ProteusHost/runtime/InvokeWire.swift",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TransportReadout.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/InvokeWire.java",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_wire.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/transport_probe.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/InvokeWire.ts",
+        "hosts/shared/bridge/entry-superapp-probes-transport.ts",
+        "scripts/invoke-wire-golden.ts",
+        "scripts/check-cache-evidence.mjs",
+        "scripts/test-coupling.mjs",
+        "docs/contract-index.md",
+        "docs/proteus-network-plan/00-capability-matrix.md",
+        "tests/fetch-transport-meta.test.ts",
+        "tests/fetch-pipeline.test.ts",
+        "docs/ai-tasks.json",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 1158,
+      "verification": "npx vitest run tests/fetch-transport-meta.test.ts tests/fetch-pipeline.test.ts && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/run-transport-probe.sh && bash hosts/ios/run-transport-probe.sh && bash hosts/harmony/run-transport-probe.sh && node scripts/check-cache-evidence.mjs",
+      "branch": null,
+      "related": [
+        "T-transport-facts-probe",
+        "T-harmony-transport-reuse"
+      ],
+      "note": "【done · 决策 #1158】承接 #1155/#1156「下一步②：把 transport 读数接进 FetchMeta」。★**为什么算\"补完\"而非\"加功能\"**：矩阵 §3 末尾的 `transport:{proto,dnsMs,connectMs,tlsMs,reused}` 此前是**愿景**（探针证明可度量，业务只有 totalMs）。现在它是已交付的 `res.meta.transport`。★★**三端可得性不同（缺键不填 0）**：iOS 全字段（URLSessionTaskMetrics）· Android 只有 proto+ttfbMs （状态行的 null 键 + 自量 TTFB）· 鸿蒙四个毫秒项（Rcp_TimeInfo）· Web 只 proto（TAO 限制会全 0）· MP 整项不出现。★**\"缺键 = 不可得\"是硬约定**——填 0/false 会让业务读成\"DNS 花了 0ms\"（假数据比缺数据更糟）。★★★**判据当场抓出两个真缺陷**：① `Number('') === 0` ⇒ 空串被解析成\"DNS 花了 0ms\" （`fetch-transport-meta` ⑤ 抓到）；② 五段链路断在 `runFetch`（它是\"挑三个字段重拼对象\"的形态 ⇒ 新字段默认被丢；`fetch-pipeline` 的端到端断言首跑红）——与 #1134/#1122 同族\"底层做完、门面没接\"。★★★**鸿蒙 `Rcp_TimeInfo` 的真实单位是微秒**（SDK 头注释写 milliseconds）：首跑 ttfbMs=26785 比整轮墙钟 39ms 长 26 倍 ⇒ 按 µs 换算后 26.8/16/9ms 三次自洽。另有 tlsMs 在明文/复用连接上算出 0 ⇒ 改为不写该键。★线格式：回程 TLV `Transport=22`（name-values），**不塞进 Headers**（那是服务端头，会污染 + 互相覆盖，判据 ⑫ 断言互不污染）；空对象/缺省不写 tag（判据 ⑩ 配对）。五端 43 向量逐字节等价。★判据：`fetch-transport-meta` **12/12** · `fetch-pipeline` **25/25**（+2 端到端）· `check:cache-evidence` 新增\"业务侧真的拿到读数\"（破坏性验证：清空 ⇒ 红并指名五段链路）。★真机三端：Android {proto,ttfbMs:16→1} · iOS {h2,reused:false,dns:0,connect:41,tls:32,ttfb:11.5} → {h2,reused:true,ttfb:11.1} · 鸿蒙 {dns:0.2,connect:26.7,ttfb:37.9} → {dns:0.1,ttfb:6.1}（后两轮无 connectMs = 复用连接的独立印证）。★**两次按纪律拆文件（不抬基线）**：`capability-invoke.ts` 998→937（抽 `capability-app-request-types.ts`）· `HttpCapability.java` 990→998（抽 `TransportReadout.java`；抽时误删 collectHeaders 的 Javadoc 已补回）。★诚实边界：Android TTFB 含连接+响应头（不细分）· 鸿蒙探针是 C++ napi、**不经过 JS useFetch** ⇒ 那条只证明\"宿主采集+编码\"，不证明 JS 拿到（后者由 Android/iOS 覆盖）· Web 只 proto · MP 无读数 · 鸿蒙 proto/reused 不可得 ⇒ http2_ok 仍为 null（未测）· 微秒结论来自三次墙钟对账。"
     }
   ]
 }

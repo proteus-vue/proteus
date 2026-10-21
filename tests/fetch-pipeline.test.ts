@@ -366,4 +366,45 @@ describe('★#1133 请求管线 · 观测（meta）', () => {
     const queuedMs = (r2 as { meta?: { queuedMs: number } }).meta?.queuedMs ?? 0
     expect(queuedMs, `★排队 ${queuedMs}ms 未记录（"慢在排队"就查不出来）`).toBeGreaterThan(10)
   })
+
+  /**
+   * ★★★#1158：**传输读数真的流到了 `meta.transport`**（不是只存在于类型定义里）。
+   *
+   * 【为什么要测到管线这一层】本字段的链路有**五段**：宿主 → 线格式 → `settleFromFrame`
+   *   → `appHttpRequest` → 管线 → `meta.transport`。只测 `parseTransportReadout`（纯函数）
+   *   与线格式往返，**不足以证明业务真的拿得到**——本仓栽过多次"底层做完、门面没接"
+   *   （#1122 五个 S3 字段没进 `FetchConfig` 就是同一形态）。
+   * ⇒ 这里用假壳返回带 `transport` 的响应，断言它出现在 `res.meta.transport` 且**已类型化**
+   *   （`reused` 是 boolean、毫秒是 number，而不是线格式的字符串）。
+   */
+  it('★★★#1158 宿主传输读数经管线进入 meta.transport（且已类型化）', async () => {
+    const { bridge } = makeBridge({
+      reply: (_n, config) =>
+        ({
+          data: { ok: 1 },
+          status: 200,
+          headers: {},
+          config,
+          // ★线格式形态：字符串（模拟宿主回程帧解出的样子）
+          transport: { proto: 'h2', reused: '1', dnsMs: '3.2', connectMs: '12.5', tlsMs: '31.0', ttfbMs: '48.7' },
+        }) as unknown as RequestResponse<unknown>,
+    })
+    const p = createFetchPipeline(bridge)
+    const res = await run(p, '/x', { cache: 'no-store' })
+    const t = (res as { meta?: { transport?: Record<string, unknown> } }).meta?.transport
+    expect(t, '★宿主给了读数但 meta.transport 没有 ⇒ 业务拿不到（链路断在某一段）').toBeTruthy()
+    expect(t).toEqual({ proto: 'h2', reused: true, dnsMs: 3.2, connectMs: 12.5, tlsMs: 31, ttfbMs: 48.7 })
+    // ★类型化断言：`reused` 必须是 boolean（线格式是 "1" 字符串；没解析就会是 "1"）
+    expect(typeof t!.reused).toBe('boolean')
+    expect(typeof t!.dnsMs).toBe('number')
+  })
+
+  it('★#1158 宿主没给读数（Web/MP/老宿主）⇒ `meta.transport` **不出现**（不是空对象）', async () => {
+    const { bridge } = makeBridge()
+    const p = createFetchPipeline(bridge)
+    const res = await run(p, '/y')
+    const meta = (res as { meta?: Record<string, unknown> }).meta
+    expect(meta).toBeTruthy()
+    expect(Object.prototype.hasOwnProperty.call(meta, 'transport')).toBe(false)
+  })
 })

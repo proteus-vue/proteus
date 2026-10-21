@@ -540,6 +540,30 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
         `——连接池空闲超时属正常波动，不作判据（TLS 通道的复用才是关键）`,
     )
   }
+  /**
+   * ⑥ ★★★#1158：**业务侧 `meta.transport` 真的拿到了读数**（"取证 → 产品化"的判据）。
+   *
+   * 【为什么必须有这一条】#1155/#1156 证明了"宿主能测"（服务端记账 + 探针直连），
+   *   但那只是**取证**。`meta.transport` 要穿五段链路才到业务手里
+   *   （宿主 → 线格式 → `settleFromFrame` → `appHttpRequest` → **`runFetch`** → 管线），
+   *   任何一段漏了业务都拿不到——而**底层全绿**（本仓 #1122 栽过同一形态）。
+   *   ⇒ 断言证据里的 `transport_first` / `transport_last` **至少有一轮非空**。
+   *
+   * ★两端可得性不同，**不要求字段齐**（那是各平台能力差异，不是缺陷）：
+   *     iOS 全字段 · Android 只有 proto+ttfbMs · 鸿蒙只有四个毫秒项（无 proto/reused）。
+   *   只要求"有对象且至少一个键"。
+   */
+  const tpFirst = p.transport_first
+  const tpLast = p.transport_last
+  const tpAny = tpLast ?? tpFirst
+  const tpKeys = tpAny && typeof tpAny === 'object' ? Object.keys(tpAny) : []
+  if (tpKeys.length === 0) {
+    problems.push(
+      `${id}: **业务侧 \`meta.transport\` 为空**（证据里 transport_first/last 都是 null）——` +
+        `宿主能测 ≠ 业务拿得到：查五段链路（host 帧 → 线格式 Transport=22 → settleFromFrame → ` +
+        `appHttpRequest → runFetch → 管线）。★不要用"该端不支持"解释——先看 \`host_stats.metrics\``,
+    )
+  }
   // ⑤ HTTP/2 只作**读数**（未协商是已取证结论，不是缺陷；换栈属独立大单）
   //   ★#1156：鸿蒙 `http2_ok === null` = **本轮未测**（明文端口 + 宿主未接 CA/pinning）——
   //     必须与"未协商"分开显示：`null` 是"没测"，`false` 是"测了但没有"。混为一谈会把
@@ -556,6 +580,8 @@ for (const { id, rel, key } of TRANSPORT_ENDS) {
     httpsReqs: p.server_requests,
     http2: http2Text,
     protos,
+    // ★#1158：业务侧拿到的读数（键名列表；空 = 没拿到）
+    tpKeys,
   })
 }
 

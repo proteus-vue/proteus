@@ -473,6 +473,8 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         var tlsPins: [Data] = []
         /// ★#1153：true ⇒ 用 pin 替代系统信任；false ⇒ 叠加（系统信任 + pin 都要过）
         var tlsPinOnly = false
+        /// ★★★#1158：`didFinishCollecting` 记下的传输读数（到达时写，完成帧时读）
+        var transport: InvokeWire.NameValues = []
     }
 
     /// ★key = taskIdentifier；只在该 task 的生命周期内存在
@@ -557,6 +559,37 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
     }
     private static var _tlsStats = TlsStats()
     private static let tlsLock = NSLock()
+
+    /**
+     * ★★★#1158：**`didFinishCollecting` 的到达顺序记账**（真机判据读它）。
+     *
+     * 【为什么要记这个】Apple **不保证** `didFinishCollecting(metrics:)` 与
+     *   `didCompleteWithError:` 的先后。若 metrics **后到**，完成帧已经发出 ⇒ 那一帧永远没有
+     *   `transport`（真机实测：iOS 首跑 `transport_first/last` 全是 `null`，而 Android 有值）。
+     *   ⇒ 先量清顺序，再决定修法（"补一个等待"还是"改到后到的路径里回推"）——**不猜**。
+     */
+    struct MetricsStats {
+        /** metrics 回调被调用次数 */
+        var collectingCalls = 0
+        /** 到达时 task 仍在 `states` 里（= 早于 didComplete）的次数 */
+        var arrivedBeforeComplete = 0
+        /** 到达时 task 已从 `states` 摘除（= 晚于 didComplete）的次数 */
+        var arrivedAfterComplete = 0
+    }
+    private static var _metricsStats = MetricsStats()
+    static func metricsStatsSnapshot() -> [String: Any] {
+        tlsLock.lock(); defer { tlsLock.unlock() }
+        return [
+            "collecting_calls": _metricsStats.collectingCalls,
+            "before_complete": _metricsStats.arrivedBeforeComplete,
+            "after_complete": _metricsStats.arrivedAfterComplete,
+        ]
+    }
+    static func metricsNote(_ kind: String) {
+        tlsLock.lock(); defer { tlsLock.unlock() }
+        _metricsStats.collectingCalls += 1
+        if kind == "before" { _metricsStats.arrivedBeforeComplete += 1 } else { _metricsStats.arrivedAfterComplete += 1 }
+    }
     static func tlsStatsSnapshot() -> [String: Any] {
         tlsLock.lock(); defer { tlsLock.unlock() }
         return [
@@ -735,6 +768,50 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         }
     }
 
+    /**
+     * ★★★#1158：`URLSessionTaskMetrics` → 传输读数（**iOS 是全字段可得的一端**）。
+     *
+     * 【为什么用 metrics 而不是自己掐表】`URLSession` 的分段时间（DNS/TCP/TLS/TTFB）
+     *   只有它自己知道——自己掐表只能得到一个总数，分不出"慢在解析还是慢在握手"。
+     *
+     * 【★时序（别想当然）】Apple **不保证** `didFinishCollecting` 与 `didCompleteWithError` 的先后。
+     *   ⇒ metrics 到达时写进 `State.transport`；完成帧时读它（有就带上，没有就不写 tag）。
+     *   ★绝不"等一小会儿再看"（那是盲等，本仓红线）。
+     */
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        guard let tm = metrics.transactionMetrics.last else { return }
+        var nv: InvokeWire.NameValues = []
+        if let proto = tm.networkProtocolName, !proto.isEmpty { nv.append(("proto", proto)) }
+        // ★`isReusedConnection` 是 Bool ⇒ 线格式统一用 "1"/"0"（判据只认这两个值）
+        nv.append(("reused", tm.isReusedConnection ? "1" : "0"))
+        /** 区间毫秒（两端都有值才写——`Date?` 缺一个就说明该阶段没发生，如复用连接就没有 DNS/TCP/TLS） */
+        func span(_ a: Date?, _ b: Date?, _ key: String) {
+            guard let a, let b else { return }
+            let ms = b.timeIntervalSince(a) * 1000.0
+            if ms >= 0 { nv.append((key, String(format: "%.1f", ms))) }
+        }
+        span(tm.domainLookupStartDate, tm.domainLookupEndDate, "dnsMs")
+        span(tm.connectStartDate, tm.connectEndDate, "connectMs")
+        span(tm.secureConnectionStartDate, tm.secureConnectionEndDate, "tlsMs")
+        span(tm.requestStartDate, tm.responseStartDate, "ttfbMs")
+        lock.lock()
+        if var st = states[task.taskIdentifier] {
+            st.transport = nv
+            states[task.taskIdentifier] = st
+            lock.unlock()
+            // ★#1158：记"早于 didComplete"（这种顺序下完成帧能带上读数）
+            BodyLimitDelegate.metricsNote("before")
+        } else {
+            lock.unlock()
+            /**
+             * ★#1158：**晚于 `didComplete` 到达** —— 此时 state 已摘除、帧已发出。
+             * ❗这里是本轮真机实测的结论：iOS 的 `transport_first/last` 全是 `null`（见判据）。
+             * 不静默：记进 `metricsStats.after_complete`，由 `http.tlsStats` 暴露给判据，
+             * 让"为什么没有读数"可归因（而不是笼统的"平台不给"）。
+             */
+            BodyLimitDelegate.metricsNote("after")
+        }
+    }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         lock.lock()
         let st = states.removeValue(forKey: task.taskIdentifier)
@@ -787,6 +864,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 var r = InvokeWire.ResolveFrame.makeOK(reqId)
                 r.status = UInt32(max(0, st.status))
                 r.headers = st.headers
+                r.transport = st.transport.isEmpty ? nil : st.transport   // ★#1158
                 let summary = "{\"path\":\(HttpCapability.jsonQuote(path)),\"size\":\(st.savedBytes)}"
                 r.body = Array(summary.utf8)
                 HttpCapability.lastSaveStats.completed = true
@@ -810,6 +888,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 var r = InvokeWire.ResolveFrame.makeOK(reqId)
                 r.status = UInt32(max(0, st.status))
                 r.headers = st.headers
+                r.transport = st.transport.isEmpty ? nil : st.transport   // ★#1158
                 r.body = []
                 frame = (try? InvokeWire.encodeResolve(r)) ?? []
                 BodyLimitDelegate.lastStreamStats.completed = true
@@ -839,6 +918,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 var r = InvokeWire.ResolveFrame.makeOK(reqId)
                 r.status = UInt32(max(0, http.statusCode))
                 r.headers = HttpCapability.headerPairsForDelegate(http)
+                r.transport = st.transport.isEmpty ? nil : st.transport   // ★#1158
                 r.body = [UInt8](st.body)
                 frame = try InvokeWire.encodeResolve(r)
             } else {

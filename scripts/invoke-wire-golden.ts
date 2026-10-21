@@ -377,6 +377,36 @@ addResolve('resolve-stream-final', {
 // ⑲ 流式块 seq 为 0 且无 body（空块/心跳）——证"有 streamSeq 就是块"，不靠 body 非空推断
 addResolve('resolve-stream-empty-chunk', { reqId: 'r-stream-2', ok: true, pending: true, streamSeq: 0 })
 
+// ⑳ ★★★#1158 传输层读数（tag 22 name-values）：
+//    ★**只写宿主真测到的键**——本例是 iOS 形态（全字段可得），键序按 UTF-16 排序后的
+//      Object.entries 顺序（写端遍历对象属性 ⇒ 键序必须与各端实现一致，故这里显式给全）。
+addResolve('resolve-transport-full', {
+  reqId: 'r-tp-1',
+  ok: true,
+  status: 200,
+  transport: {
+    proto: 'h2',
+    reused: '1',
+    dnsMs: '3.2',
+    connectMs: '12.5',
+    tlsMs: '31.0',
+    ttfbMs: '48.7',
+  },
+})
+
+// ㉑ ★#1158 部分可得：Android 只有 `proto` + `ttfbMs`（缺的键**不出现**，不填 0/false）
+//    ★这条是"缺键 = 不可得"的判据：若某端把缺失写成 `dnsMs=0`，整帧字节就不同 ⇒ 当场红。
+addResolve('resolve-transport-partial', {
+  reqId: 'r-tp-2',
+  ok: true,
+  status: 200,
+  transport: { proto: 'http/1.1', ttfbMs: '21' },
+})
+
+// ㉒ ★#1158 判据配对：`transport` 为空对象或缺省 ⇒ **都不写 tag 22**（往返后字段消失）
+//    ★只测"有值"的话，把 `{}` 也写成空 tag 的实现会漏网（与 ⑨c/⑨m 同款配对）。
+addResolve('resolve-transport-empty-no-tag', { reqId: 'r-tp-3', ok: true, transport: {} })
+
 /* ══════════════════ 坏帧（两侧都必须**拒**，不许静默接受） ══════════════════ */
 
 {

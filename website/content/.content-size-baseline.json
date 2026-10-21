@@ -624,10 +624,10 @@
     "bodyLines": 44
   },
   "website/content/capabilities/fetch.md": {
-    "tableRows": 117,
-    "headings": 15,
+    "tableRows": 126,
+    "headings": 16,
     "codeBlocks": 4,
-    "bodyLines": 26
+    "bodyLines": 28
   },
   "website/content/capabilities/websocket.md": {
     "tableRows": 44,

@@ -66,6 +66,8 @@ export const RTAG_PENDING: number = 19
 export const RTAG_HEADERS: number = 20
 /** ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算） */
 export const RTAG_STREAM_SEQ: number = 21
+/** ★★★#1158：传输层读数（name-values：proto/reused/dnsMs/connectMs/tlsMs/ttfbMs；缺键 = 不可得） */
+export const RTAG_TRANSPORT: number = 22
 
 /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
 export const RESPONSE_TEXT: number = 0
@@ -355,6 +357,8 @@ export class ResolveFrame {
   headers: Map<string, string> | undefined = undefined
   /** ★#1118：非 undefined ⇒ 本帧是流式数据块（不结算） */
   streamSeq: number | undefined = undefined
+  /** ★★★#1158：传输层读数（undefined 或空 ⇒ 不写 tag；宿主测不到就不伪造） */
+  transport: Map<string, string> | undefined = undefined
   body: Uint8Array = EMPTY
 
   static okFrame(reqId: string): ResolveFrame {
@@ -534,6 +538,8 @@ function encodeResolveMeta(f: ResolveFrame): Uint8Array {
   if (f.pending !== undefined) writeTlv(w, RTAG_PENDING, (x: Writer) => x.u8(f.pending === true ? 1 : 0))
   if (f.headers !== undefined) writeTlv(w, RTAG_HEADERS, (x: Writer) => writeNameValues(x, f.headers as Map<string, string>))
   if (f.streamSeq !== undefined) writeTlv(w, RTAG_STREAM_SEQ, (x: Writer) => x.u32(f.streamSeq as number))
+  // ★#1158：传输读数（**非空才写** —— 空表不写 tag，老宿主/无读数端行为不变）
+  if (f.transport !== undefined && f.transport.size > 0) writeTlv(w, RTAG_TRANSPORT, (x: Writer) => writeNameValues(x, f.transport as Map<string, string>))
   return w.done()
 }
 
@@ -571,6 +577,7 @@ function decodeResolveMeta(bytes: Uint8Array, into: ResolveFrame): void {
     else if (tag === RTAG_PENDING) into.pending = p.u8() !== 0
     else if (tag === RTAG_HEADERS) into.headers = readNameValues(p)
     else if (tag === RTAG_STREAM_SEQ) into.streamSeq = p.u32()
+    else if (tag === RTAG_TRANSPORT) into.transport = readNameValues(p)
   }
 }
 

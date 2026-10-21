@@ -112,7 +112,24 @@ export async function runFetch<T>(
       tlsPins: normalizePins(config?.tlsPins),
       tlsPinOnly: config?.tlsPinOnly,
     })
-    return { ok: true, data: r.data as T, status: r.status, headers: r.headers }
+    /**
+     * ★★★#1158：`transport` 必须透传 —— 第 4 段链路。
+     * 【为什么这条要写成注释而不是只加一行代码】本字段一共要穿五段
+     *   （宿主 → 线格式 → `settleFromFrame` → `appHttpRequest` → **这里** → 管线），
+     *   而 `runFetch` 此前是"挑三个字段重新拼一个对象"的形态 ⇒ 新字段**默认会被丢掉**。
+     *   ★这正是 #1134 `redirectManual` 漏在中间层、#1122 五个 S3 字段没进门面的同一类缺陷：
+     *     "底层做了、上层没用"。判据 `tests/fetch-pipeline.test.ts` 现在断言到这一层。
+     */
+    const out: {
+      ok: true
+      data: T
+      status: number
+      headers: Record<string, string>
+      transport?: Record<string, string>
+    } = { ok: true, data: r.data as T, status: r.status, headers: r.headers }
+    const tp = (r as { transport?: Record<string, string> }).transport
+    if (tp) out.transport = tp
+    return out
   } catch (e) {
     // ★#1122：错误码优先取 `CapError.code`，但**普通 Error 带 `code` 也要认**——
     //   各端桥可能抛自己构造的 Error（如 Web 腿的 `fetch.aborted` / `fetch.timeout`）；

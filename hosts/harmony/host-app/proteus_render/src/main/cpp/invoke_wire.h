@@ -80,6 +80,8 @@ constexpr uint8_t RTAG_PENDING = 19;
 constexpr uint8_t RTAG_HEADERS = 20;
 /** ★#1118：流式块序号（有本字段 = 本帧是数据块，不结算） */
 constexpr uint8_t RTAG_STREAM_SEQ = 21;
+/** ★★★#1158：传输层读数（name-values：proto/reused/dnsMs/connectMs/tlsMs/ttfbMs；缺键 = 不可得） */
+constexpr uint8_t RTAG_TRANSPORT = 22;
 
 /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
 constexpr uint8_t RESPONSE_TEXT = 0;
@@ -157,6 +159,8 @@ struct ResolveFrame {
   Opt<NameValues> headers;
   /** ★#1118：非空 ⇒ 本帧是流式数据块（不结算）；空且 !pending ⇒ 最终帧 */
   Opt<uint32_t> streamSeq;
+  /** ★★★#1158：传输层读数（空 ⇒ 不写 tag；宿主测不到就不伪造） */
+  Opt<NameValues> transport;
   std::vector<uint8_t> body;
 
   static ResolveFrame okOf(std::string reqId) {
@@ -443,6 +447,9 @@ inline std::vector<uint8_t> encodeResolveMeta(const ResolveFrame& f) {
   if (f.pending) writeTlv(w, RTAG_PENDING, [&](Writer& x) { x.u8(*f.pending ? 1u : 0u); });
   if (f.headers) writeTlv(w, RTAG_HEADERS, [&](Writer& x) { writeNameValues(x, *f.headers); });
   if (f.streamSeq) writeTlv(w, RTAG_STREAM_SEQ, [&](Writer& x) { x.u32(*f.streamSeq); });
+  // ★#1158：传输读数（**非空才写** —— 空表不写 tag，老宿主/无读数端行为不变）
+  //   ★`Opt<T>` 是**值语义**（`has` + `.v`），不是指针——首版按 `->` / `*` 用，C++ 侧编译当场红。
+  if (f.transport && !f.transport.v.empty()) writeTlv(w, RTAG_TRANSPORT, [&](Writer& x) { writeNameValues(x, f.transport.v); });
   return w.take();
 }
 
@@ -479,6 +486,7 @@ inline void decodeResolveMeta(const std::vector<uint8_t>& bytes, ResolveFrame& f
       case RTAG_PENDING: f.pending = (p.u8() != 0); break;
       case RTAG_HEADERS: f.headers = readNameValues(p); break;
       case RTAG_STREAM_SEQ: f.streamSeq = p.u32(); break;
+      case RTAG_TRANSPORT: f.transport = readNameValues(p); break;
       default: break;
     }
   }

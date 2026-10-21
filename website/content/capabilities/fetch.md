@@ -162,6 +162,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `deadlineMs` | `number` | — | ★#1135：本次请求的总时限预算（ms；未设置则不出现）。 |
 | `deadlineHit` | `boolean` | — | ★#1135：是否因总时限耗尽而失败（`fetch.deadline`）。 |
 | `cache` | `FetchCacheMeta` | — | ★★★#1149：本次请求的缓存结局（未启用缓存时不出现）。 `hit` 直接命中新鲜缓存（**没有发网络请求**）/ `revalidated` 304 复用 / `miss` 回源 / `bypass` 不适用（非 GET、流式等，或 `no-store`）。 |
+| `transport` | `TransportMeta` | — | ★★★#1158：**宿主侧传输层读数**（本次请求的最后一轮）。  【它解决什么】"网络慢"长期只有 `totalMs` 一个数 ⇒ 分不清**排队 / DNS / 建连 / TLS / 首字节**。 本字段由宿主实测提供（iOS `URLSessionTaskMetrics` · Android 状态行+TTFB · 鸿蒙 `Rcp_TimeInfo`）。  【★逐端可得性 —— 缺的键**不出现**，不是 0/false】 | 端 | proto | reused | dnsMs | connectMs | tlsMs | ttfbMs | |---|---|---|---|---|---|---| | iOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | | Android | ✅ | — | — | — | — | ✅ | | 鸿蒙 | — | — | ✅ | ✅ | ✅ | ✅ | | Web | ✅ | — | — | — | — | — | | MP | （整项不出现：`wx.request` 不暴露任何传输读数） |  ★**"不可得"与"测到 0"是两件事**：宿主不提供时这里就是 `undefined`，绝不填 0—— 否则业务会据此判断"DNS 只花了 0ms"（假的）。 ★缓存的命中（`cache.hit`）**不发网络请求** ⇒ 本字段不出现（不是"0ms"，是没有）。 |
 
 ### `RedirectTrace`
 
@@ -173,6 +174,20 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `exceeded` | `boolean` | — | 是否因为超过 `maxRedirects` 而停（真实错误，不是成功） |
 | `stopped` | `boolean` | — | 是否被 `onRedirect` 主动停止 |
 | `stopReason` | `string` | — | — |
+
+### `TransportMeta`
+
+★★★#1158：宿主侧传输层读数（**类型化、已解析**；线格式见 `invoke-wire.ts` 的 `Transport=22`）。
+所有字段可选——缺 = 该端测不到。毫秒字段为浮点（iOS/鸿蒙给小数）。
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `proto` | `string` | — | 实际协商的协议版本（`"h2"` / `"http/1.1"`） |
+| `reused` | `boolean` | — | 是否复用已有连接（`true` = 复用了连接池里的连接，没有新建 TCP） |
+| `dnsMs` | `number` | — | DNS 解析耗时（ms） |
+| `connectMs` | `number` | — | TCP 建连耗时（ms；**不含** DNS） |
+| `tlsMs` | `number` | — | TLS 握手耗时（ms；**不含** DNS/TCP） |
+| `ttfbMs` | `number` | — | 首字节耗时（ms；从发起请求到收到响应首字节） |
 
 ## 错误码
 

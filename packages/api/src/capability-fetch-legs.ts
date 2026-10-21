@@ -145,6 +145,8 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
     // ★流式：ReadableStream 逐块推给 onChunk（**拉取式**节奏，与 App 的回推式不同）
     //   ★取局部常量再判：闭包内 TS 会丢掉对 `config.onChunk` 的窄化（TS2722）。
     const onChunk = config.onChunk
+    // ★#1158：传输读数取一次（三条返回路径共用；每次调 `getEntriesByName` 都要遍历 perf buffer）
+    const webTp = webTransportReadout(url)
     if (onChunk && resp.body && typeof resp.body.getReader === 'function') {
       const reader = resp.body.getReader()
       let seq = 0
@@ -156,11 +158,11 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
         }
       })
       // ★流式模式下 `data` 为空（字节已逐块给过；要聚合请自己在 onChunk 里做）
-      return { data: undefined, status: resp.status, headers, config }
+      return { data: undefined, status: resp.status, headers, config, ...(webTp ? { transport: webTp } : {}) }
     }
     if (config.responseType === 'arraybuffer') {
       const buf = await abortAware(() => resp.arrayBuffer())
-      return { data: new Uint8Array(buf), status: resp.status, headers, config }
+      return { data: new Uint8Array(buf), status: resp.status, headers, config, ...(webTp ? { transport: webTp } : {}) }
     }
     const text = await abortAware(() => resp.text())
     let data: unknown = text
@@ -171,10 +173,32 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
         /* 非 JSON 原样（与既有行为一致：不猜） */
       }
     }
-    return { data, status: resp.status, headers, config }
+    return { data, status: resp.status, headers, config, ...(webTp ? { transport: webTp } : {}) }
   })()
 }
 
+/**
+ * ★★★#1158：Web 腿的传输读数——**只取 `nextHopProtocol`**。
+ *
+ * 【为什么只这一项】`PerformanceResourceTiming` 的 DNS/连接/TLS 时间戳对**跨源**资源
+ *   受 Timing-Allow-Origin 限制（默认全 0）；把 0 填进 transport 就是假数据。
+ *   `nextHopProtocol` 不受该限制 ⇒ 只回它，其余键**不出现**。
+ *
+ * ★诚实边界：拿不到匹配的 entry（浏览器未记录 / 已淘汰）⇒ 返回 undefined（整项不出现）。
+ */
+function webTransportReadout(url: string): Record<string, string> | undefined {
+  try {
+    const perf = (globalThis as { performance?: Performance }).performance
+    if (!perf || typeof perf.getEntriesByName !== "function") return undefined
+    const entries = perf.getEntriesByName(url, "resource") as PerformanceResourceTiming[]
+    // ★取**最后一条**：可能有多条同名资源记录（重试/重定向），最后一条对应当前这次
+    const last = entries[entries.length - 1]
+    const proto = last?.nextHopProtocol
+    return proto ? { proto } : undefined
+  } catch {
+    return undefined
+  }
+}
 /** 小程序 `wx.request` 依赖的最小面（只取本文件用到的部分）。 */
 export interface WxRequestLike {
   request?: (opts: Record<string, unknown>) => void

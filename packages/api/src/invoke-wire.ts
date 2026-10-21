@@ -176,6 +176,28 @@ export const MetaTagResolve = {
    *   且序号让消费方能**检测丢帧**（seq 跳跃 ⇒ 宿主队列丢了数据，必须报错而不是静默拼接）。
    */
   StreamSeq: 21,
+  /**
+   * ★★★#1158 **传输层读数**（name-values；键是短名 `proto` / `reused` / `dnsMs` / `connectMs` /
+   * `tlsMs` / `ttfbMs`）。
+   *
+   * 【为什么单开一个 tag 而**不塞进 `Headers`**】`Headers` 是**服务端**响应头——业务会拿到它
+   *   （`FetchOk.headers`）。把宿主侧测量混进去 ⇒ ① 业务可能把它当服务端头转发/落库；
+   *   ② 与真实响应头同名字段（如 `proto`）互相覆盖；③ 无法区分"服务端说"与"宿主测"。
+   *
+   * 【为什么用 name-values 而不是每字段一个 tag】这些字段**三端可得性不同**（见下），
+   *   name-values ⇒ 缺哪个就没有哪个键，天然表达"不可得"；若每字段一个 tag，
+   *   就要为"宿主拿不到"与"宿主没实现"造两种缺失表达（本仓反复踩的"用缺省值冒充已知"）。
+   *
+   * 【★三端可得性（真机取证，不是推断）】——**缺的键必须不出现，不能填 0/false**：
+   *   · iOS：`URLSessionTaskMetrics` ⇒ `proto` + `reused` + `dnsMs` + `connectMs` + `tlsMs` + `ttfbMs` 全有
+   *   · Android：`HttpURLConnection` ⇒ `proto`（状态行）+ `ttfbMs`（自量）；
+   *     **无** `reused` / `dnsMs` / `connectMs` / `tlsMs`（平台不暴露）
+   *   · 鸿蒙：`Rcp_TimeInfo` ⇒ `dnsMs` + `connectMs` + `tlsMs` + `ttfbMs`；
+   *     **无** `proto` / `reused`（RCP 不暴露协议版本与复用标记）
+   *   · Web：`PerformanceResourceTiming.nextHopProtocol` ⇒ `proto`（其余不填）
+   *   · MP：`wx.request` 不暴露任何传输读数 ⇒ 整个 `transport` 不出现
+   */
+  Transport: 22,
 } as const
 
 /** 响应体解释方式（与 `RequestConfig.responseType` 同语义） */
@@ -291,7 +313,23 @@ export interface ResolveFrame {
    * 无本字段且 `pending !== true` = 最终帧（结算）。
    */
   streamSeq?: number
+  /**
+   * ★★★#1158：**宿主侧传输层读数**（`proto` / `reused` / `dnsMs` / `connectMs` / `tlsMs` / `ttfbMs`）。
+   * ★只有宿主真能测到的键才出现（见 `MetaTagResolve.Transport` 注释的逐端可得性）；
+   *   一律缺失 ⇒ 本字段不出现（不返回空对象，避免"有 transport 但全空"被误读成"测了但没有"）。
+   */
+  transport?: TransportReadout
 }
+
+/** ★#1158：传输层读数的键（短名，跨端统一；值一律为字符串，便于 TLV name-values 承载） */
+export const TRANSPORT_KEYS = ['proto', 'reused', 'dnsMs', 'connectMs', 'tlsMs', 'ttfbMs'] as const
+export type TransportKey = (typeof TRANSPORT_KEYS)[number]
+
+/**
+ * ★#1158：宿主侧传输层读数（**原始字符串形态**，与线格式一一对应）。
+ * ★业务侧看的是 `FetchMeta.transport`（类型化、已解析）；本类型是**线格式中间态**。
+ */
+export type TransportReadout = Partial<Record<TransportKey, string>>
 
 /* ────────────────────────── TLV 原语 ────────────────────────── */
 
@@ -479,6 +517,11 @@ function encodeResolveMeta(f: ResolveFrame): Uint8Array {
   if (headers !== undefined) writeTlv(w, MetaTagResolve.Headers, () => writeNameValues(w, headers))
   const streamSeq = f.streamSeq
   if (streamSeq !== undefined) writeTlv(w, MetaTagResolve.StreamSeq, () => w.u32(streamSeq))
+  // ★#1158：传输读数——**非空才写**（空对象不写 ⇒ 老宿主/无读数端行为不变）
+  const transport = f.transport
+  if (transport !== undefined && Object.keys(transport).length > 0) {
+    writeTlv(w, MetaTagResolve.Transport, () => writeNameValues(w, transport as Record<string, string>))
+  }
   return w.done()
 }
 
@@ -530,6 +573,18 @@ function decodeResolveMeta(bytes: Uint8Array, into: ResolveFrame): void {
       case MetaTagResolve.StreamSeq:
         into.streamSeq = p.u32()
         break
+      case MetaTagResolve.Transport: {
+        // ★#1158：只保留已知键（未知键**丢弃而非透传**——它们是宿主侧实现细节，
+        //   透传会让业务依赖一个未承诺的字段名；但保留值形态为字符串，解析在 capability 层）
+        const nv = readNameValues(p)
+        const t: TransportReadout = {}
+        for (const k of TRANSPORT_KEYS) {
+          const v = nv[k]
+          if (v !== undefined) t[k] = v
+        }
+        if (Object.keys(t).length > 0) into.transport = t
+        break
+      }
       default:
         break
     }

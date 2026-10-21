@@ -306,6 +306,7 @@ public final class HttpCapability {
                 }
             }
 
+            final long ttfbT0 = System.nanoTime();
             int status = conn.getResponseCode();
             // ★#1150 排障：非 2xx 记一行（真机抓过「503 到了但响应没回 JS」；只在异常档打，不污染正常路径）
             if (status >= 300) Log.w(TAG, "HTTP_STATUS " + status + " reqId=" + f.reqId);
@@ -329,6 +330,7 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
             rf.status = status;
+            rf.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
             rf.headers = respHeaders;
             rf.body = respBody;
             return rf;
@@ -440,6 +442,7 @@ public final class HttpCapability {
                 closeQuietly(os);
             }
 
+            final long ttfbT0 = System.nanoTime();
             int status = conn.getResponseCode();
             Map<String, List<String>> fields = conn.getHeaderFields();
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
@@ -450,6 +453,7 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
             rf.status = status;
+            rf.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
             rf.headers = respHeaders;
             rf.body = respBody;
             stats.completed = true;
@@ -585,6 +589,7 @@ public final class HttpCapability {
                 try { ros.write(reqBody); ros.flush(); } finally { closeQuietly(ros); }
             }
 
+            final long ttfbT0 = System.nanoTime();
             int status = conn.getResponseCode();
             Map<String, List<String>> fields = conn.getHeaderFields();
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
@@ -613,6 +618,7 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
             rf.status = status;
+            rf.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
             rf.headers = respHeaders;
             // ★回程 body = 一句可读摘要（JS 侧只需要 path/size；**不回字节**）
             String summary = "{\"path\":" + org.json.JSONObject.quote(f.savePath)
@@ -764,6 +770,7 @@ public final class HttpCapability {
                 try { os.write(reqBody); os.flush(); } finally { closeQuietly(os); }
             }
 
+            final long ttfbT0 = System.nanoTime();
             int status = conn.getResponseCode();
             Map<String, List<String>> fields = conn.getHeaderFields();
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
@@ -793,6 +800,7 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame fin = InvokeWire.ResolveFrame.ok(f.reqId);
             fin.status = status;
+            fin.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
             fin.headers = respHeaders;
             fin.body = new byte[0];   // ★最终帧不回 body（数据块已逐块给过）
             stats.completed = true;

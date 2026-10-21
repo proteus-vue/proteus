@@ -217,6 +217,45 @@ export interface FetchMeta {
    * `miss` 回源 / `bypass` 不适用（非 GET、流式等，或 `no-store`）。
    */
   cache?: FetchCacheMeta
+  /**
+   * ★★★#1158：**宿主侧传输层读数**（本次请求的最后一轮）。
+   *
+   * 【它解决什么】"网络慢"长期只有 `totalMs` 一个数 ⇒ 分不清**排队 / DNS / 建连 / TLS / 首字节**。
+   *   本字段由宿主实测提供（iOS `URLSessionTaskMetrics` · Android 状态行+TTFB · 鸿蒙 `Rcp_TimeInfo`）。
+   *
+   * 【★逐端可得性 —— 缺的键**不出现**，不是 0/false】
+   *   | 端 | proto | reused | dnsMs | connectMs | tlsMs | ttfbMs |
+   *   |---|---|---|---|---|---|---|
+   *   | iOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+   *   | Android | ✅ | — | — | — | — | ✅ |
+   *   | 鸿蒙 | — | — | ✅ | ✅ | ✅ | ✅ |
+   *   | Web | ✅ | — | — | — | — | — |
+   *   | MP | （整项不出现：`wx.request` 不暴露任何传输读数） |
+   *
+   * ★**"不可得"与"测到 0"是两件事**：宿主不提供时这里就是 `undefined`，绝不填 0——
+   *   否则业务会据此判断"DNS 只花了 0ms"（假的）。
+   * ★缓存的命中（`cache.hit`）**不发网络请求** ⇒ 本字段不出现（不是"0ms"，是没有）。
+   */
+  transport?: TransportMeta
+}
+
+/**
+ * ★★★#1158：宿主侧传输层读数（**类型化、已解析**；线格式见 `invoke-wire.ts` 的 `Transport=22`）。
+ * 所有字段可选——缺 = 该端测不到。毫秒字段为浮点（iOS/鸿蒙给小数）。
+ */
+export interface TransportMeta {
+  /** 实际协商的协议版本（`"h2"` / `"http/1.1"`） */
+  proto?: string
+  /** 是否复用已有连接（`true` = 复用了连接池里的连接，没有新建 TCP） */
+  reused?: boolean
+  /** DNS 解析耗时（ms） */
+  dnsMs?: number
+  /** TCP 建连耗时（ms；**不含** DNS） */
+  connectMs?: number
+  /** TLS 握手耗时（ms；**不含** DNS/TCP） */
+  tlsMs?: number
+  /** 首字节耗时（ms；从发起请求到收到响应首字节） */
+  ttfbMs?: number
 }
 
 /** ★#1122：`useFetch` 成功结果（`data` 解构保持兼容；`status`/`headers` 为新增）。 */
@@ -234,3 +273,48 @@ export interface FetchOk<T> {
 export type FetchResult<T> =
   | FetchOk<T>
   | { ok: false; error: CapError; meta?: FetchMeta }
+
+/**
+ * ★★★#1158：把线格式的**字符串读数**解析成类型化 `TransportMeta`。
+ *
+ * 【规则（每条都有理由）】
+ *   · **只保留能解析的项**：`dnsMs` 非数字 ⇒ 丢弃该键（不写 NaN——NaN 会让 JSON 变成 `null`，
+ *     业务拿到 `null` 会以为"测到但为空"）；
+ *   · 负数 ⇒ 丢弃（宿主算错时不能把负时间交给业务）；
+ *   · `reused`：只认 `"1"` / `"0"`（线格式约定）；其它值 ⇒ 丢弃（不把任何非空串当 true）；
+ *   · 空对象 / 全项被丢弃 ⇒ 返回 `undefined`（**整项不出现**，与"某端测不到"同语义）；
+ *   · `proto` 空串 ⇒ 丢弃。
+ *
+ * ★纯函数（零 IO），由 `tests/fetch-transport-meta.test.ts` 直接断言。
+ */
+export function parseTransportReadout(raw: Record<string, string> | undefined): TransportMeta | undefined {
+  if (!raw) return undefined
+  const out: TransportMeta = {}
+  const num = (k: string): number | undefined => {
+    const s = raw[k]
+    if (s === undefined) return undefined
+    /**
+     * ★★★空串/空白串必须当**不可解析**——`Number('')` 是 **0**（JS 的经典陷阱）。
+     * 若漏掉这一条，宿主把"没测到"写成空串时，业务会读到 `dnsMs: 0`（"DNS 花了 0ms"）——
+     * **假数据比缺数据更糟**（本仓反复记的"用缺省值冒充已知"）。
+     * ★这是本轮判据 ⑤ 当场抓出的：`parseTransportReadout({dnsMs:''})` 曾返回 `{dnsMs: 0}`。
+     */
+    if (s.trim() === '') return undefined
+    const n = Number(s)
+    return Number.isFinite(n) && n >= 0 ? n : undefined
+  }
+  const proto = raw['proto']
+  if (typeof proto === 'string' && proto.length > 0) out.proto = proto
+  const reused = raw['reused']
+  if (reused === '1') out.reused = true
+  else if (reused === '0') out.reused = false
+  const dns = num('dnsMs')
+  if (dns !== undefined) out.dnsMs = dns
+  const conn = num('connectMs')
+  if (conn !== undefined) out.connectMs = conn
+  const tls = num('tlsMs')
+  if (tls !== undefined) out.tlsMs = tls
+  const ttfb = num('ttfbMs')
+  if (ttfb !== undefined) out.ttfbMs = ttfb
+  return Object.keys(out).length > 0 ? out : undefined
+}

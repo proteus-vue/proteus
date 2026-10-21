@@ -73,8 +73,20 @@ export function appHttpRequest(
     : invokeHostAsync(HTTP_REQUEST, args, budget, { signal: config.signal })
   return run
     .then((d) => {
-      const r = (d ?? {}) as { data?: unknown; status?: number; headers?: Record<string, string> }
-      return { data: r.data, status: Number(r.status ?? 0), headers: r.headers ?? {}, config }
+      const r = (d ?? {}) as {
+        data?: unknown
+        status?: number
+        headers?: Record<string, string>
+        transport?: Record<string, string>
+      }
+      return {
+        data: r.data,
+        status: Number(r.status ?? 0),
+        headers: r.headers ?? {},
+        config,
+        // ★★★#1158：透传宿主传输读数（缺省**不造空对象**——空对象会让上层以为"测了但全空"）
+        ...(r.transport ? { transport: r.transport } : {}),
+      }
     })
     .catch((e: unknown) => {
       const msg = e instanceof Error ? e.message : String(e)

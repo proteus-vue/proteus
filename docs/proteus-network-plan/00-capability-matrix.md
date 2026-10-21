@@ -151,9 +151,27 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 ★**#1155 的另一半产出：把"看不见的传输层"变成可观测读数**。
 `bash hosts/{android,ios,harmony}/run-transport-probe.sh` 现在产出
 `{client_protos, client_peers, server_protocols, server_requests, server_connections, http2_ok, conn_reused_ok}`
-——这正是本节末尾"P1 共同前提"里 `transport` 可观测字段的**雏形**（尚未接进 `FetchMeta`）。
 ★**三端读数（2026-10-21 真机）**：Android `http/1.1 · 3/1 复用` · iOS `h2 · 3/1 复用` ·
 鸿蒙 `http/1.1 · 3/1 复用（修后）· h2=未测`。
+
+### ★★★#1158 · 传输读数已**产品化**（业务可见，不只是探针）
+
+矩阵原先只写"P1 共同前提：三端要有同一套可观测字段 `transport:{protocol,dnsMs,connectMs,tlsMs,reused}`"
+——那句话此前是**愿景**。现在它是**已交付的 API**：`res.meta.transport`。
+
+| 端 | `proto` | `reused` | `dnsMs` | `connectMs` | `tlsMs` | `ttfbMs` | 采集来源 |
+|---|---|---|---|---|---|---|---|
+| iOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `URLSessionTaskMetrics` |
+| Android | ✅ | — | — | — | — | ✅ | 状态行（`getHeaderFields()` 的 null 键）+ 自量 TTFB |
+| 鸿蒙 | — | — | ✅ | ✅ | ✅ | ✅ | `Rcp_TimeInfo`（★实际单位是**微秒**，与墙钟对账后修正） |
+| Web | ✅ | — | — | — | — | — | `PerformanceResourceTiming.nextHopProtocol`（只此一项：其余受 TAO 限制会全 0，填了就是假数据） |
+| MP | （整项不出现：`wx.request` 不暴露任何传输读数） | | | | | | — |
+
+★**"缺键 = 不可得"是硬约定**：宿主测不到的项**不出现**，绝不填 `0`/`false`——
+否则业务会把"没测到"读成"DNS 花了 0ms"（假数据比缺数据更糟）。
+★线格式 = 回程 TLV `Transport=22`（name-values；五端 43 向量逐字节等价）。
+★判据：`tests/fetch-transport-meta.test.ts`（12 条）+ `tests/fetch-pipeline.test.ts` 的
+「五段链路」断言 + `check:cache-evidence` 的"业务侧真的拿到读数"（三端证据）。
 
 ★**P1 的共同前提**：三端要有**同一套可观测字段**（`transport`：`{ protocol, dnsMs, connectMs, tlsMs, reused }`），
 否则判据只能各端各写、无法比对——这与本仓"三端同判据"纪律冲突。

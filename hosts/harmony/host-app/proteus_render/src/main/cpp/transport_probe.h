@@ -294,6 +294,8 @@ static napi_value HostTransportProbe(napi_env env, napi_callback_info info) {
     std::string statuses = "[";
     std::string bytesArr = "[";
     std::string msArr = "[";
+    /** ★※#1158：逐轮的 `transport`（宿主采集读数；null = 该轮没拿到） */
+    std::string tpArr = "[";
     bool firstOk = true;
     bool allOk = true;
     bool anyStatus = false;
@@ -336,11 +338,24 @@ static napi_value HostTransportProbe(napi_env env, napi_callback_info info) {
         unsigned status = 0;
         size_t nbytes = 0;
         bool ok = false;
+        /** ★★★#1158：本轮回程帧里的 `transport`（宿主采集的传输读数） */
+        std::string tpJson = "null";
         try {
             proteus::wire::ResolveFrame rf = proteus::wire::decodeResolve(fromHex(hexOut));
             ok = rf.ok;
             status = rf.status ? *rf.status : 0u;
             nbytes = rf.body.size();
+            if (rf.transport && !rf.transport.v.empty()) {
+                std::string s = "{";
+                bool first = true;
+                for (const auto& kv : rf.transport.v) {
+                    if (!first) s += ",";
+                    first = false;
+                    s += "\"" + jsonEscape(kv.first) + "\":\"" + jsonEscape(kv.second) + "\"";
+                }
+                s += "}";
+                tpJson = s;
+            }
         } catch (const std::exception& e) {
             err = std::string("回程帧解码失败（第 ") + std::to_string(i + 1) + " 轮）：" + e.what();
             break;
@@ -348,14 +363,16 @@ static napi_value HostTransportProbe(napi_env env, napi_callback_info info) {
         if (i == 0) firstOk = ok;
         if (!ok) allOk = false;
         anyStatus = true;
-        if (i > 0) { statuses += ","; bytesArr += ","; msArr += ","; }
+        if (i > 0) { statuses += ","; bytesArr += ","; msArr += ","; tpArr += ","; }
         statuses += std::to_string(status);
         bytesArr += std::to_string(static_cast<unsigned long long>(nbytes));
         msArr += std::to_string(static_cast<long long>(dt));
+        tpArr += tpJson;
     }
     statuses += "]";
     bytesArr += "]";
     msArr += "]";
+    tpArr += "]";
 
     if (jenv != nullptr && scope != nullptr) OH_JSVM_CloseHandleScope(jenv, scope);
     if (jenv != nullptr) OH_JSVM_DestroyEnv(jenv);
@@ -363,6 +380,10 @@ static napi_value HostTransportProbe(napi_env env, napi_callback_info info) {
     if (vm != nullptr) OH_JSVM_DestroyVM(vm);
 
     body += ",\"statuses\":" + statuses + ",\"bytes\":" + bytesArr + ",\"ms\":" + msArr;
+    // ★★★#1158：逐轮 `transport`（宿主采集读数）。
+    //   ★探针只解码**宿主真实回程帧**里的 `transport` tag ⇒ 这条读数证明
+    //     "宿主的 Rcp_TimeInfo 采集 + 线格式编码"两端都真的工作（不是探针自己算的）。
+    body += ",\"transport_per_round\":" + tpArr;
     // ★★★#1156：**客户端侧因果证据**——RCP session 建了几次。
     //   服务端说"3 请求 / 3 TCP"是**现象**；`sessionsCreated=3` 才说明**为什么**
     //   （每请求一个新 session ⇒ 连接池跟着生灭）。修好后应为 1。

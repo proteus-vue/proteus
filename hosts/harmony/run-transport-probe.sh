@@ -141,6 +141,18 @@ get('/__stats')
     //   snake_case 读三端证据（Android/iOS 探针的既有形态）。两个名字并存会让"首轮成功"这条
     //   在鸿蒙上永远读不到（本轮实测：报「首轮请求失败（?）」）。
     doc.first_ok = doc.firstOk === true
+    /**
+     * ★★★#1158：把逐轮 `transport` 对齐成三端统一的 `transport_first` / `transport_last`。
+     * ★鸿蒙的读数来自**宿主的 `Rcp_TimeInfo`**（探针只解码宿主真实回程帧里的 `Transport=22` tag），
+     *   所以这条读数同时证明了「宿主采集」+「线格式编码」两端。
+     * ★诚实边界：鸿蒙的探针走 `hostTransportProbe`（C++ napi，同步在 VM 内发请求），
+     *   **不经过 JS `useFetch`** ⇒ 这条读数证明"宿主能测且能编码"，**不**证明 JS 侧 `meta.transport`
+     *   拿得到（那由 iOS/Android 的 JS 探针 + `check:cache-evidence` 断言）。
+     */
+    if (Array.isArray(doc.transport_per_round)) {
+      doc.transport_first = doc.transport_per_round[0] ?? null
+      doc.transport_last = doc.transport_per_round[doc.transport_per_round.length - 1] ?? null
+    }
     if (doc.mode === 'async' && doc.async) {
       // async 取证模式的读数在 `async` 子对象里 ⇒ 顶层也镜像一份，便于三端同判据读取
       const a = doc.async
