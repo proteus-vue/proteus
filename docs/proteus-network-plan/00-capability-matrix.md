@@ -21,7 +21,7 @@
 | 3 | **HTTP/2** | **走平台默认**（Android `HttpCapability.java:30` / iOS `http-capability.swift:30` 均注明"HTTP/2、压缩、连接池全走平台默认，不自造"） | 宿主传输 | ❌ 见 §3 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
 | 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `setInstanceFollowRedirects(!manual)`（4 条路径统一 helper）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
-| 6 | **请求缓存** | ★**#1149 已做（框架层）**：`config.cache`（对齐浏览器 `Request.cache` 六值）+ `Cache-Control`（max-age / no-store / no-cache / must-revalidate）+ `ETag`/`Last-Modified` 条件请求 + **304 ⇒ 缓存体合成 200** + `Vary` 分桶 + 内存 LRU 预算。★**L2 磁盘层仍未做**（进程重启即失效，如实标注） | **框架策略（TS）** | ✅（内存层） |
+| 6 | **请求缓存** | ★**#1149 已做（框架层）**：`config.cache`（对齐浏览器 `Request.cache` 六值）+ `Cache-Control`（max-age / no-store / no-cache / must-revalidate）+ `ETag`/`Last-Modified` 条件请求 + **304 ⇒ 缓存体合成 200** + `Vary` 分桶 + 内存 LRU 预算；★**#1150 已做**：RFC 5861 `stale-while-revalidate` / `stale-if-error` + `Age` 头。★**L2 磁盘层仍未做**（进程重启即失效，如实标注） | **框架策略（TS）** | ✅（内存层） |
 | 7 | **RequestTask** | ★**本轮做了**：`useFetchTask()` → `FetchTask`（`result` / `state` / `abort(reason)`）。★形状是 Promise + abort，**不复刻** wx 的回调对象 | **框架策略（TS）** | ✅ |
 | 8 | **网络调优** | **无**：无并发上限（本轮前）、无优先级、无超时分级、无弱网退避 | **框架策略（TS）** | ✅ 并发/优先级/退避已做；**连接参数调优仍属宿主（未做）** |
 | 9 | **观测/排障** | ★**本轮做了**：`FetchMeta`（`queuedMs` / `attemptMs[]` / `attempts` / `deduped` / `priority`） | **框架策略（TS）** | ✅ |
@@ -127,6 +127,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 | `If-None-Match` / `If-Modified-Since` 条件请求 | ✅ **已做（#1149）**：框架层存 `(method+url+params+responseType → etag/lastModified)`，命中则加条件头；304 ⇒ 用缓存体合成 200（RFC 9111 §4.3.4） | 内存 LRU（默认 5 MiB）；L2 磁盘层仍待 `04-cache-layers.md` 落地 |
 | `Cache-Control` 尊重（max-age / no-store / no-cache / must-revalidate） | ✅ **已做（#1149）**：`parseCacheControl` + `freshnessLifetimeMs`（含 `Expires`/`Age`），不新鲜则条件回源 | 同上 |
 | `Vary` 分桶 | ✅ **已做（#1149）**：按 Vary 头名 + 取值分变体；`Vary: *` 拒绝缓存 | 同上 |
+| `stale-while-revalidate` / `stale-if-error`（RFC 5861） | ✅ **已做（#1150）**：SWR = 变 stale 后 N 秒内**立即回旧值** + 后台条件校验（按条目去重，防 amplification）；SIE = 回源遇网络失败 / 500·502·503·504 时用旧值兜底。★`must-revalidate` **优先**（RFC 5861 未规定此交互，取 RFC 9111 的更严格者）；★缓存生成的响应必带 `Age`（RFC 9111 §5.1 MUST） | 同上 |
 | 请求去重（同飞） | ✅ **已做（#1133）** | — |
 
 ★诚实边界：**浏览器/小程序会自动做 HTTP 缓存，但 App 三个宿主不会**（我们的字节腿是裸 HTTP）。
@@ -166,7 +167,9 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
    ⇒ 准确说法：**"请求治理层达到超级应用可用"；"传输层仍是平台默认"**。
 2. ~~没有做 HTTP 缓存~~ ⇒ ★**已收口（#1149，框架层内存缓存）**：`config.cache` 六模式 +
    `Cache-Control` / `ETag` / `Last-Modified` / 304 合成 / `Vary` 分桶 / LRU 预算。
-   **剩余真差异**：L2 **磁盘层**未做（重启即失效）；`stale-while-revalidate` / `stale-if-error` 未做。
+   **剩余真差异**：L2 **磁盘层**未做（重启即失效）。~~`stale-while-revalidate` / `stale-if-error` 未做~~
+   ⇒ ✅ **已收口（#1150）**：两条 RFC 5861 指令 + `Age` 头已落地并真机双端验证；
+   并顺带修掉一个**真缺陷**（`responseType:json` + 非 JSON 错误体 ⇒ 请求永久挂起）。
 3. ~~重定向仍不可拦~~ ⇒ ★**已收口（本轮 #1134）**：manual / onRedirect / 限额 / 跨域剥离凭据全落地，Android+iOS 真机验过。**剩一个端差异**：MP 端 `wx.request` 隐式跟随且不可关 ⇒ 如实 `fetch.unsupported`。
 4. 管线的**并发额度是按 `CapabilityHooks` 实例**计的，不跨页面/不全局。多页面场景要全局额度需另建实例共享
    （本仓尚无"全局请求管理器"，属 P2/P3）。
@@ -178,6 +181,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 1. ~~P1 重定向可拦~~ ⇒ ✅ **已完成（#1134）**；
 2. ~~P3 总时限 deadline~~ ⇒ ✅ **已完成（#1135）**；
-3. ~~P2 条件请求缓存~~ ⇒ ✅ **已完成（#1149 · 框架层内存层）**；剩余：L2 磁盘层 + `stale-while-revalidate`；
+3. ~~P2 条件请求缓存~~ ⇒ ✅ **已完成（#1149 · 框架层内存层）**；~~RFC 5861 扩展~~ ⇒ ✅ **已完成（#1150）**；
+   剩余：L2 磁盘层（`04-cache-layers.md`）；
 4. **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引入 OkHttp，独立大单，先评估 APK 体积与包体影响）；
 5. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。

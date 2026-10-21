@@ -2404,6 +2404,37 @@
         "T-fetch-pipeline"
       ],
       "note": "【done · 决策 #1149】矩阵 §3 P2 的条件请求缓存已收口（**框架层内存层**）。★真机挖出两个只能实测才知道的事实：① iOS 的 URLSession.URLCache 会把 304 合成 200 交给调用方 ⇒ 框架层永远看不到 304（首轮 iOS status=miss 而 Android revalidated）⇒ 内部约定头 X-Proteus-Bypass-Platform-Cache 让 iOS 设 cachePolicy=.reloadIgnoringLocalCacheData（三端宿主都须消费后剔除，防外泄给业务服务端）；② 未开框架缓存时 iOS 也在省请求（off_hits_delta=0 vs Android 1）⇒ 平台缓存介入被量出来，这正是\"缓存必须收进框架层\"的立论证据，故判据不判\"未开缓存必须每次真发\"（那会把 iOS 正确行为判成假红）。★判据：fetch-cache 14/14（真实 HTTP）+ 破坏性验证 5 条各自独立命中（其中 Vary 只比头名那条抓出我自己实现的真 bug：存 zh 变体时把 en 删了）；真机双端各 11/11，证据 hosts/{android,ios}/results/cache-probe.json 已入库；新门禁 check:cache-evidence 以服务端记账为准。★诚实边界：只在内存（重启即失效；FetchCacheStore 接口是给 L2 磁盘层留的插槽）· 只缓存 GET 200/203 · stale-while-revalidate/stale-if-error 未做 · 带 Authorization 按 RFC 7234 §3.2 保守不存 · 鸿蒙 RCP 本就不做条件缓存（只剔除内部头，不冒充已支持）。"
+    },
+    {
+      "id": "T-fetch-stale-rfc5861",
+      "title": "#1150 RFC 5861：stale-while-revalidate / stale-if-error + Age 头（矩阵 P2 收尾）",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-fetch-cache.ts",
+        "packages/api/src/capability-fetch-pipeline.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "packages/api/src/capability-invoke.ts",
+        "tests/fetch-stale.test.ts",
+        "tests/capability-invoke-bytes.test.ts",
+        "hosts/shared/bridge/entry-superapp-probes-stale.ts",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/StaleProbe.java",
+        "hosts/android/tools/cache-echo-server.mjs",
+        "hosts/android/run-stale-probe.sh",
+        "hosts/ios/run-stale-probe.sh",
+        "hosts/ios/lib/probe-args.sh",
+        "scripts/check-cache-evidence.mjs",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": 1150,
+      "verification": "npx vitest run tests/fetch-stale.test.ts tests/fetch-cache.test.ts tests/capability-invoke-bytes.test.ts && node scripts/check-cache-evidence.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh",
+      "branch": null,
+      "related": [
+        "T-fetch-cache-conditional"
+      ],
+      "note": "【done · 决策 #1150】矩阵 §3 P2 收尾：#1149 登记的「stale-while-revalidate / stale-if-error 未做」已收口，并补 RFC 9111 §5.1 要求的 Age 头。★语义基准 = RFC 5861 原文（已逐句取证）：SWR 窗口是「变 stale 之后 N 秒」= age < lifetime + N（不是 age < N）；SIE 只覆盖 RFC 点名的 500/502/503/504 + 网络失败；RFC 5861 未规定与 must-revalidate 的交互 ⇒ 取 RFC 9111 §5.2.2.2 的更严格者（must-revalidate 优先，SWR/SIE 都不启用）；后台校验按条目去重（RFC 的 amplification attack 提醒）。★真机抓出一个**既有真缺陷**：responseType:json + 非 JSON 响应体（5xx 错误页/纯文本）⇒ interpretBody 抛错 ⇒ 异常逃出宿主回推回调 ⇒ 请求永久挂起（既不 resolve 也不 reject）。真机现场：探针卡 120s、服务端收到请求、宿主 HTTP_DONE 503 bodyLen=16，靠 logcat「回推回调抛异常」定位。分层修法：纯函数 interpretBody 保持\"坏 JSON 要抛\"的既有契约，在不能抛的边界（settleFromFrame）降级为原文 + 结算加兜底。★判据：fetch-stale 12/12（含窗口边界纯函数单测、并发 6 请求只发 1 次后台校验、SIE 不兜底取消与 4xx、501 不在 RFC 名单）；capability-invoke-bytes +2 条僵尸回归；破坏性验证 6 条各自独立命中。★真机双端各 12/12（证据 hosts/{android,ios}/results/stale-probe.json 已入库，check:cache-evidence 已扩到 4 份证据）。★判据自己错了三次（都以服务端记账/设备实测纠正）：waitUntil 在无 setTimeout 引擎上直接 false（而 App 引擎都没有 setTimeout）⇒ 改为以服务端收到的条件头为准；ETag 用\"生成次数\"⇒后台校验得 304 导致\"新值进缓存\"永不可能成立 ⇒ 加 /__bump 版本旋钮；deadline 30s 太紧（约 13 次往返）⇒ 120s。★诚实边界：L2 磁盘层仍未做；后台校验是进程内（进程被杀则丢失，行为安全）；SIE 不含 4xx/取消/能力缺失；未做重定向逐跳判定；鸿蒙不做条件缓存。"
     }
   ]
 }

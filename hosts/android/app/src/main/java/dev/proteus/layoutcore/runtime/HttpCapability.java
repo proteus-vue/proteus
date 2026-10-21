@@ -305,6 +305,8 @@ public final class HttpCapability {
             }
 
             int status = conn.getResponseCode();
+            // ★#1150 排障：非 2xx 记一行（真机抓过「503 到了但响应没回 JS」；只在异常档打，不污染正常路径）
+            if (status >= 300) Log.w(TAG, "HTTP_STATUS " + status + " reqId=" + f.reqId);
             Map<String, List<String>> fields = conn.getHeaderFields();
             LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
 
@@ -828,25 +830,13 @@ public final class HttpCapability {
     }
 
     /**
-     * ★★★#1149：**框架内部约定头**——语义「本次请求请勿使用平台自带的 HTTP 缓存」。
-     *
-     * 【为什么 Android 也要认它（本端并不启用 ResponseCache）】
-     *   ① **一致性**：同一个 JS 管线在三端发同一条头；某端"碰巧不需要"不是不接的理由——
-     *      一旦将来给 Android 打开 `ResponseCache`（如 OkHttp 迁移），漏接这条就是静默行为分叉；
-     *   ② **不外泄**：这是**框架内部**头，业务服务端不该看到它 ⇒ 必须在转发处剔除（与 iOS 同判据）。
-     *
-     * 【Android 侧的实际处理】本腿用裸 `HttpURLConnection` 且未安装 `ResponseCache`
-     *   ⇒ 没有平台缓存可绕；这里只做**剔除头**，不改其它行为（如实，不假装做了什么）。
+     * ★★★#1149：框架内部约定头——语义「本次请求请勿使用平台自带的 HTTP 缓存」。
+     * ★Android 本就无 ResponseCache ⇒ 这里只做**剔除**（一致性 + 防外泄给业务服务端），不改传输行为。
+     * ★为什么收敛到一处：同样的 header 循环原本在本文件出现 **4 次**，任一处漏剔除就会外泄。
      */
     static final String BYPASS_PLATFORM_CACHE_HEADER = "x-proteus-bypass-platform-cache";
 
-    /**
-     * 把调用方头逐条写入连接，并**剔除框架内部头**。
-     *
-     * 【为什么收敛到一处】此前同样的 `for (headers) setRequestProperty(...)` 在本文件出现 **4 次**
-     *   （整包 / 流式上传 / 落盘 / 流式响应）。只要有一处漏了剔除，内部头就会在该路径外泄。
-     *   ⇒ 四条路径全部改调本方法（新增第 5 条路径也天然覆盖）。
-     */
+    /** 把调用方头逐条写入连接，并**剔除框架内部头**（四条路径共用，新增路径天然覆盖）。 */
     private static void applyRequestHeaders(HttpURLConnection conn, Map<String, String> headers) {
         if (headers == null) return;
         for (Map.Entry<String, String> e : headers.entrySet()) {

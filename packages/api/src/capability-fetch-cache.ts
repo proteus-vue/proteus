@@ -40,18 +40,31 @@ import type { FetchConfig, FetchResult } from './capability-fetch-types'
 export type FetchCacheMode = 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached'
 
 /** 一次请求的缓存结局（`FetchMeta.cache.status`）。 */
-export type FetchCacheStatus = 'hit' | 'revalidated' | 'miss' | 'bypass'
+export type FetchCacheStatus =
+  | 'hit'
+  | 'revalidated'
+  | 'miss'
+  | 'bypass'
+  /**
+   * ★★★#1150 过期条目**被直接返回**（RFC 5861）：`stale` = 窗口内主动复用（随后后台校验），
+   * 或 `stale-if-error` 在回源失败后兜底。业务可据此打"数据可能过期"的提示。
+   */
+  | 'stale'
 
 /** `FetchMeta.cache`：没有它就无法回答"这次到底走了网络没有"。 */
 export interface FetchCacheMeta {
-  /** hit = 直接命中新鲜缓存；revalidated = 304 复用；miss = 回源；bypass = 未启用/不适用 */
+  /** hit = 直接命中新鲜缓存；revalidated = 304 复用；miss = 回源；bypass = 未启用/不适用；stale = 返回过期值 */
   status: FetchCacheStatus
-  /** 命中条目的年龄（ms，仅 hit / revalidated / force-cache 时有意义） */
+  /** 命中条目的年龄（ms，仅 hit / revalidated / stale / force-cache 时有意义） */
   ageMs?: number
   /** 本次响应是否写进了缓存（miss 时才有意义；304 更新也算 true） */
   stored?: boolean
   /** 实际使用的缓存模式（排障用：确认业务传的 cache 生效了） */
   mode?: FetchCacheMode
+  /** ★#1150：stale 的来源——`swr` 窗口内主动复用 / `stale-if-error` 回源失败兜底 / `force-cache` 业务要求 */
+  staleReason?: 'swr' | 'stale-if-error' | 'force-cache'
+  /** ★#1150：本次是否触发了**后台校验**（SWR 专用；`true` 表示旧值已返回、新值稍后进缓存） */
+  revalidating?: boolean
 }
 
 /** 缓存条目（store 的实现无关形态：内存 LRU / 未来磁盘层都实现它）。 */
@@ -72,6 +85,13 @@ export interface FetchCacheEntry {
   lifetimeMs: number
   /** `Cache-Control: no-cache` / `must-revalidate`（过期后不得直接用） */
   mustRevalidate: boolean
+  /**
+   * ★★★#1150 `stale-while-revalidate` 窗口（ms；0/undefined = 不启用，即默认行为不变）。
+   * 语义：变 stale 后仍可**直接回旧值**，同时后台校验（RFC 5861）。
+   */
+  swrMs?: number
+  /** ★★★#1150 `stale-if-error` 窗口（ms）：回源失败时可用旧值兜底的最长时间。 */
+  sieMs?: number
   /** 校验器 */
   etag?: string
   lastModified?: string
@@ -126,9 +146,24 @@ export interface ParsedCacheControl {
   maxAgeMs?: number
   /** `s-maxage`（ms；仅用于"带 Authorization 时能否存"的判定） */
   sMaxAgeMs?: number
+  /**
+   * ★★★#1150 `stale-while-revalidate`（RFC 5861，ms）：
+   * 变 stale 之后仍可**直接回旧值**的窗口长度；窗口内同时后台校验。
+   */
+  staleWhileRevalidateMs?: number
+  /**
+   * ★★★#1150 `stale-if-error`（RFC 5861，ms）：回源失败（网络错误 / 500·502·503·504）时
+   * 仍可用旧值兜底的最长"变 stale 后"时间。
+   */
+  staleIfErrorMs?: number
 }
 
-/** 解析响应/请求的 `Cache-Control`（大小写不敏感；`max-age="60"` 这种带引号也认）。 */
+/**
+ * 解析响应/请求的 `Cache-Control`（大小写不敏感；`max-age="60"` 这种带引号也认）。
+ *
+ * ★#1150：新增 RFC 5861 的两条扩展指令。★**不支持的指令一律忽略、不报错**——
+ *   这是 RFC 9111 §5.2 对未知指令的要求（缓存必须忽略不认识的 cache-control 指令）。
+ */
 export function parseCacheControl(headers: Record<string, string> | undefined): ParsedCacheControl {
   const out: ParsedCacheControl = {
     noStore: false,
@@ -138,6 +173,8 @@ export function parseCacheControl(headers: Record<string, string> | undefined): 
     immutable: false,
     maxAgeMs: undefined,
     sMaxAgeMs: undefined,
+    staleWhileRevalidateMs: undefined,
+    staleIfErrorMs: undefined,
   }
   const raw = headerOf(headers, 'cache-control')
   if (!raw) return out
@@ -152,6 +189,9 @@ export function parseCacheControl(headers: Record<string, string> | undefined): 
     else if (name === 'immutable') out.immutable = true
     else if (name === 'max-age' && /^\d+$/.test(value)) out.maxAgeMs = Number(value) * 1000
     else if (name === 's-maxage' && /^\d+$/.test(value)) out.sMaxAgeMs = Number(value) * 1000
+    // ★RFC 5861（扩展指令；delta-seconds）
+    else if (name === 'stale-while-revalidate' && /^\d+$/.test(value)) out.staleWhileRevalidateMs = Number(value) * 1000
+    else if (name === 'stale-if-error' && /^\d+$/.test(value)) out.staleIfErrorMs = Number(value) * 1000
   }
   return out
 }
@@ -279,6 +319,60 @@ export function isFresh(entry: FetchCacheEntry, now: number): boolean {
   return entry.lifetimeMs > 0 && entryAgeMs(entry, now) < entry.lifetimeMs
 }
 
+/**
+ * ★★★#1150：**能否在该请求里直接回旧值并后台校验**（RFC 5861 `stale-while-revalidate`）。
+ *
+ * 【判据（逐条对齐 RFC 5861 原文）】
+ *   · "caches MAY serve the response … after it becomes stale, up to the indicated number of seconds"
+ *     ⇒ 窗口 = `变 stale 之后` 的 `N` 秒，即 `age < lifetime + N`；
+ *   · 窗口过后 "it SHOULD NOT continue to be served stale" ⇒ 超出即**不得**再回旧值；
+ *   · **`must-revalidate` 优先**（★这是 RFC 5861 **未规定**的一处，必须自己拍：
+ *     RFC 9111 §5.2.2.2 说 must-revalidate 的响应一旦 stale 就 **MUST NOT** 被复用，
+ *     而 SWR 的语义正是"复用 stale" ⇒ 两者冲突时取**更严格的 must-revalidate**（保守，符合本仓"标准真值优先"）。
+ *   · `no-cache` 走 `mustRevalidate` 标记（本文件写入时已合并），同样不启用。
+ */
+export function isStaleServable(entry: FetchCacheEntry, now: number): boolean {
+  if (entry.mustRevalidate) return false
+  const window = entry.swrMs ?? 0
+  if (window <= 0) return false
+  const age = entryAgeMs(entry, now)
+  // ★必须"已经 stale"才算 SWR（新鲜期内的命中走 fresh 路径，不计入 SWR 语义）
+  return age >= entry.lifetimeMs && age < entry.lifetimeMs + window
+}
+
+/**
+ * ★★★#1150：**回源失败时能否用旧值兜底**（RFC 5861 `stale-if-error`）。
+ *
+ * 【RFC 原文口径】"Its value indicates the upper limit to staleness" ⇒ 窗口同样是
+ *   `age < lifetime + N`（从"开始 stale"起算）。
+ * ★优先级同上：`must-revalidate` 禁止复用 stale ⇒ 不启用（保守）。
+ */
+export function isStaleOnErrorAvailable(entry: FetchCacheEntry, now: number): boolean {
+  if (entry.mustRevalidate) return false
+  const window = entry.sieMs ?? 0
+  if (window <= 0) return false
+  return entryAgeMs(entry, now) < entry.lifetimeMs + window
+}
+
+/**
+ * ★★★#1150：给**由缓存生成**的响应加上 `Age` 头。
+ *
+ * 【为什么必须有】RFC 9111 §5.1：「A cache **MUST** generate the Age header field in a response
+ *   it generates from a stored response.」⇒ fresh 命中 / stale 复用 / 304 合成 200 三条路径都要带。
+ *   没有 Age，业务与上游代理无法判断"这份数据有多旧"——SWR 场景尤其关键（它天生就是旧数据）。
+ *
+ * ★单位是**整秒**（RFC 定义），且**覆盖**原条目里的 Age（那个值描述的是上游缓存，已被计入 `entryAgeMs`）。
+ */
+export function withAgeHeader(headers: Record<string, string>, ageMs: number): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === 'age') continue
+    out[k] = headers[k]!
+  }
+  out['Age'] = String(Math.max(0, Math.floor(ageMs / 1000)))
+  return out
+}
+
 /** 内存 LRU 缓存（进程内；`Map` 插入序 = LRU 序，命中时重排）。 */
 export function createMemoryFetchCache(opts: { maxBytes?: number; maxEntries?: number; now?: () => number } = {}): FetchCacheStore {
   const maxBytes = Math.max(0, opts.maxBytes ?? 5 * 1024 * 1024)
@@ -381,6 +475,11 @@ export type CacheLookup =
   | { kind: 'bypass'; mode?: FetchCacheMode }
   /** 新鲜命中：直接返回，不发请求 */
   | { kind: 'fresh'; entry: FetchCacheEntry; mode: FetchCacheMode }
+  /**
+   * ★★★#1150 **过期但仍可直接回旧值**：立即返回 + 后台校验（RFC 5861 `stale-while-revalidate`）。
+   * `reason` 区分来源：`swr`（窗口内）或 `force-cache`（业务显式要求）。
+   */
+  | { kind: 'stale'; entry: FetchCacheEntry; mode: FetchCacheMode; reason: 'swr' | 'force-cache' }
   /** 需要回源：`config` 已带条件头（有校验器时） */
   | { kind: 'revalidate'; entry?: FetchCacheEntry; config: FetchConfig; mode: FetchCacheMode }
   /** `only-if-cached` 且无条目 ⇒ 不联网，直接失败 */
@@ -434,14 +533,24 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
     if (!isCacheableRequest(config)) return { kind: 'bypass', mode }
     const key = fetchCacheKey(url, config)
     const entry = store.match(key, config.headers, now())
+    const at = now()
 
     if (mode === 'only-if-cached') {
       if (!entry) return { kind: 'miss-only', mode }
-      return { kind: 'fresh', entry, mode }
+      // ★only-if-cached 的语义就是"只用缓存"⇒ 不新鲜也回（由业务自己承担，meta 会标 stale）
+      return isFresh(entry, at) ? { kind: 'fresh', entry, mode } : { kind: 'stale', entry, mode, reason: 'force-cache' }
     }
     if (mode === 'reload') return { kind: 'revalidate', config, mode }
-    if (mode === 'force-cache' && entry) return { kind: 'fresh', entry, mode }
-    if (entry && isFresh(entry, now())) return { kind: 'fresh', entry, mode }
+    if (mode === 'force-cache' && entry) {
+      // ★业务显式要求用缓存 ⇒ 过不过期都回；新鲜时仍报 fresh（不虚报 stale）
+      return isFresh(entry, at) ? { kind: 'fresh', entry, mode } : { kind: 'stale', entry, mode, reason: 'force-cache' }
+    }
+    if (entry && isFresh(entry, at)) return { kind: 'fresh', entry, mode }
+    // ★★★#1150：stale-while-revalidate —— 在窗口内**立即回旧值**（管线负责起后台校验）。
+    //   ★只在 `default` 模式生效：业务写 `no-cache`（要求先校验）时不该被 stale 抢先。
+    if (mode === 'default' && entry && isStaleServable(entry, at)) {
+      return { kind: 'stale', entry, mode, reason: 'swr' }
+    }
     if (entry && (entry.etag || entry.lastModified)) {
       return { kind: 'revalidate', entry, config: withValidators(config, entry), mode }
     }
@@ -463,20 +572,46 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
     if (res.ok && res.status === 304 && 'entry' in looked && looked.entry) {
       const entry = looked.entry
       const merged = mergeHeaders(entry.headers, dropEntityHeaders(res.headers))
+      const cc304 = parseCacheControl(merged)
       const updated: FetchCacheEntry = {
         ...entry,
         headers: merged,
         storedAt: at,
         lifetimeMs: freshnessLifetimeMs(merged, at, defaultMaxAgeMs),
-        mustRevalidate: parseCacheControl(merged).mustRevalidate || parseCacheControl(merged).noCache,
+        mustRevalidate: cc304.mustRevalidate || cc304.noCache,
+        // ★★★#1150：304 可能**刷新**窗口声明（也可能不带这条指令 ⇒ 沿用旧条目）。
+        //   若不刷新，`stale-while-revalidate` 会在每次 304 后丢失 ⇒ 特性只在首次生效。
+        ...(cc304.staleWhileRevalidateMs !== undefined ? { swrMs: cc304.staleWhileRevalidateMs } : {}),
+        ...(cc304.staleIfErrorMs !== undefined ? { sieMs: cc304.staleIfErrorMs } : {}),
         etag: headerOf(merged, 'etag') ?? entry.etag,
         lastModified: headerOf(merged, 'last-modified') ?? entry.lastModified,
       }
       store.put(updated)
       const body = decodeCacheBody(updated, config)
+      const ageMs = entryAgeMs(updated, at)
       return {
-        result: { ok: true, data: body, status: updated.status, headers: merged },
-        cache: { status: 'revalidated', ageMs: entryAgeMs(updated, at), stored: true, mode },
+        // ★RFC 9111 §5.1：由缓存生成的响应 MUST 带 Age
+        result: { ok: true, data: body, status: updated.status, headers: withAgeHeader(merged, ageMs) },
+        cache: { status: 'revalidated', ageMs, stored: true, mode },
+      }
+    }
+
+    // ── ★★★#1150 stale-if-error：回源失败时用旧值兜底（RFC 5861）──
+    //   【触发条件（RFC 原文口径）】"an error is any situation that would result in a
+    //     500, 502, 503, or 504 HTTP response status code being returned"（网络失败同理）。
+    //   ★★判据必须用 `isErrorRescuable` 而**不是** `!res.ok`：本仓 `runFetch` 把 5xx 表达为
+    //     `ok:true + status`（只有网络/超时才 ok:false）⇒ 用 `!res.ok` 会让**RFC 明确点名的
+    //     500/502/503/504 全部漏兜底**（判据 ⑥ 当场红，这条是判据抓出来的真缺陷）。
+    //   ★只兜底**可恢复类**失败：`fetch.aborted`（业务主动取消）**绝不**用旧值冒充成功——
+    //     那会让"点了取消却拿到数据"，语义错乱。`fetch.unsupported`/`tooLarge` 同理不兜底。
+    //   ★窗口 = `age < lifetime + stale-if-error`（RFC: "upper limit to staleness"）。
+    if (isErrorRescuable(res) && 'entry' in looked && looked.entry && isStaleOnErrorAvailable(looked.entry, at)) {
+      const entry = looked.entry
+      const ageMs = entryAgeMs(entry, at)
+      const rescued = cachedResponseOf<unknown>(entry, config, ageMs)
+      return {
+        result: rescued as never,
+        cache: { status: 'stale', ageMs, stored: false, mode, staleReason: 'stale-if-error' },
       }
     }
 
@@ -490,9 +625,14 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
         const etag = headerOf(headers, 'etag')
         const lastModified = headerOf(headers, 'last-modified')
         const lifetimeMs = freshnessLifetimeMs(headers, at, defaultMaxAgeMs)
-        // 既没有新鲜期也没有校验器 ⇒ 存了永远用不上（白占内存）
-        if (encoded && (lifetimeMs > 0 || etag || lastModified)) {
-          const cc = parseCacheControl(headers)
+        const cc0 = parseCacheControl(headers)
+        // ★★★#1150：「有用」的判据要含 SWR/SIE 窗口——
+        //   `Cache-Control: max-age=0, stale-while-revalidate=60` 是**最常见**的 SWR 形态
+        //   （新鲜期 0 = 永远变立即 stale，靠 SWR 窗口服务）。若只按 `lifetimeMs > 0 || 校验器` 判，
+        //   这条响应会被判成"存了也用不上"⇒ **整个 SWR 特性形同虚设**。
+        const hasStaleWindow = (cc0.staleWhileRevalidateMs ?? 0) > 0 || (cc0.staleIfErrorMs ?? 0) > 0
+        if (encoded && (lifetimeMs > 0 || etag || lastModified || hasStaleWindow)) {
+          const cc = cc0
           const vary = varyNamesOf(headers)
           const varyValues: Record<string, string> = {}
           for (const name of vary) varyValues[name] = requestHeader(config.headers, name)
@@ -505,6 +645,8 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
             storedAt: at,
             lifetimeMs,
             mustRevalidate: cc.noCache || cc.mustRevalidate,
+            ...(cc.staleWhileRevalidateMs !== undefined ? { swrMs: cc.staleWhileRevalidateMs } : {}),
+            ...(cc.staleIfErrorMs !== undefined ? { sieMs: cc.staleIfErrorMs } : {}),
             ...(etag ? { etag } : {}),
             ...(lastModified ? { lastModified } : {}),
             varyNames: vary,
@@ -527,9 +669,51 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
   return { modeOf, lookup, settle }
 }
 
+/**
+ * ★★★#1150：这个失败是否属于 `stale-if-error` 该兜底的"错误"（RFC 5861）。
+ *
+ * 【RFC 口径】"an error is any situation that would result in a 500, 502, 503, or 504
+ *   HTTP response status code being returned"（网络段故障 / DNS 失败亦然）。
+ * 【本实现的取舍】
+ *   · 兜底：`fetch.failed`（网络/DNS/连接类）、`fetch.timeout`、以及 500/502/503/504 响应；
+ *   · **不兜底**：`fetch.aborted`（业务主动取消——用旧值冒充成功会让"点了取消却拿到数据"）、
+ *     `fetch.unsupported`（能力缺失，旧值不能掩盖配置错误）、`fetch.tooLarge`、
+ *     `fetch.cacheMiss` / `fetch.intercepted`（都不是"源站出错"）。
+ *   ★这些"不兜底"是有意的：`stale-if-error` 的目的是**可用性**，不是**掩盖故障**。
+ */
+export function isErrorRescuable(res: FetchResult<unknown>): boolean {
+  if (res.ok) {
+    // 5xx 在 runFetch 里是 ok:true + status ⇒ 按 RFC 的 500/502/503/504 判定
+    return res.status === 500 || res.status === 502 || res.status === 503 || res.status === 504
+  }
+  const code = res.error?.code
+  return code === 'fetch.failed' || code === 'fetch.timeout'
+}
+
 /** `only-if-cached` 落空的统一错误（不联网、不伪造空响应）。 */
 export function cacheMissError(): { code: 'fetch.cacheMiss'; message: string } {
   return { code: 'fetch.cacheMiss', message: 'only-if-cached：缓存无可用条目（已阻止网络请求）' }
+}
+
+/**
+ * ★★★#1150：把缓存条目**组装成业务可见的响应**（fresh / stale 两条路径共用）。
+ *
+ * 【为什么单列】fresh 命中与 SWR stale 复用的**结果形态必须完全一致**（除 meta 标注外），
+ *   否则"业务能否知道自己拿到的是旧数据"取决于走哪条分支 ⇒ 必然分叉。
+ *   差异只由 `meta.cache.status`（`hit` vs `stale`）与 `Age` 表达。
+ */
+export function cachedResponseOf<T>(
+  entry: FetchCacheEntry,
+  config: FetchConfig,
+  ageMs: number,
+): { ok: true; data: T; status: number; headers: Record<string, string> } {
+  return {
+    ok: true,
+    data: decodeCacheBody(entry, config) as T,
+    status: entry.status,
+    // ★RFC 9111 §5.1：缓存生成的响应 MUST 带 Age（SWR 场景尤其关键——它天生就是旧数据）
+    headers: withAgeHeader(entry.headers, ageMs),
+  }
 }
 
 /** 加上条件请求头（有校验器时）。 */

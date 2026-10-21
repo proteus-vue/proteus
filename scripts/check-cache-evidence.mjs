@@ -18,6 +18,10 @@
 //   ④ 304 不上浮：业务看到的 `status` 必须是 200
 //   ⑤ `no-store` 不缓存（服务端 hits **递增**）
 //   ⑥ 零回归：未开框架缓存时 `meta.cache` 不出现，且两次请求都成功
+//   ⑦ ★★★#1150 **RFC 5861 扩展**（证据文件 `stale-probe.json`）：SWR 立即回旧值 +
+//      后台校验**真发出**（服务端收到条件头）+ 新值进缓存 + `Age` 头；
+//      SWR 窗口=0 不得回 stale；`stale-if-error` 在 5xx 时用旧值兜底；
+//      ★并回归"`responseType:json` + 非 JSON 错误体**不得挂起**"（真机抓出的僵尸请求缺陷）。
 //
 // 【★刻意**不**判的（避免假红）】
 //   "未开框架缓存时服务端 hits 必须递增"——**iOS 会因系统 `URLCache` 而不递增**（实测）。
@@ -38,6 +42,15 @@ const LIST_ONLY = process.argv.includes('--list')
 const ENDS = [
   { id: 'android', rel: 'hosts/android/results/cache-probe.json', key: 'cache_probe' },
   { id: 'ios', rel: 'hosts/ios/results/cache-probe.json', key: 'cache_probe' },
+]
+
+/**
+ * ★★★#1150：**RFC 5861 扩展指令**的证据（同一能力族的第二批，与上面的基础缓存并列）。
+ * 每个端各一份 `stale-probe.json`。
+ */
+const STALE_ENDS = [
+  { id: 'android', rel: 'hosts/android/results/stale-probe.json', key: 'stale_probe' },
+  { id: 'ios', rel: 'hosts/ios/results/stale-probe.json', key: 'stale_probe' },
 ]
 
 function isTracked(rel) {
@@ -137,13 +150,82 @@ for (const { id, rel, key } of ENDS) {
   })
 }
 
+// ── ★★★#1150：RFC 5861 扩展指令（SWR / SIE + 僵尸请求回归）──
+const staleRows = []
+for (const { id, rel, key } of STALE_ENDS) {
+  const abs = path.join(ROOT, rel)
+  if (!fs.existsSync(abs)) {
+    problems.push(`${id}: 缺证据 ${rel}——跑 \`bash hosts/${id}/run-stale-probe.sh\` 生成并提交`)
+    staleRows.push({ id, rel, state: '缺失' })
+    continue
+  }
+  if (!isTracked(rel)) {
+    problems.push(`${id}: 证据 ${rel} 存在但未入库（提交后别人/CI 拿不到）——git add -f ${rel}`)
+  }
+  let d
+  try {
+    d = JSON.parse(fs.readFileSync(abs, 'utf-8'))
+  } catch (e) {
+    problems.push(`${id}: ${rel} JSON 解析失败：${e.message}`)
+    staleRows.push({ id, rel, state: '解析失败' })
+    continue
+  }
+  let p = d[key] ?? d.probe
+  if (typeof p === 'string') {
+    try {
+      p = JSON.parse(p)
+    } catch {
+      p = null
+    }
+  }
+  p = p || {}
+
+  // ① SWR：立即回旧值（stale）+ 后台校验真发出（条件头为准）+ 新值进缓存 + Age
+  if (p.swr_stale_ok !== true) problems.push(`${id}: swr_stale_ok=${p.swr_stale_ok}（SWR 窗口内未返回旧值）`)
+  if (p.swr_immediate_ok !== true) {
+    problems.push(`${id}: swr_immediate_ok=${p.swr_immediate_ok}（耗时 ${p.swr_second_elapsed_ms}ms）——SWR 没有立即返回，等于白等`)
+  }
+  if (p.swr_background_sent !== true) problems.push(`${id}: 后台校验未发出（SWR 会退化成"永远返回旧值"）`)
+  if (p.swr_background_conditional_ok !== true) {
+    problems.push(`${id}: 后台校验不是条件请求（服务端收到：${p.swr_conditional_seen || '空'}）——每次校验都整包回源`)
+  }
+  if (p.swr_refreshed_ok !== true) problems.push(`${id}: 后台校验结果没进缓存（第三次 ver=${p.swr_third_ver}）`)
+  if (p.swr_age_ok !== true) problems.push(`${id}: 缓存生成的响应缺 Age 头（RFC 9111 §5.1 MUST）`)
+  // ② 窗口=0 不得回 stale
+  if (p.swr_zero_ok !== true) problems.push(`${id}: SWR 窗口=0 却仍返回 stale（实得 ${JSON.stringify(p.swr_zero_second_cache || {})}）`)
+  // ③ SIE 兜底
+  if (p.sie_rescued_ok !== true) {
+    problems.push(`${id}: 源站 5xx 时未用旧值兜底（实得 ${JSON.stringify(p.sie_second_cache || {})}）`)
+  }
+  if (p.sie_same_body_ok !== true) problems.push(`${id}: SIE 兜底返回的不是同一份旧 body`)
+  // ④ ★僵尸请求回归（#1150 真机抓出的真缺陷）
+  if (p.sie_plain_503_ok !== true) problems.push(`${id}: 5xx 的 status/body 没能完整回到 JS（status=${p.sie_plain_503_status}）`)
+  if (p.sie_json_503_no_hang !== true) {
+    problems.push(`${id}: \`responseType:json\` + 非 JSON 错误体**挂起**了（#1150 修过的僵尸请求缺陷回归）`)
+  }
+  if (p.ok !== true) problems.push(`${id}: stale 探针整体 ok=${p.ok}`)
+
+  staleRows.push({
+    id,
+    rel,
+    state: problems.some((x) => x.startsWith(`${id}:`)) ? '不达标' : '通过',
+    swr: p.swr_second_cache?.status ?? '',
+    cond: p.swr_conditional_seen || '',
+    ver: p.swr_third_ver,
+  })
+}
+
 if (LIST_ONLY) {
-  console.log(`HTTP 条件请求缓存双端证据（共 ${rows.length} 端）`)
+  console.log(`HTTP 条件请求缓存双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端）`)
   for (const r of rows) {
     const extra =
       r.freshHits === undefined
         ? ''
         : ` · 命中时 hits ${r.freshHits} · 条件头「${r.cond}」· 平台缓存介入=${r.platformCache}（键 ${r.key}）`
+    console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} ${r.rel}${extra}`)
+  }
+  for (const r of staleRows) {
+    const extra = r.swr === undefined ? '' : ` · SWR=${r.swr} · 条件头「${r.cond}」· 刷新后 ver=${r.ver}`
     console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} ${r.rel}${extra}`)
   }
   if (problems.length) {
@@ -159,7 +241,7 @@ if (problems.length > 0) {
   process.exit(1)
 }
 console.log(
-  `✅ 条件请求缓存双端证据齐备（${rows
-    .map((r) => `${r.id} 命中 hits ${r.freshHits} / 平台缓存介入=${r.platformCache}`)
-    .join(' · ')}）`
+  `✅ 条件请求缓存双端证据齐备（基础：${rows
+    .map((r) => `${r.id} 命中 hits ${r.freshHits}/平台缓存介入=${r.platformCache}`)
+    .join(' · ')}；RFC 5861：${staleRows.map((r) => `${r.id} SWR=${r.swr} ver=${r.ver}`).join(' · ')}）`
 )

@@ -831,7 +831,6 @@
 
 472. **★★「程序化编辑必须走 safe-edit（临时文件 + diff + 校验）」+ 第四个工具层红线（★用户 2026-10-04 明示）**——**① 用户原话**：「发现你因为自己的编辑失误**无数次删除改错文件**，**修改文件不能直接修改源文件，必须先在临时文件修改然后做 diff**，这样才能提前知道有没有把文件改坏」。**② 本轮实测代价（"无数次"的清单）**：AI 用正则/内联 python 批量改 superapp 四页时——`class="sa-card"` → `class="card"`（**类名前缀被剥**，全局样式全丢）· `function readVal(...)` 整块被吞（下游引用全断）· `function webBridge(...)` 被误删（verify 页 8 处调用全断）· `(s as {...}).data` 被替换成语法残片（TS1005/TS1128 一片）· 甚至**修工具的脚本把工具自己改坏**（safe-edit.mjs 被自己的正则拼接成语法错）。每次都是"改完才发现 → 再花更多时间修回来"。**③ 纪律**：**任何程序化编辑（正则/批量/脚本）必须走 `scripts/safe-edit.mjs`**——流程 = 写临时文件 → **输出 diff 供审阅** → 语法与结构校验 → **通过才落盘**（校验不过 ⇒ 源文件保持原样，改坏的东西根本进不去）。**④ 工具（`scripts/safe-edit.mjs`）**：支持 `--replace 's/旧/新/g'` 与 `--script <JS 变换函数>`；**默认预演（不落盘）**，`--apply` 才写；校验项 = 语法（`node --check` / `JSON.parse` / `py_compile` / `bash -n`）· **SFC 结构（开闭标签成对）** · **花括号平衡突变** · 体积突变 · **SFC 脚本里"编辑前声明、编辑后被引用但已无声明"的标识符**（专抓"函数整块被吞"）。**⑤ 第四个工具层红线**：`scripts/hooks/deny-direct-edit.mjs`（PreToolUse，拦 `sed -i` / `perl -i` / 内联 python·node 写文件 / 重定向写源文件；放行 safe-edit、`/tmp`、`dist`、只读 sed；**`exit 2 + stderr`** 输出契约）；配套**静态门禁** `check:safe-edit`（扫 `scripts/**` `.agents/**` `hosts/**` 脚本**内部**的同形态——与 sleep 那条同源：hook 只看字面量、脚本内部是结构性盲区）；已接 `check:hook-wiring` 清单（3→4 条）+ `pnpm verify` + CI（`ci.yml`）。**⑥ 自测（判据=退出码）**：hook 六用例（`sed -i`→2 / safe-edit→0 / 只读 sed→0 / 内联 python 写文件→2 / 写 /tmp→0 / 重定向写源文件→2）；safe-edit 破坏性验证（吃掉 `readVal` 整块 ⇒ **当场红且源文件未动**；删 `</style>` ⇒ SFC 成对检查红）；静态门禁破坏性验证（注入 `sed -i` ⇒ 红，还原 ⇒ 绿）。**⑦ 附带修复的第三个框架缺陷**：**编译缓存键不含 App 壳片段** ⇒ 改壳后页面命中旧缓存 ⇒ 新方法/字段**永不注入**（实测：壳里新增的 `saSyncTabBarBadge` 在**全部页面产物**缺失，而单独编译壳却有——排查三轮才定位到缓存）⇒ `compileCacheKey` 新增 `globalLayerFingerprint`（片段内容序列化进键）+ 2 组回归锁。**⑧ 同轮修复的用户可见问题**：① 卡片内**分隔横线全部去掉**（用户：「太丑了，现在都是走极简卡片风格了，尤其是手机大厂操作系统的」）；② **MP 端角标改走原生 tabBar**（`wx.setTabBarBadge`，用户：「web 上面不是把未读消息放到 tabbar 的消息上面了？小程序的这个还是在右上角啊」）——修完与 Web 端形态一致（真机截图验证：Tab"消息"上红底白字 "3"）；★过程中还发现壳方法名 `__` 前缀会被编译器丢弃的坑（`__saSyncTabBarBadge` ⇒ 改名 `saSyncTabBarBadge`）。
 
-
 473. **★★★生命周期体系（从框架导入）+ 嵌套函数框架缺陷修复（★用户 2026-10-04 点名）**——**① 用户原话**：「生命周期函数需要在页面写同名函数，比如 onShow，这个体验太差了，**应该从我们框架导入使用才对，我们框架需要一套完整的体系开放给开发者使用**。还有前面挖到的**嵌套函数还是什么函数框架缺陷**这个也要修复才行」。**② 框架缺陷一（嵌套函数/类型剥除残留）**：方法体**嵌套层**的函数/箭头参数或返回类型含 `()`/`{}`/泛型 ⇒ 旧三组正则（`[^(){}]*`）全部漏剥 ⇒ 类型碎片进产物 ⇒ esbuild "Malformed arrow function parameter list" ⇒ **构建直接失败**（GP5"逐场景显式方法"绕开的正是它；五组探针 A–E 修复前全残）。修：`stripFunctionSigTypes` 统一递归扫描器（字符串/注释跳过；默认值保留——旧版吞 `= 5`）+ 修中修两处（**返回类型不跨行**防三元 else 被吞 + `isArrowParamGroup` 前驱判别——p-loading-host `? wxq.in(instanceRef) : wxq` 现场实测）。**③ 框架缺陷二（生命周期两个真缺陷）**：**Δ① 静默丢弃**——`onShow(cb)/onHide(cb)/onResize(cb)` 等（onMounted 外）回调体被丢弃（还给出错误原因警告）；`onResize(cb)` 更被裸注入 onLoad ⇒ **ReferenceError 页面启动即崩**；**Δ② 重复键覆盖**——提取端 onMounted→onReady 与安全清单自动补 onReady 无去重 ⇒ 后者覆盖前者 ⇒ 用户回调静默失效（superapp probe 实测双 onReady）。**④ 体系落地**：`extractLifecycles` 重写为通用提取器（**15 个页面原生钩子名** ∪ Vue 映射名；参数透传 `onLoad((o)=>…)` 的 `o` 进签名 + `var o = options` 别名；async 保持；返回 {params, body}）；生成端三处去重防线（declaredEvents 并入 lifecycleHooks / 专门段+通用段 / `lifecycleEmitTail` 统一派发尾巴）；决策型回调式即生成（保持"声明才显示入口"）；组件模式页面级钩子剥离+警告；**嵌套注册**不提取+从体移除（留痕注释）+可见警告（闭包变量在顶层 Page 钩子不可见——superapp 实测两处 ReferenceError）；runtime 导出 15 个（Web 降级：onShow→onMounted / onHide→onUnmounted / onResize→window resize；无对等调用时**警告一次**）；DX：`from 'vue'` 导入页面钩子名 ⇒ 准确指引（不再 fail-closed 报错）。**⑤ 回归锁**：`tests/lifecycle-callback.test.ts` 18 组（新建）+ `svg-spike-compiler-gaps` +6 组。**⑥ 验收**：superapp 四页迁移导入式（一份代码两端）· MP/Web 双构建 + vue-tsc 零错 · **MP e2e 63s 全绿 + Web e2e 6/6** · 产物核对（无重复键/无裸调用/无闭包断裂）。**⑦ safe-edit 工具自修三处**：`--apply` 段重复（既存 ENOENT 崩溃）· 括号启发式误报（排除字符串/注释 + 新增 TS 解析器权威校验、启发式降级为警告）· "标识符被吞"检查假阳性（排除类型/属性位置）；破坏性验证复跑通过。
 
 474. **★★★内核改动的「配套断言」定向工具化（★用户 2026-10-04 点名）**——**① 用户原话**：「我发现一个问题就是**编译器内核运行时规则修改总是忘了同步配套的断言**，这个也是低效率方式，带来的后果就是**花大量的时间跑全量来为这些低效率债务买单**」。**② 实证**：S56b 双类名发射（ed4da92c）配套断言忘同步——compiler-mp-probe 7 条 + compiler-dispatch 1 条 + golden 快照 2 处 + 规则数/官网数字 4 处，**在全量里连爆两轮**（每轮 2-3 分钟）才逐个发现；按配套表定向 = **~10 秒**（16 文件 384 用例）。**③ 结构性盲区**（旧机制为何漏）：deny-blind-verify 定向建议表为命令级粗粒度（`packages/compiler/` 只建议 `npx vitest run tests/compiler`），而债务重灾区（golden/mp-transform/svg-spike-compiler-gaps）**文件名不含 "compiler"** 永远建议不到。**④ 工具**（`scripts/test-coupling.mjs` / `pnpm test:coupled`）：精化映射表 COUPLING（SSOT 在脚本内；19 条覆盖 compiler 全包 41 文件 = 38 覆盖 + 3 豁免）+ 按 git diff 推导（含 untracked——实测盲区）+ **真跑**（定向 vitest，秒级）+ `--since`/`--list`/`--wide`/`--explain`/`--coverage` 五模式；**表自检**（表中测试文件不存在 ⇒ rc=2）+ **覆盖率门禁**（内核文件未落表未豁免 ⇒ rc=1 ⇒ `pnpm check:coupled-table`，新增内核文件必须补表）；未命中内核改动 ⇒ **宽面提示**（不静默）。**⑤ 接线五处**：package.json 两脚本 · deny-blind-verify 建议表（`packages/{compiler,plugin-vite,runtime}/` → 建议本工具）· deny-blind-tests 建议（①-b 条）· AGENTS.md 纪律段（操作化：改内核后提交前先跑）· ci.yml 接 `--coverage`（纯静态秒级，接 CI 而非豁免）。**⑥ 自测**：破坏性三组（注入真缺陷 ⇒ **10.1s 捕获红**；表腐化 ⇒ rc=2；覆盖率 ⇒ rc=1）+ hook 六用例 + 四门禁全绿。**⑦ 诚实边界**（写入脚本头注）：静态 import 分析到不了"测试是否会碰该代码路径"（75 个测试直接用编译产物、91 个 import compiler 包——全列即非定向）⇒ 表人工精化，防腐化靠"表自检 / 宽面提示 / 覆盖率门禁"三条机器判据。
@@ -870,51 +869,35 @@
 
 491. **★★★App 三端对齐 — C1 收尾（元素选择器 + `@keyframes` 修正，★用户 2026-10-04「继续」）**——**① 实现**：`parseClassRules` 段模型从「类集合」升级为「**tag + classes**」：a) **元素/类型选择器**（`h3`/`code`/`p.foo`）按节点**原始 tag**（`LayoutNode.tag`）匹配，可参与祖先链（`.doc code`）；b) **`@keyframes` 块整体剔除**（其 `from/to/0%` 不是选择器——旧实现误当元素选择器 ⇒ 噪音；现 `stripAtRuleBlocks`）；c) 其余 at-rule（`@media` 等）跳过并计数。**② 效果/判据**：真项目 **42/44 页有样式**（元素选择器如 `.doc code`/`h3` 现生效）。测试 `tests/vapor-class-styles.test.ts` 8 组（+元素/`@keyframes`）。**③ 诚实边界**：伪类 `:hover`/属性/兄弟/`@media`（诊断 `VAPOR_STYLE_SELECTOR_UNSUPPORTED`）· 继承/特异性不完备 · 动态 `:class`。**④ 里程碑**：用户最初点名的两类拦截条件（CSS 全兼容 / 路由页面真正落地）完整收口——App 三端全链（路由→SFC→编译器→屏内容→executor→内核树→真画屏→转场逐帧→可命中交互）。**⑤ 同收尾**：全量 5075/5075 绿。
 
-
 492. **★★★App 三端对齐 — 真实触摸事件对齐（B7，三端真事件驱动交互，★用户 2026-10-04「感觉现在需要补齐真实触摸事件对齐了」）**——**① 缺口**：合成页此前"可命中"是**装置内直调**（Android `dispatchHit`/iOS `tapAt`/鸿蒙 `proteus_layout_hit_test`）——绕过平台事件通道，只证"内核能命中"、不证"真实触摸能驱动交互"。**② 实现（一条命中链，三端各接真事件）**：a) **Android** 合成场景注入**真 MotionEvent**（DOWN+MOVE+UP，时间戳逐次前推 1s 防双击误判）→ `dispatchTouchEvent` → 平台 GestureDetector → report；b) **iOS** 抽 `SelfDrawView.classifyAndEmit`（分流器，`touchesEnded` 与宿主注入**共用一处**）+ 新增 `proteusSelfDraw.simulateTouch(x,y,heldMs)` 喂 down→held→up **按真实时长判型**（非 `tapAt` 直接声明类型）；c) **鸿蒙** `uitest uiInput click` 系统输入栈真注入 → ArkTS `.onTouch` → 新增 C++ `appScreenHitAt`（打**保留的**合成树——旧版建树后 destroy 了；`AppScreenCommands` 改保留 `g_appTouchTree`）。**③ 判据（SSOT + 破坏性验证）**：抽 `scripts/lib/app-composite-verdict.mjs`（`COMPOSITE_OK`+`REAL_TOUCH_OK`，门禁与单测共用）；`check-app-screen-content` 加真实触摸设备腿；旧报告缺 `real_touch` ⇒ 红。单测扩至 10 组。**④ 真机证据**：Android 真触摸事件 60 · 识别 tap 20 · iOS 分流器 tap 20 · 鸿蒙 uitest 真命中 6；三端合成页 51 内容节点真上屏 + 真触摸驱动。**⑤ 顺带剪两个真 bug**：`check-app-screen-content.mjs` 的 `problems` 声明在设备腿块之后（TDZ：某腿红即 `Cannot access before initialization`）已上移；`hosts/ios/run-selfdraw.sh` 合成报告取回**误放在 launch 之前**（取到上一轮旧件）已移到 ⑧ 段。**⑥ 诚实边界**：Android 为**进程内**真 MotionEvent（非系统 INJECT_EVENTS——后者需权限，本仓实测被拒）；iOS `simulateTouch` 覆盖"时长/速度分流"这一环，但 UITouch 物理链仍需人手；鸿蒙为 `uitest uiInput` 系统栈真注入。**⑦ 同收尾**：全量 5079/5079 绿 · 三端零设备编译全过 · 三端真机门禁全绿。
-
 
 493. **★★★CSS 能力对齐清单重构（五端 → 三端：Web / Skyline / App，★用户 2026-10-04「我们的 App 端是自绘 Rust 引擎，Rust 排版引擎支持自定义扩展 CSS 支持度 ⇒ 真正的平台兼容性只有一个 Skyline ⇒ 原来的 CSS 跨端兼容规则不适用了，需要重新做 CSS 能力对齐清单」）**——**① 模型变更**：旧按**五端**（web/skyline/ios/android/harmony）或生成矩阵**四列**（web/skyline/webview/app）登记 CSS 支持度。★App 端已是**自研自绘 Rust 引擎（一套，覆盖 iOS/Android/鸿蒙 三具体平台）——CSS 面由我们定义、可扩展** ⇒ 非自绘时代的 iOS=UIStackView / Android=ConstraintLayout / 鸿蒙=Row 三列**已失效**，合并为 **App**；webview 折为 Skyline 段内注记。新模型 = **Web（浏览器 CSS 超集）· Skyline（微信容器，唯一刚性外部约束）· App（自研引擎，可扩展）**。★**平台适配**（StylePlatform/原生组件/安全区/导航）是**另一条轴**，本轮不动。**② 实现**：a) 新数据源 docs/generated/css-capability-sources/app-profile-features.json（人工维护·provenance=curated）：每能力**现状**（supported / folded-only / engine-only / absent）+ **可扩展档位**（tier L0–L5 + strategy），现状核对**代码事实**（编译器 APP_* 折叠面 + 引擎 LStyle + 宿主自绘）；★诚实修正 border-color/border-width = folded-only（折叠透传但三端宿主均未真画边框）；★诚实发现 transform/transform-origin = engine-only（引擎已支持、编译面未接 = 现成扩展落点）；b) 生成器 gen-end-support-matrix → **gen-css-capability-alignment**，产物 css-capability-alignment.{json,md}（删旧表），列 = Web|Skyline|App现状|App可扩展|策略|对齐，--check 加「编译器 28 字段全覆盖」自检；c) 消费者重指（package.json/ci.yml/gen-consistency-metrics 的 M1 分母改用 rows[].compilerFields 过滤、值保持 67.9%/gen-routes/config 注释/官网 Consistency）；d) CSS 表面「五端」→「三端」重锚（css-compat/layout-semantics mappings（CssPlatform 收敛 web|skyline|app、两表塌三列 App=taffy 自绘）/resolve/index/rules 文案/contracts style/style-safety/profile-boundary 注释/Profile 规格/官网 css-compat 页）。**③ 判据**：新测试 tests/css-capability-alignment.test.ts 5 组 + layout-semantics.test.ts 改三端。**④ 同收尾**：全量 5085/5085 绿；CSS 相关门禁全绿；官网页已重生成。
 
-
 494. **★★★CSS 兼容对齐 · 批次 1：层叠正确性（继承 + 特异性 + `!important`，★用户 2026-10-04「不错，现在专攻 CSS 兼容对齐」）**——**① 路线**：从新清单 css-capability-alignment 的 absent/部分项提炼，先做**引擎无关**项（改编译器、三端同受益；标 [Rust] 的需动引擎）：批 1 层叠正确性 → 批 2 属性选择器/静态伪类 → 批 3 em/rem/calc → 批 4 文本属性 → 批 5 grid/flex-wrap/right·bottom [Rust] → 批 6 box-shadow/transform [Rust]。**② 实现（单包 compiler）**：a) 特异性——parseClassRules 算 (id,class,tag)，ClassStyleRule 加 specificity/important/order；b) 层叠排序——resolveClassStyles 由"只按源序 Object.assign"改为**按 (!important, 特异性, 源序) 升序应用**（修正 .a 后写盖过 .a.b 的缺陷）；c) !important——parseStaticStyle 识别/剥离并把逐属性重要性记入可选 importantOut，层叠优先级 **inline !important > class !important > inline 普通 > class 普通**；d) 继承——新增 APP_INHERITABLE_FIELDS=['color','fontSize']（App 文本模型可继承子集；背景/边框/圆角/不透明度不继承），walk 线程化 inherited 记录，节点无显式值时填继承值并向下传。**③ 判据**：tests/vapor-class-styles.test.ts 扩至 16 组（特异性/继承/!important + parseStaticStyle 剥离）；破坏性验证（反转源序比较 ⇒ 红，已验）；capability 源 specificity-inheritance 行 absent→supported，重生成清单（M1 仍 67.9%）+ app-screen-content（继承让 91 处节点获 color/fontSize，三端 assets 同步）。**④ 诚实边界**：伪类/属性选择器（批 2）· @media（L3）· em/rem（批 3）· grid/flex-wrap（批 5，[Rust]）· transform 折叠面（批 6，Rust NodeDto 不收 transform）均本轮不做；继承只到 App 折叠面（Web/Skyline 由各自引擎处理），特异性编译期算一次。**⑤ 同收尾**：全量 5093/5093 绿（399 文件）· test:coupled + CSS 相关门禁全绿。
-
 
 495. **★★★CSS 兼容对齐 · 批次 2：值/简写归一化（margin/padding 多值 + background 简写，★用户 2026-10-04「继续」）**——**① 路线修正（取证驱动）**：原计划批 2 = 属性选择器 + 静态伪类，但**取证否定**（扫真项目：属性选择器 0 处、结构伪类 0 处；`:` 命中全是 SCSS/动态态）⇒ 做了没人用，违背取证纪律。改用**使用证据重排**：扫 45 个 .vue 的 `<style>`，统计被 App 折叠面实际丢弃的声明（高频：background:75 · font-weight:58 · border:47 · text-align:28 · line-height:26 · flex-wrap:12）。**② 实现（引擎无关·单包 compiler）**：a) margin/padding **1–4 值简写**按 CSS 标准展开为 {top,right,bottom,left}（此前整体丢弃；auto 的边忽略）；b) **background 纯色简写** → backgroundColor（hex/rgba/transparent 归一；渐变/图片诊断跳过、走引擎 fill-gradient 通道）；新增助手 expandBoxShorthand / extractBackgroundColor。**③ 判据**：tests/vapor-class-styles.test.ts 扩至 21 组；破坏性验证（交换两值简写映射 ⇒ 3 组红，已验还原）；capability 源 margin/padding 标注 shorthand + background-color 标注 + 新增 value-shorthand 行，重生成清单（44 行 · App 全通 26）+ 重生成 app-screen-content（451 节点获 margin · 255 获 padding，三端 assets 同步）。**④ 剩余 backlog（按取证重排）**：font-weight/text-align/line-height + border 简写（半 [Rust]，需扩引擎/宿主文本或绘制通道）· flex-wrap/grid/right·bottom（[Rust]）· box-shadow/transform 折叠面（[Rust]）；属性选择器/结构伪类**降级**（真项目零使用）。**⑤ 同收尾**：全量 5098/5098 绿（399 文件）· test:coupled + CSS 门禁全绿。
 
-
 496. **★★★CSS 兼容对齐 · 批次 3：font-weight（三端宿主接线，★用户 2026-10-04「继续」）**——**① 取证选批**：真项目第 2 高频丢弃项 font-weight（58 处）。★**关键发现：宿主链路大半已就绪但从未接线**——iOS selfdraw-scene.swift 早读 style["fontWeight"]（>=600 bold）、适配器 selfdraw.ts 的 PAINT_KEYS 已含 fontWeight、Android typefaceOf(role,weight) 已实现，唯独**编译器从不下发**（APP_PAINT_FIELDS 无、parseStaticStyle 当未知键丢弃）。**② 实现（跨编译器+contracts+两宿主）**：a) 编译器 font-weight → 数值（normal→400/bold→700/100–900；bolder/lighter 依赖父级诊断跳过），入 APP_PAINT_FIELDS + APP_INHERITABLE_FIELDS + style-object PAINT；b) contracts STYLE_PROP_LEVELS.fontWeight='Integer'；c) Android 宿主 Cmd 加 fontWeight（默认 400 零变化）+ mkCmd 读取 + drawCmds 应用 setTypeface（变化时才设）+ **度量 buildMeasures 同源**；d) 鸿蒙 TextDrawSpec 加 fontWeight + OH_Drawing_SetTextStyleFontWeight + RenderCmd 三处通道补键。**③ 判据**：tests/vapor-class-styles.test.ts 25 组；capability 源 +font-weight 行；重生成清单（45 行·App 全通 27）+ app-screen-content（75 节点获 fontWeight，三端 assets 同步）；零设备编译 Android javac/鸿蒙 hvigor/iOS swiftc 全过；★**诚实记录**：M1 一致性覆盖率 67.9%→66.7%（分母 +1、L3 未同步覆盖 ⇒ 如实下降）。**④ 同收尾**：全量 5102/5102 绿（399 文件）· test:coupled + CSS 门禁全绿。**⑤ 剩余**：text-align/line-height（半 [Rust]）· border 简写（宿主未画边框）· flex-wrap/grid/right·bottom（[Rust]）· box-shadow/transform（[Rust]）。
-
 
 497. **★★★CSS 兼容对齐 · 批次 4：text-align（+ 清理 vue-tsc 存量红，★用户 2026-10-04「继续」）**——**① 取证选批**：剩余高频丢弃项 text-align(28·22 center)/line-height(26·无单位倍数语义需定)/border(47·多数用 var() 不可编译期解析+宿主不画边框) ⇒ 选 text-align（干净封闭集、三端宿主 API 均就绪）。**② 实现（编译器+contracts+三宿主）**：a) 编译器 text-align 封闭集 left/center/right（justify 诊断跳过），入 APP_PAINT_FIELDS + style-object PAINT；b) contracts 新增 TextAlign 档位 + runtime PROP_TYPES.TextAlign + narrowValue pass-through；c) iOS styleOf 透传 + makeLayer/configureLayer 的 CATextLayer.alignmentMode；d) Android Cmd.textAlign + mkCmd + drawCmds 应用 Paint.Align + 绘制 x 按对齐换算；e) 鸿蒙 TextDrawSpec.textAlign + OH_Drawing_SetTypographyTextAlign + RenderCmd 三处通道。**③ 判据**：tests 27 组；capability 源 +text-align 行；重生成清单（46 行·App 全通 28）+ app-screen-content（39 节点获 textAlign，三端 assets 同步）；零设备编译 Android/鸿蒙/iOS 全过。**④ ★顺带清理 vue-tsc 存量红（诚实归因）**：本轮暴露 11 处类型错误——10 处（app-css-surface.test.ts 1 + e2e-mp-gp5 7 + e2e-mp-superapp 2）**早于本会话**（git diff 6240d044 HEAD 确认未被本会话改动），1 处（app-screen-content-gate.test.ts 的 .mjs 导入）为 #492 引入；一并修（.d.mts 声明 + e2e probe 签名收窄 + as string[]）⇒ **vue-tsc 11→0**。**⑤ 同收尾**：全量 5104/5104 绿（399 文件）· test:coupled + CSS 门禁全绿 · vue-tsc 0 错。**⑥ 剩余**：line-height（半 [Rust]）· border（宿主未画边框+var()）· flex-wrap/grid/right·bottom（[Rust]）· box-shadow/transform（[Rust]）。
 
-
 498. **★★★CSS 兼容对齐 · 批次 5：border（uniform 简写 + 三端宿主真绘制，★用户 2026-10-04「继续」）**——**① 取证选批**：剩余高频 border(47)/line-height(26)/flex-wrap(12)/font-family(11)；font-family 真项目 10/11 用 var() 不可编译期解析（价值低），**border 最高频且 paint-only（不需改 Rust）、正是"宿主没画"的缺口** ⇒ 选它。**② 实现（编译器+三宿主）**：a) 编译器 border 简写（`<width> <style> <color>` 任意顺序）→ borderWidth + borderColor（颜色归一 hex；thin/medium/thick 忽略）；border-style 非 solid 诊断；逐边边框（border-bottom 等）诊断跳过；var() 令牌色 ⇒ 宽度保留、颜色诊断（不静默）；b) iOS CALayer.borderWidth/Color（applyBorder 助手 + styleOf 透传 + makeLayer/configureLayer 两路重配）；c) Android Cmd.borderWidth/Color + mkCmd + 主 drawCmds 专用 borderPaint 描边（stroke 半内缩、圆角 drawRoundRect、alpha×opacity）；d) 鸿蒙 OH_ArkUI_RenderNodeUtils_SetBorderWidth/Color（EDGE_DIRECTION_ALL）+ RenderCmd/SfcStyle 补键。**③ 判据**：tests 33 组；capability 源 border folded-only→supported（诚实修正：此前折叠透传但宿主不画，本批补齐绘制）；重生成清单（46 行·App 全通 29）+ app-screen-content（125 节点获 borderWidth，三端 assets 同步）；三端零设备编译全过。**④ 同收尾**：全量 5110/5110 绿（399 文件）· test:coupled + CSS 门禁全绿 · vue-tsc 0 错。**⑤ 剩余**：line-height（半 [Rust]）· flex-wrap/grid/right·bottom（[Rust]）· box-shadow/transform（[Rust]）· font-family（var() 令牌色收益低）。
-
 
 499. **★★★CSS 兼容对齐 · 批次 6：flex-wrap（首个 [Rust] 引擎能力，★用户 2026-10-04「继续」）**——**① 首次进入 [Rust] 侧**（前 5 批均纯编译器/宿主接线）。**② 取证选批**：剩余 backlog line-height(26·App 单行受限)/flex-wrap(12)/grid·right·bottom·align-content([Rust])/box-shadow(10)/font-family(11·var() 收益低) ⇒ 选 flex-wrap（剩余最高价值布局能力、taffy 原生支持完整=零布局算法风险）。**③ 实现（引擎+编译器+宿主白名单）**：a) Rust `style.rs` 新增 FlexWrap 枚举 + LStyle.flex_wrap + Default；ffi.rs NodeDto.flex_wrap + style_from_dto 映射；taffy_engine.rs to_taffy 映射；lib.rs re-export；b) 编译器入 APP_LAYOUT_FIELDS + APP_ENUM_VALUES.flexWrap + 枚举校验；c) Android VaporRenderHost.LAYOUT_KEYS 加 "flexWrap"（iOS/鸿蒙整体透传无需改）。**④ 判据（★首次带引擎行为测试）**：新增 tests/flex_wrap.rs 2 组（row 容器 6×50 宽子项 > 容器 ⇒ wrap 子项 y 两档 / nowrap 单档）；破坏性验证（to_taffy 恒 NoWrap ⇒ 红，已验还原）；编译器 tests 35 组；capability 源 flex-wrap absent→supported（align-content 拆独立行）；重生成清单（47 行·App 全通 30）+ app-screen-content（75 节点获 flexWrap，三端 assets 同步）；零设备 Rust 235 测试 + 三端编译 + vue-tsc 0 错。**⑤ 同收尾**：全量 5112/5112 绿（399 文件）· test:coupled + CSS 门禁全绿；★诚实：M1 65.6%→64.5%（分母 +1、L3 未同步 ⇒ 如实降）。**⑥ 剩余（均 [Rust]）**：align-content · right/bottom · grid · box-shadow · line-height · transform 折叠面。
 
-
 500. **★★★CSS 兼容对齐 · 批次 7：flex 简写（展开到引擎已支持字段，★用户 2026-10-04「继续」）**——**① 取证选批**：批 1–6 后重扫未支持属性 → line-height(26)/font-family(11)/box-shadow(10)/flex(3)；line-height 涉跨端基线居中（风险中）、font-family 多 var() 收益低、box-shadow 属 [Rust] 新通道 ⇒ 选 flex（纯编译器、同批 2 模式、展开到引擎已支持的 flexGrow/Shrink/Basis，零引擎改动）。**② 实现**：`parseFlexShorthand`（`flex: <g> [<s> [<b>]]` CSS 语义：省略 s⇒1、省略 b⇒0；none⇒0/0、auto⇒1/1；basis=auto/content 略过；非法诊断）；parseStaticStyle 的 flex 分支逐字段写入 + markImportant。**③ 判据**：tests 扩至 40 组；破坏性验证（flex:<n> 默认 shrink 改 0 ⇒ 2 组红，已验还原）；capability 源 value-shorthand 补 flex；重生成清单 + app-screen-content（10 节点获 flexGrow+flexBasis）。**④ 同收尾**：全量 5117/5117 绿（399 文件）· test:coupled + CSS 门禁全绿 · vue-tsc 0 错。**⑤ 里程碑**：CSS 兼容对齐（引擎无关侧）基本穷尽——批 1–7 依次：层叠正确性 · 值/简写归一化（margin/padding/background/flex）· font-weight · text-align · border · flex-wrap([Rust])。**剩余项全部需动 Rust 引擎或属低频/低价值**：align-content/right·bottom/grid/box-shadow（[Rust]）· line-height（跨端基线）· font-family（var() 收益低）· word-break/white-space/text-decoration（L4 平台文本）。
-
 
 501. **★★★CSS 兼容对齐 · 批次 8：right/bottom（[Rust] 定位）+ ★超级应用优先口径（★用户 2026-10-04「继续。我们的目标不仅仅是当前项目使用到的，我们的目标是承载超级应用」）**——**① 口径修正**：用户明确「目标不仅当前项目用到，而是**承载超级应用**」⇒ 批次选择**不按 demo 使用频次**，按「超级应用是否会用到」+ 三端可实现性。**② 取证选批**：超级应用刚需=**定位锚点**（角标/FAB/关闭按钮/底部弹层）；right/bottom demo 仅 2 处但超级应用普遍需要、taffy inset 已就绪 ⇒ 选它。**③ 实现（引擎+编译器+宿主）**：Rust LStyle.right/bottom + NodeDto + taffy inset 映射（absolute/relative 两分支）；编译器入 APP_LAYOUT_FIELDS + style-object 数值键；Android LAYOUT_KEYS 白名单加。**④ 判据**：新增引擎行为测试 tests/inset_right_bottom.rs（absolute 子 30×20 + right=10/bottom=5 ⇒ 落父右下角 x≈160/y≈175）；破坏性验证（去映射⇒红，已验还原）；编译器 tests 42 组；capability 源 right-bottom absent→supported；**新增 `superappGoal` 清单**（8 类超级应用能力：定位锚点/卡片外观/弹性布局/文本呈现/栅格/动效/滚动/层叠主题，每项带用途+现状）编码进清单数据源+生成物 → 选批不再靠临时判断。**⑤ 同收尾**：全量 5119/5119 绿（399 文件）· Rust 236 测试 · test:coupled + CSS 门禁全绿 · 三端编译 + vue-tsc 0 错；★诚实：M1 64.5%→62.6%（分母 +2、L3 未同步 ⇒ 如实降）。**⑥ 下一步（按超级应用口径）**：box-shadow（⏳需阴影通道）· line-height/text-overflow（⏳）· grid（[Rust]）· var() 令牌折叠（⏳）· transform 静态折叠面。
 
-
 502. **★★★CSS 兼容对齐 · 批次 9：CSS 变量（设计令牌）编译期折叠 —— 超级应用承载关键（★用户 2026-10-04「继续。我们的目标是承载超级应用」）**——**① 为什么关键**：现代前端/组件库几乎全靠设计令牌（var(--x)）——真项目 242 处；App 折叠面无运行时 CSS 引擎 ⇒ var() 不解析就整条丢弃（布局对、样式空），是"能否承载超级应用"的最大结构缺口。**② 实现（编译器+CLI）**：a) 编译器新增 parseCssVarTokens（解析 --name:value，剔注释）+ substituteCssVars（var(--x[,fallback]) → 值；递归展开引用令牌；未知无 fallback ⇒ 原样保留）；parseStaticStyle/parseClassRules/buildLayoutTemplate/buildVaporSubscriptions 线程化 tokens（键/值解析**之前**替换）；b) 令牌来源 = proteus.config.ts 的 globalStyle（与 Web/MP 同一份令牌文件·单一事实源），buildAppScreenContent 从 config 加载传编译器；无配置则不折（不阻断）。**③ 判据**：tests 扩至 47 组；破坏性验证（令牌查表置空 ⇒ 3 组红，已验还原）；★真机级证据：用 showcase（globalStyle=tokens.css，371 处 var()）跑 App 内容 ⇒ 产物 var(-- 计数=0（全折为字面值），120 页；examples（0 var）产物不变（零回归）；capability 源 +css-vars 行 + 超级应用清单更新。**④ 同收尾**：全量 5124/5124 绿（399 文件）· test:coupled + CSS 门禁全绿 · vue-tsc 0 错。**⑤ 诚实边界**：只折字面值令牌（含递归）；calc()/env() 动态令牌值不折；令牌作用域不建模（取声明值）。剩余超级应用缺口：box-shadow（⏳需阴影通道）· line-height/text-overflow（⏳）· grid（[Rust]）· transform 静态折叠面。
-
 
 503. **★★★CSS 兼容对齐 · 批次 10：box-shadow（超级应用卡片视觉，★用户 2026-10-04「继续」）**——**① 取证选批**：超级应用清单剩余 box-shadow（卡片抬升刚需）/line-height/text-overflow/grid([Rust])/transform；iOS/鸿蒙有原生 shadow API、Android 可分层近似 ⇒ 选 box-shadow。**② 实现（编译器+三宿主）**：a) 编译器 box-shadow → 结构化 boxShadow {dx,dy,blur,spread,color}（单层；多重取首个——**括号深度 0 处**切逗号；inset 诊断跳过），入 APP_PAINT_FIELDS；b) iOS applyShadow → CALayer.shadow*（blur/2）；★有阴影时不开 masksToBounds（CA 圆角裁剪会裁掉阴影，自绘节点是叶子层安全）；c) Android Cmd.boxShadow + parseBoxShadow + **分层圆角矩形近似**（硬件加速 setShadowLayer 只支持文本）+ 物理化 dx/dy/blur/spread；d) 鸿蒙 OH_ArkUI_RenderNodeUtils_SetShadow* + 扁平键 shadowDx/Dy/Blur/Color。**③ 判据**：tests 扩至 50 组；★破坏性验证暴露真 bug（把逗号切分改裸 indexOf(',') ⇒ 含空格 rgba 的多重阴影 2 组红——用真项目样例 0 8px 24px rgba(0, 0, 0, 0.15) 实测才暴露：空格 split 会切碎带空格 rgba）；已修（括号深度切分）；capability 源 box-shadow absent→supported + 超级应用清单更新；check:app-css-surface 登记 boxShadow 为引擎字段层例外（同 display/position/overflow 先例，语义层仍禁裸写）。**④ 同收尾**：全量 5127/5127 绿（399 文件）· test:coupled + CSS 门禁全绿 · 三端编译 + vue-tsc 0 错。**⑤ 诚实边界**：单层（多重取首个）· inset 不支持 · 鸿蒙 spread 近似忽略 · Android 分层近似（非高斯）。**⑥ 剩余**：line-height/text-overflow · grid（[Rust]）· transform 静态折叠面。
 
-
 504. **★★★CSS 兼容对齐 · 批次 11：align-content（[Rust]，补完弹性流式布局，★用户 2026-10-04「继续」）**——**① 选批（含一次诚实改判）**：初选 line-height（真项目 26 处），侦察后**改判**——line-height 要改三端不同文本引擎的度量高度 + 垂直基线（iOS CATextLayer 自控垂直位置、Android 硬编码 0.75h 基线），三端基线各异、无设备无法验证像素回归 ⇒ 按"先取证再断言"**不在无真机验证时贸然做**；改用 align-content（与 flex-wrap 完全同构，纯引擎字段+taffy，可写引擎行为测试，零渲染回归）。**② 实现（引擎+编译器+宿主）**：Rust LStyle.align_content（open string，与 justify/align-items 同模式）+ default + NodeDto + style_from_dto；taffy_engine 加 parse_align_content + out.align_content 映射；编译器入 APP_LAYOUT_FIELDS（string-passthrough 分支）+ Android LAYOUT_KEYS。**③ 判据**：新增 tests/align_content.rs（200×200 row+wrap + 4×80 宽 ⇒ 两行；flex-start 首行 y≈0、center 首行 y≈60）；破坏性验证（恒 STRETCH ⇒ 红，已验还原）；编译器 tests 52 组；capability 源 align-content absent→supported + 超级应用清单更新。**④ 同收尾**：全量 5129/5129 绿 · Rust 全绿 · test:coupled + CSS 门禁全绿 · 三端编译 + vue-tsc 0 错；★诚实：M1 62.6%→61.0%（分母 +2、L3 未同步）。**⑤ 剩余超级应用缺口**：line-height/text-overflow（需真机验证基线/截断像素）· grid（[Rust]）· transform 静态折叠面。
-
 
 505. **★★★CSS 兼容对齐 · 批次 12：CSS Grid（[Rust] 栅格，超级应用仪表盘/宫格，★用户 2026-10-04「继续」）**——**① 选批**：剩余缺口 line-height/text-overflow（需真机验证基线/截断像素）/grid（[Rust]）/transform 折叠面；选 grid——它**宿主无关**（宿主按内核 rects 绘制，同 flex-wrap），可写引擎行为测试、零渲染回归、无需真机。**② 实现（引擎+编译器+宿主）**：a) 引擎 `Display::Grid` + `LStyle.grid_template_columns/rows`（字符串轨迹）+ `NodeDto` + `style_from_dto` + `taffy_engine::parse_grid_tracks`（fr/px/数字 → taffy GridTemplateComponent）；b) 编译器 `display` 封闭集加 grid + `APP_LAYOUT_FIELDS` 加两键 + `parseGridTemplate`（显式轨迹 + `repeat(N,X)` 编译期展开，括号深度 0 切 token；auto/minmax/fit-content 诊断跳过）；c) Android `LAYOUT_KEYS` 白名单。**③ 判据**：新增 tests/grid.rs（300 宽 grid + `1fr 1fr 100px` ⇒ 子项 x=0/100/200、宽各 100）；破坏性验证（不设 grid_template_* ⇒ 红，已验还原）；编译器 tests 56 组；capability 源 grid absent→supported（**如实边界**：仅显式轨迹，auto/minmax/命名线/隐式行/grid-area 未支持）；重生成 app-screen-content（4 节点获 display:grid）。**④ 同收尾**：全量 5133/5133 绿 · Rust 10 测试二进制全绿 · test:coupled + CSS 门禁全绿 · 三端编译 + vue-tsc 0 错；★诚实：M1 61.0%→59.5%（分母 +2、L3 未同步）。**⑤ 剩余超级应用缺口**：line-height/text-overflow（需真机验证基线/截断像素）· transform 静态折叠面。
 
-
 506. **★★★CSS 兼容对齐 · 批次 13：line-height（三端宿主 + 真机验证，★用户 2026-10-04「继续…承载超级应用」+ 纠正「App设备全部在线啊，为什么你一直说当前无设备」）**——**① 纪律教训**：我在批 11 起反复以"无设备、不能验证像素"为由推迟文本类改动，**属没取证就下否定结论**（本仓明令禁止）。当场取证：Android d67e31a3 · 鸿蒙 69F9K26126005311 · iOS yunlai的iPhone —— **三端设备全在线**。★**下"做不到/无设备"结论前必须先跑取证命令**。**② 实现（编译器+三端）**：a) 编译器 line-height 归一为 token（无单位倍数/%→倍数/px）+ 入 APP_PAINT_FIELDS + APP_INHERITABLE_FIELDS + style-object；b) iOS ProteusTextAdapter.measureText 加 lineHeight（行盒高覆盖字形高，缓存键含它）+ styleOf 透传 + 4 处调用 + lineHeightOf；c) Android lineHeightPxOf + buildMeasures 行盒高 + Cmd.lineHeight + drawCmds 基线（声明行高时顶对齐 baseY=y-ascent，未声明沿用旧 0.8h）；d) 鸿蒙 lineHeightDesignPx + measureTextTypoPx 覆盖。**③ 真机验证（三端）**：Android painted_samples **284→308**（行盒变高真影响渲染）· iOS 51 层 + 真触摸 20 tap · 鸿蒙 51 节点 + 真触摸命中 6；check:app-screen-content 三端设备腿全绿（55 节点带 lineHeight）。**④ 判据**：编译器 tests 59 组（倍数/%/px + normal 诊断 + 继承 + 端到端）；破坏性验证（% 归一改错⇒红）；capability 源 line-height absent→supported（诚实边界：顶对齐非半行距居中；letter-spacing 未支持）。**⑤ 同收尾**：全量 5136/5136 绿 · test:coupled + CSS 门禁全绿 · 三端零设备编译 + 真机跑全过 · vue-tsc 0 错；★诚实：M1 59.5%→58.8%。**⑥ 剩余**：text-overflow（单行省略号，三端原生 API，可真机验证）· transform 静态折叠面（[Rust]）。
-
 
 507. **★★★批次 13 修正：line-height 改为 CSS 标准（半行距居中）—— 用户抓出多端一致性缺陷（★用户 2026-10-04「如果不是CSS标准行高的话那不是多端一致性就没了吗？」）**——**① 缺陷**：批 13 首版把 line-height 实现为「行盒变高、字形**顶对齐**」，理由写"iOS/鸿蒙本就顶对齐"——而**该前提没验证**。CSS 的 line-height 是**半行距**（形内容区垂直居中），顶对齐 ⇒ App 端与 Web/Skyline 真 CSS 对不上，多端一致性破。**② 取证**：临时 Swift 渲染 CATextLayer（层高 100/200、字号 20 ⇒ 墨迹都 [5,23]）证实顶对齐、不随层高居中。**③ 修正（三端统一 CSS 语义）**：a) iOS CATextLayer 顶对齐 ⇒ 文本层**可视 frame 居中收缩**（中心与行盒一致 ⇒ 不影响锚点动画；rects 仍报原始行盒），新增 lineBoxFrame + 4 处接线；b) Android 基线改 `盒心−(ascent+descent)/2`；c) 鸿蒙 TypographyPaint y 由 0 改 `(盒高−字形高)/2` + SfcStyle/指令补 lineHeightPx。**④ 复验（三端真机全在线）**：Android 308 采样+20 tap · iOS 51 层+20 tap · 鸿蒙 51 节点+6 命中；命中仍 20/20（rects 未变、只字形视觉位置变——符合预期）；check:app-screen-content 三端全绿。**⑤ 同收尾**：全量 5136/5136 绿 · 三端编译+真机跑全过 · vue-tsc 0 错 · capability 源改为「行盒高 + 字形垂直居中（半行距）」。**⑥ ★纪律教训（AGENTS.md 两条再实证）**：① 下断言前先取证（"iOS/鸿蒙本就顶对齐"没测）；② ★**"三端彼此一致"≠"与 Web 一致"**——三端都是自研/原生绘制，容易互相看齐却集体偏离 Web 真 CSS；**多端一致性的基准是 Web（浏览器真值）**，不是三端内部自洽。
 
@@ -2919,7 +2902,6 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑦ 诚实边界**：只接 **Android 宿主**；iOS/鸿蒙的 `animStart` 宿主驱动待补（内核动画通道三端共享 ⇒ 补驱动即全端生效）；组件内部模板的 `v-animate` 不支持（与既有 directive 边界一致，如实诊断）；App 壳 `animStart` 缺省未接时**如实 note**（不静默把"没播"当"播了"）。
 **⑧ 门禁**：`screen-runtime` +3（v-animate 值变→播 · `<Transition>` 可见性翻转→播 · 未接 animStart→如实 note）· `vapor-directives` 11 · `vapor-class-styles` 143 · `coupled` 100 · `android-host-compile` · `AAR-fresh` · `bridge-sync` · `vapor-three-end`✓（指纹逐项一致，改动对这些夹具行为中性）· `vue-tsc` 0 全绿。★`check:host-invoke-contract` 报 harmony `dev.console`——**pre-existing**（干净树同样红，非本轮引入，已在记忆待办具名）。
 
-
 794. **★★★Android 宿主显示列表**录制用了「上一屏的节点 id 表」⇒ 伪元素涟漪以满不透明录进缓存（切回首页整屏涟漪）——**通用宿主缺陷（非 demo 补丁）**（2026-10-10）：
 **① 现象（用户真机抓出）**：Dactyl **从 L3/L4/L5 切回首页（L1）**时，首页所有磁块都浮起一个个**满不透明的蓝色圆盘**（正是 L1 涟漪 `::after` 的"扩散到底"终态）；**但从 L2 切回没有这个问题**。用户追问：① 为什么只有 L2 没有？② 是否又回到了"对单个 demo 打补丁"的老路？③ 是否是"伪元素切屏没清空"？
 **② 根因（通用宿主缺陷，与 demo 无关）**：`VaporRenderHost.pushToView()` 原先 **先 `setCmds(cmds)` 再 `setCmdNodeIds(ids)`**；而 `ProteusHostView.setCmds` 在**尺寸就绪**时会**立即录制显示列表**（`rebuildPicture`→`drawCmds`），`drawCmds` 用 `cmdNodeIds` 把每条指令映回节点（据此施加每节点 `opacity`/`animTx`）。⇒ 录制用的是**上一屏遗留的 id 表**：
@@ -3637,7 +3619,6 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑤ 诚实边界**：`smoothstep(0.35,0.70)` 阈值与暗端色 `(0.12,0.13,0.16)` 是按 Apple 语义定的**初值**（非一次到位，待真机观感微调）；去饱和 12% 是权衡（再降更透但易"隐形"）。★**另一处非单源（本轮查出·记为后续）**：`refract_depth=min(w,h)*0.22`、`specular=0.18`、`light_dir=(-0.35,-0.94)` 三个 uniform 常量在 iOS/Android 宿主**各写一份**（逐字相同，属"参数常量"非"算法"）——`check:shader-capability` 只咬"手写算法"、不咬这些常量，若要单源需另收进内核/生成物。
 **⑥ 教训**：★**"对齐某平台语义"要对着官方原话逐条核**（用户给的 Apple 两句"无固有颜色 + 随背景自适应"是判据，我们两条都不满足）——**别把"我自己想要的观感（奶白）"当成"该平台语义"**（`16054b3a` 的取向就是后者）。★**算法单源 ≠ 参数单源**——改了 `glass.wgsl` 还要同步 CPU oracle（否则像素门禁咬），而宿主侧**还有几个 uniform 常量是各写一份**（诚实边界，别宣称"全单源"）。
 
-
 874. **★把 AI 协作规范同步进 Skill（`ai-development`）——AI 的入口习惯要对齐**（2026-10-13）：
 **① 起因（用户）**：「我刚才测试另一个 AI，AI 习惯去看我们 skill 里面的 ai-cobuild，那我们是不是需要把新的 AI 协作规范也在这个 skill 里面同步下？」。★**关键发现**：本仓 `.agents/skills/**` 是**项目级、已入库、被 AI 自动发现**的（`ai-cobuild`/`ai-efficiency-rules`/`spi-first` 都在 AI 的可用 skill 列表里）——**AI 找"协作规范"会优先翻 skill，而不是 `docs/`**。此前新规范（#871/#872）只落 `docs/ai-development-spec.md` + 门禁，**AI 从 skill 入口看不到它** ⇒ 等于"规范写了但 AI 不会打开"。
 **② 交付**：① **新建 `.agents/skills/ai-development/SKILL.md`**（与 `ai-cobuild` 同形——仅 SKILL.md；`docs/ai-development-spec.md` 是其规范正文，同款"doc↔skill"约定）：含 **0 先路由**（三链路 A/B/C 各去哪）+ 生命周期 7 关 + 关 2 三条铁律 + 协作原语 + 反巨型化 §4 + 机器判据 + 反模式 + DoD + 诚实边界；frontmatter 富触发词（"开发框架功能/组件 API/能力/认领/边界/拆分/交接/并行"）。② **`ai-cobuild/SKILL.md` 顶部加路由指针**——习惯打开 `ai-cobuild` 的 AI，若其实要**开发框架**会被导向 `Skill(ai-development)`（并声明"本 skill 只管 C 链外部缺陷"）。③ 同步 **AGENTS.md §0 第 4 条**（改为"挂载 `Skill(ai-development)`"）+ **spec 顶部**声明可执行形态。
@@ -3783,7 +3764,6 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ 教训**：★**"做了但看着没做"要查"是不是被不透明层盖住"**——玻璃"没生效"的真因是 **tint 0.72 盖了 blur**（不是没渲染）；**深色背景下 `blur` 单独存在≈实底**（**`saturate` 才是通透的关键**）。★**"iOS 玻璃"要对齐苹果的材质定义**（`.regular` = blur + saturate），不能只做 blur 就宣称"iOS 玻璃"（与 #875 同族：对齐某平台语义要对着它的定义逐项核）。★**同一句话我理解错了方向**——用户说"导航做成玻璃"，我做了**条**、用户要的是**块（胶囊）**；**UI 需求先确认"容器还是单元"再动手**（本轮靠用户追加澄清才对齐，多耗一轮）。★**dogfood 要"真用引擎 API"**（导航胶囊样式由 `resolveGlass` 派生，非手写 CSS）——否则"验证"名不副实。
 **⑦ ★二次复测（用户：「没有玻璃胶囊的感觉，就是普通的色块胶囊」）——补「光泽 + 斜面」**：诊断——**导航条背后是均匀深色 ⇒ `blur` 采样不到变化 ⇒ 看不出来玻璃**；**深色背景上表达"玻璃"不能只靠 blur，要靠材质暗示**：**顶亮→底透的光泽渐变**（`background-image: linear-gradient(180deg, 白0.16→0.015)` 叠在引擎 tint 上）+ **specular 顶边**（`inset 0 1px 0 rgba(255,255,255,0.30)`）+ **发丝环**（`inset 0 0 0 1px rgba(255,255,255,0.11)`）+ **内斜面**（底部内阴影）。激活项用品牌色光泽（白 0.26）。★**教训（关键）**：**"玻璃感"= 材质暗示（光泽/高光/斜面/环），不是模糊**——模糊只在**内容在其后滚动**时才有意义（nav 背后是固定深色 ⇒ 模糊无信号）；且**深色背景比浅色更难读出玻璃**（浅色/彩色背后 blur 立即可见）。★**"胶囊 vs 色块"的分界 = 有没有 top gloss + specular rim**——只给 tint+radius 就是色块。
 **⑧ ★三次复测（用户：「导航条或者导航胶囊是不是加了白底 tint？」）——深色霜（用户选 A）**：取证——导航条实际 `background: rgba(255,255,255,0.15)`（**预设默认白 15%**）+ 胶囊白色光泽 ⇒ **近黑底上叠白 15% = 灰白横带**（用户看到"加了白底"）。★**定夺**：用户选 **A 深色霜**（贴合深色站，与内容融合、只更透更亮一点）。**改**：导航条 `tint="rgba(18,18,24,0.55)"`（深色霜）+ 胶囊底 `rgba(255,255,255,0.028)`（近透明，几乎只剩光泽）+ 光泽柔化（白 0.07→0.005；激活 0.13）；**保留 top gloss + specular rim**（玻璃感来源）。★**验证**：computed `nav: rgba(18,18,24,0.55)` / 激活胶囊品牌紫；截图=导航**融入深色站**（不再灰白带）、胶囊为淡玻璃 + 柔高光。★**教训**：**玻璃 tint 要按站点明暗选（浅色霜 vs 深色霜）**——预设默认白霜是给**浅色**场景；深色站用白底 = "灰白横带"（用户一眼看出"加了白底"）。**"玻璃 tint" + "材质高光" 是两件事**：前者随明暗、后者（光泽/环）可保留。
-
 
 889. **★修「生成器 refs（hook→桥方法引用）抽取」——锚定式 + 硬失败（同族第四次咬伤，故收敛原语；顺带抓出 `wxKeys/webKeys` 漏 bridge-ext 的同族缺口）**（2026-10-13）：
 **① 症状**：官网 `mini-program`(C47) 页 iOS/Android 仍 🟡「渲染核心已落地——能力桥未接线」，而源码 `capability-app.ts` 确已暴露 `navigateMiniProgram`（**对外谎报**——与 #884 同型的低估）。
@@ -3942,28 +3922,6 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑥ ★教训（两条）**：① **"名字骗人"的通道要按字节数取证**——"字节通道"曾是 `number[]` JSON（#769）；本轮同样只有把"每字节膨胀几倍"写进**判据**，才不会再次静默回退。② **手写副本的防线不在"写得对"，在"能被对拍"**：三端各写一份编解码器是物理现实（无共享运行时）⇒ 唯一结构性的防线是**跨语言黄金向量 + 逐字节比对**；本轮把它做成门禁，并为后续端（Swift/ArkTS）预留扩展位（`ROUNDS`）。
 **⑦ ★事故与勘误留痕**：a) **决策号勘误**：本轮工作一度记 `#900`，而 `#900` 已被材质系统占用（`36b11e4f`）⇒ 改记 **#903**（详见 #902 条首的编号勘误段）；b) **操作事故**：曾误用 `git checkout -- docs/ai-tasks.json` 回滚掉**未提交**的两个任务（`T-app-runtime-capabilities` + `T-app-fetch`，HEAD 版本不含它们）⇒ 已从 #902 全文重建。**教训：撤销未提交改动严禁 `git checkout --`，必须先 `git diff` 确认该文件的所有改动都属于本次操作**（多会话并行下，工作区改动**不属于** HEAD）。
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 904. **App 端能力对齐 · iOS 腿落地（S2「去 JSON」的第二端）**（2026-10-13 · 承接 #903 / T-app-fetch）
 
   **背景**：#903 把 invoke 通道从 JSON 文本改成二进制帧（`PINV`/`PRSP`），但**只落了 JS 桥 + Android 宿主**，
@@ -4030,7 +3988,6 @@ f) **教训（本条最重要）**：★★★**"对齐"的基准必须是"产�
 **⑧ 判据**：门禁 `check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit`/`glass-pixel-parity`（0.49 不变）/三端零设备编译全绿；`tests/glass-ir`（+3 interactive 用例）/`glass`/`shader-backend`（glass uniformSize 96）全绿；**真机 Android 取证**：`hosts/android/results/glass-interactive-{idle,press}.png`——空闲=正圆、按住=**蛋形（朝触点流动）+ 触点高光**。iOS/鸿蒙（编译过 + 逻辑同源）待补真机截图。
 **⑨ 边界**：首版是**单点触觉**（触点局部凸起 + 高光 + 回弹），非多点流体/真实表面张力物理；Web/MP 无 GPU warp。iOS 真机本轮被异会话共享文件竞态阻塞（`invoke-bytes-bridge.swift` 构建期被改写）——代码已过类型检查，真机截图待补。
 
-
 906. **★★★C 桥（`quickjs_jni.c`）「绿门禁下的编不过」——回程造 `Uint8Array` 改走公开 API + 给 C 桥补真编译步 + 顺带补 `peekMethod` / Java 注释 Unicode 转义陷阱（#903/#904 的收口修复）**（2026-10-13 · 承接 #903；用户「异会话回退了 C 桥……刚才已经还原了，因为异会话构建安卓被卡住」）：
 **① 现象（复现，不是推测）**：#903 的能力通道 C 桥（`invokeBytes` / `nativeResolveHostBytes`）在静态门禁 `check:no-json-wire` 下**全绿**，但用**与真机构建同一条编译命令**（NDK r27c · clang 18.0.3）跑 `-c` ⇒ **5 处错误**：
 · `JS_IsArrayBuffer` —— 公开头 `quickjs.h` 里**没有**这个声明；
@@ -4087,7 +4044,6 @@ clang 18 对 implicit-function-declaration **直接 error**（`call to undeclare
 · **U0（单位,跨端）**:`applyOps` 的**二进制指令值不乘密度**（值在 JS 编、内核解,宿主无介入点）⇒ 真机动态 `layout.left` 只走 1× 距离（83→237 逻辑,实际到 237 物理而非 711）——高亮胶囊**落在错误项**。iOS 因 CALayer=point 天然正确,仅 Android 显形。这与 B7（几何求解错,已修）**是两回事**。需内核侧接密度（`proteus_layout_set_density`）。
 · **A1 其余**:`computed` 不产 data（`extractRefLiterals` 只认 `ref`）/ 普通 `const` 数组不建源 / 图片通路缺失——仍登记待补。
 
-
 909. **液态玻璃「对齐 iOS」差距分析（四路子代理独立调研 · 只登记未改）**（2026-10-13）：
 四路子代理外部干净视角独立取证——① 内核折射/位移场 ② 内容自适应/兜底 ③ iOS 真值联网调研 ④ 宿主合成/采样链路。
 交付 `docs/proteus-glass-plan/14-ios-gap-analysis.md`：11 条差距清单（P0×2/P1×3/P2×3/P3×3）+ 6 条可验证假设（H1-H6）。
@@ -4118,7 +4074,6 @@ clang 18 对 implicit-function-declaration **直接 error**（`call to undeclare
 ⑥ **真机取证（Android 重建 APK 含新 shader）**：白底霜白玻璃可见（此前隐形）· 绿底内容穿缘**明显压缩弯折**（此前直穿）· 背景 L134→玻璃 L190（**+56 提亮**，此前 −32 压暗）。
 【诚实边界】① iOS 采样器修复**未在 iOS 真机复验**（离线 parity 已证 max 1/255）；② 「区域级背景估计 → 浅霜/深霜整体切换」（报告 P1-1 的完全形态）仍**未做**——本单是**逐像素霜白锚点**（比 #908 的仿射对，但仍非区域统计）；③ P0-2「中心基座模糊」以**整体霜提亮**近似（AGSL 无循环 ⇒ 不做真模糊核，报告已有此约束）；④ P3（前景对比保护 / Web-MP 自适应 / U0 单位 + 玻璃随 translate 动画）**仍登记未做**；⑤ FROST_L=0.75 / 收拢 0.75 为经验锚点，真机 A/B 旋钮。
 
-
 911. **★★★液态玻璃「区域级背景估计」——浅霜/深霜随玻璃盒区域亮度整体切换（对齐 iOS `.regular`「flip from light to dark」）**（2026-10-14 · 承接 #910 的诚实边界②）：
 【为什么】#910 把自适应方向改对了（霜白锚点），但锚点**全域固定**（FROST_L=0.75）——仍是**逐像素**形态。
 iOS `.regular` 的关键是**区域级**：「each layer continuously adapts based on what's behind it」「flip from light to dark based on the background」——整块玻璃随**背景亮暗**切换基调（浅霜/深霜）。这是报告 P1-1 的完全形态。
@@ -4131,7 +4086,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 ④ 三端零设备编译绿；`check:shader-generated`/`shader-capability`/`glass-capability`/`glass-audit` 绿；`test:coupled` 71/71；玻璃单测 45/45；
 ⑤ **真机（Android 重建 APK）**：深/彩底玻璃呈**白霜**（彩色内容被提白）、白底玻璃**透出内容**（浅霜）——两张对照目视可辨区域切换。
 【诚实边界】① 真机**量化**采样受"玻璃下方被覆盖、无同位置无玻璃对照"限制 ⇒ 区域切换的**数值**判据由离线 oracle + parity 承担（真机为目视 + 运行正确性）；② 锚点两值 (0.84↔0.93) 与过渡带 (0.30↔0.90) 为经验值，待真机 A/B；③ iOS/鸿蒙真机未复验（离线 parity 三端等价已证）；④ 报告 P3（前景对比保护 / Web-MP 自适应 / U0 单位 + 玻璃随 translate 动画）仍登记未做。
-
 
 912. **液态玻璃「平面玻璃式边缘」——消卷曲内翻（位移单调化）+ 暗内容可见性保护**（2026-10-14 · 用户真机「边缘有卷曲内翻，iOS 近似平面玻璃」）：
 【取证】位移映射 `sp = x + n·bend`，其导数 `dsp/dx = 1 − A·d(smoothstep)`；smoothstep 导数峰 = 1.5 ⇒ **折叠（非单调/内翻）当且仅当 A > 1/1.5 ≈ 0.667**。#910 的 A=1.15 **必然折叠**（dsp/dx 最小 −0.73）——"卷曲内翻"根因。
@@ -4149,7 +4103,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【顺手抓出并修的真缺陷】本单编辑过程中 wgsl 误留**重复 tint**（tint 应用两次）⇒ wgsl 与 oracle 不一致 ⇒ **iOS parity 一度红为 max 8/255**（自证：判据真的在盯 wgsl↔oracle 一致性）；删除重复后回到 **1/255**。
 【诚实边界】**未上真机**（本轮真机取证未跑完；判据 = 离线 oracle 对照 + 三端 parity）；霜色/厚度两对常量 (0.93↔0.62)/(0.85↔0.40) 与过渡带 (0.30↔0.90) 为经验值，待真机 A/B；#912 的 `dark_guard` 被本条**整体替换**（保留在决策链仅供追溯）；报告 P3 三项仍登记未做。
 
-
 914. **★★★液态玻璃折射幅度对齐 iOS（消 y 轴拉伸 / 平面式轻弯折）——★先只对齐安卓一端**（2026-10-14 · 用户「折射一直不对：iOS 只有平面变化，我们文字有明显 y 轴拉伸；**先把安卓一端对齐**再做 iOS/鸿蒙，现在方向一直漂移」）：
 【取证（oracle 细线/网格探针，先量后改）】位移**机制**（沿外法线向外采样 ⇒ 边缘带内容被压缩/弯折）**方向正确**；
 问题是**幅度**：`0.55·band = 0.55×67 物理px ≈ 37px ≈ 半个字高` ⇒ 整带沿法线大幅平移 ⇒ 读作"竖向拉伸"。
@@ -4165,7 +4118,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】iOS/鸿蒙**真机未复验、parity 未重跑**（本单刻意只做安卓——用户明令）；iOS 的 `refract_depth` 传递值
 （min·0.33）与三端已一致，故产物同源即语义同源，但"像不像 iOS"只由安卓真机目视确认。
 
-
 915. **★★★液态玻璃★模型级重建★：去「宽缘带假装厚度」+ 去边缘明暗翻转 + 补背景模糊 + 窄带折射**（2026-10-14 · 用户附 iOS 滑过前后两张对照图：「边缘总有**厚厚的玻璃感**（iOS 没有）；边缘**随背景发亮发暗**（不对）；文字经过边缘**变亮、折射完全不存在**；感觉**思路一直都不对**」）：
 【为什么是"模型级"】此前（#906 起）的模型用**一条宽亮带假装"玻璃厚度"**并**单次采样**代替模糊——**iOS 根本没有这两样**。诊断（像素实测，先量后改）：
 · **厚玻璃感** = `bevel_mask = 1−smoothstep(0,0.35,e)` 展布 **0.35×band(band=0.33·min ⇒ 共 23 物理px)** 宽渐变；iOS 仅 **~2px 锐利亮线**。
@@ -4176,7 +4128,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【范围（用户明令"先对齐安卓一端"）】只重建/验证 **Android**；三端产物**同源同步**（`check:shader-generated` 要求），iOS/鸿蒙**真机与 parity 待安卓定稿**。
 【判据】真机 Android：上边缘由 **23px 宽渐变(L128→244)** → **单条细亮线(L250)+ 均匀霜面(L201)**（厚缘带消失、边缘不翻转、玻璃内可见模糊、文字穿缘）；玻璃单测 45；Android 零设备编译绿；**iOS parity（wgsl↔oracle 一致性自检）max 1/255**；生成物无漂移。
 【诚实边界】① 折射**在数学上仍在**（窄带内位移 ≈6% 条高、集中而非铺开），但**是否够明显**须真机目视判（用户主诉"折射不存在"）；② iOS/鸿蒙真机与 parity 未重跑（刻意只做安卓）；③ 若本轮方向仍不对，应**回到"iOS 到底如何在边缘改变内容"的一手取证**（而非继续调常量）。
-
 
 916. **液态玻璃：消"内容滚过玻璃抖动"（位移极小化）+ 模糊为主**（2026-10-14 · 用户续报「折射仍不对 / 内容滚过玻璃会抖动 / 折射带一直偏窄」）：
 【取证（决定性）】静止双帧玻璃带**逐像素零差异**（渲染稳定）⇒ "抖动"是**滚动时**的采样错位：位移场 `sp=local+n·bend` 会压缩带内采样，滚动时**带内内容移动速度 ≠ 带外** ⇒ 拖影。iOS 无此问题（其主体是**背景模糊**=局部平均不改位置，位移极小）。
@@ -4190,7 +4141,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【★方法论（本轮最大收获）】**多张对照图必须"对齐后相减/互相关"**，不能只看单张——前 5 轮（#908–#916）"方向漂移"的总根因 = **用单张图 + 目测猜参数**，从未真正把 iOS 的两张对齐量出数字。用户两次点破（"两张对比""1/3 都不到"）。
 【诚实边界】仍只 Android（用户"先对齐安卓"）；A=0.42 由**压缩比反推**，真机目视再定是否微调；iOS/鸿蒙真机与 parity 待定稿。
 
-
 918. **★★★液态玻璃折射方向翻正（拉伸）+ (1−e)^3 剖面（边缘薄折叠=倒影，对齐 iOS）**（2026-10-14 · 用户续报：「第五人格经过玻璃边缘有明显的 z 轴压缩，为什么我们始终是压缩，**iOS 的折射是拉伸不是压缩**」+「iOS 有一个**倒影**和内部折射的**拼接**」）：
 【取证（用户一手截图，放大目视 + 互相关）】① iOS tab bar 下缘内侧有**倒影带**：下方文字在玻璃内**上下镜像**出现，与上方正常区之间有一条**拼接缝**（互相关 ≈ −0.5 支持"翻转+极性反转"）；② iOS 是**拉伸**（放大）不是压缩。
 【根因（我当年的错）】**#912 为消"卷曲内翻"把"折叠"整个删掉了**——但 iOS **恰有这个折叠**，只是它是**薄薄一条**贴在边缘；我当年是 A=1.15 的**大范围**卷曲。⇒ 不是"有无折叠"，是"折叠的**尺度**"。
@@ -4199,20 +4149,17 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】仍只 Android（用户"先对齐安卓"）；**倒影带比 iOS 更薄更贴边**（(1−e)^3 集中度偏高），可能需调幂次让厚度接近 iOS；真机目视再定。
 【★方法论沉淀（#909→#918 五轮）】用户三次点破：①「两张对比」（滚动前后要对齐量）②「1/3 都不到」（带宽口径）③「是拉伸不是压缩 + 有倒影」（**方向与形态**）。根因都是**我拿单张图 + 目测 + 先验推断**，而真值只在**对齐的多张图 + 放大目视**里。
 
-
 919. **液态玻璃：选中胶囊亮度对齐 iOS（两层玻璃明暗关系）**（2026-10-14 · 用户「两层玻璃观感不对——**iOS 上层玻璃更暗，我们更亮**」；★此条**用户确认 #918 方向终对**（"感觉终于对了"））：
 【取证（iOS 10:18 真机 vs 我们 #918 真机，多行中位数）】iOS：胶囊 190 vs 条 183 ⇒ **+7**（暖白霜、与条融合）；我们：胶囊 247 vs 条 233 ⇒ **+14**（纯白板、明显突出）。根因：胶囊 `tint=rgba(255,255,255,0.30)`（提亮系数 ×1.30 ⇒ 漂成纯白）。
 【修】胶囊 tint **0.30 → 0.10**（×1.10）⇒ 真机实测 198 vs 187 = **+11**（方向对齐 iOS，幅度仍略大，如需更贴可降到 0.05）。
 【判据】真机 Android 肉眼两层玻璃近乎融合、只略亮；APK 重建（含 bundle-superapp）。
 【诚实边界】仍只 Android；+11 vs iOS +7 略过，等真机目视定是否再降。
 
-
 920. **液态玻璃：白底补白霜——霜色恒亮白、只厚度随背景变（修正 #913 亮端暗霜）**（2026-10-14 · 用户附 iOS 白底 vs 我们白底对照：「**我们的明显没有白霜**」）：
 【取证】我们白底条 **L244**（透明浅灰、背景内容透过来看得见）vs iOS 白底条（**实的白霜**、内容被糊白）。**根因 = #913**：我把亮端霜色设成 **0.62（暗霜）**——白底上"暗霜"≈**不可见**（白底压暗一点看不出来）。
 【修】`frost_col` 恒**亮白**（0.93↔0.97，不再在亮端变暗）；`frost_a` 白底 0.40→**0.55**（仍较实 ⇒ 糊白背景内容）。★**语义纠正**：iOS 的霜**始终是白的**，只有**厚度**随背景变（白底薄、深底厚）——不是"深底亮霜 / 白底暗霜"的**霜色**翻转。
 【判据】oracle：亮底背景 255→玻璃 **255**（白霜 +20）、深底 218 不变；真机白底条内 244→**255**（白霜可见）；倒影/拉伸/带宽保持。玻璃单测 45 · Android 编译绿 · iOS parity（wgsl↔oracle）max 1/255 · 生成物无漂移。
 【诚实边界】仍只 Android（先对齐安卓）；白底霜厚度 0.55 为经验值，待真机目视微调。
-
 
 921. **液态玻璃：选中胶囊改「压暗」（两层玻璃明暗对齐 iOS）**（2026-10-14 · 用户「胶囊和玻璃条背景差异不大，**iOS 的选中项胶囊明显偏暗**」）：
 【取证（iOS 两底真机，多行中位数）】iOS **白底**：胶囊 236 vs 条 254 ⇒ **−18**；iOS **深底**：胶囊 179 vs 条 183 ⇒ **−4**。⇒ iOS 选中胶囊**在两底都比条暗**（**不是更亮**）。我们：#919 用白 tint 0.10（提亮），白底上 255=255 **完全无区分**（白底已封顶，提亮无效——与 #920 同源坑）。
@@ -4221,13 +4168,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【诚实边界】仍只 Android；−16 vs iOS −18 已近，如需再压可调 tint 到 ×0.80。
 【★坑的共性】#920（白霜）与 #921（胶囊压暗）是**同一个坑**：在白底（高亮=255 封顶）上，**"提亮"类参数一律失效**（tint 白/自适应提亮），必须改用**压暗/霜层**手段。
 
-
 922. **液态玻璃演示：卡片白 #ffffff → iOS 列表浅灰 #f2f2f7（让白霜/玻璃条有对比）**（2026-10-14 · 用户「我们的白底内容背景 255 到顶了，玻璃条再提亮也看不到差异；内容白底调暗点儿，和 iOS 应用商店一个色调」）：
 【取证】demo 玻璃条正落在**白卡片 #ffffff(255)** 上 ⇒ 白霜（亦偏白）**无区分**；实测卡片 255 / 页面根 245 / 玻璃条 255（卡片与条同值）。
 【修】卡片 `background: #ffffff` → **`#f2f2f7`**（iOS 分组列表背景色系）。真机：卡片 **243** / 页面根 245 / 玻璃条 255 ⇒ 条与卡片 **+12** 对比（可见）。
 【诚实边界】demo 观感件（非内核）；iOS App Store 列表本身也是白（254），其可辨性来自**滚动内容 + 更暗的选中胶囊**（#921）；本改动给 demo 一个类似 iOS 的浅灰底，避免"白上白"。
 【★共性（#920/#921/#922 同源）】**白底(255)是"提亮类参数"的死区**：白霜、白 tint、胶囊提亮在纯白上全部失效。⇒ ① 内核改霜层/压暗（#920/#921）② demo 内容降为浅灰（#922）——**两侧一起改才对**：只改内核则 demo 白卡上仍白上白，只改 demo 则真实 App 白底场景仍无区分。
-
 
 923. **液态玻璃：重白霜糊平内容 ⇒ 降为「轻提亮」，让折射/倒影重新可见**（2026-10-14 · 用户「刚才那个折射倒影又没了」）：
 【取证（oracle 同输入 A/B：锐+重白霜 vs blur+轻霜）】#920 的白霜 `a=0.85/0.55` 混向 **0.93~0.97 平底白** ⇒ 玻璃内深灰文字被**冲淡成浅灰** ⇒ **内容对比尽失**。★**这是真实模型冲突**：**iOS 的霜感来自 blur（内容糊成柔和形状、内容还在）**，而我用的 **`mix(内容色, 平底白, α)` 是"擦掉内容"** ⇒ 两者方向相反（糊内容 vs 保内容）。
@@ -7420,7 +7365,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② `useBeacon` 契约缺 `startBeaconDiscovery` / `stopBeaconDiscovery`（#1084 已登记）仍未补，
      属独立批次（需三端各接 BLE 扫描 + iBeacon 帧解析）。
 
-
 1086. **★★★`useIntersection` 从「如实不支持」改为**已实现**（相交计算在 JS，宿主只推几何 tick）· 决策**（2026-10-19）:
 
 【为什么此前记为"不支持"】
@@ -9396,7 +9340,6 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ③ 按真实载荷分布标定 32 MiB；
   ④ 三端对照：鸿蒙的 `http.request`（RCP）**尚未做同类上限**——按 #1113 的硬指标，它现在连 S2 都没有。
 
-
 1117. **★★★鸿蒙 `http.request` 补齐响应体上限（S2）：RCP 逐块回调 + `HMS_Rcp_CancelRequest`，真机 21/21 全绿 · 决策**（2026-10-20 · 承接 #1116 的"下一步④：鸿蒙尚未做同类上限"，用户「继续」）：
 
 【问题（#1116 明确挂账的）】
@@ -11361,6 +11304,38 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   · **最终验证**：`hilog -r` 清日志 → 单次启动 → 取 12 组读数分布；
     拆分前 vs 拆分后 **`diff` 完全一致**（逐项相同）⇒ 行为等价**有证据**，不是"看起来没变"。
 
+【顺带暴露的两个既有问题（如实登记，不在本轮修）】
+  ① **`app-stack-executor` 退化**：设备落盘 `{"exec_content_nodes":0,...,"fatal":"Error: [screen-host] screen.mount 失败：screen.mount: create 失败"}`。
+     ★**已用 `git stash` 复验：拆掉我的改动、重建、重跑，读数同样为 0** ⇒ **与拆分无关**，
+     是既有问题（入库版本是 `exec_content_nodes=114`，说明某次提交后坏了）。
+     已把该结果文件还原到入库版本，并在 `decision` 里登记为待查项。
+  ② **文件行数反增**：`proteus_render.cpp` 3701→3721、`proteus_host.cpp` 1068→1090
+     —— 因为抽出的函数带大段"为什么这么抽"的注释。**净收益在单函数**（-19 / -22 行），
+     文件行数增加是**注释换认知**，判据（file-size 棘轮）已按新值降钉。
+
+【门禁改动（判据跟实现，语义不变）】
+  · `check-env-vars.mjs` 的鸿蒙判据字面量 `substituteEnvTokens(nodes, envTable)` → `(in.nodes, envTable)`
+    —— 该判据的**意图**是「屏内容入口真的调了 env 替换」，不是「变量必须叫 nodes」；
+    抽出后替换发生在 `parseScreenCommandsInput` 内（更早、更内聚），语义等价。
+  · `tests/env-vars-gate.test.ts` 的夹具同步（否则"删掉调用 ⇒ 应红"那条用例找不到锚点）。
+
+【诚实边界】
+  ① 拆分只做了**两处最内聚的**（合计 -41 行）；`renderCommandsImpl` 仍是 **815 行**——
+     其内部是 688 行**长流水线**（依赖 10+ 局部状态：`g_sdSpec`/`built`/`textCount`/多个 map），
+     ★**不该硬抽**（抽出来要传十几个参数，可读性反而更差）；
+  ② 真正的进一步拆分需要**重构数据流**（把局部状态收进一个 struct），那是一次更大的行为改动，
+     要有独立的判据设计（本轮不做）；
+  ③ `prebuilt` 副本已同步（`check:harmony-runtime-prebuilt` 逐字节一致）。
+
+【门禁】
+  `pnpm test` **6463 条全绿** · `check:harmony-host-compile`（两形态编译）· `check:harmony-runtime-prebuilt`
+  · 真机：`run-host-app.sh` 全绿 + **12 组读数分布逐项一致** · file-size（基线降钉）· gates-sync
+
+【下一步】
+  ① 查 `app-stack-executor` 的 `screen.mount: create 失败`（既有问题，有设备可查了）；
+  ② `renderCommandsImpl` 若要继续拆，先设计"局部状态 struct"再动；
+  ③ `.workbuddy/salvage` 5449 个未跟踪截图治理。
+
 1149. **★★★HTTP 条件请求缓存（矩阵 P2 收口）——「App 三端不会自动做 304」从推断变成实测，并挖出 iOS 的 URLCache 在替我们做缓存 · 决策**（2026-10-21 · 承接 #1135「下一步①」）：
 
 【要解决的问题（矩阵 §3 P2 的原话）】
@@ -11447,34 +11422,99 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ② `stale-while-revalidate` / `stale-if-error`；
   ③ P1 HTTPDNS / HTTP-2 / 连接池 / pinning（需 Android 引 OkHttp，独立大单，先评估包体影响）。
 
-【顺带暴露的两个既有问题（如实登记，不在本轮修）】
-  ① **`app-stack-executor` 退化**：设备落盘 `{"exec_content_nodes":0,...,"fatal":"Error: [screen-host] screen.mount 失败：screen.mount: create 失败"}`。
-     ★**已用 `git stash` 复验：拆掉我的改动、重建、重跑，读数同样为 0** ⇒ **与拆分无关**，
-     是既有问题（入库版本是 `exec_content_nodes=114`，说明某次提交后坏了）。
-     已把该结果文件还原到入库版本，并在 `decision` 里登记为待查项。
-  ② **文件行数反增**：`proteus_render.cpp` 3701→3721、`proteus_host.cpp` 1068→1090
-     —— 因为抽出的函数带大段"为什么这么抽"的注释。**净收益在单函数**（-19 / -22 行），
-     文件行数增加是**注释换认知**，判据（file-size 棘轮）已按新值降钉。
+1150. **★★★RFC 5861 扩展：`stale-while-revalidate` / `stale-if-error`（矩阵 P2 收尾）+ 真机抓出「json 模式 + 非 JSON 错误体 ⇒ 请求永久挂起」的真缺陷 · 决策**（2026-10-21 · 承接 #1149「下一步②」）：
 
-【门禁改动（判据跟实现，语义不变）】
-  · `check-env-vars.mjs` 的鸿蒙判据字面量 `substituteEnvTokens(nodes, envTable)` → `(in.nodes, envTable)`
-    —— 该判据的**意图**是「屏内容入口真的调了 env 替换」，不是「变量必须叫 nodes」；
-    抽出后替换发生在 `parseScreenCommandsInput` 内（更早、更内聚），语义等价。
-  · `tests/env-vars-gate.test.ts` 的夹具同步（否则"删掉调用 ⇒ 应红"那条用例找不到锚点）。
+【为什么做这一条（#1149 自己写下的诚实边界）】
+  #1149 在矩阵与代码注释里明确登记：「`stale-while-revalidate` / `stale-if-error` **未做**」。
+  这两条是超级应用最常用的两招：
+    · **SWR**：立即回旧值 + 后台校验 ⇒ 接口再慢也不把用户卡在首屏；
+    · **SIE**：源站挂了用旧数据兜底 ⇒ 可用性（这是"降级"，不是"报错"）。
+  共同点是「**返回 stale 数据是正确行为**」，而这与 #1149 的 `must-revalidate`（禁止复用 stale）
+  方向相反 ⇒ 必须精确区分，不能靠"大概"。
+
+【★动手前先取 RFC 原文（不凭印象）】
+  · RFC 5861 `stale-while-revalidate`："caches MAY serve the response … after it becomes stale,
+    up to the indicated number of seconds" ⇒ 窗口 = **变 stale 之后**的 N 秒 = `age < lifetime + N`
+    （★不是 `age < N`——这个差别在 `lifetime > 0` 时会让整个特性错位）；
+  · RFC 5861 `stale-if-error`："an error is any situation that would result in a
+    **500, 502, 503, or 504** HTTP response status code being returned" ⇒ **只这四类 + 网络失败**；
+  · ★**RFC 5861 未规定**与 `must-revalidate` 的交互 ⇒ 本实现取**更严格者**：
+    RFC 9111 §5.2.2.2 说 must-revalidate 一旦 stale 就 **MUST NOT** 复用 ⇒ SWR/SIE 都不启用；
+  · ★RFC 5861 未要求限流后台校验，但**明确提醒** validation 应 "predicated upon an incoming request,
+    to avoid the possibility of an **amplification attack**" ⇒ 本实现**按条目去重**（同条目同时只允许一个）；
+  · RFC 9111 §5.1："A cache **MUST** generate the Age header field in a response it generates
+    from a stored response" ⇒ fresh/stale/304 三条路径都补 `Age`。
+
+【落地（框架层，跨端同一份）】
+  · `capability-fetch-cache.ts`：`staleWhileRevalidateMs` / `staleIfErrorMs` 解析；
+    `isStaleServable` / `isStaleOnErrorAvailable` / `isErrorRescuable` / `withAgeHeader` / `cachedResponseOf`；
+    `CacheLookup` 新增 `kind:'stale'`（`reason: swr | force-cache`）。
+  · `capability-fetch-pipeline.ts`：stale 分支**立即返回旧值** + `startBackgroundRevalidate`
+    （fire-and-forget、按条目去重、不重试、去掉用户取消信号——业务取消的是它那次请求）。
+  · `FetchMeta.cache` 扩展：`status` 增 `'stale'`；新增 `staleReason`（swr / stale-if-error / force-cache）
+    与 `revalidating`。
+  · ★**入库判据的连带修正（否则特性形同虚设）**：原先"既无新鲜期也无校验器 ⇒ 不存"，
+    而 `max-age=0, stale-while-revalidate=60`（最常见形态）正好落在这条里
+    ⇒ 已把"有 SWR/SIE 窗口"也算作"有用"。
+
+【★★★真机抓出的**真缺陷**（不是本轮新代码的问题，是被新探针第一次踩到的既有缺陷）】
+  `responseType:'json'` + 非 JSON 响应体（典型：5xx 错误页 / 纯文本）⇒
+  `invoke-wire.interpretBody` 按契约抛错 ⇒ 而它在**宿主回推回调**里执行 ⇒
+  异常逃出回调 ⇒ **请求永久挂起**（既不 resolve 也不 reject）。
+  ★真机现场：探针卡死 120s、服务端日志显示请求**到了**、宿主日志已 `HTTP_DONE 503 bodyLen=16`，
+  最后靠 `adb logcat` 里的 `回推回调抛异常：SyntaxError: unexpected token: 'injected'` 才定位。
+  ★危害等级：**任何**走 `responseType:'json'` 且服务端出错返回 HTML/纯文本的请求都会变僵尸
+  （超级应用里"接口挂了"通常正是这种响应形态）——这是本轮最值钱的产出。
+  【修法（分层，不破坏既有契约）】
+    · `interpretBody` **保持"坏 JSON 要抛"**（既有判据 `invoke-wire.test.ts` 明确要求，
+      理由是不静默返回 null 以免调用方分不清"空"与"坏"）；
+    · 在**不能抛的边界**（`settleFromFrame`）降级为原文，并给结算路径加兜底 try/catch；
+    · `status` 照常返回 ⇒ 业务仍能判断 4xx/5xx（`stale-if-error` 也因此才看得到 5xx）。
+
+【判据】
+  · `tests/fetch-stale.test.ts` **12/12**（真实 HTTP）：SWR 立即返回 + 后台校验发出 + 新值进缓存 /
+    窗口外不回 stale / `must-revalidate` 优先 / 并发 6 请求只发 1 次后台校验 / SIE 兜底 503 与网络失败 /
+    SIE 不兜底取消与 4xx（含 501 不在 RFC 名单）/ `Age` 头 / 无指令零回归 / **窗口边界纯函数单测**
+    （`age < lifetime + N` 而非 `age < N`）/ 控制器 lookup 三态。
+  · `tests/capability-invoke-bytes.test.ts` **+2 条回归**（21 total）：json 模式 + 非 JSON 体（5xx 文本 / HTML）
+    ⇒ **必须结算**、`status` 保留、`data` 为原文、pending 清零。
+  · **破坏性验证 6 条各自独立命中**：SWR 窗口误算 ⇒ 1 红；去掉后台校验去重 ⇒ 1 红（6 次 vs 1 次）；
+    去掉 `must-revalidate` 优先 ⇒ 2 红；`timeout` 不可兜底 ⇒ 1 红；不写 `Age` ⇒ 2 红；
+    去掉僵尸兜底 ⇒ 2 红。
+  · 真机双端 `bash hosts/{android,ios}/run-stale-probe.sh` ⇒ 各 **12/12**，
+    证据 `hosts/{android,ios}/results/stale-probe.json`（已入库）；
+    `check:cache-evidence` 已扩展覆盖这两份（基础缓存 + RFC 5861 两批共 4 份证据）。
+
+【★判据自己的三处错（都是"判据假设错"，不是实现坏）】
+  ① `waitUntil` 在"无 `setTimeout`"时直接 return false——而 App 精简引擎**都没有 setTimeout**
+     ⇒ `swr_background_sent` 恒 false，**而服务端明明收到了 `If-None-Match`**
+     （"没等到"被当成"没发生"，是 #1148「未测到 ≠ 通过」的镜像错误）
+     ⇒ 改为以**服务端收到的条件头**为准，并用一次真实往返推进事件循环；
+  ② 首版拿"生成次数"当 ETag 版本 ⇒ 后台校验带旧 ETag 回来得到 **304** ⇒ 缓存体不变
+     ⇒ "第三次应拿到新代"**永远不可能成立** ⇒ 服务端加 `/__bump/<path>` 显式版本旋钮；
+  ③ 探针 deadline 30s 太紧（约 13 次串行往返）⇒ 实测在"第三次请求完成"就用完，
+     判据全空**看起来像框架全坏** ⇒ 改 120s。
+
+【顺带修的装置问题】
+  · 探针文件加完后 1079 行越 `check:file-size` ⇒ 按纪律**拆成独立文件**
+    `hosts/shared/bridge/entry-superapp-probes-stale.ts`（854 + 249 行），不是豁免；
+  · `HttpCapability.java` 加日志后 1003 行 ⇒ 压注释回到 **988 行**（门禁拦住的是我自己）；
+  · 故障注入响应补 `Content-Length + Connection: close`（首版 chunked 无长度，是排查时的干扰变量）。
 
 【诚实边界】
-  ① 拆分只做了**两处最内聚的**（合计 -41 行）；`renderCommandsImpl` 仍是 **815 行**——
-     其内部是 688 行**长流水线**（依赖 10+ 局部状态：`g_sdSpec`/`built`/`textCount`/多个 map），
-     ★**不该硬抽**（抽出来要传十几个参数，可读性反而更差）；
-  ② 真正的进一步拆分需要**重构数据流**（把局部状态收进一个 struct），那是一次更大的行为改动，
-     要有独立的判据设计（本轮不做）；
-  ③ `prebuilt` 副本已同步（`check:harmony-runtime-prebuilt` 逐字节一致）。
+  ① **L2 磁盘层仍未做**（进程重启即失效；`FetchCacheStore` 接口是给它留的插槽）；
+  ② SWR 的"后台校验"是**进程内**的：进程被杀则这次校验丢失（缓存里仍是旧值，行为安全）；
+  ③ SIE 只覆盖 RFC 点名的 500/502/503/504 + 网络失败，**不含** 4xx / 用户取消 / 能力缺失；
+  ④ 未实现 `stale-if-error` 对"重定向多跳中途失败"的逐跳判定（按整次请求判定）；
+  ⑤ 鸿蒙只剔除内部头、不做条件缓存（RCP 同步往返）⇒ 本门禁只要求两端。
 
 【门禁】
-  `pnpm test` **6463 条全绿** · `check:harmony-host-compile`（两形态编译）· `check:harmony-runtime-prebuilt`
-  · 真机：`run-host-app.sh` 全绿 + **12 组读数分布逐项一致** · file-size（基线降钉）· gates-sync
+  定向测试 99/99（fetch-stale 12 · fetch-cache 14 · capability-invoke-bytes 21 · invoke-wire 19 ·
+  fetch-pipeline 23 · host-probe-registry 5 · fetch-wire-fields 5）· file-size（两处越线均已拆/压）
+  · contract-index · demo-page-api-parity · gen-content 84 页 · Android/iOS 零设备编译
+  · 真机双端各 12/12。
 
-【下一步】
-  ① 查 `app-stack-executor` 的 `screen.mount: create 失败`（既有问题，有设备可查了）；
-  ② `renderCommandsImpl` 若要继续拆，先设计"局部状态 struct"再动；
-  ③ `.workbuddy/salvage` 5449 个未跟踪截图治理。
+【下一步（矩阵 §6）】
+  ① L2 **磁盘层**（`04-cache-layers.md`；`FetchCacheStore` 插槽已就位）；
+  ② P1 HTTPDNS / HTTP-2 / 连接池 / pinning（需 Android 引 OkHttp，独立大单，先评估包体影响）；
+  ③ `stale-if-error` 的逐跳（重定向中途失败）判定——需先定"哪一跳算源站错误"。

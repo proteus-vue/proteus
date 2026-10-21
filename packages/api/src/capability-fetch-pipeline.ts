@@ -29,8 +29,8 @@ import type { AbortSignalLike, FetchConfig, FetchMeta, FetchResult, RetryPolicy 
 import { headerOf, isRedirectStatus, methodAfterRedirect, nextHopConfig, resolveLocation } from './capability-fetch-redirect'
 import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
 // ★★★#1149 HTTP 条件请求缓存（P2）——App 端字节腿不会自动做 304，必须在框架层收口
-import { cacheMissError, createFetchCache, decodeCacheBody, entryAgeMs } from './capability-fetch-cache'
-import type { CacheLookup, FetchCacheController, FetchCacheMeta, FetchCacheMode, FetchCacheOptions } from './capability-fetch-cache'
+import { cacheMissError, cachedResponseOf, createFetchCache, entryAgeMs } from './capability-fetch-cache'
+import type { CacheLookup, FetchCacheController, FetchCacheEntry, FetchCacheMeta, FetchCacheMode, FetchCacheOptions } from './capability-fetch-cache'
 import { createAbortController } from './capability-invoke'
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
@@ -287,6 +287,10 @@ export function createFetchPipeline(
     now,
   )
   const inflightMap = new Map<string, Promise<FetchResult<unknown>>>()
+  /** ★#1150：SWR 后台校验的在飞表（同条目同时只允许一个——RFC 5861 的放大攻击提醒） */
+  const backgroundInflight = new Map<string, Promise<void>>()
+  /** ★#1150：最近一次后台校验的失败码（观测用；不改变前台结果） */
+  let lastBackgroundError: string | undefined
   const queue: QueueEntry[] = []
   let running = 0
   let seq = 0
@@ -316,6 +320,65 @@ export function createFetchPipeline(
     const r = config.retry
     if (typeof r === 'number') return { ...(base ?? {}), attempts: r }
     return { ...(base ?? {}), ...((r as RetryPolicy | undefined) ?? {}) }
+  }
+
+  /**
+   * ★★★#1150：**SWR 后台校验**（RFC 5861 `stale-while-revalidate`）。
+   *
+   * 【职责】旧值已同步返回给业务；这里在后台发一次**条件请求**，把新结果写回缓存，
+   *   让"下一次"请求拿到新值。★失败**不抛、不重试**（后台校验失败没有规范要求；
+   *   RFC 5861 只说窗口过后就不再服务 stale，本实现遵循：不额外补偿）。
+   *
+   * 【★★必须按 key 去重（RFC 5861 的明确提醒）】
+   *   原文：validation should be "predicated upon an incoming request, to avoid the possibility
+   *   of an **amplification attack**"。
+   *   ⇒ 同一个缓存条目上**同时只允许一个**后台校验在飞；并发 N 个请求打同一个 stale 条目时，
+   *     只发 1 次校验（否则就是"一次源站故障被放大成 N 倍流量"）。
+   *
+   * 【返回值】是否真的启动了后台校验（调用方据此写 `meta.cache.revalidating`）。
+   *   ★返回 true 表示"确实发出了校验"，不是"校验成功"——后台结果不进本次 meta。
+   */
+  function startBackgroundRevalidate(url: string, config: FetchConfig, entry: FetchCacheEntry): boolean {
+    // ★去重键用**缓存条目身份**（基站键 + Vary 变体），不是 URL——
+    //   同一 URL 的不同 Vary 变体是不同条目，各自校验是正确行为。
+    const key = `${entry.key}\u0000${JSON.stringify(entry.varyValues)}`
+    if (backgroundInflight.has(key)) return false
+    // ★只对"有校验器"的条目做条件校验；没有校验器就不发（无法 304，等于白打一次源站）
+    if (!entry.etag && !entry.lastModified) return false
+
+    const task = (async (): Promise<void> => {
+      try {
+        const revalConfig: FetchConfig = {
+          ...config,
+          cache: undefined, // ★不能让后台校验再走一遍缓存判定（会递归）
+          // 条件头由 store 侧统一生成——复用 lookup 的同一函数，避免两处拼法分叉
+          ...(entry.etag ? { headers: { ...(config.headers ?? {}), 'If-None-Match': entry.etag } } : {}),
+          ...(entry.lastModified && !entry.etag
+            ? { headers: { ...(config.headers ?? {}), 'If-Modified-Since': entry.lastModified } }
+            : {}),
+          bypassPlatformCache: true,
+          // 后台校验不该重试（重试属于前台请求的语义；后台再叠加会放大流量）
+          retry: 0,
+          // ★去掉用户取消信号：业务取消的是**它那次**请求，不该连带取消公共的后台校验
+          signal: undefined,
+        }
+        const r = await runFetch<unknown>(bridge, url, revalConfig)
+        // 复用 settle 的 304 合成与入库逻辑：给它一个"缓存已过期需校验"的等价 lookups
+        cacheCtl.settle(url, config, { kind: 'revalidate', entry, config, mode: 'default' }, r, now())
+        if (!r.ok) {
+          // ★如实登记：后台校验失败 ⇒ 交给 stale-if-error 的窗口判定（下一次请求可用旧值兜底）
+          lastBackgroundError = r.error?.code ?? 'fetch.failed'
+        } else {
+          lastBackgroundError = undefined
+        }
+      } catch (e) {
+        lastBackgroundError = e instanceof Error ? e.message : String(e)
+      } finally {
+        backgroundInflight.delete(key)
+      }
+    })()
+    backgroundInflight.set(key, task)
+    return true
   }
 
   async function execute<T>(
@@ -495,7 +558,7 @@ export function createFetchPipeline(
           },
         }
       }
-      if (cacheLook.kind === 'fresh') {
+      if (cacheLook.kind === 'fresh' || cacheLook.kind === 'stale') {
         // ★deadline 是硬约束：命中缓存也不能绕过"限时给我结果"（否则业务的时间保证失效）
         if (remaining() <= 0) return deadlineFail(now() - anchor)
         if (task.aborted) {
@@ -509,24 +572,34 @@ export function createFetchPipeline(
             },
           }
         }
-        let hitRes: FetchResult<unknown> = {
-          ok: true,
-          data: decodeCacheBody(cacheLook.entry, curConfig),
-          status: cacheLook.entry.status,
-          headers: { ...cacheLook.entry.headers },
-        }
+        const hitAge = entryAgeMs(cacheLook.entry, now())
+        const staleLook = cacheLook.kind === 'stale' ? cacheLook : undefined
+        let hitRes: FetchResult<unknown> = cachedResponseOf<unknown>(cacheLook.entry, curConfig, hitAge) as FetchResult<unknown>
         // 响应拦截器在命中路径上同样执行（业务看到的结果形态必须一致）
         for (let i = resInterceptors.length - 1; i >= 0; i--) {
           hitRes = await resInterceptors[i]!(hitRes, {
             ...ctx, url: curUrl, config: curConfig, attempt: 0, elapsedMs: now() - startedAt,
           })
         }
+        // ★★★#1150：SWR 窗口内 ⇒ 旧值已返回，**后台**发起校验（fire-and-forget，不阻塞本次）。
+        let revalidating = false
+        if (staleLook && staleLook.reason === 'swr') {
+          revalidating = startBackgroundRevalidate(curUrl, curConfig, staleLook.entry)
+        }
         return {
           ...hitRes,
           meta: {
             id, attempts: 0, queuedMs, totalMs: Math.round(now() - startedAt), attemptMs: [],
             deduped: false, priority, ...(deadlineMs !== undefined ? { deadlineMs } : {}),
-            cache: { status: 'hit', ageMs: entryAgeMs(cacheLook.entry, now()), mode: cacheMode },
+            cache: staleLook
+              ? {
+                  status: 'stale',
+                  ageMs: hitAge,
+                  mode: cacheMode,
+                  staleReason: staleLook.reason,
+                  ...(revalidating ? { revalidating: true } : {}),
+                }
+              : { status: 'hit', ageMs: hitAge, mode: cacheMode },
           },
         } as FetchResult<T>
       }

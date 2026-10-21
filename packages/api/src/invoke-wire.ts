@@ -509,6 +509,9 @@ export function decodeResolveFrame(bytes: Uint8Array): ResolveFrame {
 /**
  * 按 `responseType` 解释响应体（**唯一实现**——调用方不要各自 `JSON.parse`）。
  * ★空 body：`json` 返 `null`（对齐既有"空响应体不是错误"的处理），`text` 返 `''`。
+ * ★**契约：`json` 解析失败会抛**（不静默返回 null——否则调用方分不清"空"与"坏"）。
+ *   ⇒ 调用方若处在**不能抛**的位置（如宿主回推回调），必须自己兜住；
+ *     现行做法见 `capability-invoke.settleFromFrame`（在那里降级为原文，理由见该处注释 #1150）。
  */
 export function interpretBody(body: Uint8Array, kind: ResponseKind): unknown {
   if (kind === 'arraybuffer') return body

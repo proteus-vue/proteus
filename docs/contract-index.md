@@ -212,6 +212,17 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 ★#1149 实证：`bypassPlatformCache` 属第三类——若照"线格式字段"处理会污染请求头并外泄给业务服务端；
 若照"管线字段"处理则 iOS 的 `URLCache` 不给让开 ⇒ 304 被系统合成、框架层永远看不到。
 
+**★#1150 缓存语义改动（RFC 5861）要跑什么**：
+
+| 触发 | 必须跑 |
+|---|---|
+| 改 `packages/api/src/capability-fetch-cache.ts` / `packages/api/src/capability-fetch-pipeline.ts` 的缓存判定或 `settle` | `npx vitest run tests/fetch-stale.test.ts tests/fetch-cache.test.ts` |
+| 改 `packages/api/src/capability-invoke.ts` 的**回推结算**（`settleFromFrame` / `interpretBody` 调用点） | `npx vitest run tests/capability-invoke-bytes.test.ts` ★该处**不能抛**：异常逃出回推回调 = 请求永久挂起（#1150 真机抓出） |
+| 加/改真机缓存探针 | `npx vitest run tests/host-probe-registry.test.ts`（`IOS_PROBES` ⇄ Swift 两方）+ `node scripts/check-cache-evidence.mjs --list` |
+
+★SIE 的兜底范围**只含** RFC 5861 点名的 500/502/503/504 + 网络失败；
+**不含** `fetch.aborted`（用户取消）与 4xx——这一条由 `tests/fetch-stale.test.ts` ⑦ 守着。
+
 ---
 
 ## 8. 真机探针登记（iOS）

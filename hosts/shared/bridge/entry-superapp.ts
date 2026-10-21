@@ -12,6 +12,10 @@
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'
 export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'
+// ★★★#1150：RFC 5861 扩展指令探针**单列**（entry-superapp-probes.ts 已到 file-size 上限；
+//   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
+import { appStaleProbe } from './entry-superapp-probes-stale'
+export { appStaleProbe } from './entry-superapp-probes-stale'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -942,5 +946,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppCacheProbe?: (b: string) => string
 }).__proteusHostAppCacheProbe = (b: string) => appCacheProbe(b)
+// ★★★#1150：RFC 5861 扩展指令探针（SWR / SIE；结果填 __proteusHostStaleProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppStaleProbe?: (b: string) => string
+}).__proteusHostAppStaleProbe = (b: string) => appStaleProbe(b)
 
 

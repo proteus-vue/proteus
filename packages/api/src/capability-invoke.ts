@@ -534,8 +534,21 @@ function settleFromFrame(
     p.resolve(parsed?.data ?? parsed)
     return
   }
+  /**
+   * ★★★#1150：这里**不能抛**。`responseType:'json'` 遇非 JSON 体（5xx 错误页/纯文本）时
+   *   `interpretBody` 按契约抛错，而本函数在**宿主回推回调**里执行 ⇒ 异常逃出 ⇒ pending 已删、
+   *   Promise 既不 resolve 也不 reject ⇒ 请求**永久挂起**（真机实测卡死 120s）。
+   *   ⇒ 降级为原文；`status` 照常返回（业务仍能判断 4xx/5xx，SIE 也正因此才看得到 5xx）。
+   *   纯函数 `interpretBody` 的严格契约**保持不变**（分层：契约留在纯函数，兜底放在不能抛的边界）。
+   */
+  let data: unknown
+  try {
+    data = interpretBody(body, p.responseType)
+  } catch {
+    data = utf8Decode(body)
+  }
   p.resolve({
-    data: interpretBody(body, p.responseType),
+    data,
     status: f.status ?? 0,
     headers: f.headers ?? {},
   })
@@ -603,7 +616,17 @@ function settleHostCallBytes(frame: Uint8Array): void {
   if (f.ok && f.pending === true) return
   p.timer.clear()
   pendingHostCalls.delete(f.reqId)
-  settleFromFrame(p, f)
+  // ★★★#1150：结算**绝不能抛**（本函数在宿主回推回调里跑；抛出会让 Promise 既不 resolve
+  //   也不 reject ⇒ 请求永久挂起，真机实测卡死 120s）。兜底保证将来任何新增解析逻辑都不会制造僵尸。
+  try {
+    settleFromFrame(p, f)
+  } catch (e) {
+    try {
+      p.reject(e instanceof Error ? e : new Error(String(e)))
+    } catch {
+      /* reject 本身也不该抛；到这里说明 Promise 已结算，忽略 */
+    }
+  }
 }
 
 /** 壳异步回推入口的全局键（**JSON** 形态——老壳沿用；新壳走 `HOST_RESOLVE_BYTES_KEY`） */

@@ -156,8 +156,7 @@ describe('③ 异步回推（pending → resolveBytes）', () => {
     expect(pendingHostCallCount()).toBe(0)
   })
 
-  it('回推时壳返回 `pending` 帧则**不**结算（保持挂起，等最终帧）', async () => {
-    let dispatched: Uint8Array | null = null
+  it('回推时壳返回 `pending` 帧则**不**结算（保持挂起，等最终帧）', async () => {    let dispatched: Uint8Array | null = null
     installBytesShell((frame) => {
       dispatched = frame
       return undefined // 宿主返回空 ⇒ 语义等同"已受理待回推"
@@ -288,5 +287,50 @@ describe('⑥ 异步通用能力（非 http.request）', () => {
     installBytesShell((frame) => encodeResolveFrame({ reqId: decodeInvokeFrame(frame).reqId, ok: false, missing: true }))
     await expect(invokeHostAsync('device.get', {})).rejects.toThrow(/^unsupported: /)
     expect(pendingHostCallCount()).toBe(0)
+  })
+})
+
+/* ───────────────── ③b 僵尸请求回归判据（#1150 真机抓出） ───────────────── */
+
+describe('③b ★★★#1150：responseType:json + 非 JSON 响应体 ⇒ **必须结算**（不得挂起）', () => {
+  /**
+   * 【真机抓到的形态】宿主回推 503 + 纯文本体（injected-failure），而请求写 responseType:'json'
+   *   ⇒ interpretBody 按契约抛 ⇒ 异常从**回推回调**逃出 ⇒ Promise 既不 resolve 也不 reject
+   *   ⇒ await useFetch(...) 永久挂起（真机实测 120s 卡死，宿主侧只看到「回推回调抛异常」）。
+   * 【判定】结算必须发生（resolve），且 data 降级为**原文**、status 保留 503
+   *   （业务据此判断 4xx/5xx；stale-if-error 也正因此才能看到 5xx）。
+   * ★与 invoke-wire.test.ts 的"interpretBody 遇到坏 JSON 要抛"**不冲突**：
+   *   纯函数保持严格契约；兜底放在**不能抛的边界**（结算路径）。
+   */
+  it('★非 JSON 体（5xx 文本）⇒ resolve + status 保留 + data 为原文（不挂起、不返回 null）', async () => {
+    let dispatched: Uint8Array | null = null
+    installBytesShell((frame) => {
+      dispatched = frame
+      return encodeResolveFrame({ reqId: decodeInvokeFrame(frame).reqId, ok: true, pending: true })
+    })
+    const p = invokeHostAsync('http.request', { url: 'https://x/err', responseType: 'json' })
+    const reqId = decodeInvokeFrame(dispatched as unknown as Uint8Array).reqId
+    // ★宿主回 503 + 纯文本（真实错误页的形态）
+    resolveBytesFromHost(
+      encodeResolveFrame({ reqId, ok: true, status: 503, body: utf8Encode('injected-failure') }),
+    )
+    const r = (await p) as { data: unknown; status: number }
+    expect(r.status, '★状态码必须保留（业务据此判断 5xx）').toBe(503)
+    expect(r.data, '★非 JSON 体必须降级为原文（不是 undefined / null）').toBe('injected-failure')
+    expect(pendingHostCallCount(), '★pending 必须清零（不能留僵尸）').toBe(0)
+  })
+
+  it('★HTML 错误页同理（不是合法 JSON，也不该挂起）', async () => {
+    let dispatched: Uint8Array | null = null
+    installBytesShell((frame) => {
+      dispatched = frame
+      return encodeResolveFrame({ reqId: decodeInvokeFrame(frame).reqId, ok: true, pending: true })
+    })
+    const p = invokeHostAsync('http.request', { url: 'https://x/err2', responseType: 'json' })
+    const reqId = decodeInvokeFrame(dispatched as unknown as Uint8Array).reqId
+    resolveBytesFromHost(encodeResolveFrame({ reqId, ok: true, status: 200, body: utf8Encode('<html>oops</html>') }))
+    const r = (await p) as { data: unknown; status: number }
+    expect(r.status).toBe(200)
+    expect(r.data).toBe('<html>oops</html>')
   })
 })

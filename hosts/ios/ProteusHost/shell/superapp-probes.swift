@@ -110,6 +110,17 @@ enum SuperappProbes {
       deadlineSeconds: 180,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1150：**RFC 5861 扩展指令**判据（SWR / SIE / Age 头）。
+    //   ★真机意义：App 引擎无 `setTimeout`/无 `fetch` ⇒ 后台校验能否真的发出**只能实测**；
+    //     若不能，SWR 会退化成"永远返回旧值"（比不做更糟）。
+    ProbeConfig(
+      argPrefix: "--stale-probe=",
+      kickFormat: "__proteusHostAppStaleProbe(%@)",
+      resultKey: "__proteusHostStaleProbeResult",
+      reportPrefix: "stale",
+      deadlineSeconds: 180,
+      extraReadings: { _ in [:] },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。
