@@ -244,61 +244,70 @@ function formatViolation(v: LayeringViolation): string {
   return `  ${v.verdict.padEnd(10)} ${v.from}（${v.fromLayer ?? '?'}）→ ${v.to}（${v.toLayer ?? '?'}）  diff=${diff}`
 }
 
-function runCheck(manifests: readonly PackageManifest[], flags: Flags): number {
+/** `check` 的纯计算结果（命令面与 gate 注册表**共用**——gate.ts 不复制判定逻辑） */
+export interface KnowledgeCheckReport {
+  ok: boolean
+  edges: number
+  prod: LayeringViolation[]
+  dev: LayeringViolation[]
+  missing: string[]
+  cycles: string[][]
+  selfLoops: string[]
+  /** 人类可读全文（零 ANSI；`--json` 时不使用） */
+  text: string
+}
+
+/**
+ * 分层守护的统一判定（**纯函数**：只吃清单，不 IO、不打印）。
+ *
+ * ★为什么抽出来：`proteus knowledge check` 与 `proteus gate run knowledge` 是两条入口。
+ *   若各写一遍判定，必然漂成两套口径——这正是 #1153 独立验证抓到的缺陷类型
+ *   （图里没有 devDeps 边、判定却按层判 ⇒ 同一对包两套答案）。**一个判定，两个出口。**
+ */
+export function evaluateKnowledgeCheck(manifests: readonly PackageManifest[], opts: { dev?: boolean } = {}): KnowledgeCheckReport {
   const p = createKnowledgeProvider(manifests)
   const prod = p.diagnoseLayering()
-  const dev = flags.dev ? p.diagnoseDevLayering() : []
+  const dev = opts.dev ? p.diagnoseDevLayering() : []
   const graph = p.buildGraph()
   const { missing } = auditRegistration(manifests)
 
   // ★漏登记必须判红：否则"新包没层号"会被静默忽略，越层诊断对其完全失明
-  const failed = prod.length > 0 || missing.length > 0 || graph.cycles.length > 0 || graph.selfLoops.length > 0
+  const ok = prod.length === 0 && missing.length === 0 && graph.cycles.length === 0 && graph.selfLoops.length === 0
 
+  const lines: string[] = [`[proteus-knowledge] 分层守护：${graph.edges.length} 条生产依赖边`]
+  if (missing.length) lines.push('', `✗ 未登记分层的包 ${missing.length} 个（对越层诊断失明）：${missing.join(' ')}`)
+  if (graph.selfLoops.length) lines.push('', `✗ 自环 ${graph.selfLoops.length} 个：${graph.selfLoops.join(' ')}`)
+  if (graph.cycles.length) {
+    lines.push('', `✗ 依赖成环 ${graph.cycles.length} 处：`)
+    for (const c of graph.cycles) lines.push(`    ${c.join(' → ')}`)
+  }
+  if (prod.length) {
+    lines.push('', `✗ 越层 ${prod.length} 处：`)
+    for (const v of prod) lines.push(formatViolation(v))
+  }
+  if (ok) lines.push('', '✓ 无越层、无环、无自环、无漏登记')
+  if (dev.length) {
+    lines.push('', `• devDeps 向上引用 ${dev.length} 处（信息位，不判红——测试框架引 CLI 属正常）：`)
+    for (const v of dev) lines.push(`    ${v.from}（${v.fromLayer ?? '?'}）→ ${v.to}（${v.toLayer ?? '?'}）`)
+  }
+
+  return { ok, edges: graph.edges.length, prod, dev, missing, cycles: graph.cycles, selfLoops: graph.selfLoops, text: lines.join('\n') }
+}
+
+function runCheck(manifests: readonly PackageManifest[], flags: Flags): number {
+  const r = evaluateKnowledgeCheck(manifests, { dev: flags.dev })
   if (flags.json) {
     console.log(
       JSON.stringify(
-        {
-          kind: 'knowledge.check',
-          ok: !failed,
-          edges: graph.edges.length,
-          prod,
-          dev,
-          missing,
-          cycles: graph.cycles,
-          selfLoops: graph.selfLoops,
-        },
+        { kind: 'knowledge.check', ok: r.ok, edges: r.edges, prod: r.prod, dev: r.dev, missing: r.missing, cycles: r.cycles, selfLoops: r.selfLoops },
         null,
         2,
       ),
     )
-    return failed ? 1 : 0
+    return r.ok ? 0 : 1
   }
-
-  console.log(`[proteus-knowledge] 分层守护：${graph.edges.length} 条生产依赖边`)
-  if (missing.length) {
-    console.log('')
-    console.log(`✗ 未登记分层的包 ${missing.length} 个（对越层诊断失明）：${missing.join(' ')}`)
-  }
-  if (graph.cycles.length) {
-    console.log('')
-    console.log(`✗ 依赖成环 ${graph.cycles.length} 处：`)
-    for (const c of graph.cycles) console.log(`    ${c.join(' → ')}`)
-  }
-  if (prod.length) {
-    console.log('')
-    console.log(`✗ 越层 ${prod.length} 处：`)
-    for (const v of prod) console.log(formatViolation(v))
-  }
-  if (!failed) {
-    console.log('')
-    console.log('✓ 无越层、无环、无自环、无漏登记')
-  }
-  if (dev.length) {
-    console.log('')
-    console.log(`• devDeps 向上引用 ${dev.length} 处（信息位，不判红——测试框架引 CLI 属正常）：`)
-    for (const v of dev) console.log(`    ${v.from}（${v.fromLayer ?? '?'}）→ ${v.to}（${v.toLayer ?? '?'}）`)
-  }
-  return failed ? 1 : 0
+  console.log(r.text)
+  return r.ok ? 0 : 1
 }
 
 // ── why ─────────────────────────────────────────────────────────────

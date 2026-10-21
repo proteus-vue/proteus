@@ -91,6 +91,9 @@ jobs:
       - name: 跨端契约索引自检（★#1137：AI 改一处要知道跑哪些门禁——索引过期比没有索引更糟）
         run: node scripts/check-contract-index.mjs
 
+      - name: 包级分层守护（★G-54/#1153：48 包的 L0–L5 依赖方向 + 环/自环 + 漏登记——与契约索引同为架构静态门禁）
+        run: pnpm run check:knowledge
+
       - name: 仓库卫生门禁（★#1136：构建产物不得被跟踪——本轮就因 `target/` vs `target-qjs/` 漏了 186MB）
         run: node scripts/check-repo-hygiene.mjs
 

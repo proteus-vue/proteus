@@ -12,6 +12,8 @@ import { runAuditAll, formatAuditAll } from './audit-all'
 import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 import { runCoverageAudit } from './coverage-audit'
+import { evaluateKnowledgeCheck, resolvePackagesDir } from './knowledge/command'
+import { loadManifests } from './knowledge'
 import { runFluidCheck, formatFluidCheck } from './fluid-check'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
@@ -267,6 +269,27 @@ export const GATES: GateInfo[] = [
       const result = runCoverageAudit()
       return { ok: result.ok, text: result.text }
     },
+  },
+  {
+    id: 'knowledge',
+    group: '框架自检',
+    scope: 'framework',
+    usage: 'proteus knowledge check [--dev] [--json]',
+    desc: '★G-54 M0 知识内核分层守护（#1153）：生产依赖边越层/成环/自环/漏登记 → exit 1（同层合法；devDeps 仅信息位）。非框架仓跳过',
+    run: (root) =>
+      safeRun(root, (r) => {
+        // ★与 `proteus knowledge check` **共用同一个判定函数**（evaluateKnowledgeCheck）——
+        //   两条入口各写一遍必然漂成两套口径（#1153 独立验证抓到的正是这类缺陷）。
+        let packagesDir: string
+        try {
+          packagesDir = resolvePackagesDir(undefined, path.resolve(r))
+        } catch {
+          // 框架自检门禁：非框架仓（用户工程）没有 packages/ ⇒ 跳过，不判红
+          return { ok: true, text: '[proteus-knowledge] 非框架仓（找不到 packages/ + pnpm-workspace.yaml）——跳过分层守护' }
+        }
+        const report = evaluateKnowledgeCheck(loadManifests(packagesDir))
+        return { ok: report.ok, text: report.text }
+      }, 'knowledge'),
   },
   {
     id: 'devtools-budget',
