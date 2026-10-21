@@ -248,6 +248,33 @@ interface StoredEntry {
   cacheKey: string
 }
 
+/**
+ * ★★★#1152：持久层 **manifest**（索引 + 每条字节/年龄）。
+ *
+ * 【为什么索引要带字节与年龄，而不只是键列表】
+ *   #1151 的持久层**没有任何淘汰**（`maxPersistEntries` 只写在 JSDoc 里、代码从未使用）
+ *   ⇒ 磁盘无界增长。而 Web ~5MB / MP 10MB 是**平台配额**，写满后 `setStorageSync` 抛错
+ *   ⇒ 缓存静默失效，**还可能连带业务自己的存储写不进去**（配额是共享的）。
+ *   ⇒ 必须按**字节**做 LRU 淘汰；而"字节数"与"最近使用时刻"只能**记在 manifest 里**
+ *     （KV 后端拿不到键值大小，文件后端也不想为此读全量）。
+ *   ★manifest 随每次 flush 一起写（本来就写索引），不引入新的 IO 模式。
+ *
+ * 【★向后兼容】#1151 写过 `{ keys: string[] }` 形态 ⇒ 这里同时认两种：
+ *   老的键列表条目按 `bytes: 0 / lastUsed: 0` 载入（字节预算会先把它们当"最旧"淘汰，行为安全）。
+ */
+interface DiskManifestV2 {
+  v: 2
+  entries: Record<string, { key: string; bytes: number; lastUsed: number }>
+}
+
+/** 持久层条目上限的默认值（★KV 是**共享配额**，缓存只能占一小部分；文件无配额但重写成本 O(N)） */
+export const DEFAULT_PERSIST_BYTES = {
+  /** Web ~5MB / MP 10MB 的平台配额是共享的 ⇒ 缓存只占 2 MiB */
+  kv: 2 * 1024 * 1024,
+  /** App 无配额，但单文件重写是 O(N) ⇒ 8 MiB 是"够用且重写不贵"的折中 */
+  file: 8 * 1024 * 1024,
+} as const
+
 /** 存储条目字节数估算（与内存 LRU 同口径：文本按 2 字节/字符） */
 function entryBytesOf(e: FetchCacheEntry): number {
   return e.body.kind === 'bytes' ? e.body.bytes.byteLength : e.body.text.length * 2
@@ -261,34 +288,134 @@ function entryBytesOf(e: FetchCacheEntry): number {
  *
  * @param opts.backend 持久后端（KV / 文件）
  * @param opts.maxBytes 内存预算（与内存 LRU 同义）
- * @param opts.maxPersistEntries 持久层的**条目上限**（★MP/Web 有平台配额，必须主动淘汰）
+ * @param opts.maxPersistBytes ★#1152 持久层**字节预算**（缺省按后端类型：KV 2 MiB / 文件 8 MiB）
+ * @param opts.maxPersistEntries ★#1152 持久层**条目上限**（与字节预算二者取先到）
  * @param opts.flushDelayMs 同一 key 连续写的合并窗口（默认 120ms）
  */
 export function createPersistentFetchCache(opts: {
   backend: CachePersistBackend
   maxBytes?: number
   maxEntries?: number
+  maxPersistBytes?: number
+  maxPersistEntries?: number
   now?: () => number
   flushDelayMs?: number
 }): FetchCacheStore & {
-  /** 持久层读数（判据/排障）：成功落盘数 / 失败数 / 损坏条目数 / 已加载条目数 */
-  persistStats(): { writes: number; writeErrors: number; corruptEntries: number; loads: number }
+  /**
+   * 持久层读数（判据/排障）：成功落盘数 / 失败数 / 损坏条目数 / 已加载条目数 /
+   * ★#1152 淘汰数 / 配额收缩次数 / 当前持久层字节与条目数。
+   */
+  persistStats(): {
+    writes: number
+    writeErrors: number
+    corruptEntries: number
+    loads: number
+    evicted: number
+    quotaShrinks: number
+    persistBytes: number
+    persistEntries: number
+  }
   /** 后端形态（`kv` / `file`；排障用） */
   backendKind(): string
+  /** ★#1152：当前生效的持久层字节预算（判据断言用） */
+  persistBudget(): number
 } {
   const now = opts.now ?? Date.now
   const memory = createMemoryFetchCache({ maxBytes: opts.maxBytes, maxEntries: opts.maxEntries, now })
   const backend = opts.backend
   const flushDelayMs = opts.flushDelayMs ?? 120
-  const stats = { writes: 0, writeErrors: 0, corruptEntries: 0, loads: 0 }
+  const maxPersistBytes =
+    opts.maxPersistBytes ?? (backend.kind === 'file' ? DEFAULT_PERSIST_BYTES.file : DEFAULT_PERSIST_BYTES.kv)
+  const maxPersistEntries = opts.maxPersistEntries ?? Number.POSITIVE_INFINITY
+  const stats = { writes: 0, writeErrors: 0, corruptEntries: 0, loads: 0, evicted: 0, quotaShrinks: 0 }
   /** 已尝试从盘上加载过的键（避免同一 key 反复读盘） */
   const probed = new Set<string>()
   /** 待落盘的条目（key → entry；同 key 合并） */
   const pending = new Map<string, FetchCacheEntry>()
-  /** 已写入的磁盘键集合（用于索引维护与 clear） */
-  const diskKeys = new Set<string>()
+  /**
+   * ★#1152：盘上条目的元数据（存储键 → 基站键 / 字节 / 最近使用）。
+   * 淘汰要按**字节**与**LRU**，而这两样无法从后端"问"出来（KV 拿不到大小、文件不愿读全量）
+   * ⇒ 由 manifest 承载，随每次 flush 一起写。
+   */
+  const diskMeta = new Map<string, { key: string; bytes: number; lastUsed: number }>()
+  /** manifest 是否已从盘上载入（懒加载：首次 flush 时读一次） */
+  let manifestLoaded = false
   let flushTimer: { clear?: () => void } | undefined
   let flushing: Promise<void> | null = null
+
+  /** 当前持久层总字节（按 manifest 记账） */
+  function persistBytes(): number {
+    let n = 0
+    for (const m of diskMeta.values()) n += m.bytes
+    return n
+  }
+
+  /** 懒加载 manifest（#1151 的旧格式 `{keys:[...]}` 也认，见 `DiskManifestV2` 注释）。 */
+  async function ensureManifest(): Promise<void> {
+    if (manifestLoaded) return
+    manifestLoaded = true
+    try {
+      const raw = await backend.read(INDEX_FILE)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Partial<DiskManifestV2> & { keys?: string[] }
+      if (parsed && parsed.v === 2 && parsed.entries && typeof parsed.entries === 'object') {
+        for (const [sk, m] of Object.entries(parsed.entries)) {
+          if (!m || typeof m !== 'object') continue
+          diskMeta.set(sk, {
+            key: typeof m.key === 'string' ? m.key : '',
+            bytes: Number.isFinite(m.bytes) ? Math.max(0, m.bytes) : 0,
+            lastUsed: Number.isFinite(m.lastUsed) ? m.lastUsed : 0,
+          })
+        }
+      } else if (parsed && Array.isArray(parsed.keys)) {
+        // ★#1151 旧格式：只知道键名 ⇒ bytes/lastUsed 记 0（淘汰时会最先被清，行为安全）
+        for (const sk of parsed.keys) {
+          if (typeof sk === 'string') diskMeta.set(sk, { key: '', bytes: 0, lastUsed: 0 })
+        }
+      }
+    } catch {
+      // manifest 损坏 ⇒ 当作空（后端读条目时仍会逐条校验可解析性，不会误用坏数据）
+    }
+  }
+
+  /** 写 manifest（一次小 IO，随 flush 一起做）。 */
+  async function writeManifest(): Promise<void> {
+    const entries: DiskManifestV2['entries'] = {}
+    for (const [sk, m] of diskMeta) entries[sk] = m
+    const ok = await backend.write(INDEX_FILE, JSON.stringify({ v: 2, entries }))
+    if (!ok) stats.writeErrors++
+  }
+
+  /**
+   * ★#1152：按字节/条目预算淘汰（LRU）。
+   * @param targetBytes 目标字节（默认预算；配额收缩时传更小的值）
+   * @param protect 不淘汰的键（正在写的这条不许被自己挤掉）
+   */
+  async function evictTo(targetBytes: number, protect?: Set<string>): Promise<number> {
+    let evicted = 0
+    for (;;) {
+      const overBytes = persistBytes() > targetBytes
+      const overCount = diskMeta.size > maxPersistEntries
+      if (!overBytes && !overCount) break
+      // 找最久未用的一条（跳过受保护项）
+      let victimKey: string | null = null
+      let victimAt = Number.POSITIVE_INFINITY
+      for (const [sk, m] of diskMeta) {
+        if (protect && protect.has(sk)) continue
+        if (m.lastUsed < victimAt) {
+          victimAt = m.lastUsed
+          victimKey = sk
+        }
+      }
+      // ★只剩受保护项时停手（否则"写一条超大响应"会把自己淘汰掉，等于永远存不进去）
+      if (!victimKey) break
+      diskMeta.delete(victimKey)
+      await backend.remove(victimKey)
+      stats.evicted++
+      evicted++
+    }
+    return evicted
+  }
 
   /** 读盘并回填内存（只在内存未命中时调用）。 */
   async function loadFromDisk(cacheKey: string, requestHeaders: Record<string, string> | undefined): Promise<FetchCacheEntry | undefined> {
@@ -323,7 +450,11 @@ export function createPersistentFetchCache(opts: {
       }
     }
     stats.loads++
-    // 回填内存（put 会再触发一次落盘 —— ★这是浪费，用 silent 标记避开）
+    // ★#1152：读盘要有"使用记账"——否则淘汰的 LRU 永远是"谁先写"而不是"谁最近用"
+    const sk = storageKey
+    const prev = diskMeta.get(sk)
+    diskMeta.set(sk, { key: cacheKey, bytes: prev?.bytes ?? entryBytesOf(entry), lastUsed: now() })
+    // 回填内存（直接写内存层，**不走 store.put** —— 那会再触发一次落盘，纯属浪费）
     memory.put(entry)
     // ★Vary 校验交给上层内存匹配（内存里已按 entry.varyValues 存了同一份）
     void requestHeaders
@@ -349,21 +480,46 @@ export function createPersistentFetchCache(opts: {
     if (flushing) return flushing
     const batch = [...pending.entries()]
     pending.clear()
+    if (batch.length === 0) return
     flushing = (async () => {
-      for (const [storageKey, entry] of batch) {
-        const payload: StoredEntry = { v: 1, entry, cacheKey: entry.key }
-        const wrote = await backend.write(storageKey, JSON.stringify(payload))
-        if (wrote) {
-          stats.writes++
-          diskKeys.add(storageKey)
-        } else {
-          stats.writeErrors++
+      await ensureManifest()
+      /** 写一批；返回失败的那些（★不吞掉，配额收缩后要重试） */
+      const writeBatch = async (items: Array<[string, FetchCacheEntry]>): Promise<Array<[string, FetchCacheEntry]>> => {
+        const failed: Array<[string, FetchCacheEntry]> = []
+        for (const [storageKey, entry] of items) {
+          const payload: StoredEntry = { v: 1, entry, cacheKey: entry.key }
+          const ok = await backend.write(storageKey, JSON.stringify(payload))
+          if (ok) {
+            stats.writes++
+            diskMeta.set(storageKey, { key: entry.key, bytes: entryBytesOf(entry), lastUsed: now() })
+          } else {
+            failed.push([storageKey, entry])
+          }
         }
+        return failed
       }
-      // 索引（文件后端靠它列键；KV 后端也有用——避免 `keys()` 扫到非缓存键）
-      if (batch.length > 0) {
-        await backend.write(INDEX_FILE, JSON.stringify({ keys: [...diskKeys] }))
+
+      let failed = await writeBatch(batch)
+      /**
+       * ★★★#1152 **配额收缩**：写失败最常见的原因是"平台配额满"（Web QuotaExceededError / MP 超 10MB）。
+       *   此时若只是记一笔 `writeErrors` 就结束，缓存会**永久停在写不进的状态**（业务侧表现为
+       *   "缓存时好时坏"，且配额还被旧条目占着）。⇒ **主动淘汰 25% 再重试一次**。
+       *   ★只收缩一次（有界重试）：一次失败就再失败 ⇒ 那是别的原因（权限/路径），不该无限重试。
+       */
+      if (failed.length > 0) {
+        stats.quotaShrinks++
+        const shrinkTarget = Math.floor(persistBytes() * 0.75)
+        await evictTo(shrinkTarget)
+        failed = await writeBatch(failed)
+        for (let i = 0; i < failed.length; i++) stats.writeErrors++
       }
+
+      // ★按预算淘汰（字节 + 条目数二者取先到；受保护集 = 本次刚写入的，
+      //   防"写一条大响应把自己挤掉"⇒ 那样永远存不进去）
+      const protect = new Set(batch.map(([sk]) => sk))
+      await evictTo(maxPersistBytes, protect)
+
+      await writeManifest()
     })().finally(() => {
       flushing = null
     })
@@ -373,29 +529,42 @@ export function createPersistentFetchCache(opts: {
   return {
     match(cacheKey, requestHeaders, at) {
       const hit = memory.match(cacheKey, requestHeaders, at)
-      if (hit) return hit
+      if (hit) {
+        /**
+         * ★★★#1152：**内存命中也要刷新持久层的 LRU 记账**。
+         *   【真机/判据实测抓出】首版只在"读盘"时更新 `diskMeta.lastUsed` ⇒ 内存命中（最常见路径）
+         *   完全不记账 ⇒ 持久层的 LRU 实际退化成"谁最后写"⇒ **最近刚被业务用过的条目反而先被淘汰**。
+         *   这正是淘汰策略最容易做错的地方：热层命中不代表冷层可以忘记它。
+         */
+        const sk = entryStorageKey(cacheKey)
+        const prev = diskMeta.get(sk)
+        if (prev) diskMeta.set(sk, { key: prev.key, bytes: prev.bytes, lastUsed: at })
+        return hit
+      }
       // 内存未命中 ⇒ 读盘（异步）。★返回 Promise 只在真的需要读盘时出现
       return loadFromDisk(cacheKey, requestHeaders)
     },
     put(entry) {
       memory.put(entry)
       // ★落盘用**存储键**（hash），不是基站键
-      pending.set(entryStorageKey(entry.key), entry)
+      const storageKey = entryStorageKey(entry.key)
+      // ★#1152：内存若将来淘汰这条，仍应允许**回读盘上这份**（否则"写过又读不到"）
+      probed.delete(entry.key)
+      pending.set(storageKey, entry)
       scheduleFlush()
     },
     remove(cacheKey, entry) {
       memory.remove(cacheKey, entry)
       const storageKey = entryStorageKey(cacheKey)
       pending.delete(storageKey)
-      void backend.remove(storageKey).then(() => {
-        diskKeys.delete(storageKey)
-      })
+      diskMeta.delete(storageKey)
+      void backend.remove(storageKey)
     },
     clear() {
       memory.clear()
       pending.clear()
       probed.clear()
-      diskKeys.clear()
+      diskMeta.clear()
       // ★用 backend.clearAll()（端无关、不依赖索引/readdir）：文件后端删单文件、KV 删前缀键。
       //   ★首版用"索引里列出的键"逐个删 ⇒ 索引为空时**什么也清不掉**（真机假绿的根因之一）。
       void backend.clearAll()
@@ -409,10 +578,13 @@ export function createPersistentFetchCache(opts: {
       if (flushing) await flushing
     },
     persistStats() {
-      return { ...stats }
+      return { ...stats, persistBytes: persistBytes(), persistEntries: diskMeta.size }
     },
     backendKind() {
       return backend.kind
+    },
+    persistBudget() {
+      return maxPersistBytes
     },
   }
 }

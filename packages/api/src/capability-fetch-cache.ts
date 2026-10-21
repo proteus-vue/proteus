@@ -175,7 +175,13 @@ export interface FetchCacheOptions {
 export interface FetchCachePersistOptions {
   /** 文件后端的目录（App 端；沙箱相对路径，默认 `cache/http`） */
   dir?: string
-  /** 持久层条目上限（★Web ~5MB / MP 10MB 有平台配额，必须主动限） */
+  /**
+   * ★★★#1152 持久层**字节预算**（超过即按 LRU 淘汰）。
+   * ★缺省按后端类型给（KV 2 MiB / 文件 8 MiB）—— 因为 Web/MP 的配额是**与业务共享**的，
+   *   缓存不能把 10MB 全占了（否则业务自己的 setStorage 会失败）。
+   */
+  maxPersistBytes?: number
+  /** ★#1152 持久层**条目上限**（与字节预算二者取先到） */
   maxPersistEntries?: number
   /** 同 key 连续写的合并窗口（ms，默认 120） */
   flushDelayMs?: number
@@ -770,7 +776,10 @@ function resolveStore(opts: FetchCacheOptions, now: () => number): FetchCacheSto
     backend: choice.backend,
     ...memOpts,
     ...(persistOpts.flushDelayMs !== undefined ? { flushDelayMs: persistOpts.flushDelayMs } : {}),
-    ...(persistOpts.maxPersistEntries !== undefined ? { maxEntries: persistOpts.maxPersistEntries } : {}),
+    // ★★#1152 修正 #1151 的一处接线错误：`maxPersistEntries` 此前被接成了**内存**的 `maxEntries`
+    //   ⇒ 持久层实际**没有任何条目上限**（磁盘无界增长）。现在按字面语义接到持久层。
+    ...(persistOpts.maxPersistEntries !== undefined ? { maxPersistEntries: persistOpts.maxPersistEntries } : {}),
+    ...(persistOpts.maxPersistBytes !== undefined ? { maxPersistBytes: persistOpts.maxPersistBytes } : {}),
   })
 }
 

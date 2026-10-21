@@ -287,6 +287,20 @@ for (const { id, dir } of PERSIST_ENDS) {
   if (W.write_persisted_ok !== true) {
     problems.push(`${id}: 写盘未成功（stats=${JSON.stringify(W.persist_stats || {})}）`)
   }
+  // ★★★#1152：淘汰必须真的生效（否则持久层无限增长 ⇒ Web/MP 平台配额写满后缓存静默失效，
+  //   且会**挤占业务自己的存储**——配额是共享的）。
+  const ev = W.evict_stats || {}
+  if (W.evict_ok !== true) {
+    problems.push(
+      `${id}: 持久层**没有任何淘汰**（evicted=${ev.evicted}）——` +
+        `磁盘会无限增长；平台配额（Web ~5MB / MP 10MB）写满后缓存静默失效且挤占业务存储`,
+    )
+  }
+  if (W.budget_respected_ok !== true) {
+    problems.push(
+      `${id}: 持久层字节超出预算（${ev.persistBytes}B > ${W.persist_budget}B）——预算没生效`,
+    )
+  }
   // ② 重启后命中，且**来自盘上**
   if (R.phase !== 'read') problems.push(`${id}: read 阶段报告 phase=${R.phase}（应为 read）`)
   if (R.read_hit_ok !== true) problems.push(`${id}: 重启后**未命中**（cache=${JSON.stringify(R.read_cache || {})}）`)

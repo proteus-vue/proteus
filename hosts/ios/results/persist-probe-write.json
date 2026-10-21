@@ -1,5 +1,5 @@
 {
-  "apply_ops_host_ms" : 0.0020265579223632812,
+  "apply_ops_host_ms" : 0.00095367431640625,
   "capture_probe" : "{\"channel\":true,\"raw\":\"{\\\"data\\\":{\\\"pipSupported\\\":false,\\\"recording\\\":false,\\\"recordingSupported\\\":true,\\\"userCaptureSupported\\\":true},\\\"ok\\\":true}\",\"recording\":\"off\",\"pip\":\"unsupported\",\"done\":true}",
   "cross_check_ok" : true,
   "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
@@ -29,7 +29,7 @@
     "total_ms" : -1
   },
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"destroy_calls\":0,\"live_screens\":1,\"mount_calls\":1,\"anim_hook_missing\":0,\"anim_calls\":0,\"rect_calls\":0,\"shared_calls\":0,\"content_node_total\":73,\"anim_completed\":0,\"visible_calls\":1,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"screens\":[{\"visible\":true,\"rootNodeId\":100,\"screenId\":\"index#1\"}]},\"ok\":true}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"anim_completed\":0,\"live_screens\":1,\"mount_calls\":1,\"anim_hook_missing\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"anim_calls\":0,\"content_node_total\":73,\"rect_calls\":0,\"shared_calls\":0,\"destroy_calls\":0,\"visible_calls\":1,\"screens\":[{\"visible\":true,\"screenId\":\"index#1\",\"rootNodeId\":100}]}}",
   "interaction_probe" : "{\"press_styles\":3,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "isect_after" : "[]",
   "isect_after_hits" : "0",
@@ -40,17 +40,24 @@
   "isect_register" : "{\"ok\":true}",
   "isect_retick" : "0",
   "jsTasks" : {
-    "avgMs" : 8.2857142857142865,
+    "avgMs" : 9.5625,
     "enabled" : true,
-    "long" : 0,
-    "maxMs" : 43,
+    "long" : 2,
+    "maxMs" : 65,
     "recent" : [
-
+      {
+        "label" : "eval:__proteusSuperappRender",
+        "ms" : 65
+      },
+      {
+        "label" : "eval:__proteusHostAppPersistProbe",
+        "ms" : 51
+      }
     ],
-    "recentCount" : 0,
-    "recentP95Ms" : 0,
+    "recentCount" : 2,
+    "recentP95Ms" : 65,
     "thresholdMs" : 50,
-    "total" : 14
+    "total" : 16
   },
   "kernel_rect" : {
     "baseline" : 13.330078125,
@@ -63,15 +70,15 @@
     "x" : 330,
     "y" : 239
   },
-  "mount_anim_ms" : 0.059008598327636719,
-  "mount_emit_ms" : 12.240052223205566,
-  "mount_flat_ms" : 0.50103664398193359,
+  "mount_anim_ms" : 0.11897087097167969,
+  "mount_emit_ms" : 15.498995780944824,
+  "mount_flat_ms" : 0.50294399261474609,
   "mount_glass_ms" : 0,
   "mount_history" : [
     {
-      "anim_ms" : 0.059008598327636719,
-      "emit_ms" : 12.240052223205566,
-      "flat_ms" : 0.50103664398193359,
+      "anim_ms" : 0.11897087097167969,
+      "emit_ms" : 15.498995780944824,
+      "flat_ms" : 0.50294399261474609,
       "glass_blur_build_ms" : -1,
       "glass_blur_ms" : -1,
       "glass_blur_radius_px" : -1,
@@ -85,35 +92,35 @@
       "glass_px_per_pt" : -1,
       "glass_raster_ms" : -1,
       "glass_total_ms" : -1,
-      "host_ms" : 29.752016067504883,
-      "layers_ms" : 11.587977409362793,
-      "layout_ms" : 0.27501583099365234,
-      "measure_ms" : 8.5840225219726562,
-      "pin_ms" : 0.018000602722167969,
-      "post_ms" : 0.15103816986083984,
-      "rects_ms" : 0.14197826385498047,
+      "host_ms" : 55.806994438171387,
+      "layers_ms" : 14.608025550842285,
+      "layout_ms" : 0.25010108947753906,
+      "measure_ms" : 31.15999698638916,
+      "pin_ms" : 0.030040740966796875,
+      "post_ms" : 0.38802623748779297,
+      "rects_ms" : 0.13601779937744141,
       "sample_ms" : -1,
-      "scroll_ms" : 0.0050067901611328125,
-      "svg_ms" : 0.074028968811035156,
-      "wrap_ms" : 6.3210725784301758
+      "scroll_ms" : 0.0059604644775390625,
+      "svg_ms" : 0.23901462554931641,
+      "wrap_ms" : 6.1479806900024414
     }
   ],
-  "mount_host_ms" : 29.769062995910645,
-  "mount_layers_ms" : 11.587977409362793,
-  "mount_layout_ms" : 0.27501583099365234,
-  "mount_measure_ms" : 8.5840225219726562,
-  "mount_pin_ms" : 0.018000602722167969,
-  "mount_post_ms" : 0.15103816986083984,
-  "mount_rects_ms" : 0.14197826385498047,
+  "mount_host_ms" : 55.823922157287598,
+  "mount_layers_ms" : 14.608025550842285,
+  "mount_layout_ms" : 0.25010108947753906,
+  "mount_measure_ms" : 31.15999698638916,
+  "mount_pin_ms" : 0.030040740966796875,
+  "mount_post_ms" : 0.38802623748779297,
+  "mount_rects_ms" : 0.13601779937744141,
   "mount_sample_ms" : -1,
-  "mount_scroll_ms" : 0.0050067901611328125,
-  "mount_svg_ms" : 0.074028968811035156,
-  "mount_wrap_ms" : 6.3210725784301758,
+  "mount_scroll_ms" : 0.0059604644775390625,
+  "mount_svg_ms" : 0.23901462554931641,
+  "mount_wrap_ms" : 6.1479806900024414,
   "ok" : true,
   "persist_base" : "http:\/\/192.168.1.124:8805",
   "persist_ok" : true,
-  "persist_probe" : "{\"base\":\"http:\/\/192.168.1.124:8805\",\"phase\":\"write\",\"cleared_keys\":2,\"cleared_after\":0,\"backend_reason\":\"file:app-host\",\"backend_kind\":\"file\",\"degraded\":false,\"write_ok\":true,\"write_status\":200,\"write_gen\":1,\"write_cache\":{\"status\":\"miss\",\"stored\":true,\"mode\":\"default\"},\"persist_stats\":{\"writes\":1,\"writeErrors\":0,\"corruptEntries\":0,\"loads\":0},\"write_persisted_ok\":true,\"ok\":true}",
-  "persist_probe_rounds" : 1,
+  "persist_probe" : "{\"base\":\"http:\/\/192.168.1.124:8805\",\"phase\":\"write\",\"cleared_keys\":2,\"cleared_after\":0,\"backend_reason\":\"file:app-host\",\"backend_kind\":\"file\",\"degraded\":false,\"write_ok\":true,\"write_status\":200,\"write_gen\":1,\"write_cache\":{\"status\":\"miss\",\"stored\":true,\"mode\":\"default\"},\"persist_stats\":{\"writes\":1,\"writeErrors\":0,\"corruptEntries\":0,\"loads\":0,\"evicted\":0,\"quotaShrinks\":0,\"persistBytes\":54,\"persistEntries\":1},\"write_persisted_ok\":true,\"persist_budget\":6000,\"evict_stats\":{\"writes\":12,\"writeErrors\":0,\"corruptEntries\":0,\"loads\":0,\"evicted\":10,\"quotaShrinks\":0,\"persistBytes\":4948,\"persistEntries\":2},\"evict_ok\":true,\"budget_respected_ok\":true,\"ok\":true}",
+  "persist_probe_rounds" : 3,
   "pump" : {
     "anim_start_calls" : 0,
     "anim_started_total" : 0,
@@ -126,7 +133,7 @@
     "running" : false
   },
   "rendered_page" : "index",
-  "run_ts" : 1792556315.813091,
+  "run_ts" : 1792563327.089232,
   "scroll_probe" : {
     "after_drag_down_100k" : 9,
     "after_drag_left_100k_x" : 0,

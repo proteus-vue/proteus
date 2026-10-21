@@ -235,12 +235,15 @@ const server = http.createServer((req, res) => {
      */
     case '/persist': {
       stats.generated[path] = gen
+      // ★#1152：`?pad=N` 让响应体按需变大——淘汰判据需要一个**能撑满预算**的体
+      //   （默认几十字节的体写十几次也超不过 6 KB ⇒ 真机测不到淘汰）。
+      const pad = Number(u.searchParams.get('pad') ?? 0)
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'max-age=600',
-        ETag: '"persist-v1"',
+        ETag: `"persist-v1-${pad}"`,
       })
-      res.end(bodyFor(path, gen))
+      res.end(bodyFor(path, gen, pad > 0 ? { pad: 'p'.repeat(Math.min(pad, 20000)) } : {}))
       return
     }
     /**

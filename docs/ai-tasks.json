@@ -2464,6 +2464,31 @@
         "T-fetch-stale-rfc5861"
       ],
       "note": "【done · 决策 #1151】消费 #1150 登记的「L2 磁盘层未做」：cache:{persist:true} ⇒ 缓存跨**进程重启**仍可用。★动手前取证三端形态不同（Web localStorage 同步 KV / MP wx.setStorage / App **没有 getStorage**，只有异步 fs）⇒ FetchCacheStore.match 契约改为可返回 Promise（按最弱的端定）；否则 App 只能伪造同步阻塞或干脆不支持——等于把最需要它的端排除在外。★架构：内存是权威热层（命中零 IO，未命中才读盘并回填；不搞启动全量载入）、写盘 fire-and-forget（失败只影响下次启动能否命中，但必须记 writeErrors）、读失败/损坏当未命中并记 corruptEntries、同 key 写入合并、JSON 往返后还原 Uint8Array、clear() 必须真清盘。★真机抓出的**判据假绿**（本轮最值钱）：首次 iOS 读到 ageMs=126522，我当场把毫秒当秒误读成\"35 小时\"，顺着查发现真问题——清盘实现是\"删索引里列出的键\"，而沙箱里留着上一版（每条一文件时期）的残留 e-7727e13c 且索引为空 ⇒ 清盘什么也没清掉 ⇒ 残留落在窗口内就会假通过。修法：文件后端改**单文件存整份**（清盘=删一个固定文件名；宿主无 readdir 且 Android File.delete() 删不掉非空目录 ⇒ 按索引逐条清不可靠）+ backend 新增端无关 clearAll() + 探针在 write 阶段前清盘 + 判据加\"命中的必须是本次写入\"（ageMs<5min；用绝对上限而非期望年龄±容差，因 Android 报告无 run_ts 会退化成 NaN 假红）。★判据：persist 17/17（\"重启\"必须是**新建 store 实例 + 复用同一 backend**，并断言新实例内存为空）+ runtime 12/12（按端探测/降级/清盘边界）；破坏性验证 6 条各自独立命中（不读盘⇒2 红/不还原字节⇒2 红/不记 writeErrors⇒2 红/清盘靠索引⇒2 红/删 runner hits 断言⇒门禁红）。★真机双端各 13/13（phase=write → 进程真死 → phase=read ⇒ 命中 + loads>0 + **服务端 hits 不增** + gen 一致 + ageMs 在本次量级）；check:cache-evidence 扩到 6 份证据，并新增\"判据的判据\"：要求 runner 里确实存在 hitsRead === hitsWrite（防为变绿而删断言）。★诚实边界：单进程模型（不做多进程并发写协调）；文件后端写一条要重写整份（O(N)）；不加密；索引损坏整层重建；flush() 不保证强杀时执行。"
+    },
+    {
+      "id": "T-fetch-cache-persist-evict",
+      "title": "#1152 持久层容量治理：字节预算 + LRU 淘汰 + 配额收缩（修 #1151 的\"只有 JSDoc 没有实现\"）",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-fetch-cache-persist.ts",
+        "packages/api/src/capability-fetch-cache.ts",
+        "tests/fetch-cache-persist-evict.test.ts",
+        "hosts/shared/bridge/entry-superapp-probes-persist.ts",
+        "hosts/android/tools/cache-echo-server.mjs",
+        "hosts/android/run-persist-probe.sh",
+        "hosts/ios/run-persist-probe.sh",
+        "scripts/check-cache-evidence.mjs",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": 1152,
+      "verification": "npx vitest run tests/fetch-cache-persist-evict.test.ts tests/fetch-cache-persist.test.ts && node scripts/check-cache-evidence.mjs && bash hosts/android/run-persist-probe.sh && bash hosts/ios/run-persist-probe.sh",
+      "branch": null,
+      "related": [
+        "T-fetch-cache-persist-l2"
+      ],
+      "note": "【done · 决策 #1152】消费 #1151「下一步②」：持久层此前**没有任何淘汰**（maxPersistEntries 只写在 JSDoc、代码从未使用，且被错误接到内存 maxEntries）⇒ 磁盘无界增长；而 Web ~5MB / MP 10MB 是**与业务共享**的平台配额，写满后缓存静默失效且挤占业务存储。★落地：按**字节**做 LRU（缺省 KV 2 MiB / 文件 8 MiB；按条数不够——一条 2MB 顶掉 200 条小条目）+ manifest v2 承载字节/年龄（KV 拿不到单键大小）+ 配额写失败主动淘汰 25% 再重试一次（有界）+ 受保护集防\"大条目自杀\"+ 条目上限与字节预算取先到 + 向后兼容 #1151 的旧 manifest。★判据抓出真缺陷：首版只在读盘时更新 lastUsed，而**内存命中（最常见路径）不记账** ⇒ LRU 退化成\"谁最后写\" ⇒ 最近用过的条目反而先被淘汰（现场 a 被淘汰、b 留下，正好反了）⇒ 内存命中也要刷新持久层 LRU。★判据 7/7 + 破坏性验证 5 条各自独立命中（不按预算淘汰⇒3 红 / 不刷 LRU⇒1 红 / 去保护集⇒1 红 / 收缩失效⇒1 红 / 改坏证据⇒门禁红）。★真机双端各 15/15（新增淘汰两条：evicted=10、persistBytes=4948≤6000）。★判据自己错两处：预算 4000 而 5×800B 正好不超⇒不触发淘汰（改 2500）；淘汰阶段与主判据共用缓存⇒把主条目挤掉导致四条主判据假红（改独立 store + 独立目录——\"淘汰本来就会删数据\"，不能和\"跨进程命中\"共用一份）。★诚实边界：字节按估算（非精确序列化值）；quotaShrinks 只收缩一次；manifest 与条目非原子事务（读时按缺失当未命中）；仍是单进程模型。"
     }
   ]
 }

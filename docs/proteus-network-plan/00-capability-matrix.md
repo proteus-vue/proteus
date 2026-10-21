@@ -126,6 +126,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 |---|---|---|
 | `If-None-Match` / `If-Modified-Since` 条件请求 | ✅ **已做（#1149）**：框架层存 `(method+url+params+responseType → etag/lastModified)`，命中则加条件头；304 ⇒ 用缓存体合成 200（RFC 9111 §4.3.4） | 内存 LRU（默认 5 MiB）+ ★**L2 持久层（#1151）** |
 | **L2 持久层**（跨进程复用） | ✅ **已做（#1151）**：`cache: { persist: true }` ⇒ **Web/MP 走 KV**（`localStorage` / `wx.setStorage`）、**App 走文件**（`fs.readBytes/writeBytes`——App **没有** `getStorage`）。★内存仍是权威热层（内存命中零 IO，未命中才读盘并回填）；写盘 fire-and-forget（失败不影响本次请求，只记 `writeErrors`）；损坏条目当未命中 + 记 `corruptEntries` | `04-cache-layers.md` 的 L2 |
+| **持久层容量治理**（字节预算 + LRU + 配额收缩） | ✅ **已做（#1152）**：按**字节**做 LRU 淘汰（缺省 KV 2 MiB / 文件 8 MiB；★按条数不够——一条 2MB 响应顶掉 200 条小条目），字节与年龄记在 **manifest**（KV 拿不到单键大小）；**内存命中也会刷新持久层 LRU**（否则淘汰退化成"谁最后写"）；配额写失败 ⇒ **主动淘汰 25% 再重试一次**（有界）；单条超预算**不自杀**（受保护集） | 同上 |
 | `Cache-Control` 尊重（max-age / no-store / no-cache / must-revalidate） | ✅ **已做（#1149）**：`parseCacheControl` + `freshnessLifetimeMs`（含 `Expires`/`Age`），不新鲜则条件回源 | 同上 |
 | `Vary` 分桶 | ✅ **已做（#1149）**：按 Vary 头名 + 取值分变体；`Vary: *` 拒绝缓存 | 同上 |
 | `stale-while-revalidate` / `stale-if-error`（RFC 5861） | ✅ **已做（#1150）**：SWR = 变 stale 后 N 秒内**立即回旧值** + 后台条件校验（按条目去重，防 amplification）；SIE = 回源遇网络失败 / 500·502·503·504 时用旧值兜底。★`must-revalidate` **优先**（RFC 5861 未规定此交互，取 RFC 9111 的更严格者）；★缓存生成的响应必带 `Age`（RFC 9111 §5.1 MUST） | 同上 |
@@ -169,7 +170,9 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 2. ~~没有做 HTTP 缓存~~ ⇒ ★**已收口（#1149，框架层内存缓存）**：`config.cache` 六模式 +
    `Cache-Control` / `ETag` / `Last-Modified` / 304 合成 / `Vary` 分桶 / LRU 预算。
    **剩余真差异**：~~L2 **磁盘层**未做（重启即失效）~~ ⇒ ✅ **已收口（#1151）**：
-   `cache:{persist:true}` 跨进程命中（Web/MP=KV、App=文件，真机双端各 13/13）。~~RFC 5861 未做~~ ⇒ ✅ **#1150**。
+   `cache:{persist:true}` 跨进程命中（Web/MP=KV、App=文件，真机双端各 13/13）。
+   ~~持久层无淘汰~~ ⇒ ✅ **已收口（#1152）**：字节预算 + LRU + 配额收缩（真机双端各 15/15）。
+   ~~RFC 5861 未做~~ ⇒ ✅ **#1150**。
    **仍存的边界**：持久层是**单进程**模型（不做多进程并发写协调）；文件后端写一条要重写整份（见 #1151 的 O(N) 说明）。
 3. ~~重定向仍不可拦~~ ⇒ ★**已收口（本轮 #1134）**：manual / onRedirect / 限额 / 跨域剥离凭据全落地，Android+iOS 真机验过。**剩一个端差异**：MP 端 `wx.request` 隐式跟随且不可关 ⇒ 如实 `fetch.unsupported`。
 4. 管线的**并发额度是按 `CapabilityHooks` 实例**计的，不跨页面/不全局。多页面场景要全局额度需另建实例共享

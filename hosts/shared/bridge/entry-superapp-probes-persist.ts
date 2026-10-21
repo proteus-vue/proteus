@@ -52,7 +52,19 @@ export function appPersistProbe(base: string, phase: string): string {
       getSharedCapabilityBridge: () => unknown
     }
     const persistMod = (await import('../../../packages/api/src/capability-fetch-cache-persist')) as unknown as {
-      createPersistentFetchCache: (o: unknown) => { flush: () => Promise<void>; persistStats: () => { writes: number; loads: number; writeErrors: number } }
+      createPersistentFetchCache: (o: unknown) => {
+        flush: () => Promise<void>
+        persistStats: () => {
+          writes: number
+          loads: number
+          writeErrors: number
+          evicted: number
+          quotaShrinks: number
+          persistBytes: number
+          persistEntries: number
+        }
+        persistBudget?: () => number
+      }
     }
     const runtimeMod = (await import('../../../packages/api/src/capability-fetch-cache-runtime')) as unknown as {
       choosePersistBackend: (o?: unknown) => { backend?: unknown; degraded: boolean; reason: string }
@@ -98,7 +110,12 @@ export function appPersistProbe(base: string, phase: string): string {
     }
 
     // ★用**显式 backend** 建 store（不去重复探测；探测结果已在上面记录）
-    const store = persistMod.createPersistentFetchCache({ backend: choice.backend, flushDelayMs: 0 })
+    // ★#1152：主判据（跨进程命中）用**默认预算**——小预算留给下面独立的淘汰阶段，
+    //   否则小预算会把主条目自己挤掉（首版就这么假红过：read 阶段 miss）。
+    const store = persistMod.createPersistentFetchCache({
+      backend: choice.backend,
+      flushDelayMs: 0,
+    })
     const hooks = cap.createCapabilityHooks(cap.getSharedCapabilityBridge(), {
       fetch: { cache: { store } },
     }) as Controller
@@ -119,7 +136,58 @@ export function appPersistProbe(base: string, phase: string): string {
       progress('write:flushed', { stats: st })
       out['persist_stats'] = st
       out['write_persisted_ok'] = st.writes > 0 && st.writeErrors === 0
+
+      /**
+       * ★★★#1152：**淘汰阶段**——写多条不同 URL 直到明显超过 6 KB 预算。
+       * 【为什么必须真机做】Node 判据用的是 KV/文件桩；真机上"字节数估算 + manifest 记账 +
+       *   删除真的生效"是另一条链路（App 侧每次写都要重写整份单文件）。
+       * 【判据】`persistBytes ≤ 预算` 且 `evicted > 0` —— 前者证明"不无限增长"，后者证明"淘汰真的发生"。
+       *
+       * ★★★**必须用独立 store + 独立 backend 目录**（首版与主判据共用一个，结果把主条目挤掉了
+       *   ⇒ read 阶段 miss ⇒ 四条主判据连带假红）。
+       *   "淘汰"这件事本来就会删数据：让它和"跨进程命中"共用同一份缓存 =
+       *   两个判据互相破坏（本仓"一条命令内别并行跑两件会写同一产物的事"的同族）。
+       */
+      progress('evict:start')
+      const evictDir = 'cache/probe-http-evict'
+      const evictChoice = runtimeMod.choosePersistBackend({ dir: evictDir })
+      const budget = 6000
+      out['persist_budget'] = budget
+      try {
+        if (!evictChoice.backend) throw new Error(`拿不到介质（${evictChoice.reason}）`)
+        const evictStore = persistMod.createPersistentFetchCache({
+          backend: evictChoice.backend,
+          flushDelayMs: 0,
+          maxPersistBytes: budget,
+        })
+        // ★先清空这块**独立**目录（避免上一轮残留混入；独立目录 = 与主判据隔离）
+        const backend0 = evictChoice.backend as { clearAll?: () => Promise<void> }
+        await backend0.clearAll?.()
+        progress('evict:cleared')
+        const evictHooks = cap.createCapabilityHooks(cap.getSharedCapabilityBridge(), {
+          fetch: { cache: { store: evictStore } },
+        }) as Controller
+        for (let i = 0; i < 12; i++) {
+          // 每个参数不同 ⇒ 不同缓存键；`pad` 让体大到足以撑满预算
+          await evictHooks.useFetch(`${base}/persist?i=${i}&pad=1200`, { responseType: 'json', timeout: 15000 })
+          progress('evict:write', { i })
+        }
+        progress('evict:flushing')
+        await evictStore.flush()
+        const st2 = evictStore.persistStats()
+        progress('evict:done', { stats: st2 })
+        out['evict_stats'] = st2
+        out['evict_ok'] = st2.evicted > 0
+        out['budget_respected_ok'] = st2.persistBytes <= budget
+      } catch (e) {
+        // ★不能让它卡死：淘汰阶段失败要**如实记录**（否则整个探针超时、主判据全空）
+        out['evict_error'] = String((e as Error)?.message ?? e)
+        out['evict_ok'] = false
+        out['budget_respected_ok'] = false
+        progress('evict:error', { error: out['evict_error'] })
+      }
       out['ok'] = out['write_ok'] === true && out['write_persisted_ok'] === true
+        && out['evict_ok'] === true && out['budget_respected_ok'] === true
     } else {
       progress('read:request')
       const r = await hooks.useFetch<{ gen?: number }>(url, { responseType: 'json', timeout: 20000 })

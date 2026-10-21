@@ -105,6 +105,10 @@ add(w.backend_kind === 'file', `★App 端选的是**文件**后端（实得 ${w
 add(w.degraded === false, '持久化介质可用（没有降级成内存）')
 add(w.write_ok === true, `write 阶段请求成功（status=${w.write_status}）`)
 add(w.write_persisted_ok === true, `★★写盘成功（writes=${(w.persist_stats || {}).writes} · errors=${(w.persist_stats || {}).writeErrors}）`)
+// ★★★#1152：**淘汰必须真的生效**（否则持久层无限增长 ⇒ Web/MP 平台配额写满后静默失效）
+const ev = w.evict_stats || {}
+add(w.evict_ok === true, `★★写满后**真的发生淘汰**（evicted=${ev.evicted} · 预算=${w.persist_budget}B · 最终=${ev.persistBytes}B）`)
+add(w.budget_respected_ok === true, `★★持久层字节**受预算约束**（${ev.persistBytes}B ≤ ${w.persist_budget}B）——不无限增长`)
 add(r.read_ok === true, `read 阶段请求成功（status=${r.read_status}）`)
 add(r.read_hit_ok === true, `★★重启后**命中缓存**（实得 ${JSON.stringify(r.read_cache || {})}）`)
 add(r.read_from_disk_ok === true, `★★命中来自**盘上**（loads=${(r.persist_stats || {}).loads} > 0）`)
