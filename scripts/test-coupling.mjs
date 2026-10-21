@@ -111,6 +111,18 @@ const COUPLING = [
     why: '要穿四层白名单（FetchConfig → runFetch → appHttpRequest → splitFramePayload）：漏一层功能静默失效（#1134 redirectManual 漏在第③层，真机才抓到）；缓存语义（#1149）以 Web 标准为基准，三端同一份',
   },
   {
+    // ⑪ ★★★#1154/#1155：TLS pinning 宿主实现 + 传输层事实取证探针
+    //   · Android 若**每次请求新建 `SSLContext`**，`HttpsURLConnection` 的连接池会按
+    //     `SSLSocketFactory` 分桶 ⇒ **连接复用归零**（#1155 明文对照实验抓出来的真回归，无报错）；
+    //   · 探针装置（h2 服务端计量 / 两端 runner）改口径会让**入库证据失真**——
+    //     实测踩过两次：控制端点污染样本（假绿）、h2 下按 `req.socket` 计连接（同连接算 3 条）。
+    match:
+      /TlsPinning\.java$|tls-pinning\.swift$|entry-superapp-probes-(tls|transport)\.ts$|h2-echo-server\.mjs$|run-(tls|transport)-probe\.sh$/,
+    gates: ['pnpm check:cache-evidence'],
+    tests: ['tests/tls-pinning-reuse.test.ts', 'tests/fetch-tls-pins.test.ts', 'tests/host-probe-registry.test.ts', 'tests/transport-probe-accounting.test.ts'],
+    why: 'pinning 的 socketFactory 必须**进程内缓存**（连接池按 factory 分桶；每请求新建 ⇒ 复用归零，性能回归且无任何报错）；探针登记两方同集；证据必须由修正后的计量产出（连接身份 = 对端 socket，样本只算 /__whoami）',
+  },
+  {
     // ⑨ 文档生成器源集合（拆文件后源集合找不到 ⇒ 整段文档消失）
     match: /^packages\/api\/src\//,
     gates: ['pnpm check:content'],

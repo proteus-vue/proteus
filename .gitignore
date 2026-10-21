@@ -160,3 +160,11 @@ __pycache__/
 # ★导航丝滑演示录屏**原片**（9.5MB）——规范同 morpheus-* 系列：交付物是裁切后的正片
 #   hosts/android/results/nav-router-fast-switch.mp4（2.4MB，已在库）；原片留本机复跑用
 hosts/android/results/nav-router-raw.mp4
+
+# ★★真机 TLS / h2 探针的自签证书与私钥（每轮由 openssl 现生成，**不得入库**）
+#   【为什么】`check:secret-scan` 把 `*.key` 判为敏感凭据；且 runner 每轮 `rm -f *.crt *.key` 后重新生成
+#     ⇒ 入库的证书与下一轮私钥**必然不配对**，留着只会误导（真机读数在 transport-probe.json / tls-probe.json）。
+#   ★这是 #1154 的遗留（当时把证书连证据一起提交）——#1155 由 `check:secret-scan` 抓出。
+hosts/*/results/*-certs/*.key
+hosts/*/results/*-certs/*.crt
+hosts/*/results/*-certs/args.json

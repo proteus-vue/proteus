@@ -30,6 +30,9 @@ export { appPersistProbe } from './entry-superapp-probes-persist'
 // ★★★#1153：TLS pinning 探针**单列**（需要自签 HTTPS 服务 + 两套证书，装置形态与前几批不同）
 import { appTlsProbe } from './entry-superapp-probes-tls'
 export { appTlsProbe } from './entry-superapp-probes-tls'
+// ★★★#1155：传输层事实取证探针（HTTP/2 与连接复用**是否已在工作**——决定 P1 要不要引 OkHttp）
+import { appTransportProbe } from './entry-superapp-probes-transport'
+export { appTransportProbe } from './entry-superapp-probes-transport'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -972,5 +975,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppTlsProbe?: (a: string, b: string, pa: string, pb: string) => string
 }).__proteusHostAppTlsProbe = (a: string, b: string, pa: string, pb: string) => appTlsProbe(a, b, pa, pb)
+// ★★★#1155：传输层事实取证探针（结果填 __proteusHostTransportProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppTransportProbe?: (b: string, p: string, r?: number, pb?: string) => string
+}).__proteusHostAppTransportProbe = (b: string, p: string, r?: number, pb?: string) => appTransportProbe(b, p, r, pb)
 
 

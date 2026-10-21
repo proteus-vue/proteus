@@ -107,7 +107,24 @@ public final class TlsPinning {
     }
 
     /**
-     * 造一个带 pinning 的 `SSLSocketFactory`。
+     * ★★★#1155：**按 (pins, pinOnly) 缓存 `SSLSocketFactory`**。
+     *
+     * 【为什么必须缓存（真机实测抓出的性能回归）】
+     *   `HttpsURLConnection` 的连接池**按 `SSLSocketFactory` 实例分桶**。
+     *   #1154 首版每次请求都 `SSLContext.getInstance()` 新建一个 ⇒ **每次请求都是新连接**，
+     *   连接池与 TLS 会话复用**完全失效**。
+     *   ★真机对照实验（`run-transport-probe.sh` 的明文基线）读数：
+     *     · 明文（无 pinning）：5 次请求 / **3** 条 TCP 连接（`plain:c2` 复用了 **4** 次）
+     *     · TLS + pinning（首版）：4 次请求 / **4** 条 TCP 连接（每条只用 1 次，零复用）
+     *   ⇒ 基线能复用、带 pin 不能 ⇒ 责任在 pinning 实现，不在平台。
+     *   ★这也是"同一份源码三端一致"的一部分：Web 的浏览器连接池、iOS 的 `URLSession`
+     *     都会复用连接；若 Android 因 pinning 而退化，"性能"这一维就与其他两端分叉了。
+     */
+    private static final java.util.Map<String, SSLSocketFactory> FACTORY_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 造一个带 pinning 的 `SSLSocketFactory`（**同一配置复用同一实例**）。
      *
      * @param pinsRaw 帧里的指纹串（换行分隔）
      * @param pinOnly true ⇒ 替代系统信任；false ⇒ 叠加
@@ -120,6 +137,17 @@ public final class TlsPinning {
             Log.w(TAG, "tlsPins 为空/无法解析 ⇒ 不做 pinning（保持平台默认信任链）");
             return null;
         }
+        // ★缓存键 = 归一后的指纹串 + pinOnly（同一业务配置 ⇒ 同一 factory ⇒ 连接池可复用）
+        String cacheKey = pinsRaw + "|" + pinOnly;
+        SSLSocketFactory cached = FACTORY_CACHE.get(cacheKey);
+        if (cached != null) return cached;
+        SSLSocketFactory created = buildSocketFactory(pins, pinOnly);
+        if (created != null) FACTORY_CACHE.put(cacheKey, created);
+        return created;
+    }
+
+    /** 真正的构造（只在缓存未命中时调用）。 */
+    private static SSLSocketFactory buildSocketFactory(List<byte[]> pins, boolean pinOnly) {
         try {
             // 叠加模式需要系统默认 TrustManager 做代理；替代模式不需要
             final X509TrustManager system = pinOnly ? null : defaultTrustManager();

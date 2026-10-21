@@ -395,12 +395,12 @@ if ! xcrun devicectl device install app --device "$UDID" "$APP" > "$INSTALL_LOG"
   #   （本轮：`--cache-probe=` 未登记 ⇒ 被当成 UDID ⇒ devicectl 报设备不存在）
   #   **一行都匹配不到** ⇒ 打印"原因（详见下方）"下面是**空的**，真实原因永久不可见。
   #   ⇒ 先列命中的关键行（若命中），**再无条件打印原始输出尾部**。
-  grep -E "maximum number of installed apps|Invalid|error [0-9]+|无法安装|Failed|not found|No device" "$INSTALL_LOG" | head -6 | sed 's/^/    /'
+  # ★★★#1155：本段在 `set -euo pipefail` 下执行，`grep` 无匹配返回 1 ⇒ **管道整体返回 1 ⇒ 脚本静默退出**
+  #   ⇒ 所有"只用于展示"的 grep 必须 `|| true`（`| head` 不掩盖前者的退出码）。
+  grep -E "maximum number of installed apps|Invalid|error [0-9]+|无法安装|Failed|not found|No device" "$INSTALL_LOG" | head -6 | sed 's/^/    /' || true
   echo "    ── devicectl 原始输出（尾部 12 行）──"
   tail -12 "$INSTALL_LOG" | sed 's/^/    /'
-  echo "    ★排查：① 设备标识不合法 ⇒ 某参数被当成 UDID（查 lib/probe-args.sh 的 IOS_PROBES 表）"
-  echo "            ② max 3 apps ⇒ 用 bundle id 卸载旧应用后重跑："
-  echo "      xcrun devicectl device uninstall app --device $UDID <bundle-id>"
+  echo "    ★排查：① 参数被当成 UDID（查 lib/probe-args.sh 的 IOS_PROBES 表）② max 3 apps ⇒ 按 bundle id 卸载旧应用：xcrun devicectl device uninstall app --device $UDID <bundle-id>"
   rm -f "$INSTALL_LOG"
   exit 4
 fi

@@ -11765,3 +11765,89 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① P1 HTTPDNS / HTTP-2 / 连接池（需 Android 引 OkHttp，独立大单，先评估 APK 体积）；
   ② SIE 的逐跳判定（重定向中途失败算不算源站错误）；
   ③ pinning 的**密钥轮换**辅助（当前/备份双 pin 已支持，但缺少"何时可移除旧 pin"的工具）。
+
+1155. **★★★传输层事实取证——「P1 三项都要换栈」被实测推翻一半：连接复用两端本来就在工作（而**我们自己的 pinning 把它弄坏了**），HTTP/2 只是 Android 的端差异 · 决策**（2026-10-21 · 承接 #1154「下一步①」）:
+
+【触发：先问"这个缺口真的存在吗"，而不是"怎么补"】
+  矩阵 P1 写着「HTTP/2 + 连接池：需 Android 引入 OkHttp（APK +Δ，独立大单）」。
+  但 **AOSP 的 `HttpURLConnection` 底层就是 `com.android.okhttp`**（4.4 起）⇒ 这两项
+  **可能早就在工作**，缺的只是"我们看不见它"（没有可观测字段）。
+  ⇒ 为一个**已经工作**的能力把 APK 涨 ~1MB 是纯亏 ⇒ 先取证再谈工程量。
+  ★这是 #1134（重定向）/ #1154（pinning）同一判断的第三次应用：**"需要换栈吗"必须先问**。
+
+【装置（★服务端视角才是事实，客户端自述不算）】
+  `hosts/android/tools/h2-echo-server.mjs`：`http2.createSecureServer({ allowHTTP1: true })` + 可选
+  **明文对照端口**；自签证书（`--san=` 必须含判据**实际访问**的地址，Android 走 `adb reverse`
+  用 127.0.0.1、iOS 走局域网 IP）；`/__pin` 给 SPKI（复用 #1154 的 pinning 才能连自签）。
+  两端 runner：`bash hosts/{android,ios}/run-transport-probe.sh [rounds]`。
+
+【★★结论（真机双端，2026-10-21）】
+  · **连接复用：两端本来就在工作** —— Android `3 请求 / 1 TCP`（明文 `3/1`、TLS `3/1`）；
+    iOS `3 请求 / 1 TCP`。⇒ 矩阵里"连接池参数需换栈"**不成立**，已从 P1 移出。
+  · **HTTP/2：端差异，不是"都没做"** —— iOS `client_protos=["h2","h2","h2"]`、服务端 `{"h2":3}`；
+    Android 全 `["http/1.1",…]`、服务端 `{"http/1.1":3}`（AOSP 默认不开 h2）。
+    ⇒ P1 从"三项都要换栈"缩为 **① HTTP/2 仅 Android ② HTTPDNS 全端**（同一笔栈改动的两个收益，合并立项）。
+  ★**这条改变了工程量口径**：不是"三端一起换栈"，而是"为**一个端的一项能力**付费"，
+    且必须显式写明 iOS 已具备、另两端不受影响。
+
+【★★★本轮的真缺陷：我们自己（#1154）把连接复用弄坏了——且没有任何报错】
+  · **现象**：首跑 Android 5 请求 **5 条** TCP 连接（完全不复用）。pinning 功能本身全绿。
+  · **归因方法（对照实验）**：同一台机器的**明文端口**做基线 ⇒ 明文复用、带 pin 不复用
+    ⇒ 责任在 pinning 实现，而不是"Android 不复用"。
+  · **根因**：`TlsPinning.socketFactory` 每次请求新建 `SSLContext`/`SSLSocketFactory`；
+    而 **`HttpsURLConnection` 的连接池按 `SSLSocketFactory` 实例分桶** ⇒ 每请求一个新桶 ⇒ 池永远空。
+  · **修**：进程内 `ConcurrentHashMap<String, SSLSocketFactory>`（key = `pinsRaw + "|" + pinOnly`），
+    命中即返回；构造只发生在 `buildSocketFactory`。修后 `4 请求 / 1 连接`（`tls:c3` 复用 4 次）。
+  · **为什么必须留判据**：这类回归**功能全绿、零日志**，只有对比"请求数 vs 连接数"才看得见。
+    ⇒ `tests/tls-pinning-reuse.test.ts`（4 条：缓存入口唯一 / 命中即返回 / pinOnly 入 key /
+    只有 buildSocketFactory 里构造）+ 破坏性验证（去掉 early-return ⇒ 1 红）。
+
+【★★判据自己的两次假判（比被测对象更值钱——本仓第 4/5 次同族）】
+  ① **控制端点被算进样本**：判据自己的 `curl /__pin`（Node 走 h2）与 `useFetch /__stats`
+    被计入 `protocols` ⇒ Android 明明全 h1，却因那条 `h2:1` 被判"已协商 h2"（**假绿**）。
+    ⇒ 只有 `/__whoami`（业务形态）是受试样本。
+  ② **连接身份用了 `req.socket`**：Node 的 h2 兼容层**每个流一个 socket 包装** ⇒ 同一条 TCP 连接上
+    3 个流被数成 3 条连接。iOS 实测 `perConnection=c2/c3/c4` 各 1 次，而 `connections` 只计到 2
+    ⇒ "3 > 2" 判成复用 = **巧合**；换一轮（连接计到 3）就会翻成"不复用"。
+    ⇒ 连接身份改 **`remoteAddress:remotePort`**（TCP 四元组一端，同一连接的所有流相同），
+    且 **`reused` 由服务端算**（判据只该一个实现）。
+  ③ 附带：全局 `connection`/`secureConnection` 计数会被**就绪探测**抬高（明文 3 请求实际 1 条连接，
+    全局计成 3 ⇒ **假红**，白查一轮）⇒ 降级为排障信息位，判据只走按通道分账。
+  ★**本地校准才抓到 ②**：起服务 + 单 h2 会话发 3 请求，`connections=1` 但 `perConnection=c1,c2,c3`
+    ——**如果不做这一步，"iOS 复用"这个结论会以错误理由被接受**。
+
+【装置层三处修正（各有一条真机教训）】
+  a) **明文对照端口**：没有基线就无法区分"本端不复用"与"我们的 pinning 破坏了复用"。
+  b) **`adb shell` 传参会掉字符**（base64 的 `+`/`=`/`/`，实测末尾还多出 `)`）⇒ 参数一律 push 文件。
+     #1154 已踩过一次（同类），本轮把它固化成两端 runner 的默认形态。
+  c) **iOS 安装失败原因被静默吞掉**：`grep … | head -6` 在 `set -euo pipefail` 下无匹配返回 1
+     ⇒ **脚本直接退出**（只打印半行提示，原始日志一行都没有）⇒ 所有"只用于展示"的 grep 加 `|| true`。
+     修完立刻暴露真因：`$UDID` 为空——因为 `--transport-probe=` 被当成设备 id，
+     根因是 `IOS_PROBES` 里有一个**字面量 `\n`** 把表项写成了畸形行。
+
+【判据与门禁】
+  · `tests/transport-probe-accounting.test.ts` **4/4**：同一会话 3 流 ⇒ `connections=1` 且 `reused=true` /
+    三次新会话 ⇒ `reused=false` / 只有控制端点 ⇒ 零样本 / 明文与 TLS 分账不混。
+    **破坏性验证**：把连接身份改回 `sid` ⇒ `expected 3 to be 1`，1 红；还原 ⇒ 4/4 绿。
+  · `tests/tls-pinning-reuse.test.ts` **4/4**（见上，独立于计量）。
+  · `scripts/check-cache-evidence.mjs` 扩到 **5 类 10 份证据**，新增第 ③ 条
+    "**证据必须由修正后的计量产出**"：缺 `server_stats.channels.tls` / `connections` 与 `conns` 键数不符 /
+    顶层 `server_requests` 与通道记账不一致 ⇒ **红**（防旧口径的绿色冒充新结论）。
+    破坏性验证：把旧形态证据塞回去 ⇒ 当场红并指名重跑命令。
+  · `docs/contract-index.md` 增两行（factory 缓存 / 探针计量），`scripts/test-coupling.mjs` 增
+    `gates: ['pnpm check:cache-evidence']` + 4 个配套测试（跨端契约条目：改一处必须同步两端装置）。
+
+【诚实边界】
+  ① **`http2_ok` 不写成断言**——Android 未协商是**已取证的结论**，不是"本轮实现坏了"；
+     写成断言 = 判据永久红（判据本身错，本仓反复踩的形态）。它是**读数**，进证据文件供比对。
+  ② **明文基线只作读数**：`HttpURLConnection` 连接池会因空闲超时/请求间隔新建连接，硬断言会间歇假红。
+  ③ 传输读数**尚未接进 `FetchMeta`**（矩阵 §3 末尾要的 `transport:{protocol,dnsMs,connectMs,tlsMs,reused}`
+     仍只是探针形态）⇒ "可观测字段"只完成了一半（**取证**完成、**产品化**未做）。
+  ④ **鸿蒙端未跑**（RCP 栈形态未取证）⇒ 三端里只有两端有读数，文档明确写"两端"。
+  ⑤ h2 服务端是**取证装置**，不进框架运行时（无生产依赖）。
+
+【下一步】
+  ① **HTTPDNS + Android HTTP/2 合并立项**（同一笔栈改动的两个收益；先量 OkHttp 的 APK 增量）；
+  ② 把 `transport` 读数接进 `FetchMeta`（探针已证明可度量，缺的是产品化路径）；
+  ③ 鸿蒙端传输形态取证（补齐第三端读数）；
+  ④ SIE 的逐跳判定；⑤ pinning 密钥轮换辅助。

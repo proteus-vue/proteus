@@ -143,6 +143,17 @@ enum SuperappProbes {
       deadlineSeconds: 180,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1155：**传输层事实取证**（HTTP/2 协商 + 连接复用是否已在工作）。
+    //   ★这一端的答案与 Android **可能不同**（`URLSession` 默认就协商 h2 + 复用连接池），
+    //     而"三端同一份语义"要求我们**知道差异**而不是假设一致。
+    ProbeConfig(
+      argPrefix: "--transport-probe=",
+      kickFormat: "__proteusHostAppTransportProbe(%@)",
+      resultKey: "__proteusHostTransportProbeResult",
+      reportPrefix: "transport",
+      deadlineSeconds: 120,
+      extraReadings: { _ in [:] },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

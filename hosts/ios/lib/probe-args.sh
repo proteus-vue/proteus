@@ -44,6 +44,7 @@ IOS_PROBES=(
   "STALE_PROBE_ARG:stale-probe"         # #1150 RFC 5861（SWR / SIE）
   "PERSIST_PROBE_ARG:persist-probe"     # #1151 缓存持久层（两阶段：write,read）
   "TLS_PROBE_ARG:tls-probe"             # #1153 TLS pinning（自签 HTTPS 双服务）
+  "TRANSPORT_PROBE_ARG:transport-probe" # #1155 传输层事实取证（HTTP/2 + 连接复用）
 )
 
 # 所有探针参数都设置过之后，是否有**任一**非空（决定是否 `--console` 阻塞等报告）

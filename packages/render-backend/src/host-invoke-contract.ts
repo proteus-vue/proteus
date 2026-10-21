@@ -57,6 +57,13 @@ export const HOST_CAPABILITY_METHODS = [
   'http.cancel',
   // ★★#1122 取消通道的可观测面：宿主自报 cancel 命中/未命中（判据用，"取消真的打到宿主"）
   'http.cancelStats',
+  // ★★★#1154 TLS pinning 的可观测面：宿主自报 server-trust challenge 记账
+  //   `{challenges, withPins, accepted, rejected, defaultHandled}`。
+  //   ★为什么必须有它：`URLSession` 会**复用已建立的 TLS 连接** ⇒ 同一 host:port 的连续请求
+  //     只触发一次 challenge ⇒ 没有记账就无法区分"pinning 生效"与"根本没走 challenge"（#1154 首版踩过）。
+  //   ★同族形态（与 #1121 的 `http.cancel` 一字不差）：宿主早已实现、真机验过，但**没登记进契约**
+  //     ⇒ 门禁报「未知方法」，覆盖率数字低报。2026-10-21 由 `check:host-invoke-contract` 抓出并补登。
+  'http.tlsStats',
   // ★★C29/C30 上传/下载的文件腿（#1095）：沙箱二进制读写（宿主拒绝绝对路径与 '..'）
   'fs.writeBytes',
   'fs.readBytes',

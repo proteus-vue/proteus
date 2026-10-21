@@ -2551,6 +2551,43 @@
         "T-fetch-stale-rfc5861"
       ],
       "note": "【done · 决策 #1154】P1 三项里唯一**不需要换栈**的一项（与 #1134 把重定向从 P1 移出同一判断）：Android setSSLSocketFactory+X509TrustManager、iOS URLSession challenge 都能在现有裸 HTTP 栈上做。★钉 SPKI 而非整证书（续期不失效），权威口径 = openssl 的 `x509 -pubkey | pkey -pubin -outform der | sha256`。★三个真机/实测才暴露的坑：① **iOS SecKeyCopyExternalRepresentation 返回裸公钥不是 SPKI** ⇒ 直接哈希是另一个值（raw=Rya1… vs SPKI=sAYZ…），必须自己补 AlgorithmIdentifier+BIT STRING 头；② **URLSession 复用已建立的 TLS 连接** ⇒ 同 host:port 连续请求只触发一次 challenge ⇒ 后 4 条\"无 pin 也成功\"是复用不是失效 ⇒ 判据每条换端口 + 宿主记账 http.tlsStats；③ **SPKI 经 adb shell 传参会掉字符**（+ → 空格、= → key=value、实测末尾多出 `)`）⇒ 改 push 文件；另 probe-args.sh 的 `${arg##*=}` 在值含 `=` 时取到空串 ⇒ 改 `${arg#*=}`。★线格式 Pins=12(str)/PinOnly=13(u8)（都是原始类型 ⇒ 五端各一 case；40 向量逐字节等价）。★错误码分层：pin 未命中 ⇒ fetch.tlsError；系统不信任 ⇒ 仍 fetch.failed（首版把两者都归 tlsError ⇒ \"叠加模式\"归因错；iOS 用按 reqId 记 pin 未命中区分，Android 用 PinMismatchException 沿 cause 链找）。★判据 fetch-tls-pins 9/9 + 破坏性验证（漏写 PinOnly⇒线格式 39/40 红 / 不剥 sha256/ 前缀⇒红）+ 真机 Android 11/11、iOS 10/10 + 证据 8 份（check:cache-evidence，含\"判据的判据\"要求 challenge 记账断言在 runner 里）。★诚实边界：pinOnly 只替代信任锚不替代主机名校验；换密钥轮换必须更新 pin；不做 CT/OCSP；Web/MP 明确 unsupported；装置证书每次重生成且 SAN 必须含实际访问地址。"
+    },
+    {
+      "id": "T-transport-facts-probe",
+      "title": "#1155 传输层事实取证：连接复用两端已具备 / HTTP/2 仅 Android 缺 + 修 pinning 引入的复用回归",
+      "type": "verification",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "hosts/android/tools/h2-echo-server.mjs",
+        "hosts/android/run-transport-probe.sh",
+        "hosts/ios/run-transport-probe.sh",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/TransportProbe.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TlsPinning.java",
+        "hosts/shared/bridge/entry-superapp-probes-transport.ts",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "packages/cli/templates-host/shared/bridge/entry-superapp.ts",
+        "hosts/ios/ProteusHost/shell/superapp-probes.swift",
+        "hosts/ios/ProteusHost/shell/superapp-scene.swift",
+        "hosts/ios/lib/probe-args.sh",
+        "hosts/ios/run-selfdraw.sh",
+        "tests/tls-pinning-reuse.test.ts",
+        "tests/transport-probe-accounting.test.ts",
+        "scripts/check-cache-evidence.mjs",
+        "scripts/test-coupling.mjs",
+        "docs/contract-index.md",
+        "docs/proteus-network-plan/00-capability-matrix.md",
+        "docs/ai-tasks.json",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 1155,
+      "verification": "npx vitest run tests/transport-probe-accounting.test.ts tests/tls-pinning-reuse.test.ts && bash hosts/android/run-transport-probe.sh && bash hosts/ios/run-transport-probe.sh && node scripts/check-cache-evidence.mjs && node scripts/check-contract-index.mjs",
+      "branch": null,
+      "related": [
+        "T-fetch-tls-pinning"
+      ],
+      "note": "【done · 决策 #1155】承接 #1154「下一步①：P1 HTTPDNS/HTTP-2/连接池（需 Android 引 OkHttp）」。★**动手前先问\"这个缺口真的存在吗\"**：矩阵写着 HTTP/2 + 连接池都要换栈，但 AOSP 的 `HttpURLConnection` 底层就是 okhttp ⇒ 可能早就在工作、只是我们看不见。⇒ 造 h2 服务端做服务端视角记账（协议版本 + 请求数 vs TCP 连接数）。★★结论（真机双端）：**连接复用两端都在工作**（Android `3 请求 / 1 TCP`、iOS `3 请求 / 1 TCP`）；**HTTP/2 是端差异**（iOS `h2` 已协商、Android 全 `http/1.1`）⇒ P1 从\"三项都要换栈\"缩到\"**HTTP/2 仅 Android + HTTPDNS 全端**\"。★★★**本轮真缺陷是我们自己引入的**：pinning 首版每次请求新建 `SSLContext` ⇒ `HttpsURLConnection` 连接池按 `SSLSocketFactory` 分桶 ⇒ **TLS 通道复用归零**（明文基线复用、带 pin 不复用 ⇒ 才能把责任归到 pinning）。修法 = 进程内 `ConcurrentHashMap` 缓存 factory（key=`pinsRaw|pinOnly`），修后 `4 请求 / 1 连接`。★**判据本身的两次假判（比被测对象更值钱）**：① 控制端点（`/__pin` 走 Node h2）与 `/__stats` 被算进样本 ⇒ Android 明明全 h1 却判\"已协商 h2\"（假绿）⇒ 只有 `/__whoami` 是样本；② 连接身份用 `req.socket` ⇒ h2 兼容层**每流一个 socket 包装** ⇒ 同一 TCP 连接被数成 3 条（iOS `perConnection=c2/c3/c4` 各 1 次，而 `connections=2` ⇒ \"3>2\" 判成复用 = **巧合**）⇒ 改用 `remoteAddress:remotePort`（同一连接的所有流相同）+ `reused` 由**服务端**算。★装置层三次修正（各有破坏性验证）：明文对照端口（把\"不复用\"归因到 pinning 而非笼统\"本端不复用\"）· `adb shell` 传参掉字符 ⇒ 参数走 push 文件 · iOS 安装失败原因被 `grep|head` 在 `pipefail` 下静默吞掉 ⇒ `|| true`，并顺带修掉 `IOS_PROBES` 里一个字面量 `\\n` 造成的畸形条目（`--transport-probe=` 被当成 UDID）。★判据：`tests/transport-probe-accounting.test.ts` **4/4**（同会话 3 流 ⇒ 1 连接 / 三次新会话 ⇒ reused=false / 控制端点零样本 / 明文与 TLS 分账）+ 破坏性验证（按 socket 对象计 ⇒ `expected 3 to be 1` 红）；`tests/tls-pinning-reuse.test.ts` **4/4**（缓存入口唯一 + 命中即返回 + pinOnly 入 key + 仅 buildSocketFactory 里构造）。★证据门禁扩到 **5 类 10 份**：新增\"证据必须由修正后计量产出\"（缺 `channels` / `connections` 与 `conns` 键数不符 / 顶层与通道记账不一致 ⇒ 红），破坏性验证：把旧形态证据塞回去 ⇒ 当场红。★诚实边界：① `http2_ok` **不写成断言**（Android 未协商是**结论**不是缺陷，写成断言 = 判据永久红）；② 明文基线只作读数（连接池空闲超时会让它波动）；③ 传输读数尚未接进 `FetchMeta`（`transport` 可观测字段仍只是探针形态）；④ 鸿蒙端未跑（其 RCP 栈形态未取证）；⑤ h2 服务端只用于取证，不是框架运行时依赖。"
     }
   ]
 }

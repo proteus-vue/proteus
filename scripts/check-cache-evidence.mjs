@@ -417,9 +417,123 @@ for (const { id, rel, key } of TLS_ENDS) {
   })
 }
 
+/**
+ * ★★★#1155：**传输层事实取证**证据（HTTP/2 协商 + 连接复用）。
+ *
+ * 【这条为什么重要（它决定了一项 P1 工作的必要性）】
+ *   矩阵 P1 写着「HTTP/2 + 连接池：需 Android 引入 OkHttp（APK +Δ）」。
+ *   ⇒ 实测就是为了回答：**为这两项把 APK 涨 1MB 值不值**。
+ *   已取证（KLE-AL00U / API 37）：
+ *     · **连接复用：已工作**（`requests > connections`；明文与 TLS 都复用）——
+ *       而 #1154 的 pinning 首版**破坏了它**（每次请求新建 SSLContext ⇒ 连接池分桶失效），
+ *       本轮修掉（缓存 factory）并有静态判据守着。
+ *     · **HTTP/2：未协商**（设备侧全 `http/1.1`；AOSP 的 `HttpURLConnection` 默认不开 h2）
+ *       ⇒ 这一项**确实**需要换栈（OkHttp + `Protocol.HTTP_2`），属独立大单。
+ *   ⇒ 本段只断言**已取证到的形态**，不把"h2 未协商"判成红（那是**结论**不是缺陷）。
+ */
+const TRANSPORT_ENDS = [
+  { id: 'android', rel: 'hosts/android/results/transport-probe.json', key: 'transport_probe' },
+  { id: 'ios', rel: 'hosts/ios/results/transport-probe.json', key: 'transport_probe' },
+]
+
+const transportRows = []
+for (const { id, rel, key } of TRANSPORT_ENDS) {
+  const abs = path.join(ROOT, rel)
+  if (!fs.existsSync(abs)) {
+    problems.push(`${id}: 缺证据 ${rel}——跑 \`bash hosts/${id}/run-transport-probe.sh\` 生成并提交`)
+    transportRows.push({ id, rel, state: '缺失' })
+    continue
+  }
+  if (!isTracked(rel)) problems.push(`${id}: 证据 ${rel} 存在但未入库——git add -f ${rel}`)
+  let p = null
+  try {
+    p = probeOf(JSON.parse(fs.readFileSync(abs, 'utf-8')), key)
+  } catch (e) {
+    problems.push(`${id}: ${rel} 解析失败：${e.message}`)
+    transportRows.push({ id, rel, state: '解析失败' })
+    continue
+  }
+  if (!p) {
+    problems.push(`${id}: ${rel} 里没有 ${key} 载荷（形态变了？）`)
+    transportRows.push({ id, rel, state: '无载荷' })
+    continue
+  }
+
+  // ① 请求必须真的成功（否则"连接数"是在测连不上）
+  if (p.first_ok !== true) problems.push(`${id}: 传输层探针首轮请求失败（${p.req_error || '?'}）`)
+  // ② ★**连接复用必须成立**（这是 #1154 引入过的性能回归，必须守住）
+  if (p.conn_reused_ok !== true) {
+    problems.push(
+      `${id}: **连接未被复用**（请求 ${p.server_requests} / TCP ${p.server_connections}）——` +
+        `若刚改过 pinning，检查是否每次请求都新建 SSLContext（连接池按 factory 分桶）`,
+    )
+  }
+  /**
+   * ③ ★★★**证据必须由修正后的计量产出**（否则旧口径的绿色会冒充新结论）。
+   *
+   * 【为什么这条必须有（本轮实测两次假判，都是计量而不是被测对象的问题）】
+   *   a) 首版把控制端点（`/__pin` 走 Node h2）算进样本 ⇒ Android 明明全 http/1.1 却判"已协商 h2"（假绿）；
+   *   b) 首版连接身份用 `req.socket` ⇒ h2 兼容层**每流一个 socket 包装** ⇒ 同一条 TCP 连接被数成 3 条
+   *      （iOS 的 `perConnection` 出现 c2/c3/c4 各 1 次，而 `connections` 只计到 2 ⇒ "3 > 2" 判成复用 = 巧合）。
+   *   现口径：按通道分账（`channels.tls` / `channels.plain`）+ 连接身份 = **对端 socket**。
+   *   ⇒ 证据里必须出现 `channels`，且 TLS 通道的 `connections` 要对得上 `conns` 的键数；
+   *     没有这两个字段 ⇒ 该证据是旧装置产出（跑 `bash hosts/{android,ios}/run-transport-probe.sh` 重生成）。
+   */
+  const channels = (p.server_stats || {}).channels
+  const tlsCh = (channels || {}).tls
+  if (!channels || !tlsCh) {
+    problems.push(
+      `${id}: 证据缺少按通道的记账（\`server_stats.channels.tls\`）——**旧装置产出**，` +
+        `判据已修正（连接身份 = 对端 socket、只算 /__whoami）⇒ 必须重跑 \`bash hosts/${id}/run-transport-probe.sh\``,
+    )
+  } else {
+    const connKeys = Object.keys(tlsCh.conns || {}).length
+    if (connKeys !== Number(tlsCh.connections)) {
+      problems.push(
+        `${id}: 记账自相矛盾——\`connections=${tlsCh.connections}\` 但 \`conns\` 有 ${connKeys} 个键` +
+          `（连接身份必须按对端 socket 聚合：h2 下同一连接的所有流共享它）`,
+      )
+    }
+    if (Number(tlsCh.requests) !== Number(p.server_requests)) {
+      problems.push(
+        `${id}: 顶层 \`server_requests\`(${p.server_requests}) 与通道记账(${tlsCh.requests}) 不一致——` +
+          `说明证据来自"跨通道混算"的旧口径`,
+      )
+    }
+  }
+  // ④ 明文基线也必须复用（否则"不复用"是本端/装置问题，不是 pinning）
+  /**
+   * ④ 明文基线 = **端差异读数，不判红**（★注意：与 ③ 的"证据形态"是两件事）。
+   *
+   * 【为什么是读数】（真机首轮 5 请求/3 连接、再跑 3/3 —— 而修正计量后两轮都是 3/1）
+   *   `HttpURLConnection` 的连接池会因"空闲超时 / keep-alive 过期 / 请求间隔"新建连接
+   *   ⇒ 把基线当硬断言会产生**间歇性假红**。真正的判据是 TLS 通道也必须复用（②）：
+   *     pinning 若每次新建 SSLContext，那条会在**同一轮**就红（这正是 #1154 首版被抓住的方式）。
+   *   ★另一层保险是静态判据 `tests/tls-pinning-reuse.test.ts`（缓存入口唯一 + 命中即返回）。
+   */
+  if (p.plain_reused_ok === false) {
+    console.log(
+      `  ℹ ${id}: 明文基线本轮未复用（${p.plain_requests} 请求 / ${p.plain_connections} 连接）` +
+        `——连接池空闲超时属正常波动，不作判据（TLS 通道的复用才是关键）`,
+    )
+  }
+  // ⑤ HTTP/2 只作**读数**（未协商是已取证结论，不是缺陷；换栈属独立大单）
+  const protos = p.server_protocols || {}
+  transportRows.push({
+    id,
+    rel,
+    state: problems.some((x) => x.startsWith(`${id}:`)) ? '不达标' : '通过',
+    reused: p.conn_reused_ok,
+    httpsConns: p.server_connections,
+    httpsReqs: p.server_requests,
+    http2: p.http2_ok === true ? '已协商' : '未协商（需换栈）',
+    protos,
+  })
+}
+
 if (LIST_ONLY) {
   console.log(
-    `HTTP 网络能力双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端 + 持久层 ${persistRows.length} 端 + TLS pinning ${tlsRows.length} 端）`,
+    `HTTP 网络能力双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端 + 持久层 ${persistRows.length} 端 + TLS pinning ${tlsRows.length} 端 + 传输层 ${transportRows.length} 端）`,
   )
   for (const r of rows) {
     const extra =
@@ -445,6 +559,13 @@ if (LIST_ONLY) {
         ? ''
         : ` · challenge ${r.challenges} 次（accept ${r.accepted} / reject ${r.rejected}）`
     console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} hosts/${r.id}/results/tls-probe.json${extra}`)
+  }
+  for (const r of transportRows) {
+    const extra =
+      r.reused === undefined
+        ? ''
+        : ` · 复用=${r.reused}（HTTPS ${r.httpsReqs} 请求 / ${r.httpsConns} 连接）· HTTP/2=${r.http2}`
+    console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} ${r.rel}${extra}`)
   }
   if (problems.length) {
     console.log(`  ⚠ ${problems.length} 条问题（--list 只报告）：`)

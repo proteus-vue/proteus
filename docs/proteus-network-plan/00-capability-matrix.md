@@ -17,8 +17,8 @@
 | # | 能力 | 现状（取证） | 属哪一层 | 本轮 |
 |---|---|---|---|---|
 | 1 | **HTTPDNS** | **零实现**（全仓 `grep enableHttpDNS/httpDNSServiceId` = 0 处）。三端都走系统 DNS | 宿主传输 / 业务 SDK | ❌ 见 §3 分期 |
-| 2 | **高性能模式** | **无此概念**。Android `HttpURLConnection` 默认连接池；iOS `URLSessionConfiguration.default` 复用会话 | 宿主传输 | ❌ 见 §3 |
-| 3 | **HTTP/2** | **走平台默认**（Android `HttpCapability.java:30` / iOS `http-capability.swift:30` 均注明"HTTP/2、压缩、连接池全走平台默认，不自造"） | 宿主传输 | ❌ 见 §3 |
+| 2 | **高性能模式** | **无此概念**。Android `HttpURLConnection` 默认连接池；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）⇒ "高性能模式"若只指连接复用，则**已具备**；若指 TLS 会话复用/预连接/多路复用，见第 3 项 | 宿主传输 | 🟡 连接复用✅（#1155）；余项见 §3 |
+| 3 | **HTTP/2** | **走平台默认**（Android `HttpCapability.java:30` / iOS `http-capability.swift:30` 均注明"HTTP/2、压缩、连接池全走平台默认，不自造"）。★**#1155 真机取证**：iOS **已协商 h2**；Android **未协商**（AOSP `HttpURLConnection` 默认不开 h2）⇒ 这是**端差异**，不是"都没做" | 宿主传输 | 🟡 iOS✅（平台默认即具备）；Android❌（需换栈） |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
 | 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `setInstanceFollowRedirects(!manual)`（4 条路径统一 helper）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
 | 6 | **请求缓存** | ★**#1149 已做（框架层）**：`config.cache`（对齐浏览器 `Request.cache` 六值）+ `Cache-Control`（max-age / no-store / no-cache / must-revalidate）+ `ETag`/`Last-Modified` 条件请求 + **304 ⇒ 缓存体合成 200** + `Vary` 分桶 + 内存 LRU 预算；★**#1150 已做**：RFC 5861 `stale-while-revalidate` / `stale-if-error` + `Age` 头；★**#1151 已做（L2 持久层）**：`cache: { persist: true }` ⇒ Web/MP 走 KV、App 走文件（`fs.*`），**跨进程重启仍命中**（真机双端各 13/13） | **框架策略（TS）** | ✅（含持久层） |
@@ -27,8 +27,9 @@
 | 9 | **观测/排障** | ★**本轮做了**：`FetchMeta`（`queuedMs` / `attemptMs[]` / `attempts` / `deduped` / `priority`） | **框架策略（TS）** | ✅ |
 
 **结论（一句话）**：**9 项里 6 项已落地**（4 请求拦截 · 5 重定向拦截 · 6 请求缓存（框架层）·
-7 RequestTask · 8 网络调优的策略部分 · 9 观测）；**3 项属宿主传输层，仍未做**（1 HTTPDNS ·
-2 高性能模式 · 3 HTTP/2）——它们是**真缺口**，不是"不需要"。
+7 RequestTask · 8 网络调优的策略部分 · 9 观测）；**2 项经 #1155 取证为"部分已具备"**
+（2 高性能模式的**连接复用**两端已工作 · 3 HTTP/2 在 **iOS 已协商**）；
+**真缺口剩 2 项**（1 HTTPDNS 全端零实现 · 3 HTTP/2 在 **Android** 需换栈）。
 
 ---
 
@@ -110,23 +111,42 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 > ★**重定向可拦截已从本表移出**（它**不需要换栈**——两端都有原生钩子）⇒
 > 见上方"§2.3 重定向已落地"；执行证据见 §4。
-> ★★**证书 pinning 也已移出（#1153）**——同一判断：它同样**不需要换栈**
+> ★★**证书 pinning 也已移出（#1154）**——同一判断：它同样**不需要换栈**
 > （Android `setSSLSocketFactory` + `X509TrustManager`；iOS `URLSession` challenge 回调），
 > 见下方"P1 · 已落地"。
+> ★★★**连接池也已移出（#1155 取证）**——它**两端一直都在工作**，不是缺口：
+> 真机实测 Android `3 请求 / 1 TCP 连接`、iOS `3 请求 / 1 TCP 连接`（证据
+> `hosts/{android,ios}/results/transport-probe.json`，门禁 `check:cache-evidence`）。
+> 本轮反而抓出**我们自己**破坏它的真回归（见下方"P1 · 已落地"的 pinning 行）。
+> ⇒ **P1 只剩两项**：HTTPDNS（两端都需要自定义解析）与 **HTTP/2（只有 Android 缺）**。
 
 | 能力 | 落点 | 前置 | 判据设计（可执行） |
 |---|---|---|---|
-| HTTPDNS | Android OkHttp `Dns` 接口 / iOS `NWConnection` 自定义解析 | **Android 需引入 OkHttp**（APK +Δ） | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
-| HTTP/2 + 连接池参数 | 同上 | 同 HTTPDNS | 断言：服务端记录 `HTTP/2` 协商结果 + 复用连接数（单连接多请求） |
+| HTTPDNS | Android OkHttp `Dns` 接口 / iOS `NWConnection` 自定义解析 | **Android 需引入 OkHttp**（APK +Δ）；iOS 需自建解析或 `Network.framework` | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
+| **HTTP/2（仅 Android）** | Android 同上（OkHttp `Protocol.HTTP_2`） | 同 HTTPDNS | 断言：服务端记录 `h2` 协商（**判据已现成**：`bash hosts/android/run-transport-probe.sh`，现读数 `http2_ok=false`） |
+
+★**为什么"HTTP/2 只剩 Android"这条很重要（它改变了工程量判断）**：
+矩阵原先写"HTTP/2 + 连接池：需 Android 引入 OkHttp"，读起来像"三端都要补"。
+实测是**端差异**：iOS 的 `URLSession` **默认协商 h2**（真机 `client_protos=["h2","h2","h2"]`、
+服务端 `{"h2":3}`），Android 的 `HttpURLConnection`（AOSP 底层虽为 okhttp）**默认不开 h2**
+（真机 `["http/1.1","http/1.1","http/1.1"]`）。
+⇒ 换栈只该为**一个端的一项能力**付费；若未来只为"Android 上 h2"引 OkHttp，
+必须显式说明"iOS 已具备、另两端不受影响"，而不是笼统说"补齐传输层"。
 
 **P1 · 已落地**：
 
 | 能力 | 做法 | 判据 |
 |---|---|---|
-| **TLS 证书 pinning** | ✅ **#1153**：`tlsPins`（**SPKI** 指纹，换行/逗号/数组都接受）+ `tlsPinOnly`（`true`=替代系统信任；缺省=**叠加**）。宿主：Android `TlsPinning`（`X509TrustManager` 代理默认信任 + 逐证书 `SHA-256(getPublicKey().getEncoded())`）· iOS `TlsPinningIos`（challenge 回调 + `SecKeyCopyExternalRepresentation` **补 SPKI 头**再哈希）。线格式 `Pins=12` / `PinOnly=13`（五端 40 向量逐字节等价） | 真机双端各 **11/10 条**：pin 命中⇒成功 / 未命中⇒**`fetch.tlsError`** / **叠加模式真的叠加**（pin 对但不开 pinOnly ⇒ 自签被系统信任拒） / 无 pin⇒自签被拒 / 宿主记账确有 challenge。`bash hosts/{android,ios}/run-tls-probe.sh` |
+| **TLS 证书 pinning** | ✅ **#1154**：`tlsPins`（**SPKI** 指纹，换行/逗号/数组都接受）+ `tlsPinOnly`（`true`=替代系统信任；缺省=**叠加**）。宿主：Android `TlsPinning`（`X509TrustManager` 代理默认信任 + 逐证书 `SHA-256(getPublicKey().getEncoded())`）· iOS `TlsPinningIos`（challenge 回调 + `SecKeyCopyExternalRepresentation` **补 SPKI 头**再哈希）。线格式 `Pins=12` / `PinOnly=13`（五端 40 向量逐字节等价） | 真机双端各 **11/10 条**：pin 命中⇒成功 / 未命中⇒**`fetch.tlsError`** / **叠加模式真的叠加**（pin 对但不开 pinOnly ⇒ 自签被系统信任拒） / 无 pin⇒自签被拒 / 宿主记账确有 challenge。`bash hosts/{android,ios}/run-tls-probe.sh` |
+| **连接复用（连接池）** | ✅ **本来就具备**（#1155 取证，无需换栈）：Android `HttpURLConnection` 的 keep-alive 池 · iOS `URLSessionConfiguration.default` 的进程级单例会话。★但 **#1154 的 pinning 首版把它弄坏了**（每次请求新建 `SSLContext` ⇒ 连接池按 `SSLSocketFactory` 分桶 ⇒ 复用归零），#1155 修为**进程内缓存 factory** | 真机双端各 **3 请求 / 1 TCP 连接**（服务端按**对端 socket**记账）；静态判据 `tests/tls-pinning-reuse.test.ts`（缓存入口唯一 + 命中即返回）+ 计量判据 `tests/transport-probe-accounting.test.ts`（h2 的多个流算 1 条连接、控制端点不计样本） |
 
 ★**pinning 的两条诚实边界**：① `pinOnly` 只替代**信任锚**，**不**替代主机名校验
 （放宽主机名会打开 MITM 的门，属另一个策略开关）；② 钉 SPKI 而非整张证书——后者在证书**续期**（同一密钥）时指纹就变。
+
+★**#1155 的另一半产出：把"看不见的传输层"变成可观测读数**。
+`bash hosts/{android,ios}/run-transport-probe.sh` 现在产出
+`{client_protos, client_peers, server_protocols, server_requests, server_connections, http2_ok, conn_reused_ok}`
+——这正是本节末尾"P1 共同前提"里 `transport` 可观测字段的**雏形**（尚未接进 `FetchMeta`）。
 
 ★**P1 的共同前提**：三端要有**同一套可观测字段**（`transport`：`{ protocol, dnsMs, connectMs, tlsMs, reused }`），
 否则判据只能各端各写、无法比对——这与本仓"三端同判据"纪律冲突。
@@ -176,8 +196,11 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 ## 5. 诚实边界（不粉饰）
 
-1. **本轮没有做任何传输层优化**：HTTPDNS / HTTP/2 / 连接池调优 / 证书 pinning **全部未做**（§3 P1）。
-   ⇒ 准确说法：**"请求治理层达到超级应用可用"；"传输层仍是平台默认"**。
+1. ~~**本轮没有做任何传输层优化**~~ ⇒ ★**已按端分项收口（#1154 / #1155）**：
+   证书 pinning ✅（两端真机）· 连接复用 ✅（两端本来就在工作，且修掉了我们自己的回归）·
+   HTTP/2 🟡（iOS 平台默认已协商 · **Android 未协商**）· HTTPDNS ❌（全端零实现）。
+   ⇒ 准确说法（更新后）：**"请求治理层达到超级应用可用；传输层里 iOS 已用上 h2 + 复用、
+   Android 有复用但无 h2；两端都没有 HTTPDNS"**。
 2. ~~没有做 HTTP 缓存~~ ⇒ ★**已收口（#1149，框架层内存缓存）**：`config.cache` 六模式 +
    `Cache-Control` / `ETag` / `Last-Modified` / 304 合成 / `Vary` 分桶 / LRU 预算。
    **剩余真差异**：~~L2 **磁盘层**未做（重启即失效）~~ ⇒ ✅ **已收口（#1151）**：
@@ -198,6 +221,10 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 2. ~~P3 总时限 deadline~~ ⇒ ✅ **已完成（#1135）**；
 3. ~~P2 条件请求缓存~~ ⇒ ✅ **已完成（#1149 · 框架层内存层）**；~~RFC 5861 扩展~~ ⇒ ✅ **已完成（#1150）**；
    ~~L2 磁盘层~~ ⇒ ✅ **已完成（#1151 · `persist:true`，Web/MP=KV、App=文件）**；
-4. ~~P1 证书 pinning~~ ⇒ ✅ **已完成（#1153，不需要换栈）**；
-   **P1 HTTPDNS / HTTP/2 / 连接池**（需 Android 引入 OkHttp，独立大单，先评估 APK 体积与包体影响）；
+4. ~~P1 证书 pinning~~ ⇒ ✅ **已完成（#1154，不需要换栈）**；
+   ~~P1 连接池~~ ⇒ ✅ **#1155 取证：两端本来就在工作**（各 3 请求 / 1 连接；并修掉 #1154 引入的复用回归）；
+   ~~P1 HTTP/2（iOS 侧）~~ ⇒ ✅ **平台默认已具备**（真机 h2 已协商）；
+   **P1 剩余两项**：① **HTTP/2 仅 Android 缺**（需引 OkHttp `Protocol.HTTP_2`，独立大单，先评估 APK 体积）；
+   ② **HTTPDNS 全端缺**（Android 需 OkHttp `Dns`；iOS 需自建解析或 `Network.framework`）。
+   ★两者都属"换/扩传输栈"，应**合并为一个独立立项**评估（同一笔栈改动的两个收益）。
 5. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。

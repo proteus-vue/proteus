@@ -459,6 +459,11 @@ final class SuperappScene: NSObject {
                 let pA = parts.count >= 3 ? parts[2] : ""
                 let pB = parts.count >= 4 ? parts[3] : ""
                 extra = "\(SuperappScene.jsonQuote(b2)),\(SuperappScene.jsonQuote(pA)),\(SuperappScene.jsonQuote(pB))"
+            case "--transport-probe=":
+                // ★#1155：参数形态 `--transport-probe=<base>,<pin>[,<rounds>]`
+                let pin = parts.count >= 2 ? parts[1] : ""
+                let rounds = parts.count >= 3 ? (Int(parts[2]) ?? 3) : 3
+                extra = "\(SuperappScene.jsonQuote(pin)),\(rounds)"
             default:
                 extra = ""
             }
