@@ -53,6 +53,10 @@ export const TAG_SAVE_PATH: number = 9
 export const TAG_UPLOAD_PATH: number = 10
 // ★#1134：重定向控制（1 = 宿主不跟随，把 3xx + Location 回给 JS；undefined = 跟随）
 export const TAG_REDIRECT: number = 11
+// ★#1153：TLS 证书 pinning（string = 换行分隔的 base64 SHA-256 SPKI 指纹）
+export const TAG_PINS: number = 12
+// ★#1153：pinning 信任语义（1 = 用 pin 替代系统信任；undefined = 叠加）
+export const TAG_PIN_ONLY: number = 13
 
 /** 回程 TLV tag（16 起；与去程段不重叠） */
 export const RTAG_HTTP_STATUS: number = 16
@@ -321,6 +325,10 @@ export class InvokeFrame {
   savePath: string | undefined = undefined
   /** ★#1134：true ⇒ 不跟随重定向（undefined = 跟随，与老行为一致） */
   redirectManual: boolean | undefined = undefined
+  /** ★#1153：非 undefined ⇒ 只信任这些 SPKI 指纹（换行分隔的 base64 SHA-256） */
+  tlsPins: string | undefined = undefined
+  /** ★#1153：true ⇒ 用 tlsPins 替代系统信任；undefined/false ⇒ 叠加 */
+  tlsPinOnly: boolean | undefined = undefined
   /** ★#1120：非 undefined ⇒ 宿主边读文件边拼 multipart 边发 */
   upload: UploadSpec | undefined = undefined
   body: Uint8Array = EMPTY
@@ -427,6 +435,9 @@ function encodeInvokeMeta(f: InvokeFrame): Uint8Array {
   if (f.upload !== undefined) writeTlv(w, TAG_UPLOAD_PATH, (x: Writer) => writeUploadSpec(x, f.upload as UploadSpec))
   // ★#1134：只在**显式 true** 时写（与 TS `meta.redirectManual === true` 逐字对齐）
   if (f.redirectManual === true) writeTlv(w, TAG_REDIRECT, (x: Writer) => x.u8(1))
+  // ★#1153：pinning 只在显式要求时写（缺省 = 平台默认信任链）
+  if (f.tlsPins !== undefined && f.tlsPins.length > 0) writeTlv(w, TAG_PINS, (x: Writer) => x.str(f.tlsPins as string))
+  if (f.tlsPinOnly === true) writeTlv(w, TAG_PIN_ONLY, (x: Writer) => x.u8(1))
   return w.done()
 }
 
@@ -467,6 +478,8 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeFrame): void {
     else if (tag === TAG_SAVE_PATH) into.savePath = p.str()
     else if (tag === TAG_UPLOAD_PATH) into.upload = readUploadSpec(p)
     else if (tag === TAG_REDIRECT) into.redirectManual = p.u8() !== 0
+    else if (tag === TAG_PINS) into.tlsPins = p.str()
+    else if (tag === TAG_PIN_ONLY) into.tlsPinOnly = p.u8() !== 0
     // 未知 tag 跳过（版本演进）
   }
 }

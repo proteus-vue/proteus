@@ -11,6 +11,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -186,6 +187,14 @@ public final class HostCapabilities {
                 HttpCapability.CancelStats cs = HttpCapability.cancelStats();
                 JSONObject o = new JSONObject();
                 o.put("calls", cs.calls); o.put("hits", cs.hits); o.put("misses", cs.misses);
+                return ok(o);
+            }
+            // ★★★#1153：TLS 记账（真机判据读它区分"宿主没校验"与"pin 判定错"）
+            case "http.tlsStats": {
+                JSONObject o = new JSONObject();
+                for (Map.Entry<String, Integer> e : TlsPinning.statsSnapshot().entrySet()) {
+                    o.put(e.getKey(), e.getValue());
+                }
                 return ok(o);
             }
             // ── C27 WebSocket（#1093：RFC 6455 客户端，见 WebSocketCapability）──

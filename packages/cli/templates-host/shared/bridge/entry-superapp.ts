@@ -27,6 +27,9 @@ export { appStaleProbe } from './entry-superapp-probes-stale'
 // ★★★#1151：缓存持久层（L2）探针**单列**（两阶段跨进程；与基础的缓存探针职责不同）
 import { appPersistProbe } from './entry-superapp-probes-persist'
 export { appPersistProbe } from './entry-superapp-probes-persist'
+// ★★★#1153：TLS pinning 探针**单列**（需要自签 HTTPS 服务 + 两套证书，装置形态与前几批不同）
+import { appTlsProbe } from './entry-superapp-probes-tls'
+export { appTlsProbe } from './entry-superapp-probes-tls'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -965,5 +968,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppPersistProbe?: (b: string, p: string) => string
 }).__proteusHostAppPersistProbe = (b: string, p: string) => appPersistProbe(b, p)
+// ★★★#1153：TLS pinning 探针（结果填 __proteusHostTlsProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppTlsProbe?: (a: string, b: string, pa: string, pb: string) => string
+}).__proteusHostAppTlsProbe = (a: string, b: string, pa: string, pb: string) => appTlsProbe(a, b, pa, pb)
 
 

@@ -88,6 +88,10 @@ enum InvokeWire {
     static let TAG_UPLOAD_PATH: UInt8 = 10
     /// ★#1134：重定向控制（1 = 宿主**不跟随**，把 3xx + Location 回给 JS；nil = 跟随）
     static let TAG_REDIRECT: UInt8 = 11
+    /// ★#1153：TLS 证书 pinning（string = 换行分隔的 base64 SHA-256 **SPKI** 指纹）
+    static let TAG_PINS: UInt8 = 12
+    /// ★#1153：pinning 信任语义（1 = 用 pin **替代**系统信任；nil = 叠加）
+    static let TAG_PIN_ONLY: UInt8 = 13
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     static let RTAG_HTTP_STATUS: UInt8 = 16
@@ -168,6 +172,10 @@ enum InvokeWire {
         var upload: UploadSpec?
         /// ★#1134：true ⇒ 不跟随重定向（nil = 跟随，与老行为一致）
         var redirectManual: Bool?
+        /// ★#1153：非 nil ⇒ 只信任这些 SPKI 指纹（换行分隔的 base64 SHA-256）
+        var tlsPins: String?
+        /// ★#1153：true ⇒ 用 tlsPins **替代**系统信任；nil/false ⇒ 叠加
+        var tlsPinOnly: Bool?
         var body: [UInt8] = []
 
         /// 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可选字段。
@@ -357,6 +365,8 @@ enum InvokeWire {
             case TAG_SAVE_PATH: f.savePath = try p.str()
             case TAG_UPLOAD_PATH: f.upload = try readUploadSpec(p)
             case TAG_REDIRECT: f.redirectManual = try p.u8() != 0
+            case TAG_PINS: f.tlsPins = try p.str()
+            case TAG_PIN_ONLY: f.tlsPinOnly = try p.u8() != 0
             // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
             default: break
             }
@@ -399,6 +409,9 @@ enum InvokeWire {
         if let up = f.upload { try writeTlv(w, TAG_UPLOAD_PATH) { try writeUploadSpec(w, up) } }
         // ★#1134：只在**显式要求不跟随**时写（缺省 = 平台跟随）
         if f.redirectManual == true { try writeTlv(w, TAG_REDIRECT) { w.u8(1) } }
+        // ★#1153：pinning 只在显式要求时写（缺省 = 平台默认信任链）
+        if let pins = f.tlsPins, !pins.isEmpty { try writeTlv(w, TAG_PINS) { try w.str(pins) } }
+        if f.tlsPinOnly == true { try writeTlv(w, TAG_PIN_ONLY) { w.u8(1) } }
         return w.done()
     }
 

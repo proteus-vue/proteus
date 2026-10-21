@@ -1,7 +1,7 @@
 {
   "end": "ios",
   "source": "dactyl-measure-latency.py",
-  "generated_at": "2026-10-21T06:17:28.663102+00:00",
+  "generated_at": "2026-10-21T07:28:32.803943+00:00",
   "metrics": {
     "input_latency_p50_ms": null,
     "input_latency_p95_ms": null,

@@ -67,6 +67,10 @@ constexpr uint8_t TAG_SAVE_PATH = 9;
 constexpr uint8_t TAG_UPLOAD_PATH = 10;
 // ★#1134：重定向控制（1 = 宿主不跟随，把 3xx + Location 回给 JS；缺省 = 跟随）
 constexpr uint8_t TAG_REDIRECT = 11;
+// ★#1153：TLS 证书 pinning（str = 换行分隔的 base64 SHA-256 SPKI 指纹）
+constexpr uint8_t TAG_PINS = 12;
+// ★#1153：pinning 信任语义（1 = 用 pin 替代系统信任；缺省 = 叠加）
+constexpr uint8_t TAG_PIN_ONLY = 13;
 
 /* 回程 TLV tag（16 起；与去程段不重叠） */
 constexpr uint8_t RTAG_HTTP_STATUS = 16;
@@ -132,6 +136,10 @@ struct InvokeFrame {
   UploadSpec upload;
   /** ★#1134：true ⇒ 不跟随重定向（未指定 = 跟随，与老行为一致） */
   Opt<bool> redirectManual;
+  /** ★#1153：非空 ⇒ 只信任这些 SPKI 指纹（换行分隔的 base64 SHA-256） */
+  Opt<std::string> tlsPins;
+  /** ★#1153：true ⇒ 用 tlsPins 替代系统信任；缺省/false ⇒ 叠加 */
+  Opt<bool> tlsPinOnly;
   std::vector<uint8_t> body;
 
   int responseKind() const { return responseType ? static_cast<int>(*responseType) : RESPONSE_TEXT; }
@@ -341,6 +349,10 @@ inline std::vector<uint8_t> encodeInvokeMeta(const InvokeFrame& f) {
   if (f.upload.has) writeTlv(w, TAG_UPLOAD_PATH, [&](Writer& x) { writeUploadSpec(x, f.upload); });
   // ★#1134：只在**显式 true** 时写（与 TS `meta.redirectManual === true` 逐字对齐）
   if (f.redirectManual && *f.redirectManual) writeTlv(w, TAG_REDIRECT, [&](Writer& x) { x.u8(1u); });
+  // ★#1153：pinning 只在显式要求时写（缺省 = 平台默认信任链）
+  //   ★`Opt<T>` 是 `.has` + `operator*` 语义（不是指针）⇒ 不能写 `->empty()`（首版这么写直接编译失败）
+  if (f.tlsPins.has && !f.tlsPins.v.empty()) writeTlv(w, TAG_PINS, [&](Writer& x) { x.str(f.tlsPins.v); });
+  if (f.tlsPinOnly.has && f.tlsPinOnly.v) writeTlv(w, TAG_PIN_ONLY, [&](Writer& x) { x.u8(1u); });
   return w.take();
 }
 
@@ -380,6 +392,8 @@ inline void decodeInvokeMeta(const std::vector<uint8_t>& bytes, InvokeFrame& f) 
       case TAG_SAVE_PATH: f.savePath = p.str(); break;
       case TAG_UPLOAD_PATH: f.upload = readUploadSpec(p); break;
       case TAG_REDIRECT: f.redirectManual = p.u8() != 0; break;
+      case TAG_PINS: f.tlsPins = p.str(); break;
+      case TAG_PIN_ONLY: f.tlsPinOnly = p.u8() != 0; break;
       default: break;  // 未知 tag 跳过（版本演进）
     }
   }

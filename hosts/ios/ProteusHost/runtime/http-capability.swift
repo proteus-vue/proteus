@@ -110,7 +110,7 @@ final class HttpCapability {
             NSLog("[proteus] UPLOAD_PACKED total=%lld file=%@", packed.bytes, up.path)
             let task = session.uploadTask(with: req, fromFile: packed.url)
             registerInflight(reqId, task)   // ★#1121：可取消
-            BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url, manualRedirect: f.redirectManual == true)
+            BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
         }
@@ -122,7 +122,7 @@ final class HttpCapability {
             }
             let task = session.dataTask(with: req)
             registerInflight(reqId, task)   // ★#1121：可取消
-            BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target, manualRedirect: f.redirectManual == true)
+            BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
         }
@@ -131,7 +131,7 @@ final class HttpCapability {
         if f.stream == true {
             let task = session.dataTask(with: req)
             registerInflight(reqId, task)   // ★#1121：可取消
-            BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true)
+            BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
             task.resume()
             return try InvokeWire.encodeResolve(.makePending(reqId))
         }
@@ -141,7 +141,7 @@ final class HttpCapability {
         //     那时再判上限等于"洪水过后才关闸"（#1114 的取证结论就是这一点）。
         let task = session.dataTask(with: req)
         registerInflight(reqId, task)   // ★#1121：可取消
-        BodyLimitDelegate.shared.register(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true)
+        BodyLimitDelegate.shared.register(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
         task.resume()
 
         return try InvokeWire.encodeResolve(.makePending(reqId))
@@ -244,6 +244,8 @@ final class HttpCapability {
     struct SaveStats { var bytes = 0; var path: String?; var completed = false; var error: String? }
     /// ★不设 private(set)：`BodyLimitDelegate`（同文件另一类型）要写它；这是**诊断记账**，不做访问保护。
     static var lastSaveStats = SaveStats()
+    /** ★#1153：最近一次网络错误的 domain/code（排障读数；判据可读它确认归因依据）。 */
+    static var lastNetworkError = ""
     static func resetSaveStats() { lastSaveStats = SaveStats() }
     static func lastSaveStatsSnapshot() -> [String: Any] {
         var d: [String: Any] = ["bytes": lastSaveStats.bytes, "completed": lastSaveStats.completed]
@@ -467,6 +469,10 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         var headers: InvokeWire.NameValues = []
         /// ★#1134：true ⇒ 本 task **不跟随**重定向（3xx 原样回给 JS，由框架层决定跟不跟）
         var manualRedirect = false
+        /// ★★★#1153：TLS pinning（本 task 的 SPKI 指纹；空 = 平台默认信任链）
+        var tlsPins: [Data] = []
+        /// ★#1153：true ⇒ 用 pin 替代系统信任；false ⇒ 叠加（系统信任 + pin 都要过）
+        var tlsPinOnly = false
     }
 
     /// ★key = taskIdentifier；只在该 task 的生命周期内存在
@@ -476,26 +482,30 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
     private let lock = NSLock()
 
     /// 登记一个新 task（必须在 `resume()` **之前**调用——否则可能先收到数据、后登记，丢块）
-    func register(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, manualRedirect: Bool = false) {
+    func register(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, manualRedirect: Bool = false, pins: String? = nil, pinOnly: Bool = false) {
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.manualRedirect = manualRedirect
+        st.tlsPins = TlsPinningIos.parsePins(pins)
+        st.tlsPinOnly = pinOnly
         states[task.taskIdentifier] = st
     }
 
     /// ★#1118：登记一个**流式** task（同样必须在 `resume()` 之前）。
     ///   ★为什么复用本类而不是另建 `StreamDelegate`：`URLSession` 的 delegate 在**创建时固定**，
     ///     另建一个类根本收不到回调（实测：服务端发完 256 块、宿主记账全 0、Promise 永不结算）。
-    func registerStreaming(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, manualRedirect: Bool = false) {
+    func registerStreaming(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, manualRedirect: Bool = false, pins: String? = nil, pinOnly: Bool = false) {
         lock.lock(); defer { lock.unlock() }
         BodyLimitDelegate.lastStreamStats = StreamStats()
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.streaming = true
         st.manualRedirect = manualRedirect
+        st.tlsPins = TlsPinningIos.parsePins(pins)
+        st.tlsPinOnly = pinOnly
         states[task.taskIdentifier] = st
     }
 
     /// ★#1119：登记一个**落盘** task（边收边写文件，不累积 body）。
-    func registerSaving(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, target: URL, manualRedirect: Bool = false) {
+    func registerSaving(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, target: URL, manualRedirect: Bool = false, pins: String? = nil, pinOnly: Bool = false) {
         lock.lock(); defer { lock.unlock() }
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.saveTo = target
@@ -504,18 +514,98 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         st.savePath = HttpCapability.relativePath(target)
         st.status = 0
         st.manualRedirect = manualRedirect
+        st.tlsPins = TlsPinningIos.parsePins(pins)
+        st.tlsPinOnly = pinOnly
         states[task.taskIdentifier] = st
     }
 
     /// ★#1120：登记一个**流式上传** task（响应侧仍走普通累积路径，只是请求侧是流式）。
     /// ★#1120：登记一个**上传** task（响应侧走普通累积；请求体已由 `uploadTask(fromFile:)` 自行读取）。
     ///   `tempFile` 只用于**收尾删除**（拼好的 multipart 临时文件，发送完即删）。
-    func registerUpload(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, tempFile: URL, manualRedirect: Bool = false) {
+    func registerUpload(_ task: URLSessionDataTask, reqId: String, push: @escaping ([UInt8]) -> Void, tempFile: URL, manualRedirect: Bool = false, pins: String? = nil, pinOnly: Bool = false) {
         lock.lock(); defer { lock.unlock() }
         var st = State(reqId: reqId, push: push, gate: StreamGate(BodyLimitDelegate.STREAM_QUEUE_DEPTH))
         st.uploadTemp = tempFile
         st.manualRedirect = manualRedirect
+        st.tlsPins = TlsPinningIos.parsePins(pins)
+        st.tlsPinOnly = pinOnly
         states[task.taskIdentifier] = st
+    }
+
+    /**
+     * ★★★#1153：**TLS pinning 的落点**（`URLSession` 的 server-trust challenge）。
+     *
+     * 【为什么必须在这里做】iOS 的证书校验发生在握手阶段的 challenge 回调里；
+     *   不在这个回调里决策，就只能"事后发现连上了不该连的服务器"。
+     *
+     * 【三种返回】
+     *   · 该 task 没配 pins ⇒ 交给系统默认（`performDefaultHandling`）——老行为完全不变；
+     *   · pins 命中 ⇒ `useCredential`（**注意**：叠加模式下 `TlsPinningIos.evaluate` 已先跑过系统校验，
+     *     自签证书在这里就会被拒；`pinOnly` 模式则故意跳过系统校验）；
+     *   · pins 未命中 ⇒ `cancelAuthenticationChallenge`（**必须取消**，不能"继续但记个日志"——
+     *     那等于 MITM 已成功而业务无感）。
+     *   ★取消后 task 会以 `NSURLErrorCancelled`(-999) 失败 ⇒ `didCompleteWithError` 里映射成 `fetch.tlsError`
+     *     （见那里的判断：本 task 配过 pins 且错误是 -999 ⇒ 归因到证书而不是"用户取消"）。
+     */
+    /** ★★★#1153：TLS challenge 记账（真机判据读它区分"challenge 没被调用"与"pin 判定错"）。 */
+    struct TlsStats {
+        var challenges = 0
+        var withPins = 0
+        var accepted = 0
+        var rejected = 0
+        var defaultHandled = 0
+    }
+    private static var _tlsStats = TlsStats()
+    private static let tlsLock = NSLock()
+    static func tlsStatsSnapshot() -> [String: Any] {
+        tlsLock.lock(); defer { tlsLock.unlock() }
+        return [
+            "challenges": _tlsStats.challenges,
+            "with_pins": _tlsStats.withPins,
+            "accepted": _tlsStats.accepted,
+            "rejected": _tlsStats.rejected,
+            "default_handled": _tlsStats.defaultHandled,
+        ]
+    }
+    static func tlsNote(_ kind: String) {
+        tlsLock.lock(); defer { tlsLock.unlock() }
+        _tlsStats.challenges += 1
+        switch kind {
+        case "pins": _tlsStats.withPins += 1
+        case "accept": _tlsStats.accepted += 1
+        case "reject": _tlsStats.rejected += 1
+        default: _tlsStats.defaultHandled += 1
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        lock.lock()
+        let st = states[task.taskIdentifier]
+        lock.unlock()
+        guard let st, !st.tlsPins.isEmpty else {
+            // ★记账（不在 challenge 里打 NSLog 依赖 console：真机非 console 模式看不到）
+            BodyLimitDelegate.tlsNote("default")
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        BodyLimitDelegate.tlsNote("pins")
+        let verdict = TlsPinningIos.evaluate(challenge: challenge, pins: st.tlsPins, pinOnly: st.tlsPinOnly)
+        if verdict == .accept, let trust = challenge.protectionSpace.serverTrust {
+            BodyLimitDelegate.tlsNote("accept")
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            BodyLimitDelegate.tlsNote("reject")
+            // ★★★#1153：区分"pin 未命中"与"系统不信任"——
+            //   只有 pin **明确未命中**才记 reqId（⇒ didCompleteWithError 归成 fetch.tlsError）；
+            //   叠加模式下被系统拒绝的不记（⇒ 保持 fetch.failed，业务去查证书而不是 pin）。
+            if verdict == .pinMismatch { TlsPinningIos.notePinMismatch(st.reqId) }
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
@@ -651,6 +741,34 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         lock.unlock()
         guard let st else { return }   // ★先摘表 ⇒ 保证恰好回推一次
         let reqId = st.reqId
+        /**
+         * ★★★#1153：**pin 被拒的归因**。
+         * 【为什么需要】我们在 challenge 里 `cancelAuthenticationChallenge` ⇒ task 以
+         *   `NSURLErrorCancelled`(-999) 结束，与"业务主动取消"**同一个错误码**。
+         *   若不区分，业务会看到 `fetch.aborted`（以为是自己取消的），而真因是**证书被拒**。
+         * ⇒ 判据：本 task 配过 pins **且** 错误是 -999 ⇒ `fetch.tlsError`。
+         *   （业务主动取消走 `http.cancel` 路径，那条会先 `unregisterInflight`，且 st 已摘表/无 pins 需求；
+         *    真同时发生时"tlsError"也是更可操作的归因——证书问题必须被看见。）
+         */
+        let pinRejected: Bool = {
+            guard !st.tlsPins.isEmpty, let e = error as NSError? else { return false }
+            HttpCapability.lastNetworkError = "domain=\(e.domain) code=\(e.code) pins=\(st.tlsPins.count) reqId=\(st.reqId)"
+            /**
+             * ★★归因必须区分两件事（真机实测抓出的偏差）：
+             *   · **pin 未命中**（我们的 `TlsPinningIos.evaluate` 返回 false）⇒ `fetch.tlsError`
+             *   · **系统不信任**（叠加模式下自签证书被 `SecTrustEvaluateWithError` 拒）⇒ 仍是 `fetch.failed`
+             *   首版把两者都归成 tlsError ⇒ "叠加模式"那条报 `fetch.tlsError`，
+             *   业务会去查 pin 配置，而真因是证书不被系统信任 ⇒ **归因错**（比不归因更误导）。
+             * ⇒ 只有"本 task 配了 pins **且** pin 明确未命中"才算 tlsError。
+             *   实现：`TlsPinningIos` 在 pin 判定失败时置位 `lastPinMismatch`（按 reqId 记账），
+             *   这里查它——而不是靠错误码猜（系统信任与 pin 拒绝在本层是同一种 -999）。
+             */
+            return e.domain == NSURLErrorDomain && TlsPinningIos.consumePinMismatch(st.reqId)
+        }()
+        /** ★#1153：网络失败的统一消息（pin 被拒单独成档，不混进 failed/aborted）。 */
+        let netErrMsg: (Error) -> String = { e in
+            pinRejected ? "fetch.tlsError: 证书 pin 校验未通过（pin 未命中）" : "fetch.failed: \(e.localizedDescription)"
+        }
         // ★#1121：请求已结算 ⇒ 从在途表摘掉（取消与完成天然有竞态，这里只是清理）
         HttpCapability.unregisterInflight(reqId)
         // ★#1120：上传用的 multipart 临时文件，无论成败都删（不留在沙箱里占空间）
@@ -664,7 +782,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, se))) ?? []
             } else if let e = error {
                 try? FileManager.default.removeItem(at: target)
-                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: \(e.localizedDescription)"))) ?? []
+                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, netErrMsg(e)))) ?? []
             } else {
                 var r = InvokeWire.ResolveFrame.makeOK(reqId)
                 r.status = UInt32(max(0, st.status))
@@ -687,7 +805,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
             var frame: [UInt8]
             if let e = error {
                 BodyLimitDelegate.lastStreamStats.error = e.localizedDescription
-                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：\(e.localizedDescription)"))) ?? []
+                frame = (try? InvokeWire.encodeResolve(.makeErr(reqId, netErrMsg(e)))) ?? []
             } else {
                 var r = InvokeWire.ResolveFrame.makeOK(reqId)
                 r.status = UInt32(max(0, st.status))
@@ -711,8 +829,12 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 frame = try InvokeWire.encodeResolve(.makeErr(reqId,
                     "fetch.tooLarge: 响应体超过上限 \(HttpCapability.MAX_BODY_BYTES)B（已读 \(at)B）"))
             } else if let error {
-                // ★我们自己 cancel 产生的错误被上面拦下；这里只剩真实网络错误
-                frame = try InvokeWire.encodeResolve(.makeErr(reqId, "http.request 失败：\(error.localizedDescription)"))
+                // ★★★#1153：必须走 `netErrMsg`（pin 被拒要归因成 `fetch.tlsError`）。
+                //   ★真机实测：首版这里硬编码 `"http.request 失败：..."` ⇒ pin 拒绝虽然发生了
+                //     （记账 rejected>0）但业务看到的仍是 `fetch.failed`，**归因错**。
+                //     ⇒ 网络失败的所有分支都要经过同一个消息构造函数（这一点与 #1149 的
+                //       "错误码要逐层保住"同族：#1150 也踩过一处遗漏分支）。
+                frame = try InvokeWire.encodeResolve(.makeErr(reqId, netErrMsg(error)))
             } else if let http = task.response as? HTTPURLResponse {
                 var r = InvokeWire.ResolveFrame.makeOK(reqId)
                 r.status = UInt32(max(0, http.statusCode))

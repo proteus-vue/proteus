@@ -55,6 +55,7 @@ import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
 import { runGlassAudit, formatGlassAudit } from './glass-audit'
 import { parseMcpArgs, runMcpServe } from './mcp'
 import { runGate, formatGateList } from './gate'
+import { runKnowledgeCommand } from './knowledge/command'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 import { warnIfDistStale, assertDistFreshForDeviceBuild } from './dist-freshness'
 import * as ui from './ui'
@@ -243,11 +244,9 @@ async function main(): Promise<void> {
       console.log(listRules(phase))
       break
     }
-    case 'router:check': {
-      const { pagesDir } = parseRouterCheckArgs(rest)
-      console.log(formatRouterCheck(checkRoutes(pagesDir)))
+    case 'router:check':
+      console.log(formatRouterCheck(checkRoutes(parseRouterCheckArgs(rest).pagesDir)))
       break
-    }
     case 'module:check': {
       const { root, graph } = parseModuleCheckArgs(rest)
       const { text, result, cycles, conflicts } = await checkModuleConfigs(root, graph)
@@ -841,6 +840,7 @@ async function main(): Promise<void> {
       await runMcpServe(options)
       break
     }
+    case 'knowledge': process.exitCode = await runKnowledgeCommand(rest); break
     case 'help':
     default:
       // ★美化帮助（决策 #213）：分组 + ANSI 色彩（TTY 自动检测；非 TTY/CI 纯文本）

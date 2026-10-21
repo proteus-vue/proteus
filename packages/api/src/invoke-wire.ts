@@ -121,6 +121,42 @@ export const MetaTagInvoke = {
    *   只有业务显式要 redirect:manual 或提供 onRedirect 时才写。
    */
   Redirect: 11,
+  /**
+   * ★★★#1153 **TLS 证书 pinning**（string：换行分隔的 base64 SHA-256 **SPKI** 指纹）。
+   *
+   * 【为什么需要（这是 P1 里唯一"不需要换栈"的一项）】
+   *   HTTPDNS / HTTP-2 / 连接池 都必须换传输栈（Android 要 OkHttp），而 **pinning 不用**：
+   *   Android 的 `HttpsURLConnection.setSSLSocketFactory` + 自定义 `X509TrustManager`、
+   *   iOS 的 `URLSession` challenge 回调，都能在**现有栈**上完成证书校验
+   *   （与 #1134 把"重定向可拦"从 P1 移出是同一个判断）。
+   *
+   * 【为什么钉 SPKI 而不是钉整张证书】
+   *   钉整张证书会在证书续期（同一密钥）时失效；钉 **SubjectPublicKeyInfo** 则跨续期稳定，
+   *   且能自然覆盖"链上任意一张证书"（含中间 CA）。
+   *
+   * 【★为什么载荷是"换行分隔的字符串"而不是数组】
+   *   线格式的 TLV 只有 `str` / `u8` / `u32` / `NameValues` 等**原始类型**；
+   *   数组要么新增一种结构体 tag（五端各写一套编解码），要么用分隔串（零新增编码器）。
+   *   base64 **不含换行** ⇒ 用 `\n` 分隔无歧义、可解析、且不引入新编码形态。
+   *
+   * 【★与 `PinOnly: 13` 的分工】本 tag 只说"信任哪些公钥"；
+   *   "是否**替代**系统信任"由 13 决定（缺省=叠加在系统信任之上，即两者都要过）。
+   */
+  Pins: 12,
+  /**
+   * ★★★#1153 `Pins` 的**信任语义**（uint8：1 = 用 pin **替代**系统信任，0/缺省 = 叠加）。
+   *
+   * · 缺省（0 / 不写 tag）：**叠加**——系统信任必须通过 **且** pin 必须命中。
+   *   这是生产默认：自签/私有 CA 一律拿不到机会，pin 只是额外一道防线。
+   * · `1` = **替代**——只看 pin（仍做主机名校验）。
+   *   用途：企业内网/自建服务的自签证书（否则系统信任必然拒，pin 永远用不上）。
+   *   ★安全含义必须显式：它**放宽**了信任锚，所以只由业务显式开启，绝不默认。
+   *
+   * 【为什么用独立 tag 而不是塞进 12 的载荷】（同 `Stream: 8` / `Redirect: 11` 的做法）
+   *   两个都是**原始类型**（str / u8）⇒ 五端各加一个 case 即可；
+   *   塞成一个结构体 tag 反而要给五端各写一套结构解码。
+   */
+  PinOnly: 13,
 } as const
 
 
@@ -217,6 +253,13 @@ export interface InvokeMeta {
    * （见 `MetaTagInvoke.Redirect`）。跟随/拦截策略由框架层执行。
    */
   redirectManual?: boolean
+  /**
+   * ★★★#1153：TLS 证书 pinning——换行分隔的 base64 SHA-256 **SPKI** 指纹（见 `MetaTagInvoke.Pins`）。
+   * ★App 专属（Web 由浏览器管 TLS、MP 的 `wx.request` 不暴露）；Web/MP 腿遇到本字段 ⇒ `fetch.unsupported`。
+   */
+  tlsPins?: string
+  /** ★★★#1153：`1` = 用 pin **替代**系统信任（见 `MetaTagInvoke.PinOnly`）；缺省 = 叠加 */
+  tlsPinOnly?: boolean
 }
 
 export interface InvokeFrame {
@@ -310,6 +353,10 @@ function encodeInvokeMeta(meta: InvokeMeta): Uint8Array {
   if (up !== undefined) writeTlv(w, MetaTagInvoke.UploadPath, () => writeUploadSpec(w, up))
   // ★#1134：只在**显式要求不跟随**时写（缺省 = 平台跟随，老宿主行为不变）
   if (meta.redirectManual === true) writeTlv(w, MetaTagInvoke.Redirect, () => w.u8(1))
+  // ★#1153：pinning 只在显式要求时写（缺省 = 平台默认信任链，老宿主行为不变）
+  const pins = meta.tlsPins
+  if (pins !== undefined && pins.length > 0) writeTlv(w, MetaTagInvoke.Pins, () => w.str(pins))
+  if (meta.tlsPinOnly === true) writeTlv(w, MetaTagInvoke.PinOnly, () => w.u8(1))
   return w.done()
 }
 
@@ -376,6 +423,13 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeMeta): void {
         break
       case MetaTagInvoke.Redirect:
         into.redirectManual = p.u8() !== 0
+        break
+      // ★#1153：pinning（SPKI 指纹串 + 信任语义）
+      case MetaTagInvoke.Pins:
+        into.tlsPins = p.str()
+        break
+      case MetaTagInvoke.PinOnly:
+        into.tlsPinOnly = p.u8() !== 0
         break
       // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
       default:

@@ -110,12 +110,23 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 > ★**重定向可拦截已从本表移出**（它**不需要换栈**——两端都有原生钩子）⇒
 > 见上方"§2.3 重定向已落地"；执行证据见 §4。
+> ★★**证书 pinning 也已移出（#1153）**——同一判断：它同样**不需要换栈**
+> （Android `setSSLSocketFactory` + `X509TrustManager`；iOS `URLSession` challenge 回调），
+> 见下方"P1 · 已落地"。
 
 | 能力 | 落点 | 前置 | 判据设计（可执行） |
 |---|---|---|---|
 | HTTPDNS | Android OkHttp `Dns` 接口 / iOS `NWConnection` 自定义解析 | **Android 需引入 OkHttp**（APK +Δ） | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
 | HTTP/2 + 连接池参数 | 同上 | 同 HTTPDNS | 断言：服务端记录 `HTTP/2` 协商结果 + 复用连接数（单连接多请求） |
-| 证书 pinning | 同栈 | 同 HTTPDNS | 断言：错误证书 ⇒ 明确 `fetch.tlsError`（不是笼统 failed） |
+
+**P1 · 已落地**：
+
+| 能力 | 做法 | 判据 |
+|---|---|---|
+| **TLS 证书 pinning** | ✅ **#1153**：`tlsPins`（**SPKI** 指纹，换行/逗号/数组都接受）+ `tlsPinOnly`（`true`=替代系统信任；缺省=**叠加**）。宿主：Android `TlsPinning`（`X509TrustManager` 代理默认信任 + 逐证书 `SHA-256(getPublicKey().getEncoded())`）· iOS `TlsPinningIos`（challenge 回调 + `SecKeyCopyExternalRepresentation` **补 SPKI 头**再哈希）。线格式 `Pins=12` / `PinOnly=13`（五端 40 向量逐字节等价） | 真机双端各 **11/10 条**：pin 命中⇒成功 / 未命中⇒**`fetch.tlsError`** / **叠加模式真的叠加**（pin 对但不开 pinOnly ⇒ 自签被系统信任拒） / 无 pin⇒自签被拒 / 宿主记账确有 challenge。`bash hosts/{android,ios}/run-tls-probe.sh` |
+
+★**pinning 的两条诚实边界**：① `pinOnly` 只替代**信任锚**，**不**替代主机名校验
+（放宽主机名会打开 MITM 的门，属另一个策略开关）；② 钉 SPKI 而非整张证书——后者在证书**续期**（同一密钥）时指纹就变。
 
 ★**P1 的共同前提**：三端要有**同一套可观测字段**（`transport`：`{ protocol, dnsMs, connectMs, tlsMs, reused }`），
 否则判据只能各端各写、无法比对——这与本仓"三端同判据"纪律冲突。
@@ -187,5 +198,6 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 2. ~~P3 总时限 deadline~~ ⇒ ✅ **已完成（#1135）**；
 3. ~~P2 条件请求缓存~~ ⇒ ✅ **已完成（#1149 · 框架层内存层）**；~~RFC 5861 扩展~~ ⇒ ✅ **已完成（#1150）**；
    ~~L2 磁盘层~~ ⇒ ✅ **已完成（#1151 · `persist:true`，Web/MP=KV、App=文件）**；
-4. **P1 HTTPDNS / HTTP/2 / 连接池 / pinning**（需 Android 引入 OkHttp，独立大单，先评估 APK 体积与包体影响）；
+4. ~~P1 证书 pinning~~ ⇒ ✅ **已完成（#1153，不需要换栈）**；
+   **P1 HTTPDNS / HTTP/2 / 连接池**（需 Android 引入 OkHttp，独立大单，先评估 APK 体积与包体影响）；
 5. MP 端的重定向能力取决于微信是否开放（当前**无**）；若未来开放，框架层循环无需改动（已跨端同一份）。

@@ -541,6 +541,11 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Checks & gates',
     entries: [
       {
+        usage: 'proteus knowledge <layers|graph|check|why> [--json] [--dev] [--packages <dir>] [--reverse <pkg>]',
+        desc: '★框架知识内核（G-54 M0 · #1153）：把架构分层与 SPI 拓扑变成**可查询**的事实（只读静态索引，不跑构建）\n      layers 分层表 L0–L5 + 每层包列表 + 漏登记/幽灵条目检查（不完整 → exit 1）\n      graph  节点/边/环/自环 + 被依赖最多 Top（改动波及面）+ --reverse <包> 反查谁依赖它\n      check  生产依赖边越层 → exit 1（--dev 附带 devDeps 信息位，不判红）\n      why <from> <to>  单条判定（OK / UPWARD / SKIP_LAYER / UNKNOWN）\n      ★能力边界：仅实现 ② checkLayering / ④ buildGraph；① resolveCall / ③ locateAssertion / ⑤ affectedDevices / ⑥ previewVariants 数据源未就绪，不提供子命令',
+        descEn: '★Framework knowledge kernel (G-54 M0 · #1153): turns architecture layering and SPI topology into queryable facts (read-only static index, no build)\n      layers L0–L5 table + per-layer packages + missing/ghost registration audit (incomplete → exit 1)\n      graph  nodes/edges/cycles/self-loops + top dependents (blast radius) + --reverse <pkg> who depends on it\n      check  production dependency edges violating layering → exit 1 (--dev adds devDeps info, non-blocking)\n      why <from> <to>  single verdict (OK / UPWARD / SKIP_LAYER / UNKNOWN)\n      ★Capability boundary: only ② checkLayering / ④ buildGraph implemented; ① resolveCall / ③ locateAssertion / ⑤ affectedDevices / ⑥ previewVariants have no data source yet and expose no subcommand',
+      },
+      {
         usage: 'proteus gate ls [--group=<族>] | gate run <id|preset> [dir]',
         desc: '★统一门禁系统（★#453/#454 Gate 注册表单一来源）：ls = 全量门禁目录（族/scope/●接线态）；run = 统一执行\n      preset：check（快速）/ audit（深度十域，域集同 audit all）；已接线：d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/devtools-budget/coverage\n      未接线（○：写型/诊断/多旗标工具）经独立命令——新门禁先补录注册表再接线',
         descEn: '★Unified gate system (★#453/#454 Gate registry as the single source of truth): ls = full gate directory (family/scope/● wiring state); run = unified execution\n      preset: check (fast) / audit (deep ten domains, domain set same as audit all); wired: d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/devtools-budget/coverage\n      unwired (○: write/diagnostic/multi-flag tools) are invoked as standalone commands — register a new gate in the registry before wiring it',

@@ -107,7 +107,7 @@ const COUPLING = [
     // ⑧ useFetch 字段链 + 策略层（漏一层 ⇒ 功能静默失效）
     match: /packages\/api\/src\/capability-(fetch|app-request|invoke)\.ts$|capability-fetch-(types|pipeline|redirect|cache|persist|runtime)\.ts$/,
     gates: ['pnpm check:invoke-wire-parity'],
-    tests: ['tests/fetch-wire-fields.test.ts', 'tests/fetch-redirect.test.ts', 'tests/fetch-deadline.test.ts', 'tests/fetch-pipeline.test.ts', 'tests/fetch-cache.test.ts', 'tests/fetch-stale.test.ts', 'tests/fetch-cache-persist.test.ts', 'tests/fetch-cache-persist-runtime.test.ts', 'tests/fetch-cache-persist-evict.test.ts'],
+    tests: ['tests/fetch-wire-fields.test.ts', 'tests/fetch-redirect.test.ts', 'tests/fetch-deadline.test.ts', 'tests/fetch-pipeline.test.ts', 'tests/fetch-cache.test.ts', 'tests/fetch-stale.test.ts', 'tests/fetch-cache-persist.test.ts', 'tests/fetch-cache-persist-runtime.test.ts', 'tests/fetch-cache-persist-evict.test.ts', 'tests/fetch-tls-pins.test.ts'],
     why: '要穿四层白名单（FetchConfig → runFetch → appHttpRequest → splitFramePayload）：漏一层功能静默失效（#1134 redirectManual 漏在第③层，真机才抓到）；缓存语义（#1149）以 Web 标准为基准，三端同一份',
   },
   {

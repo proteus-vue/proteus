@@ -50,6 +50,8 @@ Param,Type,Required,Doc
 | `redirectManual` | `boolean` | No | — |
 | `cache` | `FetchCacheMode` | No | — |
 | `bypassPlatformCache` | `boolean` | No | — |
+| `tlsPins` | `string \| string[]` | No | — |
+| `tlsPinOnly` | `boolean` | No | — |
 
 ## Returns
 

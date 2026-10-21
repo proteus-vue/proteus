@@ -348,9 +348,78 @@ for (const { id, dir } of PERSIST_ENDS) {
   })
 }
 
+/**
+ * ★★★#1153：**TLS pinning** 证据（同一能力族第四批，与缓存无直接关系但同属网络能力矩阵）。
+ * 每个端一份 `tls-probe.json`。
+ * ★判据核心（缺一条都可能是"看起来钉了"）：
+ *   ① pin **命中** ⇒ 成功（否则 pin 根本没用上）
+ *   ② pin **未命中** ⇒ `fetch.tlsError`（★不是 failed/aborted——业务据此判断"该查 pin"）
+ *   ③ **叠加模式真的叠加**：pin 对但不开 pinOnly ⇒ 自签被**系统信任**拒（⇒ 仍是 failed）
+ *   ④ 无 pin ⇒ 自签被拒（基线）
+ *   ⑤ 宿主记账显示 challenge 真的发生过（否则上面的"成功"无法归因）
+ */
+const TLS_ENDS = [
+  { id: 'android', rel: 'hosts/android/results/tls-probe.json', key: 'tls_probe' },
+  { id: 'ios', rel: 'hosts/ios/results/tls-probe.json', key: 'tls_probe' },
+]
+
+const tlsRows = []
+for (const { id, rel, key } of TLS_ENDS) {
+  const abs = path.join(ROOT, rel)
+  if (!fs.existsSync(abs)) {
+    problems.push(`${id}: 缺证据 ${rel}——跑 \`bash hosts/${id}/run-tls-probe.sh\` 生成并提交`)
+    tlsRows.push({ id, rel, state: '缺失' })
+    continue
+  }
+  if (!isTracked(rel)) problems.push(`${id}: 证据 ${rel} 存在但未入库——git add -f ${rel}`)
+  let p = null
+  try {
+    p = probeOf(JSON.parse(fs.readFileSync(abs, 'utf-8')), key)
+  } catch (e) {
+    problems.push(`${id}: ${rel} 解析失败：${e.message}`)
+    tlsRows.push({ id, rel, state: '解析失败' })
+    continue
+  }
+  if (!p) {
+    problems.push(`${id}: ${rel} 里没有 ${key} 载荷（形态变了？）`)
+    tlsRows.push({ id, rel, state: '无载荷' })
+    continue
+  }
+
+  if (p.hit_secure !== true) problems.push(`${id}: 判据没用 https（明文测不了 pinning）`)
+  if (p.hit_ok !== true) problems.push(`${id}: pin **命中**却请求失败（code=${p.hit_code}）——pin 没用上`)
+  if (p.mismatch_is_tls_error !== true) {
+    problems.push(
+      `${id}: pin **未命中**没有报 \`fetch.tlsError\`（实得 ${p.mismatch_code || '成功'}）——` +
+        `业务无法区分"证书不对"与"网络不好"`,
+    )
+  }
+  if (p.stacked_failed !== true) {
+    problems.push(
+      `${id}: **叠加模式没做**（pin 对 + 不开 pinOnly 竟然成功了）——` +
+        `那样 pin 就成了"替代系统信任"，安全性反而下降`,
+    )
+  }
+  if (p.nopin_failed !== true) problems.push(`${id}: 无 pin 时自签没被拒（基线失效，装置可能放过了自签）`)
+  if (p.b_ok !== true) problems.push(`${id}: B 服务不可达 ⇒ ②"未命中"可能是"连不上"的假通过`)
+  const stats = p.host_tls_stats || {}
+  if (Number(stats.challenges ?? 0) <= 0) {
+    problems.push(`${id}: 宿主记账 challenges=${stats.challenges}——challenge 从未发生，上面的结果无法归因到 pinning`)
+  }
+
+  tlsRows.push({
+    id,
+    rel,
+    state: problems.some((x) => x.startsWith(`${id}:`)) ? '不达标' : '通过',
+    challenges: stats.challenges,
+    rejected: stats.rejected,
+    accepted: stats.accepted,
+  })
+}
+
 if (LIST_ONLY) {
   console.log(
-    `HTTP 条件请求缓存双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端 + 持久层 ${persistRows.length} 端）`,
+    `HTTP 网络能力双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端 + 持久层 ${persistRows.length} 端 + TLS pinning ${tlsRows.length} 端）`,
   )
   for (const r of rows) {
     const extra =
@@ -369,6 +438,13 @@ if (LIST_ONLY) {
         ? ''
         : ` · 后端=${r.backend} · 重启后命中（loads=${r.loads} · ageMs=${r.ageMs} · gen=${r.gen}）`
     console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} hosts/${r.id}/results/persist-probe*.json${extra}`)
+  }
+  for (const r of tlsRows) {
+    const extra =
+      r.challenges === undefined
+        ? ''
+        : ` · challenge ${r.challenges} 次（accept ${r.accepted} / reject ${r.rejected}）`
+    console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} hosts/${r.id}/results/tls-probe.json${extra}`)
   }
   if (problems.length) {
     console.log(`  ⚠ ${problems.length} 条问题（--list 只报告）：`)

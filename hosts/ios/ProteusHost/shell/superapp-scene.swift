@@ -451,8 +451,14 @@ final class SuperappScene: NSObject {
                 extra = "\(SuperappScene.jsonQuote(crossBase)),\(maxRedirects)"
             case "--persist-probe=":
                 // ★#1151：参数形态 `--persist-probe=<base>,<phase>`（phase = write | read）
-                //   ★两次进程启动用同一条参数、不同 phase（判据看"第二次是否命中 + 服务端 hits 不增"）
                 extra = SuperappScene.jsonQuote(parts.count >= 2 ? parts[1] : "write")
+            case "--tls-probe=":
+                // ★#1153：参数形态 `--tls-probe=<baseA>,<baseB>,<pinA>,<pinB>`
+                //   ★pinA/pinB 是 base64 SPKI 指纹；由 runner 从服务端 `/__pin` 取（装置自证）
+                let b2 = parts.count >= 2 ? parts[1] : ""
+                let pA = parts.count >= 3 ? parts[2] : ""
+                let pB = parts.count >= 4 ? parts[3] : ""
+                extra = "\(SuperappScene.jsonQuote(b2)),\(SuperappScene.jsonQuote(pA)),\(SuperappScene.jsonQuote(pB))"
             default:
                 extra = ""
             }

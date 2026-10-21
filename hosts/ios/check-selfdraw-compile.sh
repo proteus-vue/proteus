@@ -70,6 +70,8 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/InvokeWire.swift"
   "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift"
   "$HERE/ProteusHost/runtime/http-capability.swift"
+  # ★#1153：TLS pinning（http-capability 引用 ⇒ 必须在同一编译单元里，否则 "cannot find 'TlsPinningIos' in scope"）
+  "$HERE/ProteusHost/runtime/tls-pinning.swift"
   "$HERE/ProteusHost/dev/host-runtime-scene.swift"
   "$HERE/ProteusHost/dev/app-stack-scene.swift"
   "$HERE/ProteusHost/dev/showcase-scene.swift"

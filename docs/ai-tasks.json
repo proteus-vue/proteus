@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-20",
+  "updated_at": "2026-10-21",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -2489,6 +2489,68 @@
         "T-fetch-cache-persist-l2"
       ],
       "note": "【done · 决策 #1152】消费 #1151「下一步②」：持久层此前**没有任何淘汰**（maxPersistEntries 只写在 JSDoc、代码从未使用，且被错误接到内存 maxEntries）⇒ 磁盘无界增长；而 Web ~5MB / MP 10MB 是**与业务共享**的平台配额，写满后缓存静默失效且挤占业务存储。★落地：按**字节**做 LRU（缺省 KV 2 MiB / 文件 8 MiB；按条数不够——一条 2MB 顶掉 200 条小条目）+ manifest v2 承载字节/年龄（KV 拿不到单键大小）+ 配额写失败主动淘汰 25% 再重试一次（有界）+ 受保护集防\"大条目自杀\"+ 条目上限与字节预算取先到 + 向后兼容 #1151 的旧 manifest。★判据抓出真缺陷：首版只在读盘时更新 lastUsed，而**内存命中（最常见路径）不记账** ⇒ LRU 退化成\"谁最后写\" ⇒ 最近用过的条目反而先被淘汰（现场 a 被淘汰、b 留下，正好反了）⇒ 内存命中也要刷新持久层 LRU。★判据 7/7 + 破坏性验证 5 条各自独立命中（不按预算淘汰⇒3 红 / 不刷 LRU⇒1 红 / 去保护集⇒1 红 / 收缩失效⇒1 红 / 改坏证据⇒门禁红）。★真机双端各 15/15（新增淘汰两条：evicted=10、persistBytes=4948≤6000）。★判据自己错两处：预算 4000 而 5×800B 正好不超⇒不触发淘汰（改 2500）；淘汰阶段与主判据共用缓存⇒把主条目挤掉导致四条主判据假红（改独立 store + 独立目录——\"淘汰本来就会删数据\"，不能和\"跨进程命中\"共用一份）。★诚实边界：字节按估算（非精确序列化值）；quotaShrinks 只收缩一次；manifest 与条目非原子事务（读时按缺失当未命中）；仍是单进程模型。"
+    },
+    {
+      "id": "T-knowledge-kernel-m0",
+      "title": "G-54 M0：FrameworkKnowledgeProvider ② 分层守护 + ④ SPI 拓扑（包→层映射 + 依赖图 + 环检测）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:wb-knowledge-m0",
+      "scope": [
+        "packages/cli/src/knowledge/layer-map.ts",
+        "packages/cli/src/knowledge/layering.ts",
+        "packages/cli/src/knowledge/graph.ts",
+        "packages/cli/src/knowledge/index.ts",
+        "tests/knowledge-kernel.test.ts",
+        "docs/ai-tasks.json",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 1153,
+      "verification": "npx vitest run tests/knowledge-kernel.test.ts && node scripts/check-file-size.mjs && node scripts/check-ai-tasks.mjs --check",
+      "branch": null,
+      "related": [],
+      "note": "【done · 决策 #1153】G-54 六方法里数据源最厚的两个（②分层 / ④拓扑）。★落地位置：放 packages/cli/src/knowledge/ 而非新建包——CLI 已是仓库静态分析聚集地且在依赖图顶层 L3；新建包会牵动 check:pkg + 构建链 + 发布三条线。抽包时机 = 出现第二个消费者（Studio/VSCode 适配器）时按 #870 机械搬迁。★口径决策：同层依赖判 OK + sameLayer 信息位（按 G-55 §6；文档 §1「同层只经 contracts」暂不判红）；UNKNOWN 不兜底 L0；devDeps 不入图但由 diagnoseDevDeps 单列（不判红）。★★★独立验证（异会话子代理）打回三处真缺陷并全部修复：① 裸三色 DFS 漏报具体环（随机对拍 9.5%/5.5% 少报，最小反例 a→e,b→c,c→b,c→e,e→b,e→c 的真实环 c→e→c 未报）⇒ 改 Tarjan SCC（完备性看 sccs）+ 代表回路 + isValidCycle 独立 oracle；② findCycles 对「节点子集 + 全量边」静默丢边（邻接表只为 nodes 建）⇒ 改 nodes ∪ 端点；③ 自环被 continue 吞掉 ⇒ 单列 selfLoops；④ devDeps 口径失明（图说无边、判定说 UPWARD）⇒ diagnoseDevDeps 信息位。★判据 23/23 + tsc --strict 零错 + file-size 绿（310 行）+ 破坏性验证 7 条各自独立命中（层标错 2 红 / 环检测恒空 2 红 / 兜底 L0 1 红 / 反向依赖不记录 1 红 / 邻接表丢边 1 红 / 自环吞掉 1 红 / devDeps 失明 1 红）。★诚实边界：分层表是为现有 78 条边定标的（L2 收 23 包，层内约束力弱）；代表回路不保证覆盖分量全部节点；未实现 ①③⑤⑥ 四方法；无 CLI 命令面（index.ts 已 1101 行 / 基线 1102，接命令前须先拆）。★test:coupled 未闭环：pnpm 不在 PATH，且其建议的 check:bridge-sync 红来自**异会话未提交的 hosts/** 改动**（与本单无关，按纪律不碰）。"
+    },
+    {
+      "id": "T-fetch-tls-pinning",
+      "title": "#1154 TLS 证书 pinning（SPKI）+ 五端线格式 Pins/PinOnly + 双端真机",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/invoke-wire.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "packages/api/src/capability-fetch.ts",
+        "packages/api/src/capability-app-request.ts",
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/capability-fetch-legs.ts",
+        "packages/types/src/api-types.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TlsPinning.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/InvokeWire.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java",
+        "hosts/ios/ProteusHost/runtime/tls-pinning.swift",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/ios/ProteusHost/runtime/InvokeWire.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/InvokeWire.ts",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_wire.h",
+        "tests/fetch-tls-pins.test.ts",
+        "scripts/invoke-wire-golden.ts",
+        "hosts/shared/bridge/entry-superapp-probes-tls.ts",
+        "hosts/android/tools/tls-echo-server.mjs",
+        "hosts/android/run-tls-probe.sh",
+        "hosts/ios/run-tls-probe.sh",
+        "hosts/ios/lib/probe-args.sh",
+        "scripts/check-cache-evidence.mjs"
+      ],
+      "decision": 1154,
+      "verification": "npx vitest run tests/fetch-tls-pins.test.ts && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/run-tls-probe.sh && bash hosts/ios/run-tls-probe.sh && node scripts/check-cache-evidence.mjs",
+      "branch": null,
+      "related": [
+        "T-fetch-stale-rfc5861"
+      ],
+      "note": "【done · 决策 #1154】P1 三项里唯一**不需要换栈**的一项（与 #1134 把重定向从 P1 移出同一判断）：Android setSSLSocketFactory+X509TrustManager、iOS URLSession challenge 都能在现有裸 HTTP 栈上做。★钉 SPKI 而非整证书（续期不失效），权威口径 = openssl 的 `x509 -pubkey | pkey -pubin -outform der | sha256`。★三个真机/实测才暴露的坑：① **iOS SecKeyCopyExternalRepresentation 返回裸公钥不是 SPKI** ⇒ 直接哈希是另一个值（raw=Rya1… vs SPKI=sAYZ…），必须自己补 AlgorithmIdentifier+BIT STRING 头；② **URLSession 复用已建立的 TLS 连接** ⇒ 同 host:port 连续请求只触发一次 challenge ⇒ 后 4 条\"无 pin 也成功\"是复用不是失效 ⇒ 判据每条换端口 + 宿主记账 http.tlsStats；③ **SPKI 经 adb shell 传参会掉字符**（+ → 空格、= → key=value、实测末尾多出 `)`）⇒ 改 push 文件；另 probe-args.sh 的 `${arg##*=}` 在值含 `=` 时取到空串 ⇒ 改 `${arg#*=}`。★线格式 Pins=12(str)/PinOnly=13(u8)（都是原始类型 ⇒ 五端各一 case；40 向量逐字节等价）。★错误码分层：pin 未命中 ⇒ fetch.tlsError；系统不信任 ⇒ 仍 fetch.failed（首版把两者都归 tlsError ⇒ \"叠加模式\"归因错；iOS 用按 reqId 记 pin 未命中区分，Android 用 PinMismatchException 沿 cause 链找）。★判据 fetch-tls-pins 9/9 + 破坏性验证（漏写 PinOnly⇒线格式 39/40 红 / 不剥 sha256/ 前缀⇒红）+ 真机 Android 11/11、iOS 10/10 + 证据 8 份（check:cache-evidence，含\"判据的判据\"要求 challenge 记账断言在 runner 里）。★诚实边界：pinOnly 只替代信任锚不替代主机名校验；换密钥轮换必须更新 pin；不做 CT/OCSP；Web/MP 明确 unsupported；装置证书每次重生成且 SAN 必须含实际访问地址。"
     }
   ]
 }

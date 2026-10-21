@@ -219,6 +219,7 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 | 改 `packages/api/src/capability-fetch-cache.ts` / `packages/api/src/capability-fetch-pipeline.ts` 的缓存判定或 `settle` | `npx vitest run tests/fetch-stale.test.ts tests/fetch-cache.test.ts` |
 | 改 `packages/api/src/capability-invoke.ts` 的**回推结算**（`settleFromFrame` / `interpretBody` 调用点） | `npx vitest run tests/capability-invoke-bytes.test.ts` ★该处**不能抛**：异常逃出回推回调 = 请求永久挂起（#1150 真机抓出） |
 | ★改 `packages/api/src/capability-fetch-cache-persist.ts` / `packages/api/src/capability-fetch-cache-runtime.ts`（持久层 / 按端后端探测） | `npx vitest run tests/fetch-cache-persist.test.ts tests/fetch-cache-persist-runtime.test.ts` ★**必须两端真机重跑** `bash hosts/{android,ios}/run-persist-probe.sh`（跨进程命中只能真机证） |
+| ★改 TLS pinning（`hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TlsPinning.java` / `hosts/ios/ProteusHost/runtime/tls-pinning.swift` / `packages/api/src/invoke-wire.ts` 的 `Pins`/`PinOnly`） | `npx vitest run tests/fetch-tls-pins.test.ts` + `node scripts/check-invoke-wire-parity.mjs`（**五端 40 向量**）+ **两端真机** `bash hosts/{android,ios}/run-tls-probe.sh` |
 | 加/改真机缓存探针 | `npx vitest run tests/host-probe-registry.test.ts`（`IOS_PROBES` ⇄ Swift 两方）+ `node scripts/check-cache-evidence.mjs --list` |
 
 ★SIE 的兜底范围**只含** RFC 5861 点名的 500/502/503/504 + 网络失败；

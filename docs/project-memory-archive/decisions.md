@@ -11670,3 +11670,98 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① P1 HTTPDNS / HTTP-2 / 连接池 / pinning（需 Android 引 OkHttp，独立大单）；
   ② SIE 的逐跳判定（"重定向中途失败算不算源站错误"）；
   ③ 持久层的**跨进程并发写协调**（若将来出现多进程 Shell 形态）。
+
+1153. **★★★G-54 M0：知识内核落地前两方法（② 分层守护 + ④ SPI 拓扑）——把"分层只活在文档表格里"变成机器可判，并被独立验证打回三处真缺陷**（2026-10-21 · 承接 G-54/G-55 plan，**Studio 可行性评估的第二步**）：
+**① 为什么做**：G-54 的 `FrameworkKnowledgeProvider` 六方法一直只有 `reference-impl.cjs` 参考实现。动手前取证发现三个"做不了"的真原因：`packages/*/package.json` **没有任何 layer 字段**（`00-architecture.md` 的分层只活在文档表格里，且注册表用的还是旧包名 pinia/devtools-panel/vite-plugin/test-utils，与磁盘真名不一致）；`LayoutNode.loc` 存在但只是**落点**、没有符号表；**CMP 编号在代码里零命中**（只在 docs）。⇒ 先做数据源最厚的两个：②（层映射 + 依赖方向）与 ④（依赖图 + 环检测）。
+**② 落地位置取舍（不新建包）**：放 `packages/cli/src/knowledge/`——CLI 已是仓库静态分析聚集地（`repo-conformance`/`module-audit`/`audit-all`）且在依赖图顶层 L3，放这里不会新增越层；新建包会牵动 `check:pkg` + 构建链 + 发布三条线，而 M0 的目的是**先证明语义与判据成立**。★抽包时机 = 出现第二个消费者（Studio/VSCode 适配器）时，按 #870 机械搬迁。
+**③ 三条口径决策**：a) **同层依赖判 OK 但置 `sameLayer` 信息位**（按 G-55 `06-kernel-daemon.md` §6 口径；文档 §1「同层只经 contracts 通信」暂不判红——否则一上来红掉 24 条合法协作，**文档侧口径待收口**）；b) **UNKNOWN 不兜底 L0**（漏登记必须红，#1139 同族）；c) **devDeps 不入图但也不失明**（见 ④）。
+**④ ★★独立验证（异会话子代理）打回三处真缺陷，全按证据修**：a) **裸三色 DFS 漏报具体环**——只在遇 GRAY（回边）时记录、遇 BLACK（交叉边）直接丢弃 ⇒ 只回答"有没有环"，随机对拍 **9.5%/5.5% 少报**（最小反例 `a→e, b→c, c→b, c→e, e→b, e→c` 的真实环 `c→e→c` 未报）⇒ 改 **Tarjan SCC**（成环完备性由 `sccs` 保证）+ 每分量一条代表回路 + **`isValidCycle` 独立 oracle**（校验相邻边真实存在——首版测试只验首尾与节点集合，错误实现 `[a,c,b,a]` 也能过）。b) **`findCycles` 对"节点子集 + 全量边"静默丢边**——邻接表只为 `nodes` 建 ⇒ 宿主做局部画像时返回零环（假绿）⇒ 改成 `nodes ∪ edge 端点`。c) **自环被 `continue` 吞掉** ⇒「依赖成环」判据对自环免疫 ⇒ 单列 `selfLoops` + 报 `[a,a]`。另有 **devDeps 口径失明**：`buildGraph` 不含 devDeps 而 `checkLayering` 只按层判 ⇒ 同一对包两套答案（`web(L2) -dev-> cli(L3)` 图说无边、判定说 UPWARD）⇒ 新增 `diagnoseDevDeps()`（**信息位不判红**：devDeps 向上引用测试框架是正常的）。
+**⑤ 判据**：`tests/knowledge-kernel.test.ts` **23/23**（真实仓库：48 包 ↔ 表双向一致、78 边、0 环 0 自环 0 越层；人造 3 节点环/两节点环/SCC 交叉边/节点子集/自环/悬空依赖/纯函数性；判定三档 + UNKNOWN；devDeps 口径）+ `tsc --strict` 零错 + `check:file-size` 绿（新文件 310 行）+ `check:ai-tasks` 绿。**破坏性验证 7 条各自独立命中**：层标错（cli L3→L0 ⇒ 19 条越层，2 红）/ 环检测恒空（2 红）/ `resolveLayer` 兜底 L0（1 红）/ 反向依赖不记录（1 红）/ 邻接表回退丢边（1 红）/ 自环吞掉（1 红）/ devDeps 口径失明（1 红）。
+**⑥ 诚实边界**：a) 分层映射表是**为现有 78 条边定标的**——L2 收了 23 个包、跨"状态/组件/渲染/能力/交互"多类职责，**层内约束力弱**；它拦得住"新增向上依赖"，拦不住"分层本身不合理"。b) 同层合法是 G-55 口径，与文档 §1 严格规则**不一致**（已在 layer-map 与测试注释具名，等文档侧收口）。c) 环的代表回路**不保证覆盖分量全部节点**（有向图里"覆盖全部节点的一条回路"不一定存在）——完备性看 `sccs`。d) **未实现 ① resolveCall / ③ locateAssertion / ⑤ affectedDevices / ⑥ previewVariants**（不占位、不返假数据）。e) 未提供 CLI 命令面：`packages/cli/src/index.ts` 已 1101 行（基线 1102，棘轮只减不增）⇒ 接命令前必须**先拆该文件**。
+**⑦ ★★过程发现（并发环境）**：`pnpm test:coupled` 本轮**未能闭环**——① `pnpm` 不在 PATH（`command not found`，SKILL §3.5 已记）；② 其自动建议的 `check:bridge-sync` 红**与本次改动无关**：`git status` 显示工作树里有**异会话未提交的 hosts/** 改动**（十余个 Android/iOS/鸿蒙文件 + 删除 `hosts/ios/results/superapp.json`）⇒ 按纪律**不碰、不修、不纳入提交**。本次判据以定向测试 + tsc + file-size 为准。
+**⑧ 下一步**：① 拆 `packages/cli/src/index.ts` 后接 `proteus knowledge --layer/--graph` 命令面；② ③ locateAssertion 需先给测试补 CMP 标记（或建 CMP↔测试映射表）；③ ① resolveCall 需补符号表（现有 `loc` 只是落点）；④ 分层口径与文档 §1 收口（同层是否判红）。
+
+1154. **★★★TLS 证书 pinning——从 P1「需换栈」里摘出来（不需要 OkHttp），五端线格式 + 双端真机全部落地 · 决策**（2026-10-21 · 承接 #1152「下一步①」）:
+
+【为什么先做它（P1 三项里唯一"不需要换栈"的）】
+  P1 的 HTTPDNS / HTTP-2 / 连接池 都**必须换传输栈**（Android 要引 OkHttp，APK 涨体积，独立大单）；
+  而 **pinning 不需要**：Android 的 `setSSLSocketFactory` + `X509TrustManager`、
+  iOS 的 `URLSession` challenge 回调，都能在**现有裸 HTTP 栈**上完成证书校验。
+  ★这与 #1134 把"重定向可拦"从 P1 移出是**同一个判断**——先问"真需要换栈吗"，再谈工程量。
+
+【★动手前先取标准口径（这决定了指纹怎么算）】
+  · 钉 **SPKI**（SubjectPublicKeyInfo）而不是整张证书：后者在**续期（同一密钥）**时指纹就变 ⇒
+    每次续期都得改业务代码；SPKI 跨续期稳定，且能覆盖"链上任意一张证书"（含中间 CA）。
+  · 权威口径 = `openssl x509 -pubkey | openssl pkey -pubin -outform der | sha256`；
+    判据用它当**唯一真值**（不手抄、不按印象）。
+
+【★★★三个"只能真机/实测才知道"的坑（本轮最值钱的部分）】
+  ① **iOS 的 `SecKeyCopyExternalRepresentation` 返回的是裸公钥，不是 SPKI**
+     ⇒ 直接哈希得到的是**另一个值**（实测：raw=`Rya1...` vs SPKI=`sAYZ...`）。
+     必须自己补 SPKI 头（RSA 的 `AlgorithmIdentifier` + `BIT STRING` 包装；EC 还要带曲线 OID）。
+     ★若两端各错一套，"按文档算出的 pin 永远不匹配"，而这种错**只有真机对拍**才暴露。
+  ② **`URLSession` 会复用已建立的 TLS 连接** ⇒ 同一 `host:port` 的连续请求**只触发一次 challenge**
+     ⇒ 首版 5 条用例共用一个端口时，后 4 条"无 pin 也成功 / pin 不匹配也成功"——
+     **不是 pinning 失效，是复用了前一条的连接**。
+     ⇒ 判据每条用例换端口（强制新建连接）+ 宿主记账 `http.tlsStats`（challenge/accept/reject 计数）：
+     只有 `challenges > 0` 时"成功"才可归因。
+     ★这也解释了为什么必须做**宿主侧记账**而不是只看客户端结果。
+  ③ **SPKI 指纹串经 `adb shell` 传参会掉字符**：base64 里的 `+` 变空格、`=` 被当 key=value 分隔，
+     实测收到的 pin 末尾多出一个 `)` ⇒ 宿主 `Base64.decode` 失败 ⇒ **整条 pin 被丢弃 ⇒ pinning 静默失效**。
+     ⇒ 装置改为"把 pin 写进文件 → `adb push` → 探针读文件"。
+     ★同理 `probe-args.sh` 的 `${arg##*=}`（取最后一个 `=` 之后）在值含 `=` 时得到**空串**
+       ⇒ 整个探针参数被吞 ⇒ App 走常驻模式、报告永不落盘。改为 `${arg#*=}`（取第一个 `=`）。
+
+【落地（五端线格式 + 两端宿主）】
+  · 线格式新增 **`Pins=12`（str，换行分隔的 base64 SPKI）** 与 **`PinOnly=13`（u8）**：
+    ★都是**原始类型**（str / u8）⇒ 五端各加一个 case 即可；若塞成结构体 tag 反而要给五端各写一套解码。
+    ★`PinOnly` 独立成 tag（不塞进载荷）是刻意的：两个都是标量，分开最省。
+  · 语义：缺省 = **叠加**（系统信任必须过 **且** pin 命中——生产默认）；
+    `tlsPinOnly=true` = **替代**（只看 pin，仍校验主机名——企业自签场景）。
+    ★"替代"放宽了信任锚，所以**只由业务显式开启**，绝不默认。
+  · Android `TlsPinning`：默认 `X509TrustManager` 做代理（叠加）+ 逐证书 `SHA-256(getPublicKey().getEncoded())`；
+    建连收敛到 `TlsPinning.open`（原有 **4 条** `openConnection` 路径全部改调它——
+    与 #1149 收敛 header、#1134 漏第 4 层同族：**新增全局传输策略时必须一处收口**）。
+  · iOS `TlsPinningIos`：challenge 回调 + 裸公钥**补 SPKI 头**再哈希；三态判定
+    （`.systemTrustFailed` / `.pinMismatch` / `.accept`）——因为两者在 `URLSession` 里是**同一种** -999。
+  · Web / MP 腿：`tlsPins` ⇒ **明确 `fetch.unsupported`**（浏览器管 TLS、`wx.request` 不暴露 TLS 层）。
+    ★静默忽略比报错更糟：业务会以为钉了证书。
+
+【★错误码分层（#1150 同族：错误码必须逐层保住）】
+  · pin **未命中** ⇒ `fetch.tlsError`（业务据此判断"该查 pin 配置"）；
+  · **系统不信任**（叠加模式下自签被拒）⇒ 仍是 `fetch.failed`（业务该查证书/CA，**不是 pin**）。
+  ★首版把两者都归成 tlsError ⇒ "叠加模式"那条报 `tlsError`，**归因错**（比不归因更误导）。
+  ⇒ iOS 用"按 reqId 记一笔 pin 未命中"来区分（错误码本身分不出）；Android 用
+    `PinMismatchException` 沿 cause 链找（`HttpsURLConnection` 会把它包进 `SSLHandshakeException`）。
+  ★另一个真机抓出的遗漏：iOS 普通路径曾硬编码 `"http.request 失败：…"` ⇒ pin 拒绝虽然发生
+    （记账 `rejected>0`）但业务看到 `fetch.failed`。**所有网络失败分支必须经过同一个消息构造**。
+
+【判据】
+  · `tests/fetch-tls-pins.test.ts` **9/9**（真实 openssl 生成证书 + 权威指纹）：
+    SPKI ≠ 整证书指纹 / 不同证书指纹不同 / 三种书写形态归一等价 / 去重去前缀 /
+    **缺 `=` 填充必须补回**（真机抓出的静默失效）/ 空串⇒undefined（不是"空列表也算生效"）/
+    真实 HTTPS 自签默认被拒 / Web 腿明确 unsupported / 四层链归一位置。
+  · 五端线格式 **40 条向量**逐字节等价（新增 4 条 pinning 向量，含"false 不写 tag"配对）。
+  · 破坏性验证：iOS 漏写 `PinOnly` ⇒ 线格式门禁红（39/40）；不剥 `sha256/` 前缀 ⇒ 判据红；
+    清盘逻辑改回索引 ⇒ 红的形态（#1152 同族）。
+  · 真机：Android **11/11** · iOS **10/10**（pin 命中⇒成功 / 未命中⇒`tlsError` /
+    **叠加模式真的叠加**（pin 对但不开 pinOnly⇒系统信任拒）/ 无 pin⇒自签被拒 / B 可达 / challenge 记账>0）。
+  · `check:cache-evidence` 扩到 **8 份证据**（基础缓存 / RFC 5861 / 持久层 / TLS pinning），
+    并加"判据的判据"：要求两端 runner 里**确实存在** challenge 记账断言。
+
+【诚实边界】
+  ① `pinOnly` **只替代信任锚，不替代主机名校验**——放宽主机名会打开 MITM 的门，属另一个策略开关；
+  ② 钉 SPKI 的**证书续期**仍需"同一密钥"才免改代码（换密钥轮换必须更新 pin——这是 pinning 的固有代价）；
+  ③ 不做 CT（Certificate Transparency）校验、不做 OCSP stapling 检查；
+  ④ Web / MP 明确不支持（无 TLS 层可介入）；
+  ⑤ 判据装置的自签证书**每次重生成**（不入库私钥/证书）；SAN 必须含判据实际访问的地址
+     （真机实测：只写 127.0.0.1 时设备经局域网 IP 访问 ⇒ 主机名不匹配 ⇒ pin 从未命中）。
+
+【门禁】
+  定向测试 109/109 · 五端线格式 40 向量 · contract-index · file-size · test:coupled（含 pinning 测试）·
+  gen-content 84 页 · demo-page-api-parity · Android/iOS 零设备编译 · 真机双端各 11/10 条 · 证据 8 份。
+
+【下一步】
+  ① P1 HTTPDNS / HTTP-2 / 连接池（需 Android 引 OkHttp，独立大单，先评估 APK 体积）；
+  ② SIE 的逐跳判定（重定向中途失败算不算源站错误）；
+  ③ pinning 的**密钥轮换**辅助（当前/备份双 pin 已支持，但缺少"何时可移除旧 pin"的工具）。

@@ -275,6 +275,41 @@ addInvoke('invoke-redirect-save-path', {
   },
 })
 
+// ⑨k ★★★#1153 TLS 证书 pinning：tlsPins 必须写 tag 12（str），tlsPinOnly=true 写 tag 13（u8=1）
+//      ★载荷是**换行分隔的 base64 SPKI 指纹**（base64 不含换行 ⇒ 分隔无歧义，且不新增结构体编码器）。
+//      ★用两条指纹：真实场景常同时钉"当前"与"备份"密钥（轮换期不中断）。
+addInvoke('invoke-tls-pins', {
+  method: 'http.request',
+  reqId: 'r-pins-1',
+  meta: {
+    url: 'https://api.example.cn/v1/secure',
+    responseType: 'text',
+    tlsPins: 'aGVsbG8tc3BraS0xMTExMTExMTExMTExMTExMTExMTExMTExMTExPQ==\nbGluZS10d28tc3BraS0yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyPQ==',
+  },
+})
+
+// ⑨l ★#1153 pinOnly=true（替代系统信任；企业自签场景）
+addInvoke('invoke-tls-pin-only', {
+  method: 'http.request',
+  reqId: 'r-pins-2',
+  meta: { url: 'https://intranet.example.cn/api', tlsPins: 'b25seS1waW4tMzMzMw==', tlsPinOnly: true },
+})
+
+// ⑨m ★#1153 判据配对：tlsPinOnly=false / 缺省 ⇒ **都不写** tag 13（往返后 tag 消失）
+//      ★只测 true 的话，"把 false 也写成 tag"的实现会漏网（与 ⑨c/⑨i 同款配对）。
+addInvoke('invoke-tls-pin-only-false-no-tag', {
+  method: 'http.request',
+  reqId: 'r-pins-3',
+  meta: { url: 'https://api.example.cn/v1/x', tlsPins: 'cGFpci00', tlsPinOnly: false },
+})
+
+// ⑨n ★#1153 无 pin 时两个 tag 都**不写**（缺省 = 平台默认信任链，老宿主行为不变）
+addInvoke('invoke-tls-no-pins-no-tag', {
+  method: 'http.request',
+  reqId: 'r-pins-4',
+  meta: { url: 'https://api.example.cn/v1/plain', responseType: 'text' },
+})
+
 /* ══════════════════ 回程向量 ══════════════════ */
 
 // ⑩ 受理回执（pending）—— 决定 JS 侧"保持挂起"的那一帧

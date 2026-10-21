@@ -67,6 +67,14 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
     if (config.upload) {
       throw new ctx.CapError('fetch.unsupported', 'upload 是 App 沙箱流式上传语义——Web 请用 FormData + fetch')
     }
+    // ★★★#1153：TLS pinning 是 App 专有语义——**明确拒绝**（静默忽略比报错更糟：
+    //   业务以为钉了证书，实际是浏览器默认信任链 ⇒ 安全策略假成立）
+    if (config.tlsPins) {
+      throw new ctx.CapError(
+        'fetch.unsupported',
+        'tlsPins 是 App 宿主语义——Web 的 TLS 由浏览器管理，无法在应用层 pin（请用浏览器侧的 CSP/证书策略）',
+      )
+    }
     const url = urlJoiner(ctx)(config.url, config.params)
     // ★取消：原生 AbortSignal 直接用（Web 本来就有，不需要 App 那套自实现）
     const ctl = typeof g.AbortController === 'function' ? new g.AbortController() : null
@@ -192,6 +200,12 @@ export function mpRequest(
     }
     if (config.upload) {
       return reject(new ctx.CapError('fetch.unsupported', 'upload（流式上传）是 App 专有语义——MP 请用 wx.uploadFile'))
+    }
+    // ★★★#1153：pinning 在 MP 不可行（`wx.request` 不暴露 TLS 层）⇒ 明确拒绝，不静默忽略
+    if (config.tlsPins) {
+      return reject(
+        new ctx.CapError('fetch.unsupported', 'tlsPins 是 App 宿主语义——wx.request 不暴露 TLS 层，无法 pin 证书'),
+      )
     }
     if (config.signal) {
       return reject(new ctx.CapError('fetch.unsupported', '取消是 App/Web 语义——wx.request 返回的 RequestTask 才有 abort'))

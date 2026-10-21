@@ -76,8 +76,21 @@ describe('★★探针登记：IOS_PROBES 表 ⇄ Swift ProbeConfig 必须同集
     expect(new Set(vars).size, '表里有重复的变量名').toBe(vars.length)
   })
 
-  it('★脚本确实走表驱动（防止有人回退成三处手写清单）', () => {
-    // 解析：`--*probe=*)` 分支必须调 lib 的函数
+  /**
+   * ★★★#1153 真机抓出的**静默失效**：lib/probe-args.sh 曾用 `arg##*=` 取值
+   *   ⇒ 值里含 `=` 时取到"最后一个 ="之后的**空串**（bash 的 ## 是贪婪前缀删除）。
+   *   而 #1153 的 `--tls-probe=<baseA>,<baseB>,<pinA>,<pinB>` 里 pin 是 base64、末尾带 `=` 填充
+   *   ⇒ 整个探针参数被吞 ⇒ App 走常驻模式、报告永不落盘（"报告未取回"，与 #1134 同族）。
+   * ★为什么之前没暴露：其它探针的值都是 URL / 数字，不含 `=`。
+   */
+  it('★★参数值里含 = （如 base64 填充）也必须正确解析', () => {
+    const lib = fs.readFileSync(LIB, "utf8")
+    // 断言用的是"取第一个 ="的写法，而不是贪婪的 ##*=
+    const assignLines = lib.split("\\n").filter((l) => /^\\s*value=/.test(l))
+    expect(lib, "★probe-args.sh 缺少按第一个 = 切值的写法").toContain("${arg#*=}")
+  })
+
+  it('★脚本确实走表驱动（防止有人回退成三处手写清单）', () => {    // 解析：`--*probe=*)` 分支必须调 lib 的函数
     expect(scriptSrc, '解析分支没调用 ios_probe_parse_arg（回退成手写清单了？）').toContain('ios_probe_parse_arg "$a"')
     // 转发：必须调 ios_probe_forward_args，且不再有手写 `for pv in ...:xxx-probe` 清单
     expect(scriptSrc, '转发没调用 ios_probe_forward_args').toContain('ios_probe_forward_args SA_ARGS')

@@ -182,7 +182,7 @@ public final class HttpCapability {
                     } catch (UploadFileTooLarge e) {
                         out = InvokeWire.ResolveFrame.err(f.reqId, e.getMessage());
                     } catch (Throwable t) {
-                        out = InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: " + t);
+                        out = InvokeWire.ResolveFrame.err(f.reqId, TlsPinning.messageOr(t, "fetch.failed"));
                     }
                     push(out);
                 }
@@ -204,7 +204,7 @@ public final class HttpCapability {
                     } catch (java.net.ConnectException e) {
                         out = InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage());
                     } catch (Throwable t) {
-                        out = InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: " + t);
+                        out = InvokeWire.ResolveFrame.err(f.reqId, TlsPinning.messageOr(t, "fetch.failed"));
                     }
                     push(out);
                 }
@@ -228,7 +228,7 @@ public final class HttpCapability {
                     } catch (java.net.ConnectException e) {
                         push(InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage()));
                     } catch (Throwable t) {
-                        push(InvokeWire.ResolveFrame.err(f.reqId, "http.failed: " + t));
+                        push(InvokeWire.ResolveFrame.err(f.reqId, TlsPinning.messageOr(t, "http.failed")));
                     }
                 }
             });
@@ -251,7 +251,7 @@ public final class HttpCapability {
                 } catch (java.net.ConnectException e) {
                     out = InvokeWire.ResolveFrame.err(f.reqId, "network.unreachable: " + e.getMessage());
                 } catch (Throwable t) {
-                    out = InvokeWire.ResolveFrame.err(f.reqId, "http.failed: " + t);
+                    out = InvokeWire.ResolveFrame.err(f.reqId, TlsPinning.messageOr(t, "http.failed"));
                 }
                 push(out);
             }
@@ -261,12 +261,14 @@ public final class HttpCapability {
         return InvokeWire.encodeResolve(InvokeWire.ResolveFrame.pending(f.reqId));
     }
 
-    /** 真正发请求（**网络线程**上执行——本方法内绝不触碰 JS）。 */
+    /** 真正发请求（**网络线程**上执行——本方法内绝不触碰 JS）。
+     *  ★建连统一走 `TlsPinning.open`（四条路径共用一处 ⇒ 新增传输策略不会漏路径，#1153）；
+     *    它是本文件的**唯一建连入口**，不要在任何路径里再写 `new URL(...).openConnection()`。 */
     private static InvokeWire.ResolveFrame perform(InvokeWire.InvokeFrame f, String url, String method, int timeoutMs)
             throws Exception {
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn = TlsPinning.open(f, url);
             registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
@@ -388,7 +390,7 @@ public final class HttpCapability {
 
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn = TlsPinning.open(f, url);
             registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
@@ -558,7 +560,7 @@ public final class HttpCapability {
                 return InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: 无法创建目录 " + parent);
             }
 
-            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn = TlsPinning.open(f, url);
             registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);
@@ -737,7 +739,7 @@ public final class HttpCapability {
         consumer.start();
 
         try {
-            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn = TlsPinning.open(f, url);
             registerRequest(f.reqId, conn);   // ★#1121：可取消
             conn.setRequestMethod(method);
             conn.setConnectTimeout(timeoutMs);

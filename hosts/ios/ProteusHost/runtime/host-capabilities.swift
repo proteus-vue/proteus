@@ -89,6 +89,12 @@ final class HostCapabilities: NSObject {
         case "http.cancelStats":
             let cs = HttpCapability.cancelStats()
             return ok(["calls": cs.calls, "hits": cs.hits, "misses": cs.misses])
+        // ★★★#1153：TLS challenge 记账（真机判据读它区分"challenge 没被调用"与"pin 判定错"）
+        case "http.tlsStats":
+            // ★#1153：附带"最近一次网络错误"的 domain/code（归因依据；排障用）
+            var tls = BodyLimitDelegate.tlsStatsSnapshot()
+            tls["last_network_error"] = HttpCapability.lastNetworkError
+            return ok(tls)
         case "window.setSize":
             return ok(windowSetSize(args))
         case "worker.create":

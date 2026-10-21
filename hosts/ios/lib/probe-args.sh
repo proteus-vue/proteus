@@ -43,6 +43,7 @@ IOS_PROBES=(
   "CACHE_PROBE_ARG:cache-probe"         # #1149 HTTP 条件请求缓存
   "STALE_PROBE_ARG:stale-probe"         # #1150 RFC 5861（SWR / SIE）
   "PERSIST_PROBE_ARG:persist-probe"     # #1151 缓存持久层（两阶段：write,read）
+  "TLS_PROBE_ARG:tls-probe"             # #1153 TLS pinning（自签 HTTPS 双服务）
 )
 
 # 所有探针参数都设置过之后，是否有**任一**非空（决定是否 `--console` 阻塞等报告）
@@ -64,7 +65,11 @@ ios_probe_parse_arg() {
   [ "${arg#--}" != "$arg" ] || return 1
   name="${arg#--}"
   name="${name%%=*}"
-  value="${arg##*=}"
+  # ★★★必须按**第一个** `=` 切值（不能写 `${arg##*=}` 取"最后一个 ="之后的部分"）。
+  #   真机实测：#1153 的 `--tls-probe=<baseA>,<baseB>,<pinA>,<pinB>` 里 pin 是 base64，
+  #   **末尾带 `=` 填充** ⇒ `${arg##*=}` 取到的是**空串** ⇒ 整个探针参数被吞
+  #   ⇒ App 走常驻模式、报告永不落盘（现象是"报告未取回"，与 #1134 的形态同族）。
+  value="${arg#*=}"
   for entry in "${IOS_PROBES[@]}"; do
     var="${entry%%:*}"
     if [ "${entry#*:}" = "$name" ]; then

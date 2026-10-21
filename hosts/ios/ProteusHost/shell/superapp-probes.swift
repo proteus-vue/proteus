@@ -132,6 +132,17 @@ enum SuperappProbes {
       deadlineSeconds: 120,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1153：**TLS pinning** 判据（自签 HTTPS 双服务 + 两套证书）。
+    //   ★这一端尤其必须实测：iOS 的证书校验在 `URLSession` challenge 回调里，
+    //     "pin 未命中时连接真的被拒"只能真机证（Node 只能验指纹口径）。
+    ProbeConfig(
+      argPrefix: "--tls-probe=",
+      kickFormat: "__proteusHostAppTlsProbe(%@)",
+      resultKey: "__proteusHostTlsProbeResult",
+      reportPrefix: "tls",
+      deadlineSeconds: 180,
+      extraReadings: { _ in [:] },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

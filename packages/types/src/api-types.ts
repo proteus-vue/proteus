@@ -54,6 +54,13 @@ export interface RequestConfig {
    * ★App/MP 腿忽略本字段（它们的字节腿本就没有自动缓存）。
    */
   bypassPlatformCache?: boolean
+  /**
+   * ★★★#1153 TLS 证书 pinning（仅 App 三端）：换行分隔的 base64 SHA-256 **SPKI** 指纹。
+   * 失败 ⇒ `fetch.tlsError`（独立错误码）。Web/MP 腿遇到本字段明确 `fetch.unsupported`。
+   */
+  tlsPins?: string
+  /** ★#1153：true ⇒ 用 pin 替代系统信任；缺省 = 叠加（系统信任 + pin 都要过） */
+  tlsPinOnly?: boolean
 }
 
 export interface RequestResponse<T> {

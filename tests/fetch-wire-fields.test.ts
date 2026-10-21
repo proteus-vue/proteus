@@ -48,7 +48,7 @@ const WIRE_FIELDS = [
   'onChunk',
   'upload',
   'signal',
-  'redirectManual', // ★#1134
+  'redirectManual', // ★#1134\n  'tlsPins', // ★#1153\n  'tlsPinOnly', // ★#1153
 ]
 
 /** 只在 `FetchConfig` / `runFetch` 层出现、**不落到 App 线格式**的字段。 */

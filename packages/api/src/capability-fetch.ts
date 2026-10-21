@@ -30,6 +30,44 @@ export interface FetchBridge {
 }
 
 /**
+ * ★★★#1153：把 `tlsPins` 的多种书写形态归一成**换行分隔的字符串**。
+ *
+ * 接受：`string`（已分隔）/ `string[]`（最常见）/ 含逗号或空白分隔的单串。
+ * 归一理由：线格式只有一个 `str` 载荷（见 `MetaTagInvoke.Pins`），
+ * 若三处各自处理数组形态，迟早有一处漏掉（本仓 #1134 的"四层白名单"同族）。
+ * ★去空白 + 去重 + 保序：顺序对语义无影响，但**去重**能避免同一指纹写两遍（诊断时更清楚）。
+ */
+export function normalizePins(pins: string | string[] | undefined): string | undefined {
+  if (pins === undefined) return undefined
+  const list = Array.isArray(pins) ? pins : String(pins).split(/[\s,]+/)
+  const out: string[] = []
+  for (const raw of list) {
+    let p = String(raw).trim()
+    if (!p) continue
+    // ★★★必须与**宿主**同一口径处理 HPKP 风格前缀（`sha256/<b64>`）。
+    //   判据实测抓出：TS 侧原样保留 `sha256/`，而 Android 宿主会剥掉 ⇒
+    //   "按文档写的 pin 串"在 JS 里看着对、到宿主被剥成另一种形态 ⇒ 两端指纹字面量不一致。
+    //   ★★★而且**不能按"第一个 /"切**：base64 字母表含 `/`
+    //   ⇒ 判据里就有一张指纹本身带 `/`（`...ji/ixb6...`），按任意 `/` 切会把指纹截断。
+    //   只认**确切的**算法前缀（大小写不敏感）。
+    const m = /^(?:sha256|sha-256)\//i.exec(p)
+    if (m) p = p.slice(m[0].length)
+    // ★★统一 base64 字母表并把**填充补回**：
+    //   ① URL-safe（`-`/`_`）⇒ 换回标准（`+`/`/`）——装置常这么传，避免 shell 吃掉 `+` `/` `=`；
+    //   ② **补 `=` 填充**（★真机抓出的缺陷：首版只在"含 `-`/`_`"时才补，
+    //      而某张指纹恰好不含这两个字符却仍被去了填充 ⇒ 归一后是 43 字符无 `=`，
+    //      宿主 `Base64.decode` 解析失败 ⇒ 整条 pin 被丢弃 ⇒ pinning **静默失效**）。
+    //   ⇒ 填充是**独立于字母表**的一步，必须无条件按长度做。
+    if (p.includes('-') || p.includes('_')) p = p.replace(/-/g, '+').replace(/_/g, '/')
+    const pad = p.length % 4
+    if (pad === 2) p += '=='
+    else if (pad === 3) p += '='
+    if (p && !out.includes(p)) out.push(p)
+  }
+  return out.length > 0 ? out.join('\n') : undefined
+}
+
+/**
  * 发一次网络请求（`useFetch` 的实现）。
  *
  * @returns 成功 = `{ ok:true, data, status, headers }`；失败 = `{ ok:false, error }`（**不抛**，G-32.3）。
@@ -68,6 +106,11 @@ export async function runFetch<T>(
       // ★★★#1149：让 Web 腿关掉浏览器自带缓存（框架层缓存是唯一语义来源）。
       //   ★`cache` 本身是**管线字段**，不下传桥（缓存判定与 304 合成都在管线里完成）。
       bypassPlatformCache: config?.bypassPlatformCache,
+      // ★★★#1153 TLS pinning（App 三端；Web/MP 腿会明确 reject）
+      //   ★数组归一成换行串在本层做：下游（appHttpRequest / 线格式）只认字符串，
+      //     否则三处各写一遍归一逻辑（且容易有一处漏掉数组形态）。
+      tlsPins: normalizePins(config?.tlsPins),
+      tlsPinOnly: config?.tlsPinOnly,
     })
     return { ok: true, data: r.data as T, status: r.status, headers: r.headers }
   } catch (e) {

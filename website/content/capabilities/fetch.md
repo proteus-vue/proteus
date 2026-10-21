@@ -50,6 +50,8 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `redirectManual` | `boolean` | 否 | ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。 ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。 |
 | `cache` | `FetchCacheMode` | 否 | ★★★#1149 **HTTP 缓存模式**（对齐浏览器 `Request.cache` 的六个标准值）。  【为什么必须有】App 端的字节腿是**裸 HTTP**——Android `HttpURLConnection` 不启用 `ResponseCache`、 鸿蒙 RCP 亦不做条件缓存；而浏览器/小程序会自动做。⇒ 不显式给业务这个旋钮， 同一份源码在三端就会"Web 命中 304、App 每次整包回源"。  · `default`（管线开启缓存时的默认）= 新鲜则直用，过期则带 `If-None-Match`/`If-Modified-Since` 回源； · `no-store` = 不读也不写缓存； · `reload` = 忽略缓存、强制回源（并刷新缓存）； · `no-cache` = 跳过"新鲜直用"，但仍带校验器回源（304 则复用）； · `force-cache` = 有缓存就用（即使过期），没有才回源； · `only-if-cached` = 只用缓存；无条目 ⇒ `fetch.cacheMiss`（**不联网**）。  ★只对 GET 的 200/203 生效；流式/落盘/上传不缓存。 ★不写它时：管线未开缓存 ⇒ 行为与从前完全一致（零回归）；管线开了 ⇒ 用管线默认模式。 |
 | `bypassPlatformCache` | `boolean` | 否 | ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开， 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。 |
+| `tlsPins` | `string \| string[]` | 否 | ★★★#1153 **TLS 证书 pinning**（仅 App 三端；Web 由浏览器管 TLS、MP 的 `wx.request` 不暴露）。  传 **base64 SHA-256 SPKI 指纹**数组（换行/逗号/空格分隔的字符串也接受）。  【为什么钉 SPKI 而不是钉整张证书】整张证书在**续期**（同一密钥）时指纹就变了 ⇒ 每次续期都得改代码； SPKI 跨续期稳定，且能自然覆盖"链上任意一张证书"（含中间 CA）。  【默认语义 = 叠加】系统信任必须通过 **且** pin 必须命中（防 MITM 的额外一道防线）。 要"只看 pin"（企业自签场景）须显式 `tlsPinOnly: true`。  【命中即通过】`sniHostname` 仍按平台默认校验（pinning **不**替代主机名校验）。  ★失败 ⇒ `fetch.tlsError`（独立错误码，不混进 `fetch.failed`）——业务据此区分"证书不对"与"网络不好"。 |
+| `tlsPinOnly` | `boolean` | 否 | ★★★#1153 `tlsPins` 的**信任语义**： · 缺省/`false` = **叠加**（系统信任 + pin 都要过）——生产默认，最安全； · `true` = **替代**（只看 pin，仍校验主机名）——企业内网/自签证书场景。 ★它**放宽**了信任锚，所以只由业务显式开启，绝不默认。 |
 
 ## 返回值
 
@@ -91,6 +93,8 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `redirectManual` | `boolean` | — | ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。 ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。 |
 | `cache` | `FetchCacheMode` | — | ★★★#1149 **HTTP 缓存模式**（对齐浏览器 `Request.cache` 的六个标准值）。  【为什么必须有】App 端的字节腿是**裸 HTTP**——Android `HttpURLConnection` 不启用 `ResponseCache`、 鸿蒙 RCP 亦不做条件缓存；而浏览器/小程序会自动做。⇒ 不显式给业务这个旋钮， 同一份源码在三端就会"Web 命中 304、App 每次整包回源"。  · `default`（管线开启缓存时的默认）= 新鲜则直用，过期则带 `If-None-Match`/`If-Modified-Since` 回源； · `no-store` = 不读也不写缓存； · `reload` = 忽略缓存、强制回源（并刷新缓存）； · `no-cache` = 跳过"新鲜直用"，但仍带校验器回源（304 则复用）； · `force-cache` = 有缓存就用（即使过期），没有才回源； · `only-if-cached` = 只用缓存；无条目 ⇒ `fetch.cacheMiss`（**不联网**）。  ★只对 GET 的 200/203 生效；流式/落盘/上传不缓存。 ★不写它时：管线未开缓存 ⇒ 行为与从前完全一致（零回归）；管线开了 ⇒ 用管线默认模式。 |
 | `bypassPlatformCache` | `boolean` | — | ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开， 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。 |
+| `tlsPins` | `string \| string[]` | — | ★★★#1153 **TLS 证书 pinning**（仅 App 三端；Web 由浏览器管 TLS、MP 的 `wx.request` 不暴露）。  传 **base64 SHA-256 SPKI 指纹**数组（换行/逗号/空格分隔的字符串也接受）。  【为什么钉 SPKI 而不是钉整张证书】整张证书在**续期**（同一密钥）时指纹就变了 ⇒ 每次续期都得改代码； SPKI 跨续期稳定，且能自然覆盖"链上任意一张证书"（含中间 CA）。  【默认语义 = 叠加】系统信任必须通过 **且** pin 必须命中（防 MITM 的额外一道防线）。 要"只看 pin"（企业自签场景）须显式 `tlsPinOnly: true`。  【命中即通过】`sniHostname` 仍按平台默认校验（pinning **不**替代主机名校验）。  ★失败 ⇒ `fetch.tlsError`（独立错误码，不混进 `fetch.failed`）——业务据此区分"证书不对"与"网络不好"。 |
+| `tlsPinOnly` | `boolean` | — | ★★★#1153 `tlsPins` 的**信任语义**： · 缺省/`false` = **叠加**（系统信任 + pin 都要过）——生产默认，最安全； · `true` = **替代**（只看 pin，仍校验主机名）——企业内网/自签证书场景。 ★它**放宽**了信任锚，所以只由业务显式开启，绝不默认。 |
 
 ### `UploadSpec`
 

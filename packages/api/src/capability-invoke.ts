@@ -162,7 +162,8 @@ const BYTES_MISSING = Symbol('proteus.invokeBytes.missing')
 
 /** 去程 meta 归类表：值是字符串的字段（url / contentType） */
 // ★#1119：`savePath` 与 url/contentType 同族（字符串 meta）——宿主据此把响应体直写沙箱
-const META_STR = ['url', 'contentType', 'savePath']
+/** 去程 meta 归类表：纯字符串字段（★`tlsPins` #1153 也在此：它落到 tag 12 而非 body） */
+const META_STR = ['url', 'contentType', 'savePath', 'tlsPins']
 /** 去程 meta 归类表：值是键值对的字段 */
 const META_HEADERS = ['headers', 'params']
 /** 去程 meta 归类表：枚举校验器（形态合法才折入 meta，否则按业务体处理） */
@@ -186,8 +187,10 @@ function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array 
   for (const [k, v] of Object.entries(src)) {
     if (v === undefined) continue
     if (META_STR.includes(k) && typeof v === 'string') {
+      // ★逐分支显式赋值（不能写兜底 `else meta.contentType = v`：新增 META_STR 成员会被静默当 contentType）
       if (k === 'url') meta.url = v
       else if (k === 'savePath') meta.savePath = v
+      else if (k === 'tlsPins') meta.tlsPins = v
       else meta.contentType = v
     } else if (META_HEADERS.includes(k) && v !== null && typeof v === 'object') {
       const nv: Record<string, string> = {}
@@ -211,6 +214,8 @@ function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array 
       // ★#1134：重定向不跟随开关（宿主侧最小能力；跟随/拦截策略在 JS 管线）
       //   ★必须在此归类：落到 body 会被 JSON 编进请求体（与 upload 同一个坑）
       meta.redirectManual = v
+    } else if (k === 'tlsPinOnly' && typeof v === 'boolean') {
+      meta.tlsPinOnly = v
     } else if (k === 'data' || k === 'body') {
       rest[k] = v
     } else {
@@ -970,23 +975,18 @@ export interface AppRequestConfig {
    * ★诚实边界：宿主未实现 `http.cancel` 时 JS 侧仍会 reject，但**后台传输不会停**。
    */
   signal?: AbortSignalLike
-  /**
-   * ★★★#1134 **重定向不跟随**（宿主侧最小能力）：true ⇒ 宿主不跟随 3xx，
-   *   把 `status` + `headers.location` 原样回给 JS（跟随/拦截策略在 fetch 管线）。
-   *
-   * ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务一般不直接用。
-   */
+  /** ★#1134 **重定向不跟随**（宿主侧最小能力）：true ⇒ 宿主不跟随 3xx，把 `status` + `Location`
+   *  原样回给 JS（跟随/拦截策略在 fetch 管线）。★由管线自动置位，业务一般不直接用。 */
   redirectManual?: boolean
   /**
-   * ★★★#1149 **让平台自带的 HTTP 缓存让开**（框架层缓存接管时由管线置位）。
-   *
-   * 【为什么只在 App 腿上是"翻译成头"】`AppRequestConfig` 是桥入参（逐字段显式白名单），
-   *   本字段**不进线格式 meta**——`appHttpRequest` 把它翻译成内部约定头
-   *   `X-Proteus-Bypass-Platform-Cache: 1`，宿主消费后**从转发头剔除**（不外泄给业务服务端）。
-   *   · iOS：`URLSession` 的 `URLCache` 会自己发条件请求 / 自己合成 200 / 直接回本地副本 ⇒ 必须让开；
-   *   · Android / 鸿蒙：字节腿本就是裸 HTTP，没有平台缓存可绕 ⇒ 只做剔除（一致性 + 防外泄）。
+   * ★#1149 **让平台自带 HTTP 缓存让开**（管线置位；本字段**不进线格式 meta**——`appHttpRequest`
+   * 把它翻译成内部头 `X-Proteus-Bypass-Platform-Cache`，宿主消费后从转发头剔除，防外泄）。
    */
   bypassPlatformCache?: boolean
+  /** ★#1153：换行分隔的 base64 SHA-256 SPKI 指纹（见 `MetaTagInvoke.Pins`） */
+  tlsPins?: string
+  /** ★#1153：true ⇒ 用 pin 替代系统信任（见 `MetaTagInvoke.PinOnly`） */
+  tlsPinOnly?: boolean
 }
 
 /** 请求响应（对齐 `RequestResponse`） */
