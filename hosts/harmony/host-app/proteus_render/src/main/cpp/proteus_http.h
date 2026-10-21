@@ -317,7 +317,18 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   headers = pCreateHeaders();
   if (headers != nullptr) {
     if (f.headers) {
-      for (const auto& kv : *f.headers) pSetHeaderValue(headers, kv.first.c_str(), kv.second.c_str());
+      // ★★★#1149：剔除**框架内部约定头** `X-Proteus-Bypass-Platform-Cache`
+      //   （语义「请勿使用平台自带 HTTP 缓存」，由 JS 管线置位）。
+      //   · `pSetHeaderValue` 是 **C ABI 函数**（鸿蒙 RCP 预编译库）⇒ 这里直接逐条判定，不调 C++ 辅助函数，
+      //     保证零新增符号依赖（本文件其余部分同样只依赖 `p*` 导出）。
+      //   · 鸿蒙 RCP 同步往返本身不做条件缓存 ⇒ 本端只做剔除，不改传输行为（如实）。
+      //   · 必须剔除：这是框架内部头，业务服务端不该看到（与 Android/iOS 同判据）。
+      for (const auto& kv : *f.headers) {
+        std::string lk = kv.first;
+        for (auto& ch : lk) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
+        if (lk == "x-proteus-bypass-platform-cache") continue;
+        pSetHeaderValue(headers, kv.first.c_str(), kv.second.c_str());
+      }
     }
     // ★contentType 只在调用方没显式给 Content-Type 时补（调用方语义优先，与 Android 同）
     if (f.contentType) {

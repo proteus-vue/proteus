@@ -91,6 +91,11 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
         //   ★管线在有 onRedirect 时也会走逐跳（它需要看到每一跳才能拦截），
         //     那时本选项同样生效（每跳都是 manual，由 JS 决定下一跳）。
         ...(config.redirect === 'manual' || config.redirectManual === true ? { redirect: 'manual' as const } : {}),
+        // ★★★#1149：框架层缓存启用时，**让浏览器自己的 HTTP 缓存让开**（`no-store`）。
+        //   否则浏览器可能用它的缓存直接回 200，我们永远看不到 304 ⇒
+        //   "这次请求到底是谁服务的"变成不可解释，且 `meta.cache` 会撒谎（报 miss 实际没发请求）。
+        //   ★代价如实：该请求失去浏览器缓存（框架层缓存接管同一职责）。
+        ...(config.bypassPlatformCache === true ? { cache: 'no-store' as const } : {}),
       })
     } catch (e) {
       // ★区分"用户取消"与"超时"（对业务意义完全不同：一个不该重试、一个可以）

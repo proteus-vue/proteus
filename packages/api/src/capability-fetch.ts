@@ -65,6 +65,9 @@ export async function runFetch<T>(
       maxRedirects: config?.maxRedirects,
       onRedirect: config?.onRedirect,
       redirectManual: config?.redirectManual,
+      // ★★★#1149：让 Web 腿关掉浏览器自带缓存（框架层缓存是唯一语义来源）。
+      //   ★`cache` 本身是**管线字段**，不下传桥（缓存判定与 304 合成都在管线里完成）。
+      bypassPlatformCache: config?.bypassPlatformCache,
     })
     return { ok: true, data: r.data as T, status: r.status, headers: r.headers }
   } catch (e) {

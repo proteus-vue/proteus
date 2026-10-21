@@ -11361,6 +11361,92 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   · **最终验证**：`hilog -r` 清日志 → 单次启动 → 取 12 组读数分布；
     拆分前 vs 拆分后 **`diff` 完全一致**（逐项相同）⇒ 行为等价**有证据**，不是"看起来没变"。
 
+1149. **★★★HTTP 条件请求缓存（矩阵 P2 收口）——「App 三端不会自动做 304」从推断变成实测，并挖出 iOS 的 URLCache 在替我们做缓存 · 决策**（2026-10-21 · 承接 #1135「下一步①」）：
+
+【要解决的问题（矩阵 §3 P2 的原话）】
+  `docs/proteus-network-plan/00-capability-matrix.md`：「**浏览器/小程序会自动做 HTTP 缓存，
+  但 App 三个宿主不会**（我们的字节腿是裸 HTTP）⇒ App 端的缓存语义**必须框架层实现**，
+  这是"同一份源码三端一致"的必要条件」。
+  ★危害形态不是"慢"，而是**同一份源码行为不一致**：Web 命中 304 省流量，App 每次整包回源。
+
+【★动手前先取证（不是照文档推断）】
+  · Android `HttpCapability.perform` = 裸 `HttpURLConnection`，**未安装 `ResponseCache`** ⇒ 平台不缓存；
+  · iOS `HttpCapability.session` = `URLSessionConfiguration.default` ⇒ 系统 `URLCache` **会介入**；
+  · Web 腿走浏览器 `fetch` ⇒ 浏览器自带 HTTP 缓存。
+  ⇒ 三端天生三种行为。这条取证决定了实现方向：**缓存语义收进 TS 管线**（三端同一份），
+    并且 Web 腿要让浏览器缓存**让开**（否则"谁在服务这次请求"不可解释）。
+
+【落地（框架层，跨端同一份）】
+  · `packages/api/src/capability-fetch-cache.ts`（新，~600 行）：
+    `createFetchCache`（读/写/304 合成）+ `createMemoryFetchCache`（LRU，默认 5 MiB / 200 条）
+    + 语义函数（`parseCacheControl` / `freshnessLifetimeMs` / `isFresh` / `fetchCacheKey` / `Vary` 分桶）。
+  · `FetchConfig.cache` 取**浏览器 `Request.cache` 的六个标准值**
+    （`default` / `no-store` / `reload` / `no-cache` / `force-cache` / `only-if-cached`）
+    —— 基准 = Web 标准（本仓纪律），不自造枚举。
+  · 响应语义按 RFC 9111 **子集**：`max-age` / `Expires` / `Age` / `no-store` / `no-cache` /
+    `must-revalidate` / `Vary` / `ETag` / `Last-Modified`；**304 ⇒ 用缓存体合成 200**（§4.3.4），
+    并用 304 的响应头更新缓存（剔除 `Content-Length`/`Content-Encoding` 等实体头）。
+  · `FetchMeta.cache = { status: hit|revalidated|miss|bypass, ageMs?, stored?, mode? }`
+    —— 没有它就无法回答"这次到底走没走网络"。
+  · 管线集成：缓存判定放在**拦截器之后**（拦截器可改 url/headers/cache）、
+    收口放在**响应拦截器之前**（拦截器看到的结果 = 业务最终看到的）。
+  · `only-if-cached` 落空 ⇒ `fetch.cacheMiss`（**不联网、不伪造空响应**）。
+
+【★★★真机挖出的两个"只能实测才知道"的事实（本轮最有价值的部分）】
+  ① **iOS 的 `URLCache` 会把 304 合成 200 交给我们** ⇒ 框架层**永远看不到 304**
+     ⇒ 第一轮 iOS 读数 `etag_second_cache.status = "miss"`（而 Android 是 `revalidated`）。
+     这不是同一份 JS 的差异，是**宿主传输栈在替我们做事**。
+     修法：管线置内部约定头 `X-Proteus-Bypass-Platform-Cache: 1`
+     ⇒ iOS `req.cachePolicy = .reloadIgnoringLocalCacheData`。
+  ② **未开框架缓存时 iOS 也在省请求**：`off_hits_delta = 0`（服务端没收到第二次 `/fresh`），
+     而 Android 是 `1`。⇒ 平台缓存的介入被**量出来了**，这正是"必须框架层做"的立论证据。
+     ★因此判据**刻意不判**"未开缓存时必须每次都发"——那会把 iOS 的正确平台行为判成缺陷（假红）；
+     只作**端差异读数**打印（`off_platform_cache_intervened`）。
+
+【诚实边界（写进代码注释与矩阵）】
+  ① 只在**内存**（进程重启即失效）——`04-cache-layers.md` 的 L2 磁盘层仍未实现；
+  ② 只缓存 GET 的 200/203，且要求"有新鲜期或有校验器"；流式/落盘/上传一律不缓存；
+  ③ `stale-while-revalidate` / `stale-if-error` / 请求折叠未做；
+  ④ 带 `Authorization` 的响应按 RFC 7234 §3.2 保守处理（无 `public`/`must-revalidate`/`s-maxage` 就不存）；
+  ⑤ 鸿蒙 RCP 同步往返本就不做条件缓存 ⇒ 只**剔除内部头**（一致性 + 防外泄），不冒充已支持。
+
+【判据】
+  · `tests/fetch-cache.test.ts` **14/14**（真实 HTTP 服务，不 mock）：新鲜命中服务端零请求 /
+    304 合成 200 + 同 body / `no-store` 不缓存 / `reload`·`no-cache`·`only-if-cached` /
+    `Vary` 分桶 / POST 不缓存 / 5xx 不缓存 / 未开缓存零回归 / LRU 按最近使用淘汰 / 带凭据保守不存。
+  · **破坏性验证 5 条各自独立命中**：304 不合成 ⇒ **2 红**；`must-revalidate` 当新鲜 ⇒ 1 红；
+    不发条件头 ⇒ **2 红**；`only-if-cached` 走网络 ⇒ 1 红；`Vary` 只比头名 ⇒ 1 红
+    （★最后这条是**判据抓出的我自己实现的真 bug**：存 `zh` 变体时把 `en` 变体删了）。
+  · 真机双端：`bash hosts/android/run-cache-probe.sh` / `bash hosts/ios/run-cache-probe.sh`
+    ⇒ 各 **11/11 全绿**（证据 `hosts/{android,ios}/results/cache-probe.json`，已入库）。
+  · 新门禁 `check:cache-evidence`（进 `verify` 链 + `gates-sync`）：两端的证据须存在且入库，
+    内容判据以**服务端记账**为准（`meta.cache.status` + 服务端 `hits` + 收到的条件头原文）。
+    ★开发中抓到自己的判据缺陷：首版把"未开缓存时必须每次都发"当判据 ⇒ 在 iOS 上**必然假红**
+      （系统缓存在拦）⇒ 改为端差异读数。
+
+【★顺带修掉的装置缺陷（不是"顺手"，是它直接挡住了本轮取证）】
+  · `hosts/ios/run-selfdraw.sh` 的安装失败只 `grep` 一个白名单短语 ⇒ 本轮的真实失败
+    （`--cache-probe=` 未登记 ⇒ 被当成设备 UDID）**一行都匹配不到** ⇒ 打印"原因（详见下方）"下面是**空的**。
+    修：命中行 + **无条件打印 devicectl 原始输出尾部 12 行** + 排查顺序提示。
+  · iOS 探针登记从**三处**改为**表驱动**（`hosts/ios/lib/probe-args.sh` 的 `IOS_PROBES` 一张表；
+    解析与转发都由它派生）——因为"新增探针要同步三处"这个形态**已经失败过两次**
+    （#1134 三处全漏、#1149 只加 Swift）。★同时把判据从"脚本内部三处相等"改为
+    **`IOS_PROBES` ⇄ Swift `argPrefix` 两方相等**：原判据只比脚本内部 ⇒
+    "只加 Swift、脚本一处不加"时**照样全绿**（覆盖面没跟着实际形态走）。
+    ★破坏性验证：删表里 `cache-probe` ⇒ 判据精确报「Swift 认、表里没有 ⇒ 参数会被当成 UDID」。
+  · `check-file-size` 抓到 `run-selfdraw.sh` 被我推到 1005 行 ⇒ 按纪律**拆分而非豁免**
+    （抽出 `lib/probe-args.sh`），最终 **998 行**。
+
+【★如实登记的既有缺口（本轮不修）】
+  `decisions.md` 的最高条目是 **#1143**，而 #1144–#1148 只写在各自 commit message 里
+  （`check:decision-numbers` 只校验"重号 + 任务板引用不悬空"，不校验"commit 提到的号都有条目"）
+  ⇒ 追溯链在这五号上是**断的**。本条目沿用 #1149 不占 #1144（避免二次冲突），缺口在此具名。
+
+【下一步（矩阵 §6）】
+  ① L2 **磁盘层**（`04-cache-layers.md` 的 L2；本轮的 `FetchCacheStore` 接口就是给它留的插槽）；
+  ② `stale-while-revalidate` / `stale-if-error`；
+  ③ P1 HTTPDNS / HTTP-2 / 连接池 / pinning（需 Android 引 OkHttp，独立大单，先评估包体影响）。
+
 【顺带暴露的两个既有问题（如实登记，不在本轮修）】
   ① **`app-stack-executor` 退化**：设备落盘 `{"exec_content_nodes":0,...,"fatal":"Error: [screen-host] screen.mount 失败：screen.mount: create 失败"}`。
      ★**已用 `git stash` 复验：拆掉我的改动、重建、重跑，读数同样为 0** ⇒ **与拆分无关**，

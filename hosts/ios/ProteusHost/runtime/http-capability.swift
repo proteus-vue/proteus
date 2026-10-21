@@ -54,7 +54,27 @@ final class HttpCapability {
         var req = URLRequest(url: url)
         req.httpMethod = f.httpMethod ?? "GET"
         req.timeoutInterval = Double(f.timeoutOrDefault) / 1000.0
-        for (k, v) in f.headers ?? [] { req.setValue(v, forHTTPHeaderField: k) }
+        // ★★★#1149：框架层缓存接管时，**关掉 URLSession 自带的 HTTP 缓存**。
+        //   【为什么必须关（真机实测，不是推断）】iOS 走 `URLSessionConfiguration.default` ⇒
+        //   系统 `URLCache` 会：① 自己发条件请求；② 把 304 **合成 200** 交给调用方
+        //   （框架层就永远看不到 304 ⇒ `meta.cache` 只能报 miss，无法区分"谁在服务这次请求"）；
+        //   ③ 无缓存头时也可能直接回本地副本（服务端零请求，但那是系统缓存的功劳）。
+        //   ⇒ 约定头 `X-Proteus-Bypass-Platform-Cache: 1` 语义 = 绕过平台缓存；
+        //     **消费后必须从转发头剔除**（否则这条内部头会外泄给业务服务端）。
+        //   ★`f.headers` 是 `[(String, String)]`（有序对，编解码契约的一部分，见 InvokeWire.swift 头注）
+        //     ⇒ 不能用字典下标，必须遍历判定（写成字典下标会编译失败）。
+        let bypassHeaderName = "x-proteus-bypass-platform-cache"
+        var bypassPlatformCache = false
+        for (k, v) in f.headers ?? [] where k.lowercased() == bypassHeaderName && v == "1" {
+            bypassPlatformCache = true
+        }
+        if bypassPlatformCache {
+            req.cachePolicy = .reloadIgnoringLocalCacheData
+        }
+        for (k, v) in f.headers ?? [] {
+            if k.lowercased() == bypassHeaderName { continue }
+            req.setValue(v, forHTTPHeaderField: k)
+        }
         if !f.body.isEmpty {
             req.httpBody = Data(f.body)
             if req.value(forHTTPHeaderField: "Content-Type") == nil, let ct = f.contentType {

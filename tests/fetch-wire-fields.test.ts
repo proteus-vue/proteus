@@ -53,7 +53,7 @@ const WIRE_FIELDS = [
 
 /** 只在 `FetchConfig` / `runFetch` 层出现、**不落到 App 线格式**的字段。 */
 const APP_LAYER_EXCLUDED = ['onChunk', 'signal'] // 由 invokeHostStream / 参数通道处理，不进 meta
-const PIPELINE_ONLY_APP = ['retry', 'priority', 'maxRedirects', 'onRedirect'] // 管线字段，App 腿不该有
+const PIPELINE_ONLY_APP = ['retry', 'priority', 'maxRedirects', 'onRedirect', 'cache'] // 管线字段，App 腿不该有
 
 /**
  * 从对象字面量里抽**键名**（同时支持 `k: v` 与 shorthand `k`）。

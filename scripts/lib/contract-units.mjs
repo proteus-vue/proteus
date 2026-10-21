@@ -151,7 +151,7 @@ export const FETCH_LAYERS = [
 export const NOT_IN_META_FIELDS = new Set(['onChunk', 'signal'])
 
 /** 已知的**管线字段**：不该下传到 App 线格式（桥只跑一次请求）。 */
-export const PIPELINE_ONLY_FIELDS = new Set(['retry', 'priority', 'maxRedirects', 'onRedirect', 'redirect'])
+export const PIPELINE_ONLY_FIELDS = new Set(['retry', 'priority', 'maxRedirects', 'onRedirect', 'redirect', 'cache', 'bypassPlatformCache'])
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ★★★#1141：**Vapor 槽位**的单元定义（三类里最复杂的一类：三端 + 17 项指纹）

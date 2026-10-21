@@ -201,6 +201,17 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 **必须跑**：`npx vitest run tests/fetch-wire-fields.test.ts`（断言四层齐全 + 管线字段不下传）
 **★后果**：漏一层 ⇒ 功能**静默失效**（底层做了、门面传了、中间吃掉）。#1134 的 `redirectManual` 就是在**第 ③ 层**漏的。
 
+**★加 `FetchConfig` 字段时额外确认「它属于哪一类」**（分错类会漏接或误传）：
+
+| 类别 | 例子 | 落点 |
+|---|---|---|
+| 线格式字段 | `redirectManual` | 四层全加（④ `splitFramePayload` 要认识） |
+| **管线字段** | `retry` / `priority` / `maxRedirects` / `onRedirect` / **`cache`** | 只到 ①②，**不得**进 ③④（App 线格式没有这些 tag）。SSOT：`scripts/lib/contract-units.mjs` 的 `PIPELINE_ONLY_FIELDS` |
+| **翻译成内部头** | **`bypassPlatformCache`（#1149）** | 只到 ①②；`appHttpRequest` 把它翻成 `X-Proteus-Bypass-Platform-Cache: 1`，**宿主消费后必须从转发头剔除**（三端：`hosts/ios/ProteusHost/runtime/http-capability.swift` 设 `cachePolicy=.reloadIgnoringLocalCacheData` / `hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java` 的 `applyRequestHeaders` / `hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h`） |
+
+★#1149 实证：`bypassPlatformCache` 属第三类——若照"线格式字段"处理会污染请求头并外泄给业务服务端；
+若照"管线字段"处理则 iOS 的 `URLCache` 不给让开 ⇒ 304 被系统合成、框架层永远看不到。
+
 ---
 
 ## 8. 真机探针登记（iOS）
@@ -214,6 +225,10 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 
 **必须跑**：`npx vitest run tests/host-probe-registry.test.ts`（三处集合必须相等）
 **★后果**：漏任一处的表现是 **"报告永远是旧的"**（App 走常驻模式永不退出），**不报错**。#1134 三处全漏，连跑两轮空转。
+★★**#1149 补的第四方**：该判据现在还把 `hosts/ios/ProteusHost/shell/superapp-probes.swift` 的 `argPrefix` 集合拉进来比对——
+原判据只比脚本内部三处，**新探针只加进 Swift、脚本一处都不加时全绿**，而现场表现是
+`--cache-probe=` 被当成设备 UDID ⇒ 安装失败（旧脚本还把失败原因 grep 掉了，下面一片空白）。
+⇒ 新探针的四步：Swift `ProbeConfig` + 脚本解析分支 / case 赋值 / 转发清单。
 
 ---
 

@@ -2368,6 +2368,42 @@
       "branch": null,
       "related": [],
       "note": "★九项对账：本轮落地 4 项（请求拦截/RequestTask/并发优先级重试/观测），5 项属传输层未做（HTTPDNS/HTTP2/高性能模式/重定向可拦/缓存）⇒ 准确说法是\"请求治理层达到超级应用可用，传输层仍是平台默认\"，矩阵见 docs/proteus-network-plan/00-capability-matrix.md。★自己踩两个坑都被判据抓到：① linkSignals 单信号返回包装对象 ⇒ 取消静默失效（真浏览器超时暴露）；② 管线无条件注入内部 signal ⇒ MP 全站 unsupported（真容器 4/5 红）⇒ 加 abortable 开关。"
+    },
+    {
+      "id": "T-fetch-cache-conditional",
+      "title": "#1149 HTTP 条件请求缓存（矩阵 P2）：If-None-Match / If-Modified-Since + 304 复用 + Cache-Control",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-fetch-cache.ts",
+        "packages/api/src/capability-fetch-pipeline.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "packages/api/src/capability-fetch.ts",
+        "packages/api/src/capability-app-request.ts",
+        "packages/api/src/capability-invoke.ts",
+        "packages/api/src/index.ts",
+        "packages/types/src/api-types.ts",
+        "tests/fetch-cache.test.ts",
+        "tests/host-probe-registry.test.ts",
+        "scripts/check-cache-evidence.mjs",
+        "hosts/ios/lib/probe-args.sh",
+        "hosts/ios/run-selfdraw.sh",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "hosts/android/tools/cache-echo-server.mjs",
+        "hosts/android/run-cache-probe.sh",
+        "hosts/ios/run-cache-probe.sh",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": 1149,
+      "verification": "npx vitest run tests/fetch-cache.test.ts && node scripts/check-cache-evidence.mjs && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh",
+      "branch": null,
+      "related": [
+        "T-fetch-pipeline"
+      ],
+      "note": "【done · 决策 #1149】矩阵 §3 P2 的条件请求缓存已收口（**框架层内存层**）。★真机挖出两个只能实测才知道的事实：① iOS 的 URLSession.URLCache 会把 304 合成 200 交给调用方 ⇒ 框架层永远看不到 304（首轮 iOS status=miss 而 Android revalidated）⇒ 内部约定头 X-Proteus-Bypass-Platform-Cache 让 iOS 设 cachePolicy=.reloadIgnoringLocalCacheData（三端宿主都须消费后剔除，防外泄给业务服务端）；② 未开框架缓存时 iOS 也在省请求（off_hits_delta=0 vs Android 1）⇒ 平台缓存介入被量出来，这正是\"缓存必须收进框架层\"的立论证据，故判据不判\"未开缓存必须每次真发\"（那会把 iOS 正确行为判成假红）。★判据：fetch-cache 14/14（真实 HTTP）+ 破坏性验证 5 条各自独立命中（其中 Vary 只比头名那条抓出我自己实现的真 bug：存 zh 变体时把 en 删了）；真机双端各 11/11，证据 hosts/{android,ios}/results/cache-probe.json 已入库；新门禁 check:cache-evidence 以服务端记账为准。★诚实边界：只在内存（重启即失效；FetchCacheStore 接口是给 L2 磁盘层留的插槽）· 只缓存 GET 200/203 · stale-while-revalidate/stale-if-error 未做 · 带 Authorization 按 RFC 7234 §3.2 保守不存 · 鸿蒙 RCP 本就不做条件缓存（只剔除内部头，不冒充已支持）。"
     }
   ]
 }

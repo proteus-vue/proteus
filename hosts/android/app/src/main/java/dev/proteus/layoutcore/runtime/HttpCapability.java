@@ -274,11 +274,8 @@ public final class HttpCapability {
             // ★#1134：重定向跟随策略由去程帧决定（manual ⇒ 交回 JS 逐步处理）
             RedirectPolicy.apply(conn, f);
 
-            if (f.headers != null) {
-                for (Map.Entry<String, String> e : f.headers.entrySet()) {
-                    conn.setRequestProperty(e.getKey(), e.getValue());
-                }
-            }
+            // ★#1149：统一入口（顺带剔除框架内部头——四条路径共用这一份，见 applyRequestHeaders）
+            applyRequestHeaders(conn, f.headers);
             // ★G-46：会话共享 —— 注入平台 cookie 存储里的会话 cookie（调用方已显式设 Cookie 头则不覆盖）
             String jarCookie = null;
             try {
@@ -398,11 +395,7 @@ public final class HttpCapability {
             conn.setDoOutput(true);
             // ★定长流式（不是 chunked）：multipart 长度可预知
             conn.setFixedLengthStreamingMode(total);
-            if (f.headers != null) {
-                for (Map.Entry<String, String> e : f.headers.entrySet()) {
-                    conn.setRequestProperty(e.getKey(), e.getValue());
-                }
-            }
+            applyRequestHeaders(conn, f.headers);   // ★#1149：统一入口（含剔除内部头）
             // ★G-46 会话共享（与其余路径同口径：调用方显式设了 Cookie 就不覆盖）
             String jarCookie = null;
             try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
@@ -569,11 +562,7 @@ public final class HttpCapability {
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
             RedirectPolicy.apply(conn, f);
-            if (f.headers != null) {
-                for (Map.Entry<String, String> e : f.headers.entrySet()) {
-                    conn.setRequestProperty(e.getKey(), e.getValue());
-                }
-            }
+            applyRequestHeaders(conn, f.headers);   // ★#1149：统一入口（含剔除内部头）
             String jarCookie = null;
             try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
                 Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
@@ -752,11 +741,7 @@ public final class HttpCapability {
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
             RedirectPolicy.apply(conn, f);
-            if (f.headers != null) {
-                for (Map.Entry<String, String> e : f.headers.entrySet()) {
-                    conn.setRequestProperty(e.getKey(), e.getValue());
-                }
-            }
+            applyRequestHeaders(conn, f.headers);   // ★#1149：统一入口（含剔除内部头）
             String jarCookie = null;
             try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
                 Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
@@ -840,6 +825,34 @@ public final class HttpCapability {
             if (k != null && k.equalsIgnoreCase(key)) return true;
         }
         return false;
+    }
+
+    /**
+     * ★★★#1149：**框架内部约定头**——语义「本次请求请勿使用平台自带的 HTTP 缓存」。
+     *
+     * 【为什么 Android 也要认它（本端并不启用 ResponseCache）】
+     *   ① **一致性**：同一个 JS 管线在三端发同一条头；某端"碰巧不需要"不是不接的理由——
+     *      一旦将来给 Android 打开 `ResponseCache`（如 OkHttp 迁移），漏接这条就是静默行为分叉；
+     *   ② **不外泄**：这是**框架内部**头，业务服务端不该看到它 ⇒ 必须在转发处剔除（与 iOS 同判据）。
+     *
+     * 【Android 侧的实际处理】本腿用裸 `HttpURLConnection` 且未安装 `ResponseCache`
+     *   ⇒ 没有平台缓存可绕；这里只做**剔除头**，不改其它行为（如实，不假装做了什么）。
+     */
+    static final String BYPASS_PLATFORM_CACHE_HEADER = "x-proteus-bypass-platform-cache";
+
+    /**
+     * 把调用方头逐条写入连接，并**剔除框架内部头**。
+     *
+     * 【为什么收敛到一处】此前同样的 `for (headers) setRequestProperty(...)` 在本文件出现 **4 次**
+     *   （整包 / 流式上传 / 落盘 / 流式响应）。只要有一处漏了剔除，内部头就会在该路径外泄。
+     *   ⇒ 四条路径全部改调本方法（新增第 5 条路径也天然覆盖）。
+     */
+    private static void applyRequestHeaders(HttpURLConnection conn, Map<String, String> headers) {
+        if (headers == null) return;
+        for (Map.Entry<String, String> e : headers.entrySet()) {
+            if (e.getKey() != null && e.getKey().equalsIgnoreCase(BYPASS_PLATFORM_CACHE_HEADER)) continue;
+            conn.setRequestProperty(e.getKey(), e.getValue());
+        }
     }
 
     /**

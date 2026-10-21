@@ -25,6 +25,8 @@ set -euo pipefail
 #   详见 hosts/ios/lib/xcode-env.sh —— 导出 DEVELOPER_DIR，免去每次手工指定。
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/xcode-env.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/src-snapshot.sh"
+# ★★★#1149：真机探针参数的表驱动实现（解析 / 赋值 / 转发三处合并为一张表）
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/probe-args.sh"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -132,10 +134,8 @@ for a in "$@"; do
     #   → 截图 → 落报告自退（fixed/sticky 滚动锚定证据；与 Android `--es screen`/`--es scroll` 同语义）
     --screen=*) SCREEN_ARG="${a#--screen=}" ;;
     --scroll=*) SCROLL_ARG="${a#--scroll=}" ;;
-    # ★★★探针参数（#1115 响应体上限 / #1118 流式 / #1120 上传 / #1121 取消）——同一模式，统一解析
-    --fetch-limit-probe=*|--stream-probe=*|--upload-probe=*|--cancel-probe=*|--usefetch-probe=*|--redirect-probe=*)
-      PN="${a#--}"; PN="${PN%%=*}"; PV="${a##*=}"
-      case "$PN" in fetch-limit-probe) FETCH_LIMIT_ARG="$PV" ;; stream-probe) STREAM_PROBE_ARG="$PV" ;; upload-probe) UPLOAD_PROBE_ARG="$PV" ;; cancel-probe) CANCEL_PROBE_ARG="$PV" ;; usefetch-probe) USEFETCH_PROBE_ARG="$PV" ;; redirect-probe) REDIRECT_PROBE_ARG="$PV" ;; esac ;;
+    # ★探针参数（表驱动）：清单在 `hosts/ios/lib/probe-args.sh` 的 `IOS_PROBES`——新增探针只改表里一行
+    --*probe=*) ios_probe_parse_arg "$a" || { [ -z "$UDID" ] && UDID="$a"; } ;;
     --native-mix) MODE="native-mix" ;;
     --vapor-ab) MODE="vapor-ab" ;;
     # ★★★Vapor 设备端链（2026-10-03 · 三端对齐）：与 Android/鸿蒙**同一份**判据（①–⑫）
@@ -145,11 +145,9 @@ for a in "$@"; do
   esac
 done
 if [ -z "$UDID" ]; then
-  # ★设备标识有**两种形态**（本机实测：Xcode 26.5 + 无线配对给出的是标准 UUID）：
-  #   · 旧：ECID 式  00008101-001938AC1A68801E   （8-16）
-  #   · 新：标准 UUID F02622D7-29CC-5E75-9AF9-A3AB36BC5C55 （8-4-4-4-12）
-  #   只认前者会让探测**静默返回空**（现象 = "✗ 未发现真机"，但设备其实连着）——
-  #   本仓已踩：同一台 iPhone 12 在两种 Xcode 下标识形态不同。故两种都认。
+  # ★设备标识有**两种形态**（Xcode 26.5 + 无线配对给的是标准 UUID）：旧 ECID 式
+  #   `00008101-001938AC1A68801E`（8-16）与新 UUID `F02622D7-…`（8-4-4-4-12）。
+  #   只认前者会**静默返回空**（现象 = "✗ 未发现真机"，而设备其实连着）⇒ 两种都认。
   UDID="$(xcrun devicectl list devices 2>/dev/null | grep -vE 'simulated' \
     | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1 || true)"
 fi
@@ -386,17 +384,22 @@ codesign --force --sign "$IDENTITY" --entitlements "$BUILD/entitlements.plist" -
 echo "    身份：$IDENTITY · 描述文件：$(basename "$PROFILE")"
 
 echo "==> ⑦ 安装并启动"
-# ★★安装必须**校验成功**，失败即停（本仓实测踩坑：安装失败时脚本继续往下走，
-#   在第 ⑧ 段**盲等一个永远不会到来的报告**，白等 10 分钟还看不出原因）。
-#   免费开发者账号在设备上最多装 **3 个** App；超限的报错形如
+# ★安装必须**校验成功**，失败即停：失败时继续往下走会在第 ⑧ 段**等一个永远不会到来的报告**。
+#   免费开发者账号在设备上最多装 3 个 App；超限报错形如
 #   `maximum number of installed apps using a free developer profile: {...}`
-#   ⇒ 卸载该清单里不再需要的旧应用即可（注意 uninstall 收的是 **bundle id**
-#     如 `dev.proteus.experiments`，**不是** application-identifier `TEAM.dev.proteus.experiments`）。
+#   ⇒ 卸载旧应用（uninstall 收 **bundle id**，不是 application-identifier）。
 INSTALL_LOG="$(mktemp)"
 if ! xcrun devicectl device install app --device "$UDID" "$APP" > "$INSTALL_LOG" 2>&1; then
   echo "✗ 安装失败——原因（详见下方）："
-  grep -E "maximum number of installed apps|Invalid|error [0-9]+|无法安装|Failed" "$INSTALL_LOG" | head -6 | sed 's/^/    /'
-  echo "    ★若是「max 3 apps」：用 bundle id 卸载旧应用后重跑，例如"
+  # ★★★装置缺陷修复（2026-10-21 实测）：此前只 grep 白名单短语 ⇒ 其它形态的失败
+  #   （本轮：`--cache-probe=` 未登记 ⇒ 被当成 UDID ⇒ devicectl 报设备不存在）
+  #   **一行都匹配不到** ⇒ 打印"原因（详见下方）"下面是**空的**，真实原因永久不可见。
+  #   ⇒ 先列命中的关键行（若命中），**再无条件打印原始输出尾部**。
+  grep -E "maximum number of installed apps|Invalid|error [0-9]+|无法安装|Failed|not found|No device" "$INSTALL_LOG" | head -6 | sed 's/^/    /'
+  echo "    ── devicectl 原始输出（尾部 12 行）──"
+  tail -12 "$INSTALL_LOG" | sed 's/^/    /'
+  echo "    ★排查：① 设备标识不合法 ⇒ 某参数被当成 UDID（查 lib/probe-args.sh 的 IOS_PROBES 表）"
+  echo "            ② max 3 apps ⇒ 用 bundle id 卸载旧应用后重跑："
   echo "      xcrun devicectl device uninstall app --device $UDID <bundle-id>"
   rm -f "$INSTALL_LOG"
   exit 4
@@ -645,11 +648,9 @@ elif [ "$MODE" = "superapp" ]; then
   if [ -n "${SCREEN_ARG:-}" ]; then SA_ARGS+=("--screen=$SCREEN_ARG"); fi
   if [ -n "${SCROLL_ARG:-}" ]; then SA_ARGS+=("--scroll=$SCROLL_ARG"); fi
   # ★#1115：响应体上限探针（自动化验证 ⇒ 同样用 --console 阻塞到报告落盘自退）
-  # ★探针参数转发（#1126 usefetch 走门面）；★#1134 新增探针须同步三处：解析/case/本清单
-  for pv in FETCH_LIMIT_ARG:fetch-limit-probe STREAM_PROBE_ARG:stream-probe UPLOAD_PROBE_ARG:upload-probe CANCEL_PROBE_ARG:cancel-probe USEFETCH_PROBE_ARG:usefetch-probe REDIRECT_PROBE_ARG:redirect-probe; do
-    v="${pv%%:*}"; [ -n "${!v:-}" ] && SA_ARGS+=("--${pv#*:}=${!v}")
-  done
-  ANY_PROBE="${FETCH_LIMIT_ARG:-}${STREAM_PROBE_ARG:-}${UPLOAD_PROBE_ARG:-}${CANCEL_PROBE_ARG:-}${USEFETCH_PROBE_ARG:-}${REDIRECT_PROBE_ARG:-}"
+  # ★探针参数转发（#1126 usefetch 走门面）——**表驱动**：清单在 `lib/probe-args.sh` 的 `IOS_PROBES`
+  ios_probe_forward_args SA_ARGS
+  ANY_PROBE="$IOS_PROBE_ANY"
   # ★B1：`--drive` 或 `--tap` 都是**自动化验证**（落报告后自退）⇒ 用 `--console` 阻塞到退出；
   #   两者皆无 = 常驻给人看（App 不退 ⇒ 绝不能加 `--console`，见上注释）。
   if [ "$DRIVE" = "1" ] || [ -n "$TAP" ] || [ -n "${PUMP:-}" ] || [ -n "${SCROLL_ARG:-}" ] || [ -n "$ANY_PROBE" ]; then

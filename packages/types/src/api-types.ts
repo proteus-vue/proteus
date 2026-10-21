@@ -48,6 +48,12 @@ export interface RequestConfig {
   onRedirect?: (hop: { status: number; from: string; to: string; methodChanged: boolean }) => unknown
   /** 宿主级开关：true ⇒ 宿主不跟随（由管线在 manual / 有 onRedirect 时自动置位）。 */
   redirectManual?: boolean
+  /**
+   * ★★★#1149：true ⇒ Web 腿对本次请求传 `cache: 'no-store'`，关掉浏览器自带的 HTTP 缓存。
+   * 【为什么】框架层缓存启用后，浏览器缓存会抢先回 200（看不到 304）⇒ `meta.cache` 与实际不符。
+   * ★App/MP 腿忽略本字段（它们的字节腿本就没有自动缓存）。
+   */
+  bypassPlatformCache?: boolean
 }
 
 export interface RequestResponse<T> {

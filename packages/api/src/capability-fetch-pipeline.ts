@@ -28,6 +28,9 @@ import type { AbortSignalLike, FetchConfig, FetchMeta, FetchResult, RetryPolicy 
 // ★#1134 重定向策略（跟随循环 / RFC 规则 / 跨域剥离凭据）——与宿主解耦，跨端同一份
 import { headerOf, isRedirectStatus, methodAfterRedirect, nextHopConfig, resolveLocation } from './capability-fetch-redirect'
 import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
+// ★★★#1149 HTTP 条件请求缓存（P2）——App 端字节腿不会自动做 304，必须在框架层收口
+import { cacheMissError, createFetchCache, decodeCacheBody, entryAgeMs } from './capability-fetch-cache'
+import type { CacheLookup, FetchCacheController, FetchCacheMeta, FetchCacheMode, FetchCacheOptions } from './capability-fetch-cache'
 import { createAbortController } from './capability-invoke'
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
@@ -70,6 +73,18 @@ export interface FetchPipelineOptions {
   /** 请求/响应拦截器（请求按注册序、响应按**逆序**执行——洋葱模型） */
   requestInterceptors?: RequestInterceptor[]
   responseInterceptors?: ResponseInterceptor[]
+  /**
+   * ★★★#1149 **HTTP 条件请求缓存**（默认**关闭**——零回归）。
+   *
+   * · `true` = 开启（内存 LRU，默认 5 MiB/200 条，模式 `default`）；
+   * · 对象 = 开启并配置（字节预算 / 条数 / 默认模式 / 自定义 store）；
+   * · 不传/false = 不缓存；但**单请求**写 `config.cache` 时仍会为该请求开启（业务显式意图）。
+   *
+   * 【为什么要这个开关（取证）】Android 腿是裸 `HttpURLConnection`（未启用 ResponseCache）、
+   *   鸿蒙 RCP 同步往返——**都不会**自动发条件请求；浏览器会自动。⇒ 不开这一层，
+   *   App 与 Web 的缓存语义天生不一致（同一份源码，304 复用只发生在 Web）。
+   */
+  cache?: boolean | FetchCacheOptions
   /** 时钟注入（判据用；默认 `Date.now`） */
   now?: () => number
   /**
@@ -262,6 +277,15 @@ export function createFetchPipeline(
   const { delay } = makeDelay()
   const reqInterceptors = opts.requestInterceptors ?? []
   const resInterceptors = opts.responseInterceptors ?? []
+  // ★★★#1149：缓存控制器**始终建一个**（store 只在首次真正用到时才有条目），
+  //   但 `enabled` 跟随 `opts.cache` ⇒ 不传时 `modeOf` 返回 undefined ⇒ 零回归。
+  const cacheCtl: FetchCacheController = createFetchCache(
+    {
+      ...(typeof opts.cache === 'object' ? opts.cache : {}),
+      enabled: opts.cache !== undefined && opts.cache !== false,
+    },
+    now,
+  )
   const inflightMap = new Map<string, Promise<FetchResult<unknown>>>()
   const queue: QueueEntry[] = []
   let running = 0
@@ -454,7 +478,70 @@ export function createFetchPipeline(
       curConfig = out.config
     }
 
+    // ★★★#1149：**缓存决策**（放在拦截器之后——拦截器可以改 url / headers / cache 模式）。
+    const cacheMode: FetchCacheMode | undefined = cacheCtl.modeOf(curConfig)
+    let cacheLook: CacheLookup | undefined
+    let wireConfig: FetchConfig = curConfig
+    if (cacheMode) {
+      cacheLook = cacheCtl.lookup(curUrl, curConfig, cacheMode)
+      if (cacheLook.kind === 'miss-only') {
+        // only-if-cached 且无条目 ⇒ **不联网**、不伪造空响应
+        return {
+          ok: false,
+          error: cacheMissError() as never,
+          meta: {
+            id, attempts: 0, queuedMs, totalMs: Math.round(now() - startedAt), attemptMs: [],
+            deduped: false, priority, cache: { status: 'bypass', mode: cacheLook.mode },
+          },
+        }
+      }
+      if (cacheLook.kind === 'fresh') {
+        // ★deadline 是硬约束：命中缓存也不能绕过"限时给我结果"（否则业务的时间保证失效）
+        if (remaining() <= 0) return deadlineFail(now() - anchor)
+        if (task.aborted) {
+          return {
+            ok: false,
+            error: { code: 'fetch.aborted', message: `请求已取消（${task.abortReason ?? '业务主动'}）` } as never,
+            meta: {
+              id, attempts: 0, queuedMs, totalMs: Math.round(now() - startedAt), attemptMs: [],
+              deduped: false, priority, ...(deadlineMs !== undefined ? { deadlineMs } : {}),
+              cache: { status: 'bypass', mode: cacheMode },
+            },
+          }
+        }
+        let hitRes: FetchResult<unknown> = {
+          ok: true,
+          data: decodeCacheBody(cacheLook.entry, curConfig),
+          status: cacheLook.entry.status,
+          headers: { ...cacheLook.entry.headers },
+        }
+        // 响应拦截器在命中路径上同样执行（业务看到的结果形态必须一致）
+        for (let i = resInterceptors.length - 1; i >= 0; i--) {
+          hitRes = await resInterceptors[i]!(hitRes, {
+            ...ctx, url: curUrl, config: curConfig, attempt: 0, elapsedMs: now() - startedAt,
+          })
+        }
+        return {
+          ...hitRes,
+          meta: {
+            id, attempts: 0, queuedMs, totalMs: Math.round(now() - startedAt), attemptMs: [],
+            deduped: false, priority, ...(deadlineMs !== undefined ? { deadlineMs } : {}),
+            cache: { status: 'hit', ageMs: entryAgeMs(cacheLook.entry, now()), mode: cacheMode },
+          },
+        } as FetchResult<T>
+      }
+      if (cacheLook.kind === 'revalidate') {
+        // ★让平台自带缓存让开：否则浏览器可能用它自己的缓存直接回 200，
+        //   我们就永远看不到 304（"谁在服务这次请求"必须是唯一可解释的）。
+        wireConfig = { ...cacheLook.config, bypassPlatformCache: true }
+      } else {
+        // bypass：`no-store` 时同样要让平台缓存让开；其它（非 GET / 流式）保持原样
+        wireConfig = cacheMode === 'no-store' ? { ...curConfig, bypassPlatformCache: true } : curConfig
+      }
+    }
+
     let last: FetchResult<T> | null = null
+    let cacheMeta: FetchCacheMeta | undefined
     // ★信号链只在"用户信号变了"时重建（拦截器每轮可能改 config.signal）——
     //   每轮重建会不断 chain 上一层的 relay ⇒ 重试多次后 onabort 回调堆积。
     // ★★无用户信号时：只有 `abortable` 端才注入内部信号（MP 注入会被判 unsupported，见 options 说明）
@@ -484,7 +571,7 @@ export function createFetchPipeline(
           linkedSig = buildSignal()
           linkedFrom = curConfig.signal
         }
-        res = await dispatchWithRedirects(curUrl, curConfig)
+        res = await dispatchWithRedirects(curUrl, wireConfig)
       } catch (e) {
         res = { ok: false, error: { code: 'fetch.failed', message: e instanceof Error ? e.message : String(e) } as never }
       }
@@ -498,6 +585,13 @@ export function createFetchPipeline(
           traceStopReason = redirectTrace.stopReason
         }
       }
+      // ★★★#1149：**缓存收口**放在响应拦截器**之前**——拦截器属于策略层，
+      //   它看到的结果应当与业务最终看到的一致（304 已合成 200、命中即为缓存体）。
+      if (cacheLook) {
+        const settled = cacheCtl.settle(curUrl, curConfig, cacheLook, res, now())
+        res = settled.result
+        cacheMeta = settled.cache
+      }
       // ③ 响应拦截器（逆序，洋葱出口）
       for (let i = resInterceptors.length - 1; i >= 0; i--) {
         res = await resInterceptors[i]!(res, {
@@ -509,8 +603,7 @@ export function createFetchPipeline(
         })
       }
       last = res as FetchResult<T>
-      // ④ 可重试判定
-      //   ★★★这里**不能写 `if (last.ok) break`**：HTTP 429/5xx 在 `runFetch` 里是 `ok:true` +
+      // ④ 可重试判定      //   ★★★这里**不能写 `if (last.ok) break`**：HTTP 429/5xx 在 `runFetch` 里是 `ok:true` +
       //   status（不是异常）⇒ 先 break 就永远不重试。判定交给 `retryOn`（默认对 429/5xx 返 true）。
       const shouldRetry = (retryCfg.retryOn ?? DEFAULT_RETRY_ON)(res, attempt)
       if (!task.aborted && attempt + 1 < maxAttempts && shouldRetry) {
@@ -536,6 +629,7 @@ export function createFetchPipeline(
       priority,
       ...(retryDelaySkipped ? { retryDelaySkipped: true } : {}),
       ...(deadlineMs !== undefined ? { deadlineMs } : {}),
+      ...(cacheMeta ? { cache: cacheMeta } : {}),
       ...(traceHops.length || traceExceeded || traceStopped
         ? {
             redirects: {

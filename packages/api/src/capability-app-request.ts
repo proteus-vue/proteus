@@ -19,6 +19,22 @@ import type { AppRequestConfig, AppRequestResponse } from './capability-invoke'
 const HTTP_REQUEST = 'http.request'
 
 /**
+ * ★★★#1149：**框架内部约定头**——语义「本次请求请勿使用平台自带的 HTTP 缓存」。
+ *
+ * 【为什么用头而不是新线格式 tag】
+ *   只有一个平台需要它（iOS `URLSession` 的 `URLCache` 会自己发条件请求 / 自己合成 200 /
+ *   直接回本地缓存），而加线格式 tag 要五端同步（常量/encode/decode/黄金向量/探针登记）。
+ *   ⇒ 用一条**内部约定头**：JS 管线置位，宿主**消费后从转发头里剔除**（不外泄给服务端）。
+ *
+ * 【★这条通路是真机实测逼出来的，不是推断】
+ *   iOS 开框架缓存后第二次请求 `meta.cache` 报 `miss` 而非 `revalidated`——
+ *   因为 `URLSession` 已把 304 合成 200 交给我们，**框架层永远看不到 304**；
+ *   而"未开框架缓存"时服务端计数证明系统缓存也在替我们省请求（hits 不增）。
+ *   ⇒ 不让开平台缓存，`meta.cache` 就无法诚实回答"到底谁在服务这次请求"。
+ */
+export const BYPASS_PLATFORM_CACHE_HEADER = 'X-Proteus-Bypass-Platform-Cache'
+
+/**
  * 发一次 App 端 HTTP 请求。
  *
  * @param CapError 调用方注入的错误类（本模块不 import 具体实现，避免循环依赖）
@@ -36,9 +52,15 @@ export function appHttpRequest(
   //     跨域请求直接打到第三方（判据读数 `manual_status=200` / `cross_seen_count=0`）。
   //   ⇒ 本清单是**唯一维护点**，并由 `tests/fetch-wire-fields.test.ts` 断言它与 `FetchConfig`
   //     的线上字段逐项对齐（新增字段忘了加 ⇒ 判据红）。
+  //
+  // ★★★#1149：`bypassPlatformCache` **不进本清单**——它不是线格式字段，
+  //   而是"翻译成一条内部请求头"（`BYPASS_PLATFORM_CACHE_HEADER`；宿主消费后剔除）。
+  const headers = config.bypassPlatformCache
+    ? { ...(config.headers ?? {}), [BYPASS_PLATFORM_CACHE_HEADER]: '1' }
+    : config.headers
   const args = {
     url: config.url, method: config.method, data: config.data, params: config.params,
-    headers: config.headers, timeout: config.timeout, responseType: config.responseType,
+    headers, timeout: config.timeout, responseType: config.responseType,
     savePath: config.savePath, onChunk: config.onChunk, upload: config.upload, signal: config.signal,
     redirectManual: config.redirectManual,
   }

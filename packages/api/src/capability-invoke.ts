@@ -954,6 +954,16 @@ export interface AppRequestConfig {
    * ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务一般不直接用。
    */
   redirectManual?: boolean
+  /**
+   * ★★★#1149 **让平台自带的 HTTP 缓存让开**（框架层缓存接管时由管线置位）。
+   *
+   * 【为什么只在 App 腿上是"翻译成头"】`AppRequestConfig` 是桥入参（逐字段显式白名单），
+   *   本字段**不进线格式 meta**——`appHttpRequest` 把它翻译成内部约定头
+   *   `X-Proteus-Bypass-Platform-Cache: 1`，宿主消费后**从转发头剔除**（不外泄给业务服务端）。
+   *   · iOS：`URLSession` 的 `URLCache` 会自己发条件请求 / 自己合成 200 / 直接回本地副本 ⇒ 必须让开；
+   *   · Android / 鸿蒙：字节腿本就是裸 HTTP，没有平台缓存可绕 ⇒ 只做剔除（一致性 + 防外泄）。
+   */
+  bypassPlatformCache?: boolean
 }
 
 /** 请求响应（对齐 `RequestResponse`） */

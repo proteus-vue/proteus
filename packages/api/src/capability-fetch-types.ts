@@ -16,6 +16,7 @@
 import type { HttpMethod } from '@proteus-vue/types/api-types'
 import type { CapError } from './capability-types'
 import type { RedirectDecision, RedirectHop, RedirectTrace } from './capability-fetch-redirect'
+import type { FetchCacheMeta, FetchCacheMode } from './capability-fetch-cache'
 
 /** 重试策略（与 `capability-fetch-pipeline.ts` 的 `RetryPolicy` 同构）。 */
 export interface RetryPolicy {
@@ -109,6 +110,29 @@ export interface FetchConfig {
    * ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。
    */
   redirectManual?: boolean
+  /**
+   * ★★★#1149 **HTTP 缓存模式**（对齐浏览器 `Request.cache` 的六个标准值）。
+   *
+   * 【为什么必须有】App 端的字节腿是**裸 HTTP**——Android `HttpURLConnection` 不启用 `ResponseCache`、
+   *   鸿蒙 RCP 亦不做条件缓存；而浏览器/小程序会自动做。⇒ 不显式给业务这个旋钮，
+   *   同一份源码在三端就会"Web 命中 304、App 每次整包回源"。
+   *
+   * · `default`（管线开启缓存时的默认）= 新鲜则直用，过期则带 `If-None-Match`/`If-Modified-Since` 回源；
+   * · `no-store` = 不读也不写缓存；
+   * · `reload` = 忽略缓存、强制回源（并刷新缓存）；
+   * · `no-cache` = 跳过"新鲜直用"，但仍带校验器回源（304 则复用）；
+   * · `force-cache` = 有缓存就用（即使过期），没有才回源；
+   * · `only-if-cached` = 只用缓存；无条目 ⇒ `fetch.cacheMiss`（**不联网**）。
+   *
+   * ★只对 GET 的 200/203 生效；流式/落盘/上传不缓存。
+   * ★不写它时：管线未开缓存 ⇒ 行为与从前完全一致（零回归）；管线开了 ⇒ 用管线默认模式。
+   */
+  cache?: FetchCacheMode
+  /**
+   * ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开，
+   * 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。
+   */
+  bypassPlatformCache?: boolean
 }
 
 /** ★#1122：流式上传规格（宿主据此自读文件 + 自拼 multipart）。 */
@@ -164,6 +188,12 @@ export interface FetchMeta {
   deadlineMs?: number
   /** ★#1135：是否因总时限耗尽而失败（`fetch.deadline`）。 */
   deadlineHit?: boolean
+  /**
+   * ★★★#1149：本次请求的缓存结局（未启用缓存时不出现）。
+   * `hit` 直接命中新鲜缓存（**没有发网络请求**）/ `revalidated` 304 复用 /
+   * `miss` 回源 / `bypass` 不适用（非 GET、流式等，或 `no-store`）。
+   */
+  cache?: FetchCacheMeta
 }
 
 /** ★#1122：`useFetch` 成功结果（`data` 解构保持兼容；`status`/`headers` 为新增）。 */

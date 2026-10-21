@@ -41,10 +41,12 @@ const apiRows = ref([
   ["config.retry / priority", "★#1133 请求治理：失败重试（指数退避，只重试可恢复失败）/ 并发队列优先级（越大越先发）", "number | RetryPolicy / number?"],
   ["config.redirect / maxRedirects / onRedirect / redirectManual", "★#1134 重定向：follow/manual/error + 上限（默认 5）+ 逐跳回调（可 stop）；★跨域自动剥离 Authorization/Cookie；redirectManual 是内部字段（自动置位）", "'follow' | 'manual' | 'error' / number? / (hop) => decision? / boolean?"],
   ["config.deadline", "★#1135 **总时限**（从入队起算，跨排队/重试/多跳）：耗尽 ⇒ fetch.deadline；与单轮 timeout 取更紧者", "number?"],
+  ["config.cache / bypassPlatformCache", "★★#1149 **HTTP 缓存**（对齐浏览器 Request.cache）：default / no-store / reload / no-cache / force-cache / only-if-cached；过期后自动带 If-None-Match / If-Modified-Since 回源，304 ⇒ 复用缓存体。★App 三端字节腿不会自动做 304 ⇒ 由框架层收口；落空（only-if-cached）⇒ fetch.cacheMiss。bypassPlatformCache 是内部字段（管线自动置位，让浏览器自带缓存让开）", "'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached'? / boolean?"],
+  ["res.meta.cache", "★★#1149 缓存结局：hit（**没发网络**）/ revalidated（304 复用）/ miss（回源）/ bypass（非 GET、流式等）；配合 res.meta.attempts 可判定\"到底走没走网络\"", "{ status, ageMs?, stored?, mode? }?"],
 ])
 const compatRows = ref([
-  ["Web SPA", "fetch + AbortController（timeout/取消）+ ReadableStream（流式）", "✅"],
-  ["微信小程序", "wx.request（timeout + responseType）；流式/落盘/上传/取消明确 unsupported", "✅"],
+  ["Web SPA", "fetch + AbortController（timeout/取消）+ ReadableStream（流式）；★缓存由框架层接管（浏览器自带缓存让开）", "✅"],
+  ["微信小程序", "wx.request（timeout + responseType）；流式/落盘/上传/取消明确 unsupported；缓存走框架层（wx.request 不做 HTTP 缓存）", "✅"],
   ["Headless（SSR/测试）", "mock 桥注入", "✅"],
   ["iOS / Android", "宿主原生 HTTP；流式/落盘/上传/取消 + 32 MiB 上限（S3）", "✅"],
   ["鸿蒙", "RCP 同步往返 + 32 MiB 上限（S2）；流式/取消 unsupported", "🟡"],

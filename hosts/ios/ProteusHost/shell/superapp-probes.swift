@@ -99,6 +99,17 @@ enum SuperappProbes {
       deadlineSeconds: 180,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1149：**HTTP 条件请求缓存**判据（新鲜命中 / 304 复用 / no-store / 零回归）。
+    //   ★这一端尤其必须实测：iOS 走 `URLSessionConfiguration.default`，系统 `URLCache`
+    //     **可能替我们发条件请求或直接回本地缓存** —— 不测就不知道 304 到底是谁处理的。
+    ProbeConfig(
+      argPrefix: "--cache-probe=",
+      kickFormat: "__proteusHostAppCacheProbe(%@)",
+      resultKey: "__proteusHostCacheProbeResult",
+      reportPrefix: "cache",
+      deadlineSeconds: 180,
+      extraReadings: { _ in [:] },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

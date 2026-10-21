@@ -685,3 +685,170 @@ export function appUseFetchProbe(base: string, chunks = 128, size = 16 * 1024, d
   return JSON.stringify({ phase: 'started', queued: true })
 }
 
+/**
+ * ★★★决策 #1149：**HTTP 条件请求缓存**的真机判据探针。
+ *
+ * 【为什么这条必须在真机上跑（Node 层判据不够）】
+ *   `tests/fetch-cache.test.ts` 用的是 Node 的 `fetch`（undici）——它自己不做 HTTP 缓存，
+ *   所以那条判据验的是"框架层语义对不对"。真机上是另一回事：
+ *     · **Android** 腿是裸 `HttpURLConnection`（未装 `ResponseCache`）⇒ 条件头真能发出去？
+ *       304 会原样回来还是被吞？**必须实测**；
+ *     · **iOS** 腿是 `URLSessionConfiguration.default` ⇒ 系统 `URLCache` **可能**替我们发条件请求、
+ *       把 304 合成 200，甚至直接回本地缓存（那样我们就看不到 304）。
+ *   ⇒ 本探针同时读**服务端记账**：客户端说"命中"不算，服务端没收到才算。
+ *
+ * 【判据（缺一条都可能是"看起来缓存了"）】
+ *   ① `max-age=60`：第二次 `meta.cache.status='hit'`，且服务端 `hits` **不增加**；
+ *   ② `max-age=0 + ETag`：第二次服务端**收到** `If-None-Match`，我们拿到 `status=200`
+ *      + **同一份 body**（`gen` 不变 ⇒ 确实是缓存体，不是重新生成）；
+ *   ③ `no-store`：第二次仍回源（服务端 `hits` 递增）；
+ *   ④ 未开缓存的管线：`meta.cache` 不出现（零回归）。
+ *
+ * 【★装置硬约束（同 #1134 教训）】App 精简引擎**没有全局 `fetch`** ⇒ 一切请求（含读记账）都走 `useFetch`。
+ */
+export function appCacheProbe(base: string): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { base }
+  g['__proteusHostCacheProbeResult'] = ''
+
+  type CacheMeta = { status?: string; ageMs?: number; stored?: boolean; mode?: string }
+  type Res = {
+    ok?: boolean
+    status?: number
+    data?: unknown
+    headers?: Record<string, string>
+    error?: { code?: string; message?: string }
+    meta?: { attempts?: number; cache?: CacheMeta }
+  }
+  type Hooks = { useFetch: <T>(u: string, c?: unknown) => Promise<Res> }
+
+  const run = async (): Promise<void> => {
+    const cap = (await import('../../../packages/api/src/capability')) as unknown as {
+      createCapabilityHooks: (b: unknown, o?: unknown) => Hooks
+      getSharedCapabilityBridge: () => unknown
+    }
+    const bridge = cap.getSharedCapabilityBridge()
+    /** ★每个用例用**独立管线实例**：缓存是管线级状态，共用会让用例互相污染。 */
+    const mk = (opts: unknown): Hooks => cap.createCapabilityHooks(bridge, opts)
+
+    /** 读服务端记账（绕过缓存：no-store）。 */
+    const readStats = async (): Promise<Record<string, unknown>> => {
+      const hooks = mk({ fetch: {} })
+      const r = await hooks.useFetch<Record<string, unknown>>(`${base}/__stats`, {
+        responseType: 'json',
+        cache: 'no-store',
+        timeout: 15000,
+      })
+      return r.ok && r.data && typeof r.data === 'object' ? (r.data as Record<string, unknown>) : {}
+    }
+    const hitOf = (o: Record<string, unknown>, path: string): number => {
+      const m = o['hits'] as Record<string, number> | undefined
+      const n = m?.[path]
+      return typeof n === 'number' ? n : 0
+    }
+    const condOf = (o: Record<string, unknown>, path: string): string =>
+      ((o['conditional'] as Record<string, string[]> | undefined)?.[path] ?? []).join('|')
+
+    // ── ① 新鲜期命中：第二次不该打服务器 ──
+    // ★★`cache` 开在**管线配置**上：`createCapabilityHooks(bridge, { fetch: { cache: true } })`
+    const fresh = mk({ fetch: { cache: true } })
+    try {
+      // 首调用 `reload` ⇒ 即使该实例里已有条目也强制回源（让计数起点确定）
+      const r1 = await fresh.useFetch<{ gen?: number }>(`${base}/fresh`, { cache: 'reload', responseType: 'json' })
+      const s1 = await readStats()
+      const r2 = await fresh.useFetch<{ gen?: number }>(`${base}/fresh`, { responseType: 'json' })
+      const s2 = await readStats()
+      out['fresh_first_status'] = r1.status
+      out['fresh_first_cache'] = r1.meta?.cache
+      out['fresh_second_status'] = r2.status
+      out['fresh_second_cache'] = r2.meta?.cache
+      out['fresh_second_data'] = r2.data
+      out['fresh_hits_after_first'] = hitOf(s1, '/fresh')
+      out['fresh_hits_after_second'] = hitOf(s2, '/fresh')
+      const firstGen = (r1.data as { gen?: number } | undefined)?.gen
+      const secondGen = (r2.data as { gen?: number } | undefined)?.gen
+      out['fresh_hit_ok'] = r2.meta?.cache?.status === 'hit'
+      out['fresh_no_network_ok'] = hitOf(s2, '/fresh') === hitOf(s1, '/fresh')
+      out['fresh_same_body_ok'] = typeof firstGen === 'number' && firstGen === secondGen
+    } catch (e) {
+      out['fresh_error'] = String((e as Error)?.message ?? e)
+    }
+
+    // ── ② 条件请求 + 304 复用（max-age=0 ⇒ 每次都要校验）──
+    const etag = mk({ fetch: { cache: true } })
+    try {
+      const r1 = await etag.useFetch<{ gen?: number }>(`${base}/etag`, { cache: 'reload', responseType: 'json' })
+      const r2 = await etag.useFetch<{ gen?: number }>(`${base}/etag`, { responseType: 'json' })
+      const s2 = await readStats()
+      out['etag_first_cache'] = r1.meta?.cache
+      out['etag_second_cache'] = r2.meta?.cache
+      out['etag_second_status'] = r2.status
+      out['etag_second_data'] = r2.data
+      out['etag_conditional_seen'] = condOf(s2, '/etag')
+      const g1 = (r1.data as { gen?: number } | undefined)?.gen
+      const g2 = (r2.data as { gen?: number } | undefined)?.gen
+      out['etag_if_none_match_ok'] = /If-None-Match:\s*"g1"/.test(condOf(s2, '/etag'))
+      out['etag_revalidated_ok'] = r2.meta?.cache?.status === 'revalidated'
+      out['etag_status_200_ok'] = r2.status === 200
+      out['etag_same_body_ok'] = typeof g1 === 'number' && g1 === g2
+      out['etag_hits'] = hitOf(s2, '/etag')
+    } catch (e) {
+      out['etag_error'] = String((e as Error)?.message ?? e)
+    }
+
+    // ── ③ no-store：不许缓存 ──
+    const nostore = mk({ fetch: { cache: true } })
+    try {
+      await nostore.useFetch(`${base}/nostore`, { responseType: 'json' })
+      const s1 = await readStats()
+      await nostore.useFetch(`${base}/nostore`, { responseType: 'json' })
+      const s2 = await readStats()
+      out['nostore_hits_after_first'] = hitOf(s1, '/nostore')
+      out['nostore_hits_after_second'] = hitOf(s2, '/nostore')
+      out['nostore_ok'] = hitOf(s2, '/nostore') === hitOf(s1, '/nostore') + 1
+    } catch (e) {
+      out['nostore_error'] = String((e as Error)?.message ?? e)
+    }
+
+    // ── ④ 未开缓存 ⇒ 零回归（meta.cache 不出现；框架层完全不参与）──
+    //   ★★这里**不能断言"每次都真发"**：真机实测（2026-10-21）iOS 在未开框架缓存时
+    //     系统 `URLCache` 自己就会拦下 `/fresh`（`max-age=60`）——服务端 hits 不增。
+    //     那是**平台既有行为**（我们没改过 iOS 的 cachePolicy 默认值），不是本轮的回归。
+    //   ⇒ 如实分两件事：
+    //     · `off_meta_has_cache=false`（框架层零参与）——这是**判据**；
+    //     · `off_platform_cache_intervened`（服务端 hits 没增 ⇒ 平台缓存在起作用）——这是**端差异读数**，
+    //       它恰好就是"为什么必须框架层做缓存"的立论证据（Android 裸连接不会做，iOS 会做，Web 浏览器会做）。
+    const plain = mk({})
+    try {
+      const r1 = await plain.useFetch(`${base}/fresh`, { responseType: 'json' })
+      const s1 = await readStats()
+      const r2 = await plain.useFetch(`${base}/fresh`, { responseType: 'json' })
+      const s2 = await readStats()
+      out['off_meta_has_cache'] = r1.meta !== undefined && Object.prototype.hasOwnProperty.call(r1.meta, 'cache')
+      out['off_hits_delta'] = hitOf(s2, '/fresh') - hitOf(s1, '/fresh')
+      out['off_platform_cache_intervened'] = out['off_hits_delta'] === 0
+      out['off_both_ok'] = r1.ok === true && r2.ok === true
+    } catch (e) {
+      out['off_error'] = String((e as Error)?.message ?? e)
+    }
+
+    out['ok'] = out['fresh_hit_ok'] === true
+      && out['fresh_no_network_ok'] === true
+      && out['fresh_same_body_ok'] === true
+      && out['etag_if_none_match_ok'] === true
+      && out['etag_revalidated_ok'] === true
+      && out['etag_status_200_ok'] === true
+      && out['etag_same_body_ok'] === true
+      && out['nostore_ok'] === true
+      && out['off_meta_has_cache'] === false
+      && out['off_both_ok'] === true
+    g['__proteusHostCacheProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostCacheProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true })
+}
+

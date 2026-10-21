@@ -1,108 +1,88 @@
 // tests/host-probe-registry.test.ts
-// ★★★决策 #1134：**宿主探针登记必须三处同集**——静态判据。
+// ★★★决策 #1134：#1149 重写——**宿主探针登记必须两方同集**（表驱动后从"三处"降到"两方"）。
 //
-// 【它守的是什么（本轮真机抓出来的真缺陷）】
-//   给 iOS 加一个新探针，要在 `hosts/ios/run-selfdraw.sh` 里改**三处**（互相正交）：
-//     ① 参数解析分支：`--xxx-probe=*|...`（否则参数被当"设备 UDID"吞掉）
-//     ② `case "$PN"` 赋值：`xxx-probe) XXX_PROBE_ARG="$PV" ;;`（否则变量是空的）
-//     ③ 转发清单 `for pv in ...` + `ANY_PROBE`（否则参数不传给 App）
-//   漏任意一处 ⇒ 参数根本没到 App ⇒ App 走**常驻模式永不退出** ⇒
-//   **现象是"报告永远是旧的"**，而不是报错。
+// 【它守的是什么】
+//   iOS 真机探针的登记过去分散在 `run-selfdraw.sh` 的**三处**（解析分支 / case 赋值 / 转发清单），
+//   漏任意一处 ⇒ 参数根本没到 App ⇒ App 走常驻模式**永不退出** ⇒ 现象是"报告永远是旧的"，不报错。
+//   ★实测两次：
+//     · #1134：`redirect-probe` 三处全漏 ⇒ 服务端一个请求都没收到，连跑两轮 iOS 空转；
+//     · #1149：`--cache-probe=` **只**加进 Swift、脚本一处没加 ⇒ 参数被当成设备 UDID
+//       ⇒ 「✗ 安装失败」（而且旧脚本把安装失败原因 grep 掉了，下面一片空白）。
 //
-//   ★本轮实测：`redirect-probe` **三处全漏** ⇒ 服务端一个请求都没收到，
-//     连续两轮 iOS 跑空（每轮 ≈5 分钟），最后靠"服务端 `/__seen` 只有我自己的记录"才定位。
+// 【为什么现在只比两方】
+//   #1149 把三处合并成 `hosts/ios/lib/probe-args.sh` 的 `IOS_PROBES` **一张表**
+//   （解析与转发都由它派生）⇒ "三处不同步"这个形态本身被消除了。
+//   剩下的真实风险只有一项：**表里有、Swift 不认**（或反之）——参数解析了但 App 永远不认。
+//   ⇒ 本判据改为：`IOS_PROBES` 集合 ⇄ `superapp-probes.swift` 的 `argPrefix` 集合必须相等。
 //
-// 【判据口径】从脚本源码里抽出三处的探针名集合，断言三者**相等**。
-//   ★这是"清单腐化"类判据的通用形态：新增一项时人只会记得一处，机器负责核对另外两处。
+// 【★判据自己的假绿教训（原版）】旧版只比 `run-selfdraw.sh` **内部**三处 ⇒
+//   "只加 Swift、脚本一处不加"时三处照样相等、判据全绿。⇒ 覆盖面必须跟着实际形态走。
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 
 const ROOT = path.resolve(__dirname, '..')
+const LIB = path.join(ROOT, 'hosts/ios/lib/probe-args.sh')
+const SWIFT = path.join(ROOT, 'hosts/ios/ProteusHost/shell/superapp-probes.swift')
 const SCRIPT = path.join(ROOT, 'hosts/ios/run-selfdraw.sh')
 
-/** ① 参数解析分支里列出的探针名（`--a-probe=*|--b-probe=*`） */
-function parseBranchNames(src: string): string[] {
-  const m = /--([a-z-]+-probe)=\*\|([^\n]*?)\)/.exec(src)
+/** ① `lib/probe-args.sh` 的 `IOS_PROBES` 表（`"VAR:probe-name"` 行） */
+function tableNames(src: string): string[] {
+  const m = /IOS_PROBES=\(([\s\S]*?)\n\)/.exec(src)
   if (!m) return []
-  const line = m[0]
-  return [...line.matchAll(/--([a-z-]+-probe)=\*/g)].map((x) => x[1]!)
+  return [...m[1]!.matchAll(/"([A-Z_]+):([a-z-]+-probe)"/g)].map((x) => x[2]!)
 }
 
-/** ② `case "$PN"` 的赋值分支（`xxx-probe) XXX_PROBE_ARG=`） */
-function caseNames(src: string): string[] {
-  const at = src.indexOf('case "$PN" in')
-  if (at < 0) return []
-  const line = src.slice(at, src.indexOf('\n', at))
-  // ★允许数字、且不要求 `)` 后空格（本仓 case 写成紧凑单行）
-  // ★变量名不一定是 `*_PROBE_ARG`（`fetch-limit-probe` 存进 `FETCH_LIMIT_ARG`）⇒ 只要求 `_ARG=`
-  return [...line.matchAll(/([a-z0-9-]+-probe)\)\s*[A-Z_]+ARG=/g)].map((x) => x[1]!)
+/** ② Swift `ProbeConfig.argPrefix` 集合（App 真正会认的参数名） */
+function swiftNames(src: string): string[] {
+  return [...src.matchAll(/argPrefix:\s*"--([a-z-]+-probe)=/g)].map((x) => x[1]!)
 }
 
-/** ③ 转发清单（`for pv in A:xxx-probe ...`） */
-function forwardNames(src: string): string[] {
-  const m = /for pv in ([^\n]*?); do/.exec(src)
-  if (!m) return []
-  return [...m[1]!.matchAll(/:([a-z-]+-probe)/g)].map((x) => x[1]!)
-}
+describe('★★探针登记：IOS_PROBES 表 ⇄ Swift ProbeConfig 必须同集', () => {
+  const libSrc = fs.readFileSync(LIB, 'utf8')
+  const swiftSrc = fs.readFileSync(SWIFT, 'utf8')
+  const scriptSrc = fs.readFileSync(SCRIPT, 'utf8')
 
-describe('★★#1134 宿主探针登记：三处必须同集（漏一处 = 报告永远是旧的）', () => {
-  const src = fs.readFileSync(SCRIPT, 'utf8')
-
-  it('三处都能解析出探针（解析器自证：0 个 = 源码形态变了，判据会退化成空跑）', () => {
-    const a = parseBranchNames(src)
-    const b = caseNames(src)
-    const c = forwardNames(src)
-    expect(a.length, `① 解析分支抽到 0 个（源码形态变了？）`).toBeGreaterThan(3)
-    expect(b.length, `② case 赋值抽到 0 个`).toBeGreaterThan(3)
-    expect(c.length, `③ 转发清单抽到 0 个`).toBeGreaterThan(3)
+  it('解析器自证：两方都抽得到探针（0 个 = 源码形态变了，判据会退化成空跑）', () => {
+    expect(tableNames(libSrc).length, 'IOS_PROBES 表抽到 0 个（源码形态变了？）').toBeGreaterThan(3)
+    expect(swiftNames(swiftSrc).length, 'Swift argPrefix 抽到 0 个').toBeGreaterThan(3)
   })
 
-  it('★① 解析分支 ⊆ ③ 转发清单（新探针漏加转发 ⇒ 参数不传 App）', () => {
-    const parsed = new Set(parseBranchNames(src))
-    const forwarded = new Set(forwardNames(src))
-    const missing = [...parsed].filter((n) => !forwarded.has(n))
-    expect(missing, `★这些探针在解析分支里有、但没进转发清单：${missing.join(', ')}`).toEqual([])
+  it('★★表里有的，Swift 必须认（否则参数解析了但 App 永远不响应）', () => {
+    const inTable = new Set(tableNames(libSrc))
+    const inSwift = new Set(swiftNames(swiftSrc))
+    const missing = [...inTable].filter((n) => !inSwift.has(n))
+    expect(
+      missing,
+      `★这些探针在 IOS_PROBES 表里、Swift ProbeConfig 里没有：${missing.join(', ')}——App 永远不会响应这些参数`,
+    ).toEqual([])
   })
 
-  it('★② case 赋值 ⊆ ① 解析分支（新探针漏加 case ⇒ 变量恒空）', () => {
-    const parsed = new Set(parseBranchNames(src))
-    const assigned = new Set(caseNames(src))
-    const missing = [...assigned].filter((n) => !parsed.has(n))
-    expect(missing, `★这些探针有 case 赋值但解析分支收不到：${missing.join(', ')}`).toEqual([])
+  it('★★Swift 认的，表里必须有（否则参数被当成设备 UDID ⇒ 安装失败）', () => {
+    const inTable = new Set(tableNames(libSrc))
+    const inSwift = new Set(swiftNames(swiftSrc))
+    const missing = [...inSwift].filter((n) => !inTable.has(n))
+    expect(
+      missing,
+      `★★这些探针 Swift 会认、但 IOS_PROBES 表里没有：${missing.join(', ')}` +
+        `——参数会被当成设备 UDID（表现为安装失败 / 报告永远是旧的）`,
+    ).toEqual([])
   })
 
-  it('★① 解析分支 ⊆ ② case 赋值（漏 case ⇒ 参数解析了却没存下来）', () => {
-    const parsed = new Set(parseBranchNames(src))
-    const assigned = new Set(caseNames(src))
-    const missing = [...parsed].filter((n) => !assigned.has(n))
-    expect(missing, `★这些探针解析了但没有 case 赋值：${missing.join(', ')}`).toEqual([])
+  it('★表项去重 + 变量名唯一（重复会让转发顺序/覆盖关系不可预测）', () => {
+    const names = tableNames(libSrc)
+    expect(new Set(names).size, '表里有重复的探针名').toBe(names.length)
+    const vars = [...libSrc.matchAll(/"([A-Z_]+):[a-z-]+-probe"/g)].map((x) => x[1]!)
+    expect(new Set(vars).size, '表里有重复的变量名').toBe(vars.length)
   })
 
-  it('★★`ANY_PROBE` 覆盖全部转发项（漏一个 ⇒ 该探针不加 --console ⇒ 永不退出）', () => {
-    const fwd = forwardNames(src)
-    const m = /ANY_PROBE="([^"]*)"/.exec(src)
-    expect(m, '没找到 ANY_PROBE 定义').toBeTruthy()
-    const anyExpr = m![1]!
-    // 转发项 `FOO_PROBE_ARG:foo-probe` ⇒ ANY_PROBE 里必须有 `${FOO_PROBE_ARG:-}`
-    const missing = fwd.filter((name) => {
-      const varM = new RegExp(`([A-Z_]+)_PROBE_ARG:${name}\\b`, 'g') // 占位，下面按变量名核对
-      if (varM.test('')) return false
-      return false
-    })
-    // 直接按"转发项对应的变量名"核对（从 for 循环文本里取 VAR:name）
-    const pairs = [.../for pv in ([^\n]*?); do/.exec(src)![1]!.matchAll(/([A-Z_]+_ARG):([a-z-]+-probe)/g)].map(
-      (x) => ({ v: x[1]!, name: x[2]! }),
-    )
-    const missingVars = pairs.filter((p) => !anyExpr.includes(`\${${p.v}:-}`))
-    expect(missingVars.map((p) => `${p.v}(${p.name})`), '★ANY_PROBE 漏了这些变量').toEqual([])
-    // 顺带保证上面的占位循环没被优化掉（保持判据可读）
-    expect(missing).toEqual([])
-  })
-
-  it('★redirect-probe（#1134）三处齐全（防回归：本轮就是漏了它）', () => {
-    expect(parseBranchNames(src)).toContain('redirect-probe')
-    expect(caseNames(src)).toContain('redirect-probe')
-    expect(forwardNames(src)).toContain('redirect-probe')
+  it('★脚本确实走表驱动（防止有人回退成三处手写清单）', () => {
+    // 解析：`--*probe=*)` 分支必须调 lib 的函数
+    expect(scriptSrc, '解析分支没调用 ios_probe_parse_arg（回退成手写清单了？）').toContain('ios_probe_parse_arg "$a"')
+    // 转发：必须调 ios_probe_forward_args，且不再有手写 `for pv in ...:xxx-probe` 清单
+    expect(scriptSrc, '转发没调用 ios_probe_forward_args').toContain('ios_probe_forward_args SA_ARGS')
+    expect(scriptSrc, '仍存在手写的探针转发清单（应为表驱动）').not.toMatch(/for pv in [^\n]*:[a-z-]+-probe/)
+    // 旧形态的 `case "$PN"` 赋值块不该再出现
+    expect(scriptSrc, '仍存在手写 case 赋值块（应为表驱动）').not.toMatch(/case "\$PN" in [^\n]*-probe\)/)
   })
 })

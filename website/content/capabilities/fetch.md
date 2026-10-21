@@ -48,6 +48,8 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `maxRedirects` | `number` | 否 | ★#1134 最多跟随几跳（默认 5）。超过 ⇒ `fetch.tooManyRedirects`（真实错误）。 ★只在 `manual` / `onRedirect`（即框架层在跟）时生效。 |
 | `onRedirect` | `(hop: RedirectHop) => RedirectDecision \| Promise<RedirectDecision>` | 否 | ★#1134 **逐跳拦截**：每遇到一次重定向调一次；返回 `{action:'stop'}` 可拒绝。  【为什么这是超级应用必须的】重定向是**框架看不见的跳转**：API 302 到第三方域时， 宿主会把 `Authorization` 带过去（open-redirect 凭据泄露）。有了本回调，业务能看见每一跳 并决定跟不跟；**跨域时框架还会自动剥离凭据头**（不经业务决策，安全底线）。  ★回调里 `hop.from/to/status/methodChanged` 都是可记录的审计信息。 |
 | `redirectManual` | `boolean` | 否 | ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。 ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。 |
+| `cache` | `FetchCacheMode` | 否 | ★★★#1149 **HTTP 缓存模式**（对齐浏览器 `Request.cache` 的六个标准值）。  【为什么必须有】App 端的字节腿是**裸 HTTP**——Android `HttpURLConnection` 不启用 `ResponseCache`、 鸿蒙 RCP 亦不做条件缓存；而浏览器/小程序会自动做。⇒ 不显式给业务这个旋钮， 同一份源码在三端就会"Web 命中 304、App 每次整包回源"。  · `default`（管线开启缓存时的默认）= 新鲜则直用，过期则带 `If-None-Match`/`If-Modified-Since` 回源； · `no-store` = 不读也不写缓存； · `reload` = 忽略缓存、强制回源（并刷新缓存）； · `no-cache` = 跳过"新鲜直用"，但仍带校验器回源（304 则复用）； · `force-cache` = 有缓存就用（即使过期），没有才回源； · `only-if-cached` = 只用缓存；无条目 ⇒ `fetch.cacheMiss`（**不联网**）。  ★只对 GET 的 200/203 生效；流式/落盘/上传不缓存。 ★不写它时：管线未开缓存 ⇒ 行为与从前完全一致（零回归）；管线开了 ⇒ 用管线默认模式。 |
+| `bypassPlatformCache` | `boolean` | 否 | ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开， 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。 |
 
 ## 返回值
 
@@ -87,6 +89,8 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `maxRedirects` | `number` | `5` | ★#1134 最多跟随几跳（默认 5）。超过 ⇒ `fetch.tooManyRedirects`（真实错误）。 ★只在 `manual` / `onRedirect`（即框架层在跟）时生效。 |
 | `onRedirect` | `(hop: RedirectHop) => RedirectDecision \| Promise<RedirectDecision>` | — | ★#1134 **逐跳拦截**：每遇到一次重定向调一次；返回 `{action:'stop'}` 可拒绝。  【为什么这是超级应用必须的】重定向是**框架看不见的跳转**：API 302 到第三方域时， 宿主会把 `Authorization` 带过去（open-redirect 凭据泄露）。有了本回调，业务能看见每一跳 并决定跟不跟；**跨域时框架还会自动剥离凭据头**（不经业务决策，安全底线）。  ★回调里 `hop.from/to/status/methodChanged` 都是可记录的审计信息。 |
 | `redirectManual` | `boolean` | — | ★#1134 **宿主级**开关（一般不直接用）：true ⇒ 宿主不跟随（见线格式 `Redirect` tag）。 ★由管线在 `redirect:manual` / 有 `onRedirect` 时自动置位；业务手写无副作用（语义一致）。 |
+| `cache` | `FetchCacheMode` | — | ★★★#1149 **HTTP 缓存模式**（对齐浏览器 `Request.cache` 的六个标准值）。  【为什么必须有】App 端的字节腿是**裸 HTTP**——Android `HttpURLConnection` 不启用 `ResponseCache`、 鸿蒙 RCP 亦不做条件缓存；而浏览器/小程序会自动做。⇒ 不显式给业务这个旋钮， 同一份源码在三端就会"Web 命中 304、App 每次整包回源"。  · `default`（管线开启缓存时的默认）= 新鲜则直用，过期则带 `If-None-Match`/`If-Modified-Since` 回源； · `no-store` = 不读也不写缓存； · `reload` = 忽略缓存、强制回源（并刷新缓存）； · `no-cache` = 跳过"新鲜直用"，但仍带校验器回源（304 则复用）； · `force-cache` = 有缓存就用（即使过期），没有才回源； · `only-if-cached` = 只用缓存；无条目 ⇒ `fetch.cacheMiss`（**不联网**）。  ★只对 GET 的 200/203 生效；流式/落盘/上传不缓存。 ★不写它时：管线未开缓存 ⇒ 行为与从前完全一致（零回归）；管线开了 ⇒ 用管线默认模式。 |
+| `bypassPlatformCache` | `boolean` | — | ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开， 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。 |
 
 ### `UploadSpec`
 
@@ -153,6 +157,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `redirects` | `RedirectTrace` | — | ★#1134：重定向轨迹（仅在发生过跳转/被拦截/超限时出现）。`hops` 是逐跳审计记录。 |
 | `deadlineMs` | `number` | — | ★#1135：本次请求的总时限预算（ms；未设置则不出现）。 |
 | `deadlineHit` | `boolean` | — | ★#1135：是否因总时限耗尽而失败（`fetch.deadline`）。 |
+| `cache` | `FetchCacheMeta` | — | ★★★#1149：本次请求的缓存结局（未启用缓存时不出现）。 `hit` 直接命中新鲜缓存（**没有发网络请求**）/ `revalidated` 304 复用 / `miss` 回源 / `bypass` 不适用（非 GET、流式等，或 `no-store`）。 |
 
 ### `RedirectTrace`
 

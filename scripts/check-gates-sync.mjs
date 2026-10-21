@@ -119,6 +119,14 @@ const LOCAL_ONLY = {
   //   ★鸿蒙流式 unsupported（一次性 VM 限制）⇒ 只要求两端，不拿做不到的端当判据。
   //   与 check:evidence-tracked 同族（开发机跑：需真机产物 + git 工作树）。
   'check:stream-evidence': '流式通道双端真机证据门禁（逐块/字节/错位/seq + 背压真触发）——与 check:evidence-tracked 同族（开发机跑，需真机产物）',
+  // ★★★HTTP 条件请求缓存双端真机证据门禁（2026-10-21 · #1149）：Android/iOS 的 cache-probe.json
+  //   必须都在库 + 达标（新鲜命中时**服务端零请求** / 条件头真发出 / 304 合成 200 / no-store 不缓存 / 零回归）。
+  //   背景：Node 层判据跑在 undici 上，而 undici 不做 HTTP 缓存 ⇒ 只能证明"框架层语义"；
+  //   真机两端**行为不同**（Android 裸连接不缓存；iOS 的 URLCache 会把 304 合成 200 甚至直接回本地副本）
+  //   ⇒ 必须两端各跑一次，并以**服务端记账**为准。
+  //   ★鸿蒙 RCP 同步往返不做条件缓存（只剔除内部头）⇒ 只要求两端，不拿做不到的端当判据。
+  //   与 check:stream-evidence 同族（开发机跑：需真机产物 + git 工作树）。
+  'check:cache-evidence': '条件请求缓存双端真机证据门禁（新鲜命中零请求 / 条件头 / 304 合成 / no-store / 零回归）——与 check:stream-evidence 同族（开发机跑，需真机产物）',
   // ★★★hosts 关注点分层门禁（2026-10-07 · 用户「宿主里项目信息与项目无关抽象混在一起」）：
   //   校验三端 runtime/shell/dev 三层齐备 + runtime 无反向依赖 + 无被跟踪产物。
   //   与 check:host-rounding / check:host-kernel-keys 同族：宿主侧门禁，开发机跑（CI 无宿主源码语境）。

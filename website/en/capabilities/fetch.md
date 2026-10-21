@@ -48,6 +48,8 @@ Param,Type,Required,Doc
 | `maxRedirects` | `number` | No | — |
 | `onRedirect` | `(hop: RedirectHop) => RedirectDecision \| Promise<RedirectDecision>` | No | — |
 | `redirectManual` | `boolean` | No | — |
+| `cache` | `FetchCacheMode` | No | — |
+| `bypassPlatformCache` | `boolean` | No | — |
 
 ## Returns
 

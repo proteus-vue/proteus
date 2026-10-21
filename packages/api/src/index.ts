@@ -23,6 +23,16 @@ export type {
   ResponseInterceptor,
   PipelineBridge,
 } from './capability-fetch-pipeline'
+// ★★★#1149：HTTP 条件请求缓存（P2）——store 契约 + 语义函数（业务可注入自定义持久层）
+export { createFetchCache, createMemoryFetchCache, parseCacheControl, freshnessLifetimeMs, isFresh, fetchCacheKey } from './capability-fetch-cache'
+export type {
+  FetchCacheMode,
+  FetchCacheStatus,
+  FetchCacheMeta,
+  FetchCacheEntry,
+  FetchCacheStore,
+  FetchCacheOptions,
+} from './capability-fetch-cache'
 // ★决策 #1071：能力实例的订阅回收接线（注入式，零 vue 依赖）
 export { createSubscriptionScope, installCapabilityDisposeHook } from './capability-hooks-scope'
 // ★#1094：能力层边界资源账本（G-43 治理在能力侧的落点）
