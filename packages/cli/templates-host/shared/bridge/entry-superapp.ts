@@ -24,6 +24,9 @@ export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCa
 //   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
 import { appStaleProbe } from './entry-superapp-probes-stale'
 export { appStaleProbe } from './entry-superapp-probes-stale'
+// ★★★#1151：缓存持久层（L2）探针**单列**（两阶段跨进程；与基础的缓存探针职责不同）
+import { appPersistProbe } from './entry-superapp-probes-persist'
+export { appPersistProbe } from './entry-superapp-probes-persist'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -958,5 +961,9 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppStaleProbe?: (b: string) => string
 }).__proteusHostAppStaleProbe = (b: string) => appStaleProbe(b)
+// ★★★#1151：缓存持久层探针（两阶段：write/read；结果填 __proteusHostPersistProbeResult）
+;(globalThis as unknown as {
+  __proteusHostAppPersistProbe?: (b: string, p: string) => string
+}).__proteusHostAppPersistProbe = (b: string, p: string) => appPersistProbe(b, p)
 
 

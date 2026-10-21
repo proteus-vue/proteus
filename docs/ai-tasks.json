@@ -2435,6 +2435,35 @@
         "T-fetch-cache-conditional"
       ],
       "note": "【done · 决策 #1150】矩阵 §3 P2 收尾：#1149 登记的「stale-while-revalidate / stale-if-error 未做」已收口，并补 RFC 9111 §5.1 要求的 Age 头。★语义基准 = RFC 5861 原文（已逐句取证）：SWR 窗口是「变 stale 之后 N 秒」= age < lifetime + N（不是 age < N）；SIE 只覆盖 RFC 点名的 500/502/503/504 + 网络失败；RFC 5861 未规定与 must-revalidate 的交互 ⇒ 取 RFC 9111 §5.2.2.2 的更严格者（must-revalidate 优先，SWR/SIE 都不启用）；后台校验按条目去重（RFC 的 amplification attack 提醒）。★真机抓出一个**既有真缺陷**：responseType:json + 非 JSON 响应体（5xx 错误页/纯文本）⇒ interpretBody 抛错 ⇒ 异常逃出宿主回推回调 ⇒ 请求永久挂起（既不 resolve 也不 reject）。真机现场：探针卡 120s、服务端收到请求、宿主 HTTP_DONE 503 bodyLen=16，靠 logcat「回推回调抛异常」定位。分层修法：纯函数 interpretBody 保持\"坏 JSON 要抛\"的既有契约，在不能抛的边界（settleFromFrame）降级为原文 + 结算加兜底。★判据：fetch-stale 12/12（含窗口边界纯函数单测、并发 6 请求只发 1 次后台校验、SIE 不兜底取消与 4xx、501 不在 RFC 名单）；capability-invoke-bytes +2 条僵尸回归；破坏性验证 6 条各自独立命中。★真机双端各 12/12（证据 hosts/{android,ios}/results/stale-probe.json 已入库，check:cache-evidence 已扩到 4 份证据）。★判据自己错了三次（都以服务端记账/设备实测纠正）：waitUntil 在无 setTimeout 引擎上直接 false（而 App 引擎都没有 setTimeout）⇒ 改为以服务端收到的条件头为准；ETag 用\"生成次数\"⇒后台校验得 304 导致\"新值进缓存\"永不可能成立 ⇒ 加 /__bump 版本旋钮；deadline 30s 太紧（约 13 次往返）⇒ 120s。★诚实边界：L2 磁盘层仍未做；后台校验是进程内（进程被杀则丢失，行为安全）；SIE 不含 4xx/取消/能力缺失；未做重定向逐跳判定；鸿蒙不做条件缓存。"
+    },
+    {
+      "id": "T-fetch-cache-persist-l2",
+      "title": "#1151 缓存持久层（L2）：跨进程复用（Web/MP=KV、App=文件）+ 按端自动探测",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "packages/api/src/capability-fetch-cache-persist.ts",
+        "packages/api/src/capability-fetch-cache-runtime.ts",
+        "packages/api/src/capability-fetch-cache.ts",
+        "packages/api/src/capability-fetch-pipeline.ts",
+        "packages/api/src/index.ts",
+        "tests/fetch-cache-persist.test.ts",
+        "tests/fetch-cache-persist-runtime.test.ts",
+        "hosts/shared/bridge/entry-superapp-probes-persist.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/PersistProbe.java",
+        "hosts/android/run-persist-probe.sh",
+        "hosts/ios/run-persist-probe.sh",
+        "scripts/check-cache-evidence.mjs",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": 1151,
+      "verification": "npx vitest run tests/fetch-cache-persist.test.ts tests/fetch-cache-persist-runtime.test.ts && node scripts/check-cache-evidence.mjs && bash hosts/android/check-host-compile.sh && bash hosts/ios/check-selfdraw-compile.sh",
+      "branch": null,
+      "related": [
+        "T-fetch-stale-rfc5861"
+      ],
+      "note": "【done · 决策 #1151】消费 #1150 登记的「L2 磁盘层未做」：cache:{persist:true} ⇒ 缓存跨**进程重启**仍可用。★动手前取证三端形态不同（Web localStorage 同步 KV / MP wx.setStorage / App **没有 getStorage**，只有异步 fs）⇒ FetchCacheStore.match 契约改为可返回 Promise（按最弱的端定）；否则 App 只能伪造同步阻塞或干脆不支持——等于把最需要它的端排除在外。★架构：内存是权威热层（命中零 IO，未命中才读盘并回填；不搞启动全量载入）、写盘 fire-and-forget（失败只影响下次启动能否命中，但必须记 writeErrors）、读失败/损坏当未命中并记 corruptEntries、同 key 写入合并、JSON 往返后还原 Uint8Array、clear() 必须真清盘。★真机抓出的**判据假绿**（本轮最值钱）：首次 iOS 读到 ageMs=126522，我当场把毫秒当秒误读成\"35 小时\"，顺着查发现真问题——清盘实现是\"删索引里列出的键\"，而沙箱里留着上一版（每条一文件时期）的残留 e-7727e13c 且索引为空 ⇒ 清盘什么也没清掉 ⇒ 残留落在窗口内就会假通过。修法：文件后端改**单文件存整份**（清盘=删一个固定文件名；宿主无 readdir 且 Android File.delete() 删不掉非空目录 ⇒ 按索引逐条清不可靠）+ backend 新增端无关 clearAll() + 探针在 write 阶段前清盘 + 判据加\"命中的必须是本次写入\"（ageMs<5min；用绝对上限而非期望年龄±容差，因 Android 报告无 run_ts 会退化成 NaN 假红）。★判据：persist 17/17（\"重启\"必须是**新建 store 实例 + 复用同一 backend**，并断言新实例内存为空）+ runtime 12/12（按端探测/降级/清盘边界）；破坏性验证 6 条各自独立命中（不读盘⇒2 红/不还原字节⇒2 红/不记 writeErrors⇒2 红/清盘靠索引⇒2 红/删 runner hits 断言⇒门禁红）。★真机双端各 13/13（phase=write → 进程真死 → phase=read ⇒ 命中 + loads>0 + **服务端 hits 不增** + gen 一致 + ageMs 在本次量级）；check:cache-evidence 扩到 6 份证据，并新增\"判据的判据\"：要求 runner 里确实存在 hitsRead === hitsWrite（防为变绿而删断言）。★诚实边界：单进程模型（不做多进程并发写协调）；文件后端写一条要重写整份（O(N)）；不加密；索引损坏整层重建；flush() 不保证强杀时执行。"
     }
   ]
 }

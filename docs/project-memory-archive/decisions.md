@@ -11518,3 +11518,94 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ① L2 **磁盘层**（`04-cache-layers.md`；`FetchCacheStore` 插槽已就位）；
   ② P1 HTTPDNS / HTTP-2 / 连接池 / pinning（需 Android 引 OkHttp，独立大单，先评估包体影响）；
   ③ `stale-if-error` 的逐跳（重定向中途失败）判定——需先定"哪一跳算源站错误"。
+
+1151. **★★★缓存持久层（L2）——"重启后缓存还在"从文档变成跨进程实测，并抓出「清盘靠索引 ⇒ 残留造成假绿」 · 决策**（2026-10-21 · 承接 #1150「下一步①」）：
+
+【为什么做（前两轮自己写下的诚实边界）】
+  #1149 交付条件请求/304/Vary/LRU，#1150 交付 RFC 5861 + Age，
+  但两者都明确登记「只在**内存**，重启即失效」⇒ App 冷启动后**一条缓存都用不上**：
+  首屏每次整包回源，而内存 LRU 刚建好就随进程消失。
+  ⇒ 把条目落到平台持久化介质，让"上次运行学到的 ETag / 新鲜内容"跨进程复用。
+
+【★★动手前先取证：三端的持久化能力**形态不同**（这决定了契约必须异步）】
+  | 端 | 能力 | 形态 |
+  |---|---|---|
+  | Web | `localStorage`（桥 `getStorage`） | KV，**同步**，~5MB |
+  | MP  | `wx.setStorage`（桥 `getStorage`） | KV，同步+异步，10MB |
+  | App | **没有 `getStorage`**；只有 `fs.readBytes/writeBytes/remove` | 文件，**异步** |
+  ⇒ `FetchCacheStore.match` 的契约改为**可返回 Promise**（按最弱的端定）。
+    ★若按"Web 同步"定契约，App 端只能伪造同步阻塞（QuickJS 无 `Atomics.wait`）或干脆不支持
+      ⇒ 那等于把最需要它的端（冷启动最贵的端）排除在外。
+
+【落地】
+  · `capability-fetch-cache-persist.ts`：`createPersistentFetchCache`（**内存热层 + 持久冷层**）
+    + `createKvFetchCacheStorage`（Web/MP）+ `createFileFetchCacheStorage`（App）
+    + 自带最小 UTF-8 编解码（★App 引擎无 `TextEncoder/TextDecoder`，#1071/#1095 已证）。
+  · `capability-fetch-cache-runtime.ts`：`choosePersistBackend` 按端探测（业务侧零端分支）。
+  · `FetchCacheOptions.persist`：`true` 即按端自动选后端；可配 `{dir, maxPersistEntries, flushDelayMs}`。
+  · `settle`/`lookup` 转异步（持久层要读/删盘）；内存命中时仍是同步值（await 不多一次 tick）。
+
+【★★★关键设计取舍（每条都有理由）】
+  ① **内存始终是权威热层**：命中零 IO；未命中才读盘并回填。不搞"启动全量载入"——
+     冷启动是最贵的时候，不该做最重的 IO。
+  ② **写盘 fire-and-forget**：`put` 保持同步签名（同一请求链里第二次查缓存必须能看到刚写的条目）；
+     落盘异步。★失败只影响"下次启动能否命中"，绝不冒泡成请求失败——但必须**记账**
+     （`writeErrors`）：静默失败的持久层等于没有持久层。
+  ③ **读盘失败/损坏 ⇒ 当未命中**（不抛），但记 `corruptEntries` 并删掉该条（不静默）。
+  ④ **写入合并**（`flushDelayMs`，默认 120ms）：SWR 后台校验 + 前台命中可能连续写同一条。
+  ⑤ **byte 体要还原**：JSON 往返会把 `Uint8Array` 变成 `{0:..,1:..}` ⇒ 读时还原（判据守着）。
+  ⑥ **`clear()` 必须真清盘**（登出场景；只清内存会留下上一次用户的响应体）。
+
+【★★★真机抓出的**判据假绿**（本轮最有价值的教训）】
+  第一次 iOS 读到的 `ageMs=126522` —— 我**当场误读成"35 小时"**（把毫秒当秒），
+  以为读到了前一天残留。实际 126522ms = 126s ≈ 两阶段间隔，**完全合理**。
+  ★但顺着查下去发现了**真问题**：清盘实现是"删索引里列出的键"，
+  而 iOS 沙箱里确实留着上一版（"每条一文件"时期）的残留 `e-7727e13c`，索引却为空
+  ⇒ **清盘什么也没清掉** ⇒ 如果残留恰好在窗口内，"重启后命中"就会**假通过**。
+  【修法（两层）】
+    · 文件后端改**单文件存整份**：清盘 = 删一个固定文件名，一定成功（不依赖索引/readdir）。
+      ★为什么必须这样：宿主只开 read/write/remove，**没有 readdir**，
+        而 Android `fs.remove` 用 `File.delete()`——**非空目录删不掉** ⇒ "按索引逐条清"不可靠。
+    · backend 契约新增 `clearAll()`（端无关）：KV 删本层前缀键（**不动别人的数据**）/ 文件删单文件。
+    · 探针在 **write 阶段前先清盘**，并把 `cleared_keys / cleared_after` 写进证据。
+    · 判据加"**命中的必须是本次写入**"：`ageMs < 5min`（跨天残留是小时级）。
+      ★用绝对上限而不是"期望年龄±容差"：Android 报告没有 `run_ts`，用它会退化成 NaN 假红。
+
+【判据】
+  · `tests/fetch-cache-persist.test.ts` **17/17**（真实 HTTP；★"重启"= **新建 store 实例 + 复用同一 backend**，
+    并断言新实例内存为空——复用同一实例测的是内存，完全不证明持久化）：
+    重启后命中且**服务端零请求** / Vary 分桶跨重启 / 损坏条目当未命中 + 记账 + 删掉 /
+    落盘失败不影响请求 / `clear()` 真清盘 / 二进制体往返仍是 `Uint8Array` / 内存是热层（不再读盘）/
+    **KV 与文件两种后端跑同一套断言**。
+  · `tests/fetch-cache-persist-runtime.test.ts` **12/12**：按端探测（Web/MP⇒KV、App⇒文件、无介质⇒降级）+
+    `persist` 开关 + **清盘必须真清干净**（文件删单文件；KV 只清本层、不动 `other-app-key`）。
+  · **破坏性验证 6 条各自独立命中**：不读盘⇒2 红 / 不还原字节⇒2 红 / 不记 writeErrors⇒2 红 /
+    清盘靠索引⇒2 红（"磁盘上仍有文件残留"）/ 删 runner 的 hits 断言⇒门禁红 / （另 rediscover：
+    `persist:{backend}` 未优先使用⇒1 红，判据抓出的真 bug）。
+  · 真机双端 `bash hosts/{android,ios}/run-persist-probe.sh` ⇒ 各 **13/13**：
+    **phase=write → 进程真死（force-stop / 自退）→ phase=read** ⇒ 命中 + `loads>0` +
+    **服务端 hits 不增** + gen 一致 + `ageMs` 落在本次运行量级。
+    证据 `hosts/{android,ios}/results/persist-probe{,-write}.json`（已入库）；
+    `check:cache-evidence` 扩到 **6 份**证据（基础缓存 / RFC 5861 / 持久层）。
+
+【★门禁扩了一个"判据的判据"】
+  「服务端 hits 不增」这条**无法在静态门禁复算**（要运行时记账）⇒ 只能在 runner 里断言。
+  ⇒ `check:cache-evidence` 增加一条：**要求 runner 里确实存在 `hitsRead === hitsWrite`** ——
+    防止有人为了变绿而删掉它（本仓 #1145 的"早退"就是这类形态）。破坏验证：改成 `hitsRead >= 0` ⇒ 门禁红。
+
+【诚实边界】
+  ① **单进程模型**：不做多进程并发写同一缓存的协调（本仓 Shell 是单进程）；
+  ② 文件后端写一条要**重写整份文件**（O(N) 不是 O(1)）——预算内（5 MiB/200 条）可接受；
+     条目数上百且频繁写时应换"每条一文件 + 宿主补 readdir"（需动宿主契约，独立批次）；
+  ③ 不做加密（缓存体是服务端公开响应；敏感响应由 #1149 的 `Authorization` 规则挡在入库之外）；
+  ④ 索引损坏 ⇒ **整层重建**（丢弃所有条目），不逐条抢救——简单且不会读到错配条目；
+  ⑤ `flush()` 不保证在宿主被强杀时执行（平台限制；它用于**显式**收尾与判据）。
+
+【门禁】
+  定向测试 109/109 · contract-index · file-size · 真机双端各 13/13 ·
+  demo-page-api-parity · gen-content 84 页 · Android/iOS 零设备编译 · test:coupled（含新增两条持久层测试）。
+
+【下一步】
+  ① P1 HTTPDNS / HTTP-2 / 连接池 / pinning（需 Android 引 OkHttp，独立大单）；
+  ② 持久层的**条目上限主动淘汰**（MP 10MB 配额下需要"按字节淘汰"而不只是条目数）；
+  ③ SIE 的逐跳判定（重定向中途失败算不算"源站错误"）。

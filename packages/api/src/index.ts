@@ -25,6 +25,18 @@ export type {
 } from './capability-fetch-pipeline'
 // ★★★#1149：HTTP 条件请求缓存（P2）——store 契约 + 语义函数（业务可注入自定义持久层）
 export { createFetchCache, createMemoryFetchCache, parseCacheControl, freshnessLifetimeMs, isFresh, fetchCacheKey } from './capability-fetch-cache'
+// ★★★#1151：缓存持久层（L2）——持久化 store + KV/文件后端 + 按端探测（业务只需 `cache: { persist: true }`）
+export {
+  createPersistentFetchCache,
+  createKvFetchCacheStorage,
+  createFileFetchCacheStorage,
+  utf8DecodeBytes,
+  utf8EncodeString,
+} from './capability-fetch-cache-persist'
+export { choosePersistBackend } from './capability-fetch-cache-runtime'
+export type { PersistBackendChoice } from './capability-fetch-cache-runtime'
+export type { CachePersistBackend } from './capability-fetch-cache-persist'
+export type { FetchCachePersistOptions } from './capability-fetch-cache'
 export type {
   FetchCacheMode,
   FetchCacheStatus,

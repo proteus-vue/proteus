@@ -42,6 +42,7 @@ IOS_PROBES=(
   "REDIRECT_PROBE_ARG:redirect-probe"   # #1134 重定向拦截
   "CACHE_PROBE_ARG:cache-probe"         # #1149 HTTP 条件请求缓存
   "STALE_PROBE_ARG:stale-probe"         # #1150 RFC 5861（SWR / SIE）
+  "PERSIST_PROBE_ARG:persist-probe"     # #1151 缓存持久层（两阶段：write,read）
 )
 
 # 所有探针参数都设置过之后，是否有**任一**非空（决定是否 `--console` 阻塞等报告）

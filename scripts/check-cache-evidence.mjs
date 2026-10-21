@@ -215,8 +215,129 @@ for (const { id, rel, key } of STALE_ENDS) {
   })
 }
 
+/**
+ * ★★★#1151：**持久层（L2）**证据（同一能力族第三批）。
+ * 每个端两份：`persist-probe-write.json`（写入阶段）+ `persist-probe.json`（重启后读取阶段）。
+ * ★★判据核心：**两个阶段是两个进程**（中间 force-stop / 进程自退）⇒ 内存 LRU 必然消失，
+ *   所以"命中"只能来自盘上。配套断言：`loads>0`（读过盘）+ **服务端 hits 不增**（真的省了网络）。
+ */
+const PERSIST_ENDS = [
+  { id: 'android', dir: 'hosts/android/results' },
+  { id: 'ios', dir: 'hosts/ios/results' },
+]
+
+/**
+ * 从报告里取探针载荷。
+ * ★两端形态不同（#1148 的教训）：Android 存**对象**、iOS 的 `reportBody()` 存**字符串**（JSON 文本）。
+ *   ⇒ 统一在取值处兼容，不要在两个门禁各写一套。
+ */
+function probeOf(doc, key) {
+  let v = doc[key] ?? doc.probe
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v)
+    } catch {
+      return null
+    }
+  }
+  return v && typeof v === 'object' ? v : null
+}
+
+// ── ★★★#1151：持久层（两阶段跨进程）──
+const persistRows = []
+for (const { id, dir } of PERSIST_ENDS) {
+  const writeRel = `${dir}/persist-probe-write.json`
+  const readRel = `${dir}/persist-probe.json`
+  const writeAbs = path.join(ROOT, writeRel)
+  const readAbs = path.join(ROOT, readRel)
+  if (!fs.existsSync(writeAbs) || !fs.existsSync(readAbs)) {
+    problems.push(
+      `${id}: 缺持久层证据（需要 ${writeRel} + ${readRel}）——跑 \`bash hosts/${id}/run-persist-probe.sh\``,
+    )
+    persistRows.push({ id, state: '缺失' })
+    continue
+  }
+  for (const rel of [writeRel, readRel]) {
+    if (!isTracked(rel)) problems.push(`${id}: 证据 ${rel} 存在但未入库——git add -f ${rel}`)
+  }
+  let W = null
+  let R = null
+  try {
+    W = probeOf(JSON.parse(fs.readFileSync(writeAbs, 'utf-8')), 'persist_probe')
+    R = probeOf(JSON.parse(fs.readFileSync(readAbs, 'utf-8')), 'persist_probe')
+  } catch (e) {
+    problems.push(`${id}: 持久层证据解析失败：${e.message}`)
+    persistRows.push({ id, state: '解析失败' })
+    continue
+  }
+  if (!W || !R) {
+    problems.push(`${id}: 持久层证据里没有 persist_probe 载荷（形态变了？）`)
+    persistRows.push({ id, state: '无载荷' })
+    continue
+  }
+
+  // ① 写入阶段真的写盘了
+  if (W.phase !== 'write') problems.push(`${id}: write 阶段报告 phase=${W.phase}（应为 write）`)
+  if (W.backend_kind !== 'file') {
+    problems.push(
+      `${id}: 后端 = ${W.backend_kind}（${W.backend_reason}）——App 端**没有 getStorage**，应为 file`,
+    )
+  }
+  if (W.degraded !== false) problems.push(`${id}: 持久化介质不可用（degraded=${W.degraded}）`)
+  if (W.write_persisted_ok !== true) {
+    problems.push(`${id}: 写盘未成功（stats=${JSON.stringify(W.persist_stats || {})}）`)
+  }
+  // ② 重启后命中，且**来自盘上**
+  if (R.phase !== 'read') problems.push(`${id}: read 阶段报告 phase=${R.phase}（应为 read）`)
+  if (R.read_hit_ok !== true) problems.push(`${id}: 重启后**未命中**（cache=${JSON.stringify(R.read_cache || {})}）`)
+  if (R.read_from_disk_ok !== true) {
+    problems.push(`${id}: 命中但不是来自盘上（loads=${(R.persist_stats || {}).loads}）——装置可能没真重启`)
+  }
+  // ③ 体一致
+  if (R.read_gen !== W.write_gen) problems.push(`${id}: 重启后体内容变了（gen ${W.write_gen} → ${R.read_gen}）`)
+  // ④ ★防"读到旧残留"：年龄必须落在"本次运行"的量级（跨天残留是小时级）
+  const ageMs = Number((R.read_cache || {}).ageMs ?? -1)
+  if (!(ageMs >= 0 && ageMs < 300000)) {
+    problems.push(
+      `${id}: 命中的条目年龄 ${ageMs}ms 超出本次运行量级（>5min）——可能是**上一次残留**（清盘没生效）`,
+    )
+  }
+  if (R.ok !== true) problems.push(`${id}: read 阶段整体 ok=${R.ok}`)
+
+  /**
+   * ★★**服务端 hits 不增**这条无法在本门禁复算（它需要 runner 运行时的服务端记账，
+   *   而门禁只读静态产物）⇒ 在 runner 里断言，本门禁做**间接守**：
+   *   要求 runner 确实把这条写成了判据（防止有人为了让结果变绿而删掉它）。
+   *   ★这是"判据的判据"——本仓反复吃"删掉断言就静默通过"的亏（#1145 的早退即此形态）。
+   */
+  const runnerRel = `hosts/${id}/run-persist-probe.sh`
+  const runnerAbs = path.join(ROOT, runnerRel)
+  if (fs.existsSync(runnerAbs)) {
+    const src = fs.readFileSync(runnerAbs, 'utf-8')
+    if (!/hitsRead === hitsWrite/.test(src)) {
+      problems.push(
+        `${id}: ${runnerRel} 缺少「服务端 hits 不增」断言（hitsRead === hitsWrite）——` +
+          `那是"重启后真省了网络"的唯一硬证据，删掉它本判据就只剩客户端自述`,
+      )
+    }
+  } else {
+    problems.push(`${id}: 缺 runner ${runnerRel}`)
+  }
+
+  persistRows.push({
+    id,
+    state: problems.some((x) => x.startsWith(`${id}:`)) ? '不达标' : '通过',
+    backend: W.backend_kind,
+    gen: W.write_gen,
+    ageMs,
+    loads: (R.persist_stats || {}).loads,
+  })
+}
+
 if (LIST_ONLY) {
-  console.log(`HTTP 条件请求缓存双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端）`)
+  console.log(
+    `HTTP 条件请求缓存双端证据（基础 ${rows.length} 端 + RFC 5861 扩展 ${staleRows.length} 端 + 持久层 ${persistRows.length} 端）`,
+  )
   for (const r of rows) {
     const extra =
       r.freshHits === undefined
@@ -227,6 +348,13 @@ if (LIST_ONLY) {
   for (const r of staleRows) {
     const extra = r.swr === undefined ? '' : ` · SWR=${r.swr} · 条件头「${r.cond}」· 刷新后 ver=${r.ver}`
     console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} ${r.rel}${extra}`)
+  }
+  for (const r of persistRows) {
+    const extra =
+      r.backend === undefined
+        ? ''
+        : ` · 后端=${r.backend} · 重启后命中（loads=${r.loads} · ageMs=${r.ageMs} · gen=${r.gen}）`
+    console.log(`  ${r.state.padEnd(6)} ${r.id.padEnd(8)} hosts/${r.id}/results/persist-probe*.json${extra}`)
   }
   if (problems.length) {
     console.log(`  ⚠ ${problems.length} 条问题（--list 只报告）：`)
@@ -243,5 +371,6 @@ if (problems.length > 0) {
 console.log(
   `✅ 条件请求缓存双端证据齐备（基础：${rows
     .map((r) => `${r.id} 命中 hits ${r.freshHits}/平台缓存介入=${r.platformCache}`)
-    .join(' · ')}；RFC 5861：${staleRows.map((r) => `${r.id} SWR=${r.swr} ver=${r.ver}`).join(' · ')}）`
+    .join(' · ')}；RFC 5861：${staleRows.map((r) => `${r.id} SWR=${r.swr} ver=${r.ver}`).join(' · ')}；` +
+    `持久层：${persistRows.map((r) => `${r.id} ${r.backend} 重启命中 ageMs=${r.ageMs}`).join(' · ')}）`,
 )

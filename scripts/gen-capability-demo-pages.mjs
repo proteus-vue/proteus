@@ -309,6 +309,7 @@ async function onFetch(): Promise<void> {
       ['Cache-Control: stale-while-revalidate', '★★#1150 **立即回旧值 + 后台校验**（RFC 5861）：变 stale 后 N 秒内直接返回旧值，同时后台发条件请求刷新缓存 ⇒ 接口慢也不卡首屏。★`must-revalidate` 优先（一旦 stale 就 MUST NOT 复用，RFC 9111 §5.2.2.2）；无 `setTimeout` 的引擎上后台校验同样能跑（靠宿主回推）', '响应头指令（秒）'],
       ['Cache-Control: stale-if-error', '★★#1150 **源站故障时用旧值兜底**（RFC 5861）：回源遇网络失败 / 500·502·503·504 ⇒ 返回缓存旧值（`meta.cache.status=stale`）。★**不兜底**用户取消（fetch.aborted）与 4xx（那不是"源站错误"，RFC 原文只列 500/502/503/504）', '响应头指令（秒）'],
       ['res.headers.age', '★#1150 由缓存生成的响应必带 `Age`（RFC 9111 §5.1 MUST）——业务据此知道"这份数据多旧"（SWR 场景尤其关键）', 'string（秒）'],
+      ['config.cache.persist', '★★★#1151 **L2 持久层**：`true` ⇒ 缓存跨**进程重启**仍可用（Web/MP 走 KV、App 走文件；App 没有 getStorage）。★不开则只在内存，冷启动后一条都用不上。可配 `{ dir, maxPersistEntries, flushDelayMs }`；介质不可用时自动退回内存（不报错）', 'boolean | { dir?, maxPersistEntries?, flushDelayMs? }?'],
     ],
     compat: [
       ['Web SPA', 'fetch + AbortController（timeout/取消）+ ReadableStream（流式）；★缓存由框架层接管（浏览器自带缓存让开）', '✅'],

@@ -364,7 +364,8 @@ export function createFetchPipeline(
         }
         const r = await runFetch<unknown>(bridge, url, revalConfig)
         // 复用 settle 的 304 合成与入库逻辑：给它一个"缓存已过期需校验"的等价 lookups
-        cacheCtl.settle(url, config, { kind: 'revalidate', entry, config, mode: 'default' }, r, now())
+        // ★#1151：settle 已异步（持久层要读/删盘）
+        await cacheCtl.settle(url, config, { kind: 'revalidate', entry, config, mode: 'default' }, r, now())
         if (!r.ok) {
           // ★如实登记：后台校验失败 ⇒ 交给 stale-if-error 的窗口判定（下一次请求可用旧值兜底）
           lastBackgroundError = r.error?.code ?? 'fetch.failed'
@@ -546,7 +547,8 @@ export function createFetchPipeline(
     let cacheLook: CacheLookup | undefined
     let wireConfig: FetchConfig = curConfig
     if (cacheMode) {
-      cacheLook = cacheCtl.lookup(curUrl, curConfig, cacheMode)
+      // ★#1151：持久层的 lookup 可能要读盘 ⇒ 必须 await（内存命中时它是同步值，await 也不多一次 tick）
+      cacheLook = await cacheCtl.lookup(curUrl, curConfig, cacheMode)
       if (cacheLook.kind === 'miss-only') {
         // only-if-cached 且无条目 ⇒ **不联网**、不伪造空响应
         return {
@@ -661,7 +663,7 @@ export function createFetchPipeline(
       // ★★★#1149：**缓存收口**放在响应拦截器**之前**——拦截器属于策略层，
       //   它看到的结果应当与业务最终看到的一致（304 已合成 200、命中即为缓存体）。
       if (cacheLook) {
-        const settled = cacheCtl.settle(curUrl, curConfig, cacheLook, res, now())
+        const settled = await cacheCtl.settle(curUrl, curConfig, cacheLook, res, now())
         res = settled.result
         cacheMeta = settled.cache
       }

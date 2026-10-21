@@ -35,6 +35,9 @@
 //   ⑤ 缓存键含 `responseType`（同一 URL 以 text/json 取会分开存）——避免"猜"反序列化形态。
 
 import type { FetchConfig, FetchResult } from './capability-fetch-types'
+// ★#1151 持久层：按端探测后端（App=文件 / Web·MP=KV）+ 持久化 store 包装
+import { choosePersistBackend } from './capability-fetch-cache-runtime'
+import { createPersistentFetchCache } from './capability-fetch-cache-persist'
 
 /** `Request.cache` 的六个标准值（与浏览器同名同义）。 */
 export type FetchCacheMode = 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached'
@@ -104,15 +107,33 @@ export interface FetchCacheEntry {
   bytes: number
 }
 
-/** 缓存存储契约（内存实现见 `createMemoryFetchCache`；磁盘层将来实现同一接口即可）。 */
+/**
+ * 缓存存储契约（内存实现见 `createMemoryFetchCache`；持久化实现见 `createPersistentFetchCache`）。
+ *
+ * ★★★#1151：`match` 改为**异步**——因为 App 端**只有异步文件通路**
+ *   （`fs.readBytes` 经 `invokeHostAsync`；App 没有 `getStorage`，Web/MP 的 KV 是同步的）。
+ *   若把契约定成同步，App 端就只能"同步等异步"（伪造阻塞），或干脆不支持持久层。
+ *   ⇒ 契约按**最弱的端**定：`match` 可以返回 `Promise`。
+ *   ★`put` / `remove` 仍是**同步签名**：内存态必须立即一致（同一请求链里的第二次查缓存要能看到刚写的条目）；
+ *     落盘由实现自己 fire-and-forget（写失败只影响"下次启动能否命中"，绝不影响本次请求）。
+ */
 export interface FetchCacheStore {
-  /** 按基站键 + 请求头匹配（`Vary` 语义在 store 内完成） */
-  match(key: string, requestHeaders: Record<string, string> | undefined, now: number): FetchCacheEntry | undefined
+  /** 按基站键 + 请求头匹配（`Vary` 语义在 store 内完成）。★异步：见上 */
+  match(
+    key: string,
+    requestHeaders: Record<string, string> | undefined,
+    now: number,
+  ): FetchCacheEntry | undefined | Promise<FetchCacheEntry | undefined>
   put(entry: FetchCacheEntry): void
   remove(key: string, entry: FetchCacheEntry): void
-  /** 清空（测试/登出场景） */
+  /** 清空（测试/登出场景）。★持久层实现应同时清盘；异步由实现自己处理 */
   clear(): void
   stats(): { entries: number; bytes: number }
+  /**
+   * ★#1151：把内存条目**全部落盘**并等待完成（App 退出前、判据"模拟重启"前调用）。
+   * 不实现 ⇒ 视为"已持久"（内存实现无需盘）。
+   */
+  flush?(): Promise<void>
 }
 
 /** 管线级缓存配置（`createFetchPipeline(bridge, { cache: ... })`）。 */
@@ -133,6 +154,33 @@ export interface FetchCacheOptions {
    * ★false 时仍允许**单请求**用 `config.cache` 显式开启——那是业务意图，不该被管线默认值否决。
    */
   enabled?: boolean
+  /**
+   * ★★★#1151 **持久层开关（L2）**。
+   *
+   * · `true` = 按当前端自动选后端：Web/MP ⇒ KV（`localStorage` / `wx.setStorage`）；
+   *   App ⇒ 文件（`fs.readBytes/writeBytes`，因 App **没有** `getStorage`）；
+   * · `false`/不传 = 只内存（#1149/#1150 的原行为，冷启动后作废）；
+   * · 对象 = 开启并配置（`dir` 文件目录 / `maxPersistEntries` 条目上限 / `flushDelayMs` 合并窗口）。
+   *
+   * 【为什么值得开】不开时 **App 冷启动后一条缓存都用不上**（内存 LRU 随进程消失）——
+   *   首屏每次整包回源。开了之后"上次运行学到的 ETag / 新鲜内容"跨进程复用。
+   *
+   * ★诚实边界：本字段只决定"**要不要**持久化"；具体后端由 `createFetchCacheForRuntime()`
+   *   按端探测（探测失败 ⇒ 自动退回内存，不报错——缓存是可选加速层）。
+   */
+  persist?: boolean | FetchCachePersistOptions
+}
+
+/** 持久层的可配置项（`cache.persist` 的对象形态）。 */
+export interface FetchCachePersistOptions {
+  /** 文件后端的目录（App 端；沙箱相对路径，默认 `cache/http`） */
+  dir?: string
+  /** 持久层条目上限（★Web ~5MB / MP 10MB 有平台配额，必须主动限） */
+  maxPersistEntries?: number
+  /** 同 key 连续写的合并窗口（ms，默认 120） */
+  flushDelayMs?: number
+  /** 显式指定后端（判据用；缺省按端探测） */
+  backend?: import('./capability-fetch-cache-persist').CachePersistBackend
 }
 
 /** `Cache-Control` 的解析结果（只保留本实现真正消费的指令）。 */
@@ -495,16 +543,20 @@ export type CacheLookup =
 export interface FetchCacheController {
   /** 该请求的生效模式（`undefined` = 完全不碰缓存） */
   modeOf(config: FetchConfig): FetchCacheMode | undefined
-  /** 请求前：查缓存 / 加条件头 / 判定 only-if-cached 落空 */
-  lookup(url: string, config: FetchConfig, mode: FetchCacheMode): CacheLookup
-  /** 响应后：304 合成 200 并更新条目；可写则写；返回最终结果与缓存元数据 */
+  /** 请求前：查缓存 / 加条件头 / 判定 only-if-cached 落空
+   *  ★#1151：**可能是 Promise**（持久层读盘）；内存命中时为同步值。调用方必须 `await`。 */
+  lookup(url: string, config: FetchConfig, mode: FetchCacheMode): CacheLookup | Promise<CacheLookup>
+  /** 响应后：304 合成 200 并更新条目；可写则写；返回最终结果与缓存元数据。
+   *  ★#1151：**异步**（持久层的 `match`/`remove` 是异步的）；它在管线里本就是 awaited 路径。 */
   settle(
     url: string,
     config: FetchConfig,
     lookup: CacheLookup,
     res: FetchResult<unknown>,
     now: number,
-  ): { result: FetchResult<unknown>; cache: FetchCacheMeta }
+  ): Promise<{ result: FetchResult<unknown>; cache: FetchCacheMeta }>
+  /** ★#1151：持久层落盘等待（App 退出前 / 判据"模拟重启"前用；未实现即视为已持久） */
+  flush(): Promise<void>
 }
 
 /** 建一个缓存控制器（每个管线一个；store 可在多个管线间共享——业务自愿）。 */
@@ -512,7 +564,10 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
   const defaultMode = opts.defaultMode ?? 'default'
   const enabled = opts.enabled ?? true
   const defaultMaxAgeMs = 0
-  const store = opts.store ?? createMemoryFetchCache({ maxBytes: opts.maxBytes, maxEntries: opts.maxEntries, now })
+  const store = resolveStore(opts, now)
+  /** ★#1151：持久层读数（未启用持久层时为 undefined；判据/排障用） */
+  const maybeStats = (store as unknown as { persistStats?: () => unknown }).persistStats
+  const persistStats = typeof maybeStats === 'function' ? () => maybeStats.call(store) : undefined
 
   function modeOf(config: FetchConfig): FetchCacheMode | undefined {
     if (config.cache) return config.cache
@@ -527,14 +582,27 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
     return undefined
   }
 
-  function lookup(url: string, config: FetchConfig, modeIn: FetchCacheMode): CacheLookup {
+  function lookup(url: string, config: FetchConfig, modeIn: FetchCacheMode): CacheLookup | Promise<CacheLookup> {
     const mode = requestModeOverride(config) ?? modeIn
     if (mode === 'no-store') return { kind: 'bypass', mode }
     if (!isCacheableRequest(config)) return { kind: 'bypass', mode }
     const key = fetchCacheKey(url, config)
-    const entry = store.match(key, config.headers, now())
     const at = now()
+    // ★#1151：`match` 可能异步（持久层）⇒ 只有它需要 await；其余分支保持同步返回
+    const maybe = store.match(key, config.headers, at)
+    if (maybe && typeof (maybe as Promise<unknown>).then === 'function') {
+      return (maybe as Promise<FetchCacheEntry | undefined>).then((entry) => finishLookup(config, mode, entry, at))
+    }
+    return finishLookup(config, mode, maybe as FetchCacheEntry | undefined, at)
+  }
 
+  /** lookup 的第二段（`match` 拿到条目后的判定；同步/异步两条路共用，避免分叉）。 */
+  function finishLookup(
+    config: FetchConfig,
+    mode: FetchCacheMode,
+    entry: FetchCacheEntry | undefined,
+    at: number,
+  ): CacheLookup {
     if (mode === 'only-if-cached') {
       if (!entry) return { kind: 'miss-only', mode }
       // ★only-if-cached 的语义就是"只用缓存"⇒ 不新鲜也回（由业务自己承担，meta 会标 stale）
@@ -557,13 +625,13 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
     return { kind: 'revalidate', entry, config, mode }
   }
 
-  function settle(
+  async function settle(
     url: string,
     config: FetchConfig,
     looked: CacheLookup,
     res: FetchResult<unknown>,
     at: number,
-  ): { result: FetchResult<unknown>; cache: FetchCacheMeta } {
+  ): Promise<{ result: FetchResult<unknown>; cache: FetchCacheMeta }> {
     if (looked.kind === 'bypass') return { result: res, cache: { status: 'bypass', ...(looked.mode ? { mode: looked.mode } : {}) } }
     const mode = looked.mode
     const key = fetchCacheKey(url, config)
@@ -657,8 +725,8 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
           stored = true
         }
       } else if (parseCacheControl(headers).noStore) {
-        // 服务端明确 no-store ⇒ 已有条目也作废
-        const old = store.match(key, config.headers, at)
+        // 服务端明确 no-store ⇒ 已有条目也作废（含持久层）
+        const old = await store.match(key, config.headers, at)
         if (old) store.remove(key, old)
       }
     }
@@ -666,7 +734,44 @@ export function createFetchCache(opts: FetchCacheOptions = {}, now: () => number
     return { result: res, cache: { status: 'miss', stored, mode } }
   }
 
-  return { modeOf, lookup, settle }
+  return {
+    modeOf,
+    lookup,
+    settle,
+    flush: () => (store.flush ? store.flush() : Promise.resolve()),
+    ...(persistStats ? { persistStats } : {}),
+  }
+}
+
+/**
+ * ★★★#1151：解析出该用的 store。
+ *
+ * 优先级：**显式注入** > `persist` 开关（按端探测）> 纯内存。
+ * ★`persist` 探测失败时**退回内存**并把原因挂在 store 上（`degradedReason`），不抛——
+ *   缓存是可选加速层，不该让 `useFetch` 因"介质不可用"整体失效。
+ * ★文件/KV 后端与内存层共用同一个 `now()`（否则新鲜期判定与 LRU 记账会漂移）。
+ */
+function resolveStore(opts: FetchCacheOptions, now: () => number): FetchCacheStore {
+  if (opts.store) return opts.store
+  const memOpts = { maxBytes: opts.maxBytes, maxEntries: opts.maxEntries, now }
+  if (!opts.persist) return createMemoryFetchCache(memOpts)
+  const persistOpts = typeof opts.persist === 'object' ? opts.persist : {}
+  // ★★显式 backend 优先于端探测（判据/自定义持久层）。★首版漏了这一支：
+  //   `persist:{backend}` 仍走探测 ⇒ 判据里"开了持久化应有 persistStats"直接红。
+  const choice = persistOpts.backend
+    ? { backend: persistOpts.backend, degraded: false, reason: 'explicit' }
+    : choosePersistBackend(persistOpts)
+  if (!choice.backend) {
+    const mem = createMemoryFetchCache(memOpts) as FetchCacheStore & { degradedReason?: string }
+    mem.degradedReason = choice.reason
+    return mem
+  }
+  return createPersistentFetchCache({
+    backend: choice.backend,
+    ...memOpts,
+    ...(persistOpts.flushDelayMs !== undefined ? { flushDelayMs: persistOpts.flushDelayMs } : {}),
+    ...(persistOpts.maxPersistEntries !== undefined ? { maxEntries: persistOpts.maxPersistEntries } : {}),
+  })
 }
 
 /**

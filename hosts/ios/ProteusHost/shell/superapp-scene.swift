@@ -449,6 +449,10 @@ final class SuperappScene: NSObject {
                 let crossBase = parts.count >= 2 ? parts[1] : ""
                 let maxRedirects = parts.count >= 3 ? (Int(parts[2]) ?? 2) : 2
                 extra = "\(SuperappScene.jsonQuote(crossBase)),\(maxRedirects)"
+            case "--persist-probe=":
+                // ★#1151：参数形态 `--persist-probe=<base>,<phase>`（phase = write | read）
+                //   ★两次进程启动用同一条参数、不同 phase（判据看"第二次是否命中 + 服务端 hits 不增"）
+                extra = SuperappScene.jsonQuote(parts.count >= 2 ? parts[1] : "write")
             default:
                 extra = ""
             }

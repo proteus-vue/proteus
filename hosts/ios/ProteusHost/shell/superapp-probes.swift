@@ -121,6 +121,17 @@ enum SuperappProbes {
       deadlineSeconds: 180,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1151：**缓存持久层（L2）**判据——两阶段跨进程（write → 退出 → read）。
+    //   参数形态 `--persist-probe=<base>`，阶段由环境变量 `PROTEUS_PERSIST_PHASE` 决定
+    //   （默认 write）⇒ 同一条参数可跑两次进程，判据看"第二次是否命中 + 服务端 hits 不增"。
+    ProbeConfig(
+      argPrefix: "--persist-probe=",
+      kickFormat: "__proteusHostAppPersistProbe(%@)",
+      resultKey: "__proteusHostPersistProbeResult",
+      reportPrefix: "persist",
+      deadlineSeconds: 120,
+      extraReadings: { _ in [:] },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

@@ -229,6 +229,21 @@ const server = http.createServer((req, res) => {
       return
     }
     /**
+     * ★★★#1151 持久层判据端点：新鲜期很长（10 分钟）+ 稳定 ETag。
+     * 判据用法：`phase=write` 进程请求一次（落盘）→ **进程退出** →
+     *   `phase=read` **新进程**请求同一 URL ⇒ 必须命中；**服务端 hits 不增**是唯一硬证据。
+     */
+    case '/persist': {
+      stats.generated[path] = gen
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'max-age=600',
+        ETag: '"persist-v1"',
+      })
+      res.end(bodyFor(path, gen))
+      return
+    }
+    /**
      * ★#1150 SWR 窗口=0 ⇒ **不得**再回旧值（边界判据）。
      */
     case '/swr-zero': {

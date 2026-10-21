@@ -218,10 +218,18 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 |---|---|
 | 改 `packages/api/src/capability-fetch-cache.ts` / `packages/api/src/capability-fetch-pipeline.ts` 的缓存判定或 `settle` | `npx vitest run tests/fetch-stale.test.ts tests/fetch-cache.test.ts` |
 | 改 `packages/api/src/capability-invoke.ts` 的**回推结算**（`settleFromFrame` / `interpretBody` 调用点） | `npx vitest run tests/capability-invoke-bytes.test.ts` ★该处**不能抛**：异常逃出回推回调 = 请求永久挂起（#1150 真机抓出） |
+| ★改 `packages/api/src/capability-fetch-cache-persist.ts` / `packages/api/src/capability-fetch-cache-runtime.ts`（持久层 / 按端后端探测） | `npx vitest run tests/fetch-cache-persist.test.ts tests/fetch-cache-persist-runtime.test.ts` ★**必须两端真机重跑** `bash hosts/{android,ios}/run-persist-probe.sh`（跨进程命中只能真机证） |
 | 加/改真机缓存探针 | `npx vitest run tests/host-probe-registry.test.ts`（`IOS_PROBES` ⇄ Swift 两方）+ `node scripts/check-cache-evidence.mjs --list` |
 
 ★SIE 的兜底范围**只含** RFC 5861 点名的 500/502/503/504 + 网络失败；
 **不含** `fetch.aborted`（用户取消）与 4xx——这一条由 `tests/fetch-stale.test.ts` ⑦ 守着。
+
+**★#1151 持久层的两个"看不见的坑"（改它必读）**：
+1. **App 端没有 `getStorage`**（只有 web/wx 桥实现）⇒ 唯一持久化通路是 `fs.readBytes/writeBytes`，
+   而它是**异步**的 ⇒ `FetchCacheStore.match` 的契约必须是"可返回 Promise"（不要改回同步）。
+2. **文件后端是"单文件存整份"**，不是"每条一文件"：宿主只开了 read/write/remove、**没有 readdir**，
+   且 Android 的 `fs.remove` 用 `File.delete()`（非空目录删不掉）⇒ "按索引逐条清盘"在索引缺失时
+   **什么也清不掉** ⇒ 真机读到前一天残留造成**假绿**（`ageMs` 是小时级）。清盘只走 `backend.clearAll()`。
 
 ---
 
