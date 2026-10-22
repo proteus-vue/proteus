@@ -60,7 +60,17 @@ export interface FetchConfig {
   deadline?: number
   /** ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 */
   responseType?: 'text' | 'json' | 'arraybuffer'
-  /** ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 */
+  /**
+   * ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径。
+   *
+   * ★★★#1191 更正（独立验证 B4）：原文写「内存与文件大小无关」——**对鸿蒙不成立，且未取证**。
+   *   · Android / iOS：逐块写文件，已验证；
+   *   · **鸿蒙**：我们这层确实逐块直写（`SaveSession`），但 RCP 的 `Rcp_Response.body`
+   *     仍可能把整包驻留（`HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 只"替换回调"，
+   *     没有关闭整包驻留的开关）⇒ **内存上限未取证**。
+   *   ⇒ 准确说法：**"避免框架层的第二份拷贝；是否与文件大小无关取决于宿主栈，鸿蒙端未取证"**。
+   *     大文件落盘前请按目标端实测（本仓待补 `VmHWM` 对照）。
+   */
   savePath?: string
   /**
    * ★#1122 流式消费：每块回调一次，内存不随响应体增长。**回调同步**（宿主回推的 JS 线程上）。

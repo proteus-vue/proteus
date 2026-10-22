@@ -150,10 +150,17 @@ describe('★★探针登记：IOS_PROBES 表 ⇄ Swift ProbeConfig 必须同集
    * ★为什么之前没暴露：其它探针的值都是 URL / 数字，不含 `=`。
    */
   it('★★参数值里含 = （如 base64 填充）也必须正确解析', () => {
-    const lib = fs.readFileSync(LIB, "utf8")
+    const lib = fs.readFileSync(LIB, 'utf8')
+    /**
+     * ★★★#1191（独立验证 J9 修复）：原来写的是 `lib.split("\\n")` —— JS 字符串里
+     *   `"\\n"` 是**两个字符**（反斜杠 + n），不是换行 ⇒ `assignLines` **恒为空数组**
+     *   ⇒ 这条用例实际只执行了下面那句 `toContain`，等于没验。
+     *   ⇒ 改成 `split('\n')`，并**断言确实找到了赋值行**（自证判据没退化成空跑）。
+     */
+    const assignLines = lib.split('\n').filter((l) => /^\s*value=/.test(l))
+    expect(assignLines.length, '★一行 value= 都没找到（判据退化）').toBeGreaterThan(0)
     // 断言用的是"取第一个 ="的写法，而不是贪婪的 ##*=
-    const assignLines = lib.split("\\n").filter((l) => /^\\s*value=/.test(l))
-    expect(lib, "★probe-args.sh 缺少按第一个 = 切值的写法").toContain("${arg#*=}")
+    expect(lib, '★probe-args.sh 缺少按第一个 = 切值的写法').toContain('${arg#*=}')
   })
 
   it('★脚本确实走表驱动（防止有人回退成三处手写清单）', () => {    // 解析：`--*probe=*)` 分支必须调 lib 的函数

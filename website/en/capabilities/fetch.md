@@ -107,7 +107,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `timeout` | `number` | 超时（ms；超时 → Err）。★单轮语义：重试时每轮各自计时 |
 | `deadline` | `number` | ★★★#1135 **总时限**（ms）：从**入队**起算的墙钟预算，跨排队/重试退避/重定向多跳。  【与 `timeout` 的区别（这是超级应用最常踩的坑）】 · `timeout` 是**单轮**语义：重试 3 次 × 15s ⇒ 最坏 ~60s；多跳重定向同理； · `deadline` 是**总预算**：排队、退避、每一跳都计入，耗尽 ⇒ `fetch.deadline`。 ⇒ 业务要"20s 内给我结果"时必须用 `deadline`，`timeout: 20000` 表达不了这个意思。  ★超预算时框架会把**单轮 timeout 收敛到剩余预算**（不会让某一次尝试突破总时限）。 ★`fetch.deadline` 与 `fetch.timeout` 分开：前者"整体没时间了"，后者"这一轮等太久"。 |
 | `responseType` | `'text' \| 'json' \| 'arraybuffer'` | ★#1122 响应体解释方式（`arraybuffer` ⇒ `data` 是裸字节）。端差异：wx 给 `ArrayBuffer`。 |
-| `savePath` | `string` | ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径，内存与文件大小无关。Web/MP ⇒ unsupported。 |
+| `savePath` | `string` | ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径。  ★★★#1191 更正（独立验证 B4）：原文写「内存与文件大小无关」——**对鸿蒙不成立，且未取证**。 · Android / iOS：逐块写文件，已验证； · **鸿蒙**：我们这层确实逐块直写（`SaveSession`），但 RCP 的 `Rcp_Response.body` 仍可能把整包驻留（`HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 只"替换回调"， 没有关闭整包驻留的开关）⇒ **内存上限未取证**。 ⇒ 准确说法：**"避免框架层的第二份拷贝；是否与文件大小无关取决于宿主栈，鸿蒙端未取证"**。 大文件落盘前请按目标端实测（本仓待补 `VmHWM` 对照）。 |
 | `onChunk` | `(chunk: Uint8Array, seq: number) => void` | ★#1122 流式消费：每块回调一次，内存不随响应体增长。**回调同步**（宿主回推的 JS 线程上）。 App 逐块回推；Web 用 ReadableStream（节奏不同）；**MP 不支持** ⇒ unsupported。 |
 | `upload` | `UploadSpec` | ★#1122 流式上传（仅 App）：宿主自读文件、自拼 multipart、边读边发。Web/MP 用各自上传 API ⇒ unsupported。 |
 | `signal` | `AbortSignalLike` | ★#1122 取消：`abort()` ⇒ 立即 `fetch.aborted`，并尽力通知宿主中止传输。 App 用 `createAbortController()`（引擎无原生 AbortController）；Web 用原生 `AbortSignal`；**MP 不支持**。 |
