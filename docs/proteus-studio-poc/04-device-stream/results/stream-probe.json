@@ -1,0 +1,34 @@
+{
+    "programs": [
+
+    ],
+    "stream_groups": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "h264",
+            "profile": "High",
+            "width": 1280,
+            "height": 720,
+            "r_frame_rate": "120/1",
+            "avg_frame_rate": "289350000/2697073",
+            "bit_rate": "6171997",
+            "nb_frames": "3215"
+        },
+        {
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "nb_frames": "1"
+        },
+        {
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "nb_frames": "1"
+        }
+    ],
+    "format": {
+        "duration": "29.967478",
+        "bit_rate": "6195061"
+    }
+}

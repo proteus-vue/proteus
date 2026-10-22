@@ -1,0 +1,14 @@
+{
+  "file": "/tmp/poc/device-720p.mp4",
+  "size": "1280x720",
+  "hwdec": "videotoolbox",
+  "seconds": 20.0,
+  "frames_rendered": 2147,
+  "measured_fps": 107.32,
+  "interval_ms": {"p50": 9.27, "p95": 11.44, "p99": 14.10, "max": 96.43},
+  "render_ms": {"p50": 1.323, "p95": 3.408, "p99": 4.570, "max": 52.228},
+  "frame_budget_ms": 9.32,
+  "late_frames": 73,
+  "late_pct": 3.40,
+  "cpu": {"self_seconds": 4.02, "wall_seconds": 20.00, "single_core_pct": 20.1}
+}

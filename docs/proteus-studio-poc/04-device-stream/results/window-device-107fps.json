@@ -1,0 +1,16 @@
+{
+  "mode": "window",
+  "file": "/tmp/poc/device-720p.mp4",
+  "size": "1280x720",
+  "hwdec": "videotoolbox",
+  "seconds": 20.0,
+  "frames_presented": 2147,
+  "measured_fps": 107.31,
+  "interval_ms": {"p50": 9.30, "p95": 11.98, "p99": 16.61, "max": 53.08},
+  "compose_ms": {"p50": 0.763, "p95": 0.915, "p99": 1.284, "max": 5.144},
+  "present_ms": {"p50": 0.463, "p95": 3.254, "p99": 8.910, "max": 45.580},
+  "frame_budget_ms": 9.32,
+  "late_frames": 38,
+  "late_pct": 1.77,
+  "cpu": {"self_seconds": 4.24, "wall_seconds": 20.01, "single_core_pct": 21.2}
+}

@@ -2991,6 +2991,28 @@
         "T-studio-poc-a-fbo"
       ],
       "note": "【done · 决策 #1170（2026-10-22）】承接 #1168「这不是 Tauri，挂载可行性不同源」。★做法：Tauri 2.12.5 最小应用；透明 WKWebView + HTML 叠加层；原生 NSOpenGLView 垫底（addSubview:positioned:NSWindowBelow）；KVC drawsBackground=NO；30fps 主线程调度。★实测（三轮 22s）：attach rc=0 · webview found=1 transparent=1 · 30.34 fps · 迟到 0% · 间隔 p99 44.5/49.6/45.2ms · 合计 p50 1.36–1.44ms · CPU 8.1–8.8% ⇒ R1–R4 全过。★与 B1 对账：单帧成本持平（1.4ms）；间隔 p99 +8ms（vsync 对齐变松）、CPU +1pt；余量从 13ms 缩到 4ms。★六条踩坑（已写 README）：setup 里窗口没建好/不能在 setup 里 run_on_main_thread/后台线程碰窗口会抛 ObjC 异常/ns_window() 给的是 NSWindow 不是 NSView/ObjC 异常必须 @try 兜住/图标必须 RGBA。★边界：不评判 HTML 叠加层交互与无障碍；KVC 透明是 PoC 手法；无菜单栏多窗口。★下一步：C（真机投屏流）或 Studio 阶段 1 骨架——性能侧三个前提（离屏/窗口/Tauri 承载）都已有数据。"
+    },
+    {
+      "id": "T-studio-poc-c-device-stream",
+      "title": "Studio PoC C：真机投屏流复测——真机是 100–120fps（预算掉到 9.3ms），窗口路径 0.65% 通过、离屏 3.40% 不通过",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/README.md",
+        "docs/proteus-studio-poc/04-device-stream",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1172,
+      "verification": "adb shell screenrecord --size 1280x720 --bit-rate 8000000 --time-limit 30 /sdcard/x.mp4 && adb pull …；离屏 bash ../01-offscreen-fbo/run.sh 20；窗口 win_harness --seconds 20",
+      "branch": null,
+      "related": [
+        "T-studio-poc-a-fbo",
+        "T-studio-poc-b1-window",
+        "T-studio-poc-b2-tauri"
+      ],
+      "note": "【done · 决策 #1172（2026-10-22）】判据 S1–S4 沿用 A/B，不新造。★真机流（ffprobe 实测）：h264 High / 720p / 6.17 Mbps / 标称 120fps / 实测 107.3fps（3215 帧/29.97s）/ 变帧率。★实测：离屏 107.32fps、render p50 1.32ms、迟到 3.40%、CPU 20.1%（S2 ❌）；窗口 107.33fps、compose+present 1.23ms、迟到 0.65%、CPU 21.3%（全过）。★三条发现：① 投屏不是 30fps 而是 100–120fps，帧预算 33.3→9.3ms；② 快节奏下离屏(glFinish)代价被放大、窗口才是产品路径；③ raw H.264 无容器时间戳（raw 报 25fps、mp4 报 120fps）⇒ 传输必须带 PTS。★含义：镜像帧率必须设上限且可配（默认 30/60）；必须定义迟到策略（丢帧保实时 vs 延迟累积）；CPU 与帧率近似线性。★边界：只测 Android 一台（120Hz）；iOS ReplayKit 未测；未测 60fps 上限（下一步第一件）；无网络抖动/丢包。"
     }
   ]
 }
