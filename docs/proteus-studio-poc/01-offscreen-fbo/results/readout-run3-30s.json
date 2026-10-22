@@ -1,0 +1,14 @@
+{
+  "file": "/tmp/proteus-poc/720p30.mp4",
+  "size": "1280x720",
+  "hwdec": "videotoolbox",
+  "seconds": 30.0,
+  "frames_rendered": 901,
+  "measured_fps": 30.03,
+  "interval_ms": {"p50": 33.35, "p95": 34.29, "p99": 35.59, "max": 61.04},
+  "render_ms": {"p50": 1.253, "p95": 2.663, "p99": 5.162, "max": 19.152},
+  "frame_budget_ms": 33.33,
+  "late_frames": 0,
+  "late_pct": 0.00,
+  "cpu": {"self_seconds": 1.55, "wall_seconds": 30.00, "single_core_pct": 5.2}
+}

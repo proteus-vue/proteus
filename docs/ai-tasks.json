@@ -2926,6 +2926,28 @@
         "T-android-okhttp-transport"
       ],
       "note": "【planned · #1166 头文件取证】查 `$PROTEUS_HMS_SDK/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h` 发现 RCP **内置 DoH**：`typedef struct Rcp_DnsOverHttps { const char *url; bool skipCertificatesValidation; }`，注释为「DNS configuration on HTTPS. If set, the address resolved by the DOH dns server is preferred.」⇒ 矩阵里「鸿蒙需自建解析器或 Network.framework」这个工程量判断**对鸿蒙是错的**——它只需配一个 `doh.url`。★这条与 Android 的 `Dns` seam（#1160）形成两端对照：Android 注入解析函数、鸿蒙注入 DoH URL，语义不同但都能实现 HTTPDNS。★**待办**：① 实测 DoH 是否真的生效（需可达的 DoH 服务端 + 真机；当前只做了头文件取证，不能宣称\"已具备\"）；② 线格式设计要能表达两端不同的注入形态（Android 是 resolver 函数、鸿蒙是 URL）；③ `skipCertificatesValidation` **不要默认打开**（那是关证书校验，安全风险）。★注意：#1166 同时发现 `Rcp_DnsOverHttps` 的存在**不**等于\"鸿蒙已在用 DoH\"——默认不配置就是系统 DNS。"
+    },
+    {
+      "id": "T-studio-poc-a-fbo",
+      "title": "Studio PoC A（决定性）：720p30 解码 → 自有 GL FBO——管线成立（30fps/0 丢帧/单核 5.2%），选型被迫从 libmpv 改 ffmpeg+VT",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/README.md",
+        "docs/proteus-studio-poc/01-offscreen-fbo/fbo_harness.c",
+        "docs/proteus-studio-poc/01-offscreen-fbo/run.sh",
+        "docs/proteus-studio-poc/01-offscreen-fbo/results",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1167,
+      "verification": "FFMPEG_PREFIX=/opt/homebrew/opt/ffmpeg bash docs/proteus-studio-poc/01-offscreen-fbo/run.sh 60（判据 P1/P3/P4 过；P2 需 v2 才可判）",
+      "branch": null,
+      "related": [
+        "T-gates-cat-predicates"
+      ],
+      "note": "【done · 决策 #1167（2026-10-22）】承接 proteus-studio-plan 阶段 2「libmpv 离屏 FBO 未验证」——Studio 主线回归第一单。★选型变更（实测迫使，经用户同意）：libmpv 在本机装不上——github HTTPS 不通（curl 000）+ 独立前缀不吃瓶装包（bottle needs HOMEBREW_CELLAR=/opt/homebrew/Cellar）+ 瓶装解包被沙箱挡（sandbox_apply not permitted）。改 ffmpeg + VideoToolbox：设备投屏要解码器不是播放器。★判据先注册：P1 帧间隔 p99≤50ms · P2 渲染段 p95≤5ms · P3 丢帧≤1% · P4 CPU≤40% 单核。★实测（M1/macOS 26.5/GL Apple M1 Metal 4.1）：30.01–30.03 fps · 0 丢帧/1801 帧 · 单核 5.2% · 帧间隔 p99 36.3ms ⇒ 管线成立。★P2 判不了：三轮 render p95 = 9.23/3.91/2.66（3.5× 漂移），并发负载 + glFinish 墙钟同步是主因；上传只占 0.58ms。要可判需 GPU timer query + 静机 + 流水线化（后者改语义，须重注册判据）。★P4′ 判据本身写错：「≤纯解码 1.3×」分母不含渲染 = 要求渲染零成本；绝对线（≤40%）有效。★产物：docs/proteus-studio-poc/（采样器 + 一键复跑 + 全部读数 JSON 入库）。下一步 B（Tauri 上屏）/ v2（流水线）/ C（真机投屏流）。"
     }
   ]
 }

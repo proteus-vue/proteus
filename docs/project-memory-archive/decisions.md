@@ -12382,3 +12382,14 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **下一步**：① 实测 DoH（可达 DoH 服务端 + 真机对照）② HTTPDNS 线格式要能表达两端不同形态
 （Android 注入解析函数 / 鸿蒙注入 DoH URL）③ 把 `http2_ok` 从 transport-probe 的判据体系里
 对鸿蒙**移除**（改用公网证据），避免后人再次误读为"鸿蒙没 h2"。
+
+1167. **★★★【★编号勘误：原写 #1165，与并发会话的「鸿蒙取消语义更正」撞号 ⇒ 按 check:decision-numbers 提示改为 #1167，不动他人已入库的号】** Studio PoC A（决定性验证）：720p30 解码 → 我们自己的 GL FBO 成立（30.01fps / 0 丢帧 / 单核 5.2%）；选型从 libmpv 被迫改 ffmpeg+VideoToolbox，P2 因方差过大判不了 · 决策**（2026-10-22 · 承接 `proteus-studio-plan` 阶段 2「libmpv 离屏 FBO 真嵌入未验证」· 主线回归第一单）:
+**① 为什么做这个**：plan 的四宿主矩阵里 Studio 唯一 ✅ 的是 `device.native` 与 `form.mobile`，而 `device.native` 的技术前提只有一条——**mpv/解码器只解码，把帧画进我们自己的 FBO**（而不是自己开播放器窗口）。这条不成立，Studio 就退化成"又一个播放器窗口"，存在理由塌一半。这条也是 plan 自己列的诚实边界 ②。
+**② 选型变更（不是偏好，是被环境逼的）**：原计划 libmpv，本机**装不上**，三重阻碍叠加：a) `github.com` **HTTPS 不通**（`curl` 8s 超时返回 000，SSH 才通）⇒ brew 克隆 4 分钟只涨 80KB；b) 独立前缀（/Volumes/data1/brew）**不吃瓶装包**——brew 原话 `bottle needs HOMEBREW_CELLAR=/opt/homebrew/Cellar` ⇒ 回落源码编译 ⇒ 又要 github 拉 tarball/patch ⇒ 死锁；c) 瓶装解包走 `sandbox_operation.rb extract` → `sandbox-exec: sandbox_apply: Operation not permitted`（嵌套沙箱，提权也无效）。★改用 **ffmpeg + VideoToolbox**：设备投屏要的是**解码器**不是播放器（mpv 的价值在格式兼容/字幕/网络流，设备投屏是裸 H.264），这个选型反而更贴。**用户明确同意后**才换，未擅自改 plan。
+**③ 判据（先注册后测量）**：P1 帧间隔 p99 ≤ 1.5×帧预算（50ms）· P2 渲染段 p95 ≤ 5ms · P3 丢帧 ≤1% · P4 CPU ≤ 40% 单核且 ≤ 纯解码 1.3×。测量装置 = 无窗口 CGL 离屏上下文（可进 CI、不靠人眼看）+ VT 硬解 + NV12 两平面 + BT.601 着色器合成。
+**④ 实测（M1 / 8 核 / macOS 26.5 / GL `Apple M1` Metal 后端 4.1 / 合成源 1280×720@30 6Mbps）**：帧率 **30.01–30.03 fps**，60s **0 丢帧**，CPU **5.2% 单核**（三轮 4.9/5.2/6.1）；帧间隔 p99 **36.3ms**（三轮 35.6/36.3/39.2）。⇒ **管线成立**。
+**⑤ ★P2 判不了，原因必须写明**：三轮 30s 的 render p95 = **9.23 / 3.91 / 2.66**——3.5 倍漂移，中位 3.9ms 达标、最差 9.2ms 不达标。两条根因：a) 本机有并发负载（同仓另一会话在跑 vitest），`glFinish` 是**墙钟同步等待**，被抢占直接计入；b) 上传只占 **0.58ms**（`POC_SKIP_UPLOAD=1` 对照 5.36→5.94），其余是绘制+同步。⇒ 要变成可判定需同时改三处：GPU timer query（`GL_TIME_ELAPSED`）替代墙钟、静机复测、**流水线化**（双缓冲+fence）——后者会改变"渲染段"语义（吞吐 vs 延迟），**必须重新注册判据，不许偷偷换口径**。
+**⑥ ★P4′ 判据自己写错了**：「≤ 纯解码 1.3×」的分母不含渲染 ⇒ 等于要求"渲染零成本"，任何真实合成管线都过不了（实测纯解码 1.7% ⇒ 本管线 ≈3×）。绝对线（≤40%）才有效。这条记下来是为了提醒：**判据也会错，错了先修判据再谈结论**，但不能事后改。
+**⑦ 对 Studio 的意义**：`device.native` 的技术前提**基本成立**（30fps 零丢帧、CPU 5%），但只证明了**离屏这一段**；真机上屏（swap/合成进 Tauri 窗口）、检查器叠加的预算余量、真实设备投屏流（低延迟 H.264，码率/关键帧分布不同）都未测。P2 的 3–9ms 波动还说明：**留给叠加层的预算很薄** ⇒ 流水线化是必需品，不是优化项。
+**⑧ 产物**：`docs/proteus-studio-poc/`（README 环境与判据 · `01-offscreen-fbo/fbo_harness.c` 采样器 · `run.sh` 一键复跑 + `--baseline` · `results/*.json` 全部读数入库，含三轮 30s 与诊断轮）。二进制不入库（`run.sh` 每次现编）。
+**⑨ 未做 / 下一步**：B（把同一条管线嵌进 Tauri 2 窗口，量 swap 与合成）；v2（GPU timer query + 流水线 + 静机复测，重注册 P2）；C（真机投屏流）。
