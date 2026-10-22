@@ -205,6 +205,19 @@ struct CallDnsSourceGuard {
 };
 
 /**
+ * ★★★#1186：**最近一次请求的传输读数**（供 `http_probe.h` 的探针回执读取）。
+ *
+ * 【为什么需要一份进程级副本】回程帧里的 `transport` 只有走 `useFetch` 的业务看得到；
+ *   而鸿蒙 HTTP 探针走**原生直调**（ArkTS 自编帧 → C++ 执行），JS 侧拿不到 `meta` ⇒
+ *   没有这份副本就**无法在鸿蒙真机验证 `dnsSource`**（#1185 的诚实边界 b）。
+ * ★只用于取证探针，**不参与**业务读数生成（业务仍读回程帧）。
+ */
+inline proteus::wire::NameValues& lastTransport() {
+  static proteus::wire::NameValues t;
+  return t;
+}
+
+/**
  * ★★★#1169：**RAII 守卫**——`handle()` 有十余个 return 出口，逐个加清理太脆
  * （漏一个就是"表指针悬垂 ⇒ 下一个请求读到已析构对象"）。
  * ⇒ 用析构函数清空：无论从哪个出口返回、还是抛异常，都会执行。
@@ -831,7 +844,11 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
         tp.emplace_back("dnsSource", callDnsSource());
         tp.emplace_back("dnsTableHit", callDnsSource() == "table" ? "1" : "0");
       }
-      if (!tp.empty()) out.transport = std::move(tp);
+      if (!tp.empty()) {
+        // ★#1186：留一份给取证探针（必须在 move **之前**——move 后 tp 已空）
+        lastTransport() = tp;
+        out.transport = std::move(tp);
+      }
     }
     // 响应体原样回字节（不解析）
     // ★#1117：逐块闸生效时用它累计的 body（resp->body 可能是同一份数据的二次副本）；

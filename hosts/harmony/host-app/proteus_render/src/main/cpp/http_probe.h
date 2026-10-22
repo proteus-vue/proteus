@@ -225,6 +225,29 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         dnsJson = db;
     }
     body += dnsJson;
+    /**
+     * ★★★#1186：**传输读数**（`transport`：proto/reused/dnsMs/... + `dnsSource`/`dnsTableHit`）。
+     *
+     * 【为什么必须在探针里也输出一份】回程帧里的 `transport` 只有业务（`useFetch` 的
+     *   `meta.transport`）看得到；而这个探针走的是**原生直调**（ArkTS 自编帧 → C++ 执行），
+     *   JS 侧拿不到 `meta` ⇒ 没有这份读数就**无法在鸿蒙真机验证 `dnsSource`**。
+     * ★同样必须拼在**两条回执路径**上（见 #1117 的 limit 教训：`body = head` 会整串覆盖）。
+     */
+    std::string transportJson;
+    {
+        const proteus::wire::NameValues& tp = proteus::http::lastTransport();
+        if (!tp.empty()) {
+            transportJson = ",\"transport\":{";
+            bool first = true;
+            for (const auto& kv : tp) {
+                if (!first) transportJson += ",";
+                first = false;
+                transportJson += "\"" + jsonEscape(kv.first) + "\":\"" + jsonEscape(kv.second) + "\"";
+            }
+            transportJson += "}";
+        }
+    }
+    body += transportJson;
     if (!err.empty()) {
         body += ",\"error\":\"" + jsonEscape(err) + "\"}";
     } else if (hexOut == "NO_OUTPUT" || hexOut.empty()) {
@@ -252,6 +275,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             body = head;
             body += limitJson;   // ★同上：head 覆盖后必须重新拼
             body += dnsJson;     // ★#1169：DNS 读数同理（覆盖后必须重拼）
+            body += transportJson; // ★#1186：传输读数同理
             body += ",\"preview\":\"" + jsonEscape(preview) + "\"}";
         } catch (const std::exception& e) {
             body += ",\"error\":\"" + jsonEscape(std::string("回程帧解码失败：") + e.what()) + "\"}";

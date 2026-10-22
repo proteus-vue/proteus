@@ -241,8 +241,13 @@ DNS 来源本就是"这次连接怎么建立的"的一部分，复用容器 ⇒ 
 ★**为什么必须有这两项**：`http.dnsStats` 是**进程级**记账，业务在单次请求里看不到；
 而 `httpDns` 的失败形态全是静默的（表没生效 ⇒ 请求照常成功、走系统 DNS）⇒
 "以为防住了劫持，实际没有"（#1171 同纪律）。
-★**真机双向证据**：Android `hit_transport={proto:h2, reused:false, dnsSource:table, dnsTableHit:true}`
-+ 基线 `dnsSource` 不出现；iOS `hit_dns_source=table` + 未命中那次 `dnsSource=system`。
+★**真机双向证据（三端齐）**：
+  · Android `hit_transport={proto:h2, reused:false, dnsSource:table, dnsTableHit:true}` + 基线 `dnsSource` 不出现；
+  · iOS `hit_dns_source=table` + 未命中那次 `dnsSource=system`；
+  · ★★★**鸿蒙（#1186）** `transport={dnsMs:0.1, connectMs:369.3, tlsMs:319.7, ttfbMs:1086.8, dnsSource:table, dnsTableHit:"1"}`
+    + `dns.tableHits=1` + `status=200` + `http=http/2`（`hosts/harmony/results/http-probe-dns-table.json`）。
+    ★鸿蒙这条**必须在探针里补一份 `transport`**：它的探针走**原生直调**（ArkTS 自编帧 → C++ 执行），
+    JS 侧拿不到 `meta.transport` ⇒ 没有探针回执里的那份读数就根本验不了（`lastTransport()` 副本）。
 ★**三端实现的同一个坑**：不能拿**进程级** `lastDnsSource` 冒充 per-call（并发会被别的请求覆盖）
 ⇒ Android 用 `CallMetrics.dnsSource`（线程绑定）、iOS 用 proxy 的 `host → 来源` 映射、
 鸿蒙用 `callDnsSource()` + RAII 守卫。

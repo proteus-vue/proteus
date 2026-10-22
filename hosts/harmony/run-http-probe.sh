@@ -112,6 +112,29 @@ else:
         prev = (d.get("preview") or "")[:100]
         if prev:
             print(f"   响应体前 100 字符：{prev}")
+        # ★★★#1186：**传输读数**（含 HTTPDNS 的每请求可观测面）
+        #   ★为什么必须在探针侧判：鸿蒙探针走原生直调，JS 拿不到 `meta.transport`.
+        tp = d.get("transport") or {}
+        if not tp:
+            print("✗ 回执缺 transport（#1186 未接线）"); ok = False
+        else:
+            print(f"   transport：{json.dumps(tp, ensure_ascii=False)}")
+            # 装了表 ⇒ 必须能看到 dnsSource=table（这是"表真的生效"的每请求直接证据）
+            dn = d.get("dns") or {}
+            if (dn.get("tableRules") or 0) > 0:
+                src = tp.get("dnsSource")
+                if src != "table":
+                    print(f"✗ 装了表但 dnsSource={src!r}（应为 table）"); ok = False
+                if tp.get("dnsTableHit") != "1":
+                    print(f"✗ dnsTableHit={tp.get('dnsTableHit')!r}（应为 \"1\"）"); ok = False
+                if src == "table":
+                    print("✅ 每请求可观测面成立：transport.dnsSource=table · dnsTableHit=1")
+            else:
+                # 没装表 ⇒ dnsSource 必须**不出现**（没发生解析 ≠ 走了系统 DNS）
+                if "dnsSource" in tp:
+                    print(f"✗ 未装表却报了 dnsSource={tp.get('dnsSource')!r}（伪造来源）"); ok = False
+                else:
+                    print("✅ 未装表：dnsSource 不出现（符合「缺键=不可得」）")
 sys.exit(0 if ok else 1)
 PY
 RC=$?

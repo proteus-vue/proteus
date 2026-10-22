@@ -121,6 +121,42 @@ describe('★★★#1183 dnsSource：三端实现（宿主必须真的写、且�
     expect(s, '★鸿蒙未命中时没记来源（回落不可见）').toMatch(/callDnsSource\(\) = "miss"/)
   })
 
+  it('★★★#1186 鸿蒙取证探针：必须把 transport 也输出（否则真机验不了 dnsSource）', () => {
+    // ★为什么需要这条：鸿蒙的 HTTP 探针走**原生直调**（ArkTS 自编帧 → C++ 执行），
+    //   JS 侧拿不到 `meta.transport` ⇒ 没有探针回执里的这份读数就**根本无法在鸿蒙真机验证**。
+    const probe = read('hosts/harmony/host-app/proteus_render/src/main/cpp/http_probe.h')
+    expect(probe, '★探针回执缺 transport（鸿蒙的 dnsSource 无法真机取证）').toMatch(/transportJson/)
+    expect(probe, '★探针没读 lastTransport()').toMatch(/proteus::http::lastTransport\(\)/)
+    // ★#1117 的教训：成功分支 `body = head` 会整串覆盖 ⇒ 必须在两条路径都重拼
+    const occurrences = (probe.match(/body \+= transportJson;/g) || []).length
+    expect(
+      occurrences,
+      `★transportJson 只拼了 ${occurrences} 处（两条回执路径都要拼，否则成功分支会静默丢）`,
+    ).toBeGreaterThanOrEqual(2)
+
+    // 来源侧：必须有进程级副本（且 copy 在 move 之前——move 后是空的）
+    const h = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h')
+    expect(h, '★缺 lastTransport() 副本').toMatch(/inline proteus::wire::NameValues& lastTransport\(\)/)
+    expect(h, '★lastTransport 在 move 之后赋值（拿到的是空表）').toMatch(
+      /lastTransport\(\) = tp;\s*\n\s*out\.transport = std::move\(tp\)/,
+    )
+  })
+
+  it('★★★#1186 鸿蒙**真机**证据入库（三端取证齐：Android + iOS + 鸿蒙）', () => {
+    // ★#1185 的诚实边界 b：「鸿蒙只做静态编译验证、真机未跑」——这条把它收口。
+    const p = 'hosts/harmony/results/http-probe-dns-transport.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺鸿蒙真机证据 ${p}（跑 bash hosts/harmony/run-http-probe.sh --dns-host ... --dns-ip ...）`).toBe(true)
+    const r = JSON.parse(read(p))
+    expect(r.status, '★鸿蒙真机请求未成功（证据不成立）').toBe(200)
+    // ★装了表 ⇒ 每请求可观测面必须写出来
+    expect(r.dns?.tableRules, '★证据里没有装表（tableRules=0 ⇒ 验的不是这条路径）').toBeGreaterThan(0)
+    expect(r.dns?.tableHits, '★表没被采用（tableHits=0）').toBeGreaterThan(0)
+    expect(r.transport?.dnsSource, '★鸿蒙真机 transport.dnsSource 不是 table').toBe('table')
+    expect(r.transport?.dnsTableHit, '★鸿蒙真机 dnsTableHit 不是 "1"').toBe('1')
+    // 传输读数也在（证明这条探针真读到了 transport）
+    expect(r.transport?.ttfbMs ?? r.transport?.connectMs, '★transport 里没有任何耗时读数').toBeTruthy()
+  })
+
   it('★三端都不允许把"缺省"写成 system（本仓"假数据比缺数据更糟"）', () => {
     const ios = read('hosts/ios/ProteusHost/runtime/http-capability.swift')
     const harmony = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h')

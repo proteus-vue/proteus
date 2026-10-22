@@ -12497,7 +12497,7 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   宿主记账 `lookups=2 · tableHits=1`。
 · **鸿蒙**：注入 ⇒ `tableRules=1 · tableHits=1 · lastSource=table` + 请求失败；
   基线 ⇒ `tableHits=0`（未注入时表不参与）。
-证据：`hosts/android/results/httpdns-probe.json` · `hosts/harmony/results/http-probe-dns-table.json`。
+证据：`hosts/android/results/httpdns-probe.json` · `hosts/harmony/results/http-probe-dns-transport.json`。
 
 **★★首跑踩到的装置陷阱（比缺陷更值钱）**：**连接池优先于 DNS** ——
 先跑基线会让 `host:443` 的连接进池，注入请求**直接复用、根本不查 DNS** ⇒ 表"看起来没生效"
@@ -12698,3 +12698,17 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑧ 判据**：新增 `tests/fetch-dns-source.test.ts` **12 条**，三层各守：解析层（白名单/不伪造）、线格式层（在 `TRANSPORT_KEYS` 内/往返不覆盖）、三端实现层（真的写 + 复用时**不写** + 回落可见 + RAII）。**破坏性验证**：从 `TRANSPORT_KEYS` 删 `dnsSource` ⇒ 红（并连带 3 条停靠它）；iOS 复用时也写来源 ⇒ 红。合计定向判据 **48 条**（fetch-dns-source 12 + httpdns-wire 17 + fetch-transport-meta 12 + host-probe-registry 7）全绿。
 **⑨ 产物**：`packages/api/src/invoke-wire.ts`（`TRANSPORT_KEYS` +2）· `packages/api/src/capability-fetch-types.ts`（`TransportMeta` +2 字段 + 解析白名单）· `hosts/android/.../HttpTransport.java`（`CallMetrics.dnsSource` + `CALL_METRICS` + `noteCallDnsSource` + readout）· `hosts/android/.../HttpDnsProbe.java` + `MainActivity.java`（广播中转 reachableIp）· `hosts/android/run-httpdns-probe.sh`（dig 解析 + 4 条新断言）· `hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift`（`source(forHost:)`）· `.../http-capability.swift`（`dnsSource` 写入，仅非复用）· `.../http-capability-dns-session.swift`（session→表映射）· `hosts/harmony/.../proteus_http.h`（`callDnsSource()` + RAII）· `hosts/shared/bridge/entry-superapp-probes-httpdns*.ts`（hit 轮）· `hosts/ios/run-httpdns-prod-probe.sh`（dig + 3 条新断言）· 矩阵 §4.x · 契约索引 2 行。
 **⑩ 诚实边界**：a) `dnsSource` 只在**本次新建连接**时可得——连接复用时**不出现**（这是正确语义，不是缺陷；业务若想知道"这次走没走表"必须先确保池是空的，或用 `Cache-Control: no-store` 类手段）；b) 鸿蒙端只做了静态编译验证（`check:harmony-host-compile`），**真机未跑**；c) 仍无排障面板 UI（数据已可读，UI 归 Studio 侧）；d) `connectMs`/`tlsMs` 在 Android 首连可达 4s，那是**探测网络慢**不是实现问题（同轮 `dig` 也是秒级）。
+
+1186. **★★★鸿蒙 HTTPDNS 每请求可观测面真机取证：探针补 `transport` 副本（`lastTransport()`）+ 表命中 ⇒ `dnsSource=table` · 决策**（2026-10-22 · 承接 #1185「鸿蒙只做静态编译验证、真机未跑」）:
+**① 承接的诚实边界**：#1185 把 `dnsSource`/`dnsTableHit` 三端落地，但鸿蒙**只做了静态编译验证**（`check:harmony-host-compile`），真机读数缺失。本轮把它补上。
+**② ★为什么不能直接读 `meta.transport`**：鸿蒙的 HTTP 探针走**原生直调**（ArkTS 自编帧 → C++ 执行 → 回程帧），**JS 侧拿不到 `useFetch` 的 `meta`**。这是鸿蒙探针装置的结构性差异（Android/iOS 走 JS 探针、有 `meta`；鸿蒙走原生探针）。
+**③ 修法**：在 `proteus_http.h` 加**进程级副本** `lastTransport()`（与既有 `dnsProbe()` 同族，只供取证探针），`handle()` 里在 `std::move(tp)` **之前** copy 一份（★move 后是空的——这是本轮编译期就踩到的：先写成了 move 之后赋值，`no viable overloaded '='` 当场红）；`http_probe.h` 的回执里拼 `transport`。
+**④ ★#1117 的教训必须照做**：`http_probe.h` 成功分支有 `body = head`（整串覆盖），因此 `transportJson` 必须**在两条回执路径都拼**（初始 body 一次 + 覆盖后重拼一次）。判据直接数出现次数（`>= 2`），变异测试：删掉成功分支那处 ⇒ 判据红（"只拼了 1 处"）。
+**⑤ 真机读数（HarmonyOS，设备 69F9K26126005311）**：
+  · **无表（baseline）**：`transport={dnsMs:1.3, connectMs:1267.3, tlsMs:809.6, ttfbMs:2498.1}`，**`dnsSource` 不出现** —— 正确语义：没装 DNS 规则时 RCP 走系统 DNS，我们的回调根本不被调用 ⇒ **无法得知来源**；此时写 `system` 就是伪造（#1185 的「缺键=不可得」纪律）。
+  · **装表（可达 IP）**：`transport={dnsMs:0.1, connectMs:369.3, tlsMs:319.7, ttfbMs:1086.8, dnsSource:table, dnsTableHit:"1"}` + `dns.tableRules=1 / tableHits=1 / lastSource=table` + `status=200` + 响应自报 `http=http/2`。证据 `hosts/harmony/results/http-probe-dns-table.json`。
+**⑥ 探针判据升级**（`run-http-probe.sh`）：装了表 ⇒ 断言 `dnsSource=='table'` 且 `dnsTableHit=='1'`；**没装表 ⇒ 断言 `dnsSource` 必须不出现**（防止伪造来源）。两条方向都判，避免"只验一边"。
+**⑦ 静态判据**：`tests/fetch-dns-source.test.ts` 新增 2 条（**14/14**）：① 探针必须输出 `transport` + 读 `lastTransport()` + **两处都拼**（`>= 2`）+ 副本必须在 move 之前；② 鸿蒙**真机证据**入库校验（`status=200` / `tableRules>0` / `tableHits>0` / `dnsSource=='table'` / `dnsTableHit=='1'`）。**破坏性验证**：删掉成功分支的 `body += transportJson` ⇒ 红（"只拼了 1 处"）。
+**⑧ 装置侧记录**：鸿蒙设备**锁屏时 `aa start` 报 10106102**（"screen is locked during the application launch"）⇒ 必须先手动解锁（`power-shell wakeup` 只亮屏、解不了锁）。这不是探针缺陷，但会让"跑不动"看起来像"实现坏了"——记下来。
+**⑨ 产物**：`hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h`（`lastTransport()` + move 前 copy）· `.../http_probe.h`（transportJson 两处拼接）· `hosts/harmony/run-http-probe.sh`（双向断言）· `hosts/harmony/results/http-probe-dns-table.json`（真机证据）· `tests/fetch-dns-source.test.ts` +2 · 矩阵 §4.x。
+**⑩ 诚实边界**：a) 无表时 `dnsSource` **不可得**（回调不被调用，宿主无法知道系统 DNS 走了哪条路）——这是语义正确而非缺陷；b) 本轮仍**没有**排障面板 UI（数据可读、UI 归 Studio）；c) 鸿蒙探针仍是"一次性 VM + 原生直调"，不覆盖 `useFetch` 的业务封装（那条由 Android/iOS 的 JS 探针 + 单测覆盖）。
