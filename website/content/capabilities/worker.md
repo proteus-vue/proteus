@@ -96,11 +96,20 @@ Web 端：new Worker(...)（同源脚本）∪ 缺省 Err（诚实降级）。
 | `onMessage` | `onMessage(cb: (message: unknown) => void): () => void` | 订阅 Worker → 主线程消息（返回取消） |
 | `terminate` | `terminate(): void` | 终止 Worker 线程 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |
 |---|---|
 | `worker.unsupported` | 桥未提供 createWorker（useWorker 不可用） |
+| `worker.failed` | worker: ${r.reason} |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

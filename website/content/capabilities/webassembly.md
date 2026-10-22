@@ -74,6 +74,14 @@ instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapRe
 |---|---|---|
 | `instantiate` | `instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapResult<WasmModuleHandle>>` | 实例化 WASM 模块（**跨端归一的唯一入口**）。 不可用平台 / 来源形态不匹配 → `Err('webassembly.unsupported')`（不抛异常）。 |
 
+### `WasmSource`
+
+WASM 来源（判别联合——见 `WebAssemblyAPI` 头的跨端差异说明）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `bytes` | `ArrayBuffer \| Uint8Array` | — | — |
+
 ### `WasmInstantiateOptions`
 
 | 属性 | 类型 | 默认值 | 说明 |
@@ -122,6 +130,14 @@ instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapRe
 | 方法 | 签名 | 说明 |
 |---|---|---|
 | `dispose` | `dispose(): void` | 释放（暂无资源需释放——预留：WASM 实例由 GC 回收，本方法供未来池化实现统一出口） |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
 
 ## 错误码
 

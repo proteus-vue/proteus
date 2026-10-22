@@ -107,6 +107,48 @@ disconnect(): void
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `MediaQueryObserver`
+
+★组件实例 API 对齐：C60 媒体查询句柄（`useMediaQuery()`）。
+wx：`wx.createMediaQueryObserver()`；web：`window.matchMedia`（条件 → media query 串）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `observe` | `observe(condition: MediaQueryCondition, cb: (result: MediaQueryResult) => void): void` | 开始观察媒体查询条件。 |
+| `disconnect` | `disconnect(): void` | 停止观察（释放） |
+
+### `MediaQueryCondition`
+
+媒体查询条件（wx MediaQueryObserver.observe options——对齐官方字段）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `minWidth` | `number` | 最小宽度（px） |
+| `maxWidth` | `number` | 最大宽度（px） |
+| `width` | `number` | 宽度（px） |
+| `minHeight` | `number` | 最小高度（px） |
+| `maxHeight` | `number` | 最大高度（px） |
+| `height` | `number` | 高度（px） |
+| `orientation` | `'landscape' \| 'portrait'` | 屏幕方向 |
+
+### `MediaQueryResult`
+
+媒体查询结果
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `matches` | `boolean` | 是否匹配当前条件 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

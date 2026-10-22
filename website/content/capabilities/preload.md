@@ -119,6 +119,14 @@ web：无标准预加载 API（可用 `<link rel=preload>` 或动态 import 替�
 |---|---|---|
 | `onProgressUpdate` | `onProgressUpdate(cb: (res: { progress: number; totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void): () => void` | 订阅下载进度。 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

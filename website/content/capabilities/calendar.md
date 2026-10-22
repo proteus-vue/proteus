@@ -62,6 +62,14 @@ C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined）
 | `location` | `string` | — | 地点 |
 | `description` | `string` | — | 备注/描述 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -62,6 +62,23 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `OrientationInfo`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `type` | `'portrait' \| 'landscape'` | 屏幕方向 |
+| `angle` | `number` | 旋转角度（0/90/180/-90 度） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

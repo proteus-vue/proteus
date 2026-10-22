@@ -39,7 +39,23 @@ import type { FetchConfig, FetchResult } from './capability-fetch-types'
 import { choosePersistBackend } from './capability-fetch-cache-runtime'
 import { createPersistentFetchCache } from './capability-fetch-cache-persist'
 
-/** `Request.cache` 的六个标准值（与浏览器同名同义）。 */
+/**
+ * `Request.cache` 的六个标准值（与浏览器**同名同义**）。
+ *
+ * 为什么必须给业务这个旋钮：App 端的字节腿是**裸 HTTP**（Android/iOS/鸿蒙 都不做平台条件缓存），
+ * 而浏览器/小程序会自动做 ⇒ 不给旋钮，同一份源码在三端就会"Web 命中 304、App 每次整包回源"。
+ *
+ * 逐值语义（★这里是**单一事实源**：官网能力页的取值表由本 JSDoc 生成，改语义只改这里）：
+ * · `default` = 新鲜则直用，过期则带 `If-None-Match` / `If-Modified-Since` 回源（管线开启缓存时的默认）
+ * · `no-store` = 不读也不写缓存
+ * · `reload` = 忽略缓存、强制回源（并刷新缓存）
+ * · `no-cache` = 跳过"新鲜直用"，但仍带校验器回源（304 则复用）
+ * · `force-cache` = 有缓存就用（即使已过期），没有才回源
+ * · `only-if-cached` = 只用缓存；无条目 ⇒ `fetch.cacheMiss`（**不联网**）
+ *
+ * ★只对 **GET 的 200/203** 生效；流式（`onChunk`）/落盘（`savePath`）/上传（`upload`）一律不缓存。
+ * ★不写它时：管线未开缓存 ⇒ 行为与从前完全一致（零回归）；管线开了 ⇒ 用管线默认模式。
+ */
 export type FetchCacheMode = 'default' | 'no-store' | 'reload' | 'no-cache' | 'force-cache' | 'only-if-cached'
 
 /** 一次请求的缓存结局（`FetchMeta.cache.status`）。 */

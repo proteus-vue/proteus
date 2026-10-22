@@ -131,6 +131,55 @@ wx 侧真实接入；web：MediaContainer/MediaAudioPlayer 无标准 → Err（�
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `MediaProcessingAPI`
+
+★权威标尺缺口 C70：媒体处理句柄（`useMediaProcessing()`）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `container` | `container(): MediaContainerHandle` | 创建视频轨道合成容器 |
+| `videoDecoder` | `videoDecoder(): VideoDecoderHandle` | 创建视频解码器（取帧） |
+| `audioPlayer` | `audioPlayer(): MediaAudioPlayerHandle` | 创建多音源混音播放器 |
+
+### `MediaContainerHandle`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `addTrack` | `addTrack(track: MediaTrackInfo): Promise<CapResult<void>>` | 添加音视频轨道。 |
+| `removeTrack` | `removeTrack(track: MediaTrackInfo): Promise<CapResult<void>>` | 移除轨道。 |
+| `extractDataSource` | `extractDataSource(src: string): Promise<CapResult<MediaTrackInfo[]>>` | 分离视频源为轨道（不自动加入容器）。 |
+| `export` | `export(): Promise<CapResult<string>>` | 合成并导出视频。 |
+| `destroy` | `destroy(): void` | 销毁容器（释放资源） |
+
+### `VideoDecoderHandle`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `start` | `start(options: { source: string; mode?: number; abortAudio?: boolean }): Promise<CapResult<void>>` | 开始解码。 |
+| `getFrameData` | `getFrameData(): Promise<CapResult<{ data: ArrayBuffer; width?: number; height?: number }>>` | 解码下一帧（返回帧数据） |
+| `seek` | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定时间。 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止解码（释放） |
+
+### `MediaAudioPlayerHandle`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `addAudioSource` | `addAudioSource(src: string, startTime?: number): Promise<CapResult<void>>` | 添加音源。 |
+| `removeAudioSource` | `removeAudioSource(src: string): Promise<CapResult<void>>` | 移除音源。 |
+| `start` | `start(): Promise<CapResult<void>>` | 开始混音播放 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止播放 |
+| `destroy` | `destroy(): void` | 销毁（释放） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

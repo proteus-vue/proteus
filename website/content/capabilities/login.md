@@ -56,6 +56,14 @@ C41 登录结果（wx.login → code；web/其它 provider → token/授权信�
 | `code` | `string` | — | 登录凭证（wx code，服务端换 session 用） |
 | `token` | `string` | — | 令牌（第三方 provider 直接下发 token 时） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

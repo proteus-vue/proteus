@@ -70,6 +70,14 @@ C47 小程序跳转（wx.navigateToMiniProgram）
 | `path` | `string` | — | 目标页路径（缺省首页） |
 | `extraData` | `Record<string, unknown>` | — | 传递给目标小程序的数据（target app onLoad options.extraData） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

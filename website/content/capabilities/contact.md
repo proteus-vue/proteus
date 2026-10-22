@@ -50,6 +50,14 @@ C19 联系人（wx.chooseContact / web 无标准 → 降级 undefined）
 | `phone` | `string` | — | 电话号码 |
 | `email` | `string` | — | 邮箱 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

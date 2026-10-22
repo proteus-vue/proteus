@@ -172,6 +172,14 @@ batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void
 | `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
 | `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

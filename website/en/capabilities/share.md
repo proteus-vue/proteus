@@ -69,6 +69,24 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `ShareOptions`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `title` | `string` | 分享标题 |
+| `text` | `string` | 分享文本（Web navigator.share 用；MP 缺省） |
+| `url` | `string` | 分享链接（web 必传 HTTPS URL） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

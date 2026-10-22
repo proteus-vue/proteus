@@ -47,6 +47,12 @@ Param,Type,Required,Doc
 | `heading` | `number` | No | Compass heading (0-360°, relative to true north; compass only) |
 | `timestamp` | `number` | No | Sample timestamp (ms) |
 
+## Referenced types
+
+### `SensorKind`
+
+C5 传感器类型（wx onAccelerometer/onCompass/onGyroscope / web DeviceMotion/DeviceOrientation）
+
 ## Error codes
 
 | code | Doc |
@@ -163,6 +169,39 @@ active(): boolean
 | `z` | `number` | Z 轴加速度/分量 |
 | `heading` | `number` | 罗盘方位（0-360°，参考正北；仅 compass） |
 | `timestamp` | `number` | 采样时间戳（ms） |
+
+## Referenced types
+
+### `SensorKind`
+
+C5 传感器类型（wx onAccelerometer/onCompass/onGyroscope / web DeviceMotion/DeviceOrientation）
+
+| 取值 | 说明 |
+|---|---|
+| `'accelerometer'` | — |
+| `'compass'` | — |
+| `'gyroscope'` | — |
+
+### `SensorSample`
+
+C5 传感器采样（一次性读取当前值；compass 带 heading）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `kind` | `SensorKind` | 传感器类型（回显请求的 kind） |
+| `x` | `number` | X 轴加速度/分量（accelerometer/gyroscope） |
+| `y` | `number` | Y 轴加速度/分量 |
+| `z` | `number` | Z 轴加速度/分量 |
+| `heading` | `number` | 罗盘方位（0-360°，参考正北；仅 compass） |
+| `timestamp` | `number` | 采样时间戳（ms） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

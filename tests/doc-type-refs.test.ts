@@ -24,6 +24,7 @@ async function lib() {
   return (await import('../website/scripts/lib/type-refs.mjs')) as unknown as {
     collectPageTypeRefs: (p: Record<string, unknown>) => string[]
     findUnexplainedTypes: (md: string, ifaces: Record<string, Iface>) => string[]
+    findUnregisteredTypes: (md: string, exported: Set<string>, ifaces: Record<string, Iface>) => string[]
     TS_BUILTINS: Set<string>
   }
 }
@@ -178,7 +179,102 @@ describe('★#1124 门禁接线（生成器真的会判红）', () => {
   })
 
   it('接口解析支持 readonly（否则 AbortSignalLike.aborted 这类属性整行丢失）', () => {
-    const s = read(GEN)
+    // ★#1161：抽取器已移到 lib/type-shapes.mjs（gen-content 过 1000 行棘轮）
+    const s = read('website/scripts/lib/type-shapes.mjs')
     expect(s, '★属性正则不支持 readonly').toMatch(/\(\?:readonly\\s\+\)\?/)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★★#1161：**数据源漏登记**判据（用户实测："官网 `FetchCacheMode` 还是没有单独说明，
+//   上次不是做了门禁吗？"——上次的门禁确实在，但它只检查 `ifaces` 里**已有**的类型，
+//   而该类型所在的源文件根本没登记 ⇒ 集合外的形态永远不被检查。这是"门禁只覆盖已知集合"的经典盲区。）
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★★#1161 生成器数据源覆盖（`FetchCacheMode` 长期无说明的根因）', () => {
+  const GEN = 'website/scripts/gen-content.mjs'
+  it('★★★`capability-fetch-cache.ts` 必须在生成器源集合里', () => {
+    // 该文件定义 FetchCacheMode / FetchCacheStatus / FetchCacheMeta（缓存三件套）。
+    // 不登记 ⇒ 三者不进 ifaces ⇒ findUnexplainedTypes 的 `if (!ifaces[n]) continue` 静默跳过它们。
+    const s = read(GEN)
+    // ★不能写 `\[([\s\S]*?)\]`——列表项里有 `'a', 'b'` 这种引号内容，非贪婪会提前在第一个 `]`
+    //   之外的地方截断（实测：拿到的是半段 ⇒ 判据自己假红）。改为"数组开始到 `]\n  let apiSrc`"。
+    const m = s.match(/const API_SRC_FILES = \[([\s\S]*?)\n\s*\]/)
+    expect(m, '找不到 API_SRC_FILES').toBeTruthy()
+    expect(m![1], '★能力缓存类型源未登记 ⇒ 缓存相关类型在官网上永远没有说明').toContain('capability-fetch-cache.ts')
+  })
+
+  it('★★★数据源覆盖检查必须**扫全仓**导出类型（不能拿 API_SRC_FILES 当基准）', () => {
+    // ★这是本判据的核心：用被测清单做判据基准 = "用被测对象证明自己正确"。
+    // ★#1161：形态抽取已移到 lib/type-shapes.mjs ⇒ 枚举实现也在那里；gen-content 只管调用。
+    const libSrc = read('website/scripts/lib/type-shapes.mjs')
+    expect(libSrc, '缺全仓导出类型枚举').toMatch(/collectExportedTypeNames/)
+    expect(libSrc, '★导出枚举必须扫 readdirSync(apiSrcDir) 而不是只用 API_SRC_FILES').toMatch(
+      /readdirSync\(apiSrcDir\)[\s\S]{0,300}export\\s\+\(\?:interface\|type\|class\)/,
+    )
+    const s = read(GEN)
+    expect(s, '缺 findUnregisteredTypes 调用（新门禁没接上）').toMatch(/findUnregisteredTypes\(md,\s*exportedTypeNames,\s*ifaces\)/)
+  })
+
+  it('★`findUnregisteredTypes` 语义：抽不到 ⇒ 报；抽到 ⇒ 不报；非本项目 ⇒ 不报', async () => {
+    const { findUnregisteredTypes } = await lib()
+    const exported = new Set(['FetchCacheMode', 'SomeApi'])
+    const ifaces = { SomeApi: { props: [] } } as unknown as Record<string, Iface>
+    const md = '`FetchCacheMode` 与 `SomeApi` 以及 `Promise`'
+    const miss = findUnregisteredTypes(md, exported, ifaces)
+    expect(miss, '★导出但抽不到 ⇒ 必须报（这正是 FetchCacheMode 的形态）').toEqual(['FetchCacheMode'])
+    expect(miss, '抽到的不得报').not.toContain('SomeApi')
+    expect(miss, '内置类型不得报').not.toContain('Promise')
+  })
+
+  it('★说明段内**叙述性提及**不算悬空引用（避免"别名指向谁"的说明被判红）', async () => {
+    // 实测场景：`### \`AppLifecycle\`` 的 doc 里写"定义在 capability-app.ts 的 `AppLifecycleHandle`"，
+    // 那段话本身就是解释；若要求 `AppLifecycleHandle` 也有独立段 ⇒ 逼人写重复段落（假红）。
+    const { findUnregisteredTypes } = await lib()
+    const exported = new Set(['AppLifecycleHandle'])
+    const md = ['### `AppLifecycle`', '', '定义在 `AppLifecycleHandle`，此处仅做别名导出。', '', '## 用法'].join('\n')
+    expect(findUnregisteredTypes(md, exported, {})).toEqual([])
+  })
+
+  it('★★★字符串字面量联合类型必须能抽成"取值枚举"（FetchCacheMode 的核心）', () => {
+    const libSrc = read('website/scripts/lib/type-shapes.mjs')
+    expect(libSrc, '★未抽取字符串字面量联合 ⇒ 枚举类型只有裸名字').toMatch(/export function stringLiteralUnion/)
+    expect(libSrc, '★缺取值表渲染原语').toMatch(/export function renderUnionTable/)
+    const s = read(GEN)
+    const calls = s.match(/renderUnionTable\(lines,\s*ti,\s*escMd\)/g) ?? []
+    expect(calls.length, `★取值表只在 ${calls.length} 处渲染（h2/h3 两条路径都要有）`).toBeGreaterThanOrEqual(2)
+  })
+
+  it('★★★`stringLiteralUnion` 行为：纯字面量联合 ⇒ 取值表；混合/非字面量 ⇒ null', async () => {
+    // ★行为判据（不依赖源码文本）：变异"恒返回 null"时这条必红。
+    const { stringLiteralUnion } = (await import('../website/scripts/lib/type-shapes.mjs')) as unknown as {
+      stringLiteralUnion: (rhs: string) => string[] | null
+    }
+    expect(stringLiteralUnion("'a' | 'b' | 'c'")).toEqual(['a', 'b', 'c'])
+    expect(stringLiteralUnion("'default' | \"no-store\"")).toEqual(['default', 'no-store'])
+    expect(stringLiteralUnion("'auto' | SomeType"), '★混合联合不是枚举（含类型名）').toBeNull()
+    expect(stringLiteralUnion('SomeType'), '★无字面量 ⇒ null').toBeNull()
+  })
+
+  it('★★★`FetchCacheMode` 在官网上有**独立的取值说明段**（端到端回归）', () => {
+    const md = read('website/content/capabilities/fetch.md')
+    expect(md, '★缺 FetchCacheMode 说明段').toMatch(/^### `FetchCacheMode`$/m)
+    // 六个取值每个都要有一行（不只列名字——要带语义）
+    for (const v of ['default', 'no-store', 'reload', 'no-cache', 'force-cache', 'only-if-cached']) {
+      expect(md, `★取值 ${v} 未出现在取值表`).toMatch(new RegExp("\\| `'" + v + "'` \\|", ''))
+    }
+    // ★逐值说明必须来自源码 JSDoc（不是 `—` 占位）
+    expect(md, '★取值表全是 `—`（JSDoc 里没有逐值语义）').toMatch(/\| `'no-store'` \| [^—]/)
+  })
+
+  it('★★`CapError` 必须有属性表（class 抽取 + 构造参数属性）', () => {
+    const libSrc = read('website/scripts/lib/type-shapes.mjs')
+    expect(libSrc, '★抽取器只认 interface，class 抽不到 ⇒ CapError 无属性表').toMatch(
+      /export \(\?:interface\|class\)/,
+    )
+    expect(libSrc, '★未抽 class 构造参数属性（parameter properties）').toMatch(
+      /export function parameterProperties/,
+    )
+    const md = read('website/content/capabilities/fetch.md')
+    expect(md, '★CapError 段缺 code 属性').toMatch(/^\| `code` \| `string`/m)
   })
 })

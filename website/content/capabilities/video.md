@@ -188,6 +188,14 @@ wx：`wx.createVideoContext(id)`；web：`document` 中按 id 定位 `<video>` �
 |---|---|---|---|
 | `direction` | `'horizontal' \| 'vertical'` | — | 全屏方向（horizontal 横屏 / vertical 竖屏） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -540,6 +540,105 @@ C4 地图区域（wx.createMapContext 语义）
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `MapController`
+
+★能力颗粒度对齐：C4 地图控制器（原 2 方法 → 覆盖物/视野/坐标转换/移动标记全套）
+方法统一 Promise<CapResult<T>>；上层组件 <map> 通过 id 取控制器。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | 获取当前地图视野（中心经纬 + 缩放级别） |
+| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | 平移地图中心到指定经纬。 |
+| `moveToLocation` | `moveToLocation(): Promise<CapResult<void>>` | 移动到当前定位点 |
+| `includePoints` | `includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>` | 缩放视野以包含所有给定点。 |
+| `translateMarker` | `translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>` | 平移指定标记到目标点（带旋转/时长）。 |
+| `addMarkers` | `addMarkers(markers: MapMarker[]): Promise<CapResult<void>>` | 添加标记。 |
+| `removeMarkers` | `removeMarkers(ids: number[]): Promise<CapResult<void>>` | 移除标记。 |
+| `addPolylines` | `addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>` | 添加折线。 |
+| `removePolylines` | `removePolylines(ids: number[]): Promise<CapResult<void>>` | 移除折线。 |
+| `addCircles` | `addCircles(circles: MapCircle[]): Promise<CapResult<void>>` | 添加圆。 |
+| `removeCircles` | `removeCircles(ids: number[]): Promise<CapResult<void>>` | 移除圆。 |
+| `getScale` | `getScale(): Promise<CapResult<number>>` | 获取当前缩放级别 |
+| `openMapApp` | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | 打开第三方地图 App 导航（宿主放行才可用）。 |
+| `on` | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | 订阅地图事件。 |
+| `getCenterLocation` | `getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>` | 获取地图中心经纬 |
+| `getRotate` | `getRotate(): Promise<CapResult<number>>` | 获取地图旋转角（度） |
+| `getSkew` | `getSkew(): Promise<CapResult<number>>` | 获取地图倾斜角（度） |
+| `fromScreenLocation` | `fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>` | 屏幕坐标 → 经纬度。 |
+| `toScreenLocation` | `toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>` | 经纬度 → 屏幕坐标。 |
+| `setCenterOffset` | `setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>` | 设置地图中心偏移（把中心点从容器中心移开，露出标记）。 |
+| `setBoundary` | `setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>` | 限制地图可拖动范围到给定边界多边形。 |
+| `moveAlong` | `moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>` | 沿路径平滑移动（轨迹回放）。 |
+| `addArc` | `addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>` | 添加弧线。 |
+| `eraseLines` | `eraseLines(ids: number[]): Promise<CapResult<void>>` | 删除折线（清空指定 id）。 |
+| `initMarkerCluster` | `initMarkerCluster(enable: boolean): Promise<CapResult<void>>` | 开启/关闭点聚合。 |
+| `setLocMarkerIcon` | `setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>` | 设置定位点图标。 |
+| `addCustomLayer` | `addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | 添加自定义图层（Canvas 绘制覆盖物）。 |
+| `removeCustomLayer` | `removeCustomLayer(layerId: string): Promise<CapResult<void>>` | 移除自定义图层。 |
+| `addVisualLayer` | `addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | 添加可视化图层（GeoJSON → 样式）。 |
+| `removeVisualLayer` | `removeVisualLayer(layerId: string): Promise<CapResult<void>>` | 移除可视化图层。 |
+| `executeVisualLayerCommand` | `executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>` | 执行可视化图层指令（增删改要素）。 |
+| `addGroundOverlay` | `addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | 添加地面覆盖物（图片贴地）。 |
+| `updateGroundOverlay` | `updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | 更新地面覆盖物。 |
+| `removeGroundOverlay` | `removeGroundOverlay(overlayId: string): Promise<CapResult<void>>` | 移除地面覆盖物。 |
+
+### `MapRegion`
+
+C4 地图区域（wx.createMapContext 语义）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `latitude` | `number` | 中心纬度 |
+| `longitude` | `number` | 中心经度 |
+| `scale` | `number` | 缩放级别（4-20，越大越细） |
+
+### `MapMarker`
+
+地图标记（wx.Marker 子集）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `id` | `number` | 标记唯一 id（增删改按 id） |
+| `latitude` | `number` | 纬度 |
+| `longitude` | `number` | 经度 |
+| `title` | `string` | 标题（点按显示） |
+| `iconPath` | `string` | 图标路径 |
+| `width` | `number` | 图标宽（px） |
+| `height` | `number` | 图标高（px） |
+| `callout` | `Record<string, unknown>` | 气泡配置 |
+
+### `MapPolyline`
+
+折线
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `points` | `Array<{ latitude: number; longitude: number }>` | 顶点序列 |
+| `color` | `string` | 线颜色 |
+| `width` | `number` | 线宽（px） |
+
+### `MapCircle`
+
+圆
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `latitude` | `number` | 圆心纬度 |
+| `longitude` | `number` | 圆心经度 |
+| `radius` | `number` | 半径（m） |
+| `color` | `string` | 描边色 |
+| `fillColor` | `string` | 填充色 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

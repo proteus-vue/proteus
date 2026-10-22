@@ -123,6 +123,46 @@ subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `PreloadAPI`
+
+★权威标尺缺口 C67：预加载（wx.preloadAssets / preloadSkylineView / preloadWebview / preDownloadSubpackage）。
+「用空间换时间」——提前拉取资源 / 视图 / 分包，降低首屏与页面切换等待。
+web：无标准预加载 API（可用 `<link rel=preload>` 或动态 import 替代）→ 各方法 Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `assets` | `assets(data: PreloadAsset[]): Promise<CapResult<void>>` | 预加载资源（字体 / 图片）。 |
+| `skylineView` | `skylineView(): Promise<CapResult<void>>` | 预加载 Skyline 视图（配合 Skyline 渲染器的页面预载） |
+| `webview` | `webview(): Promise<CapResult<void>>` | 预加载 WebView 页面 |
+| `subpackage` | `subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>` | 预下载分包（目前仅 workers 分包）。 |
+
+### `PreloadAsset`
+
+预加载资源项（wx.preloadAssets——字体/图片）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `src` | `string` | 资源地址 |
+| `type` | `'font' \| 'image'` | 资源类型（font 字体 / image 图片） |
+
+### `PreDownloadTask`
+
+分包预下载任务句柄（wx.preDownloadSubpackage 返回）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onProgressUpdate` | `onProgressUpdate(cb: (res: { progress: number; totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void): () => void` | 订阅下载进度。 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

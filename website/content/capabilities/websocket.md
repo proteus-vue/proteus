@@ -111,6 +111,14 @@ App 端尤其如此——`ws.open` 受理即返（不阻塞 JS 线程等握手�
 | `close` | `close(code?: number, reason?: string): void` | 关闭连接（`close` 事件仍由对端/宿主推回——本调用不等于已断开） |
 | `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | 订阅事件（返回取消订阅函数）。 - `open`：连接建立（**唯一**的"已连上"证据） - `message`：收到的消息（`{ data }`；二进制为字节数组） - `close`：连接关闭（`{ code, reason }`） - `error`：连接或发送出错（`{ message, missing? }`） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

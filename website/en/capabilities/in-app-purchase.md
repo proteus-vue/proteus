@@ -69,6 +69,26 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `IAPReceipt`
+
+C46 内购回执（wx 无公开 IAP API——宿主桥接；web 无标准 → Err）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `productId` | `string` | 内购商品 ID（应用商店登记） |
+| `transactionId` | `string` | 交易单号（商店返回） |
+| `state` | `'purchased' \| 'restored'` | 交易状态（purchased 新购 / restored 恢复购买） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

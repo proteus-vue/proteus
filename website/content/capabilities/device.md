@@ -10,7 +10,7 @@ order: 1007
 
 **什么时候用**：问题排查、按机型做兼容。
 
-> 技术标识：能力原语 C11 · `capability.device` · 返回 `DeviceInfo` · **Hook 已实现**（各端支持情况见下方兼容进度表）
+> 技术标识：能力原语 C11 · `capability.device` · 返回 `CapDeviceInfo` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
 设备（wx.getSystemInfo / navigator.userAgent / mock）
 
@@ -51,6 +51,14 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 | `os` | `string` | — | 操作系统名（iOS / Android / Windows / macOS） |
 | `version` | `string` | — | 系统版本号（如 17.4） |
 | `browser` | `string` | — | 浏览器/容器名（web 端有；MP 缺省） |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
 
 ## 错误码
 

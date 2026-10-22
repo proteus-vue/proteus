@@ -109,6 +109,14 @@ web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实
 | `needAuthorization` | `boolean` | — | 是否需要用户授权（用户未同意 → true） |
 | `privacyContractName` | `string` | — | 隐私协议名称（如《用户隐私保护指引》） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

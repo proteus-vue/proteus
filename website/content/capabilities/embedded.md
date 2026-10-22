@@ -50,6 +50,14 @@ C48 被宿主嵌入（HostContext——宿主桥注入；缺省 Err 诚实降级
 | `version` | `string` | — | 宿主/基础库版本 |
 | `capabilities` | `string[]` | — | 宿主声明的能力名集合 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

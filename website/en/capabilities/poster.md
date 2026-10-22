@@ -75,6 +75,25 @@ onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `PosterAPI`
+
+★权威标尺缺口 C80：分享海报（`usePoster()`）。
+wx：`wx.onGeneratePoster`（分享海报生成事件）；web：无对等 → Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onGenerate` | `onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void` | 订阅海报生成事件。 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

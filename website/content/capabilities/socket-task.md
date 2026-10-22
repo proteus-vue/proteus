@@ -111,6 +111,14 @@ C28 useSocketTask 句柄（Hook 层——方法包 CapResult，G-32.4）
 | `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
 | `isConnected` | `isConnected(): boolean` | 连接是否已建立 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

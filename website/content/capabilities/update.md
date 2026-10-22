@@ -118,6 +118,14 @@ Web/无更新机制 → 全 Err（诚实降级）。
 | `onUpdateFailed` | `onUpdateFailed(cb: (errMsg: string) => void): () => void` | 订阅「更新失败」（返回取消） |
 | `applyUpdate` | `applyUpdate(): Promise<CapResult<void>>` | 应用更新并重启小程序 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

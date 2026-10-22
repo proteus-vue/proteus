@@ -134,12 +134,65 @@ function hasExplanation(markdown, name) {
 export function findUnexplainedTypes(markdown, ifaces) {
   if (typeof markdown !== 'string') return []
   const missing = []
-  for (const m of markdown.matchAll(/`([A-Z][A-Za-z0-9]+)`/g)) {
-    const n = m[1]
-    if (TS_BUILTINS.has(n)) continue
-    if (!ifaces[n]) continue
-    if (hasExplanation(markdown, n)) continue
-    if (!missing.includes(n)) missing.push(n)
+  let inSection = false
+  for (const line of markdown.split('\n')) {
+    if (/^#{2,4}\s/.test(line)) inSection = /^#{2,4}\s+`?[A-Z]/.test(line)
+    // ★#1161：说明段**内部**提到的类型名不算"引用"（叙述性提及，如"定义在 capability-app.ts 的
+    //   `AppLifecycleHandle`"——那段话本身就在解释这个别名指向谁）。否则会逼人为每个同源别名
+    //   再建一个重复段落 ⇒ 假红（本仓假红比漏报更贵）。
+    if (inSection) continue
+    for (const m of line.matchAll(/`([A-Z][A-Za-z0-9]+)`/g)) {
+      const n = m[1]
+      if (TS_BUILTINS.has(n)) continue
+      if (!ifaces[n]) continue
+      if (hasExplanation(markdown, n)) continue
+      if (!missing.includes(n)) missing.push(n)
+    }
+  }
+  return missing
+}
+
+/**
+ * ★★★#1161：**数据源覆盖检查**——页面上引用的类型，在 `packages/api/src/` 里确实导出，
+ * 却**不在 `ifaces` 里** ⇒ 说明该源文件没登记进生成器的 `API_SRC_FILES`。
+ *
+ * 【这道门禁为什么必须单独存在（用户实测的漏网形态）】
+ *   `findUnexplainedTypes` 的判据是 `if (!ifaces[n]) continue` —— 它只检查"**已知**类型有没有说明段"。
+ *   于是源文件没登记时，类型**根本不进 ifaces**，悬空引用检查**静默跳过**它：
+ *   门禁全绿，而官网上 `FetchCacheMode` 只有一个裸名字、没有取值说明。
+ *   ★这与本仓反复记的"断言只覆盖已知集合 ⇒ 集合外的形态永远不报"是同一族缺陷。
+ *   ⇒ 判据换向：**从源码侧枚举所有导出类型**，凡是文档里引用了却抽不到 ⇒ 直接判"数据源缺失"。
+ *
+ * 【口径（克制）】只认**反引号包裹**、且在 api 源码里以 `export interface/type/class` 出现的名字；
+ *   抽不到才报，不猜测"应不应该出现在这页"。
+ *
+ * ★★排除"说明段里提到的名字"（2026-10-22 实测）：
+ *   正文/说明段**叙述性**提到某个类型名（如 `AppLifecycle` 的 doc 里写"定义在
+ *   `capability-app.ts` 的 `AppLifecycleHandle`"）**不构成悬空引用**——那段话是在解释
+ *   `AppLifecycle` 这个别名指向谁。若把它们也算引用，会要求每个"被提及的同源类型"都建独立段
+ *   ⇒ 假红（本仓假红比漏报更贵：会逼人删掉有价值的说明）。
+ *   实现：按行扫描，**跳过**任何"已在说明段内"的行（`### \`X\`` 之后到下一个标题之间）。
+ *
+ * @param {string} markdown     生成的 md 全文
+ * @param {Set<string>} exported api 源码里**全部**导出类型名（跨所有文件）
+ * @param {object} ifaces       生成器实际抽到的接口表
+ * @returns {string[]} 引用了但抽取不到的导出类型名
+ */
+export function findUnregisteredTypes(markdown, exported, ifaces) {
+  if (typeof markdown !== 'string' || !exported) return []
+  const missing = []
+  let inSection = false
+  for (const line of markdown.split('\n')) {
+    // 进入/离开"类型说明段"（### `X` / ## 类型引用 之外的一句话叙述不算）
+    if (/^#{2,4}\s/.test(line)) { inSection = /^#{2,4}\s+`?[A-Z]/.test(line) }
+    if (inSection) continue
+    for (const m of line.matchAll(/`([A-Z][A-Za-z0-9]+)`/g)) {
+      const n = m[1]
+      if (TS_BUILTINS.has(n)) continue
+      if (ifaces[n]) continue              // 已抽到 ⇒ 由 findUnexplainedTypes 管
+      if (!exported.has(n)) continue       // 不是本项目的导出类型（外部/内置）
+      if (!missing.includes(n)) missing.push(n)
+    }
   }
   return missing
 }

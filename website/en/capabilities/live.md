@@ -157,6 +157,12 @@ leave(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
+## Referenced types
+
+### `LivePlayState`
+
+直播播放状态（LivePlayerContext.onXxx 归一）
+
 ## Error codes
 
 | code | Doc |
@@ -182,6 +188,56 @@ leave(): Promise<CapResult<void>>
 > Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but the bridge is missing **or is a pure shell** → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. ★**Strictness differs by target**: WeChat/Web require the bridge method to exist **and do real platform work** (a body returning `unsupported` on every path counts as ⚠️); iOS/Android require the method in the App bridge factories; HarmonyOS requires **both** the JS bridge and host dispatch. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Referenced types
+
+### `LiveRoomOptions`
+
+C49 直播房间（wx live 组件形态/宿主桥——缺省 Err）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `roomId` | `string` | 直播间 ID（同时作为 `<live-player id>` 组件 id——wx.createLivePlayerContext(roomId)） |
+| `mode` | `'video' \| 'audio'` | 拉流模式 |
+
+### `LiveRoomHandle`
+
+★能力颗粒度对齐：C49 直播房间操作句柄（原仅 leave/status → 播放控制全套）
+观看端（LivePlayerContext）；推流端（LivePusherContext：美颜/连麦/推流）为诚实边界（需推流类目，未纳入）。
+注：live-player 组件需在页面声明 + 直播类目资质；Web 无对等 → Err。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `play` | `play(): Promise<CapResult<void>>` | 开始播放 |
+| `pause` | `pause(): Promise<CapResult<void>>` | 暂停播放 |
+| `resume` | `resume(): Promise<CapResult<void>>` | 从暂停处恢复播放 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止播放 |
+| `mute` | `mute(): void` | 静音切换（同步，无 Promise） |
+| `snapshot` | `snapshot(): Promise<CapResult<string>>` | 截图（返回临时文件路径） |
+| `requestFullScreen` | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | 请求全屏（direction 0 竖屏 / 90 横屏；缺省不变） |
+| `exitFullScreen` | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
+| `status` | `status(): LivePlayState` | 当前播放状态 |
+| `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | 订阅播放状态变化（返回取消） |
+| `leave` | `leave(): Promise<CapResult<void>>` | 离开直播间（= stop 的语义别名） |
+
+### `LivePlayState`
+
+直播播放状态（LivePlayerContext.onXxx 归一）
+
+| 取值 | 说明 |
+|---|---|
+| `'playing'` | — |
+| `'paused'` | — |
+| `'stopped'` | — |
+| `'error'` | — |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

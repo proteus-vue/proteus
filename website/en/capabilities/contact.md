@@ -64,6 +64,26 @@ useContact(): Promise<CapResult<Contact[]>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `Contact`
+
+C19 联系人（wx.chooseContact / web 无标准 → 降级 undefined）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `name` | `string` | 联系人姓名 |
+| `phone` | `string` | 电话号码 |
+| `email` | `string` | 邮箱 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

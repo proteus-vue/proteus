@@ -301,6 +301,44 @@ setSaveExitStateProvider(fn: () => Record<string, unknown>): void
 | `setAddToFavoritesProvider` | `setAddToFavoritesProvider(fn: () => ShareContent): void` | 收藏（同上） |
 | `setSaveExitStateProvider` | `setSaveExitStateProvider(fn: () => Record<string, unknown>): void` | 保存退出状态（MP `onSaveExitState`——返回需保存的状态对象） |
 
+### `PageEventPayloads`
+
+页面级事件载荷（按事件类型区分——订阅方按事件取用；未列出的端不产生该载荷）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `resize` | `{ size: { windowWidth: number; windowHeight: number } }` | — | — |
+
+### `ShareContent`
+
+分享内容（决策型事件的返回值——微信 `onShareAppMessage` 语义）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `title` | `string` | — | — |
+| `path` | `string` | — | — |
+| `imageUrl` | `string` | — | — |
+| `query` | `string` | — | — |
+
+### `PageLifecyclePhase`
+
+页面阶段（与 C24 `PageLifecycle.phase` 同值域）
+
+| 取值 | 说明 |
+|---|---|
+| `'IDLE'` | — |
+| `'LOAD'` | — |
+| `'SHOW'` | — |
+| `'HIDE'` | — |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

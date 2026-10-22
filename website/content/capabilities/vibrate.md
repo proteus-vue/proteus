@@ -36,6 +36,16 @@ useVibrate(durationMs?: number): Promise<CapResult<void>>
 | `data` | `void` | 成功时无载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
+## 类型引用
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

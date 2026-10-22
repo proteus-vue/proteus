@@ -115,6 +115,48 @@ web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `ARAPI`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `createSession` | `createSession(options?: AROptions): ARSessionHandle` | 创建视觉算法会话 |
+| `isSupported` | `isSupported(version?: 'v1' \| 'v2'): Promise<CapResult<boolean>>` | 查询设备是否支持视觉算法。 |
+
+### `AROptions`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `track` | `Record<string, unknown>` | 追踪模式（'plane' 平面 / 'marker' 标记 / 'OSD' 图片识别 / 'face' 人脸 / 'hand' 手势 / 'body' 人体 / 'depth' 深度） |
+| `version` | `'v1' \| 'v2'` | 算法版本（缺省 v2） |
+| `gl` | `unknown` | WebGL 上下文（渲染锚点用） |
+
+### `ARSessionHandle`
+
+★权威标尺缺口 C76：AR/XR 视觉算法（`useAR()`）。
+wx：`wx.createVKSession`（v1/v2 视觉算法会话——平面检测/人脸/手势/深度/OCR/标记）；
+web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `state` | `state(): VKSessionState` | 会话状态（0 未初始化 / 1 就绪 / 2 运行中 / 3 暂停） |
+| `start` | `start(): Promise<CapResult<void>>` | 启动会话 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止会话 |
+| `destroy` | `destroy(): void` | 销毁会话（释放相机/算法资源） |
+| `on` | `on(event: string, cb: (payload: unknown) => void): () => void` | 订阅会话事件。 |
+| `requestAnimationFrame` | `requestAnimationFrame(cb: (timestamp: number, frame: unknown) => void): number` | 请求下一帧 VK 数据（驱动算法） |
+| `cancelAnimationFrame` | `cancelAnimationFrame(handle: number): void` | 取消动画帧 |
+| `getVKFrame` | `getVKFrame(width?: number, height?: number): unknown` | 取当前 VK 帧 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

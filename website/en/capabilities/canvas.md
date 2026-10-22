@@ -246,6 +246,126 @@ Canvas 图案填充（createPattern 返回）
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `CanvasController`
+
+★组件实例 API 对齐：C57 画布控制器（`useCanvas(id)`）。
+wx：`wx.createCanvasContext(id)` + `createSelectorQuery().fields({node:true})` +
+`wx.canvasToTempFilePath` + `wx.createOffscreenCanvas`；
+web：`document` 中按 id/选择器定位 `HTMLCanvasElement` + 标准 2D 上下文适配 + OffscreenCanvas 降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `id` | `string` | 画布标识（wx canvas-id；web 选择器/id，已去 `#` 前缀） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `createContext` | `createContext(): CapResult<CanvasContext>` | 创建旧版 2D 绘图上下文（方法名对齐官方 CanvasContext） |
+| `node` | `node(): Promise<CapResult<CanvasNode>>` | 取画布节点（`<canvas type="2d">` node——用于 requestAnimationFrame / 标准 getContext） |
+| `toTempFilePath` | `toTempFilePath(options?: CanvasExportOptions): Promise<CapResult<string>>` | 导出为临时文件路径（wx.canvasToTempFilePath；web 返回 data URL） |
+| `toDataURL` | `toDataURL(options?: CanvasExportOptions): Promise<CapResult<string>>` | 导出为 data URL（web 原生；wx 经临时文件读为 base64） |
+| `offscreen` | `offscreen(width: number, height: number, type?: '2d' \| 'webgl'): CapResult<OffscreenCanvasHandle>` | 创建离屏画布（Skyline 高频渲染 / 离屏合成） |
+
+### `CanvasContext`
+
+★组件实例 API 对齐（2026-09-12）：C57 CanvasContext 2D 绘图上下文。
+方法名与参数**逐一对齐微信官方 CanvasContext**（`wx.createCanvasContext` 返回）——
+web 由标准 `CanvasRenderingContext2D` 适配（`setFillStyle` → `fillStyle` 等），
+因此同一份绘图代码在小程序端与 Web 端均可运行，业务零平台分支。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `setFillStyle` | `setFillStyle(color: string): void` | 设置填充色（CSS 颜色串） |
+| `setStrokeStyle` | `setStrokeStyle(color: string): void` | 设置描边色（CSS 颜色串） |
+| `setLineWidth` | `setLineWidth(lineWidth: number): void` | 设置线宽 |
+| `setLineCap` | `setLineCap(lineCap: 'butt' \| 'round' \| 'square'): void` | 设置线帽（butt 平头 / round 圆头 / square 方头） |
+| `setLineJoin` | `setLineJoin(lineJoin: 'bevel' \| 'round' \| 'miter'): void` | 设置连线拐角（bevel 斜角 / round 圆角 / miter 尖角） |
+| `setMiterLimit` | `setMiterLimit(miterLimit: number): void` | 设置最大斜接长度 |
+| `setGlobalAlpha` | `setGlobalAlpha(alpha: number): void` | 设置全局透明度（0–1） |
+| `setShadow` | `setShadow(offsetX: number, offsetY: number, blur: number, color?: string): void` | 设置阴影（offsetX/offsetY 偏移、blur 模糊、color 颜色） |
+| `setLineDash` | `setLineDash(pattern: number[], offset?: number): void` | 设置虚线（pattern 为线段与间隔长度数组，offset 起始偏移） |
+| `setFontSize` | `setFontSize(fontSize: number): void` | 设置字号（px） |
+| `setTextAlign` | `setTextAlign(align: 'left' \| 'center' \| 'right'): void` | 设置文本水平对齐（left / center / right） |
+| `setTextBaseline` | `setTextBaseline(textBaseline: 'top' \| 'bottom' \| 'middle' \| 'normal' \| 'alphabetic' \| 'hanging' \| 'ideographic'): void` | 设置文本基线 |
+| `setTransform` | `setTransform(scaleX: number, skewY: number, skewX: number, scaleY: number, translateX: number, translateY: number): void` | 设置变换矩阵（等价标准 setTransform） |
+| `save` | `save(): void` | 保存绘图上下文（与 restore 配对，栈式） |
+| `restore` | `restore(): void` | 恢复最近保存的绘图上下文 |
+| `translate` | `translate(x: number, y: number): void` | 平移坐标系 |
+| `rotate` | `rotate(rotate: number): void` | 旋转坐标系（弧度） |
+| `scale` | `scale(scaleX: number, scaleY: number): void` | 缩放坐标系 |
+| `beginPath` | `beginPath(): void` | 开始新路径（清空当前路径） |
+| `closePath` | `closePath(): void` | 闭合当前路径 |
+| `moveTo` | `moveTo(x: number, y: number): void` | 移动路径起点 |
+| `lineTo` | `lineTo(x: number, y: number): void` | 连线到坐标 |
+| `arc` | `arc(x: number, y: number, radius: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void` | 画圆弧（startAngle/endAngle 弧度；counterclockwise 逆时针） |
+| `arcTo` | `arcTo(x1: number, y1: number, x2: number, y2: number, radius: number): void` | 画圆弧并连线 |
+| `quadraticCurveTo` | `quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void` | 二次贝塞尔曲线 |
+| `bezierCurveTo` | `bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void` | 三次贝塞尔曲线 |
+| `rect` | `rect(x: number, y: number, width: number, height: number): void` | 矩形路径 |
+| `fill` | `fill(): void` | 填充当前路径 |
+| `stroke` | `stroke(): void` | 描边当前路径 |
+| `clip` | `clip(): void` | 按当前路径裁剪 |
+| `fillRect` | `fillRect(x: number, y: number, width: number, height: number): void` | 填充矩形 |
+| `strokeRect` | `strokeRect(x: number, y: number, width: number, height: number): void` | 描边矩形 |
+| `clearRect` | `clearRect(x: number, y: number, width: number, height: number): void` | 清除矩形区域 |
+| `fillText` | `fillText(text: string, x: number, y: number, maxWidth?: number): void` | 填充文本（maxWidth 可选，超宽压缩） |
+| `measureText` | `measureText(text: string): CanvasTextMetrics` | 测量文本尺寸 |
+| `drawImage` | `drawImage(imageResource: string \| unknown, ...args: number[]): void` | 绘制图片（对齐官方 9 参 / 5 参 / 3 参重载：source 后接目标/裁剪参数） |
+| `createLinearGradient` | `createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradientLike` | 创建线性渐变 |
+| `createCircularGradient` | `createCircularGradient(x: number, y: number, radius: number): CanvasGradientLike` | 创建径向渐变（圆心 x,y 半径 radius） |
+| `createPattern` | `createPattern(image: string \| unknown, repetition: 'repeat' \| 'repeat-x' \| 'repeat-y' \| 'no-repeat'): CanvasPatternLike \| null` | 创建图案填充 |
+| `draw` | `draw(reserve?: boolean \| (() => void), callback?: () => void): void` | 提交绘制（wx 异步提交到画布；web 即时绘制 → 直接回调。reserve 为 true 时保留上次绘制内容） |
+
+### `CanvasNode`
+
+Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTMLCanvasElement）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `width` | `number` | 画布像素宽 |
+| `height` | `number` | 画布像素高 |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `getContext` | `getContext(type: '2d' \| 'webgl'): unknown` | 取原生上下文（2d / webgl） |
+
+### `CanvasExportOptions`
+
+Canvas 导出参数（wx.canvasToTempFilePath 对齐——web 端取相关字段）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `x` | `number` | 源区域左上角 x（缺省 0） |
+| `y` | `number` | 源区域左上角 y（缺省 0） |
+| `width` | `number` | 源区域宽（缺省画布宽） |
+| `height` | `number` | 源区域高（缺省画布高） |
+| `destWidth` | `number` | 输出图宽（缺省 = 源宽） |
+| `destHeight` | `number` | 输出图高（缺省 = 源高） |
+| `fileType` | `'png' \| 'jpg'` | 图片格式（缺省 png） |
+| `quality` | `number` | 图片质量（仅 jpg 生效，0–1） |
+
+### `OffscreenCanvasHandle`
+
+离屏画布（wx.createOffscreenCanvas / web OffscreenCanvas——Skyline 高频渲染）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `width` | `number` | 像素宽 |
+| `height` | `number` | 像素高 |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `getContext` | `getContext(type: '2d' \| 'webgl'): CanvasContext \| null` | 取上下文（2d 返回可绘图上下文） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

@@ -115,6 +115,27 @@ isConnected(): boolean
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `SocketTaskHandle`
+
+C28 useSocketTask 句柄（Hook 层——方法包 CapResult，G-32.4）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| `close` | `close(code?: number, reason?: string): Promise<CapResult<void>>` | 关闭连接（code/reason 透传给对端） |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+| `isConnected` | `isConnected(): boolean` | 连接是否已建立 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

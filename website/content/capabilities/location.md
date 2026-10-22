@@ -52,6 +52,14 @@ useLocation(): Promise<CapResult<Coords>>
 | `altitude` | `number` | — | 海拔（米；平台不支持时缺省） |
 | `speed` | `number` | — | 速度（米/秒；平台不支持时缺省） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

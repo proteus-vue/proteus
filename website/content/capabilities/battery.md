@@ -50,6 +50,14 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 | `chargingTime` | `number` | — | 充满所需秒数（充电中才有；不支持缺省） |
 | `dischargingTime` | `number` | — | 剩余可用秒数（放电中才有；不支持缺省） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -104,6 +104,14 @@ web：无标准 → Err 诚实降级。★App 三端**逐方法独立分档**（
 | `onUserCapture` | `onUserCapture(cb: () => void): () => void` | 订阅用户主动截屏事件。 |
 | `isPictureInPictureActive` | `isPictureInPictureActive(): Promise<CapResult<boolean>>` | 查询当前是否处于画中画（Picture-in-Picture）状态 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -80,6 +80,14 @@ web：无对等（可用 Translation API）→ Err 诚实降级。
 | `onTrigger` | `onTrigger(cb: (res: { locale: string; type: string }) => void): () => void` | 订阅用户主动翻译。 |
 | `onOff` | `onOff(cb: () => void): () => void` | 订阅用户取消翻译。 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

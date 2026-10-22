@@ -117,6 +117,30 @@ applyUpdate(): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `UpdateManagerAPI`
+
+★颗粒度对齐 C（2026-09-11）：C51 小程序热更新管理器（wx.getUpdateManager）
+checkUpdate → onCheckForUpdate 结果 → onUpdateReady → applyUpdateAndRestart。
+Web/无更新机制 → 全 Err（诚实降级）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `checkUpdate` | `checkUpdate(): Promise<CapResult<{ hasUpdate: boolean }>>` | 检查是否有新版本 |
+| `onCheckForUpdate` | `onCheckForUpdate(cb: (hasUpdate: boolean) => void): () => void` | 订阅「发现新版本」（返回取消） |
+| `onUpdateReady` | `onUpdateReady(cb: () => void): () => void` | 订阅「新版本已下载，可立即应用」（返回取消） |
+| `onUpdateFailed` | `onUpdateFailed(cb: (errMsg: string) => void): () => void` | 订阅「更新失败」（返回取消） |
+| `applyUpdate` | `applyUpdate(): Promise<CapResult<void>>` | 应用更新并重启小程序 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

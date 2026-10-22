@@ -25,7 +25,7 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `options` | `UploadOptions` | 是 | C29 上传选项（wx.uploadFile / web fetch FormData） |
-| `onProgress` | `ProgressCallback` | 否 | 进度回调（0-100；可省） |
+| `onProgress` | `ProgressCallback` | 否 | C29/C30 传输进度回调（0-100） |
 
 #### `options` 的属性
 
@@ -73,6 +73,14 @@ C29 上传选项（wx.uploadFile / web fetch FormData）
 | `headers` | `Record<string, string>` | — | 自定义请求头 |
 | `timeout` | `number` | — | 超时（ms；超时 → Err） |
 
+### `ProgressCallback`
+
+C29/C30 传输进度回调（0-100）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `call` | `(pct: number): void` | — |
+
 ### `UploadResult`
 
 C29 上传结果
@@ -82,6 +90,14 @@ C29 上传结果
 | `status` | `number` | — | HTTP 状态码 |
 | `data` | `unknown` | — | 响应体（文本/JSON 由服务端决定） |
 | `progress` | `number` | — | 进度（0-100，若平台支持 onProgressUpdate） |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
 
 ## 错误码
 

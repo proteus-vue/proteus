@@ -278,6 +278,31 @@ setSaveExitStateProvider(fn: () => Record<string, unknown>): void
 |---|---|---|---|
 | `phase` | `PageLifecyclePhase` | Yes | — |
 
+## Referenced types
+
+### `PageEventPayloads`
+
+页面级事件载荷（按事件类型区分——订阅方按事件取用；未列出的端不产生该载荷）
+
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `resize` | `{ size: { windowWidth: number; windowHeight: number } }` | — | — |
+
+### `ShareContent`
+
+分享内容（决策型事件的返回值——微信 `onShareAppMessage` 语义）
+
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `title` | `string` | — | — |
+| `path` | `string` | — | — |
+| `imageUrl` | `string` | — | — |
+| `query` | `string` | — | — |
+
+### `PageLifecyclePhase`
+
+页面阶段（与 C24 `PageLifecycle.phase` 同值域）
+
 ## Error codes
 
 | code | Doc |
@@ -302,6 +327,77 @@ setSaveExitStateProvider(fn: () => Record<string, unknown>): void
 > Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but the bridge is missing **or is a pure shell** → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. ★**Strictness differs by target**: WeChat/Web require the bridge method to exist **and do real platform work** (a body returning `unsupported` on every path counts as ⚠️); iOS/Android require the method in the App bridge factories; HarmonyOS requires **both** the JS bridge and host dispatch. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Referenced types
+
+### `PageLifecycle`
+
+★★C24 页面生命周期句柄（**扩展为完整事件面**——2026-09-30）。
+
+【类型收口】定义在 `capability-app.ts` 的 `PageLifecycleHandle`，此处仅别名导出。
+覆盖 15 个页面事件（`PAGE_EVENTS`）：阶段事件（load/show/ready/hide/unload）+
+页面事件（route-done/pull-down-refresh/reach-bottom/page-scroll/resize/tab-item-tap）+
+决策型（share-app-message/share-timeline/add-to-favorites/save-exit-state——单处理器）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `phase` | `PageLifecyclePhase` | — |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onLoad` | `onLoad(cb: () => void): () => void` | — |
+| `onShow` | `onShow(cb: () => void): () => void` | — |
+| `onReady` | `onReady(cb: () => void): () => void` | — |
+| `onHide` | `onHide(cb: () => void): () => void` | — |
+| `onUnload` | `onUnload(cb: () => void): () => void` | — |
+| `onRouteDone` | `onRouteDone(cb: (e: PageEventPayloads['route-done']) => void): () => void` | 路由动画完成（MP `onRouteDone` / App 转场结束 / Web transitionend） |
+| `onPullDownRefresh` | `onPullDownRefresh(cb: () => void): () => void` | 下拉刷新（MP `onPullDownRefresh` / App 宿主手势；★Web 无原生——诚实不触发） |
+| `onReachBottom` | `onReachBottom(cb: () => void): () => void` | 触底（MP `onReachBottom` / Web 滚动到底 / App 滚动到底） |
+| `onPageScroll` | `onPageScroll(cb: (e: PageEventPayloads['page-scroll']) => void): () => void` | 页面滚动（★**高频**：微信文档明确会引起两线程通信 ⇒ MP 端仅"声明过 onPageScroll"才派发） |
+| `onResize` | `onResize(cb: (e: PageEventPayloads['resize']) => void): () => void` | 尺寸变化（MP `onResize` / Web resize / App 旋转分屏） |
+| `onTabItemTap` | `onTabItemTap(cb: (e: PageEventPayloads['tab-item-tap']) => void): () => void` | tab 点击（MP `onTabItemTap` / App tab 栏） |
+| `setShareAppMessageProvider` | `setShareAppMessageProvider(fn: () => ShareContent): void` | 转发给好友（返回分享内容；MP 端声明后右上角出现"转发"入口） |
+| `setShareTimelineProvider` | `setShareTimelineProvider(fn: () => ShareContent): void` | 分享到朋友圈（同上；声明后才显示入口） |
+| `setAddToFavoritesProvider` | `setAddToFavoritesProvider(fn: () => ShareContent): void` | 收藏（同上） |
+| `setSaveExitStateProvider` | `setSaveExitStateProvider(fn: () => Record<string, unknown>): void` | 保存退出状态（MP `onSaveExitState`——返回需保存的状态对象） |
+
+### `PageEventPayloads`
+
+页面级事件载荷（按事件类型区分——订阅方按事件取用；未列出的端不产生该载荷）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `resize` | `{ size: { windowWidth: number; windowHeight: number } }` | — |
+
+### `ShareContent`
+
+分享内容（决策型事件的返回值——微信 `onShareAppMessage` 语义）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `title` | `string` | — |
+| `path` | `string` | — |
+| `imageUrl` | `string` | — |
+| `query` | `string` | — |
+
+### `PageLifecyclePhase`
+
+页面阶段（与 C24 `PageLifecycle.phase` 同值域）
+
+| 取值 | 说明 |
+|---|---|
+| `'IDLE'` | — |
+| `'LOAD'` | — |
+| `'SHOW'` | — |
+| `'HIDE'` | — |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

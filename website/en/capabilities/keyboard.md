@@ -84,6 +84,37 @@ C14 键盘信息（高度 px + 可见性）
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `KeyboardLifecycle`
+
+C14 键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `info` | `KeyboardInfo` | 当前键盘状态（高度/可见性快照） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | 订阅键盘高度变化（返回取消） |
+
+### `KeyboardInfo`
+
+C14 键盘信息（高度 px + 可见性）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `height` | `number` | 键盘高度（px） |
+| `visible` | `boolean` | 键盘是否可见 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

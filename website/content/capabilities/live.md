@@ -210,6 +210,25 @@ C49 直播房间（wx live 组件形态/宿主桥——缺省 Err）
 | `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | 订阅播放状态变化（返回取消） |
 | `leave` | `leave(): Promise<CapResult<void>>` | 离开直播间（= stop 的语义别名） |
 
+### `LivePlayState`
+
+直播播放状态（LivePlayerContext.onXxx 归一）
+
+| 取值 | 说明 |
+|---|---|
+| `'playing'` | — |
+| `'paused'` | — |
+| `'stopped'` | — |
+| `'error'` | — |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

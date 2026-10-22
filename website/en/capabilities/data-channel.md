@@ -100,6 +100,31 @@ onMessage(cb: (data: string) => void): () => void
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `DataChannelOptions`
+
+C31 数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `channelId` | `string` | 通道标识（业务自定义，跨端路由用） |
+
+### `DataChannelHandle`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

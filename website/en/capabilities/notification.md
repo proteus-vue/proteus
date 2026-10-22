@@ -105,6 +105,26 @@ useCustomerService(corpId: string, url: string): Promise<CapResult<void>>
 | `corpId` | `string` | Yes | 字符串参数 |
 | `url` | `string` | Yes | 地址 |
 
+## Referenced types
+
+### `MessageSubscription`
+
+C17 可订阅的消息模板（wx.requestSubscribeMessage / web Notification）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `templateId` | `string` | 模板 id（wx 需要先在公众平台申请） |
+| `granted` | `boolean` | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
+| `status` | `string` | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

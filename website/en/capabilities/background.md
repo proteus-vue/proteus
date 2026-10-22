@@ -182,6 +182,42 @@ C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `BackgroundAPI`
+
+★能力颗粒度对齐：C25 后台/宿主生命周期 API（原仅 onEvent（visible/hidden）→ 全事件面）
+各订阅返回取消函数；未实现的事件 → 返回 no-op 取消（诚实边界）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | 订阅前后台切换（返回取消） |
+| `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | 内存警告（wx.onMemoryWarning） |
+| `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | 主题变化（wx.onThemeChange，深色/浅色） |
+| `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（wx.onWindowResize / web resize） |
+| `onError` | `onError(cb: (error: string) => void): () => void` | 小程序错误（wx.onError） |
+| `onUnhandledRejection` | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | 未处理的 Promise rejection（wx.onUnhandledRejection） |
+| `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | 网络状态变化（wx.onNetworkStatusChange） |
+| `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | 启动参数（wx.getLaunchOptionsSync） |
+| `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | 当前进入参数（wx.getEnterOptionsSync） |
+
+### `BackgroundEvent`
+
+C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `type` | `'enter-background' \| 'enter-foreground'` | 事件类型（退后台 / 回前台） |
+| `time` | `number` | 事件时间戳（ms） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

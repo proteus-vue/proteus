@@ -50,6 +50,14 @@ C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia）
 | `supported` | `boolean` | — | 平台能力/设备存在 |
 | `granted` | `boolean` | — | 用户已授权 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

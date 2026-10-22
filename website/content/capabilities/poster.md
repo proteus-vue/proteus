@@ -63,6 +63,14 @@ wx：`wx.onGeneratePoster`（分享海报生成事件）；web：无对等 → E
 |---|---|---|
 | `onGenerate` | `onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void` | 订阅海报生成事件。 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

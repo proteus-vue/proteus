@@ -101,6 +101,38 @@ cancel(id: number): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `IdleAPI`
+
+★权威标尺缺口 C73：空闲调度（`useIdle()`）。
+wx：`wx.requestIdleCallback` / `wx.cancelIdleCallback`；web：`requestIdleCallback`（Safari 缺省 → setTimeout 兜底）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `request` | `request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResult<number>>` | 在浏览器/宿主空闲时执行回调。 |
+| `cancel` | `cancel(id: number): Promise<CapResult<void>>` | 取消待执行的空闲回调。 |
+
+### `IdleDeadline`
+
+空闲回调截止信息（requestIdleCallback 回调载荷子集）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `didTimeout` | `boolean` | 是否因超时触发（非真正空闲） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `timeRemaining` | `timeRemaining(): number` | 本次空闲回调剩余时间（ms） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

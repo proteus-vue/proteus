@@ -26,7 +26,7 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 |---|---|---|---|
 | `url` | `string` | 是 | 目标 URL（HTTPS） |
 | `options` | `DownloadOptions` | 否 | C30 下载选项 |
-| `onProgress` | `ProgressCallback` | 否 | 进度回调（0-100；可省） |
+| `onProgress` | `ProgressCallback` | 否 | C29/C30 传输进度回调（0-100） |
 
 #### `options` 的属性
 
@@ -67,6 +67,14 @@ C30 下载选项
 | `timeout` | `number` | — | 超时（ms；超时 → Err） |
 | `responseType` | `'blob' \| 'path' \| 'text' \| 'json'` | — | 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json |
 
+### `ProgressCallback`
+
+C29/C30 传输进度回调（0-100）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `call` | `(pct: number): void` | — |
+
 ### `DownloadResult`
 
 C30 下载结果
@@ -77,6 +85,14 @@ C30 下载结果
 | `data` | `unknown` | — | 响应体（形态由 responseType 决定） |
 | `path` | `string` | — | wx tempFilePath（responseType=path） |
 | `progress` | `number` | — | 进度（0-100） |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
 
 ## 错误码
 

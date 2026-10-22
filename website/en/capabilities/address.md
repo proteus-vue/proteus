@@ -69,6 +69,31 @@ useAddress(): Promise<CapResult<ShippingAddress>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `ShippingAddress`
+
+★颗粒度对齐 C3：C54 收货地址（wx.chooseAddress）——对齐小程序收货地址 API
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `userName` | `string` | — |
+| `postalCode` | `string` | — |
+| `provinceName` | `string` | — |
+| `cityName` | `string` | — |
+| `countyName` | `string` | — |
+| `detailInfo` | `string` | — |
+| `nationalCode` | `string` | — |
+| `telNumber` | `string` | — |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

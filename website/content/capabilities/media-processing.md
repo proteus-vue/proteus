@@ -109,6 +109,14 @@ audioPlayer(): MediaAudioPlayerHandle
 | `stop` | `stop(): Promise<CapResult<void>>` | 停止播放 |
 | `destroy` | `destroy(): void` | 销毁（释放） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ### `MediaTrackInfo`
 
 ★权威标尺缺口 C70：媒体高级（wx.createMediaContainer / createVideoDecoder / createMediaAudioPlayer）。

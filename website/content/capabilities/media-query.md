@@ -96,6 +96,14 @@ wx：`wx.createMediaQueryObserver()`；web：`window.matchMedia`（条件 → me
 |---|---|---|---|
 | `matches` | `boolean` | — | 是否匹配当前条件 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

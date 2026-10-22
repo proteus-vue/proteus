@@ -138,6 +138,48 @@ Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标�
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `AlbumAPI`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `pick` | `pick(options?: AlbumPickOptions): Promise<CapResult<MediaFile[]>>` | 选择图片/视频（wx.chooseMedia；web <input type=file>） |
+| `saveImage` | `saveImage(filePath: string): Promise<CapResult<void>>` | 保存图片到系统相册（wx.saveImageToPhotosAlbum——需 scope.writePhotosAlbum 授权；web 无标准 → Err） |
+| `saveVideo` | `saveVideo(filePath: string): Promise<CapResult<void>>` | 保存视频到系统相册（wx.saveVideoToPhotosAlbum；web 无标准 → Err） |
+| `preview` | `preview(urls: string[], current?: string): Promise<CapResult<void>>` | 预览媒体（wx.previewImage / previewMedia；web 宿主视图） |
+
+### `AlbumPickOptions`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `count` | `number` | 选择数量上限（默认 1；小程序上限 9） |
+| `mediaType` | `'image' \| 'video' \| 'all'` | 媒体类型：image（默认）/ video / all |
+| `source` | `'album' \| 'camera'` | 来源：album 相册（默认）/ camera 拍照 |
+
+### `MediaFile`
+
+★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
+选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
+Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标准（下载替代）∪ 缺省 Err（诚实降级）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `tempFilePath` | `string` | 临时文件路径（wx 临时文件 / web Blob URL） |
+| `type` | `'image' \| 'video'` | 媒体类型 |
+| `size` | `number` | 字节大小 |
+| `duration` | `number` | 时长 ms（视频） |
+| `width` | `number` | — |
+| `height` | `number` | — |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

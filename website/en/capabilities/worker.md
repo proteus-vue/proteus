@@ -81,6 +81,7 @@ terminate(): void
 | code | Doc |
 |---|---|
 | `worker.unsupported` | wx.createWorker is missing (or Web Worker is unavailable — SSR / restricted env) |
+| `worker.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 
@@ -100,6 +101,28 @@ terminate(): void
 > Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but the bridge is missing **or is a pure shell** → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. ★**Strictness differs by target**: WeChat/Web require the bridge method to exist **and do real platform work** (a body returning `unsupported` on every path counts as ⚠️); iOS/Android require the method in the App bridge factories; HarmonyOS requires **both** the JS bridge and host dispatch. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Referenced types
+
+### `WorkerHandle`
+
+★颗粒度对齐 C3：C53 多线程 Worker（wx.createWorker）
+创建 Worker 线程 + postMessage 收发 + terminate——对齐小程序 Worker API。
+Web 端：new Worker(...)（同源脚本）∪ 缺省 Err（诚实降级）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `postMessage` | `postMessage(message: unknown): void` | 主线程 → Worker 发消息 |
+| `onMessage` | `onMessage(cb: (message: unknown) => void): () => void` | 订阅 Worker → 主线程消息（返回取消） |
+| `terminate` | `terminate(): void` | 终止 Worker 线程 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

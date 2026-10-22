@@ -10,7 +10,7 @@ order: 1007
 
 **When to use it**: Troubleshooting, per-device compatibility.
 
-> 技术标识：能力原语 C11 · `capability.device` · 返回 `DeviceInfo` · **Hook implemented** (per-end support in the table below)
+> 技术标识：能力原语 C11 · `capability.device` · 返回 `CapDeviceInfo` · **Hook implemented** (per-end support in the table below)
 
 Device (wx.getSystemInfo / navigator.userAgent / mock)
 
@@ -64,6 +64,26 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 > Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but the bridge is missing **or is a pure shell** → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. ★**Strictness differs by target**: WeChat/Web require the bridge method to exist **and do real platform work** (a body returning `unsupported` on every path counts as ⚠️); iOS/Android require the method in the App bridge factories; HarmonyOS requires **both** the JS bridge and host dispatch. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Referenced types
+
+### `CapDeviceInfo`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `platform` | `string` | 平台标识（ios / android / devtools / desktop …） |
+| `model` | `string` | 设备型号（如 iPhone 15 Pro） |
+| `os` | `string` | 操作系统名（iOS / Android / Windows / macOS） |
+| `version` | `string` | 系统版本号（如 17.4） |
+| `browser` | `string` | 浏览器/容器名（web 端有；MP 缺省） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

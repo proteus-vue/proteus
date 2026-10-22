@@ -63,6 +63,23 @@ useNetwork(): Promise<CapResult<NetworkType>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `NetworkType`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `online` | `boolean` | 是否联网（navigator.onLine / wx.getNetworkType 归一） |
+| `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | 网络类型（web 无细分 → unknown；离线 → none） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

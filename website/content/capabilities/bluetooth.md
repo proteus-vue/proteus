@@ -351,6 +351,14 @@ BLE 特征值（wx.BLECharacteristic 子集）
 | `uuid` | `string` | — | 特征值 uuid |
 | `properties` | `{ read: boolean; write: boolean; notify: boolean; indicate: boolean }` | — | 支持的操作（read/write/notify/indicate） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

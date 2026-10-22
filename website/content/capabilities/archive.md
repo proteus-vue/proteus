@@ -56,6 +56,14 @@ C44 压缩选项（wx.compressFile / web 无标准 → 降级 undefined）
 | `dest` | `string` | — | 目标路径（缺省同目录） |
 | `quality` | `number` | — | 图片压缩质量 0-100（wx 支持） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

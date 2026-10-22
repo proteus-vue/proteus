@@ -65,6 +65,25 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `ScreenInfo`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `width` | `number` | 屏幕宽度（px，CSS 像素） |
+| `height` | `number` | 屏幕高度（px，CSS 像素） |
+| `dpr` | `number` | 设备像素比（物理像素 / CSS 像素） |
+| `orientation` | `'portrait' \| 'landscape'` | 当前方向 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

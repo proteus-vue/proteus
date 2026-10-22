@@ -96,6 +96,26 @@ error(message: string, data?: unknown): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `Logger`
+
+C35 Logger（useLog 句柄——console + 上报）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `log` | `log(message: string, data?: unknown): Promise<CapResult<void>>` | 普通日志 |
+| `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
+| `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

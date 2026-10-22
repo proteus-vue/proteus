@@ -65,6 +65,25 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `BatteryInfo`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `level` | `number` | 电量（0-1，浮点） |
+| `charging` | `boolean` | 是否充电中 |
+| `chargingTime` | `number` | 充满所需秒数（充电中才有；不支持缺省） |
+| `dischargingTime` | `number` | 剩余可用秒数（放电中才有；不支持缺省） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

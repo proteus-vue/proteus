@@ -96,6 +96,14 @@ C31 数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级）
 | `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
 | `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

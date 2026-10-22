@@ -90,6 +90,14 @@ wx：`wx.requestIdleCallback` / `wx.cancelIdleCallback`；web：`requestIdleCall
 |---|---|---|
 | `timeRemaining` | `timeRemaining(): number` | 本次空闲回调剩余时间（ms） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

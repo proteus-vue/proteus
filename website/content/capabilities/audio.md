@@ -182,6 +182,14 @@ wx：`wx.createInnerAudioContext()`；web：`Audio` 元素（HTMLAudioElement）
 | `destroy` | `destroy(): void` | 释放音频资源 |
 | `on` | `on(event: 'canplay' \| 'play' \| 'pause' \| 'stop' \| 'ended' \| 'timeupdate' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅音频事件（canplay / play / pause / stop / ended / timeupdate / error）。 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -76,6 +76,25 @@ setSize(width: number, height: number): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `WindowAPI`
+
+★权威标尺缺口 C74：窗口（`useWindow()`）。
+wx：`wx.setWindowSize`（PC 端调整窗口）；web：无标准 → Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `setSize` | `setSize(width: number, height: number): Promise<CapResult<void>>` | 调整窗口大小（PC 端）。 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

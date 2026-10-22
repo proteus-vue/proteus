@@ -72,6 +72,14 @@ wx：`wx.createTCPSocket()`；web：无原始 TCP 标准 API（浏览器不支�
 | `onClose` | `onClose(cb: () => void): () => void` | 订阅连接关闭 |
 | `close` | `close(): Promise<CapResult<void>>` | 关闭连接（释放） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ### `UdpMessage`
 
 UDP 收到的消息（wx UDPSocket onMessage）

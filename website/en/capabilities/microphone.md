@@ -169,6 +169,26 @@ onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) 
 | `encodeBitRate` | `number` | 编码码率（bps） |
 | `format` | `'mp3' \| 'aac' \| 'wav' \| 'PCM'` | 音频格式 |
 
+## Referenced types
+
+### `MediaAccess`
+
+C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `kind` | `'camera' \| 'microphone'` | 媒体设备类型 |
+| `supported` | `boolean` | 平台能力/设备存在 |
+| `granted` | `boolean` | 用户已授权 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

@@ -226,6 +226,14 @@ web：无对等（可用 Service Worker / Cache Storage）→ 创建时 throw �
 | `origin` | `string` | — | 缓存域名 |
 | `maxAge` | `number` | — | 默认最大缓存时长（秒） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

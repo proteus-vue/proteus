@@ -58,6 +58,14 @@ instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapRe
 
 ## Referenced types
 
+### `WasmSource`
+
+WASM 来源（判别联合——见 `WebAssemblyAPI` 头的跨端差异说明）
+
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `bytes` | `ArrayBuffer \| Uint8Array` | — | — |
+
 ### `WasmInstantiateOptions`
 
 | Prop | Type | Default | Doc |
@@ -131,6 +139,84 @@ instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapRe
 > Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but the bridge is missing **or is a pure shell** → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. ★**Strictness differs by target**: WeChat/Web require the bridge method to exist **and do real platform work** (a body returning `unsupported` on every path counts as ⚠️); iOS/Android require the method in the App bridge factories; HarmonyOS requires **both** the JS bridge and host dispatch. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Referenced types
+
+### `WebAssemblyAPI`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `supportsStreaming` | `boolean` | 能力位：是否支持流式/字节编译（Web/App-JSC true；MP **false**——只收路径） |
+| `supportsPathLoad` | `boolean` | 能力位：是否支持从代码包路径加载（MP true；Web/App **false**） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `instantiate` | `instantiate(source: WasmSource, options?: WasmInstantiateOptions): Promise<CapResult<WasmModuleHandle>>` | 实例化 WASM 模块（**跨端归一的唯一入口**）。 不可用平台 / 来源形态不匹配 → `Err('webassembly.unsupported')`（不抛异常）。 |
+
+### `WasmSource`
+
+WASM 来源（判别联合——见 `WebAssemblyAPI` 头的跨端差异说明）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `bytes` | `ArrayBuffer \| Uint8Array` | — |
+
+### `WasmInstantiateOptions`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `imports` | `Record<string, Record<string, unknown>>` | 导入对象（`{ module: { name: value } }`）；缺省无导入 |
+
+### `WasmModuleHandle`
+
+★C82 WebAssembly：跨平台 WASM 模块编译/实例化/校验。
+
+【为什么有它】WASM 是"一次编译、三端执行"的计算载体（图像处理 / 编解码 / 加解密 /
+物理引擎等 CPU 密集逻辑），与 Proteus 的「一份源码多端」定位同源。
+
+★★**平台真实能力（已取证，非按标准 Web API 假设）**——三端形态**有实质差异**：
+
+| 端 | 入口 | 首参 | compile/validate | 证据 |
+|---|---|---|---|---|
+| MP（微信） | `WXWebAssembly.instantiate(path, imports)` | **代码包路径**（.wasm / .wasm.br） | ❌ **无** | 官方文档 + `miniprogram-api-typings/lib.wx.wasm.d.ts` |
+| Web | 标准 `WebAssembly` | `BufferSource \| Response \| URL` | ✅ 有 | 平台标准 |
+| App-iOS | JSC 内建 `WebAssembly`（与 Web 同形） | 同上 | ✅ 有 | **本机实测**：`validate(minimalModule)===true`，8 个 API 齐备 |
+| App-Android | 宿主 **wasm3**（QuickJS 无内建 WASM ⇒ 宿主侧运行时） | `{ bytes }`（宿主通道） | ✅ 有（宿主实现） | **真机实测**：`add(2,40)===42`，真跑 i32.add（wasm3 解释器，MIT/无 JIT ⇒ 兼容 W^X） |
+
+【因此本原语的设计取舍（★不是"照抄 Web 标准"）】
+· **入口归一为 `instantiate(source)`**，`source` 是**判别联合**（`{ bytes }` / `{ path }`）——
+因为 MP 只收路径、Web/App-JSC 只收字节，**没有**一个共同的首参类型可表达；
+若强行只暴露字节，MP 端会**结构性不可用**（无法把路径变成字节，见下）。
+· **`compile` / `validate` 声明为可选**（`?`）：MP 端**客观没有**这两个方法；
+声明为必需会让 MP 端实现要么撒谎、要么抛错。诚实做法 = 调用方 `if (wasm.compile)` 探测。
+· **`supportsStreaming` / `supportsPathLoad` 两个能力位**把这个差异变成**可查询的数据**，
+而不是让调用方按平台名分支（平台名分支是本仓 stores 铁律禁止的形态）。
+
+【诚实边界（明确不支持的）】
+· MP 端**无法**从网络/字节流加载：官方只接受代码包内路径 ⇒ 动态下载 wasm 需先落包
+（`useFileSystem` + 重新分包），本原语**不假装**能做。
+· ★App-Android 的 JS 引擎（QuickJS）**内建无 WebAssembly** ⇒ 由**宿主侧 wasm3** 提供
+（`webassembly.instantiate/call/release` 通道，`hosts/android/wasm/`）；iOS 的 JSC 内建
+⇒ 走引擎路径。同一份 JS 桥 **两条路径都被真机验证**（结果都是 add(2,40)=42）。
+· MP 端 export 支持 函数 / Memory / Table，**iOS 平台暂不支持 Global**（官方原文）。
+· 本原语**不做** WASM↔JS 的自动编组（那需要 IDL）；只负责"拿到 instance"，调用面归调用方。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `exports` | `Record<string, unknown>` | 模块导出的符号（函数 / Memory / Table；Global 依平台而定——见接口头） |
+| `fromPath` | `boolean` | 该实例是否由**路径**加载（MP 端恒 true；Web/App 端恒 false） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `dispose` | `dispose(): void` | 释放（暂无资源需释放——预留：WASM 实例由 GC 回收，本方法供未来池化实现统一出口） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

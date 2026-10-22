@@ -81,6 +81,45 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `DownloadOptions`
+
+C30 下载选项
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `headers` | `Record<string, string>` | 自定义请求头 |
+| `timeout` | `number` | 超时（ms；超时 → Err） |
+| `responseType` | `'blob' \| 'path' \| 'text' \| 'json'` | 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json |
+
+### `ProgressCallback`
+
+C29/C30 传输进度回调（0-100）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `call` | `(pct: number): void` | — |
+
+### `DownloadResult`
+
+C30 下载结果
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `status` | `number` | HTTP 状态码 |
+| `data` | `unknown` | 响应体（形态由 responseType 决定） |
+| `path` | `string` | wx tempFilePath（responseType=path） |
+| `progress` | `number` | 进度（0-100） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

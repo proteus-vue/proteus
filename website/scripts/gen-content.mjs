@@ -7,8 +7,10 @@
 //   幂等：重复运行输出一致（无时间戳）。用法：node website/scripts/gen-content.mjs
 import fs from 'node:fs'
 import { extractErrorCodes } from './lib/error-codes.mjs'
+// ★★★#1161：类型形态识别（字符串字面量联合 / 对象联合 / 函数别名 / class 构造参数）
+import { stringLiteralUnion, objectLiteralUnion, functionAlias, parameterProperties, collectExportedTypeNames, renderUnionTable, extractInterfaces } from './lib/type-shapes.mjs'
 // ★#1124：类型引用收集 + 悬空引用检查（用户点名 UploadSpec/AbortSignalLike 无说明）
-import { collectPageTypeRefs, findUnexplainedTypes } from './lib/type-refs.mjs'
+import { collectPageTypeRefs, findUnexplainedTypes, findUnregisteredTypes } from './lib/type-refs.mjs'
 // ★#1125：内容缩水门禁（记录各页结构性规模，变小即红）
 import { measureDoc, judgeShrink, mergeBaseline } from './lib/content-shrink.mjs'
 import path from 'node:path'
@@ -278,160 +280,9 @@ function compatSection(rows, footer) {
   return lines
 }
 
-// ★#1089 全端兼容进度的汇总与渲染实现在 lib/cap-end-status.mjs（生成器保持"只装配不实现"）
-// ★#406 颗粒度批：TS 接口解析（能力页参数/返回值属性表的 SSOT——capability.ts 内 60+ 接口属性带 JSDoc）
-//   提取 export interface X { ... } 的逐属性：名称/类型/可选(?)/前置 JSDoc 首行
-//   ★#490 补方法成员：句柄型接口（CookieJar/BackgroundAPI/FSAdapter…）的结构本体是方法——属性通道排除 '): ' 行，这里成对补齐
-// ★#1122：**TS 接口解析**（从 `gen-content.mjs` 抽出——该文件 2326 行超棘轮）。
-//
-// 【它做什么】把 `packages/api/src/*.ts` 里的 `export interface X { ... }` 解析成
-//   `{X: {props:[], methods:[], doc}}`，供能力页渲染**参数表 / 返回值属性表 / 类型引用**。
-//   ★SSOT = 源码里的 JSDoc——文档的字段说明不手写，全从接口注释来。
-//
-// 【诚实边界】这是**文本扫描**而非真 TS 解析：靠花括号配对 + 行级规则，
-//   因此对"字符串里含花括号/正则"等形态不严谨。本仓用它是因为生成器不能引入 TS 编译器的重依赖。
-function extractInterfaces(src) {
-  const out = {}
-  // ★官网漏修（2026-09-11）：原正则只认 `export interface X {` —— 漏三类 → 官网方法表缺失：
-  //   ① extends（BluetoothAPI extends BluetoothInfo / NFCAPI extends NfcInfo）
-  //   ② 单行接口（MapPolyline/MapCircle `{ ... }` 同行——还会吞掉紧随的 MapController）
-  //   ③ 带泛型默认值的接口（ReactiveStorage<TState extends ... = ...>）
-  //   改：定位每个 `export interface NAME`，从其后第一个 `{` 起花括号配对取 body（含跨行/单行/extends/泛型）。
-  const re = /(?:\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*)?export interface (\w+)([^{;]*?)\{/g
-  let m
-  while ((m = re.exec(src))) {
-    const jsdoc = m[1]
-    const name = m[2]
-    // extends 基名（如 ` extends BluetoothInfo）——合并父接口属性到本接口
-    const extM = (m[3] || '').match(/extends\s+([\w.]+)/)
-    const extendsName = extM ? extM[1] : null
-    const braceStart = m.index + m[0].length - 1
-    // 花括号配对（跳过字符串/注释简化：capability.ts 接口体无嵌套模板串干扰）
-    let depth = 0
-    let i = braceStart
-    for (; i < src.length; i++) {
-      const ch = src[i]
-      if (ch === '{') depth++
-      else if (ch === '}') {
-        depth--
-        if (depth === 0) break
-      }
-    }
-    const body = src.slice(braceStart + 1, i)
-    re.lastIndex = i + 1
-    const props = []
-    // ★官网漏修：属性解析改**行级**（原多行正则会把 `getAdapterState(): Promise<CapResult<{ available: boolean; ... }>>`
-    //   的参数碎片误当属性 → 类型截断）。行级规则：跳过注释行 / 含 `(` 的方法行 / 含 `<` 泛型参数行，仅收 `name?: type`。
-    {
-      const propLines = body.split('\n')
-      let pdoc = ''
-      // 顶层 ; 切分（单行接口 `a: X; b: Y` 拆成多条，尊重 <>{}()[] 嵌套）
-      const splitTop = (str) => {
-        const out = []
-        let depth = 0
-        let cur = ''
-        for (const ch of str) {
-          if ('<({['.includes(ch)) depth++
-          else if ('>)}]'.includes(ch)) depth--
-          if (ch === ';' && depth === 0) { out.push(cur); cur = '' } else cur += ch
-        }
-        if (cur.trim()) out.push(cur)
-        return out
-      }
-      for (const rawLine of propLines) {
-        const t = rawLine.trim()
-        if (!t) continue
-        // 含顶层 ; 的单行多属性 → 逐个（注释缓冲只在首个生效）
-        const segs = splitTop(t)
-        if (segs.length > 1) {
-          for (const seg of segs) {
-            const pm = seg.trim().match(/^(\w+)(\?)?:\s*(.*)$/)
-            if (pm) props.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim(), doc: pdoc.trim() })
-          }
-          pdoc = ''
-          continue
-        }
-        if (t.startsWith('/**') || t.startsWith('*') || t.startsWith('*/')) {
-          pdoc = (pdoc ? pdoc + ' ' : '') + t.replace(/^\/\*\*/, '').replace(/\*\/$/, '').replace(/^\*\s?/, '').trim()
-          continue
-        }
-        // 方法行（`name(...): T` 形态）→ 跳过且清零文档缓冲
-        // ★★★#1122：**函数类型的属性行不能跳**——`onChunk?: (chunk, seq) => void` 也是 `name?: type`，
-        //   只是 type 里带 `(`。旧规则见 `(` 就跳过 ⇒ 官网能力页**静默丢掉所有回调型字段**
-        //   （本轮实测：useFetch 的 onChunk 在生成的参数表里完全消失）。
-        //   ⇒ 判据改成"**在 `:` 之前**出现 `(` 才算方法"。
-        if (/^\w+\s*\(/.test(t)) { pdoc = ''; continue }
-        // 属性行：类型可含嵌套对象/泛型（内部含 `;`）——取整行，再剥尾分号与行尾 // 注释
-        // 剥行尾 // 注释（引号内的 // 罕见——capability.ts 接口属性注释均在行尾且无 // 字符串）
-        const commentM = t.match(/^([\s\S]*?)\s*\/\/(.*)$/)
-        const noComment = (commentM ? commentM[1] : t).replace(/;\s*$/, '')
-        const inline = commentM ? commentM[2].trim() : ''
-        // ★#1124：支持 `readonly` 修饰符——`readonly aborted: boolean` 原被整行丢弃
-        //   （导致 AbortSignalLike 在文档里只有一句说明、**没有属性表**）
-        const pm = noComment.match(/^(?:readonly\s+)?(\w+)(\?)?:\s*(.*)$/)
-        if (pm) {
-          props.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim(), doc: (pdoc || inline).trim() })
-        }
-        pdoc = ''
-      }
-    }
-    // 方法成员（行级解析——capability.ts 接口成员均为单行；JSDoc 缓冲遇非注释行即清零）
-    // ★详细文档（2026-09-11）：保留 rawDoc（含 @param/@returns）+ 解析参数，供「逐方法详细段」生成
-    const methods = []
-    let mdocLines = []
-    const parseMethodDoc = (raw) => {
-      const lines = raw
-        .replace(/^\/\*\*/, '')
-        .replace(/\*\/$/, '')
-        .split('\n')
-        .map((l) => l.replace(/^\s*\*\s?/, '').trim())
-      const paramDocs = {}
-      let returns = ''
-      const prose = []
-      for (const l of lines) {
-        let mm
-        if ((mm = l.match(/^@param\s+(\w+)\s*(?:-|—)?\s*(.*)$/))) paramDocs[mm[1]] = mm[2].trim()
-        else if ((mm = l.match(/^@returns?\s*(?:-|—)?\s*(.*)$/))) returns = mm[1].trim()
-        else if (l.startsWith('@')) continue
-        else prose.push(l)
-      }
-      return { doc: normalizeJsdoc(prose.join('\n')), paramDocs, returns } // ★保留行结构；cell 消费点过 oneline()
-    }
-    for (const raw of body.split('\n')) {
-      const t = raw.trim()
-      if (t.startsWith('/**') || t.startsWith('*') || t.startsWith('*/')) {
-        mdocLines.push(t)
-        continue
-      }
-      const mm = t.match(/^(\w+)\s*\((.*)\)\s*:\s*(.+?);?$/)
-      if (mm) {
-        const parsed = mdocLines.length ? parseMethodDoc(mdocLines.join('\n')) : { doc: '', paramDocs: {}, returns: '' }
-        methods.push({ name: mm[1], sig: `${mm[1]}(${mm[2]}): ${mm[3].replace(/;$/, '')}`, args: mm[2], ret: mm[3].replace(/;$/, ''), doc: parsed.doc, paramDocs: parsed.paramDocs, returns: parsed.returns })
-      }
-      mdocLines = []
-    }
-    out[name] = {
-      // ★★保留换行（2026-09-30 用户反馈「这块儿排版是不是乱了？」）：
-      //   原 `.join(' ')` 把多行 JSDoc 压成一行 ⇒ 源码里的 **Markdown 表格**（如 C82 的
-      //   「端 | 入口 | 首参」四行）在页面上退化成一大段普通文字（截图实测）。
-      //   Markdown 的表格/列表/段落块都需要**行结构** ⇒ 这里保留 `\n`，
-      //   而**表格 cell** 的消费点统一过 `oneline()` 压平（见其定义——cell 里不能有换行）。
-      doc: normalizeJsdoc(jsdoc || ''),
-      props,
-      methods,
-      extendsName,
-    }
-  }
-  // ★官网漏修：extends 合并（子接口属性 = 父接口属性（去重） + 自身属性）——BluetoothAPI/NFCAPI 状态字段可见
-  for (const name of Object.keys(out)) {
-    const base = out[name].extendsName
-    if (base && out[base]) {
-      const ownNames = new Set(out[name].props.map((x) => x.name))
-      out[name].props = [...out[base].props.filter((x) => !ownNames.has(x.name)), ...out[name].props]
-    }
-  }
-  return out
-}
+// ★★★#1161：`extractInterfaces` 已抽到 `lib/type-shapes.mjs`（纯文本形态识别：interface/class/
+//   字符串联合/对象联合/函数别名/构造参数属性）。★为什么抽：本文件过 1000 行棘轮，且"类型形态识别"
+//   与"页面渲染"是两个职责。
 
 // 表格单元格内类型/签名/描述竖线转义（'joined' | 'left' / string | null / 形态区间表达式——否则断列）
 const escMd = (s) => String(s).replace(/\|/g, '\\|')
@@ -518,6 +369,9 @@ function renderTypeRefs(lines, names, ifaces, opts) {
     const ti = ifaces[n]
     if (!ti) continue
     if (ti.doc) { lines.push(`**\`${n}\`** — ${ti.doc}`); lines.push('') }
+    // ★★★#1161：字符串字面量联合（`FetchCacheMode` 这类"取值枚举"）也要有说明段——
+    //   原实现只渲染 props/methods ⇒ 枚举类型在页面上**完全没有解释**（用户实测发现）。
+    if (renderUnionTable(lines, ti, escMd)) { /* 取值表已追加 */ }
     if (ti.props.length) {
       lines.push(`| ${cols[0]} | ${cols[1]} | ${cols[2]} |`)
       lines.push('|---|---|---|')
@@ -608,6 +462,7 @@ function renderTypeRefsH2(lines, names, ifaces) {
     lines.push(`### \`${n}\``)
     lines.push('')
     if (ti.doc) { lines.push(ti.doc); lines.push('') }
+    renderUnionTable(lines, ti, escMd)   // ★#1161：取值枚举要有取值表（fetch 的 FetchCacheMode 就缺这个）
     if (ti.props.length) {
       lines.push('| 属性 | 类型 | 默认值 | 说明 |')
       lines.push('|---|---|---|---|')
@@ -1221,6 +1076,11 @@ function capContext(ir) {
     'capability-invoke.ts',
     // ★#1134：重定向/管线类型（RedirectHop/RedirectDecision/RedirectTrace）在独立文件 ⇒ 不登记会 DANGLING_TYPES 红
     'capability-fetch-redirect.ts', 'capability-fetch-pipeline.ts',
+    // ★#1161：缓存类型（FetchCacheMode/FetchCacheStatus/FetchCacheMeta）在独立文件——不登记则它们不进 ifaces，
+    //   悬空引用检查会静默跳过（官网长期缺取值说明，而门禁全绿）。
+    'capability-fetch-cache.ts',
+    // ★#1161：新门禁一次抓出的其它漏登记源（BeaconAPI/DeviceInfo/AppLifecycle*）；完整性由 findUnregisteredTypes 兜底
+    'capability-beacon.ts', 'adapters.ts', 'capability-app.ts',
   ]
   let apiSrc = API_SRC_FILES.map((f) => fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', f), 'utf8')).join('\n') // ★#876 三文件拼接（#870 拆分）；types 在前——下游 bridgeIface=slice(CapabilityBridge,CapabilityHooks) 靠此序
   // ★★类型别名解析（2026-09-30）：句柄类型已**收口**到 `capability-app.ts`（单一事实源），
@@ -1261,6 +1121,8 @@ function capContext(ir) {
   if (bridgeKeys.misses.length) throw new Error(`[gen-content] 平台桥成员集解析失败（数据源契约被破坏）：${bridgeKeys.misses.join('；')}`)
   const { wxKeys, webKeys } = bridgeKeys
   const ifaces = extractInterfaces(apiSrc)
+  // ★#1161：全仓导出类型名（扫 packages/api/src 所有文件，不依赖 API_SRC_FILES——后者正是可能漏的那份）
+  const exportedTypeNames = collectExportedTypeNames(path.join(ROOT, 'packages', 'api', 'src'))
   // ★颗粒度对齐 A（2026-09-11）：旧 spread 让 webBridge 同名方法覆盖 wxBridge → 丢 wx 原生错误码（network/orientation/device…）。
   //   改 per-method **并集**（同名两段都保留，错误码提取两源皆扫）。
   const wxBodies = extractBridgeBodies(apiSrc, 'wxBridge')
@@ -1301,12 +1163,12 @@ function capContext(ir) {
     perCat[catOf[c.semantic]] = (perCat[catOf[c.semantic]] ?? 0) + 1
     orderOfCap[c.semantic] = CAP_CAT_ORDER.indexOf(catOf[c.semantic]) * 1000 + perCat[catOf[c.semantic]]
   }
-  return { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap, apiSrc }
+  return { caps, wxKeys, webKeys, ifaces, exportedTypeNames, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap, apiSrc }
 }
 
 function genCapabilities(ir, ends) {
   fs.mkdirSync(OUT_CAP, { recursive: true })
-  const { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap, apiSrc } = capContext(ir)
+  const { caps, wxKeys, webKeys, ifaces, exportedTypeNames, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap, apiSrc } = capContext(ir)
   // ★#1088：示例表的单一 SSOT = website/scripts/lib/cap-usage.mjs（中英同源；本文件不再内联手写表）
 
   // 纯数据/void 型 hook 的参数典型值（SSOT = 签名；句柄型走 USAGE_EXAMPLES 不经此表）
@@ -1528,7 +1390,9 @@ function genCapabilities(ir, ends) {
     // ★★★#1124：**四个来源都要收**——原只收方法签名 ⇒ 参数类型（FetchConfig）、
     //   参数对象属性类型（UploadSpec/AbortSignalLike）、返回值类型（FetchResult）全漏
     //   ⇒ 页面引用了它们却没有说明段（用户点名的问题）。
+    // ★#1161：`error: CapError` 是硬编码渲染的，从未经过收集器 ⇒ 显式登记进页级引用
     const refTypeNames = collectPageTypeRefs({ sigLine, ifaces, allMethods, allProps })
+    if (ifaces['CapError'] && !refTypeNames.includes('CapError')) refTypeNames.push('CapError')
     if (refTypeNames.length) {
       lines.push('## 类型引用')
       lines.push('')
@@ -1666,6 +1530,13 @@ function genCapabilities(ir, ends) {
       const md = lines.join('\n')
       const miss = findUnexplainedTypes(md, ifaces)
       if (miss.length) collapsed.push(`${c.semantic.replace('capability.', '')}.md:未解释的类型 ${miss.join(',')}`)
+      // ★#1161：数据源缺失检查（引用了、源码确实 export、但生成器抽不到 ⇒ 该文件没登记）
+      const unreg = findUnregisteredTypes(md, exportedTypeNames, ifaces)
+      if (unreg.length) {
+        collapsed.push(
+          `${c.semantic.replace('capability.', '')}.md:类型未进生成器数据源 ${unreg.join(',')}（登记到 API_SRC_FILES）`,
+        )
+      }
     }
     writeDoc(path.join(OUT_CAP, `${c.semantic.replace('capability.', '')}.md`), lines.join('\n'))
     ok++
@@ -2251,6 +2122,40 @@ async function genCapabilitiesEn(ir, ends) {
                 }
               }
             }
+          }
+        }
+      }
+    }
+    // ★★★#1161：英文页也要有**页级类型引用段**（与中文 `## 类型引用` 对称）——
+    //   此前只有句柄方法子段的 `#### Referenced types` ⇒ 中文新增的取值表/属性表在 en 侧缺失，
+    //   `check:en-drift` 的缺口会因此变大（不得让门禁更红）。
+    {
+      // ★英文页没有 allProps/allMethods（只有 shape）⇒ 直接从 shape 现算，保持与中文四来源同口径
+      const enProps = [...(shape.dataIface?.props ?? []), ...(shape.handleIface?.props ?? [])]
+      const enMethods = [...(shape.dataIface?.methods ?? []), ...(shape.handleIface?.methods ?? [])]
+      const enRefNames = collectPageTypeRefs({ sigLine, ifaces, allMethods: enMethods, allProps: enProps })
+      if (ifaces['CapError'] && !enRefNames.includes('CapError')) enRefNames.push('CapError')
+      if (enRefNames.length) {
+        lines.push('## Referenced types')
+        lines.push('')
+        for (const n of enRefNames) {
+          const rt = ifaces[n]
+          if (!rt) continue
+          lines.push(`### \`${n}\``)
+          lines.push('')
+          if (rt.doc) { lines.push(rt.doc); lines.push('') }
+          renderUnionTable(lines, rt, escMd)
+          if (rt.props.length) {
+            lines.push('| Prop/Method | Type | Doc |')
+            lines.push('|---|---|---|')
+            for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${oneline(pr.doc) || '—'} |`)
+            lines.push('')
+          }
+          if (rt.methods.length) {
+            lines.push('| Prop/Method | Type | Doc |')
+            lines.push('|---|---|---|')
+            for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${oneline(mm.doc) || '—'} |`)
+            lines.push('')
           }
         }
       }

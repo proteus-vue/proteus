@@ -52,6 +52,14 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | `permission` | `string` | — | 权限名（web Permissions API 名，如 geolocation / camera） |
 | `state` | `'granted' \| 'denied' \| 'prompt'` | — | 授权状态（prompt = 未询问） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

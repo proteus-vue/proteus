@@ -50,6 +50,14 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | `dpr` | `number` | — | 设备像素比（物理像素 / CSS 像素） |
 | `orientation` | `'portrait' \| 'landscape'` | — | 当前方向 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

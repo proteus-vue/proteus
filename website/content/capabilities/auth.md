@@ -110,6 +110,14 @@ C33 认证状态（组合：createAuth 凭证托管 + login 桥 + 存储桥；�
 | `setToken` | `setToken(token: string \| null): void` | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
 | `subscribe` | `subscribe(cb: (token: string \| null) => void): () => void` | 订阅登录态变化（响应式 UI 联动） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

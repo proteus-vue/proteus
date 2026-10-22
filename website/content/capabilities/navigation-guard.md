@@ -74,6 +74,14 @@ web：`beforeunload` 事件承接（浏览器原生行为）。
 | `enable` | `enable(message: string): Promise<CapResult<void>>` | 开启卸载前确认弹窗。 |
 | `disable` | `disable(): Promise<CapResult<void>>` | 关闭卸载前确认弹窗 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

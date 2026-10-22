@@ -624,6 +624,14 @@ C4 地图区域（wx.createMapContext 语义）
 | `color` | `string` | — | 描边色 |
 | `fillColor` | `string` | — | 填充色 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

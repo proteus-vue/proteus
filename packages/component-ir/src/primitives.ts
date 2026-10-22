@@ -168,7 +168,10 @@ const CAPABILITY: PrimitiveDef[] = [
   cap('C8', 'network', 'useNetwork()', 'wx.getNetworkType', 'NetworkType'),
   cap('C9', 'clipboard', 'useClipboard()', 'wx.set/getClipboardData', 'Result<string>'),
   cap('C10', 'screen', 'useScreen()', 'wx.getSystemInfo', 'ScreenInfo'),
-  cap('C11', 'device', 'useDevice()', 'wx.getSystemInfo', 'DeviceInfo'),
+  // ★#1161：返回类型名必须是**能力实际返回的**那个（`CapDeviceInfo`，见 capability-types.ts）。
+  //   旧值 `DeviceInfo` 是 `adapters.ts` 里 MP/Web 的**内部**结构，两者不是同一类型
+  //   ⇒ 官网 device 页技术标识行引用了 `DeviceInfo`，却永远不会有它的说明段。
+  cap('C11', 'device', 'useDevice()', 'wx.getSystemInfo', 'CapDeviceInfo'),
   cap('C12', 'orientation', 'useOrientation()', 'wx.onDeviceOrientationChange', 'Orientation'),
   cap('C13', 'brightness', 'useBrightness()', 'wx.setScreenBrightness', 'Result<void>'),
   cap('C14', 'keyboard', 'useKeyboard()', 'wx.onKeyboardHeightChange', 'KeyboardInfo'),

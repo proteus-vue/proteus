@@ -106,6 +106,14 @@ C32 Cookie 罐（web document.cookie / wx storage 兜底）
 | `remove` | `remove(name: string): void` | 删除 cookie |
 | `list` | `list(): Record<string, string>` | 列出全部 cookie |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

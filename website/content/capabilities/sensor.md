@@ -24,7 +24,7 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `kind` | `SensorKind` | 是 | 传感器类型（accelerometer 加速度计 / compass 罗盘 / gyroscope 陀螺仪） |
+| `kind` | `SensorKind` | 是 | C5 传感器类型（wx onAccelerometer/onCompass/onGyroscope / web DeviceMotion/DeviceOrientation） |
 
 ## 返回值
 
@@ -49,6 +49,16 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 
 ## 类型引用
 
+### `SensorKind`
+
+C5 传感器类型（wx onAccelerometer/onCompass/onGyroscope / web DeviceMotion/DeviceOrientation）
+
+| 取值 | 说明 |
+|---|---|
+| `'accelerometer'` | — |
+| `'compass'` | — |
+| `'gyroscope'` | — |
+
 ### `SensorSample`
 
 C5 传感器采样（一次性读取当前值；compass 带 heading）
@@ -61,6 +71,14 @@ C5 传感器采样（一次性读取当前值；compass 带 heading）
 | `z` | `number` | — | Z 轴加速度/分量 |
 | `heading` | `number` | — | 罗盘方位（0-360°，参考正北；仅 compass） |
 | `timestamp` | `number` | — | 采样时间戳（ms） |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
 
 ## 错误码
 

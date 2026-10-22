@@ -167,6 +167,38 @@ on(event: 'canplay' | 'play' | 'pause' | 'stop' | 'ended' | 'timeupdate' | 'erro
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `AudioController`
+
+★组件实例 API 对齐：C62 音频控制器（`useAudio(options?)`）。
+wx：`wx.createInnerAudioContext()`；web：`Audio` 元素（HTMLAudioElement）适配。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `currentTime` | `number` | 当前播放进度（秒） |
+| `duration` | `number` | 音频时长（秒） |
+| `paused` | `boolean` | 是否暂停 |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `play` | `play(src?: string): Promise<CapResult<void>>` | 播放。 |
+| `pause` | `pause(): Promise<CapResult<void>>` | 暂停 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止 |
+| `seek` | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定位置。 |
+| `setVolume` | `setVolume(volume: number): void` | 设置音量（0–1） |
+| `setLoop` | `setLoop(loop: boolean): void` | 设置是否循环 |
+| `destroy` | `destroy(): void` | 释放音频资源 |
+| `on` | `on(event: 'canplay' \| 'play' \| 'pause' \| 'stop' \| 'ended' \| 'timeupdate' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅音频事件（canplay / play / pause / stop / ended / timeupdate / error）。 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

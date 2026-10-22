@@ -149,6 +149,42 @@ mDNS 局域网服务（wx OnLocalServiceFound/Lost）
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `LocalServiceAPI`
+
+★权威标尺缺口 C78：局域网服务发现（`useLocalService()`，mDNS）。
+wx：`wx.onLocalServiceFound` / `onLocalServiceLost` / `onLocalServiceResolveFail`
+/ `onLocalServiceDiscoveryStop`；web：无标准 mDNS → Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `startDiscovery` | `startDiscovery(serviceType: string): Promise<CapResult<void>>` | ★#1097：**必须先 startDiscovery 才会收到 onFound**（与 useBeacon 同形态——订阅不启动搜索）。 |
+| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止搜索（订阅保留；会触发一次 `onDiscoveryStop`）。 |
+| `onFound` | `onFound(cb: (res: LocalServiceInfo) => void): () => void` | 订阅发现新服务（**需先 `startDiscovery`**）。 |
+| `onLost` | `onLost(cb: (res: LocalServiceInfo) => void): () => void` | 订阅服务离开。 |
+| `onResolveFail` | `onResolveFail(cb: (res: LocalServiceInfo) => void): () => void` | 订阅服务解析失败。 |
+| `onDiscoveryStop` | `onDiscoveryStop(cb: () => void): () => void` | 订阅搜索停止。 |
+
+### `LocalServiceInfo`
+
+mDNS 局域网服务（wx OnLocalServiceFound/Lost）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `serviceName` | `string` | 服务名 |
+| `serviceType` | `string` | 服务类型（如 _http._tcp） |
+| `ip` | `string` | 服务 IP |
+| `port` | `number` | 服务端口 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

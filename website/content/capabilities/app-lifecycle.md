@@ -158,6 +158,25 @@ App 走壳（G-39 运行时）转发。事件面 SSOT 见 `APP_EVENTS`（11 个�
 | `onAudioInterruptionBegin` | `onAudioInterruptionBegin(cb: () => void): () => void` | 音频被系统中断开始（来电等） |
 | `onAudioInterruptionEnd` | `onAudioInterruptionEnd(cb: () => void): () => void` | 音频中断结束（可恢复播放） |
 
+### `AppLifecyclePhase`
+
+应用阶段（与 C23 `AppLifecycle.phase` 同值域）
+
+| 取值 | 说明 |
+|---|---|
+| `'PENDING'` | — |
+| `'LAUNCH'` | — |
+| `'SHOW'` | — |
+| `'HIDE'` | — |
+
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

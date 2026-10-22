@@ -130,6 +130,14 @@ Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标�
 | `width` | `number` | — | — |
 | `height` | `number` | — | — |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

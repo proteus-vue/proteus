@@ -169,6 +169,26 @@ onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) =
 | `duration` | `number` | 视频时长（ms） |
 | `size` | `number` | 视频大小（字节） |
 
+## Referenced types
+
+### `MediaAccess`
+
+C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `kind` | `'camera' \| 'microphone'` | 媒体设备类型 |
+| `supported` | `boolean` | 平台能力/设备存在 |
+| `granted` | `boolean` | 用户已授权 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

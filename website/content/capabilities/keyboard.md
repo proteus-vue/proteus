@@ -73,6 +73,14 @@ C14 键盘信息（高度 px + 可见性）
 | `height` | `number` | — | 键盘高度（px） |
 | `visible` | `boolean` | — | 键盘是否可见 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

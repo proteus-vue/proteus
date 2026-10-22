@@ -95,6 +95,14 @@ connect(SSID: string, password?: string): Promise<CapResult<void>>
 | `signalStrength` | `number` | — | — |
 | `frequency` | `number` | — | 频率 MHz（5G/2.4G 区分；部分平台缺失） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -106,6 +106,36 @@ connect(SSID: string, password?: string): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `WifiAPI`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `getConnected` | `getConnected(): Promise<CapResult<WifiInfo>>` | 当前连接的 WiFi（wx.getConnectedWifi） |
+| `list` | `list(): Promise<CapResult<WifiInfo[]>>` | 已扫描到的 WiFi 列表（需 wx.startWifi + onGetWifiList 授权；wx.getWifiList → onGetWifiList） |
+| `connect` | `connect(SSID: string, password?: string): Promise<CapResult<void>>` | 连接指定 WiFi（wx.connectWifi——Android 支持；iOS/部分基础库 → Err） |
+
+### `WifiInfo`
+
+★颗粒度对齐 C3：C55 WiFi（wx.getConnectedWifi / getWifiList / connectWifi——Android 连接）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `SSID` | `string` | — |
+| `BSSID` | `string` | — |
+| `secure` | `boolean` | — |
+| `signalStrength` | `number` | — |
+| `frequency` | `number` | 频率 MHz（5G/2.4G 区分；部分平台缺失） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

@@ -54,6 +54,14 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 | `text` | `string` | — | 分享文本（Web navigator.share 用；MP 缺省） |
 | `url` | `string` | — | 分享链接（web 必传 HTTPS URL） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

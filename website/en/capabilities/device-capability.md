@@ -69,6 +69,25 @@ supportsHevc(): Promise<CapResult<boolean>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `DeviceCapabilityAPI`
+
+★权威标尺缺口 C81：设备能力探测（`useDeviceCapability()`）。
+wx：`wx.checkDeviceSupportHevc`（HEVC 硬解支持）；web：`MediaSource.isTypeSupported` 兜底。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `supportsHevc` | `supportsHevc(): Promise<CapResult<boolean>>` | 查询设备是否支持 HEVC（H.265）硬解码 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

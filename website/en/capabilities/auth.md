@@ -118,6 +118,32 @@ subscribe(cb: (token: string | null) => void): () => void
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `AuthState`
+
+C33 认证状态（组合：createAuth 凭证托管 + login 桥 + 存储桥；业务只读 AuthState 不读 raw token——铁律 2）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `token` | `string \| null` | 当前令牌（未登录 null；响应式——UI 直接绑定） |
+| `isAuthenticated` | `boolean` | 是否已登录（token 非空即真） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `login` | `login(provider?: string): Promise<CapResult<string>>` | 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） |
+| `logout` | `logout(): Promise<CapResult<void>>` | 登出：清 token |
+| `setToken` | `setToken(token: string \| null): void` | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
+| `subscribe` | `subscribe(cb: (token: string \| null) => void): () => void` | 订阅登录态变化（响应式 UI 联动） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

@@ -82,6 +82,27 @@ disable(): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `NavigationGuardAPI`
+
+★权威标尺缺口 C75：导航卸载拦截（`useNavigationGuard()`）。
+wx：`wx.enableAlertBeforeUnload` / `disableAlertBeforeUnload`（返回/关闭时弹确认）；
+web：`beforeunload` 事件承接（浏览器原生行为）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `enable` | `enable(message: string): Promise<CapResult<void>>` | 开启卸载前确认弹窗。 |
+| `disable` | `disable(): Promise<CapResult<void>>` | 关闭卸载前确认弹窗 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

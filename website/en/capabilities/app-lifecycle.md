@@ -134,6 +134,12 @@ onAudioInterruptionEnd(cb: () => void): () => void
 |---|---|---|---|
 | `phase` | `AppLifecyclePhase` | Yes | — |
 
+## Referenced types
+
+### `AppLifecyclePhase`
+
+应用阶段（与 C23 `AppLifecycle.phase` 同值域）
+
 ## Error codes
 
 | code | Doc |
@@ -158,6 +164,49 @@ onAudioInterruptionEnd(cb: () => void): () => void
 > Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but the bridge is missing **or is a pure shell** → explicit `Err` degradation · 🟡 render core shipped — capability bridge not wired · ⬜ target not started. ★**Strictness differs by target**: WeChat/Web require the bridge method to exist **and do real platform work** (a body returning `unsupported` on every path counts as ⚠️); iOS/Android require the method in the App bridge factories; HarmonyOS requires **both** the JS bridge and host dispatch. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Referenced types
+
+### `AppLifecycle`
+
+★★C23 应用生命周期句柄（**扩展为完整事件面**——2026-09-30）。
+
+【类型收口（防漂移）】定义在 `capability-app.ts` 的 `AppLifecycleHandle`，
+此处仅做别名导出——**单一事实源**。三端（MP/Web/App）共用同一句柄形状：
+MP 走 wx 全局 API + 产物派发；Web 走 visibilitychange/resize/scroll；
+App 走壳（G-39 运行时）转发。事件面 SSOT 见 `APP_EVENTS`（11 个事件）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `phase` | `AppLifecyclePhase` | — |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onLaunch` | `onLaunch(cb: () => void): () => void` | 应用启动（**恰好一次**，先于首个 show；冷启动自动补发——壳只需转发 show/hide） |
+| `onShow` | `onShow(cb: () => void): () => void` | 应用进入前台 |
+| `onHide` | `onHide(cb: () => void): () => void` | 应用退到后台 |
+| `onPageNotFound` | `onPageNotFound(cb: (e: { path: string }) => void): () => void` | 路由未命中（可跳兜底页） |
+| `onAudioInterruptionBegin` | `onAudioInterruptionBegin(cb: () => void): () => void` | 音频被系统中断开始（来电等） |
+| `onAudioInterruptionEnd` | `onAudioInterruptionEnd(cb: () => void): () => void` | 音频中断结束（可恢复播放） |
+
+### `AppLifecyclePhase`
+
+应用阶段（与 C23 `AppLifecycle.phase` 同值域）
+
+| 取值 | 说明 |
+|---|---|
+| `'PENDING'` | — |
+| `'LAUNCH'` | — |
+| `'SHOW'` | — |
+| `'HIDE'` | — |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
 
 ## Usage
 

@@ -496,6 +496,14 @@ C43 FSAdapter（useFileSystem 句柄——方法均返回 Result<T>）
 | `size` | `number` | — | 文件大小（字节） |
 | `createTime` | `number` | — | 保存时间（ms 时间戳） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

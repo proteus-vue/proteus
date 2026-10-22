@@ -208,6 +208,60 @@ on(event: 'request' | 'enterWeakNetwork' | 'exitWeakNetwork', cb: (payload: unkn
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `CacheManagerHandle`
+
+★权威标尺缺口 C72：缓存管理（`useCacheManager(options?)`）。
+wx：`wx.createCacheManager`（HTTP 请求缓存——规则/启停/清理/删除 + 事件）；
+web：无对等（可用 Service Worker / Cache Storage）→ 创建时 throw 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `rules` | `CacheRule[]` | 缓存规则（可读写） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `addRules` | `addRules(rules: CacheRule[]): Promise<CapResult<string[]>>` | 添加缓存规则。 |
+| `deleteRules` | `deleteRules(ids: string[]): Promise<CapResult<void>>` | 删除缓存规则。 |
+| `clearRules` | `clearRules(): Promise<CapResult<void>>` | 清空全部规则 |
+| `start` | `start(): Promise<CapResult<void>>` | 启动缓存 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止缓存 |
+| `deleteCache` | `deleteCache(id: string): Promise<CapResult<void>>` | 删除指定 URL 的缓存。 |
+| `deleteCaches` | `deleteCaches(ids: string[]): Promise<CapResult<void>>` | 批量删除缓存。 |
+| `clearCaches` | `clearCaches(): Promise<CapResult<void>>` | 清空全部缓存 |
+| `getState` | `getState(): CacheManagerState` | 读取当前配置 |
+| `on` | `on(event: 'request' \| 'enterWeakNetwork' \| 'exitWeakNetwork', cb: (payload: unknown) => void): () => void` | 订阅缓存事件。 |
+
+### `CacheRule`
+
+缓存规则（wx.addRules 的字符串 / 正则形态简化为声明式）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `pattern` | `string` | 匹配 URL 的字符串或正则源 |
+| `method` | `string` | 缓存方法（缺省 GET） |
+| `maxAge` | `number` | 最大缓存时长（秒） |
+
+### `CacheManagerState`
+
+缓存管理器状态
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `mode` | `'weakNetwork' \| 'always' \| 'none'` | 缓存模式（weakNetwork 弱网 / always 总是 / none 关闭） |
+| `state` | `number` | 运行状态（0 未启动 / 1 运行中 / 2 已停止——对齐 wx state） |
+| `origin` | `string` | 缓存域名 |
+| `maxAge` | `number` | 默认最大缓存时长（秒） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

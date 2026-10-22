@@ -79,6 +79,37 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `PaymentConfig`
+
+C40 支付参数（对齐 wx.requestPayment 核心字段——服务端下单后下发）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `timeStamp` | `string` | 时间戳（秒级字符串，服务端生成） |
+| `nonceStr` | `string` | 随机串（服务端生成，32 字符内） |
+| `package` | `string` | 统一下单接口返回的 prepay_id（格式 paySign=...） |
+| `signType` | `string` | 签名方式（缺省 MD5/平台默认；建议 RSA） |
+| `paySign` | `string` | 签名（服务端按商户私钥计算） |
+
+### `PaymentReceipt`
+
+C40 支付结果
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `provider` | `string` | 支付渠道（wechat / alipay / host …由宿主桥标注） |
+| `transactionId` | `string` | 交易单号（渠道返回；不支持缺省） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

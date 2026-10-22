@@ -143,6 +143,14 @@ web：无广告联盟标准 API → 创建时抛 `ad.unsupported`（诚实降级
 | `onResize` | `onResize(cb: (size: { width: number; height: number }) => void): () => void` | 订阅尺寸变化 |
 | `onError` | `onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void` | 订阅错误 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

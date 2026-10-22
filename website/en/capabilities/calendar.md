@@ -147,6 +147,29 @@ list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>
 | `location` | `string` | 地点 |
 | `description` | `string` | 备注/描述 |
 
+## Referenced types
+
+### `CalendarEvent`
+
+C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `title` | `string` | 日历事件标题 |
+| `startTime` | `number` | 开始时间戳（ms） |
+| `endTime` | `number` | 结束时间戳（ms） |
+| `alarms` | `number[]` | 提前提醒（分钟） |
+| `location` | `string` | 地点 |
+| `description` | `string` | 备注/描述 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

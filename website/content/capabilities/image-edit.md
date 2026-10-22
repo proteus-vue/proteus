@@ -79,6 +79,14 @@ web：无微信编辑 UI → Err 诚实降级（可用 canvas 自实现裁剪）
 | `crop` | `crop(src: string, cropScale: '16:9' \| '9:16' \| '4:3' \| '3:4' \| '5:4' \| '4:5' \| '1:1'): Promise<CapResult<string>>` | 裁剪图片（拉起裁剪 UI，按比例）。 |
 | `edit` | `edit(src: string): Promise<CapResult<string>>` | 编辑图片（拉起编辑 UI——涂鸦 / 裁剪 / 文字 / 马赛克）。 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

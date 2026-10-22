@@ -63,6 +63,26 @@ useEmbedded(): Promise<CapResult<HostContext>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `HostContext`
+
+C48 被宿主嵌入（HostContext——宿主桥注入；缺省 Err 诚实降级）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `provider` | `string` | 宿主渠道标识（wechat / web / studio …） |
+| `version` | `string` | 宿主/基础库版本 |
+| `capabilities` | `string[]` | 宿主声明的能力名集合 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

@@ -228,6 +228,14 @@ Canvas 导出参数（wx.canvasToTempFilePath 对齐——web 端取相关字段
 |---|---|---|
 | `getContext` | `getContext(type: '2d' \| 'webgl'): CanvasContext \| null` | 取上下文（2d 返回可绘图上下文） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ### `CanvasTextMetrics`
 
 Canvas 文本度量（measureText 返回——对齐官方 TextMetrics 子集）

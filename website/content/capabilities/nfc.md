@@ -166,6 +166,14 @@ HCE = Host Card Emulation（手机模拟卡）；APDU 收发 + 事件订阅。
 | `connectMifareClassic` | `connectMifareClassic(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Classic 标签 |
 | `connectMifareUltralight` | `connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Ultralight 标签 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ### `NfcTag`
 
 NFC 发现的标签

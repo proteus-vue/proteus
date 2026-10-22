@@ -192,6 +192,54 @@ NFC 标签连接句柄（各技术类型公共面：connect/close/isConnected/se
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `NFCAPI`
+
+★能力颗粒度对齐：C37 NFC 操作接口（原仅 getHCEState 状态探测 → HCE 卡模拟 + 消息收发）
+HCE = Host Card Emulation（手机模拟卡）；APDU 收发 + 事件订阅。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `supported` | `boolean` | 平台是否支持 NFC |
+| `available` | `boolean` | NFC 当前可用（已开启） |
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `startHCE` | `startHCE(aidList: string[]): Promise<CapResult<void>>` | 启动 HCE（模拟卡；aidList 应用标识） |
+| `stopHCE` | `stopHCE(): Promise<CapResult<void>>` | 停止 HCE |
+| `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | 发送 APDU 响应（收到 onHCEMessage 后回） |
+| `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | 订阅 HCE 消息（返回取消） |
+| `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | 订阅 HCE 状态变化（返回取消） |
+| `getAdapter` | `getAdapter(): NfcAdapter` | ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 |
+
+### `NfcAdapter`
+
+★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接）
+与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `startDiscovery` | `startDiscovery(): Promise<CapResult<void>>` | 开始发现附近标签 |
+| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止发现 |
+| `onDiscovered` | `onDiscovered(cb: (tag: NfcTag) => void): () => void` | 订阅发现的标签（返回取消） |
+| `connectNdef` | `connectNdef(): Promise<CapResult<NdefHandle>>` | 连接 NDEF 标签（读写 NDEF 消息） |
+| `connectIsoDep` | `connectIsoDep(): Promise<CapResult<NfcTagHandle>>` | 连接 IsoDep 标签（ISO-DEP/APDU 透传） |
+| `connectNfcA` | `connectNfcA(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-A 标签 |
+| `connectNfcB` | `connectNfcB(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-B 标签 |
+| `connectNfcF` | `connectNfcF(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-F 标签（FeliCa） |
+| `connectNfcV` | `connectNfcV(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-V 标签 |
+| `connectMifareClassic` | `connectMifareClassic(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Classic 标签 |
+| `connectMifareUltralight` | `connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Ultralight 标签 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

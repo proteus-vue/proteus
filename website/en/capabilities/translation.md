@@ -88,6 +88,27 @@ onOff(cb: () => void): () => void
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `TranslationAPI`
+
+★权威标尺缺口 C79：翻译（`useTranslation()`）。
+wx：`wx.onUserTriggerTranslation` / `wx.onUserOffTranslation`（用户主动/取消翻译菜单）；
+web：无对等（可用 Translation API）→ Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `onTrigger` | `onTrigger(cb: (res: { locale: string; type: string }) => void): () => void` | 订阅用户主动翻译。 |
+| `onOff` | `onOff(cb: () => void): () => void` | 订阅用户取消翻译。 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

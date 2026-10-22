@@ -206,6 +206,87 @@ Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTM
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `ElementQuery`
+
+★组件实例 API 对齐：C58 元素查询句柄（`useElement(id?)`）。
+wx：`wx.createSelectorQuery()`（rect / scrollOffset / fields + node/rect/size）+ `createIntersectionObserver`；
+web：`querySelector` + `getBoundingClientRect()`。★App 选择器支持面见各方法 `@param selector`（#1082）；坐标为视口坐标（同 Web）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `boundingClientRect` | `boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>` | 查询元素几何。 |
+| `scrollOffset` | `scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>` | 查询元素滚动位置。 |
+| `fields` | `fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<ElementFieldsResult>>` | 按需查询元素字段（node/rect/size/scrollOffset/computedStyle）。 |
+| `size` | `size(selector?: string): Promise<CapResult<{ width: number; height: number }>>` | 查询元素尺寸（boundingClientRect 的常用投影）。 |
+| `batch` | `batch(selectors: string[]): Promise<CapResult<Array<ElementRect \| null>>>` | 批量查询（同一查询内选择器数组——对齐官方 selectAll 的批量语义）。 |
+
+### `ElementRect`
+
+元素几何（SelectorQuery.boundingClientRect 结果——对齐官方字段）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `id` | `string` | 元素 id |
+| `dataset` | `Record<string, unknown>` | dataset 数据 |
+| `left` | `number` | 左边界（相对显示区域） |
+| `top` | `number` | 上边界 |
+| `right` | `number` | 右边界 |
+| `bottom` | `number` | 下边界 |
+| `width` | `number` | 宽度 |
+| `height` | `number` | 高度 |
+
+### `ElementScrollOffset`
+
+滚动位置（SelectorQuery.scrollOffset 结果）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `id` | `string` | 元素 id |
+| `dataset` | `Record<string, unknown>` | dataset 数据 |
+| `scrollTop` | `number` | 纵向滚动距离 |
+| `scrollLeft` | `number` | 横向滚动距离 |
+
+### `ElementFieldsOptions`
+
+fields 查询选项（对齐官方 SelectorQuery.fields）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `node` | `boolean` | 返回节点（`<canvas type="2d">` / 自定义组件实例） |
+| `rect` | `boolean` | 返回几何（left/top/right/bottom/width/height） |
+| `size` | `boolean` | 返回尺寸（width/height） |
+| `scrollOffset` | `boolean` | 返回滚动位置 |
+| `computedStyle` | `string[]` | 返回 computedStyle（属性名数组） |
+| `context` | `boolean` | 返回类名/自定义属性 dataset 等上下文 |
+
+### `ElementFieldsResult`
+
+fields 查询结果（含请求到的各维度——未请求字段为 undefined）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `id` | `string` | 元素 id |
+| `dataset` | `Record<string, unknown>` | dataset 数据 |
+| `node` | `CanvasNode` | 节点（node: true） |
+| `left` | `number` | 几何（rect: true） |
+| `top` | `number` | — |
+| `right` | `number` | — |
+| `bottom` | `number` | — |
+| `width` | `number` | 尺寸（rect/size: true） |
+| `height` | `number` | — |
+| `scrollTop` | `number` | 滚动位置（scrollOffset: true） |
+| `scrollLeft` | `number` | — |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

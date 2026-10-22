@@ -55,6 +55,14 @@ C34 TrackAPI（useAnalytics 句柄）
 |---|---|---|
 | `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

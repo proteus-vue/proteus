@@ -70,6 +70,26 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `LoginResult`
+
+C41 登录结果（wx.login → code；web/其它 provider → token/授权信息）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `provider` | `string` | 登录渠道（wechat / host-provider …） |
+| `code` | `string` | 登录凭证（wx code，服务端换 session 用） |
+| `token` | `string` | 令牌（第三方 provider 直接下发 token 时） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

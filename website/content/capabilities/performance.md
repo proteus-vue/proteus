@@ -148,6 +148,14 @@ web：`performance.getEntries*` 承接条目读取；`report` 无对等上报后
 | `observe` | `observe(cb: (entries: PerformanceEntry[]) => void, entryTypes?: string[]): void` | 开始观察新性能条目。 |
 | `disconnect` | `disconnect(): void` | 取消观察（释放） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -83,6 +83,48 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `UploadOptions`
+
+C29 上传选项（wx.uploadFile / web fetch FormData）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `url` | `string` | 上传目标 URL（HTTPS） |
+| `filePath` | `string` | wx 临时文件路径（wx.chooseMedia/chooseImage 等产出） |
+| `file` | `Blob` | web 文件对象 |
+| `name` | `string` | 表单字段名（缺省 'file'） |
+| `formData` | `Record<string, string>` | 附加表单字段 |
+| `headers` | `Record<string, string>` | 自定义请求头 |
+| `timeout` | `number` | 超时（ms；超时 → Err） |
+
+### `ProgressCallback`
+
+C29/C30 传输进度回调（0-100）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `call` | `(pct: number): void` | — |
+
+### `UploadResult`
+
+C29 上传结果
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `status` | `number` | HTTP 状态码 |
+| `data` | `unknown` | 响应体（文本/JSON 由服务端决定） |
+| `progress` | `number` | 进度（0-100，若平台支持 onProgressUpdate） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

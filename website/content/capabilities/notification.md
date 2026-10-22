@@ -58,6 +58,14 @@ C17 可订阅的消息模板（wx.requestSubscribeMessage / web Notification）
 | `granted` | `boolean` | — | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
 | `status` | `string` | — | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

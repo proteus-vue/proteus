@@ -110,6 +110,27 @@ list(): Record<string, string>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `CookieJar`
+
+C32 Cookie 罐（web document.cookie / wx storage 兜底）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `get` | `get(name: string): string \| undefined` | 读取 cookie |
+| `set` | `set(name: string, value: string, maxAge?: number): void` | 写入 cookie（maxAge 秒；缺省会话级） |
+| `remove` | `remove(name: string): void` | 删除 cookie |
+| `list` | `list(): Record<string, string>` | 列出全部 cookie |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

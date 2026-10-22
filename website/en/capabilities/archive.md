@@ -70,6 +70,26 @@ Param,Type,Required,Doc
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `ArchiveOptions`
+
+C44 压缩选项（wx.compressFile / web 无标准 → 降级 undefined）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `src` | `string` | 源文件路径 |
+| `dest` | `string` | 目标路径（缺省同目录） |
+| `quality` | `number` | 图片压缩质量 0-100（wx 支持） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

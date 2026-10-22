@@ -76,6 +76,14 @@ C40 支付结果
 | `provider` | `string` | — | 支付渠道（wechat / alipay / host …由宿主桥标注） |
 | `transactionId` | `string` | — | 交易单号（渠道返回；不支持缺省） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

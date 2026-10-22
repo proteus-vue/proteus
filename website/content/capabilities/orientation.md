@@ -46,6 +46,14 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 | `type` | `'portrait' \| 'landscape'` | — | 屏幕方向 |
 | `angle` | `number` | — | 旋转角度（0/90/180/-90 度） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

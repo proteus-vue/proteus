@@ -55,6 +55,56 @@ useSocket(): CapResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectO
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `UDPSocketHandle`
+
+★权威标尺缺口 C69-a：UDP Socket（`useUDPSocket()`）。
+wx：`wx.createUDPSocket()`；web：无 UDP 标准 API（浏览器不支持裸 UDP）→ Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `bind` | `bind(port?: number): Promise<CapResult<void>>` | 绑定本地端口（缺省系统分配） |
+| `connect` | `connect(address: string, port: number): Promise<CapResult<void>>` | 预连目标地址（配合 write）。 |
+| `send` | `send(address: string, port: number, message: string \| ArrayBuffer, broadcast?: boolean): Promise<CapResult<void>>` | 发送消息。 |
+| `write` | `write(address: string, port: number, message: string \| ArrayBuffer): Promise<CapResult<void>>` | 向已 connect 的地址发送（少写地址；需先 connect）。 |
+| `onMessage` | `onMessage(cb: (msg: UdpMessage) => void): () => void` | 订阅收到的消息。 |
+| `onError` | `onError(cb: (err: { errMsg: string }) => void): () => void` | 订阅错误 |
+| `close` | `close(): Promise<CapResult<void>>` | 关闭 socket（释放） |
+
+### `TCPSocketConnectOptions`
+
+TCP Socket 连接选项
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `address` | `string` | 目标地址 |
+| `port` | `number` | 目标端口 |
+| `timeout` | `number` | 连接超时（ms，缺省 2000） |
+
+### `TCPSocketHandle`
+
+★权威标尺缺口 C69-b：TCP Socket（`useTCPSocket(options?)`）。
+wx：`wx.createTCPSocket()`；web：无原始 TCP 标准 API（浏览器不支持）→ Err 诚实降级。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `connect` | `connect(options: TCPSocketConnectOptions): Promise<CapResult<void>>` | 连接目标地址。 |
+| `write` | `write(data: string \| ArrayBuffer): Promise<CapResult<void>>` | 写入数据。 |
+| `onMessage` | `onMessage(cb: (res: { message: ArrayBuffer; localInfo?: unknown; remoteInfo?: unknown }) => void): () => void` | 订阅收到的消息。 |
+| `onConnect` | `onConnect(cb: () => void): () => void` | 订阅连接建立成功 |
+| `onError` | `onError(cb: (err: { errMsg: string }) => void): () => void` | 订阅错误 |
+| `onClose` | `onClose(cb: () => void): () => void` | 订阅连接关闭 |
+| `close` | `close(): Promise<CapResult<void>>` | 关闭连接（释放） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

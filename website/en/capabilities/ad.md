@@ -150,6 +150,77 @@ banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `AdAPI`
+
+★组件实例 API 对齐：C64 广告句柄（`useAd()`）。
+wx：`wx.createRewardedVideoAd` / `createInterstitialAd` / `createBannerAd`；
+web：无广告联盟标准 API → 创建时抛 `ad.unsupported`（诚实降级，宿主可注入自建广告桥）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `rewardedVideo` | `rewardedVideo(adUnitId: string): RewardedVideoAdHandle` | 创建激励视频广告（按 adUnitId 缓存实例——同 id 复用） |
+| `interstitial` | `interstitial(adUnitId: string): InterstitialAdHandle` | 创建插屏广告 |
+| `banner` | `banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle` | 创建横幅广告 |
+
+### `RewardedVideoAdHandle`
+
+激励视频广告句柄（wx.createRewardedVideoAd）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `load` | `load(): Promise<CapResult<void>>` | 拉取广告（缺省 show 前自动 load） |
+| `show` | `show(): Promise<CapResult<void>>` | 展示广告（返回是否因激励观看完毕而闭合的 Promise 解析在 onClose 载荷） |
+| `onLoad` | `onLoad(cb: () => void): () => void` | 订阅加载成功（可缓存预热） |
+| `onClose` | `onClose(cb: (res: { isEnded: boolean }) => void): () => void` | 订阅用户关闭广告。 |
+| `onError` | `onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void` | 订阅错误 |
+| `off` | `off(): void` | 销毁 |
+
+### `InterstitialAdHandle`
+
+插屏广告句柄（wx.createInterstitialAd）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `load` | `load(): Promise<CapResult<void>>` | 拉取广告 |
+| `show` | `show(): Promise<CapResult<void>>` | 展示广告 |
+| `onLoad` | `onLoad(cb: () => void): () => void` | 订阅加载成功 |
+| `onClose` | `onClose(cb: () => void): () => void` | 订阅用户关闭 |
+| `onError` | `onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void` | 订阅错误 |
+| `destroy` | `destroy(): void` | 销毁 |
+
+### `BannerAdStyle`
+
+横幅广告样式（wx.createBannerAd style）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `left` | `number` | 左侧偏移（px） |
+| `top` | `number` | 顶部偏移（px） |
+| `width` | `number` | 宽度（px） |
+
+### `BannerAdHandle`
+
+横幅广告句柄（wx.createBannerAd）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `show` | `show(): Promise<CapResult<void>>` | 展示广告 |
+| `hide` | `hide(): Promise<CapResult<void>>` | 隐藏广告 |
+| `destroy` | `destroy(): void` | 销毁 |
+| `onLoad` | `onLoad(cb: () => void): () => void` | 订阅加载成功 |
+| `onResize` | `onResize(cb: (size: { width: number; height: number }) => void): () => void` | 订阅尺寸变化 |
+| `onError` | `onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void` | 订阅错误 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

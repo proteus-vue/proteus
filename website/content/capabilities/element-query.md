@@ -192,6 +192,14 @@ fields 查询结果（含请求到的各维度——未请求字段为 undefined
 | `scrollTop` | `number` | — | 滚动位置（scrollOffset: true） |
 | `scrollLeft` | `number` | — | — |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ### `CanvasNode`
 
 Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTMLCanvasElement）

@@ -65,7 +65,7 @@ order: 0
 | C8 | [capability.network](/docs/capability/network) | `useNetwork()` | `NetworkType` | wx.getNetworkType |
 | C9 | [capability.clipboard](/docs/capability/clipboard) | `useClipboard()` | `Result<string>` | wx.set/getClipboardData |
 | C10 | [capability.screen](/docs/capability/screen) | `useScreen()` | `ScreenInfo` | wx.getSystemInfo |
-| C11 | [capability.device](/docs/capability/device) | `useDevice()` | `DeviceInfo` | wx.getSystemInfo |
+| C11 | [capability.device](/docs/capability/device) | `useDevice()` | `CapDeviceInfo` | wx.getSystemInfo |
 | C12 | [capability.orientation](/docs/capability/orientation) | `useOrientation()` | `Orientation` | wx.onDeviceOrientationChange |
 | C13 | [capability.brightness](/docs/capability/brightness) | `useBrightness()` | `Result<void>` | wx.setScreenBrightness |
 | C14 | [capability.keyboard](/docs/capability/keyboard) | `useKeyboard()` | `KeyboardInfo` | wx.onKeyboardHeightChange |

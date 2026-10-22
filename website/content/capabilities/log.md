@@ -89,6 +89,14 @@ C35 Logger（useLog 句柄——console + 上报）
 | `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
 | `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

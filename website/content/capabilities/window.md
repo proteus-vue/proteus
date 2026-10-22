@@ -64,6 +64,14 @@ wx：`wx.setWindowSize`（PC 端调整窗口）；web：无标准 → Err 诚实
 |---|---|---|
 | `setSize` | `setSize(width: number, height: number): Promise<CapResult<void>>` | 调整窗口大小（PC 端）。 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

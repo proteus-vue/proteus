@@ -146,6 +146,14 @@ disconnect(): void
 | `relativeRect` | `{ left: number; top: number; right: number; bottom: number; width: number; height: number }` | — | 相对参照物的区域 |
 | `time` | `number` | — | 时间戳 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ### `ElementRect`
 
 元素几何（SelectorQuery.boundingClientRect 结果——对齐官方字段）

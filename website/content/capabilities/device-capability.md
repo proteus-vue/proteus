@@ -57,6 +57,14 @@ wx：`wx.checkDeviceSupportHevc`（HEVC 硬解支持）；web：`MediaSource.isT
 |---|---|---|
 | `supportsHevc` | `supportsHevc(): Promise<CapResult<boolean>>` | 查询设备是否支持 HEVC（H.265）硬解码 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

@@ -101,6 +101,14 @@ web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false
 | `cancelAnimationFrame` | `cancelAnimationFrame(handle: number): void` | 取消动画帧 |
 | `getVKFrame` | `getVKFrame(width?: number, height?: number): unknown` | 取当前 VK 帧 |
 
+### `CapError`
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `code` | `string` | — | — |
+| `message` | `string` | — | — |
+| `cause` | `unknown` | — | — |
+
 ## 错误码
 
 | code | 说明 |

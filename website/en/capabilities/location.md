@@ -66,6 +66,26 @@ useLocation(): Promise<CapResult<Coords>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `Coords`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `latitude` | `number` | 纬度（WGS84，浮点度数） |
+| `longitude` | `number` | 经度（WGS84，浮点度数） |
+| `accuracy` | `number` | 定位精度（米，半径；越小越准） |
+| `altitude` | `number` | 海拔（米；平台不支持时缺省） |
+| `speed` | `number` | 速度（米/秒；平台不支持时缺省） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

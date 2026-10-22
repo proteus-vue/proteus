@@ -66,6 +66,26 @@ useWeRun(): Promise<CapResult<WeRunData>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `WeRunData`
+
+★颗粒度对齐 C3：C56 微信运动（wx.getWeRunData → 加密数据需后端解密）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `encryptedData` | `string` | 加密的步数数据（wx.getWeRunData 返回的 cloudID/encryptedData；需业务后端解密） |
+| `iv` | `string` | — |
+| `cloudID` | `string` | cloudID（小程序云开发场景免解密） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

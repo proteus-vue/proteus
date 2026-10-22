@@ -88,6 +88,32 @@ C47 小程序跳转（wx.navigateToMiniProgram）
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `MiniProgramAPI`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | 跳转到其他小程序 |
+
+### `MiniProgramNavOptions`
+
+C47 小程序跳转（wx.navigateToMiniProgram）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `appId` | `string` | 目标小程序 appId |
+| `path` | `string` | 目标页路径（缺省首页） |
+| `extraData` | `Record<string, unknown>` | 传递给目标小程序的数据（target app onLoad options.extraData） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

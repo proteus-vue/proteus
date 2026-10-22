@@ -68,6 +68,24 @@ track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `TrackAPI`
+
+C34 TrackAPI（useAnalytics 句柄）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

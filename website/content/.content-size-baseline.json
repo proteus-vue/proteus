@@ -474,506 +474,506 @@
     "bodyLines": 7
   },
   "website/content/capabilities/camera.md": {
-    "tableRows": 59,
-    "headings": 17,
+    "tableRows": 64,
+    "headings": 18,
     "codeBlocks": 16,
     "bodyLines": 29
   },
   "website/content/capabilities/microphone.md": {
-    "tableRows": 53,
-    "headings": 18,
+    "tableRows": 58,
+    "headings": 19,
     "codeBlocks": 18,
     "bodyLines": 30
   },
   "website/content/capabilities/location.md": {
-    "tableRows": 33,
-    "headings": 8,
+    "tableRows": 38,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/map.md": {
-    "tableRows": 211,
-    "headings": 47,
+    "tableRows": 216,
+    "headings": 48,
     "codeBlocks": 72,
     "bodyLines": 89
   },
   "website/content/capabilities/sensor.md": {
-    "tableRows": 66,
-    "headings": 18,
+    "tableRows": 76,
+    "headings": 20,
     "codeBlocks": 14,
-    "bodyLines": 26
+    "bodyLines": 27
   },
   "website/content/capabilities/vibrate.md": {
-    "tableRows": 22,
-    "headings": 6,
+    "tableRows": 27,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/battery.md": {
-    "tableRows": 31,
-    "headings": 8,
+    "tableRows": 36,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/network.md": {
-    "tableRows": 27,
-    "headings": 8,
+    "tableRows": 32,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/clipboard.md": {
-    "tableRows": 21,
-    "headings": 5,
+    "tableRows": 26,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/screen.md": {
-    "tableRows": 31,
-    "headings": 8,
+    "tableRows": 36,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/device.md": {
-    "tableRows": 32,
-    "headings": 8,
+    "tableRows": 37,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/orientation.md": {
-    "tableRows": 26,
-    "headings": 8,
+    "tableRows": 31,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/brightness.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/keyboard.md": {
-    "tableRows": 32,
-    "headings": 11,
+    "tableRows": 37,
+    "headings": 12,
     "codeBlocks": 6,
     "bodyLines": 19
   },
   "website/content/capabilities/storage.md": {
-    "tableRows": 55,
-    "headings": 17,
+    "tableRows": 60,
+    "headings": 18,
     "codeBlocks": 22,
     "bodyLines": 34
   },
   "website/content/capabilities/permission.md": {
-    "tableRows": 30,
-    "headings": 9,
+    "tableRows": 35,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/notification.md": {
-    "tableRows": 44,
-    "headings": 13,
+    "tableRows": 49,
+    "headings": 14,
     "codeBlocks": 8,
     "bodyLines": 18
   },
   "website/content/capabilities/share.md": {
-    "tableRows": 31,
-    "headings": 9,
+    "tableRows": 36,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/contact.md": {
-    "tableRows": 29,
-    "headings": 8,
+    "tableRows": 34,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/calendar.md": {
-    "tableRows": 61,
-    "headings": 16,
+    "tableRows": 66,
+    "headings": 17,
     "codeBlocks": 12,
     "bodyLines": 24
   },
   "website/content/capabilities/phone-call.md": {
-    "tableRows": 22,
-    "headings": 6,
+    "tableRows": 27,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/sms.md": {
-    "tableRows": 22,
-    "headings": 6,
+    "tableRows": 27,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/app-lifecycle.md": {
-    "tableRows": 53,
-    "headings": 20,
+    "tableRows": 64,
+    "headings": 22,
     "codeBlocks": 16,
-    "bodyLines": 45
+    "bodyLines": 46
   },
   "website/content/capabilities/page-lifecycle.md": {
-    "tableRows": 98,
-    "headings": 29,
+    "tableRows": 118,
+    "headings": 33,
     "codeBlocks": 34,
-    "bodyLines": 69
+    "bodyLines": 72
   },
   "website/content/capabilities/background.md": {
-    "tableRows": 65,
-    "headings": 22,
+    "tableRows": 70,
+    "headings": 23,
     "codeBlocks": 22,
     "bodyLines": 44
   },
   "website/content/capabilities/fetch.md": {
-    "tableRows": 126,
-    "headings": 16,
+    "tableRows": 156,
+    "headings": 21,
     "codeBlocks": 4,
-    "bodyLines": 28
+    "bodyLines": 43
   },
   "website/content/capabilities/websocket.md": {
-    "tableRows": 44,
-    "headings": 12,
+    "tableRows": 49,
+    "headings": 13,
     "codeBlocks": 10,
     "bodyLines": 30
   },
   "website/content/capabilities/socket-task.md": {
-    "tableRows": 43,
-    "headings": 13,
+    "tableRows": 48,
+    "headings": 14,
     "codeBlocks": 12,
     "bodyLines": 24
   },
   "website/content/capabilities/upload.md": {
-    "tableRows": 51,
-    "headings": 11,
+    "tableRows": 59,
+    "headings": 13,
     "codeBlocks": 4,
-    "bodyLines": 17
+    "bodyLines": 18
   },
   "website/content/capabilities/download.md": {
-    "tableRows": 46,
-    "headings": 11,
+    "tableRows": 54,
+    "headings": 13,
     "codeBlocks": 4,
-    "bodyLines": 17
+    "bodyLines": 18
   },
   "website/content/capabilities/data-channel.md": {
-    "tableRows": 41,
-    "headings": 13,
+    "tableRows": 46,
+    "headings": 14,
     "codeBlocks": 8,
     "bodyLines": 21
   },
   "website/content/capabilities/cookie.md": {
-    "tableRows": 41,
-    "headings": 12,
+    "tableRows": 46,
+    "headings": 13,
     "codeBlocks": 12,
     "bodyLines": 24
   },
   "website/content/capabilities/auth.md": {
-    "tableRows": 43,
-    "headings": 13,
+    "tableRows": 48,
+    "headings": 14,
     "codeBlocks": 12,
     "bodyLines": 24
   },
   "website/content/capabilities/analytics.md": {
-    "tableRows": 23,
-    "headings": 9,
+    "tableRows": 28,
+    "headings": 10,
     "codeBlocks": 6,
     "bodyLines": 18
   },
   "website/content/capabilities/log.md": {
-    "tableRows": 35,
-    "headings": 11,
+    "tableRows": 40,
+    "headings": 12,
     "codeBlocks": 10,
     "bodyLines": 22
   },
   "website/content/capabilities/bluetooth.md": {
-    "tableRows": 125,
-    "headings": 29,
+    "tableRows": 130,
+    "headings": 30,
     "codeBlocks": 38,
     "bodyLines": 56
   },
   "website/content/capabilities/nfc.md": {
-    "tableRows": 84,
-    "headings": 19,
+    "tableRows": 89,
+    "headings": 20,
     "codeBlocks": 16,
     "bodyLines": 35
   },
   "website/content/capabilities/biometric.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/face-id.md": {
-    "tableRows": 21,
-    "headings": 6,
+    "tableRows": 26,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/payment.md": {
-    "tableRows": 44,
-    "headings": 11,
+    "tableRows": 49,
+    "headings": 12,
     "codeBlocks": 4,
     "bodyLines": 17
   },
   "website/content/capabilities/login.md": {
-    "tableRows": 32,
-    "headings": 9,
+    "tableRows": 37,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/qr-code.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/file-system.md": {
-    "tableRows": 190,
-    "headings": 37,
+    "tableRows": 195,
+    "headings": 38,
     "codeBlocks": 56,
     "bodyLines": 70
   },
   "website/content/capabilities/archive.md": {
-    "tableRows": 32,
-    "headings": 9,
+    "tableRows": 37,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/shortcut.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/content/capabilities/in-app-purchase.md": {
-    "tableRows": 31,
-    "headings": 9,
+    "tableRows": 36,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/mini-program.md": {
-    "tableRows": 33,
-    "headings": 14,
+    "tableRows": 38,
+    "headings": 15,
     "codeBlocks": 6,
     "bodyLines": 22
   },
   "website/content/capabilities/embedded.md": {
-    "tableRows": 28,
-    "headings": 12,
+    "tableRows": 33,
+    "headings": 13,
     "codeBlocks": 4,
     "bodyLines": 19
   },
   "website/content/capabilities/live.md": {
-    "tableRows": 62,
-    "headings": 22,
+    "tableRows": 73,
+    "headings": 24,
     "codeBlocks": 26,
-    "bodyLines": 42
+    "bodyLines": 43
   },
   "website/content/capabilities/extension.md": {
-    "tableRows": 21,
-    "headings": 10,
+    "tableRows": 26,
+    "headings": 12,
     "codeBlocks": 4,
     "bodyLines": 19
   },
   "website/content/capabilities/update.md": {
-    "tableRows": 41,
-    "headings": 17,
+    "tableRows": 46,
+    "headings": 18,
     "codeBlocks": 14,
     "bodyLines": 31
   },
   "website/content/capabilities/album.md": {
-    "tableRows": 56,
-    "headings": 14,
+    "tableRows": 61,
+    "headings": 15,
     "codeBlocks": 12,
     "bodyLines": 26
   },
   "website/content/capabilities/worker.md": {
-    "tableRows": 37,
-    "headings": 16,
+    "tableRows": 43,
+    "headings": 17,
     "codeBlocks": 10,
     "bodyLines": 28
   },
   "website/content/capabilities/address.md": {
-    "tableRows": 39,
-    "headings": 8,
+    "tableRows": 44,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/wifi.md": {
-    "tableRows": 39,
-    "headings": 12,
+    "tableRows": 44,
+    "headings": 13,
     "codeBlocks": 10,
     "bodyLines": 22
   },
   "website/content/capabilities/we-run.md": {
-    "tableRows": 29,
-    "headings": 8,
+    "tableRows": 34,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 17
   },
   "website/content/capabilities/canvas.md": {
-    "tableRows": 126,
-    "headings": 22,
+    "tableRows": 131,
+    "headings": 23,
     "codeBlocks": 14,
     "bodyLines": 39
   },
   "website/content/capabilities/element-query.md": {
-    "tableRows": 95,
-    "headings": 19,
+    "tableRows": 100,
+    "headings": 20,
     "codeBlocks": 14,
     "bodyLines": 34
   },
   "website/content/capabilities/intersection.md": {
-    "tableRows": 73,
-    "headings": 17,
+    "tableRows": 78,
+    "headings": 18,
     "codeBlocks": 12,
     "bodyLines": 28
   },
   "website/content/capabilities/media-query.md": {
-    "tableRows": 42,
-    "headings": 12,
+    "tableRows": 47,
+    "headings": 13,
     "codeBlocks": 8,
     "bodyLines": 23
   },
   "website/content/capabilities/video.md": {
-    "tableRows": 62,
-    "headings": 19,
+    "tableRows": 67,
+    "headings": 20,
     "codeBlocks": 22,
     "bodyLines": 36
   },
   "website/content/capabilities/audio.md": {
-    "tableRows": 67,
-    "headings": 18,
+    "tableRows": 72,
+    "headings": 19,
     "codeBlocks": 20,
     "bodyLines": 33
   },
   "website/content/capabilities/live-pusher.md": {
-    "tableRows": 50,
-    "headings": 18,
+    "tableRows": 55,
+    "headings": 19,
     "codeBlocks": 22,
     "bodyLines": 35
   },
   "website/content/capabilities/ad.md": {
-    "tableRows": 66,
-    "headings": 15,
+    "tableRows": 71,
+    "headings": 16,
     "codeBlocks": 10,
     "bodyLines": 28
   },
   "website/content/capabilities/privacy.md": {
-    "tableRows": 37,
-    "headings": 13,
+    "tableRows": 42,
+    "headings": 14,
     "codeBlocks": 12,
     "bodyLines": 29
   },
   "website/content/capabilities/performance.md": {
-    "tableRows": 59,
-    "headings": 15,
+    "tableRows": 64,
+    "headings": 16,
     "codeBlocks": 14,
     "bodyLines": 31
   },
   "website/content/capabilities/preload.md": {
-    "tableRows": 43,
-    "headings": 18,
+    "tableRows": 48,
+    "headings": 19,
     "codeBlocks": 12,
     "bodyLines": 31
   },
   "website/content/capabilities/image-edit.md": {
-    "tableRows": 33,
-    "headings": 10,
+    "tableRows": 38,
+    "headings": 11,
     "codeBlocks": 8,
     "bodyLines": 22
   },
   "website/content/capabilities/socket.md": {
-    "tableRows": 47,
-    "headings": 10,
+    "tableRows": 52,
+    "headings": 11,
     "codeBlocks": 4,
     "bodyLines": 21
   },
   "website/content/capabilities/media-processing.md": {
-    "tableRows": 53,
-    "headings": 15,
+    "tableRows": 58,
+    "headings": 16,
     "codeBlocks": 10,
     "bodyLines": 26
   },
   "website/content/capabilities/screen-capture.md": {
-    "tableRows": 36,
-    "headings": 12,
+    "tableRows": 41,
+    "headings": 13,
     "codeBlocks": 12,
     "bodyLines": 27
   },
   "website/content/capabilities/cache-manager.md": {
-    "tableRows": 78,
-    "headings": 22,
+    "tableRows": 83,
+    "headings": 23,
     "codeBlocks": 24,
     "bodyLines": 41
   },
   "website/content/capabilities/idle.md": {
-    "tableRows": 39,
-    "headings": 15,
+    "tableRows": 44,
+    "headings": 16,
     "codeBlocks": 8,
     "bodyLines": 25
   },
   "website/content/capabilities/window.md": {
-    "tableRows": 28,
-    "headings": 13,
+    "tableRows": 33,
+    "headings": 14,
     "codeBlocks": 6,
     "bodyLines": 24
   },
   "website/content/capabilities/navigation-guard.md": {
-    "tableRows": 29,
-    "headings": 14,
+    "tableRows": 34,
+    "headings": 15,
     "codeBlocks": 8,
     "bodyLines": 26
   },
   "website/content/capabilities/ar.md": {
-    "tableRows": 47,
-    "headings": 12,
+    "tableRows": 52,
+    "headings": 13,
     "codeBlocks": 8,
     "bodyLines": 23
   },
   "website/content/capabilities/beacon.md": {
-    "tableRows": 18,
-    "headings": 5,
-    "codeBlocks": 4,
-    "bodyLines": 16
+    "tableRows": 52,
+    "headings": 14,
+    "codeBlocks": 12,
+    "bodyLines": 31
   },
   "website/content/capabilities/local-service.md": {
-    "tableRows": 55,
-    "headings": 15,
+    "tableRows": 60,
+    "headings": 16,
     "codeBlocks": 16,
     "bodyLines": 32
   },
   "website/content/capabilities/translation.md": {
-    "tableRows": 32,
-    "headings": 10,
+    "tableRows": 37,
+    "headings": 11,
     "codeBlocks": 8,
     "bodyLines": 23
   },
   "website/content/capabilities/poster.md": {
-    "tableRows": 27,
-    "headings": 9,
+    "tableRows": 32,
+    "headings": 10,
     "codeBlocks": 6,
     "bodyLines": 20
   },
   "website/content/capabilities/device-capability.md": {
-    "tableRows": 24,
-    "headings": 9,
+    "tableRows": 29,
+    "headings": 10,
     "codeBlocks": 6,
     "bodyLines": 19
   },
   "website/content/capabilities/webassembly.md": {
-    "tableRows": 52,
-    "headings": 16,
+    "tableRows": 61,
+    "headings": 18,
     "codeBlocks": 6,
-    "bodyLines": 43
+    "bodyLines": 44
   },
   "website/content/capabilities/keep-screen-on.md": {
-    "tableRows": 21,
-    "headings": 6,
+    "tableRows": 26,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/content/capabilities/document-preview.md": {
-    "tableRows": 21,
-    "headings": 6,
+    "tableRows": 26,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 15
   },
@@ -1458,506 +1458,506 @@
     "bodyLines": 7
   },
   "website/en/capabilities/camera.md": {
-    "tableRows": 54,
-    "headings": 15,
+    "tableRows": 64,
+    "headings": 18,
     "codeBlocks": 16,
-    "bodyLines": 28
-  },
-  "website/en/capabilities/microphone.md": {
-    "tableRows": 48,
-    "headings": 16,
-    "codeBlocks": 18,
     "bodyLines": 29
   },
+  "website/en/capabilities/microphone.md": {
+    "tableRows": 58,
+    "headings": 19,
+    "codeBlocks": 18,
+    "bodyLines": 30
+  },
   "website/en/capabilities/location.md": {
-    "tableRows": 26,
-    "headings": 6,
+    "tableRows": 38,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/map.md": {
-    "tableRows": 174,
-    "headings": 46,
+    "tableRows": 242,
+    "headings": 53,
     "codeBlocks": 72,
-    "bodyLines": 54
+    "bodyLines": 60
   },
   "website/en/capabilities/sensor.md": {
-    "tableRows": 57,
-    "headings": 16,
+    "tableRows": 75,
+    "headings": 22,
     "codeBlocks": 14,
-    "bodyLines": 26
+    "bodyLines": 29
   },
   "website/en/capabilities/vibrate.md": {
-    "tableRows": 21,
-    "headings": 6,
+    "tableRows": 26,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/en/capabilities/battery.md": {
-    "tableRows": 25,
-    "headings": 6,
+    "tableRows": 36,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/network.md": {
-    "tableRows": 23,
-    "headings": 6,
+    "tableRows": 32,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/clipboard.md": {
-    "tableRows": 21,
-    "headings": 5,
+    "tableRows": 26,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/screen.md": {
-    "tableRows": 25,
-    "headings": 6,
+    "tableRows": 36,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/device.md": {
-    "tableRows": 25,
-    "headings": 6,
+    "tableRows": 37,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/orientation.md": {
-    "tableRows": 22,
-    "headings": 6,
+    "tableRows": 31,
+    "headings": 9,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/brightness.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/keyboard.md": {
-    "tableRows": 26,
-    "headings": 10,
+    "tableRows": 41,
+    "headings": 14,
     "codeBlocks": 6,
-    "bodyLines": 17
+    "bodyLines": 19
   },
   "website/en/capabilities/storage.md": {
-    "tableRows": 44,
-    "headings": 15,
+    "tableRows": 60,
+    "headings": 18,
     "codeBlocks": 22,
-    "bodyLines": 24
+    "bodyLines": 25
   },
   "website/en/capabilities/permission.md": {
-    "tableRows": 25,
-    "headings": 7,
+    "tableRows": 34,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/en/capabilities/notification.md": {
-    "tableRows": 38,
-    "headings": 11,
+    "tableRows": 48,
+    "headings": 14,
     "codeBlocks": 8,
-    "bodyLines": 18
+    "bodyLines": 19
   },
   "website/en/capabilities/share.md": {
-    "tableRows": 25,
-    "headings": 7,
+    "tableRows": 35,
+    "headings": 10,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/en/capabilities/contact.md": {
-    "tableRows": 24,
-    "headings": 6,
+    "tableRows": 34,
+    "headings": 9,
     "codeBlocks": 4,
-    "bodyLines": 15
+    "bodyLines": 16
   },
   "website/en/capabilities/calendar.md": {
-    "tableRows": 52,
-    "headings": 14,
+    "tableRows": 65,
+    "headings": 17,
     "codeBlocks": 12,
-    "bodyLines": 24
+    "bodyLines": 25
   },
   "website/en/capabilities/phone-call.md": {
-    "tableRows": 21,
-    "headings": 6,
+    "tableRows": 26,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/en/capabilities/sms.md": {
-    "tableRows": 21,
-    "headings": 6,
+    "tableRows": 26,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 17
   },
   "website/en/capabilities/app-lifecycle.md": {
-    "tableRows": 42,
-    "headings": 18,
+    "tableRows": 64,
+    "headings": 24,
     "codeBlocks": 16,
-    "bodyLines": 40
+    "bodyLines": 47
   },
   "website/en/capabilities/page-lifecycle.md": {
-    "tableRows": 78,
-    "headings": 27,
+    "tableRows": 127,
+    "headings": 37,
     "codeBlocks": 34,
-    "bodyLines": 69
+    "bodyLines": 80
   },
   "website/en/capabilities/background.md": {
-    "tableRows": 54,
-    "headings": 21,
+    "tableRows": 74,
+    "headings": 25,
     "codeBlocks": 22,
-    "bodyLines": 33
+    "bodyLines": 36
   },
   "website/en/capabilities/fetch.md": {
-    "tableRows": 47,
-    "headings": 7,
+    "tableRows": 121,
+    "headings": 16,
     "codeBlocks": 4,
-    "bodyLines": 16
+    "bodyLines": 38
   },
   "website/en/capabilities/websocket.md": {
-    "tableRows": 38,
-    "headings": 10,
+    "tableRows": 48,
+    "headings": 13,
     "codeBlocks": 10,
-    "bodyLines": 23
+    "bodyLines": 27
   },
   "website/en/capabilities/socket-task.md": {
-    "tableRows": 36,
-    "headings": 11,
+    "tableRows": 47,
+    "headings": 14,
+    "codeBlocks": 12,
+    "bodyLines": 21
+  },
+  "website/en/capabilities/upload.md": {
+    "tableRows": 58,
+    "headings": 13,
+    "codeBlocks": 4,
+    "bodyLines": 19
+  },
+  "website/en/capabilities/download.md": {
+    "tableRows": 53,
+    "headings": 13,
+    "codeBlocks": 4,
+    "bodyLines": 19
+  },
+  "website/en/capabilities/data-channel.md": {
+    "tableRows": 45,
+    "headings": 14,
+    "codeBlocks": 8,
+    "bodyLines": 20
+  },
+  "website/en/capabilities/cookie.md": {
+    "tableRows": 46,
+    "headings": 13,
     "codeBlocks": 12,
     "bodyLines": 20
   },
-  "website/en/capabilities/upload.md": {
-    "tableRows": 36,
-    "headings": 8,
-    "codeBlocks": 4,
-    "bodyLines": 16
-  },
-  "website/en/capabilities/download.md": {
-    "tableRows": 34,
-    "headings": 8,
-    "codeBlocks": 4,
-    "bodyLines": 16
-  },
-  "website/en/capabilities/data-channel.md": {
-    "tableRows": 33,
-    "headings": 10,
-    "codeBlocks": 8,
-    "bodyLines": 19
-  },
-  "website/en/capabilities/cookie.md": {
-    "tableRows": 35,
-    "headings": 10,
-    "codeBlocks": 12,
-    "bodyLines": 19
-  },
   "website/en/capabilities/auth.md": {
-    "tableRows": 33,
-    "headings": 11,
+    "tableRows": 48,
+    "headings": 14,
     "codeBlocks": 12,
-    "bodyLines": 23
+    "bodyLines": 24
   },
   "website/en/capabilities/analytics.md": {
-    "tableRows": 20,
-    "headings": 7,
+    "tableRows": 28,
+    "headings": 10,
     "codeBlocks": 6,
-    "bodyLines": 16
+    "bodyLines": 17
   },
   "website/en/capabilities/log.md": {
-    "tableRows": 30,
-    "headings": 9,
+    "tableRows": 40,
+    "headings": 12,
     "codeBlocks": 10,
-    "bodyLines": 18
+    "bodyLines": 19
   },
   "website/en/capabilities/bluetooth.md": {
-    "tableRows": 101,
-    "headings": 28,
+    "tableRows": 143,
+    "headings": 34,
     "codeBlocks": 38,
-    "bodyLines": 36
+    "bodyLines": 42
   },
   "website/en/capabilities/nfc.md": {
-    "tableRows": 72,
-    "headings": 18,
+    "tableRows": 102,
+    "headings": 22,
     "codeBlocks": 16,
-    "bodyLines": 27
+    "bodyLines": 31
   },
   "website/en/capabilities/biometric.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 16
   },
   "website/en/capabilities/face-id.md": {
-    "tableRows": 20,
-    "headings": 6,
+    "tableRows": 25,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 17
   },
   "website/en/capabilities/payment.md": {
-    "tableRows": 32,
-    "headings": 8,
+    "tableRows": 48,
+    "headings": 12,
     "codeBlocks": 4,
-    "bodyLines": 16
+    "bodyLines": 18
   },
   "website/en/capabilities/login.md": {
-    "tableRows": 26,
-    "headings": 7,
+    "tableRows": 36,
+    "headings": 10,
     "codeBlocks": 4,
-    "bodyLines": 16
+    "bodyLines": 17
   },
   "website/en/capabilities/qr-code.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/file-system.md": {
-    "tableRows": 159,
-    "headings": 36,
+    "tableRows": 208,
+    "headings": 41,
     "codeBlocks": 56,
-    "bodyLines": 43
+    "bodyLines": 46
   },
   "website/en/capabilities/archive.md": {
-    "tableRows": 26,
-    "headings": 7,
+    "tableRows": 36,
+    "headings": 10,
     "codeBlocks": 4,
-    "bodyLines": 16
+    "bodyLines": 17
   },
   "website/en/capabilities/shortcut.md": {
-    "tableRows": 19,
-    "headings": 5,
+    "tableRows": 24,
+    "headings": 7,
     "codeBlocks": 4,
     "bodyLines": 15
   },
   "website/en/capabilities/in-app-purchase.md": {
-    "tableRows": 25,
-    "headings": 7,
+    "tableRows": 35,
+    "headings": 10,
     "codeBlocks": 4,
-    "bodyLines": 16
+    "bodyLines": 17
   },
   "website/en/capabilities/mini-program.md": {
-    "tableRows": 30,
-    "headings": 13,
+    "tableRows": 43,
+    "headings": 17,
     "codeBlocks": 6,
-    "bodyLines": 21
+    "bodyLines": 22
   },
   "website/en/capabilities/embedded.md": {
-    "tableRows": 23,
-    "headings": 10,
+    "tableRows": 33,
+    "headings": 13,
     "codeBlocks": 4,
-    "bodyLines": 18
+    "bodyLines": 19
   },
   "website/en/capabilities/live.md": {
-    "tableRows": 44,
-    "headings": 19,
+    "tableRows": 72,
+    "headings": 26,
     "codeBlocks": 26,
-    "bodyLines": 28
+    "bodyLines": 34
   },
   "website/en/capabilities/extension.md": {
-    "tableRows": 20,
-    "headings": 10,
+    "tableRows": 25,
+    "headings": 12,
     "codeBlocks": 4,
     "bodyLines": 20
   },
   "website/en/capabilities/update.md": {
-    "tableRows": 34,
-    "headings": 15,
-    "codeBlocks": 14,
-    "bodyLines": 23
-  },
-  "website/en/capabilities/album.md": {
-    "tableRows": 50,
-    "headings": 13,
-    "codeBlocks": 12,
-    "bodyLines": 22
-  },
-  "website/en/capabilities/worker.md": {
-    "tableRows": 31,
-    "headings": 14,
-    "codeBlocks": 10,
-    "bodyLines": 23
-  },
-  "website/en/capabilities/address.md": {
-    "tableRows": 29,
-    "headings": 6,
-    "codeBlocks": 4,
-    "bodyLines": 15
-  },
-  "website/en/capabilities/wifi.md": {
-    "tableRows": 34,
-    "headings": 11,
-    "codeBlocks": 10,
-    "bodyLines": 19
-  },
-  "website/en/capabilities/we-run.md": {
-    "tableRows": 24,
-    "headings": 6,
-    "codeBlocks": 4,
-    "bodyLines": 16
-  },
-  "website/en/capabilities/canvas.md": {
-    "tableRows": 115,
-    "headings": 21,
-    "codeBlocks": 14,
-    "bodyLines": 31
-  },
-  "website/en/capabilities/element-query.md": {
-    "tableRows": 87,
+    "tableRows": 46,
     "headings": 18,
     "codeBlocks": 14,
-    "bodyLines": 27
-  },
-  "website/en/capabilities/intersection.md": {
-    "tableRows": 67,
-    "headings": 16,
-    "codeBlocks": 12,
-    "bodyLines": 24
-  },
-  "website/en/capabilities/media-query.md": {
-    "tableRows": 38,
-    "headings": 11,
-    "codeBlocks": 8,
-    "bodyLines": 19
-  },
-  "website/en/capabilities/video.md": {
-    "tableRows": 50,
-    "headings": 18,
-    "codeBlocks": 22,
     "bodyLines": 26
   },
-  "website/en/capabilities/audio.md": {
-    "tableRows": 51,
-    "headings": 16,
-    "codeBlocks": 20,
-    "bodyLines": 24
-  },
-  "website/en/capabilities/live-pusher.md": {
-    "tableRows": 38,
-    "headings": 16,
-    "codeBlocks": 22,
+  "website/en/capabilities/album.md": {
+    "tableRows": 74,
+    "headings": 18,
+    "codeBlocks": 12,
     "bodyLines": 25
   },
-  "website/en/capabilities/ad.md": {
-    "tableRows": 61,
-    "headings": 14,
-    "codeBlocks": 10,
-    "bodyLines": 22
-  },
-  "website/en/capabilities/privacy.md": {
-    "tableRows": 31,
-    "headings": 12,
-    "codeBlocks": 12,
-    "bodyLines": 24
-  },
-  "website/en/capabilities/performance.md": {
-    "tableRows": 52,
-    "headings": 14,
-    "codeBlocks": 14,
-    "bodyLines": 22
-  },
-  "website/en/capabilities/preload.md": {
-    "tableRows": 37,
+  "website/en/capabilities/worker.md": {
+    "tableRows": 42,
     "headings": 17,
-    "codeBlocks": 12,
-    "bodyLines": 24
-  },
-  "website/en/capabilities/image-edit.md": {
-    "tableRows": 29,
-    "headings": 8,
-    "codeBlocks": 8,
-    "bodyLines": 17
-  },
-  "website/en/capabilities/socket.md": {
-    "tableRows": 18,
-    "headings": 5,
-    "codeBlocks": 4,
-    "bodyLines": 15
-  },
-  "website/en/capabilities/media-processing.md": {
-    "tableRows": 48,
-    "headings": 14,
     "codeBlocks": 10,
-    "bodyLines": 22
+    "bodyLines": 26
   },
-  "website/en/capabilities/screen-capture.md": {
-    "tableRows": 30,
-    "headings": 10,
-    "codeBlocks": 12,
+  "website/en/capabilities/address.md": {
+    "tableRows": 44,
+    "headings": 9,
+    "codeBlocks": 4,
+    "bodyLines": 16
+  },
+  "website/en/capabilities/wifi.md": {
+    "tableRows": 51,
+    "headings": 15,
+    "codeBlocks": 10,
     "bodyLines": 20
   },
-  "website/en/capabilities/cache-manager.md": {
-    "tableRows": 62,
-    "headings": 21,
-    "codeBlocks": 24,
-    "bodyLines": 29
-  },
-  "website/en/capabilities/idle.md": {
-    "tableRows": 35,
-    "headings": 14,
-    "codeBlocks": 8,
-    "bodyLines": 21
-  },
-  "website/en/capabilities/window.md": {
-    "tableRows": 25,
-    "headings": 11,
-    "codeBlocks": 6,
-    "bodyLines": 21
-  },
-  "website/en/capabilities/navigation-guard.md": {
-    "tableRows": 25,
-    "headings": 12,
-    "codeBlocks": 8,
-    "bodyLines": 21
-  },
-  "website/en/capabilities/ar.md": {
-    "tableRows": 43,
-    "headings": 11,
-    "codeBlocks": 8,
-    "bodyLines": 21
-  },
-  "website/en/capabilities/beacon.md": {
-    "tableRows": 18,
-    "headings": 5,
+  "website/en/capabilities/we-run.md": {
+    "tableRows": 34,
+    "headings": 9,
     "codeBlocks": 4,
-    "bodyLines": 16
-  },
-  "website/en/capabilities/local-service.md": {
-    "tableRows": 47,
-    "headings": 14,
-    "codeBlocks": 16,
-    "bodyLines": 23
-  },
-  "website/en/capabilities/translation.md": {
-    "tableRows": 28,
-    "headings": 8,
-    "codeBlocks": 8,
-    "bodyLines": 18
-  },
-  "website/en/capabilities/poster.md": {
-    "tableRows": 24,
-    "headings": 7,
-    "codeBlocks": 6,
     "bodyLines": 17
   },
-  "website/en/capabilities/device-capability.md": {
-    "tableRows": 21,
-    "headings": 7,
+  "website/en/capabilities/canvas.md": {
+    "tableRows": 196,
+    "headings": 28,
+    "codeBlocks": 14,
+    "bodyLines": 42
+  },
+  "website/en/capabilities/element-query.md": {
+    "tableRows": 136,
+    "headings": 25,
+    "codeBlocks": 14,
+    "bodyLines": 34
+  },
+  "website/en/capabilities/intersection.md": {
+    "tableRows": 92,
+    "headings": 21,
+    "codeBlocks": 12,
+    "bodyLines": 27
+  },
+  "website/en/capabilities/media-query.md": {
+    "tableRows": 59,
+    "headings": 16,
+    "codeBlocks": 8,
+    "bodyLines": 23
+  },
+  "website/en/capabilities/video.md": {
+    "tableRows": 69,
+    "headings": 22,
+    "codeBlocks": 22,
+    "bodyLines": 29
+  },
+  "website/en/capabilities/audio.md": {
+    "tableRows": 71,
+    "headings": 19,
+    "codeBlocks": 20,
+    "bodyLines": 26
+  },
+  "website/en/capabilities/live-pusher.md": {
+    "tableRows": 54,
+    "headings": 19,
+    "codeBlocks": 22,
+    "bodyLines": 27
+  },
+  "website/en/capabilities/ad.md": {
+    "tableRows": 100,
+    "headings": 21,
+    "codeBlocks": 10,
+    "bodyLines": 29
+  },
+  "website/en/capabilities/privacy.md": {
+    "tableRows": 46,
+    "headings": 16,
+    "codeBlocks": 12,
+    "bodyLines": 28
+  },
+  "website/en/capabilities/performance.md": {
+    "tableRows": 76,
+    "headings": 19,
+    "codeBlocks": 14,
+    "bodyLines": 28
+  },
+  "website/en/capabilities/preload.md": {
+    "tableRows": 55,
+    "headings": 22,
+    "codeBlocks": 12,
+    "bodyLines": 29
+  },
+  "website/en/capabilities/image-edit.md": {
+    "tableRows": 38,
+    "headings": 11,
+    "codeBlocks": 8,
+    "bodyLines": 20
+  },
+  "website/en/capabilities/socket.md": {
+    "tableRows": 46,
+    "headings": 10,
+    "codeBlocks": 4,
+    "bodyLines": 20
+  },
+  "website/en/capabilities/media-processing.md": {
+    "tableRows": 78,
+    "headings": 20,
+    "codeBlocks": 10,
+    "bodyLines": 23
+  },
+  "website/en/capabilities/screen-capture.md": {
+    "tableRows": 41,
+    "headings": 13,
+    "codeBlocks": 12,
+    "bodyLines": 23
+  },
+  "website/en/capabilities/cache-manager.md": {
+    "tableRows": 93,
+    "headings": 26,
+    "codeBlocks": 24,
+    "bodyLines": 34
+  },
+  "website/en/capabilities/idle.md": {
+    "tableRows": 50,
+    "headings": 18,
+    "codeBlocks": 8,
+    "bodyLines": 24
+  },
+  "website/en/capabilities/window.md": {
+    "tableRows": 33,
+    "headings": 14,
     "codeBlocks": 6,
-    "bodyLines": 16
+    "bodyLines": 23
+  },
+  "website/en/capabilities/navigation-guard.md": {
+    "tableRows": 34,
+    "headings": 15,
+    "codeBlocks": 8,
+    "bodyLines": 24
+  },
+  "website/en/capabilities/ar.md": {
+    "tableRows": 67,
+    "headings": 16,
+    "codeBlocks": 8,
+    "bodyLines": 24
+  },
+  "website/en/capabilities/beacon.md": {
+    "tableRows": 60,
+    "headings": 16,
+    "codeBlocks": 12,
+    "bodyLines": 27
+  },
+  "website/en/capabilities/local-service.md": {
+    "tableRows": 66,
+    "headings": 18,
+    "codeBlocks": 16,
+    "bodyLines": 27
+  },
+  "website/en/capabilities/translation.md": {
+    "tableRows": 37,
+    "headings": 11,
+    "codeBlocks": 8,
+    "bodyLines": 21
+  },
+  "website/en/capabilities/poster.md": {
+    "tableRows": 32,
+    "headings": 10,
+    "codeBlocks": 6,
+    "bodyLines": 19
+  },
+  "website/en/capabilities/device-capability.md": {
+    "tableRows": 29,
+    "headings": 10,
+    "codeBlocks": 6,
+    "bodyLines": 18
   },
   "website/en/capabilities/webassembly.md": {
-    "tableRows": 45,
-    "headings": 15,
+    "tableRows": 79,
+    "headings": 22,
     "codeBlocks": 6,
-    "bodyLines": 39
+    "bodyLines": 61
   },
   "website/en/capabilities/keep-screen-on.md": {
-    "tableRows": 20,
-    "headings": 6,
+    "tableRows": 25,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 17
   },
   "website/en/capabilities/document-preview.md": {
-    "tableRows": 20,
-    "headings": 6,
+    "tableRows": 25,
+    "headings": 8,
     "codeBlocks": 4,
     "bodyLines": 16
   },

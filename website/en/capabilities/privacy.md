@@ -116,6 +116,37 @@ web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `PrivacyAPI`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `getSetting` | `getSetting(): Promise<CapResult<PrivacySetting>>` | 查询隐私授权状态（wx.getPrivacySetting） |
+| `openContract` | `openContract(): Promise<CapResult<void>>` | 打开隐私协议页面（wx.openPrivacyContract） |
+| `requireAuthorize` | `requireAuthorize(): Promise<CapResult<boolean>>` | 主动触发隐私授权弹窗（wx.requirePrivacyAuthorize）。 |
+| `onNeedAuthorization` | `onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void` | 订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。 用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。 |
+
+### `PrivacySetting`
+
+★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract /
+requirePrivacyAuthorize / onNeedPrivacyAuthorization）。
+《个人信息保护法》+ 微信隐私协议合规的刚需：开发者需在用户触发隐私授权时弹协议、可跳转协议页、可主动触发授权。
+web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实降级（常驻宿主桥）。
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `needAuthorization` | `boolean` | 是否需要用户授权（用户未同意 → true） |
+| `privacyContractName` | `string` | 隐私协议名称（如《用户隐私保护指引》） |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts

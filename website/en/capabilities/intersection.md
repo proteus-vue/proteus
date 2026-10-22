@@ -168,6 +168,51 @@ disconnect(): void
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Referenced types
+
+### `IntersectionOptions`
+
+交叉观察配置（wx.createIntersectionObserver options）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `thresholds` | `number[]` | 相交阈值数组（缺省 [0]） |
+| `initialRatio` | `number` | 初始相交比例（用于立即上报初始态） |
+| `observeAll` | `boolean` | 是否同时观察所有满足选择器的元素 |
+
+### `IntersectionHandle`
+
+交叉观察句柄（IntersectionHandle.observe / relativeTo* / disconnect）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `relativeTo` | `relativeTo(selector: string, margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle` | 指定参照元素（相对该元素观察）。 |
+| `relativeToViewport` | `relativeToViewport(margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle` | 以显示区域（视口）为参照。 |
+| `observe` | `observe(targetSelector: string, cb: (result: IntersectionResult) => void): IntersectionHandle` | 开始观察目标元素。 |
+| `disconnect` | `disconnect(): void` | 停止观察（释放） |
+
+### `IntersectionResult`
+
+交叉观察结果（IntersectionObserver 回调载荷——对齐官方字段）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `id` | `string` | 元素 id |
+| `dataset` | `Record<string, unknown>` | dataset 数据 |
+| `intersectionRatio` | `number` | 相交比例（0–1） |
+| `intersectionRect` | `{ left: number; top: number; right: number; bottom: number; width: number; height: number }` | 相交区域 |
+| `boundingClientRect` | `ElementRect` | 目标边界 |
+| `relativeRect` | `{ left: number; top: number; right: number; bottom: number; width: number; height: number }` | 相对参照物的区域 |
+| `time` | `number` | 时间戳 |
+
+### `CapError`
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `code` | `string` | — |
+| `message` | `string` | — |
+| `cause` | `unknown` | — |
+
 ## Usage
 
 ```ts
