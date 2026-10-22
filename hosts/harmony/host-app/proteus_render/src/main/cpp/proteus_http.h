@@ -141,7 +141,7 @@ inline LastLimitDiag& lastLimitDiag() {
   return d;
 }
 
-/* ══════════════ ★★★#1167：HTTPDNS 的**鸿蒙落点取证**（仅探针启用，生产零影响） ══════════════
+/* ══════════════ ★★★#1169：HTTPDNS 的**鸿蒙落点取证**（仅探针启用，生产零影响） ══════════════
  *
  * 【为什么要这段（用户「继续」后接着收 HTTPDNS）】
  *   `rcp.h` 的 `Rcp_DnsConfiguration` 提供**四条**域名解析定制路径：
@@ -176,7 +176,7 @@ inline DnsProbe& dnsProbe() {
 namespace detail {
 
 /**
- * ★★★#1167：**探针用的假解析器**（`RCP_DNS_RULE_DYNAMIC` 的回调）。
+ * ★★★#1169：**探针用的假解析器**（`RCP_DNS_RULE_DYNAMIC` 的回调）。
  *
  * 形状与 Android `okhttp3.Dns.lookup` 同构：`(host, port) → IP 地址链`。
  * · `forcedIp` 非空 ⇒ 返回它（用于"解析到不可达 IP ⇒ 请求必失败"的因果实验）；
@@ -510,7 +510,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    */
   cfg.tracingConfiguration.collectTimeInfo = true;
   /**
-   * ★★★#1167：**只有探针安装时才接自定义 DNS**（生产默认走系统 DNS，行为一字未变）。
+   * ★★★#1169：**只有探针安装时才接自定义 DNS**（生产默认走系统 DNS，行为一字未变）。
    *   `RCP_DNS_RULE_DYNAMIC` 的回调形状 = `(host, port) → Rcp_IpAddress*`，
    *   与 Android `Dns.lookup(host) → List<InetAddress>` **语义同构** ⇒ HTTPDNS 可两端同一套语义。
    * ★`dnsRule` 必须活到请求结束 ⇒ 声明在这里（与 `cfg` 同栈帧），不放进 if 块内。

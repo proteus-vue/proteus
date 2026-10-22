@@ -1,5 +1,5 @@
 // tests/harmony-dns-inject.test.ts
-// ★★★#1167：**鸿蒙的自定义 DNS 注入点真的能工作**——HTTPDNS 的鸿蒙落点已实证。
+// ★★★#1169：**鸿蒙的自定义 DNS 注入点真的能工作**——HTTPDNS 的鸿蒙落点已实证。
 //
 // 【这条判据回答什么（矩阵里最后一项真缺口的前置）】
 //   矩阵写「HTTPDNS 业务化：Android `Dns` seam 已落 #1160 / 鸿蒙有现成落点 #1166 / iOS 待定」。
@@ -38,7 +38,7 @@ type Probe = {
   dns?: { installed?: boolean; calls?: number; host?: string; port?: number; forcedIp?: string }
 }
 
-describe('★★★#1167 鸿蒙自定义 DNS 注入点（HTTPDNS 的鸿蒙落点）', () => {
+describe('★★★#1169 鸿蒙自定义 DNS 注入点（HTTPDNS 的鸿蒙落点）', () => {
   it('★★★注入侧：假解析器被调用 1 次（host/port 正确），且请求因不可达 IP 失败', () => {
     expect(fs.existsSync(path.join(ROOT, INJECT)), `缺证据 ${INJECT}（跑 run-http-probe.sh --dns-ip 203.0.113.1）`).toBe(true)
     const d = JSON.parse(read(INJECT)) as Probe

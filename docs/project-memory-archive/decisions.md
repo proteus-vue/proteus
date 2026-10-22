@@ -12403,3 +12403,50 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 诚实边界**：a) **这不是 Tauri**——原生 `NSWindow + NSOpenGLView`；Tauri 2 的窗口内容是 WKWebView，把这层 NSView 挂进它的 `contentView` 是**独立风险（B2 未做）**：性能面同源、**挂载可行性不同源**，不可外推；b) **无 UI 叠加**：只测"画布贴满窗口"，没测检查器/参考线/录制叠加；c) 本机有并发负载（p95 2.2–7.3 波动来源）；d) 合成源，真实投屏流未测（C）。
 **⑦ 产物**：`docs/proteus-studio-poc/02-window-present/`（`window_harness.m` 采样器 + `results/readout-run{1,2,3}-30s.json` 入库）。
 **⑧ 下一步**：B2（Tauri 2 承载：把 NSView 挂进 WKWebView 窗口 + 叠加一层 HTML UI，量"原生画面 + Web UI 叠加"是否可行）；C（真机投屏流）。
+
+1169. **★★★【★编号勘误：原写 #1167，与并发会话的 Studio PoC 条撞号 ⇒ 改为 #1169】HTTPDNS 的鸿蒙落点已真机实证——`RCP_DNS_RULE_DYNAMIC` 与 Android `Dns` 语义同构（门面可两端同一套） · 决策**（2026-10-22 · 承接 #1166 的头文件取证）:
+
+**背景**：矩阵里 HTTPDNS 是 useFetch 最后一项真缺口。#1166 只做到头文件取证
+（`Rcp_DnsConfiguration` 有 DoH / DnsServers / Static / Dynamic 四条路），本轮把
+`RCP_DNS_RULE_DYNAMIC` 真接到宿主探针上并**真机双向对照**。
+
+**★头文件取证（决定架构的那一条）**
+`Rcp_DynamicDnsRuleFunction` 签名 = `Rcp_IpAddress* (*)(const char* host, uint16_t port)`
+—— 与 Android `okhttp3.Dns.lookup(hostname) → List<InetAddress>` **语义同构**：
+都是"框架调我们给的函数要 IP"。
+⇒ **HTTPDNS 的业务 API 可以两端同一套语义**，不必为鸿蒙单独设计一套"解析器抽象"。
+（对比 #1166 里发现的 DoH：那只是"给一个 DoH 服务端 URL"，属另一条路，不适合做统一门面。）
+
+**★★★真机双向对照（因果闭环，不是"碰巧失败"）**
+· **注入**：假解析器把 `www.cloudflare.com` 强制解析到 `203.0.113.1`（TEST-NET-3，不可达）
+  ⇒ `dns.calls=1`（host=`www.cloudflare.com` / port=443 都对）+ 请求**失败**（`timeout: RCP 1007900028`）；
+· **基线**：不注入 ⇒ `dns.calls=0` + 请求**成功**（200，且响应体仍回显 `http=http/2`）。
+证据：`hosts/harmony/results/http-probe-dns-inject.json` / `-dns-baseline.json`。
+★为什么必须双向：只有"注入后失败"可能是巧合（网络本来就不通）；配上"基线成功"才排除了这种解释。
+
+**★宿主实现（生产零影响，这是一条硬约束）**
+· `proteus_http.h`：`DnsProbe` + `probeDnsLookup` 回调；`cfg.dnsConfiguration.dnsRules`
+  **只在 `dnsProbe().installed` 时**接 `RCP_DNS_RULE_DYNAMIC`（默认不碰，走系统 DNS）；
+· `http_probe.h`：新增 `dnsForceIp` 入参 + `dns` 回执读数（**必须拼在两条回执路径上**——
+  与 #1117 的 `limit` 同款教训：`body = head` 会整串覆盖）；
+· `EntryAbility`/`Superapp`：`--ps dnsIp` → `AppStorage` → 探针参数；
+· `run-http-probe.sh`：新增 `--dns-ip`。
+★基线证据 `calls=0` 即证"生产仍走系统 DNS"——**不是靠自查，是靠证据**。
+
+**★判据** `tests/harmony-dns-inject.test.ts` **3/3**
+（注入侧因果 / 基线侧对照 / 源码必须把注入收在 installed 守卫后）；
+**破坏性验证 4/4 全红**：`calls→0` · `ok→true` · `host` 改掉 · 源码去掉 installed 守卫。
+
+**诚实边界**
+· 证明的是**注入点可用**，**不是**"HTTPDNS 已实现"——门面、线格式 tag、解析结果缓存、
+  失败策略（解析失败是否回退系统 DNS：**不得静默回退**）都还没做；
+· 只验 `RCP_DNS_RULE_DYNAMIC`；DoH（`Rcp_DnsOverHttps`）与 Static/DnsServers 规则**未实测**；
+· iOS 侧落点仍未定（自建解析或 `Network.framework`）⇒ 三端门面要能表达"两端函数式 + 一端待定"。
+
+**★过程记录（一次小事故，值得记）**：`Superapp.ets` 已 998 行逼近 1000 硬上限，
+第一版加了 4 行破线 ⇒ 按纪律**不加行**（改成单行内联传参），而不是压注释或抬基线。
+中间还因连续小编辑把 `payload` 声明搞重了一次——**改逼近上限的文件时，先看清整段再动手**。
+
+**下一步**：① `fetch: { httpDns }` 门面 + 线格式 tag（两端同一套语义：`(host) → IP[]`）
+② 解析结果缓存与 TTL ③ 解析失败策略（显式报错 vs 回退系统 DNS——**默认不回退**，要回退由业务显式开）
+④ 真机对照 DoH 路径（它是另一条可用的路，优先级低于 Dynamic）⑤ iOS 落点定案。

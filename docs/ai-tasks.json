@@ -2909,7 +2909,7 @@
     },
     {
       "id": "T-harmony-httpdns-doh",
-      "title": "HTTPDNS 业务化：接入点已三端有二（Android `Dns` seam · 鸿蒙 `RCP_DNS_RULE_DYNAMIC` **#1167 真机实证** · iOS 待定）——剩门面 + 线格式 + 缓存/降级",
+      "title": "HTTPDNS 业务化：接入点已三端有二（Android `Dns` seam · 鸿蒙 `RCP_DNS_RULE_DYNAMIC` **#1169 真机实证** · iOS 待定）——剩门面 + 线格式 + 缓存/降级",
       "type": "capability",
       "status": "planned",
       "owner": null,
@@ -2925,7 +2925,7 @@
       "related": [
         "T-android-okhttp-transport"
       ],
-      "note": "【planned · #1166 头文件取证】查 `$PROTEUS_HMS_SDK/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h` 发现 RCP **内置 DoH**：`typedef struct Rcp_DnsOverHttps { const char *url; bool skipCertificatesValidation; }`，注释为「DNS configuration on HTTPS. If set, the address resolved by the DOH dns server is preferred.」⇒ 矩阵里「鸿蒙需自建解析器或 Network.framework」这个工程量判断**对鸿蒙是错的**——它只需配一个 `doh.url`。★这条与 Android 的 `Dns` seam（#1160）形成两端对照：Android 注入解析函数、鸿蒙注入 DoH URL，语义不同但都能实现 HTTPDNS。★**待办**：① 实测 DoH 是否真的生效（需可达的 DoH 服务端 + 真机；当前只做了头文件取证，不能宣称\"已具备\"）；② 线格式设计要能表达两端不同的注入形态（Android 是 resolver 函数、鸿蒙是 URL）；③ `skipCertificatesValidation` **不要默认打开**（那是关证书校验，安全风险）。★注意：#1166 同时发现 `Rcp_DnsOverHttps` 的存在**不**等于\"鸿蒙已在用 DoH\"——默认不配置就是系统 DNS。 ★★★**#1167 已真机实证（本轮重大进展，定性从\"只有 DoH\"改为\"与 Android 同构\"）**：`rcp.h` 的 `Rcp_DnsConfiguration` 有**四条**定制路径（DoH / DnsServers / Static / **Dynamic**），其中 `RCP_DNS_RULE_DYNAMIC` 的 `Rcp_DynamicDnsRuleFunction` 签名 = `Rcp_IpAddress* (*)(const char* host, uint16_t port)` —— 与 Android `okhttp3.Dns.lookup(hostname) → List<InetAddress>` **语义同构**（都是\"框架调我们给的函数要 IP\"）⇒ **HTTPDNS 的业务 API 可以两端同一套语义**，不必为鸿蒙单独设计解析器抽象。★**真机双向对照（因果闭环，不是\"碰巧失败\"）**：注入假解析器把 `www.cloudflare.com` 强制解析到 `203.0.113.1`（TEST-NET-3 不可达）⇒ `dns.calls=1`（host/port 都对）+ 请求**失败**（RCP 超时）；不注入 ⇒ `dns.calls=0` + 请求**成功**（200 且仍是 h2）。证据：`hosts/harmony/results/http-probe-dns-inject.json` / `-dns-baseline.json`；判据 `tests/harmony-dns-inject.test.ts` **3/3**（+ 破坏性验证 4/4：calls→0 / ok→true / host 改掉 / 源码去掉 installed 守卫）。★**生产零影响**：DNS 注入收在 `dnsProbe().installed` 之后，基线证据 `calls=0` 即证默认仍走系统 DNS。★**本轮剩余**（业务化才完成）：① 设计 `fetch: { httpDns }` 门面 + 线格式 tag（要能表达 Android=解析函数 / 鸿蒙=同构函数 / iOS=待定）② 缓存与降级策略（解析失败怎么办、TTL、是否回退系统 DNS——**不得静默回退**）③ iOS 侧落点未定 ④ DoH（`Rcp_DnsOverHttps`）与 Static 规则仍未实测（它们是另一条可用的路，优先级低于 Dynamic）。"
+      "note": "【planned · #1166 头文件取证】查 `$PROTEUS_HMS_SDK/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h` 发现 RCP **内置 DoH**：`typedef struct Rcp_DnsOverHttps { const char *url; bool skipCertificatesValidation; }`，注释为「DNS configuration on HTTPS. If set, the address resolved by the DOH dns server is preferred.」⇒ 矩阵里「鸿蒙需自建解析器或 Network.framework」这个工程量判断**对鸿蒙是错的**——它只需配一个 `doh.url`。★这条与 Android 的 `Dns` seam（#1160）形成两端对照：Android 注入解析函数、鸿蒙注入 DoH URL，语义不同但都能实现 HTTPDNS。★**待办**：① 实测 DoH 是否真的生效（需可达的 DoH 服务端 + 真机；当前只做了头文件取证，不能宣称\"已具备\"）；② 线格式设计要能表达两端不同的注入形态（Android 是 resolver 函数、鸿蒙是 URL）；③ `skipCertificatesValidation` **不要默认打开**（那是关证书校验，安全风险）。★注意：#1166 同时发现 `Rcp_DnsOverHttps` 的存在**不**等于\"鸿蒙已在用 DoH\"——默认不配置就是系统 DNS。 ★★★**#1169 已真机实证（本轮重大进展，定性从\"只有 DoH\"改为\"与 Android 同构\"）**：`rcp.h` 的 `Rcp_DnsConfiguration` 有**四条**定制路径（DoH / DnsServers / Static / **Dynamic**），其中 `RCP_DNS_RULE_DYNAMIC` 的 `Rcp_DynamicDnsRuleFunction` 签名 = `Rcp_IpAddress* (*)(const char* host, uint16_t port)` —— 与 Android `okhttp3.Dns.lookup(hostname) → List<InetAddress>` **语义同构**（都是\"框架调我们给的函数要 IP\"）⇒ **HTTPDNS 的业务 API 可以两端同一套语义**，不必为鸿蒙单独设计解析器抽象。★**真机双向对照（因果闭环，不是\"碰巧失败\"）**：注入假解析器把 `www.cloudflare.com` 强制解析到 `203.0.113.1`（TEST-NET-3 不可达）⇒ `dns.calls=1`（host/port 都对）+ 请求**失败**（RCP 超时）；不注入 ⇒ `dns.calls=0` + 请求**成功**（200 且仍是 h2）。证据：`hosts/harmony/results/http-probe-dns-inject.json` / `-dns-baseline.json`；判据 `tests/harmony-dns-inject.test.ts` **3/3**（+ 破坏性验证 4/4：calls→0 / ok→true / host 改掉 / 源码去掉 installed 守卫）。★**生产零影响**：DNS 注入收在 `dnsProbe().installed` 之后，基线证据 `calls=0` 即证默认仍走系统 DNS。★**本轮剩余**（业务化才完成）：① 设计 `fetch: { httpDns }` 门面 + 线格式 tag（要能表达 Android=解析函数 / 鸿蒙=同构函数 / iOS=待定）② 缓存与降级策略（解析失败怎么办、TTL、是否回退系统 DNS——**不得静默回退**）③ iOS 侧落点未定 ④ DoH（`Rcp_DnsOverHttps`）与 Static 规则仍未实测（它们是另一条可用的路，优先级低于 Dynamic）。"
     },
     {
       "id": "T-studio-poc-a-fbo",
@@ -2947,7 +2947,7 @@
       "related": [
         "T-gates-cat-predicates"
       ],
-      "note": "【done · 决策 #1167（2026-10-22）】承接 proteus-studio-plan 阶段 2「libmpv 离屏 FBO 未验证」——Studio 主线回归第一单。★选型变更（实测迫使，经用户同意）：libmpv 在本机装不上——github HTTPS 不通（curl 000）+ 独立前缀不吃瓶装包（bottle needs HOMEBREW_CELLAR=/opt/homebrew/Cellar）+ 瓶装解包被沙箱挡（sandbox_apply not permitted）。改 ffmpeg + VideoToolbox：设备投屏要解码器不是播放器。★判据先注册：P1 帧间隔 p99≤50ms · P2 渲染段 p95≤5ms · P3 丢帧≤1% · P4 CPU≤40% 单核。★实测（M1/macOS 26.5/GL Apple M1 Metal 4.1）：30.01–30.03 fps · 0 丢帧/1801 帧 · 单核 5.2% · 帧间隔 p99 36.3ms ⇒ 管线成立。★P2 判不了：三轮 render p95 = 9.23/3.91/2.66（3.5× 漂移），并发负载 + glFinish 墙钟同步是主因；上传只占 0.58ms。要可判需 GPU timer query + 静机 + 流水线化（后者改语义，须重注册判据）。★P4′ 判据本身写错：「≤纯解码 1.3×」分母不含渲染 = 要求渲染零成本；绝对线（≤40%）有效。★产物：docs/proteus-studio-poc/（采样器 + 一键复跑 + 全部读数 JSON 入库）。下一步 B（Tauri 上屏）/ v2（流水线）/ C（真机投屏流）。"
+      "note": "【done · 决策 #1169（2026-10-22）】承接 proteus-studio-plan 阶段 2「libmpv 离屏 FBO 未验证」——Studio 主线回归第一单。★选型变更（实测迫使，经用户同意）：libmpv 在本机装不上——github HTTPS 不通（curl 000）+ 独立前缀不吃瓶装包（bottle needs HOMEBREW_CELLAR=/opt/homebrew/Cellar）+ 瓶装解包被沙箱挡（sandbox_apply not permitted）。改 ffmpeg + VideoToolbox：设备投屏要解码器不是播放器。★判据先注册：P1 帧间隔 p99≤50ms · P2 渲染段 p95≤5ms · P3 丢帧≤1% · P4 CPU≤40% 单核。★实测（M1/macOS 26.5/GL Apple M1 Metal 4.1）：30.01–30.03 fps · 0 丢帧/1801 帧 · 单核 5.2% · 帧间隔 p99 36.3ms ⇒ 管线成立。★P2 判不了：三轮 render p95 = 9.23/3.91/2.66（3.5× 漂移），并发负载 + glFinish 墙钟同步是主因；上传只占 0.58ms。要可判需 GPU timer query + 静机 + 流水线化（后者改语义，须重注册判据）。★P4′ 判据本身写错：「≤纯解码 1.3×」分母不含渲染 = 要求渲染零成本；绝对线（≤40%）有效。★产物：docs/proteus-studio-poc/（采样器 + 一键复跑 + 全部读数 JSON 入库）。下一步 B（Tauri 上屏）/ v2（流水线）/ C（真机投屏流）。"
     },
     {
       "id": "T-studio-poc-b1-window",
@@ -2969,7 +2969,7 @@
       "related": [
         "T-studio-poc-a-fbo"
       ],
-      "note": "【done · 决策 #1168（2026-10-22）】承接 #1167「只证明了离屏这一段」。★方法：compose / blit / present 三段分开记账——把 present（含 vsync）混进渲染是最常见的测量谎言。★实测（三轮 30s）：30.03 fps · 间隔 p99 34.8/40.8/37.9ms · 合计 p50 1.39/1.15/2.00ms（预算 33.3ms 的 4%）· 迟到 0/903 · CPU 7.0–8.2% ⇒ Q1–Q4 全过。★更正 A：A 的「渲染 3–9ms」是 glFinish 墙钟同步 + 并发负载；窗口路径不显式同步，compose 只有 0.8–1.6ms。已在 A 的 README 加更正段，阈值口径不改。★测量事实：compose 与 present 的分界会漂移（run1 present 0.40 vs run2 5.55），只有「合计」跨轮可比。★边界：不是 Tauri（原生 NSWindow+NSOpenGLView）；无 UI 叠加；本机并发负载；合成源。★下一步：B2（挂进 Tauri 2 的 WKWebView 窗口 + 叠 HTML UI，量挂载可行性）；C（真机投屏流）。"
+      "note": "【done · 决策 #1168（2026-10-22）】承接 #1169「只证明了离屏这一段」。★方法：compose / blit / present 三段分开记账——把 present（含 vsync）混进渲染是最常见的测量谎言。★实测（三轮 30s）：30.03 fps · 间隔 p99 34.8/40.8/37.9ms · 合计 p50 1.39/1.15/2.00ms（预算 33.3ms 的 4%）· 迟到 0/903 · CPU 7.0–8.2% ⇒ Q1–Q4 全过。★更正 A：A 的「渲染 3–9ms」是 glFinish 墙钟同步 + 并发负载；窗口路径不显式同步，compose 只有 0.8–1.6ms。已在 A 的 README 加更正段，阈值口径不改。★测量事实：compose 与 present 的分界会漂移（run1 present 0.40 vs run2 5.55），只有「合计」跨轮可比。★边界：不是 Tauri（原生 NSWindow+NSOpenGLView）；无 UI 叠加；本机并发负载；合成源。★下一步：B2（挂进 Tauri 2 的 WKWebView 窗口 + 叠 HTML UI，量挂载可行性）；C（真机投屏流）。"
     }
   ]
 }

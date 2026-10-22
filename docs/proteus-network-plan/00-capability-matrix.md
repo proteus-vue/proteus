@@ -16,7 +16,7 @@
 
 | # | 能力 | 现状（取证） | 属哪一层 | 本轮 |
 |---|---|---|---|---|
-| 1 | **HTTPDNS** | **业务面未实现**，但★**接入点三端已具备其二、且鸿蒙已真机实证**：·**Android #1160** `Dns` 注入 seam · ★★★**鸿蒙 #1167 已真机证实 `RCP_DNS_RULE_DYNAMIC` 可用**——回调形状 `(host, port) → Rcp_IpAddress*` 与 Android `Dns.lookup(host) → List<InetAddress>` **语义同构**（真机双向对照：注入不可达 IP ⇒ 回调被调 1 次 + 请求失败；不注入 ⇒ 0 次 + 成功）· iOS 待定（自建解析或 `Network.framework`）。★鸿蒙另有 `Rcp_DnsOverHttps`（DoH）与 Static/DnsServers 规则，未实测 | 宿主传输 / 业务 SDK | 🟡 接入点：Android✅ / 鸿蒙✅（真机实证）/ iOS ❌；**业务面（门面+线格式）三端全未做** |
+| 1 | **HTTPDNS** | **业务面未实现**，但★**接入点三端已具备其二、且鸿蒙已真机实证**：·**Android #1160** `Dns` 注入 seam · ★★★**鸿蒙 #1169 已真机证实 `RCP_DNS_RULE_DYNAMIC` 可用**——回调形状 `(host, port) → Rcp_IpAddress*` 与 Android `Dns.lookup(host) → List<InetAddress>` **语义同构**（真机双向对照：注入不可达 IP ⇒ 回调被调 1 次 + 请求失败；不注入 ⇒ 0 次 + 成功）· iOS 待定（自建解析或 `Network.framework`）。★鸿蒙另有 `Rcp_DnsOverHttps`（DoH）与 Static/DnsServers 规则，未实测 | 宿主传输 / 业务 SDK | 🟡 接入点：Android✅ / 鸿蒙✅（真机实证）/ iOS ❌；**业务面（门面+线格式）三端全未做** |
 | 2 | **高性能模式** | **无此概念**。Android ~~`HttpURLConnection` 默认连接池~~ ⇒ ★**#1160 换 OkHttp**（进程级 `ConnectionPool(8, 5min)`）；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）；★**#1160 换栈后 Android 仍 3/1**（未退化） | 宿主传输 | 🟡 连接复用✅（#1155 取证 · #1160 未退化）；余项见 §3 |
 | 3 | **HTTP/2** | ★★★**三端全具备**：**Android #1160** 换 OkHttp 3.14.9（`protocols(HTTP_2, HTTP_1_1)`，真机 `{"h2":3}`）· **iOS** 平台默认已协商（#1155）· ★★★**鸿蒙 #1166 已取证：本来就具备**（RCP 底层是 libcurl，公网真机 `http=http/2` + `tls=TLSv1.3`）——原记的"鸿蒙需先接 CA/pinning"**是误判**（把"探针连不上自签服务端"当成了"平台不支持"，见 §3 专项） | 宿主传输 | ✅ Android + iOS + 鸿蒙 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
