@@ -114,7 +114,7 @@ describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 
       const b = fnBody(fn)
       expect(b, `★找不到 ${fn}（函数改名了？）`).toBeTruthy()
       expect(b, `★${fn} 里没注入沙箱根（B5：首屏/后续 render 都走它）`).toMatch(
-        /setHttpSandboxRoot\(/,
+        /if \(!\w+\.empty\(\)\) proteus::http::setHttpSandboxRoot\(\w+\);/,
       )
     }
     // CLI 模板首屏确实走 hostAppRender（而不是 Boot）
@@ -240,6 +240,8 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
       /stat -c %s/,
     )
     expect(sh, '★缺"设备大小 != 回执 size"的失败分支').toMatch(/SIZE_ON_DEVICE.*!=.*SIZE_REPORTED|!= "\$SIZE_REPORTED"/)
+    // ★#1194（J-R1）：光有比较不算——失败分支必须**真的置 RC=1**
+    expect(sh, '★stat 不符时没置 RC=1（探针会假绿）').toMatch(/\.\s*echo\s+"✗[^\n]*\n?\s*RC=1|然后\s*RC=1|;\s*RC=1/)
     expect(sh, '★缺 --expect-reject 模式（穿越证据无法复现）').toMatch(/--expect-reject/)
   })
 
@@ -252,6 +254,10 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     expect(body, '★handle() 入口没清空 lastTransport（上一请求读数会粘到本次）').toMatch(
       /lastTransport\(\)\.clear\(\)/,
     )
+    // ★#1194（J-R3）：必须**在第一个 return 之前**——挪到 url/stream 早退之后同样是回归形态
+    const clearAt = body.indexOf('lastTransport().clear()')
+    const firstReturn = body.indexOf('return ')
+    expect(clearAt, '★clear 在第一个 return 之后（早退请求会把上次读数粘过去）').toBeLessThan(firstReturn)
   })
 
   it('★stream：真机如实拒绝（fetch.unsupported + 点明根因 + 给替代）', () => {

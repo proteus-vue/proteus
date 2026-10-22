@@ -44,7 +44,37 @@ function runProbe(body: string): string {
     `#include <cstdio>
 #include <string>
 #include <cstdint>
+#include <dirent.h>
+#include <cstring>
 #include "proteus_http_save.h"
+// ★#1194（R2 修复）：数目录里残留的临时文件。
+//   ★不能再用 access("<name>.part")：临时名现在唯一（.proteus-tmp-<pid>-<seq>）
+//     ⇒ 固定名探测永远不存在 ⇒ 残包断言恒为 0（第三轮验证者变异实测：去掉
+//     abortUnfinished 的 remove，判据仍 5/5 绿而磁盘真留了 16 个残包）。
+static int countTempFiles(const char* dir) {
+  DIR* d = opendir(dir);
+  if (!d) return 0;
+  int n = 0;
+  struct dirent* e;
+  while ((e = readdir(d)) != nullptr)
+    if (e->d_name[0] == '.' && std::strncmp(e->d_name, ".proteus-tmp-", 13) == 0) n++;
+  closedir(d);
+  return n;
+}
+// ★#1194：**探针自清**——否则上一次运行的残包会让本次假红（实测：变异后留下的
+//   16 个 .proteus-tmp-* 让恢复后的正常实现被判"留下残包"）。
+static void cleanTempFiles(const char* dir) {
+  DIR* d = opendir(dir);
+  if (!d) return;
+  struct dirent* e;
+  while ((e = readdir(d)) != nullptr) {
+    if (e->d_name[0] == '.' && std::strncmp(e->d_name, ".proteus-tmp-", 13) == 0) {
+      std::string p = std::string(dir) + "/" + e->d_name;
+      std::remove(p.c_str());
+    }
+  }
+  closedir(d);
+}
 ${body}
 `,
   )
@@ -75,6 +105,7 @@ static int openFds() {
 int main() {
   using namespace proteus::http;
   setHttpSandboxRoot("/tmp");
+  cleanTempFiles("/tmp/proteus-raii-probe");   // ★#1194：自清（防上次残留导致假红）
   int before = openFds();
   // ★#1192（J-RAII-1）：先自证 fd 计数有效——opendir 失败时 openFds() 返回 -1，
   //   前后都是 -1 ⇒ FD_DELTA=0 ⇒ 判据恒绿（哪怕真泄漏）。
@@ -90,7 +121,8 @@ int main() {
   }
   int after = openFds();
   printf("FD_DELTA %d\\n", after - before);
-  printf("LEFTOVER %d\\n", access("/tmp/proteus-raii-probe/x.bin.part", 0) == 0 ? 1 : 0);
+  // ★#1194（R2）：临时名不再固定 ⇒ 必须**扫目录**数 .proteus-tmp-* 残包（原来的固定名 access 恒 -1）
+  printf("LEFTOVER %d\\n", countTempFiles("/tmp/proteus-raii-probe"));
   printf("TARGET_EXISTS %d\\n", access("/tmp/proteus-raii-probe/x.bin", 0) == 0 ? 1 : 0);
   return 0;
 }
@@ -110,6 +142,7 @@ int main() {
   using namespace proteus::http;
   setHttpSandboxRoot("/tmp");
   system("mkdir -p /tmp/proteus-noTrunc && printf 'ORIGINAL-11' > /tmp/proteus-noTrunc/keep.txt");
+  cleanTempFiles("/tmp/proteus-noTrunc");   // ★#1194：自清
   {
     SaveSession s;
     std::string err;
@@ -137,6 +170,7 @@ int main() {
 int main() {
   using namespace proteus::http;
   setHttpSandboxRoot("/tmp");
+  cleanTempFiles("/tmp/proteus-ok/a"); cleanTempFiles("/tmp/proteus-ok");   // ★#1194：自清
   SaveSession s;
   std::string err;
   if (!s.open("proteus-ok/a/b.txt", &err)) { printf("OPEN_FAIL %s\\n", err.c_str()); return 2; }
@@ -148,7 +182,7 @@ int main() {
   printf("SUMMARY %s\\n", summary.c_str());
   struct stat st{};
   printf("REAL_SIZE %lld\\n", (long long)(stat("/tmp/proteus-ok/a/b.txt", &st) == 0 ? st.st_size : -1));
-  printf("PART_LEFT %d\\n", access("/tmp/proteus-ok/a/b.txt.part", 0) == 0 ? 1 : 0);
+  printf("PART_LEFT %d\\n", countTempFiles("/tmp/proteus-ok/a") + countTempFiles("/tmp/proteus-ok"));
   return 0;
 }
 `);
@@ -156,6 +190,36 @@ int main() {
     expect(Number(/REAL_SIZE (-?\d+)/.exec(out)?.[1]), '★磁盘上文件大小 != 写入量').toBe(10)
     expect(String(/SUMMARY (.*)/.exec(out)?.[1]), '★摘要里 size 与实际不符').toContain('"size":10')
     expect(Number(/PART_LEFT (\d)/.exec(out)?.[1]), '★成功后 .part 残留').toBe(0)
+  })
+
+  it('★★★#1194（R1）长文件名不被临时名挤掉（244 字符 basename 必须能落盘）', () => {
+    /**
+     * ★独立验证第三轮 R1 的真回归：`NAME_MAX=255`，而原临时名是
+     *   `absPath + ".part.<pid>.<seq>.<nsec>"`（后缀 23–27 字符）⇒ 把可用 basename
+     *   上限从 **~249 压到 ~231**（实测 244/249 字符的名字旧 `open=1`、新 `open=0`）
+     *   ⇒ **232–249 是新增失败面**，而 Android/iOS 在同一窗口内成功。
+     * ⇒ 临时文件改到同目录短名 `.proteus-tmp-<pid>-<seq>`（不占 basename 预算）。
+     *   本判据锁死：244 字符名字必须 open+finish 都成功。
+     */
+    const out = runProbe(`
+int main() {
+  using namespace proteus::http;
+  setHttpSandboxRoot("/tmp/r1-longname");
+  cleanTempFiles("/tmp/r1-longname");
+  std::string name(240, 'a'); name += ".txt";   // basename 244 字符（NAME_MAX=255）
+  SaveSession s; std::string err;
+  const bool opened = s.open(name, &err);
+  bool fin = false; std::string e2;
+  if (opened) { const char* p = "x"; s.write(reinterpret_cast<const uint8_t*>(p), 1); s.finish(&fin, &e2); }
+  printf("BASENAME_LEN %zu\\n", name.size());
+  printf("OPEN %d\\n", opened ? 1 : 0);
+  printf("FINISH %d\\n", fin ? 1 : 0);
+  return 0;
+}
+`)
+    expect(out, '★长文件名（244）被临时名挤掉了 —— 临时名不能拼在 basename 后面').toContain('BASENAME_LEN 244')
+    expect(Number(/OPEN (\d)/.exec(out)?.[1]), '★244 字符 basename 打不开（R1 回归）').toBe(1)
+    expect(Number(/FINISH (\d)/.exec(out)?.[1]), '★244 字符 basename 收尾失败（R1 回归）').toBe(1)
   })
 
   it('★路径防护：.. / 绝对路径被拒；子目录能建', () => {

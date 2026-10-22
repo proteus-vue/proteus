@@ -139,20 +139,27 @@ struct SaveSession {
      * ⇒ 名字里带 pid + 自增序号（同进程内也不会撞）。
      */
     /**
-     * ★★★#1192（第三轮自查，验证者提的第 1 点）：`static` 局部变量在**每个 TU 各一份**
-     *   （`proteus_http.h` 被多个 .cpp include）⇒ 同 pid 下两个 TU 的序号都从 1 开始 ⇒ 可能撞名。
-     *   鸿蒙同步 napi 下并发窗口极小，但"撞名"的后果是**互相删临时文件**（NB2b 那个后果）。
-     * ⇒ 用 `std::atomic` 全局唯一序号（函数内 static atomic 在同一 TU 内唯一；跨 TU 再叠
-     *   `clock_gettime` 纳秒兜底，两个 TU 在同一纳秒撞号概率可忽略）。
+     * ★★★#1194（独立验证第三轮 R1 修复）：**临时名不能拼在 basename 后面**。
+     *
+     *   `NAME_MAX` = 255；原实现 `absPath + ".part.<pid>.<seq>.<nsec>"`（后缀 23–27 字符）
+     *   ⇒ 把可用 basename 上限从 **~249 压到 ~231**（实测 244/249 字符的名字
+     *   旧实现 `open=1`、新实现 `open=0`）⇒ **232–249 这个窗口是新增的失败面**，
+     *   而 Android/iOS 在同一窗口内成功 ⇒ 三端不一致（本仓纪律：可预期性优先）。
+     *
+     *   ⇒ 临时文件放到**同目录**、用**固定短名**：`<dir>/.proteus-tmp-<pid>-<seq>`
+     *     · 不占业务文件名的 basename 预算；
+     *     · 总长恒定 ~30 字符；
+     *     · 与目标**同一目录** ⇒ `rename` 不跨文件系统（不会 EXDEV）。
+     *   ★`std::atomic` 保留（同 .so 内唯一；同进程内 seq 递增）。★纳秒字段去掉：
+     *     验证者实测「隐式 inline 成员函数的函数内 static 在同一 .so 内唯一」⇒ 不需要跨 TU 兜底。
      */
     static std::atomic<unsigned long long> sSeq{0};
-    struct timespec ts{};
-    ::clock_gettime(CLOCK_MONOTONIC, &ts);
-    char uniq[96];
-    std::snprintf(uniq, sizeof(uniq), ".part.%ld.%llu.%ld",
-                  static_cast<long>(::getpid()), ++sSeq,
-                  static_cast<long>(ts.tv_nsec));
-    partPath = absPath + uniq;
+    const size_t slash = absPath.rfind('/');
+    const std::string dir = (slash == std::string::npos) ? std::string(".") : absPath.substr(0, slash);
+    char uniq[64];
+    std::snprintf(uniq, sizeof(uniq), "/.proteus-tmp-%ld-%llu",
+                  static_cast<long>(::getpid()), ++sSeq);
+    partPath = dir + uniq;
     fp = std::fopen(partPath.c_str(), "wb");
     if (fp == nullptr) {
       if (err) *err = "fetch.failed: 无法创建落盘文件：" + rel;

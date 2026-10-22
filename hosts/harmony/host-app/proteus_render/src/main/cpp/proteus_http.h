@@ -45,6 +45,7 @@
 
 #include "invoke_wire.h"
 #include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
+#include "proteus_http_diag.h"   // ★#1194：VmHWM 读取（读数记账）
 #include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
 
 #if defined(__has_include)
@@ -149,23 +150,11 @@ struct LastLimitDiag {
   bool saveMode = false;
   unsigned long long saveWritten = 0;
   unsigned long long saveLimit = 0;
-  // ★#1193（B4 取证）：进程峰值 RSS（VmHWM，kB）。前后差值判"落盘内存是否与文件大小无关"。
-  //   ★0 = 读不到（无 /proc），**不是"内存 0"**。实测 64MiB 文件只涨 3.41MiB（见决策 #1193）。
+  // ★#1193/#1194（B4）：进程峰值 RSS（VmHWM，kB）；0 = 读不到（不是"内存 0"）。见 proteus_http_diag.h
   unsigned long long vmHwmBeforeKb = 0;
   unsigned long long vmHwmAfterKb = 0;
 };
 
-/** 读 `/proc/self/status` 的 `VmHWM`（峰值 RSS，kB）；读不到 ⇒ 0（不可得） */
-inline unsigned long long readVmHwmKb() {
-  FILE* f = std::fopen("/proc/self/status", "r");
-  if (f == nullptr) return 0;
-  char line[128];
-  unsigned long long kb = 0;
-  while (std::fgets(line, sizeof(line), f) != nullptr)
-    if (std::strncmp(line, "VmHWM:", 6) == 0) { std::sscanf(line + 6, "%llu", &kb); break; }
-  std::fclose(f);
-  return kb;
-}
 inline LastLimitDiag& lastLimitDiag() {
   static LastLimitDiag d;
   return d;
@@ -846,11 +835,9 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     d.kept = gate.body.size();
     // ★#1191（J4/J5）：落盘模式的可核对读数（kept==0 是恒真式，不能当证据）
     d.saveMode = (gate.save != nullptr);
-    d.saveWritten = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->written) : 0ULL;
     d.saveLimit = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->limit) : 0ULL;
     // ★#1193（B4）：请求后的峰值 RSS（差值就是"这次落盘把内存顶了多少"）
     d.vmHwmBeforeKb = vmHwmBefore;
-    d.vmHwmAfterKb = readVmHwmKb();
   }
 
   proteus::wire::ResolveFrame out;
@@ -970,6 +957,20 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   //   关掉它就等于把连接池一起丢掉，连接复用会立刻归零（真机实测 3 请求/3 TCP 就是这个原因））
   if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
   pDestroyRequest(req);
+  /**
+   * ★★★#1194（独立验证第三轮 R3 修复）：**读数必须在 finish() 之后取**。
+   *   原实现把 `saveWritten` / `vmHwmAfterKb` 在 `finish()` **之前**快照；
+   *   而"闸未安装 / chunks==0"时有一支 `resp->body` 回填（`gate.save->write(...)`）
+   *   发生在快照**之后** ⇒ 那批字节会**漏计** ⇒ `saveWritten == seen` 判据红成"实现坏了"，
+   *   而真因只是读数取早了（本仓最怕的"装置让人误诊"）。
+   *   ★验证者更正了我先前的判断：这不是"minSdk 17 下不可达"——注册回调失败
+   *   （`pSetOnBinaryRecv` 返回非 0）是**运行时降级路径**，代码本身就实现了它。
+   */
+  {
+    LastLimitDiag& d = lastLimitDiag();
+    d.saveWritten = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->written) : 0ULL;
+    d.vmHwmAfterKb = readVmHwmKb();
+  }
   return out;
 #endif
 }

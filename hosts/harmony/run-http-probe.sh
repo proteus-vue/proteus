@@ -118,6 +118,14 @@ save_path = diag.get("savePath") or ""
 stream_on = (diag.get("stream") or "") == "1"
 if EXPECT_REJECT:
     # ★#1192（J-J6-2）：**预期被拒**模式——让"路径穿越被拒"这份证据可重放
+    # ★#1194（J-R5）：与 save/stream 分支同口径，必须校验 host/bridge/frameSource，
+    #   否则探针跑在别的宿主或非 ArkTS 帧路径上也会绿
+    if d.get("host") != "harmony":
+        print(f"✗ host 应为 harmony，实得 {d.get('host')}"); sys.exit(1)
+    if d.get("bridge") != "invokeBytes":
+        print(f"✗ bridge 应为 invokeBytes，实得 {d.get('bridge')}"); sys.exit(1)
+    if d.get("frameSource") != "arkts":
+        print(f"✗ frameSource 应为 arkts，实得 {d.get('frameSource')}"); sys.exit(1)
     if d.get("ok") is not False:
         print("✗ 期望被拒但请求成功了"); sys.exit(1)
     if (d.get("limit") or {}).get("saveMode") is not False:

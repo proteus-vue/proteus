@@ -12867,3 +12867,22 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 结构性**：VmHWM 装置让 `proteus_http.h` 涨到 1009 行（越 1000）⇒ 压缩注释与 `readVmHwmKb` 回 **996 行**。★没有加 ALLOW 豁免。
 **⑧ 判据状态**：五份定向判据 **61 条全绿**；门禁 `check:file-size` / `check:content` / `check:harmony-host-compile` 全绿。
 **⑨ 诚实边界**：a) 只测到 **64 MiB**，**不外推到 1 GiB**（上限未压测）；b) VmHWM 是**进程级**峰值，含 JS VM 等全部开销，差值只代表"这次请求把峰值顶了多少"（够用，但不是精确归因到某个分配）；c) 仍无排障面板 UI；d) `stream`/`abort`/SPKI pinning 三处仍是模型/平台限制。
+
+1194. **★★★独立验证第三轮：抓出 1 条我引入的真回归（长文件名）+ 2 条判据空跑 + 1 条「不可达」判断错误 · 决策**（2026-10-22 · 承接 #1192/#1193）:
+**① 第三轮结论**：无数据丢失/安全类阻断（NB2 rename 保旧文件、NB2b 两会话、NB3 未 open 拒绝、J-RAII-1/J-B3-1/J-J6-2/J-J4-1/J-J8-1、B4 VmHWM 全部成立），但有 **1 条真回归 + 2 条判据空跑 + 1 条判断错误**。
+**② ★R1（真回归，我引入）长文件名从「能用」变成「失败」**：`NAME_MAX=255`，而我为 NB2b 加的临时名 `absPath + ".part.<pid>.<seq>.<nsec>"`（后缀 23–27 字符）把可用 basename 上限从 **~249 压到 ~231**。实测：basename 244/249 字符时，旧实现 `open=1 finish_ok=1`、**新实现 `open=0`** ⇒ **232–249 是新增失败面**，而 Android/iOS 在同一窗口内成功（三端不一致）。
+  ⇒ 修法：**临时文件改到同目录短名** `<dir>/.proteus-tmp-<pid>-<seq>`（不占业务名的 basename 预算、总长恒定 ~30 字符、与目标同目录故 `rename` 不跨文件系统）。验证：244 字符名字现在 `OPEN=1 / FINISH=1`。
+**③ ★R2（判据空跑，最高危）两条残包断言永远为 0**：`LEFTOVER` / `PART_LEFT` 探针探测的是**固定名** `x.bin.part`，而唯一化后实际名是 `.proteus-tmp-<pid>-<seq>` ⇒ `access()` 永远 -1 ⇒ 断言恒 0。验证者变异实测：**去掉 `abortUnfinished()` 里的 `remove`，判据仍 5/5 绿，而磁盘真留了 16 个残包**。
+  ⇒ 修法：探针改成**扫目录** `countTempFiles()`（数 `.proteus-tmp-*`）。★顺带修了一个真缺陷：探针**不清目录** ⇒ 上一次运行的残包会让下一次**假红**（我实测到：变异留下的 16 个残包让恢复后的正常实现被判"留下残包"）。现在每个用例开头 `cleanTempFiles()`，连跑 3 次稳定 5/5。
+**④ ★R3（我的「不可达」判断错误）`saveWritten` 快照取早了**：我上一轮说"minSdk 17 下走不到 `resp->body` 回填那支"，验证者更正：`pSetOnBinaryRecv` **注册失败**（返回非 0）是**运行时降级路径**，代码本身就实现了它并打了日志 ⇒ 与 minSdk 无关。
+  ⇒ 修法：把 `d.saveWritten` / `d.vmHwmAfterKb` 的赋值**挪到 `finish()` 之后**（此时回填已发生）。同时抽到 `proteus_http_diag.h`（`proteus_http.h` 因此回到 997 行）。
+**⑤ 四条判据弱点（第三轮新发现，全部已修 + 变异验证）**：
+  · **J-R1**：stat 守卫只断言"比较表达式出现过"，**删掉 `RC=1` 仍全绿** ⇒ 加断言失败分支必须置 RC。
+  · **J-R2**：B5 只匹配 `setHttpSandboxRoot(`，`if (false && !fd.empty())` **仍绿** ⇒ 改成断言**完整语句** `if (!\w+.empty()) proteus::http::setHttpSandboxRoot(\w+);`。验证：`if (false && ...)` 现在精确红。
+  · **J-R3**：`lastTransport().clear()` 删除/改 no-op 会红，但**挪到 url 早退之后仍绿**（而那正是"早退请求把上次读数粘过去"的真实回归形态）⇒ 加断言 `clearAt < firstReturn`。验证：挪到早退后精确红。
+  · **J-R5**：`--expect-reject` 分支不校验 `host`/`bridge`/`frameSource` ⇒ 补齐三项。
+**⑥ 两条诚实性更正**：
+  · `e4505668`（#1192 的 atomic 修复）**把 prebuilt 副本改脏且未同步**——验证者在 `/tmp` 复跑 `check:harmony-runtime-prebuilt --check` 判红。直到 `1cba7ed0` 才修好。★这正是该门禁存在的理由（外部用户走 prebuilt）。
+  · 我上一轮"`static` 局部变量跨 TU 各一份"的**技术前提是错的**：`SaveSession::open` 是**类内定义的成员函数（隐式 inline）**，其函数内 static 在**同一 .so 内唯一**（验证者实测两 TU 序号连续 1→2→3）。真正各有一份的是**不同 .so**，而 `std::atomic` 对那个轴**同样无效** ⇒ 那次"修复"没解决它声称的问题，却引入了 R1。⇒ 现在保留 atomic（无害）+ 短临时名，并删掉纳秒字段。
+**⑦ 判据**：`harmony-save-session-raii` **6 条**（新增 R1 长文件名回归判据）· `harmony-http-gaps` **16 条** ⇒ 定向 **22 条全绿**；`check:harmony-host-compile` / `check:file-size` / `bash -n` 全绿。变异验证：R1（改回长后缀）⇒ 红、R2（去掉 remove）⇒ 红、J-R2（`if(false&&)`）⇒ 红、J-R3（挪到早退后）⇒ 红。
+**⑧ 诚实边界**：a) **真机未复跑**（设备在验证时又锁屏 `10106102`）——临时名重构后的真机落盘待解锁补验；b) 三端都**没有 `fsync`**（掉电可能留下"已改名但内容未落盘"），属**非本单**既有缺口，验证者已指出，建议未来统一补；c) 只测到 64 MiB 文件，不外推 1 GiB；d) `stream`/`abort`/SPKI pinning 仍是模型/平台限制。
