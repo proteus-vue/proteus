@@ -178,6 +178,9 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
      * ⇒ 换成三个可核对的量 + 设备侧 stat（脚本里已加）。
      */
     const r = JSON.parse(read('hosts/harmony/results/http-probe-save.json'))
+    // ★#1199（第五轮 D1）：**本块必须自带 ok:true 前提**——失败路径下 `saveWritten`
+    //   语义是"写入后丢弃的字节"，拿它跟设备大小比会误读。别依赖另一个测试块的前提。
+    expect(r.ok, '★落盘未成功时下列读数无意义').toBe(true)
     const lim = r.limit ?? {}
     expect(lim.saveMode, '★saveMode != true（没走落盘分支）').toBe(true)
     expect(lim.saveWritten, '★saveWritten=0（一个字节都没写进文件）').toBeGreaterThan(0)
@@ -262,22 +265,30 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     expect(sh, '★缺"设备大小 != 回执 size"的失败分支').toMatch(/SIZE_ON_DEVICE.*!=.*SIZE_REPORTED|!= "\$SIZE_REPORTED"/)
     // ★#1194（J-R1）：光有比较不算——失败分支必须**真的置 RC=1**
     /**
-     * ★★★#1196（第四轮 W1 修复）：**必须按分支锚定**。
-     *   原正则匹配全文任意位置的 `; RC=1`，而脚本有两个 stat 失败分支
-     *   （文件不存在 / 大小不符）⇒ **任何单分支失效都测不出来**（验证者变异实测：删掉
-     *   任一分支的 `; RC=1`，断言仍绿）。
-     *   ⇒ 两个分支各断言一次：`then` 之后 200 字符内必须出现 `RC=1`。
+     * ★★★#1199（第五轮 W1 再修）：**300 字符窗口会跨到下一个分支**。
+     *   验证者实测字符距离：分支1→自己的 RC=1 = 83、分支2→自己的 = 127、
+     *   **分支1→分支2 的 RC=1 = 217（仍在 300 内）** ⇒ 只删分支1 的 `RC=1` 时，
+     *   断言1 会命中分支2 的 `RC=1` ⇒ 全绿；而按变异版真跑时 `FINAL_RC=0`
+     *   （脚本会在"设备上没有落盘文件"的情况下打印「✓ 判据通过」）。
+     *   ⇒ **按分支切片**：每段只到下一个 `elif`/`fi` 为止，窗口不跨分支。
      */
     const statBlock = sh.slice(sh.indexOf('stat -c %s'), sh.indexOf('T-app-fetch 真机判据通过'))
-    const rcBranches = [
-      // ① 设备上找不到文件
-      /if \[ -z "\$SIZE_ON_DEVICE" \]; then[\s\S]{0,300}RC=1/,
-      // ② 大小不符
-      /elif \[ "\$SIZE_ON_DEVICE" != "\$SIZE_REPORTED" \]; then[\s\S]{0,300}RC=1/,
-    ]
-    rcBranches.forEach((re, i) => {
-      expect(statBlock, `★stat 第 ${i + 1} 个失败分支没置 RC=1（该分支失效也测不出来）`).toMatch(re)
-    })
+    /** 取某个 `if/elif ... then` 分支的**体内**（到下一个 `elif`/`fi` 之前） */
+    const branchBody = (needle: string): string => {
+      const at = statBlock.indexOf(needle)
+      if (at < 0) return ''
+      const from = statBlock.indexOf('then', at) + 4
+      const ends = [statBlock.indexOf('elif', from), statBlock.indexOf('fi', from)].filter((x) => x > 0)
+      const end = ends.length ? Math.min(...ends) : statBlock.length
+      return statBlock.slice(from, end)
+    }
+    const b1 = branchBody('if [ -z "$SIZE_ON_DEVICE" ]')
+    const b2 = branchBody('elif [ "$SIZE_ON_DEVICE" != "$SIZE_REPORTED" ]')
+    expect(b1, '★找不到「设备上无文件」分支').toBeTruthy()
+    expect(b2, '★找不到「大小不符」分支').toBeTruthy()
+    // ★分支体内的 RC=1 —— 不允许借用另一个分支的
+    expect(b1, '★「设备无文件」分支没置 RC=1（该分支失效测不出来）').toMatch(/RC=1/)
+    expect(b2, '★「大小不符」分支没置 RC=1（该分支失效测不出来）').toMatch(/RC=1/)
     expect(sh, '★缺 --expect-reject 模式（穿越证据无法复现）').toMatch(/--expect-reject/)
   })
 

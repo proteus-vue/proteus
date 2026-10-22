@@ -263,7 +263,7 @@ DNS 来源本就是"这次连接怎么建立的"的一部分，复用容器 ⇒ 
 | 逐块直写（不累积 body） | `chunks=4260`（64 MiB）、`saveWritten == seen` |
 | **内存与文件大小无关** | 1 MiB → VmHWM +2.76 MiB；**64 MiB → 只 +3.41 MiB** ⇒ 64 MiB 量级未观测到整包驻留 |
 | 落盘上限 | 1 GiB（与 Android/iOS 同值；此前 `cap` 误报 32 MiB） |
-| 长文件名 | **244 / 249 / 252 字符 basename 全部成功**（临时名不占 basename 预算） |
+| 长文件名 | **244 字符 basename 已入库证据**（`http-probe-save-longname.json`）· 249/252 曾真机跑通但**未入库，不作为承诺**（#1196 已撤回此宣称） |
 | 路径防护 | `../../etc/passwd` 真机被拒（`saveMode:false` ⇒ 拒绝发生在任何网络操作之前） |
 | 证据可离线复判 | 证据含 `deviceStat={sizeOnDevice,sizeReported,match}`（设备侧 `stat` 结果入库） |
 

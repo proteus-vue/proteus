@@ -46,7 +46,7 @@ struct LastLimitDiag {
   // ★#1197：成功 = 落盘字节；失败 = 写入后丢弃的字节（判据只在 ok:true 断言 saveWritten==seen）
   unsigned long long saveWritten = 0;
   unsigned long long saveLimit = 0;
-  // ★#1193/#1194（B4）：进程峰值 RSS（VmHWM，kB）；0 = 读不到（不是"内存 0"）。见 proteus_http_diag.h
+  // ★#1193/#1194（B4）：进程峰值 RSS（VmHWM，kB）；0 = 读不到（不是"内存 0"）。见本文件上方 readVmHwmKb()
   unsigned long long vmHwmBeforeKb = 0;
   unsigned long long vmHwmAfterKb = 0;
 };

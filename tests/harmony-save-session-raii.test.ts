@@ -91,6 +91,42 @@ ${body}
   return out
 }
 
+/**
+ * ★#1199：编译并运行一个**能 include 全量 `proteus_http.h`** 的探针。
+ *   `runProbe()` 的统一前缀只 include `proteus_http_save.h`（不需要 HMS 头）；
+ *   而入口重置判据要看 `handle()` ⇒ 必须 include `proteus_http.h`；
+ *   它的 RCP 分支依赖 HMS 头 ⇒ 用 `-DPROTEUS_HAVE_RCP=0` 关掉（早退路径不走 RCP）。
+ */
+function runEntryProbe(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-entry-'))
+  const src = path.join(dir, 'probe.cpp')
+  const bin = path.join(dir, 'probe')
+  fs.writeFileSync(
+    src,
+    `#include <cstdio>
+#include "proteus_http.h"
+int main(){
+  using namespace proteus::http;
+  lastTransport().emplace_back("proto","h2");
+  lastLimitDiag().saveWritten = 214;
+  lastLimitDiag().saveMode = true;
+  lastLimitDiag().vmHwmAfterKb = 90000;
+  proteus::wire::InvokeFrame f;
+  f.reqId = "early"; f.method = "http.request";
+  (void)proteus::http::handle(f);
+  printf("TRANSPORT_SIZE %zu\\n", lastTransport().size());
+  printf("SAVE_WRITTEN %llu\\n", (unsigned long long)lastLimitDiag().saveWritten);
+  printf("SAVE_MODE %d\\n", lastLimitDiag().saveMode?1:0);
+  printf("VM_AFTER %llu\\n", (unsigned long long)lastLimitDiag().vmHwmAfterKb);
+  return 0;
+}
+`,
+  )
+  execFileSync('clang++', ['-std=c++17','-O0','-DPROTEUS_HAVE_RCP=0','-I', path.dirname(SAVE_HEADER), '-o', bin, src],
+    { stdio: ['ignore','pipe','pipe'] })
+  return execFileSync(bin, [], { encoding: 'utf8', cwd: dir, stdio: ['ignore','pipe','pipe'] })
+}
+
 const SKIP = !hasClang()
 
 describe.skipIf(SKIP)('★★★#1191 SaveSession 行为（真编译真跑）', () => {
@@ -272,6 +308,22 @@ int main() {
     expect(Number(/AFTER_SUB (\d)/.exec(out)?.[1]), '★成功后临时文件残留').toBe(0)
   })
 
+  it('★★★#1199 入口重置：早退请求后 `lastTransport()` 与 `lastLimitDiag()` 都必须为空', () => {
+    /**
+     * ★第五轮验证者的两处实测：**文本正则抓不住"包在第几层 if 里"**。
+     *   · `if (false) { lastTransport().clear(); }`（块形态，clear 独占一行）⇒ 位置判据**全绿**，
+     *     而行为探针显示 `transport_size_after=1`（上一请求读数粘住）。
+     *   · 删掉 `lastLimitDiag() = LastLimitDiag{};` ⇒ **全绿**，而 `saveWritten` 保留上一次的 214。
+     *   ⇒ **可执行判据**：预置读数 → 走必然早退的请求（url 缺失）→ 断言四项全 0。
+     *   ★必须带 `-DPROTEUS_HAVE_RCP=0` 单独编译（`proteus_http.h` 的 RCP 分支依赖 HMS 头）。
+     */
+    const out = runEntryProbe()
+    expect(Number(/TRANSPORT_SIZE (\d+)/.exec(out)?.[1]), '★早退后 lastTransport 仍有上次读数（粘贴）').toBe(0)
+    expect(Number(/SAVE_WRITTEN (\d+)/.exec(out)?.[1]), '★早退后 saveWritten 仍是上次的值（粘贴）').toBe(0)
+    expect(Number(/SAVE_MODE (\d)/.exec(out)?.[1]), '★早退后 saveMode 仍是上次的值（粘贴）').toBe(0)
+    expect(Number(/VM_AFTER (\d+)/.exec(out)?.[1]), '★早退后 vmHwmAfter 仍是上次的值（粘贴）').toBe(0)
+  })
+
   it('★★★#1194（R1）真机：244 字符 basename 落盘成功且设备侧 size 一致', () => {
     // ★本地 clang 判据只证明"能 open/finish"；真机上还要过 RCP + 文件系统。
     //   本证据是 #1194 修完后补跑的真机读数（原缺陷下这一组会报"无法创建落盘文件"）。
@@ -282,6 +334,9 @@ int main() {
     expect(rel.split('/').pop()!.length, '★证据里的 basename 不是 244 字符（验错了对象）').toBe(244)
     expect(r.ok, '★244 字符 basename 在真机上落盘失败（R1 回归）').toBe(true)
     expect(r.limit.saveWritten, '★真机没写进文件').toBeGreaterThan(0)
+    // ★#1199（第五轮 D3）：长名证据也必须有 deviceStat（此前只有 http-probe-save.json 有）
+    expect(r.deviceStat?.verified, '★长名证据缺 deviceStat.verified（离线无法复判）').toBe(true)
+    expect(r.deviceStat.sizeOnDevice, '★长名证据的设备侧大小 != saveWritten').toBe(r.limit.saveWritten)
   })
 
   it('★路径防护：.. / 绝对路径被拒；子目录能建', () => {

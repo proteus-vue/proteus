@@ -12922,3 +12922,18 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **④ 这条的形态值得记**：`match` 与 `verified` 是**两件事**——`match` 说"这两个数相等"，`verified` 说"这一整轮判据通过"。上一轮我把两者混成一个字段，就等于"局部相等 ⇒ 整体通过"（本仓反复踩的"用部分证据代替整体结论"）。
 **⑤ 判据与门禁**：六份定向 **82 条全绿**；`file-size` / `content` / `prebuilt` / `ai-tasks` / `decision-numbers` 全绿。
 **⑥ 诚实边界**：a) `verified` 只覆盖"设备侧 size 与回执一致"这一条，不代表整轮所有判据（若将来判据扩项，`verified` 语义要跟着更新）；b) 掉电持久性仍是 `T-fetch-save-durability`；c) 第五轮独立验证仍在跑。
+
+1199. **★★★第五轮 PASS 后的 3 条判据弱点 + 1 条自我矛盾（撤回又被写回）· 决策**（2026-10-22 · 承接 #1198）:
+**① 第五轮结论：PASS（无数据丢失/安全阻断）**。R1/R2/R3、W3b、prebuilt 同步、入口 diag 重置、临时文件同目录 **全部真修好**（验证者用变异 + 可执行探针逐条确认）。
+**② ★W1（第三轮报过、我只修一半）300 字符窗口跨分支**：验证者实测字符距离 —— 分支1→自己的 `RC=1` = 83、分支2→自己的 = 127、**分支1→分支2 的 `RC=1` = 217（仍在 300 内）** ⇒ 只删分支1 的 `RC=1` 时，断言1 会命中分支2 的 `RC=1` ⇒ **全绿**；而按变异版真跑 `FINAL_RC=0`（脚本会在"设备上根本没有落盘文件"时打印「✓ 判据通过」）。⇒ 改成**按分支切片**（每段只到下一个 `elif`/`fi`）。变异验证：删分支1 的 `RC=1` ⇒ 精确红。
+**③ ★W3a（第四轮报过、我只修"同行"形态）文本正则抓不住"包在第几层 if 里"**：`if (false) { lastTransport().clear(); }`（块形态，clear 独占一行）⇒ 位置判据**全绿**，而行为探针 `transport_size_after=1`；删 `lastLimitDiag() = LastLimitDiag{};` ⇒ 也**全绿**，而 `saveWritten=214` 粘住。
+  ⇒ **改成可执行判据**（`runEntryProbe()`，`-DPROTEUS_HAVE_RCP=0` 单独编译 `proteus_http.h`）：预置四项读数 → 走必然早退的请求（url 缺失）→ 断言 `TRANSPORT_SIZE / SAVE_WRITTEN / SAVE_MODE / VM_AFTER` **全 0**。变异验证：删入口重置 ⇒ 精确红 `saveWritten 214 → 0`；块形态 `if (false){clear}` ⇒ 精确红 `transport_size 1 → 0`。
+  ★这条同时给 **`lastLimitDiag` 入口重置补上了"零判据"**——它此前只有实现、`grep tests/` 0 命中。
+**④ ★自我矛盾（本轮唯一的实质性诚实性问题，验证者抓出）**：#1196 §⑥ 明确写「此前称'真机 249/252 字符也成功'但**只入库了 244 的读数** ⇒ 只锁 244，**不再宣称** 249/252」；而 **更晚的 #1197** 在矩阵 §4.y 又写「244 / 249 / 252 字符 basename **全部成功**」，且 `results/` 里仍只有 244 那一份。⇒ 撤回 → 一个提交后重新宣称。
+  ⇒ 修正为：**「244 字符 basename 已入库证据；249/252 曾真机跑通但未入库，不作为承诺（#1196 已撤回此宣称）」**。
+  ★教训：**撤回必须落到"所有会重复该宣称的地方"**——只改一个文档等于没撤回（这次的载体是能力矩阵，与决策条目是两处）。
+**⑤ 两条判据加固**：D1（`deviceStat` 块**缺 `ok:true` 前提**，失败路径下 `saveWritten` 语义是"写入后丢弃的字节"，误比会读错）⇒ 本块首行补 `expect(r.ok).toBe(true)`；D3（**长名证据没有 `deviceStat`** —— 恰恰"设备侧 size 可离线复判"这条修复没覆盖它）⇒ 重跑长名探针让脚本写入，判据要求 `deviceStat.verified===true` 且 `sizeOnDevice == saveWritten`。
+**⑥ D4 小修**：`proteus_http_diag.h:49` 的注释写「见 `proteus_http_diag.h`」——**它自己就在这个文件里**（搬家时留下的自指）⇒ 改成「见本文件上方 `readVmHwmKb()`」。
+**⑦ ★D5（未做，登记为下一步）**：`proteus_http.h` 969 行里 **`handle()` 一个函数 496 行（占 51%）**；余量只剩 31 行，撑不了下一次语义改动。验证者建议下一步拆 `handle()` 的三段（建 session/request · 发请求+等待 · 装配回程），**而不是继续抠注释**。★本单不做（第五轮验证刚结束，动结构会让验证对象漂移），但已明确。
+**⑧ 判据与门禁**：六份定向 **83 条全绿**；`file-size` / `content` / `prebuilt` / `ai-tasks` / `decision-numbers` / `memory` 全绿。
+**⑨ 诚实边界**：a) 只测到 64 MiB；b) `T-fetch-save-durability`（三端缺 fsync）仍 planned；c) `handle()` 496 行的拆分未做；d) `stream`/`abort`/SPKI pinning 仍是模型/平台限制；e) 259/252 长名不再宣称（见 ④）。
