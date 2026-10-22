@@ -3061,22 +3061,26 @@
       "id": "T-ios-httpdns-options",
       "title": "iOS HTTPDNS 落地：四条路线（A 改 IP / B 本地 CONNECT 代理 / C 自建栈 / D 系统 DNS Proxy）择一实施 + 真机判据",
       "type": "capability",
-      "status": "blocked",
-      "owner": null,
+      "status": "done",
+      "owner": "zcode",
       "scope": [
+        "hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift",
+        "hosts/ios/ProteusHost/runtime/http-capability-dns-session.swift",
         "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/shared/bridge/entry-superapp-probes-httpdns-prod.ts",
+        "hosts/ios/run-httpdns-prod-probe.sh",
         "hosts/ios/lib/probe-args.sh",
-        "hosts/ios/run-httpdns-probe.sh",
         "docs/proteus-network-plan/02-ios-httpdns-industry-survey.md",
         "docs/proteus-network-plan/00-capability-matrix.md"
       ],
-      "decision": 1179,
-      "verification": "`npx vitest run tests/httpdns-wire.test.ts tests/host-probe-registry.test.ts`（22 条）+ 真机 `bash hosts/ios/run-httpdns-b-device-probe.sh 3` 必须 `exit 0` 且 `hosts/ios/results/httpdns-b-device.json` 的 `verdict=ROUTE_B_DEVICE_OK`",
+      "decision": 1182,
+      "verification": "真机 `bash hosts/ios/run-httpdns-prod-probe.sh` 必须 `exit 0` 且 `hosts/ios/results/httpdns-prod-device.json` 的 `verdict=HTTPDNS_PROD_DEVICE_OK`；`npx vitest run tests/httpdns-wire.test.ts tests/host-probe-registry.test.ts`（24 条）",
       "branch": null,
       "related": [
         "T-harmony-httpdns-doh"
       ],
-      "note": "【blocked · 决策 #1176 + #1178 + #1179（2026-10-22）】承接用户质疑「iOS 不支持 HTTPDNS 吗？」——上一轮把实现限制说成了平台边界，已更正。★★★#1178 模拟器定性 B 路线可行；★★★#1179 **真机复验通过**（iPhone 12，13/13 全绿）：配 `connectionProxyDictionary` 的 HTTP 代理键后，https 由 CFNetwork 以 `CONNECT host:port` 隧道交给代理；真机读数——假域名 3 个 CONNECT、公网 1 个 CONNECT、**SNI 三次全是原域名**、公网 `[200,200,200]` + **3 请求 1 隧道**（复用成立）、无明文绝对 URI。★真机与模拟器的**两处实质差异**（这就是必须真机跑的原因）：① 复用要用**真实证书**判——模拟器用 TrustAll 无条件信任，真机生产 session 不信任自签 ⇒ 假域名 3 次各建一条隧道（装置变量，非路线缺陷，与 #1165 同族）；② \"请求到达\"的判据不能取 HTTP 层——自签导致握手在证书校验处中断，`request` 事件永不触发（用它会假红），正解是 `SNICallback` 被调用。★又一个\"参数丢失伪装成功能失败\"：`superapp-scene.swift` 的 `switch argPrefix` 漏了 case ⇒ 走 `default: extra = \"\"` ⇒ publicUrl/rounds 静默丢弃 ⇒ 现象是\"公网经代理全失败\"（`public_statuses: []`）。已在 `tests/host-probe-registry.test.ts` 补**第三处**判据（原来只比两方：IOS_PROBES ⇄ ProbeConfig）。★装置坑（#1178 起累积，全部已修）：端口占用让新进程 bind 静默失败而 `wait_for --port` 被旧进程冒充（改用 `lsof` 预检 + `--file` 就绪）；空数组 `every()` 恒真（先判 `length>0`）。★【为什么仍 blocked】**只完成可行性定性，生产实现零行**：a) 代理进程本身未写（loopback 监听 / CONNECT / 按表连 IP / 失败不静默回落）；b) `httpDns` 表 → 代理查询的通路未接；c) 与 `fetch.unsupported` 的切换点未改；d) 后台/被挂起时的代理存活策略未评估（iOS 后台限制）。★【Handoff】下一步：① 在 `hosts/ios/ProteusHost/runtime/` 新增本地代理（建议 `HttpDnsProxy.swift`，`NWListener` 或 BSD socket；注意 iOS 后台限制）；② `HttpCapability.session` 按\"是否有 httpDns 表\"选配置（**不要每请求新建 session**，否则连接池归零——#1155/#1160 同族纪律）；③ 代理侧查表未命中必须回落系统解析**并在回执里标记**（不得静默）；④ 用与 Android #1171 同形判据做业务面复验：注入不可达 IP ⇒ 失败、不注入 ⇒ 成功、`dns.calls>0` + `lastSource=table`。★【工具链纪律】跑 iOS 东西前先 `pnpm check:ios-xcode`（本机 26.5 有 devicectl，在 `/Volumes/data1/work/office-applications/`；我因手写 14.2 路径误判过\"本机没 devicectl\"）。★【诚实边界】假域名组用自签证书（必然证书失败，仅用于证明\"只有代理能让它通\"）；本地 TLS 服务端未开 h2（公网那轮才是 h2）；模拟器与真机各一份证据，两份都入库。"
+      "note": "【done · 决策 #1176 → #1178 → #1179 → **#1182**（2026-10-22）】**iOS HTTPDNS 已支持**。★最终实现 = **B 路线**（进程内本地 CONNECT 代理）：`HttpDnsProxy.swift`（loopback 监听 / 按表解析 / 多 IP 顺序试 / 表未命中回落系统并记账）+ `http-capability-dns-session.swift`（按表缓存 session）。★★真机双向对照（`HTTPDNS_PROD_DEVICE_OK`）：注入 `203.0.113.1` ⇒ 请求失败；基线 ⇒ 200；`tableHits=1`；表未命中的域名 ⇒ 200 且 `lastSource=system`（回落可见）。★三条硬约束（全是实测踩出来的）：① 一表一 session（proxy 字典 per-session，共用会串表）；② session 必须按表缓存（每请求 new = 连接池归零，#1155/#1160 同族）；③ 表未命中必须回落系统且**可见**，超上限（8 张）**如实报错**不悄悄回落（否则变成\"以为走了表其实走系统\"的假数据）。★实现历程里的三次纠错：a) #1176 我把实现限制说成\"平台边界\"（用户质疑「iOS 不支持 HTTPDNS 吗？」）——取证推翻，证书校验不必降级、只丢 SNI；b) #1178/#1179 用假域名 `sni-probe.local` + 服务端 `SNICallback` 证明 B 可行（真机 13/13，SNI 三次全是原域名）；c) #1179 真机首跑\"3 请求 3 隧道\"看似不复用——真因是自签证书每次失败重连（**装置变量**，与 #1165 同族），改用公网真实证书轮次后 1 隧道。★装置坑（已修，写进契约索引）：端口占用让新进程 bind 静默失败而 `wait_for --port` 被旧进程冒充（改 `lsof` 预检 + `--file`）；空数组 `every()` 恒真；**新增探针要改三处**（probe-args 表 / ProbeConfig / superapp-scene 的 switch 参数分派），漏第三处会让额外参数静默丢弃。★判据 24 条（httpdns-wire 17 + host-probe-registry 7），破坏性验证全红：证据 tableHits 改 0 / 代理监听改 0.0.0.0 / 删回落分支 / session 永远返回默认 / 探针不发请求 / 宿主忽略 PROTEUS_B_PROXY。★【诚实边界】① 只做 HTTP/1.1 CONNECT 隧道（明文 http 经代理会被拒 501，不静默改写）；② 不做解析缓存/TTL（表由业务给，与 Android/鸿蒙同边界）；③ App 进后台监听线程随挂起（iOS 后台限制），未做后台保活评估；④ 表上限 8 张（超出如实报错）；⑤ 仍未接性能预算/排障面板（`http.dnsStats` 已可读，但未进 FetchMeta）。★【后续可做】a) `transport`/`dnsStats` 接入排障面板；b) 多表合并策略（现在超 8 张报错）；c) 若将来要 DoH，单列能力项（进程级语义，不混进 per-request `httpDns`）。"
     },
     {
       "id": "T-studio-latency",
@@ -3132,7 +3136,7 @@
         "docs/proteus-studio-poc/native/embed_view.m",
         "docs/proteus-studio-poc/native/live_stream.h",
         "docs/proteus-studio-poc/05-studio-shell/src/main.rs",
-        "docs/proteus-studio-poc/05-studio-shell/dist/index.html",
+        "docs/proteus-studio-poc/05-studio-shell/web/index.html",
         "docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs",
         "docs/proteus-studio-poc/05-studio-shell/results",
         "docs/project-memory-archive/decisions.md",
