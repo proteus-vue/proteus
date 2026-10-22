@@ -165,12 +165,12 @@ describe('④ 键盘推送通道（读壳源码，不看桥方法）', () => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ★★★#1162：**网络域（C26 useFetch）在鸿蒙的分档**——用户实测："鸿蒙怎么一直都是未接线状态"
+// ★★★#1163：**网络域（C26 useFetch）在鸿蒙的分档**——用户实测："鸿蒙怎么一直都是未接线状态"
 //   根因：`request` 的桥工厂 `createAppNativeCapabilities` 从未登记进 `HARMONY_BRIDGE_SOURCES`，
 //   而 `http.request` 的分派在 `invoke_bytes_bridge.h`（`f.method == "http.request"`），
 //   该文件也不在 `HARMONY_HOST_SOURCES` ⇒ 两端都查不到 ⇒ 永远 🟡（而代码早就实现了）。
 // ══════════════════════════════════════════════════════════════════════════════
-describe('★★★#1162 鸿蒙网络域（useFetch）接线判定', () => {
+describe('★★★#1163 鸿蒙网络域（useFetch）接线判定', () => {
   it('★★★`request` → `http.request` 映射已登记，且鸿蒙宿主真的有该分派', async () => {
     const { loadHarmonyBridgeKeys: load } = (await import('../website/scripts/lib/harmony-host-keys.mjs')) as unknown as {
       loadHarmonyBridgeKeys: (root: string) => { keys: Set<string>, misses?: string[] }
@@ -180,7 +180,7 @@ describe('★★★#1162 鸿蒙网络域（useFetch）接线判定', () => {
   })
 
   it('★★抽取器要能认字节桥的 `f.method == "..."` 形态（带接收者前缀）', async () => {
-    // ★#1162 更正：同一正则本就命中 `f.method == "x"`（`.` 只是前一字符）——
+    // ★#1163 更正：同一正则本就命中 `f.method == "x"`（`.` 只是前一字符）——
     //   这里固定**形态支持**这件事本身（防将来有人把正则收紧成 `^\s*method`）。
     //   ★fetch 页原先 🟡 的真因是"清单没登记"，不是抽取器不认形态。
     const { extractHarmonyHostMethods: ex } = (await import('../website/scripts/lib/harmony-host-keys.mjs')) as unknown as {

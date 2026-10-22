@@ -86,7 +86,7 @@ export const CAPTURE_BRIDGE_TO_HOST = {
 }
 
 /**
- * ★★★决策 #1162：**网络域**（C26 `useFetch`）的桥工厂与方法映射。
+ * ★★★决策 #1163：**网络域**（C26 `useFetch`）的桥工厂与方法映射。
  *
  * 【为什么必须登记（用户实测："鸿蒙怎么一直都是未接线状态"）】
  *   `request` 是 `createAppNativeCapabilities` 的返回成员，而该工厂**从未登记**在
@@ -133,7 +133,7 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-capture.ts', factory: CAPTURE_BRIDGE_FACTORY, map: CAPTURE_BRIDGE_TO_HOST },
-  // ★#1162：网络域（request → http.request）
+  // ★#1163：网络域（request → http.request）
   { file: 'packages/api/src/capability-app.ts', factory: NATIVE_BRIDGE_FACTORY, map: NATIVE_BRIDGE_TO_HOST },
 ]
 
@@ -141,7 +141,7 @@ export const HARMONY_BRIDGE_SOURCES = [
 export const HARMONY_HOST_SOURCES = [
   'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h',
   'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h',
-  // ★★★#1162：**字节桥是网络能力的真实分派点**——`http.request` 的分支在这里
+  // ★★★#1163：**字节桥是网络能力的真实分派点**——`http.request` 的分支在这里
   //   （`if (f.method == "http.request") proteus::http::handle(f)`），
   //   而实现体在 `proteus_http.h`。两份都登记：
   //   · 分派形态 `f.method == "..."` 与 `method == "..."` 不同 ⇒ 抽取器已同时支持；
@@ -154,7 +154,7 @@ export const HARMONY_HOST_SOURCES = [
 /**
  * 从宿主 C++ 源码抽出**已实现的方法名字面量**。
  *
- * ★#1162 更正：此前以为字节桥的 `if (f.method == "http.request")` 需要额外正则——
+ * ★#1163 更正：此前以为字节桥的 `if (f.method == "http.request")` 需要额外正则——
  *   **实测不需要**：`/method\s*==\s*"…"/` 对 `f.method == "…"` 同样命中（`.` 只是前一字符）。
  *   fetch 页原先报 🟡 的真因是**两处清单没登记**（`createAppNativeCapabilities` 未进
  *   `HARMONY_BRIDGE_SOURCES`、`invoke_bytes_bridge.h` 未进 `HARMONY_HOST_SOURCES`），
@@ -278,7 +278,7 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
   const r = loadHarmonyBridgeKeys(root)
   if (r.misses.length) throw new Error('[harmony-host-keys] ' + r.misses.join('；'))
   if (refs.length && refs.every((k) => r.keys.has(k))) {
-    // ★★★#1162：说明要指出**真实的分派文件**，不能笼统写"宿主已接线"——
+    // ★★★#1163：说明要指出**真实的分派文件**，不能笼统写"宿主已接线"——
     //   网络能力的分派在 `invoke_bytes_bridge.h`（`f.method == "http.request"`），
     //   不在 scre/device 那两个文件里。按 refs 的实际宿主方法反查源文件。
     const hosts = refs.map((k) => HARMONY_BRIDGE_SOURCES.find((x) => k in x.map)?.map[k]).filter(Boolean)
@@ -290,7 +290,7 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
       }
     }
     const where = files.size ? [...files].join(' / ') : 'host'
-    // ★★★#1162：网络域的 ✅ 必须带**真机证据**与**真实缺口**，否则"✅"会盖住两件事：
+    // ★★★#1163：网络域的 ✅ 必须带**真机证据**与**真实缺口**，否则"✅"会盖住两件事：
     //   ① 真机验过什么（`hosts/harmony/results/transport-probe.json`：3 请求全 200、连接复用 3/1、
     //      传输读数 dns/connect/ttfb 有值）——只用静态分派证明不了"网络真的通"；
     //   ② 鸿蒙**没有实现** `http.cancel` / `http.cancelStats` / `http.tlsStats`（源码查无分派）

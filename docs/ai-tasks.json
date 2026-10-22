@@ -2867,7 +2867,7 @@
     },
     {
       "id": "T-harmony-http-cancel",
-      "title": "鸿蒙缺 http.cancel / http.cancelStats / http.tlsStats ⇒ useFetch 的 abort() 只 reject 本地、宿主传输不停（#1162 实测缺口）",
+      "title": "鸿蒙缺 http.cancel / http.cancelStats / http.tlsStats ⇒ useFetch 的 abort() 只 reject 本地、宿主传输不停（#1163 实测缺口）",
       "type": "bugfix",
       "status": "planned",
       "owner": null,
@@ -2884,7 +2884,7 @@
       "related": [
         "T-android-okhttp-transport"
       ],
-      "note": "【planned · #1162 实测发现】鸿蒙网络域已接线（`http.request` 经 `invoke_bytes_bridge.h` → `proteus_http.h`，真机 transport-probe 3/3 200、fetch-limit 两道闸全通），但**三个配套方法查无分派**：`http.cancel` / `http.cancelStats` / `http.tlsStats`。后果：JS 侧 `abort()` 只 reject 本地 promise，**宿主传输仍在跑**（`capability-invoke.ts:441` 已如实登记\"鸿蒙）\"）。这正是 #1121 当初立单要防的形态（\"用户以为取消了，其实后台还在下载\"）——Android/iOS 已修，鸿蒙未修。修法：① `proteus_http.h` 里维护 reqId → `HMS_Rcp_Request` 的在途表；② 在字节桥加 `http.cancel` 分支（`HMS_Rcp_CancelRequest`）；③ `http.tlsStats` 至少要能回 `{ challenges: 0, note: \"鸿蒙未做 pinning 回调\" }` 而不是 missing（否则 `host_stats` 恒 null，传输探针的归因链断）。④ 判据沿用 Android 的 `run-cancel-probe.sh` 三件（reject / chunks_stopped / host hits）。★注意鸿蒙是**一次性 VM**（#540）——原生 napi 同步返回，\"在飞请求\"的取消要在 C++ 侧持有句柄，不能依赖 JS 侧保留引用。"
+      "note": "【planned · #1163 实测发现】鸿蒙网络域已接线（`http.request` 经 `invoke_bytes_bridge.h` → `proteus_http.h`，真机 transport-probe 3/3 200、fetch-limit 两道闸全通），但**三个配套方法查无分派**：`http.cancel` / `http.cancelStats` / `http.tlsStats`。后果：JS 侧 `abort()` 只 reject 本地 promise，**宿主传输仍在跑**（`capability-invoke.ts:441` 已如实登记\"鸿蒙）\"）。这正是 #1121 当初立单要防的形态（\"用户以为取消了，其实后台还在下载\"）——Android/iOS 已修，鸿蒙未修。修法：① `proteus_http.h` 里维护 reqId → `HMS_Rcp_Request` 的在途表；② 在字节桥加 `http.cancel` 分支（`HMS_Rcp_CancelRequest`）；③ `http.tlsStats` 至少要能回 `{ challenges: 0, note: \"鸿蒙未做 pinning 回调\" }` 而不是 missing（否则 `host_stats` 恒 null，传输探针的归因链断）。④ 判据沿用 Android 的 `run-cancel-probe.sh` 三件（reject / chunks_stopped / host hits）。★注意鸿蒙是**一次性 VM**（#540）——原生 napi 同步返回，\"在飞请求\"的取消要在 C++ 侧持有句柄，不能依赖 JS 侧保留引用。"
     }
   ]
 }

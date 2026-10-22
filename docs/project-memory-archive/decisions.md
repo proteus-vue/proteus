@@ -12223,3 +12223,54 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 顺手修掉的既有夹具缺陷**：一条既有用例的 `toEqual([])` 夹具把 `cat:'sdk'` 的脚本正文写成 `pnpm run check:x`（零 SDK 痕迹）——按新判据它本身就该红，夹具补成 `"$NDK"/ndk-build` + 调用，保持它"验证 build-script 取证"的原意。
 **⑦ 诚实边界（逐条具名）**：1) token 谓词只证"**用到**该工具链"，不证"**CI 没有**它"（例如 CI 其实装了 JDK，只是没接线）——那属于"该不该接 CI"的决策，不是 cat 能判的；2) **传递依赖未递归**（脚本 A 调脚本 B、B 里用 xcrun ⇒ A 会被判无证据）——失败方向为**假红**，且改依赖形态时正好该复核标签，接受；3) `policy` 与 `machine-noise` **仍是标签**（前者是决策、后者是跨机比较），不假装判得出；4) `trackedFiles` 取不到（非 git 环境）时该判据降级为提醒，不假装验证过。
 **⑧ 未做 / 下一步**：① `policy` 14 条逐条评估接 CI（`ios-exp-docs` / `ios-source-lists` / `android-bundle` 三条已核实"本可接 CI"，只差决策）；② `manual` 桶（10 条）逐条收敛到 `verify` 或写明触发脚本用 `build-script` 取证；③ 若要覆盖传递依赖，需建"脚本调用图"（目前 `refsOf` 只做一层）。
+
+1163. **★★★【★编号勘误：本条原写 #1162，与并发会话的 #1162（gates-sync cat 可证伪化）撞号，按 check:decision-numbers 提示改为 #1163——不改动他人已入库的号】** fetch 页鸿蒙从"永远未接线"改为 ✅——根因是判定链两处清单漏登记（不是鸿蒙没实现）；✅ 现在强制带真机证据 + 真实缺口 · 决策**（2026-10-22 · 承接 #1067 的鸿蒙端分档）:
+
+**需求（用户原话）**：「继续收尾 useFetch，我看鸿蒙怎么一直都是未接线状态」。
+
+**★根因：不是鸿蒙没实现，是判定链的两处清单没登记**
+· 鸿蒙宿主**早就实现了** `http.request`：`proteus_http.h::handle()`（HMS RCP 栈），
+  经 `invoke_bytes_bridge.h` 的 `if (f.method == "http.request")` 分派；真机也跑过
+  （`hosts/harmony/results/transport-probe.json`：3/3 200、3 请求/1 连接；
+  `fetch-limit-{exact,declared,chunked}.json`：两道闸都按预期返回 `fetch.tooLarge`）。
+· 但 `harmonyEndStatus` 的判定链是「桥方法 → 宿主方法 → 宿主源码里的 `method == "..."` 分派」：
+  ① `request` 的工厂 `createAppNativeCapabilities` **从未登记**进 `HARMONY_BRIDGE_SOURCES`；
+  ② `http.request` 的分派文件 `invoke_bytes_bridge.h` **不在** `HARMONY_HOST_SOURCES`
+     （那里只有 `host_app_runtime_impl.h` + `proteus_device.h`）。
+  ⇒ 两端都查不到 ⇒ fetch 页永远 🟡「App 桥已就绪——鸿蒙宿主壳未接线」。
+· ★这是「代码做了、文档不认」的形态，与被 #1067 修掉的那批（设备域 12 项）同源。
+
+**★修正**
+· `NATIVE_BRIDGE_FACTORY = createAppNativeCapabilities` + `NATIVE_BRIDGE_TO_HOST`
+  （`request → http.request`；其余 10 个成员**如实 null**——它们不属 fetch 的 refs，也不假装 ✅）。
+· `HARMONY_HOST_SOURCES` 补 `invoke_bytes_bridge.h` / `proteus_http.h`。
+· 说明里的分派文件**由 refs 反查得出**（不再笼统写"宿主已接线"）。
+
+**★★★「✅ 不裸着写」——文案强制带真机证据 + 真实缺口**
+· 证据：`transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 fetch.tooLarge`；
+· 缺口：**`http.cancel` / `http.cancelStats` / `http.tlsStats` 在鸿蒙查无分派**
+  ⇒ `abort()` 只 reject 本地、**宿主传输不停**（`capability-invoke.ts:441` 已如实登记）。
+  ★这正是 #1121 立单要防的形态（"用户以为取消了，其实后台还在下载"）——Android/iOS 已修，鸿蒙未修
+  ⇒ 登记 `T-harmony-http-cancel`（含修法：在途表 + `HMS_Rcp_CancelRequest` + 一次性 VM 的注意事项）。
+· ★为什么必须写进文案：`✅` 很容易被读成"和三端完全一致"，而这个 ✅ 只覆盖**请求本身**。
+
+**★判据**：`tests/gen-content-harmony-host.test.ts` **14 → 18 条**
+· `request` 映射被认出 · 抽取器认 `f.method == "..."` 形态 ·
+  fetch 页鸿蒙 ✅ 且文案含「分派文件 + 真机读数 + `http.cancel` 缺口」·
+  **反向断言**「鸿蒙确实没有 `http.cancel`/`http.tlsStats` 分派」（将来实现了会红 ⇒ 提醒同步文档）；
+· **破坏性验证**：撤销 `request` 映射 / 撤销 `invoke_bytes_bridge.h` 登记 → 均打红。
+
+**★一处自我更正（避免留假判据）**
+本以为字节桥的 `f.method == "..."` 需要额外正则，**实测不需要**——
+`/method\s*==\s*"…"/` 对 `f.method == "…"` 同样命中（`.` 只是前一字符）。
+⇒ 删掉冗余分支（否则那条变异永远打不红），并把"为什么不需要"写进注释，防止下次再"修"一遍。
+
+**诚实边界**
+· ✅ 覆盖的是 **`http.request` 本身**（含 32 MiB 上限、流式、落盘、上传——鸿蒙真机证据都在）；
+  **取消与传输读数仍是缺口**（见上）；
+· 鸿蒙 `http2_ok` 仍为 `null`＝未测（RCP 需先接 CA/pinning）；
+· `createAppNativeCapabilities` 另外 10 个成员（worker/window/update…）在鸿蒙**未实现**，
+  本次登记为 `null` 只表示"不由宿主方法回答"，不代表可用——它们的页面仍是 🟡。
+
+**下一步**：① `T-harmony-http-cancel`（取消通道 + tlsStats 回执）② 鸿蒙 RCP 接 CA/pinning ⇒ 才可能 h2
+③ 其余 10 个原生能力成员逐项落地（`T-app-runtime-capabilities`）。
