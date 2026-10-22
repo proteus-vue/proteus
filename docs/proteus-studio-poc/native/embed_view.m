@@ -108,11 +108,14 @@ static int g_vs = -1, g_W = 0, g_H = 0;
 static double g_fps = 30.0, g_budget = 33.333;
 static bool g_hw = false, g_eof = false, g_live = false;
 static long g_recv_ok = 0, g_send_ok = 0;
+static long g_ticks = 0, g_empty = 0, g_maxq = 0;   /* 诊断：tick 总数 / 空转 / 队列峰值 */
 static AVFrame *g_last = NULL;   /* live：本拍解出的最后一帧 */
 
 static double g_t_start = 0, g_base_pts = -1, g_last_out = -1, g_wall0 = 0;
 static long g_frames = 0, g_late = 0;
 static double g_iv[MAX_SAMPLES], g_rc[MAX_SAMPLES], g_pr[MAX_SAMPLES];
+static double g_tr[MAX_SAMPLES];   /* 硬解帧回拷 GPU→CPU 的耗时（用来判断零拷贝还有多少油水） */
+static int g_n_tr = 0;
 static int g_n_iv = 0, g_n_rc = 0, g_n_pr = 0;
 static struct rusage g_ru0;
 static int g_probe_bits = 0;
@@ -157,23 +160,45 @@ static int poc_attach_impl(void *parent_nsview) {
     const char *live_cmd = getenv("POC_LIVE");
     if (live_cmd) {
       g_live = true;
+      g_pkt = av_packet_alloc();
+      g_frm = av_frame_alloc();
+      g_nv12 = av_frame_alloc();
+
+      /* ★顺序很关键：**先起读取线程，等 SPS/PPS 到齐，再开解码器**。
+         VideoToolbox 硬解必须有 extradata（参数集），而裸流里 SPS/PPS 随第一个 IDR 才出现；
+         第一版是"先开解码器后读流"，VT 拿不到参数集 ⇒ 直接拒绝解码（只能退回软解）。
+         live_peek_params 只窥探不取走，首个 IDR 仍在队列里，解出来就是完整一帧。 */
+      if (live_start(live_cmd) != 0) { fprintf(stderr, "实时：起读取线程失败\n"); return 2; }
+      static unsigned char params[4096];
+      int plen = 0, waited = 0;
+      while (!live_peek_params(params, (int)sizeof(params), &plen)) {
+        if (waited >= 5000) break;
+        usleep(10000);
+        waited += 10;
+      }
+
       const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
       g_cc = avcodec_alloc_context3(dec);
       g_cc->flags |= AV_CODEC_FLAG_LOW_DELAY;
+      if (plen > 0) {
+        g_cc->extradata = (uint8_t *)av_mallocz((size_t)plen + AV_INPUT_BUFFER_PADDING_SIZE);
+        memcpy(g_cc->extradata, params, (size_t)plen);
+        g_cc->extradata_size = plen;
+      }
       if (getenv("POC_LIVE_SW") == NULL &&
           av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
         g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
         g_hw = true;
       }
-      if (avcodec_open2(g_cc, dec, NULL) < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return 2; }
-      /* 尺寸由 screenrecord --size 决定；真到帧若不一致，下面上传时会按实际帧尺寸重设 */
+      int open_rc = avcodec_open2(g_cc, dec, NULL);
+      fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
+      if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return 2; }
+
+      /* 尺寸：SPS 里已经解析出来了，优先用它（screenrecord --size 只是请求值，设备可能改） */
       g_W = getenv("POC_LIVE_W") ? atoi(getenv("POC_LIVE_W")) : 1280;
       g_H = getenv("POC_LIVE_H") ? atoi(getenv("POC_LIVE_H")) : 720;
+      if (g_cc->width > 0 && g_cc->height > 0) { g_W = g_cc->width; g_H = g_cc->height; }
       g_fps = 60.0; g_budget = 1000.0 / g_fps;
-      g_pkt = av_packet_alloc();
-      g_frm = av_frame_alloc();
-      g_nv12 = av_frame_alloc();
-      if (live_start(live_cmd) != 0) { fprintf(stderr, "实时：起读取线程失败\n"); return 2; }
       fprintf(stderr, "实时投屏：%s（%dx%d）\n", live_cmd, g_W, g_H);
       goto gl_init;   /* 跳过后面的文件打开/流信息 */
     }
@@ -314,6 +339,8 @@ long poc_frames(void) { return g_frames; }
 long poc_recv_ok(void) { return g_recv_ok; }
 long poc_send_ok(void) { return g_send_ok; }
 long poc_live_aus(void) { return g_live_aus; }
+long poc_ticks(void) { return g_ticks; }
+long poc_empty(void) { return g_empty; }
 int poc_live_restarts(void) { return g_live_restarts; }
 long poc_late(void) { return g_late; }
 
@@ -326,8 +353,24 @@ double poc_cpu_pct(void) {
   return wall > 0 ? cpu / wall * 100.0 : -1;
 }
 
+/* 上传一个平面。★必须按 linesize 走：解码器给的 stride 常被对齐到 16/32 的倍数
+   （实测 VT 回拷帧 linesize 可能 > width），直接 `glTexSubImage2D(..., w, h, data)` 会
+   把每行都读偏 ⇒ 画面斜切/块状失真。stride == w 时走整块上传（快路径）。 */
+static void upload_plane(GLuint tex, int w, int h, GLenum fmt, const unsigned char *data, int stride) {
+  glBindTexture(GL_TEXTURE_2D, tex);
+  if (!data || w <= 0 || h <= 0) return;
+  if (stride == w) {
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, fmt, GL_UNSIGNED_BYTE, data);
+    return;
+  }
+  for (int y = 0; y < h; y++) {
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, w, 1, fmt, GL_UNSIGNED_BYTE, data + (size_t)y * (size_t)stride);
+  }
+}
+
 static int poc_tick_impl(void) {
   if (!g_inited || g_eof) return g_eof ? 1 : 2;
+  g_ticks++;
   @autoreleasepool {
     [g_ctx makeCurrentContext];
 
@@ -353,7 +396,7 @@ static int poc_tick_impl(void) {
           got = 1;
         }
       }
-      if (!got) return 0;
+      if (!got) { g_empty++; return 0; }
       goto use_last;
     }
     if (av_read_frame(g_fmt, g_pkt) < 0) {
@@ -399,7 +442,10 @@ use_last:
     AVFrame *src = frm;
     if (frm->format == AV_PIX_FMT_VIDEOTOOLBOX) {
       av_frame_unref(g_nv12);
-      if (av_hwframe_transfer_data(g_nv12, frm, 0) < 0) { av_frame_unref(frm); return 0; }
+      double t0 = now_ms();
+      int trc = av_hwframe_transfer_data(g_nv12, frm, 0);
+      if (g_n_tr < MAX_SAMPLES) g_tr[g_n_tr++] = now_ms() - t0;
+      if (trc < 0) { av_frame_unref(frm); return 0; }
       src = g_nv12;
     }
     if (src->format != AV_PIX_FMT_NV12) {
@@ -424,10 +470,10 @@ use_last:
     glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
     glViewport(0, 0, g_W, g_H);
     glUseProgram(g_progComp);
-    glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, g_ty);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_W, g_H, GL_RED, GL_UNSIGNED_BYTE, src->data[0]);
-    glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, g_tuv);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_W / 2, g_H / 2, GL_RG, GL_UNSIGNED_BYTE, src->data[1]);
+    glActiveTexture(GL_TEXTURE0);
+    upload_plane(g_ty, g_W, g_H, GL_RED, src->data[0], src->linesize[0]);
+    glActiveTexture(GL_TEXTURE1);
+    upload_plane(g_tuv, g_W / 2, g_H / 2, GL_RG, src->data[1], src->linesize[1]);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     double c1 = now_ms();
 
@@ -475,6 +521,7 @@ void poc_report(const char *path) {
     qsort(g_iv, g_n_iv, sizeof(double), cmp_double);
     qsort(g_rc, g_n_rc, sizeof(double), cmp_double);
     qsort(g_pr, g_n_pr, sizeof(double), cmp_double);
+    qsort(g_tr, g_n_tr, sizeof(double), cmp_double);
 
     char json[2560];
     snprintf(json, sizeof(json),
@@ -484,14 +531,18 @@ void poc_report(const char *path) {
              "  \"interval_ms\": {\"p50\": %.2f, \"p95\": %.2f, \"p99\": %.2f, \"max\": %.2f},\n"
              "  \"compose_ms\": {\"p50\": %.3f, \"p95\": %.3f, \"p99\": %.3f, \"max\": %.3f},\n"
              "  \"present_ms\": {\"p50\": %.3f, \"p95\": %.3f, \"p99\": %.3f, \"max\": %.3f},\n"
+             "  \"hw_transfer_ms\": {\"p50\": %.3f, \"p95\": %.3f, \"max\": %.3f},\n"
+             "  \"ticks\": %ld, \"empty_ticks\": %ld,\n"
              "  \"late_frames\": %ld,\n  \"late_pct\": %.2f,\n"
              "  \"cpu\": {\"self_seconds\": %.2f, \"wall_seconds\": %.2f, \"single_core_pct\": %.1f}\n}\n",
-             video_path(), g_W, g_H, g_hw ? "videotoolbox" : "software",
+             g_live ? "(live pipe)" : video_path(), g_W, g_H, g_hw ? "videotoolbox" : "software",
              (g_probe_bits & 1) ? "true" : "false", (g_probe_bits & 2) ? "true" : "false",
              g_frames, g_frames / (wall / 1000.0),
              pct(g_iv, g_n_iv, 0.50), pct(g_iv, g_n_iv, 0.95), pct(g_iv, g_n_iv, 0.99), g_n_iv ? g_iv[g_n_iv - 1] : -1,
              pct(g_rc, g_n_rc, 0.50), pct(g_rc, g_n_rc, 0.95), pct(g_rc, g_n_rc, 0.99), g_n_rc ? g_rc[g_n_rc - 1] : -1,
              pct(g_pr, g_n_pr, 0.50), pct(g_pr, g_n_pr, 0.95), pct(g_pr, g_n_pr, 0.99), g_n_pr ? g_pr[g_n_pr - 1] : -1,
+             pct(g_tr, g_n_tr, 0.50), pct(g_tr, g_n_tr, 0.95), g_n_tr ? g_tr[g_n_tr - 1] : -1,
+             g_ticks, g_empty,
              g_late, g_frames ? 100.0 * (double)g_late / (double)g_frames : -1,
              cpu, wall / 1000.0, wall > 0 ? cpu / (wall / 1000.0) * 100.0 : -1);
     fputs(json, stdout);

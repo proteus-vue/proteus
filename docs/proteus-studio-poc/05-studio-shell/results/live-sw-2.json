@@ -1,0 +1,18 @@
+{
+  "mode": "tauri-window",
+  "video": "(live pipe)",
+  "size": "1280x720",
+  "hwdec": "software",
+  "webview_found": true,
+  "webview_transparent": true,
+  "frames_presented": 956,
+  "measured_fps": 59.79,
+  "interval_ms": {"p50": 16.19, "p95": 23.79, "p99": 37.05, "max": 91.46},
+  "compose_ms": {"p50": 1.188, "p95": 1.341, "p99": 1.719, "max": 4.035},
+  "present_ms": {"p50": 0.469, "p95": 4.068, "p99": 6.215, "max": 12.002},
+  "hw_transfer_ms": {"p50": -1.000, "p95": -1.000, "max": -1.000},
+  "ticks": 1124, "empty_ticks": 51,
+  "late_frames": 0,
+  "late_pct": 0.00,
+  "cpu": {"self_seconds": 5.14, "wall_seconds": 15.99, "single_core_pct": 32.2}
+}

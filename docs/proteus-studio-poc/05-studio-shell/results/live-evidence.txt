@@ -1,1 +1,6 @@
-[studio] dump rc=0 | aus=649 restarts=1 frames=51 send_ok=649 recv_ok=649
+实时：参数集 108 字节（等 280ms）· 硬解=1 · open rc=0
+实时投屏：adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -（1280x720）
+[studio] dump rc=0 | aus=558 restarts=1 frames=157 send_ok=555 recv_ok=555 ticks=311 empty=46
+实时：参数集 108 字节（等 350ms）· 硬解=0 · open rc=0
+实时投屏：adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -（1280x720）
+[studio] dump rc=0 | aus=442 restarts=1 frames=164 send_ok=440 recv_ok=440 ticks=310 empty=42

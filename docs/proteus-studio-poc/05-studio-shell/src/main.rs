@@ -22,8 +22,11 @@ extern "C" {
     fn poc_dump(path: *const c_char) -> c_int;
     fn poc_live_aus() -> i64;
     fn poc_recv_ok() -> i64;
+    fn poc_ticks() -> i64;
+    fn poc_empty() -> i64;
     fn poc_send_ok() -> i64;
     fn poc_live_restarts() -> i32;
+    fn poc_report(path: *const c_char);
 }
 
 #[derive(Serialize)]
@@ -89,8 +92,27 @@ fn poll_window(handle: tauri::AppHandle, tries: u32) {
                     let rc = unsafe { poc_attach(p as *mut c_void) };
                     eprintln!("[studio] attach rc={rc}");
                     start_ticks(h.clone());
-                    // 自证用：POC_DUMP=<path> 时，5 秒后把画布读回成 PPM 并退出
-                    if let Ok(path) = std::env::var("POC_DUMP") {
+                    // 取数模式（真机实时流没有容器、没法用 ffmpeg 侧统计，只能自己上报）：
+                    //   POC_SECONDS=n + POC_JSON=<path> ⇒ 跑 n 秒后写读数并退出
+                    //   POC_DUMP=<path>              ⇒ 5 秒后把画布读回成 PPM（视觉自证）
+                    let secs: f64 = std::env::var("POC_SECONDS")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(0.0);
+                    let json = std::env::var("POC_JSON").ok();
+                    let dump = std::env::var("POC_DUMP").ok();
+                    if secs > 0.0 && json.is_some() {
+                        let hh = h.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(Duration::from_millis((secs * 1000.0) as u64));
+                            let c = CString::new(json.unwrap()).unwrap();
+                            let _ = hh.run_on_main_thread(move || unsafe {
+                                poc_report(c.as_ptr());
+                            });
+                            std::thread::sleep(Duration::from_millis(500));
+                            hh.exit(0);
+                        });
+                    } else if let Some(path) = dump {
                         let hh = h.clone();
                         std::thread::spawn(move || {
                             std::thread::sleep(Duration::from_millis(5000));
@@ -98,8 +120,9 @@ fn poll_window(handle: tauri::AppHandle, tries: u32) {
                             let _ = hh.run_on_main_thread(move || unsafe {
                                 let rc = poc_dump(c.as_ptr());
                                 eprintln!(
-                                    "[studio] dump rc={rc} | aus={} restarts={} frames={} send_ok={} recv_ok={}",
-                                    poc_live_aus(), poc_live_restarts(), poc_frames(), poc_send_ok(), poc_recv_ok()
+                                    "[studio] dump rc={rc} | aus={} restarts={} frames={} send_ok={} recv_ok={} ticks={} empty={}",
+                                    poc_live_aus(), poc_live_restarts(), poc_frames(), poc_send_ok(), poc_recv_ok(),
+                                    poc_ticks(), poc_empty()
                                 );
                             });
                             std::thread::sleep(Duration::from_millis(600));

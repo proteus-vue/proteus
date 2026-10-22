@@ -68,44 +68,69 @@ DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-s
 ```
 
 
-## 实时投屏（决策 #1174）
+## 实时投屏（决策 #1174 · 收口于 #1175）
 
 把画布输入从"录制流"换成**实时管道**：
 
 ```bash
+# 硬解（默认）
 POC_LIVE='adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -' \
-POC_LIVE_SW=1 DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
+DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
+
+# 软解（逃生口：VT 在某些设备/参数下面会拒绝，用这个排除硬解因素）
+POC_LIVE_SW=1 …
+
+# 取数（真机流没有容器，ffmpeg 侧统计不了，只能自己上报）
+POC_SECONDS=18 POC_JSON=results/x.json …
 ```
 
 ### 为什么要自己写传输层
 
 `screenrecord --output-format=h264` 出的是**裸 Annex-B，没有时间戳**（PoC C 的发现③）。
-ffmpeg 的 raw h264 demuxer 只能按默认 25fps 猜 ⇒ 慢动作。所以 `native/live_stream.h` 自己做了四件事：
+ffmpeg 的 raw h264 demuxer 只能按默认 25fps 猜 ⇒ 慢动作。所以 `native/live_stream.h` 自己做了五件事：
 popen 拉流（进程退出自动重连）→ Annex-B 拆 NAL → **按 `first_mb_in_slice==0` 判新帧** →
-**到帧时刻 = PTS**（`CLOCK_MONOTONIC`）→ 环形队列交给主线程。
+**到帧时刻 = PTS**（`CLOCK_MONOTONIC`）→ 环形队列交给主线程；另加 `live_peek_params` 供硬解取参数集。
 
-### 三个实测踩坑（都修了）
+### 五个实测踩坑（全修了，每条都被画面或用例打回过）
 
 | # | 现象 | 根因 | 修法 |
 |---|---|---|---|
 | 1 | 画布全黑，`send_packet` 返 `INVALIDDATA(-1094995529)` | 组 AU 时只拼 NAL 负载，**丢了起始码** | 每个 NAL 前补 `00 00 00 01` |
-| 2 | 画面花屏（块状拖影） | 用"一个 VCL = 一帧"，**一帧多 slice 时被切成半帧** | 按 `first_mb_in_slice==0` 判新帧；SPS/PPS/SEI 归下一帧 |
-| 3 | 仍然花屏，且 `aus 649 / send_ok 295` | tick 60Hz 追不上 120fps，队列积压**丢参考帧** | 每拍**排空队列**，只把最后一帧拿去渲染 ⇒ `649/649` 零丢包 |
+| 2 | 花屏（块状拖影） | 用"一个 VCL = 一帧"，**一帧多 slice 时被切成半帧** | 按 `first_mb_in_slice==0` 判新帧；SPS/PPS/SEI 归下一帧 |
+| 3 | 仍花屏，`aus 649 / send_ok 295` | tick 60Hz 追不上 120fps，队列积压**丢参考帧** | 每拍**排空队列**，只把最后一帧拿去渲染 |
+| 4 | **画面残留块状失真**（零丢包仍在） | ★**找不到下一个起始码时，尾部不完整数据既被当完整 NAL 处理、又留在 carry 带进下一轮** ⇒ 同一段字节被拼进 AU 两次 ⇒ 码流损坏 | 没有下一个起始码就 `break`，尾部一律留给下一轮；只在缓冲塞满时硬切 |
+| 5 | `ticks=309 / empty=228`（74% 空转），且投屏延迟平白多最多 64ms | `fread` 会**把请求字节读满才返回**（管道也如此），64KB 缓冲在 8Mbps 下要攒 ~64ms ⇒ AU 成批到达 | 改 `read(fileno(p), …)`，取"当前有多少给多少"⇒ `empty` 228→28 |
 
-### 还没解决的（如实写）
+另修两处：**VT 硬解需要 extradata**（原"先开解码器后读流"⇒ VT 拿不到 SPS/PPS 直接拒绝）
+⇒ 改为先起读取线程、`live_peek_params` 窥探首个 IDR 里的 SPS/PPS（**不取走**，首个 IDR 仍会正常解码）
+→ 设 `cc->extradata` → 再 `avcodec_open2`；以及**上传按 `linesize` 走**（解码器 stride 可能 > width，
+直接按 width 上传会把每行读偏）。
 
-- **VT 硬解在裸流上直接拒绝**（`POC_LIVE_SW=1` 才出画面）：VideoToolbox 需要 SPS/PPS 作为 extradata，
-  而我们是"先读流再开解码器"。修法明确（先收首个 AU 抽 SPS/PPS → 设 extradata → 再 `avcodec_open2`），本轮没做。
-- 软解路径下画面**仍有残留块状失真**（`results/canvas-live-softdecode.png`），
-  但收发已经 649/649 零丢包 ⇒ 不是丢包问题，怀疑 AU/切片边界仍有错判，**未定位完**。
-- 软解 720p/120fps 的 CPU 明显高于硬解（未测准确值）。
+### 实测（同一台真机 120fps 流，各 3 轮 18s，取中位）
 
-⇒ **结论：实时链路"通了但没通干净"**——数据流、拆包、解码、上屏都成立，画面质量还差一个 extradata/AU 边界的修复。
+| 解码 | fps | 间隔 p50 / p99 | compose p50 | present p50 | 回拷 | 迟到 | CPU 单核 |
+|---|---|---|---|---|---|---|---|
+| **VT 硬解** | **59.5** | 16.1 / 37.7ms | 1.30ms | 0.44ms | **0.05ms** | 0 | **20.5%** |
+| 软解 | 59.8 | 16.2 / 37.0ms | 1.19ms | 0.42ms | — | 0 | **32.7%** |
+
+⇒ **硬解省 37% CPU，帧率与抖动无实质差别**。默认走硬解，`POC_LIVE_SW=1` 留作逃生口。
+
+### 两处被自己推翻的猜测（记下来免得下轮重犯）
+
+1. 上一轮写"软解仍有残留失真、怀疑 AU/slice 边界"——真因是踩坑 4 的**尾字节重复拼接**，
+   与解码方式无关；修完后**硬解与软解画面都干净**（`results/canvas-live-hw.png` / `canvas-live-sw.png`）。
+2. 本轮中途猜"硬解 p99 更差是 GPU→CPU 回拷造成的"——量出来 `hw_transfer_ms.p50 = 0.05ms`
+   （Apple Silicon 统一内存），**假设不成立**；首批看到的 p99 差异是机器负载噪声，不是机制。
 
 ## 诚实边界
 
-1. **画面来自录制流**，不是实时投屏；循环播放靠 `avformat_seek_file` 回片头；
+
+1. **实时链路仍未覆盖的**：只测了 Android 一台（1200×2608 / 120Hz）；iOS ReplayKit 未接；
+   走 `adb` 管道**不是**网络投屏（无 RTP 重组 / 丢包 / 抖动），真实无线链路未测；
+   端到端延迟（设备出帧 → 画布上屏）**还没量**——PTS 已经打好了，接统计即可；
 2. **只证明了"画布 + 布局 + 叠加"这一层**，面板内容是占位，没有真实交互；
+   `screenrecord --size 1280x720` 会把竖屏**加黑边**塞进 16:9（实测有效像素只有约 330×720），
+   带宽与 FBO 面积浪费约 74% —— 产品上应按设备宽高比取分辨率；
 3. **没有编辑器/终端**——那是阶段 1 的另外两块，且编辑器按 G-56.1 只用现成的（CodeMirror 6）；
 4. `stats` 的 fps 是前端按帧数差算的（500ms 窗口），不是精确到帧的时序；
 5. 状态栏读数取自**原生侧累计值**，页面刷新不清零。

@@ -3041,21 +3041,21 @@
       "id": "T-studio-live-stream",
       "title": "Studio 实时投屏管道：裸 H.264 → 自建传输层 → 上屏（通了但没通干净：VT extradata 与残留失真未解）",
       "type": "capability",
-      "status": "in_progress",
+      "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
         "docs/proteus-studio-poc/native/live_stream.h",
         "docs/proteus-studio-poc/native/embed_view.m",
         "docs/proteus-studio-poc/05-studio-shell"
       ],
-      "decision": 1174,
+      "decision": 1175,
       "branch": null,
-      "verification": "POC_LIVE=… POC_LIVE_SW=1 ./target/release/proteus-studio-shell → 期望 aus==send_ok==recv_ok 且画布无色块（当前有色块，未达）",
+      "verification": "POC_SECONDS=18 POC_JSON=results/x.json POC_LIVE=… ./target/release/proteus-studio-shell（期望 硬解=1、empty/ticks < 10%、画布无色块）；两组各 3 轮读数见 results/live-{hw,sw}-{1,2,3}.json",
       "related": [
         "T-studio-shell-stage1",
         "T-studio-poc-c-device-stream"
       ],
-      "note": "【in_progress · 决策 #1174（2026-10-22）】承接 #1173「画布仍是录制流」。★已完成：自建传输层（popen 拉流 + Annex-B 拆 NAL + first_mb_in_slice 判帧 + 到帧 PTS + 环形队列）；三个缺陷修完（丢起始码/多 slice 切成半帧/积压丢参考帧）⇒ aus 649 = send_ok 649 = recv_ok 649 零丢包。★未完成：① VT 硬解在裸流上拒绝（需 SPS/PPS extradata，当前先读流后开解码器）；② 软解下仍有残留块状失真（非丢包，怀疑 AU/slice 边界）；③ 软解 CPU 未测。★下一步：抽 SPS/PPS 设 extradata 恢复 VT（一举解画质+CPU）；仍失真则改用 av_parser_parse2 代替手写拆包。"
+      "note": "【done · 决策 #1175（2026-10-22）】承接 #1174「通了但没通干净」，两个未解项全部落地。★VT 硬解恢复：先起读取线程 → live_peek_params 窥探首个含 SPS+PPS 的 AU（不取走，那是首个 IDR）→ 设 cc->extradata → avcodec_open2。实测 参数集 108 字节 / 硬解=1 / open rc=0。★残留失真真因（推翻 #1174 的\"AU/slice 边界\"猜测）：拆包循环找不到下一个起始码时，尾部数据既被当完整 NAL 处理、又留在 carry 带进下一轮 ⇒ 每个读边界往码流插一段重复字节。修法：无起始码即 break，尾部留给下一轮，只有缓冲塞满才硬切。★新抓两个缺陷：① fread 读满 64KB 才返回 ⇒ AU 成批到达（empty 74%、延迟 +64ms）⇒ 改 read(fileno)；empty 228→28、frames 51→175。② 上传按 g_W 当 stride，忽略 linesize ⇒ 新增 upload_plane() 逐行回退。★实测（真机 120fps 流，各 3 轮 18s 中位）：硬解 59.5fps / p99 37.7ms / compose 1.30ms / 回拷 0.05ms / CPU 20.5%；软解 59.8fps / p99 37.0ms / CPU 32.7% ⇒ 硬解省 37% CPU。★自我推翻：曾猜\"硬解 p99 差是 GPU→CPU 回拷\"——实测回拷 0.05ms（统一内存），假设不成立；单批 3 轮的 p99 差异是负载噪声。教训：机制结论要多轮 + 直接测量。★边界：只测 Android 一台；iOS ReplayKit 未接；adb 管道非网络投屏；端到端延迟未量；1280x720 对竖屏加黑边（有效像素仅 ~330x720）。"
     }
   ]
 }
