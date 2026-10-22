@@ -31,7 +31,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { extractRunCommands, isCovered, refsOf } from './lib/gates-sync.mjs'
+import { auditLocalOnly, extractRunCommands, isCovered, refsOf } from './lib/gates-sync.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WF_DIR = path.join(ROOT, '.github', 'workflows')
@@ -45,7 +45,7 @@ const LOCAL_ONLY = {
   //   覆盖：iOS 竖切 M1 链路（Vue → Dispatcher → native 后端 → JSC 桥 → 宿主树）。
   'check:ios-host': '需 macOS + Xcode（swiftc/JavaScriptCore）；CI 为 ubuntu-latest',
   'check:ios-perf': '同上（性能基线需真实 JavaScriptCore；真机数字另需模拟器/设备）',
-  'check:ios-exp-docs': '文档↔实验数字一致性；依赖 hosts/ios/experiments/results/（本机跑出的产物，不入库）',
+  'check:ios-exp-docs': '文档↔实验数字一致性（★2026-10-22 复核：产物 hosts/ios/experiments/results/*.json 已入库、脚本纯 node，本可接 CI——按实验族先例留本地，属政策豁免）',
   'check:ios-exp-compile': '实验代码（模拟器/真机两变体）可编译性；需 Xcode 工具链（CI 为 ubuntu-latest）',
   // ★iOS 自绘宿主的类型检查（零设备、零签名）——需 macOS + Xcode（iphoneos SDK）。
   //   背景：`run-selfdraw.sh` 是唯一编译 selfdraw-scene.swift 的地方且需真机+签名
@@ -54,7 +54,7 @@ const LOCAL_ONLY = {
   // ★决策 #1073：iOS 两份源码清单一致性 + 清单续行形态（纯静态，但检查对象是 macOS 工具链脚本）。
   //   实测事故：#1067/#1069 两轮各漏加一个 .swift 到 run-selfdraw.sh ⇒ 真机 "cannot find X in scope"；
   //   #1067 那轮还用脚本把清单续行写成了 `\\` ⇒ 后续文件全部不参与编译（bash -n 查不出来）。
-  'check:ios-source-lists': '检查 hosts/ios 的两份手写源码清单（依赖 macOS 工具链语境；CI 为 ubuntu-latest）',
+  'check:ios-source-lists': '检查 hosts/ios 的两份手写源码清单（★2026-10-22 复核：纯 fs 读 .sh 做集合比对，零 xcrun/swiftc，CI 也能跑——留本地属政策）',
   // ★玻璃像素等价门禁（决策 #834 · B6）：需 macOS Metal（xcrun swift 编译生成物 MSL 并渲染）——
   //   CI 为 ubuntu-latest、无 Metal ⇒ 归开发机（真机端另有 iOS --glass 截图取证）。
   'check:glass-pixel-parity': '需 macOS Metal（本机渲染生成物 MSL 与 Rust CPU oracle 逐像素比对）；CI 为 ubuntu-latest 无 Metal',
@@ -98,7 +98,7 @@ const LOCAL_ONLY = {
   // ★卡 I2「平台层零舍入」静态门禁（2026-09-29 新增）。扫描面是 **hosts/**（Android/iOS 宿主源码）——
   //   那部分不参与 CI 的 TS 构建（真机宿主需 NDK/Xcode），CI 上跑它只会扫到空集 ⇒ 假门禁。
   //   它的作用域是**开发机**：改宿主代码后立刻拦下"平台侧再舍入一次"。
-  'check:host-rounding': '扫描 hosts/（Android/iOS 宿主源码）——CI 不构建宿主，扫不到任何文件 ⇒ 假门禁',
+  'check:host-rounding': '扫描 hosts/（Android/iOS 宿主源码）★2026-10-22 复核更正：原文"CI 不构建宿主 ⇒ 扫不到文件"不成立——hosts/** 是入库源码，本机实测扫 117 个文件；CI 也能扫，留本地属政策（扫源码 ≠ 构建宿主）',
   // ★★★宿主内核键门禁（2026-10-06 · css:next justify-self 项配套）：从内核 style_from_dto 推出消费键，
   //   断言 Android 宿主白名单覆盖（漏登记 = 请求树不带 = 内核静默用默认——本仓已三次踩同款）。
   //   与 check:host-rounding 同族：宿主侧门禁，开发机跑（CI 无宿主构建语境）。
@@ -273,6 +273,92 @@ const LOCAL_ONLY = {
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 const scripts = pkg.scripts ?? {}
 
+/**
+ * ★LOCAL_ONLY 台账的**结构化元数据**（决策 #1159）——与上面 `LOCAL_ONLY`（人类可读理由）**同名同步**。
+ * 两维闭合枚举（定义见 `scripts/lib/gates-sync.mjs` 的 `LOCAL_ONLY_CATS` / `LOCAL_ONLY_RUNS`）：
+ *   `cat` = 为什么 CI 跑不了/不该跑；`run` = 那它到底由谁跑（能取证的一律取证）。
+ * 只有 `cat` 没有 `run` 等于没说清"谁在守"，反之亦然 ⇒ 双向必填（缺一个就红）。
+ * 新增一条的正确姿势：先问"能不能接 CI"，不能才登记，并在 cat 里挑**最贴近事实**的那一类。
+ */
+const LOCAL_ONLY_META = {
+  // ── device（需真机/真机产物）──────────────────────────────────────────
+  // ★`evidence: 'live'` = 活体设备取证（无 results/*.json，渲染读数当场取）⇒ 不按"缺产物路径"提醒
+  'check:glass-parity-harmony': { cat: 'device', run: 'verify', evidence: 'live' },
+  'check:stream-evidence': { cat: 'device', run: 'verify' },
+  'check:cache-evidence': { cat: 'device', run: 'verify' },
+  'check:android-platform-anim': { cat: 'device', run: 'verify' },
+  'check:android-kernel-anim': { cat: 'device', run: 'verify' },
+  'check:android-lights': { cat: 'device', run: 'verify' },
+  'check:android-flip': { cat: 'device', run: 'verify' },
+  'check:android-ink': { cat: 'device', run: 'verify' },
+  'check:android-ink-scroll': { cat: 'device', run: 'verify' },
+  'check:app-stack': { cat: 'device', run: 'verify' },
+  'check:mount-layers': { cat: 'device', run: 'verify' },
+  'check:showcase': { cat: 'device', run: 'on-device' },
+  'check:cross-end-geometry': { cat: 'device', run: 'manual' },
+  'check:host-runtime': { cat: 'device', run: 'verify' },
+  'check:embed-demo': { cat: 'device', run: 'verify' },
+  // ── macos（需 Xcode / Swift / Metal / JSC）───────────────────────────
+  'check:ios-host': { cat: 'macos', run: 'manual' },
+  'check:ios-perf': { cat: 'macos', run: 'on-device' },
+  'check:ios-exp-docs': { cat: 'policy', run: 'manual' },
+  'check:ios-exp-compile': { cat: 'macos', run: 'manual' },
+  'check:ios-selfdraw-compile': { cat: 'macos', run: 'manual' },
+  'check:ios-source-lists': { cat: 'policy', run: 'verify' },
+  'check:glass-pixel-parity': { cat: 'macos', run: 'verify' },
+  'check:ios-cli-host-compile': { cat: 'macos', run: 'manual' },
+  'check:ios-invoke-bytes': { cat: 'macos', run: 'manual' },
+  // ── sdk（Android SDK/NDK/JDK · DevEco OHOS SDK）──────────────────────
+  'check:js-engine-build': { cat: 'sdk', run: 'verify' },
+  'check:js-engine': { cat: 'sdk', run: 'verify' },
+  'check:16kb-align': { cat: 'sdk', run: 'verify' },
+  'check:android-bundle': { cat: 'policy', run: 'verify' },
+  'check:android-host-compile': { cat: 'sdk', run: 'verify' },
+  'check:harmony-host-compile': { cat: 'sdk', run: 'verify' },
+  'check:host-abi-aar': { cat: 'sdk', run: 'verify' },
+  'check:invoke-wire-parity': { cat: 'sdk', run: 'verify' },
+  // ── policy（能跑，但**选择**本地跑：省时 / 避免 CI 与本地各红一次）───────────
+  //   ★这类原先写成 `host-src`，理由"CI 无宿主源码语境 ⇒ 扫不到文件"——2026-10-22 独立验证
+  //     实测不成立：hosts/** 是**入库源码**，CI checkout 后 `check:host-rounding` 能扫到 117 个文件。
+  //     政策豁免本身没问题，问题是把"我们选择不跑"写成"CI 跑不了"——后者无法被复核，也会挡住
+  //     将来"要不要接 CI"的讨论。⇒ 独立成类，理由与标签都如实。
+  'check:host-rounding': { cat: 'policy', run: 'verify' },
+  'check:host-kernel-keys': { cat: 'policy', run: 'verify' },
+  'check:ios-style-keys': { cat: 'policy', run: 'verify' },
+  'check:env-vars': { cat: 'policy', run: 'verify' },
+  'check:screen-mount-helpers': { cat: 'policy', run: 'verify' },
+  'check:evidence-tracked': { cat: 'policy', run: 'verify' },
+  'check:host-layering': { cat: 'policy', run: 'verify' },
+  'check:host-separation-ledger': { cat: 'policy', run: 'verify' },
+  'check:host-invoke-contract': { cat: 'policy', run: 'verify' },
+  'check:host-tab-spec': { cat: 'policy', run: 'verify' },
+  'check:shell-i18n-vars': { cat: 'policy', run: 'verify' },
+  // ── machine-noise（跨机不可比 / 环境漂移）───────────────────────────
+  'check:compile-baseline': { cat: 'machine-noise', run: 'verify' },
+  // ── generator（生成物基线类：--check 双模 或 gen:* 对偶）─────────────
+  'check:css-inventory': { cat: 'generator', run: 'manual' },
+  'check:binding-matrix': { cat: 'generator', run: 'verify' },
+  'check:gap-report': { cat: 'generator', run: 'verify' },
+  'check:ops-fixture': { cat: 'generator', run: 'verify' },
+  // ── closeout（收尾/发布显式调用；基座在 verify）──────────────────────
+  'check:pushed': { cat: 'closeout', run: 'verify' },
+  'check:pushed:strict': { cat: 'closeout', run: 'closeout' },
+  'check:deploy-pending': { cat: 'closeout', run: 'verify' },
+  'check:deploy-pending:strict': { cat: 'closeout', run: 'closeout' },
+  'check:baseline-approval:strict': { cat: 'closeout', run: 'closeout' },
+  // ── covered（已被其他通道等价覆盖）─────────────────────────────────
+  'check:lockfile-sync': { cat: 'covered', run: 'verify', also: '--frozen-lockfile' },
+  'check:anim-color-golden': { cat: 'covered', run: 'suite', also: 'test' },
+  // ── measure（测量装置 / 非门禁）─────────────────────────────────────
+  'check:app-ir-shadow': { cat: 'measure', run: 'manual' },
+  'check:baseline-freshness': { cat: 'measure', run: 'manual' },
+  // ── local-env（依赖本机 gitignored 配置）────────────────────────────
+  'check:hook-wiring': { cat: 'local-env', run: 'verify' },
+}
+
+/** ★棘轮（只减不增）：新增豁免必须同时抬这个数，diff 里看得见（同 check:file-size 先例） */
+const LOCAL_ONLY_MAX = 58
+
 /** 读取所有 workflow 文本（含 pages.yml / consistency.yml 等） */
 function workflowFiles() {
   if (!fs.existsSync(WF_DIR)) return []
@@ -292,10 +378,13 @@ const notes = []
 const checkNames = Object.keys(scripts).filter((k) => k.startsWith('check:'))
 const viaCount = { name: 0, file: 0, sub: 0 }
 const localOnlyInEffect = []
+/** ★已由 workflow 的 run 命令真正执行的 check:*（供 ④ 台账互斥判据用） */
+const coveredNames = new Set()
 for (const name of checkNames) {
   const r = isCovered({ name, cmd: scripts[name], runCommands: RUN_COMMANDS, scripts })
   if (r.covered) {
     viaCount[r.via] += 1
+    coveredNames.add(name)
     continue
   }
   if (name in LOCAL_ONLY) {
@@ -307,10 +396,6 @@ for (const name of checkNames) {
     `${name} 未接入任何 workflow，也未在 LOCAL_ONLY 声明理由（新增门禁必须接线，或写明为何 CI 跑不了）`,
   )
 }
-// ★声明失效审计（信息位）：LOCAL_ONLY 里登记了、但 package.json 已没有的脚本——
-//   它们会让"仅本地 N 个"的统计虚高，也让读者以为某门禁还在。
-const staleLocalOnly = Object.keys(LOCAL_ONLY).filter((k) => !(k in scripts))
-for (const k of staleLocalOnly) notes.push(`⚠ LOCAL_ONLY 声明已失效（package.json 无此脚本）：${k}`)
 
 /* ---------- ② verify 链与 CI 的覆盖差集 ---------- */
 // verify 里的形态门禁（脚本文件维度）：CI 缺则报；反方向由 ① 覆盖（CI 有的未必在 verify）
@@ -343,6 +428,44 @@ for (const { pat, why } of CI_MUST_HAVE) {
   if (!RUN_TEXT.includes(pat)) failures.push(`CI 缺关键步骤 ${pat}（${why}）——被误删或未接线（注释里提到不算）`)
 }
 
+/* ---------- ④ LOCAL_ONLY 台账审计（决策 #1159） ---------- */
+// 原形态是「写一句理由就永久不进 CI」的自由文本豁免：58/159 条，其中若干**既不在 CI 也不在
+// verify**（= 默认流程里谁也不跑它，但报表读起来像"本地有跑"）。此处的判据全部是**能证伪**的：
+// 台账齐备 / 枚举合法 / 理由非敷衍 / 声明↔事实互斥 / 通道自证 / 结构自洽 / 棘轮。
+const ledger = auditLocalOnly({
+  localOnly: LOCAL_ONLY,
+  meta: LOCAL_ONLY_META,
+  scripts,
+  coveredNames,
+  verifyCmd,
+  runText: RUN_TEXT,
+  max: LOCAL_ONLY_MAX,
+  // ★路径必须落在仓库内且是**文件**：`at:'../../../etc/hosts'` 不该能当证据，
+  //   `at:'scripts'`（目录）不该让 readFileSync 抛 EISDIR 把整条门禁打成栈错误（独立验证指出）。
+  io: {
+    exists: (p) => {
+      try {
+        const abs = path.resolve(ROOT, p)
+        return abs.startsWith(ROOT + path.sep) && fs.statSync(abs).isFile()
+      } catch {
+        return false
+      }
+    },
+    read: (p) => {
+      try {
+        const abs = path.resolve(ROOT, p)
+        return abs.startsWith(ROOT + path.sep) ? fs.readFileSync(abs, 'utf8') : ''
+      } catch {
+        return ''
+      }
+    },
+  },
+})
+for (const f of ledger.findings) {
+  if (f.level === 'error') failures.push(`LOCAL_ONLY[${f.name}] ${f.msg}（${f.code}）`)
+  else notes.push(`⚠ LOCAL_ONLY[${f.name}] ${f.msg}（${f.code}）`)
+}
+
 /* ---------- 报告 ---------- */
 console.log('门禁通道一致性检查（CI ⟷ verify）')
 console.log(`  package.json 的 check:* 共 ${checkNames.length} 个`)
@@ -360,4 +483,19 @@ console.log(
 )
 console.log('  ✅ verify 链含 build-packages + 根 vue-tsc（本地与 CI 无覆盖盲区）')
 console.log('  ✅ CI 关键步骤齐备')
-console.log('\n✅ 门禁通道一致（接线不再依靠人工记忆）')
+// ★台账分布（决策 #1159）：把"豁免面"按 为何跑不了 / 谁在跑 两维摊开——
+//   增长一眼可见；`unverifiable` 那段是**诚实边界**（人工/真机/收尾类判不出是否真跑过）。
+const { stats } = ledger
+const fmt = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ')
+console.log(`  ✅ LOCAL_ONLY 台账：${stats.total} 条（上限 ${LOCAL_ONLY_MAX}）`)
+console.log(`     为何跑不了：${fmt(stats.byCat)}`)
+console.log(`     由谁执行：${fmt(stats.byRun)}`)
+// ★诚实边界：这几类是"标签"，不是判据——列出来，别让人误以为都验证过
+console.log(`     △ cat 仅标签（无结构谓词，判不出真伪）：${stats.labelOnlyCats.join(' ')}`)
+console.log(
+  `     △ 不可机判（人工/真机/收尾，${stats.unverifiable.length} 条）：` +
+    `${stats.unverifiable.slice(0, 6).join(' ')}${stats.unverifiable.length > 6 ? ' …' : ''}`,
+)
+console.log(
+  '\n✅ 门禁通道一致（接线不再依靠人工记忆；"仅本地"的豁免面已分类可审计）',
+)

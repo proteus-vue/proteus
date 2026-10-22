@@ -20,12 +20,17 @@
 //   ② 共享入口的不同子命令不得互相冒充（`knowledge layers` ≠ `knowledge check`）；
 //   ③ `run: |` 块标量逐行提取、遇缩进回退即止；`check:*` 名字命中要词边界；
 //   ④ 真仓：`check:knowledge` 真在跑 / `check:baseline-freshness` 不再靠注释假绿；
-//   ⑤ 未接线集合 ⊆ LOCAL_ONLY 声明，且**豁免必须写理由**（空理由 = 未思考的豁免）。
+//   ⑤ 未接线集合 ⊆ LOCAL_ONLY 声明，且**豁免必须写理由**（空理由 = 未思考的豁免）；
+//   ⑥ LOCAL_ONLY 台账（2026-10-22 · 决策 #1159）：cat × run 两维枚举 + 结构判据
+//      （元数据缺一即红 / 枚举闭合 / 通道自证 verify·suite·build-script·ci / 与事实互斥 /
+//       generator·closeout·covered 的结构自洽 / 棘轮只减不增）；
+//   ⑦ 解析器细节："执行形态"而非"文本包含"（注释/echo 不算 · flag 完整命中 · 块标量不重复消费）。
 
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
+  auditLocalOnly,
   extractRunCommands,
   hasToken,
   isCovered,
@@ -334,5 +339,283 @@ describe('★真实仓库（不可造假的事实）', () => {
 
   it('workflow 解析没退化成空集（199 行量级；空集会令上面所有断言假绿）', () => {
     expect(REAL_RUNS.length).toBeGreaterThan(50)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⑥⑦ LOCAL_ONLY 台账（2026-10-22 · 决策 #1159）
+//
+// 缺陷：`LOCAL_ONLY` 原是自由文本豁免——写一句话就永久不进 CI（58/159 条），
+//   其中 20 条**既不在 CI 也不在 verify**（默认流程谁都不跑，报表却像"本地有跑"）。
+// 收紧：两维闭合枚举（cat = 为何跑不了 / run = 由谁跑）+ 八条能证伪的判据。
+// 全部用例用**人造台账**控形（真仓台账由 `check:gates-sync` 在 verify/CI 里守）。
+// ═══════════════════════════════════════════════════════════════════════════
+describe('LOCAL_ONLY 台账审计（auditLocalOnly）', () => {
+  const WHY = '需要真机产物（CI 无设备，无法复现端上读数）' // 去空白后 24 字，过下限
+  const IO = {
+    exists: (p: string) => p === 'scripts/build.sh',
+    read: (p: string) => (p === 'scripts/build.sh' ? '#!/bin/sh\nnode scripts/x.mjs\n' : ''),
+  }
+  const base = {
+    localOnly: { 'check:x': WHY } as Record<string, string>,
+    meta: { 'check:x': { cat: 'device', run: 'manual' } } as Record<string, Record<string, string>>,
+    scripts: { 'check:x': 'node scripts/x.mjs', verify: 'pnpm run test' } as Record<string, string>,
+    coveredNames: new Set<string>(),
+    verifyCmd: 'pnpm run test',
+    runText: 'pnpm install --frozen-lockfile',
+    max: 58,
+    io: IO,
+  }
+  const audit = (over: Record<string, unknown> = {}) => auditLocalOnly({ ...base, ...over })
+  const codes = (r: { findings: { code: string; level: string }[] }) => r.findings.filter((f) => f.level === 'error').map((f) => f.code)
+
+  it('基线：合法台账零 error（否则后面每条判据都可能是恒真）', () => {
+    expect(codes(audit())).toEqual([])
+  })
+
+  it('① 元数据双向齐备：缺 meta / meta 多出声明都红', () => {
+    expect(codes(audit({ meta: {} }))).toContain('NO_META')
+    expect(codes(audit({ localOnly: {}, meta: { 'check:x': { cat: 'device', run: 'manual' } } }))).toContain('ORPHAN_META')
+  })
+
+  it('② 理由不得敷衍：`本地跑` 这种过短理由是豁免的黑洞', () => {
+    expect(codes(audit({ localOnly: { 'check:x': '本地跑' } }))).toContain('THIN_WHY')
+  })
+
+  it('③ 枚举闭合：cat / run 现编即红（新增一类必须改枚举本体）', () => {
+    expect(codes(audit({ meta: { 'check:x': { cat: 'because-i-said-so', run: 'manual' } } }))).toContain('UNKNOWN_CAT')
+    expect(codes(audit({ meta: { 'check:x': { cat: 'device', run: 'sometimes' } } }))).toContain('UNKNOWN_RUN')
+  })
+
+  it('④ 声明失效：package.json 已没有该脚本 ⇒ 台账在说谎（口径虚高）', () => {
+    expect(codes(audit({ scripts: { verify: 'pnpm run test' } }))).toContain('STALE_NAME')
+  })
+
+  it('⑤ 声明↔事实互斥：CI 真在跑却仍登记"仅本地"', () => {
+    expect(codes(audit({ coveredNames: new Set(['check:x']) }))).toContain('STALE_DECL')
+  })
+
+  it('⑥ 通道自证：run=verify 但 verify 链里没有它', () => {
+    const r = audit({ meta: { 'check:x': { cat: 'device', run: 'verify' } }, verifyCmd: 'pnpm run check:other' })
+    expect(codes(r)).toContain('RUN_UNPROVEN')
+  })
+
+  it('⑥ 通道自证：run=suite 必须 also=test 且 verify 真有 test 步', () => {
+    expect(codes(audit({ meta: { 'check:x': { cat: 'covered', run: 'suite' } } }))).toContain('RUN_UNPROVEN')
+    const r = audit({ meta: { 'check:x': { cat: 'covered', run: 'suite', also: 'test' } }, verifyCmd: 'pnpm run build' })
+    expect(codes(r)).toContain('RUN_UNPROVEN')
+  })
+
+  it('⑥ 通道自证：run=build-script 必须 at 存在且脚本里真引用它', () => {
+    // 缺 at
+    expect(codes(audit({ meta: { 'check:x': { cat: 'sdk', run: 'build-script' } } }))).toContain('RUN_UNPROVEN')
+    // at 不存在
+    expect(
+      codes(audit({ meta: { 'check:x': { cat: 'sdk', run: 'build-script' }, }, io: { ...IO, exists: () => false } })),
+    ).toContain('RUN_UNPROVEN')
+    // at 存在但没引用（"构建时跑"未被证实）
+    expect(
+      codes(
+        audit({
+          meta: { 'check:x': { cat: 'sdk', run: 'build-script', at: 'scripts/build.sh' } },
+          io: { exists: () => true, read: () => '#!/bin/sh\nmake release\n' },
+        }),
+      ),
+    ).toContain('RUN_UNPROVEN')
+    // 脚本里真调用了它 ⇒ 通过
+    expect(
+      codes(
+        audit({
+          meta: { 'check:x': { cat: 'sdk', run: 'build-script', at: 'scripts/build.sh' } },
+          scripts: { 'check:x': 'node scripts/x.mjs', verify: '' },
+          io: { exists: () => true, read: () => 'pnpm run check:x\n' },
+        }),
+      ),
+    ).toEqual([])
+  })
+
+  it('⑦ 反向矛盾：明明在 verify 里跑，却标成人工/真机/收尾/不跑', () => {
+    for (const run of ['manual', 'on-device', 'closeout', 'none']) {
+      const r = audit({ meta: { 'check:x': { cat: 'device', run } }, verifyCmd: 'pnpm run check:x' })
+      expect(codes(r), `run=${run} 与"在 verify 里跑"矛盾却没报`).toContain('RUN_MISLABEL')
+    }
+  })
+
+  it('⑧ 「谁也不跑」只允许测量装置（黑洞不得冒充门禁）', () => {
+    expect(codes(audit({ meta: { 'check:x': { cat: 'device', run: 'none' } } }))).toContain('NO_TRIGGER')
+    expect(codes(audit({ meta: { 'check:x': { cat: 'measure', run: 'none' } } }))).not.toContain('NO_TRIGGER')
+  })
+
+  it('⑨ generator 必须能证明"产物是生成的"：gen:* 对偶 或 自带 --check', () => {
+    expect(codes(audit({ meta: { 'check:x': { cat: 'generator', run: 'manual' } } }))).toContain('CAT_STRUCTURE')
+    // 自带 --check（写回/比对双模）
+    expect(
+      codes(
+        audit({
+          meta: { 'check:x': { cat: 'generator', run: 'manual' } },
+          scripts: { 'check:x': 'node scripts/x.mjs --check', verify: '' },
+        }),
+      ),
+    ).toEqual([])
+    // gen:* 对偶
+    expect(
+      codes(
+        audit({
+          meta: { 'check:x': { cat: 'generator', run: 'manual' } },
+          scripts: { 'check:x': 'node scripts/x.mjs', 'gen:x': 'node scripts/x.mjs --write', verify: '' },
+        }),
+      ),
+    ).toEqual([])
+  })
+
+  it('⑨ closeout 必须成对且基座在 verify（否则"只在收尾调用"= 平时没人跑）', () => {
+    // :strict 但基座不存在
+    expect(
+      codes(audit({ localOnly: { 'check:x:strict': WHY }, meta: { 'check:x:strict': { cat: 'closeout', run: 'closeout' } }, scripts: { 'check:x:strict': 'node scripts/x.mjs --require', verify: '' } })),
+    ).toContain('CAT_STRUCTURE')
+    // 基座存在但不在 verify
+    expect(
+      codes(
+        audit({
+          localOnly: { 'check:x:strict': WHY },
+          meta: { 'check:x:strict': { cat: 'closeout', run: 'closeout' } },
+          scripts: { 'check:x:strict': 'node scripts/x.mjs --require', 'check:x': 'node scripts/x.mjs', verify: '' },
+        }),
+      ),
+    ).toContain('CAT_STRUCTURE')
+    // 基座在 verify ⇒ 通过（基座自己不必再配对）
+    expect(
+      codes(
+        audit({
+          localOnly: { 'check:x': WHY, 'check:x:strict': WHY },
+          meta: { 'check:x': { cat: 'closeout', run: 'verify' }, 'check:x:strict': { cat: 'closeout', run: 'closeout' } },
+          scripts: { 'check:x:strict': 'node scripts/x.mjs --require', 'check:x': 'node scripts/x.mjs' },
+          verifyCmd: 'pnpm run check:x',
+        }),
+      ),
+    ).toEqual([])
+  })
+
+  it('⑨ covered 必须指明覆盖通道且该通道取证', () => {
+    // 既无 also
+    expect(codes(audit({ meta: { 'check:x': { cat: 'covered', run: 'manual' } } }))).toContain('CAT_STRUCTURE')
+    // also=test 但 verify 无 test 步
+    expect(
+      codes(audit({ meta: { 'check:x': { cat: 'covered', run: 'manual', also: 'test' } }, verifyCmd: '' })),
+    ).toContain('CAT_STRUCTURE')
+    // also 是 CI 命令里的字面串，且真出现
+    expect(
+      codes(audit({ meta: { 'check:x': { cat: 'covered', run: 'manual', also: '--frozen-lockfile' } } })),
+    ).toEqual([])
+    // 该串没出现 ⇒ 谎报
+    expect(
+      codes(audit({ meta: { 'check:x': { cat: 'covered', run: 'manual', also: '--frozen-lockfile' } }, runText: '' })),
+    ).toContain('CAT_STRUCTURE')
+  })
+
+  it('⑩ 棘轮：豁免面只减不增（超上限即红）', () => {
+    expect(codes(audit({ max: 0 }))).toContain('RATCHET')
+  })
+
+  it('统计口径：按 cat/run 分组 + 列出不可机判项（透明化，不假装判得出"人工是否真跑了"）', () => {
+    const r = audit({
+      localOnly: { 'check:x': WHY, 'check:y': WHY },
+      meta: { 'check:x': { cat: 'device', run: 'manual' }, 'check:y': { cat: 'macos', run: 'verify' } },
+      scripts: { 'check:x': 'node scripts/x.mjs', 'check:y': 'node scripts/y.mjs', verify: 'pnpm run check:y' },
+    })
+    expect(r.stats.total).toBe(2)
+    expect(r.stats.byCat).toEqual({ device: 1, macos: 1 })
+    expect(r.stats.byRun).toEqual({ manual: 1, verify: 1 })
+    expect(r.stats.unverifiable).toEqual(['check:x'])
+  })
+
+  it('信息位不误报：device 类脚本内部读 results/ 时不再出提醒', () => {
+    const r = audit({
+      scripts: { 'check:x': 'node scripts/x.mjs', verify: '' },
+      io: { exists: () => true, read: () => "path = 'hosts/android/results/lights.json'" },
+    })
+    expect(r.findings.filter((f) => f.code === 'DEVICE_NO_ARTIFACT')).toEqual([])
+  })
+
+  // ── 以下六条来自 2026-10-22 独立验证（异会话子代理）打回的缺陷，逐条锁住 ──────────
+  it('★★`{}` / 只有 cat / 只有 run 都算缺元数据（否则整段判据可被 truthy 空对象跳过）', () => {
+    expect(codes(audit({ meta: { 'check:x': {} } })), 'meta 是 {} 却零 error ⇒ ⑥–⑪ 全被跳过').toContain('NO_META')
+    expect(codes(audit({ meta: { 'check:x': { cat: 'device' } } }))).toContain('NO_META')
+    expect(codes(audit({ meta: { 'check:x': { run: 'manual' } } }))).toContain('NO_META')
+  })
+
+  it('★covered.also 不接受裸词（`also:\'node\'` 能在 CI 文本里遍地命中 = 没取证）', () => {
+    const r = audit({ meta: { 'check:x': { cat: 'covered', run: 'manual', also: 'node' } }, runText: 'node scripts/build-packages.mjs' })
+    expect(codes(r)).toContain('CAT_STRUCTURE')
+  })
+
+  it('★suite 支持任意套件脚本名（不再只认字面 test）', () => {
+    const ok = audit({
+      meta: { 'check:x': { cat: 'covered', run: 'suite', also: 'test:cse-parity' } },
+      scripts: { 'check:x': 'node scripts/x.mjs', 'test:cse-parity': 'vitest run tests/e2e-cse-parity.test.ts' },
+      verifyCmd: 'pnpm run test:cse-parity',
+    })
+    expect(codes(ok)).toEqual([])
+    const bad = audit({
+      meta: { 'check:x': { cat: 'covered', run: 'suite', also: 'test:nope' } },
+      scripts: { 'check:x': 'node scripts/x.mjs' },
+      verifyCmd: 'pnpm run test',
+    })
+    expect(codes(bad)).toContain('RUN_UNPROVEN')
+  })
+
+  it('★closeout 反向：基座有 :strict 变体却没登记 ⇒ 整对删掉会被抓', () => {
+    const r = audit({
+      localOnly: { 'check:x': WHY },
+      meta: { 'check:x': { cat: 'closeout', run: 'verify' } },
+      scripts: { 'check:x': 'node scripts/x.mjs', 'check:x:strict': 'node scripts/x.mjs --require' },
+      verifyCmd: 'pnpm run check:x',
+    })
+    expect(codes(r)).toContain('CAT_STRUCTURE')
+  })
+
+  it('★build-script 取证只认执行形态：注释/echo 里的名字不算', () => {
+    for (const body of ['#!/bin/sh\n# pnpm run check:x 已废弃\n', '#!/bin/sh\necho "记得跑 check:x"\n', '#!/bin/sh\n# old: x.mjs\n']) {
+      const r = audit({
+        meta: { 'check:x': { cat: 'sdk', run: 'build-script', at: 'scripts/build.sh' } },
+        io: { exists: () => true, read: () => body },
+      })
+      expect(codes(r), `这段 body 不应构成取证：${JSON.stringify(body)}`).toContain('RUN_UNPROVEN')
+    }
+  })
+})
+
+describe('解析器细节（独立验证 2026-10-22 打回）', () => {
+  it('★入口文件取值要断词：`data/package.json` 不得被读成 `data/package.js`', () => {
+    // 端到端：构建脚本里只有 `cp package.json dist/` 时，不得算"引用了入口文件"
+    const r = auditLocalOnly({
+      localOnly: { 'check:x': '需要一个足够长的理由来说明为什么它不进 CI（测试夹具）' },
+      meta: { 'check:x': { cat: 'sdk', run: 'build-script', at: 'scripts/build.sh' } },
+      scripts: { 'check:x': 'node scripts/x.mjs --in data/package.json', verify: '' },
+      coveredNames: new Set(),
+      verifyCmd: '',
+      runText: '',
+      max: 58,
+      io: { exists: () => true, read: () => '#!/bin/sh\ncp package.json dist/\n' },
+    })
+    expect(r.findings.filter((f) => f.level === 'error').map((f) => f.code)).toContain('RUN_UNPROVEN')
+  })
+
+  it('★flag 必须完整命中：`--check-output`（写回）不得冒充 `--check`（比对）', () => {
+    const cmd = 'node scripts/gen-x.mjs --check'
+    expect(runsFile(cmd, 'scripts/gen-x.mjs', ['node scripts/gen-x.mjs --check-output dist/x.json'])).toBe(false)
+    expect(runsFile(cmd, 'scripts/gen-x.mjs', ['node scripts/gen-x.mjs --check=off'])).toBe(false)
+    expect(runsFile(cmd, 'scripts/gen-x.mjs', ['node scripts/gen-x.mjs --check'])).toBe(true)
+  })
+
+  it('★块标量内形如 `run:` 的数据行不得再被外层当成第二条命令', () => {
+    const wf = ['jobs:', '  a:', '    steps:', '      - run: |', '          pnpm run check:foo', '          run: pnpm run check:evil'].join('\n')
+    const cmds = extractRunCommands(wf)
+    expect(cmds).toContain('pnpm run check:foo')
+    expect(cmds, '块内数据行被重复计入 ⇒ 凭空多一条接线证据').not.toContain('pnpm run check:evil')
+  })
+
+  it('★带引号的行内命令也要剥行尾注释', () => {
+    expect(extractRunCommands('      - run: "pnpm run check:x" # 说明')).toEqual(['pnpm run check:x'])
   })
 })
