@@ -10,6 +10,8 @@ import fs from 'node:fs'
 
 const port = Number(process.argv[2] || 18899)
 const outJson = process.argv[3] || '/tmp/proxy-probe.json'
+// ★#1179：bind 地址可配（真机经 LAN IP 访问 ⇒ 需要 0.0.0.0；默认仍 loopback，模拟器行为不变）
+const bindAddr = process.argv[4] || '127.0.0.1'
 const events = []
 const t0 = Date.now()
 
@@ -46,8 +48,8 @@ server.on('connect', (req, clientSocket, head) => {
   clientSocket.on('error', () => { try { upstream.destroy() } catch {} })
 })
 
-server.listen(port, '127.0.0.1', () => {
-  record({ kind: 'listening', port })
+server.listen(port, bindAddr, () => {
+  record({ kind: 'listening', port, bind: bindAddr })
 })
 
 // 收到 SIGTERM 时把最终结果落盘

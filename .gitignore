@@ -118,6 +118,11 @@ hosts/ios/results/paint-hint-*.log
 # ★炫技场录屏**原片**（ReplayKit 逐帧无损，~40MB）——只是转码中间物；
 #   网页交付物是 website/public/morpheus-showcase.mp4（3MB，见 hosts/ios/make-showcase-video.sh）
 hosts/ios/results/showcase.mp4
+# ★#1179 B 路线探针的**自签私钥/证书**：脚本每次找不到就现生成（`sni-server.mjs`），
+#   属临时装置物 —— 入库既无用（下次不配对）又会被 `check:secret-scan` 判红。
+#   证据是两份 JSON（httpdns-b-device.json / httpdns-b-device-proxy.json），不是密钥。
+hosts/ios/results/b-probe-key.pem
+hosts/ios/results/b-probe-cert.pem
 
 # ══════════════════════════════════════════════════════════════════════════
 # ★★★构建/调试产物目录（#1136：此前 **186 MB + 26 MB 漏网入库**，clone 体积被撑大）

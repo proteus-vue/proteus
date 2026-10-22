@@ -42,6 +42,25 @@ final class HttpCapability {
         let cfg = URLSessionConfiguration.default
         cfg.httpShouldSetCookies = true
         cfg.httpCookieStorage = HTTPCookieStorage.shared
+        // ★★★#1178：**B 路线探针开关**（仅取证用；业务面不走这里）。
+        //   `PROTEUS_B_PROXY=host:port` ⇒ 只配**HTTP** 代理键（iOS 没有 HTTPS 代理键，
+        //   `kCFNetworkProxiesHTTPSEnable` 是 CF_AVAILABLE(10_6, NA)）⇒ 这正是要实测的问题：
+        //   https 请求会不会经 HTTP 代理键走 CONNECT 隧道。实测结论见
+        //   docs/proteus-network-plan/02-ios-httpdns-industry-survey.md §7。
+        //   ★不设这个变量时**一个键都不加**（生产路径零影响）。
+        if let proxy = ProcessInfo.processInfo.environment["PROTEUS_B_PROXY"], !proxy.isEmpty {
+            let parts = proxy.split(separator: ":")
+            if parts.count == 2, let port = Int(parts[1]) {
+                cfg.connectionProxyDictionary = [
+                    "HTTPEnable": 1,
+                    "HTTPProxy": String(parts[0]),
+                    "HTTPPort": port,
+                    "HTTPSEnable": 1,
+                    "HTTPSProxy": String(parts[0]),
+                    "HTTPSPort": port,
+                ]
+            }
+        }
         return URLSession(configuration: cfg, delegate: BodyLimitDelegate.shared, delegateQueue: nil)
     }()
 

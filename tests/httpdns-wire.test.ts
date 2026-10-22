@@ -147,6 +147,29 @@ describe('★★★#1169 HTTPDNS · 宿主可用性（三端如实分档）', ()
     expect(code, '★就绪判据不应依赖 --port（会被别人的监听冒充）').not.toMatch(/--port "127\.0\.0\.1/)
     expect(code, '★就绪判据应用文件（= 自己的进程真的 listen 过）').toMatch(/--file "\$OUT_DIR\/httpdns-route-b-proxy\.json"/)
   })
+
+  it('★★★#1179 B 路线：**真机**证据入库（模拟器绿不算数——真机才是落地前提）', () => {
+    const p = 'hosts/ios/results/httpdns-b-device.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺 B 路线真机证据 ${p}（跑 bash hosts/ios/run-httpdns-b-device-probe.sh）`).toBe(true)
+    const r = JSON.parse(read(p))
+    expect(r.verdict, '★真机 B 路线结论不是 ROUTE_B_DEVICE_OK').toBe('ROUTE_B_DEVICE_OK')
+    // ★SNI 由真机侧服务端 SNICallback 读——"隧道里发的仍是原域名"的直接证据
+    expect(Array.isArray(r.sniValues) && r.sniValues.length > 0, '★真机没读到 SNI').toBe(true)
+    expect(r.sniValues.every((v: string) => v === 'sni-probe.local'), `★真机 SNI 退化（实得 ${JSON.stringify(r.sniValues)}）`).toBe(true)
+    // ★复用必须用**公网那组**判（自签证书让假域名每次失败重连 = 装置变量，不是路线缺陷）
+    expect(r.fakeConnects, '★真机代理没收到假域名的 CONNECT').toBeGreaterThan(0)
+    expect(r.connectCount, '★真机代理一个 CONNECT 都没收到').toBeGreaterThan(0)
+    expect(r.probe?.public_ok, `★公网经代理不通（生产形态不成立；实得 ${JSON.stringify(r.probe?.public_statuses)}）`).toBe(true)
+    expect(r.proxyEnv, '★代理环境变量没转发进 App（参数丢失会伪装成功能失败）').toBeTruthy()
+  })
+
+  it('★★★#1179 探针登记第三处：参数分派（superapp-scene.swift）必须被覆盖', () => {
+    // ★漏洞现场：只加 ProbeConfig 不加 case ⇒ 走 default ⇒ 额外参数静默丢弃
+    //   ⇒ 现象是"公网经代理全失败"，真因只是参数没传进去。
+    const reg = read('tests/host-probe-registry.test.ts')
+    expect(reg, '★host-probe-registry 未覆盖 Swift 参数分派（第三处）').toMatch(/superapp-scene\.swift/)
+    expect(reg, '★host-probe-registry 未校验 switch 分派').toMatch(/-probe\)="/)
+  })
 })
 
 describe('★★★#1169 HTTPDNS · 真机证据（Android）', () => {

@@ -150,18 +150,55 @@ SDK：`iPhoneOS16.2.sdk`。
    修法：先要求 `length > 0` 再判内容。
 
 **诚实边界**：
-- 跑在**模拟器**（与真机同一份 CFNetwork），**真机未跑**——本机 Xcode 14.2 无 `devicectl`（需 15+）。
-  真机复验是落地 B 的前提条件，不能拿模拟器结果当"iOS 端已支持"。
-- TLS 服务端用**自签证书 + 探针无条件信任**（仅为读 SNI，绝不进生产）。
+- **★真机已补（#1179）**：`bash hosts/ios/run-httpdns-b-device-probe.sh` 在 **iPhone 12 真机**上
+  13/13 全绿 ⇒ B 路线不再只是模拟器结论，见 §7.2。
+- TLS 服务端用**自签证书**（仅为本探针读 SNI，绝不进生产）；★真机生产 session 不信任自签证书
+  ⇒ 假域名必然 `fetch.failed: The certificate for this…`，**这是预期的装置变量，不是路线缺陷**。
 - 隧道内是 HTTP/1.1（本地服务端未开 h2）；公网那轮实测是 `http/2`，两条互补。
 - **B 的生产实现尚未开始**：本单只定性"可行"，代理进程、表查询、降级链、
   与 `fetch.unsupported` 的切换点都还没写。
+
+## 7.2 真机复验（#1179）—— 同一组判据，模拟器结论在真机上成立
+
+**入口**：`bash hosts/ios/run-httpdns-b-device-probe.sh [repeats]` → `hosts/ios/results/httpdns-b-device.json`
+（`verdict=ROUTE_B_DEVICE_OK`）。
+
+**装置**：本机起「HTTP 代理 + 自签 TLS 服务端」绑 `0.0.0.0`（真机经 LAN IP 访问）；
+App 侧由 `PROTEUS_B_PROXY=<LAN_IP>:<port>` 注入 `connectionProxyDictionary`
+（`HttpCapability.session`，不设该变量时**一个代理键都不加**，生产零影响）。
+
+| 判据 | 真机读数 |
+|---|---|
+| 代理收到 `CONNECT sni-probe.local` | **3 个** |
+| 代理收到 `CONNECT www.cloudflare.com:443` | **1 个** |
+| 无明文绝对 URI | 0 |
+| 服务端读到的 SNI | 3 次全是 `sni-probe.local`（**原域名**） |
+| 公网经代理（真实证书） | **`[200,200,200]`** |
+| 公网 3 次请求的隧道数 | **1**（隧道内复用成立） |
+| 假域名请求到达 | ✅（证书校验处失败，如预期） |
+
+**★真机与模拟器的两处实质差异（这才是真机复验的价值）**：
+1. **复用必须用真实证书判**：模拟器探针用 `TrustAll` 无条件信任 ⇒ 假域名也能握手成功 ⇒ 1 隧道；
+   真机走生产 session、不信任自签 ⇒ 假域名 3 次各建一条隧道（3 个 CONNECT）。
+   **这不是 B 路线缺陷，而是"证书不受信"这个装置变量** —— 与 #1165「把探针连不上自签服务端
+   当成平台不支持」同族。修法：加一组**公网域名**（真实证书）轮次专测复用，真机读数 **1 隧道 / 3 请求**。
+2. **"请求到达"的判据不能取 HTTP 层**：自签证书 ⇒ 握手在证书校验处中断 ⇒ HTTP 请求永不发出
+   ⇒ 用 `request` 事件判"到达"会**永远红（假红）**。正确判据是 `SNICallback` 被调用（= 握手已开始）。
+
+**★又一个"参数丢失伪装成功能失败"**：`superapp-scene.swift` 的探针参数分派漏了新 case
+⇒ 走 `default: extra = ""` ⇒ `publicUrl`/`rounds` **静默丢弃** ⇒ 现象是"公网经代理全失败"
+（`public_statuses: []`），而真因只是参数没传进去。⇒ **新增探针必须同时加 Swift 分派分支**。
+
+**破坏性验证（真机）**：① 探针不发请求 ⇒ `exit 1`（CONNECT/SNI 全 0）；
+② 宿主忽略 `PROTEUS_B_PROXY` ⇒ `exit 1`（同样全 0）。恢复 ⇒ `exit 0`、`ROUTE_B_DEVICE_OK`。
 
 ## 8. 判据（可回归）
 
 - `tests/httpdns-wire.test.ts` 断言 iOS **必须**明确 `fetch.unsupported`，
   且**不得**再声称"平台不支持"（只允许说"当前栈无注入点"）。
-- `bash hosts/ios/run-httpdns-route-b-probe.sh` —— B 路线 11 项判据（`exit 1` = 不可行）；
+- `bash hosts/ios/run-httpdns-route-b-probe.sh` —— **模拟器** B 路线 11 项判据（`exit 1` = 不可行）；
   证据 `hosts/ios/results/httpdns-route-b.json` 入库，`tests/httpdns-wire.test.ts` 校验其
   `verdict === 'ROUTE_B_FEASIBLE'` 且 `sniValues` 全是原域名。
+- `bash hosts/ios/run-httpdns-b-device-probe.sh` —— **真机** B 路线 13 项判据（`exit 1` = 失败）；
+  证据 `hosts/ios/results/httpdns-b-device.json` 的 `verdict === 'ROUTE_B_DEVICE_OK'` 由判据校验。
 - 本文的 API 事实均可由 SDK 头文件复核；路线选择变更时必须同步本文与能力矩阵。

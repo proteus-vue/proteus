@@ -464,6 +464,14 @@ final class SuperappScene: NSObject {
                 let pin = parts.count >= 2 ? parts[1] : ""
                 let rounds = parts.count >= 3 ? (Int(parts[2]) ?? 3) : 3
                 extra = "\(SuperappScene.jsonQuote(pin)),\(rounds)"
+            case "--httpdns-b-probe=":
+                // ★★★#1179：参数形态 `--httpdns-b-probe=<fakeUrl>[,<publicUrl>][,<rounds>]`
+                //   ★真机首跑踩过的坑：本 case 缺失时走 `default: extra = ""` ⇒ publicUrl 与
+                //     rounds 被**静默丢弃**，探针只跑假域名组（`public_statuses: []`），
+                //     而现象看起来像"公网经代理失败"——**参数丢失伪装成功能失败**。
+                let pub = parts.count >= 2 ? parts[1] : ""
+                let rounds = parts.count >= 3 ? (Int(parts[2]) ?? 3) : 3
+                extra = "\(SuperappScene.jsonQuote(pub)),\(rounds)"
             default:
                 extra = ""
             }

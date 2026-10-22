@@ -25,6 +25,8 @@ const ROOT = path.resolve(__dirname, '..')
 const LIB = path.join(ROOT, 'hosts/ios/lib/probe-args.sh')
 const SWIFT = path.join(ROOT, 'hosts/ios/ProteusHost/shell/superapp-probes.swift')
 const SCRIPT = path.join(ROOT, 'hosts/ios/run-selfdraw.sh')
+/** ③ 参数分派所在文件（`switch cfg.argPrefix`）——#1179 补的第三处 */
+const SCENE = path.join(ROOT, 'hosts/ios/ProteusHost/shell/superapp-scene.swift')
 
 /** ① `lib/probe-args.sh` 的 `IOS_PROBES` 表（`"VAR:probe-name"` 行） */
 function tableNames(src: string): string[] {
@@ -36,6 +38,30 @@ function tableNames(src: string): string[] {
 /** ② Swift `ProbeConfig.argPrefix` 集合（App 真正会认的参数名） */
 function swiftNames(src: string): string[] {
   return [...src.matchAll(/argPrefix:\s*"--([a-z-]+-probe)=/g)].map((x) => x[1]!)
+}
+
+/**
+ * 在 bridge 源码里找 `__proteusHostXxxProbe` 对应的 JS 函数签名（用于判"有没有额外参数"）。
+ * ★判据只关心**参数个数**（`base` 之外还有没有），所以取 `function appXxxProbe(...)` 的形参列表即可。
+ */
+function findBridgeFnSig(hostFnName: string): string | null {
+  const dir = path.join(ROOT, 'hosts/shared/bridge')
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.ts'))
+  } catch {
+    return null
+  }
+  // 宿主 globalThis 名 → JS 函数名：`AppHttpDnsB` → `appHttpDnsBProbe`
+  //   ★注意 `__proteusHost(\w+)Probe` 的 `\w+` 拿不到尾部 `Probe`（它被字面量吃掉）
+  //   ⇒ 必须自己补回来，否则永远匹配不到函数（本判据首版就在这里退化成空跑、被 size>2 断言抓到）
+  const jsName = hostFnName.charAt(0).toLowerCase() + hostFnName.slice(1) + 'Probe'
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8')
+    const m = new RegExp(`export function ${jsName}\\s*\\(([^)]*)\\)`).exec(src)
+    if (m) return m[1]!
+  }
+  return null
 }
 
 describe('★★探针登记：IOS_PROBES 表 ⇄ Swift ProbeConfig 必须同集', () => {
@@ -74,6 +100,46 @@ describe('★★探针登记：IOS_PROBES 表 ⇄ Swift ProbeConfig 必须同集
     expect(new Set(names).size, '表里有重复的探针名').toBe(names.length)
     const vars = [...libSrc.matchAll(/"([A-Z_]+):[a-z-]+-probe"/g)].map((x) => x[1]!)
     expect(new Set(vars).size, '表里有重复的变量名').toBe(vars.length)
+  })
+
+  /**
+   * ★★★#1179 真机抓出的**第二类静默失效**（原判据只比两方 ⇒ 漏掉这一处）：
+   *   `superapp-scene.swift` 用 `switch cfg.argPrefix` 把探针参数拼成 JS 调用的实参，
+   *   新探针只加 `ProbeConfig` 而不加 `case` ⇒ 走 `default: extra = ""`
+   *   ⇒ **publicUrl / rounds 被静默丢弃**。
+   *   ★现场表现极具欺骗性：`public_statuses: []` + 公网经代理"全失败"，
+   *     看起来像功能坏了，真因只是参数没传进去。
+   *   ★为什么原判据漏了：它只比 `IOS_PROBES` ⇄ `ProbeConfig`（两方），
+   *     而参数分派是**第三处**——覆盖面必须跟着实际形态走（本仓反复踩的形态）。
+   */
+  it('★★★#1179 第三处：Swift 参数分派（switch argPrefix）必须覆盖每个探针', () => {
+    const sceneSrc = fs.readFileSync(SCENE, 'utf8')
+    const dispatched = [...sceneSrc.matchAll(/case\s+"--([a-z-]+-probe)=":/g)].map((x) => x[1]!)
+    expect(dispatched.length, 'superapp-scene.swift 里抽不到探针分派（源码形态变了？）').toBeGreaterThan(3)
+    // ★只判「**有额外参数**的探针」：`cache-probe` / `stale-probe` 的 JS 函数只接 base
+    //   （`appStaleProbe(base)` / `appCacheProbe(base)`）⇒ 走 `default: extra = ""` 是**正确的**，
+    //   把它们也算进"必须有 case"会产生假红（本判据首版就是在这里红的）。
+    //   判据取"额外参数"的唯一事实来源：Swift 的 kickFormat **形状**——
+    //   形如 `__proteusHostAppXxxProbe(%@)` 且 JS 侧函数除 base 外还有参数。
+    const extraParamProbes = new Set<string>()
+    for (const [full, name] of swiftSrc.matchAll(/argPrefix:\s*"--([a-z-]+-probe)=/g).map((m) => [m[0], m[1]!] as const)) {
+      // 在该 argPrefix 之后的 200 字符内找 kickFormat
+      const at = swiftSrc.indexOf(full)
+      const kick = /kickFormat:\s*"([^"]+)"/.exec(swiftSrc.slice(at, at + 400))
+      if (!kick) continue
+      const jsFn = /__proteusHost(\w+)Probe/.exec(kick[1]!)?.[1]
+      if (!jsFn) continue
+      // 在 bridge 源码里找该函数的签名，看是否有第二个参数
+      const bridge = findBridgeFnSig(jsFn)
+      if (bridge && bridge.split(',').length > 1) extraParamProbes.add(name)
+    }
+    expect(extraParamProbes.size, '一个"有额外参数"的探针都没识别出来（判据会退化成空跑）').toBeGreaterThan(2)
+    const missing = [...extraParamProbes].filter((n) => !dispatched.includes(n))
+    expect(
+      missing,
+      `★★这些探针有额外参数但没有在 superapp-scene.swift 的 switch 里分派：${missing.join(', ')}` +
+        `——走 default ⇒ 额外参数被静默丢弃（表现为"功能失败"，真因只是参数没传进去）`,
+    ).toEqual([])
   })
 
   /**

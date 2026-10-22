@@ -1,0 +1,41 @@
+{
+  "verdict": "ROUTE_B_DEVICE_OK",
+  "connectCount": 4,
+  "fakeConnects": 3,
+  "connectTargets": [
+    "sni-probe.local:18443",
+    "sni-probe.local:18443",
+    "sni-probe.local:18443",
+    "www.cloudflare.com:443"
+  ],
+  "sniValues": [
+    "sni-probe.local",
+    "sni-probe.local",
+    "sni-probe.local"
+  ],
+  "proxyEnv": "192.168.1.124:18899",
+  "probe": {
+    "ok": true,
+    "fake_domain_ok": false,
+    "fake_reached": true,
+    "host_preserved": false,
+    "public_ok": true,
+    "public_statuses": [
+      200,
+      200,
+      200
+    ],
+    "statuses": [
+      -1,
+      -1,
+      -1
+    ],
+    "errors": [
+      "fetch.failed:[proteus-cap] fetch.failed: [proteus-cap] fetch.failed: The certificate for this",
+      "fetch.failed:[proteus-cap] fetch.failed: [proteus-cap] fetch.failed: The certificate for this",
+      "fetch.failed:[proteus-cap] fetch.failed: [proteus-cap] fetch.failed: The certificate for this"
+    ],
+    "error": ""
+  },
+  "failedChecks": []
+}

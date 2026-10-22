@@ -44,6 +44,18 @@
    门禁 `pnpm check:file-size`（新文件硬上限 + 存量棘轮只减不增）。
    三链路：A(`开发框架`)=`Skill(ai-development)` · B(`AI 用框架`)=`docs/proteus-ai-agent-plan/08-rules.md`(G-36) · C(`外部缺陷`)=`Skill(ai-cobuild)`。
 6. 只改该改的：改动前先用 grep 定位，避免整读大文件；改完跑对应门禁（见下）。
+6.5 **★★★需要 iOS 真机/模拟器能力时，先跑 `pnpm check:ios-xcode` —— 禁止手写任何 Xcode 路径**
+   （2026-10-22 用户第 N 次纠正：「iOS设备一直在线的，你是不是又按照默认路径在找xcode？
+   说了很多次了是在 `/Volumes/data1/work/office-applications` 下面，不要总是按照默认路径找」）。
+   - **本机事实**：Xcode **26.5（有 `devicectl`）在 `/Volumes/data1/work/office-applications/Xcode.app`**；
+     `/Volumes/data1/applications/Xcode.app` 是 **14.2（无 `devicectl`）**；`/Applications` 下**没有**。
+   - **症状把我骗过三次**：写死 14.2 那位 ⇒ `xcrun: unable to find utility "devicectl"`
+     ⇒ 我据此断言「本机没有 devicectl ⇒ 真机路线不可用」，**而设备一直连着（iPhone 12 available (paired)）**。
+   - **为什么做成命令而不是再写一段话**：这条教训在下方《纪律：先取证，再断言》表格里**早就写着**
+     （"误判本机无可用 Xcode ≈1 小时绕路"），我照样重犯 ⇒ **写在文档里的经验拦不住，只有能跑的门禁拦得住**。
+   - 用法：`pnpm check:ios-xcode`（选中的路径 + devicectl + 已配对设备数）；
+     `pnpm check:ios-xcode -- --verbose` 列出本机全部候选与各自能力。
+   - 脚本内需要时：`source hosts/ios/lib/xcode-env.sh`（它会按「能力完备度」选，**不要自己拼路径**）。
 7. **★一律用中文回复用户**（2026-10-09 用户指定）：所有对用户输出的正文（总结 / 说明 / 结论 /
    状态更新 / 提问）一律**中文**；代码、命令、标识符、日志、文件路径、报错原文等**保持原样不改写**。
    术语可用中文并保留英文原词（如「门禁 gate」「桩测 stub」），但**不得整段用英文作答**。

@@ -4,14 +4,18 @@
 import https from 'node:https'
 import tls from 'node:tls'
 import fs from 'node:fs'
+import path from 'node:path'
 import { execSync } from 'node:child_process'
 
 const port = Number(process.argv[2] || 18443)
 const outJson = process.argv[3] || '/tmp/b-probe/sni.json'
-const keyPath = '/tmp/b-probe/key.pem'
-const certPath = '/tmp/b-probe/cert.pem'
+// ★#1179：bind 地址可配（真机经 LAN IP 访问 ⇒ 0.0.0.0；默认仍 loopback）
+const bindAddr = process.argv[4] || '127.0.0.1'
+const keyPath = path.join(path.dirname(outJson), 'b-probe-key.pem')
+const certPath = path.join(path.dirname(outJson), 'b-probe-cert.pem')
 
 if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+  fs.mkdirSync(path.dirname(keyPath), { recursive: true })
   execSync(
     `openssl req -x509 -newkey rsa:2048 -nodes -keyout ${keyPath} -out ${certPath} -days 2 ` +
       `-subj "/CN=sni-probe.local" -addext "subjectAltName=DNS:sni-probe.local" 2>/dev/null`,
@@ -46,7 +50,7 @@ const server = https.createServer(
   },
 )
 
-server.listen(port, '127.0.0.1', () => record({ kind: 'listening', port }))
+server.listen(port, bindAddr, () => record({ kind: 'listening', port, bind: bindAddr }))
 
 process.on('SIGTERM', () => {
   const snis = events.filter((e) => e.kind === 'sni').map((e) => e.servername)

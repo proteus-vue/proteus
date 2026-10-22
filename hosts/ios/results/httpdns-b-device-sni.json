@@ -1,0 +1,38 @@
+{
+  "port": 18443,
+  "events": [
+    {
+      "kind": "listening",
+      "port": 18443,
+      "bind": "0.0.0.0",
+      "atMs": 19
+    },
+    {
+      "kind": "sni",
+      "servername": "sni-probe.local",
+      "atMs": 118538
+    },
+    {
+      "kind": "sni",
+      "servername": "sni-probe.local",
+      "atMs": 118681
+    },
+    {
+      "kind": "sni",
+      "servername": "sni-probe.local",
+      "atMs": 118807
+    }
+  ],
+  "summary": {
+    "sniCount": 3,
+    "sniValues": [
+      "sni-probe.local",
+      "sni-probe.local",
+      "sni-probe.local"
+    ],
+    "distinctSni": [
+      "sni-probe.local"
+    ],
+    "alpnSeen": []
+  }
+}

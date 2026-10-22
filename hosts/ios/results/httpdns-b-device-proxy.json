@@ -1,0 +1,46 @@
+{
+  "port": 18899,
+  "events": [
+    {
+      "kind": "listening",
+      "port": 18899,
+      "bind": "0.0.0.0",
+      "atMs": 8
+    },
+    {
+      "kind": "connect",
+      "url": "sni-probe.local:18443",
+      "host": "sni-probe.local:18443",
+      "atMs": 118498
+    },
+    {
+      "kind": "connect",
+      "url": "sni-probe.local:18443",
+      "host": "sni-probe.local:18443",
+      "atMs": 118577
+    },
+    {
+      "kind": "connect",
+      "url": "sni-probe.local:18443",
+      "host": "sni-probe.local:18443",
+      "atMs": 118746
+    },
+    {
+      "kind": "connect",
+      "url": "www.cloudflare.com:443",
+      "host": "www.cloudflare.com",
+      "atMs": 118868
+    }
+  ],
+  "summary": {
+    "connectCount": 4,
+    "plainRequestCount": 0,
+    "connectTargets": [
+      "sni-probe.local:18443",
+      "sni-probe.local:18443",
+      "sni-probe.local:18443",
+      "www.cloudflare.com:443"
+    ],
+    "verdict": "CONNECT_SUPPORTED"
+  }
+}

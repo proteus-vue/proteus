@@ -154,6 +154,21 @@ enum SuperappProbes {
       deadlineSeconds: 120,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1179：**B 路线（本地 CONNECT 代理）真机**判据——把 #1178 的模拟器结论升到真机。
+    //   ★为什么必须真机再跑一次：模拟器与真机共用 CFNetwork，但**代理/网络栈的系统策略可能不同**
+    //     （例如真机有运营商配置、VPN 配置、MDM 策略）⇒ 模拟器绿不等于真机绿。
+    //   ★代理地址由环境变量 `PROTEUS_B_PROXY=host:port` 注入（见 `HttpCapability.session`），
+    //     探针参数只给目标 URL（一个**无 DNS 记录**的假域名，见 JS 探针文件头）。
+    ProbeConfig(
+      argPrefix: "--httpdns-b-probe=",
+      kickFormat: "__proteusHostAppHttpDnsBProbe(%@)",
+      resultKey: "__proteusHostHttpDnsBProbeResult",
+      reportPrefix: "httpdns_b",
+      deadlineSeconds: 120,
+      extraReadings: { _ in
+        ["httpdns_b_proxy_env": ProcessInfo.processInfo.environment["PROTEUS_B_PROXY"] ?? ""]
+      },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

@@ -64,6 +64,14 @@ const LOCAL_ONLY = {
   //   它检查**框架参考宿主**；CLI 生成宿主的**壳模板**（templates-host/ios/shell/*.swift）此前无任何本地判据
   //   ⇒ 改模板只能等真机打包才发现编译错。同样需 macOS + Xcode。
   'check:ios-cli-host-compile': '需 macOS + Xcode（iphoneos SDK 做 swiftc -typecheck）；CI 为 ubuntu-latest',
+  // ★★★iOS 工具链解析门禁（2026-10-22 · 决策 #1179）：判「有能力完备的 Xcode 时是否选中它」
+  //   + 「候选清单是否覆盖非默认安装位」+ 「hosts/ios 下不得绕过解析器手写 Xcode 路径」。
+  //   ★为什么归 LOCAL_ONLY：判据对象是**本机的 Xcode 安装布局**——CI 上根本没有 Xcode
+  //     （ubuntu-latest），跑它只会得到"未找到任何 Xcode"这种与结论无关的失败。
+  //   背景（这条门禁存在的原因）：我手写 `/Volumes/data1/applications/Xcode.app`（14.2，无 devicectl）
+  //   ⇒ 据此断言"本机没有 devicectl"，而 26.5 一直装在 `/Volumes/data1/work/office-applications/`
+  //   ⇒ 这条教训在 AGENTS.md 表格里**早就写着**我还是重犯 ⇒ 必须做成能跑的命令。
+  'check:ios-xcode': '判本机 Xcode 安装布局（能力完备优先 + 非默认卷覆盖）；CI 无 Xcode，跑它只会得到无关失败',
   // ★★「提交 ≠ 交付」门禁（2026-09-28 新增，背景：一天 111 个提交漏推送 —— 用户指出）。
   //   CI 里跑它**没有意义**：CI 的 checkout 是 detached HEAD（或 `refs/pull/*`），
   //   "本地领先 upstream N 个提交"这个状态在 CI 中天然为 0 ⇒ **恒绿，属假门禁**。
@@ -303,6 +311,9 @@ const LOCAL_ONLY_META = {
   'check:ios-selfdraw-compile': { cat: 'macos', run: 'manual' },
   'check:glass-pixel-parity': { cat: 'macos', run: 'verify' },
   'check:ios-cli-host-compile': { cat: 'macos', run: 'manual' },
+  // ★★★#1179：判**本机**的 Xcode 安装布局（哪个版本有 devicectl / 非默认卷是否覆盖），
+  //   由 `pnpm verify` 在开发机上跑；CI 无 Xcode ⇒ 只会得到与结论无关的失败。
+  'check:ios-xcode': { cat: 'macos', run: 'verify' },
   'check:ios-invoke-bytes': { cat: 'macos', run: 'manual' },
   // ── sdk（Android SDK/NDK/JDK · DevEco OHOS SDK）──────────────────────
   'check:js-engine-build': { cat: 'sdk', run: 'verify' },
@@ -355,7 +366,13 @@ const LOCAL_ONLY_META = {
 }
 
 /** ★棘轮（只减不增）：新增豁免必须同时抬这个数，diff 里看得见（同 check:file-size 先例） */
-const LOCAL_ONLY_MAX = 55
+// ★2026-10-22 抬 55 → 56（决策 #1179）：新增 `check:ios-xcode`。
+//   理由（为什么不能接 CI）：它判的是**本机 Xcode 安装布局**——哪个版本有 devicectl、
+//   非默认卷上的安装位是否被候选清单覆盖。CI 跑在 ubuntu-latest，**根本没有 Xcode** ⇒
+//   跑它只会得到"未找到可用 Xcode"这种与结论无关的失败，属真·不可接（不是懒得接）。
+//   ★这条门禁本身就是"文档拦不住、必须工具化"的产物：我手写了 `/Volumes/data1/applications`
+//   （14.2，无 devicectl）并据此说"本机没 devicectl"，而 26.5 一直在线。
+const LOCAL_ONLY_MAX = 56
 
 /** 读取所有 workflow 文本（含 pages.yml / consistency.yml 等） */
 function workflowFiles() {
