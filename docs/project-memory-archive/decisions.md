@@ -12460,3 +12460,75 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 诚实边界**：a) 只证明"能共存 + 成本"，**不评判 HTML 叠加层的交互/无障碍/命中测试**（那是 Studio 真正的工作量）；b) KVC 设透明是 PoC 手法，生产要走 Tauri 透明窗口配置或自绘 layer；c) 没有菜单栏/多窗口/面板拖拽；d) 本机有并发负载。
 **⑦ 产物**：`docs/proteus-studio-poc/03-tauri-embed/`（Cargo 工程 + `native/embed_view.m` + `dist/index.html` 叠加层 + `results/readout-tauri-run{1,2,3}.json`）。`target/` 已由本地 `.gitignore` 拦掉（本仓 `.gitignore` **没有**全局 `target/`，这正是它第 126 行注释里写过的坑）。
 **⑧ 下一步**：C（真机投屏流）；或转入 Studio 阶段 1 骨架（面板/编排层）——**性能侧的两个前提（离屏、窗口、Tauri 承载）现在都有数据了**。
+
+1171. **★★★【★编号勘误：原写 #1170，与并发会话撞号 ⇒ 改为 #1171】HTTPDNS 业务化——线格式 `HttpDns=14` + 四层字段链 + Android/鸿蒙双端真机生效；iOS 如实 unsupported（useFetch 最后一项真缺口收口）· 决策**（2026-10-22 · 承接 #1169 的鸿蒙落点实证）:
+
+**需求**：承接 #1169「下一步①：`fetch: { httpDns }` 门面 + 线格式 tag + 三端宿主」。
+
+**★门面（四层字段链全打通）**
+`FetchConfig.httpDns: Record<string, string | string[]>` ⇒ `runFetch` 里 `normalizeHttpDns` 归一
+（**域名小写**——DNS 大小写不敏感，不归一会导致"业务传了大写就静默不命中"；去空白/去空 IP/去重保序；
+**空表返 `undefined`**——与"不传"同义）⇒ ①②③④ 四层白名单全加。
+★语义（写进类型注释并落到判据）：只影响**表内域名**；表里没有的照旧走系统 DNS；
+**SNI 与证书主机名校验仍用原域名**（把 URL 换成 IP 直连会破坏这两件事，是本次设计的硬约束）。
+
+**★线格式 `HttpDns = 14`（name-values：域名 → 逗号分隔 IP）**
+· 与 `Headers` / `Params` / `Transport` **同一原语** ⇒ 零新增编码形态（五端各加一个 case）；
+· ★**空表不写 tag**（与"不写"语义相同）⇒ 不产生两种等价形态（否则 parity 对拍会出现一对多期望值）；
+· golden 向量 **43 → 45**，TS/Java/Swift/ArkTS/C++ **逐字节等价全绿**。
+
+**★三端宿主（如实分档，不粉饰）**
+· **Android** ✅ OkHttp `Dns` **三级回落**：per-call 表 → 进程级 resolver → 系统 DNS。
+  ★★**不按表分 client**：表若进 `clientKey`，HTTPDNS 的 IP 轮换会让**每个不同表一个新连接池**
+    ⇒ 连接复用归零（#1155 同族缺陷）。改用 `ThreadLocal` 传表 —— **前提是本仓用同步 `execute()`**，
+    DNS 在调用线程执行（本机取证：`caller-thread == lookup-thread`）；若将来改 `enqueue()` 本机制失效（已写进注释）。
+  ★"表里有域名但 IP 全非法" ⇒ **抛错**（不回退系统 DNS）——回退会掩盖业务给的错 IP。
+  ★新增 `http.dnsStats`（`lookups` / `tableHits` / `lastSource` / `lastHost`）—— 把"表被采用"从**推断**变**直接证据**。
+· **鸿蒙** ✅ `RCP_DNS_RULE_DYNAMIC` 查表（该路径 #1169 已真机证实；表放栈上、回调经全局指针读）。
+  ★`HttpDnsTableGuard`（RAII）：`handle()` 有十余个出口，逐个清表指针太脆（漏一个就是悬垂）。
+  ★**表注入与假解析器互斥**（同一条 `Rcp_DnsRule`，后设覆盖先设）—— 本轮实测踩到：两者同时装时
+    `lastSource` 永远是 `probe`，**业务表根本没被验证**。
+· **iOS** ❌ 明确 `fetch.unsupported`。**不静默忽略**——否则业务以为走了 HTTPDNS、实际走系统 DNS
+  （**假数据比缺数据更糟**，与本仓"transport 缺键不填 0"同一纪律）。★理由：`URLSession` 无 DNS 钩子；
+  唯一替代是把 URL 改成 IP 直连，但那**破坏 SNI 与证书主机名校验**（不可接受的降级）。
+
+**★★★真机双向对照（关键：证明"表真的起作用"而非"网络碰巧不通"）**
+· **Android**：注入 `203.0.113.1`（TEST-NET-3 不可达）⇒ 失败 `fetch.failed`；基线 ⇒ 200；
+  宿主记账 `lookups=2 · tableHits=1`。
+· **鸿蒙**：注入 ⇒ `tableRules=1 · tableHits=1 · lastSource=table` + 请求失败；
+  基线 ⇒ `tableHits=0`（未注入时表不参与）。
+证据：`hosts/android/results/httpdns-probe.json` · `hosts/harmony/results/http-probe-dns-table.json`。
+
+**★★首跑踩到的装置陷阱（比缺陷更值钱）**：**连接池优先于 DNS** ——
+先跑基线会让 `host:443` 的连接进池，注入请求**直接复用、根本不查 DNS** ⇒ 表"看起来没生效"
+（证据 `lookups=1 · tableHits=0 · lastSource=system`）。
+⇒ 探针改为**注入侧先跑**（池空 ⇒ 必查 DNS）。
+★这不是缺陷而是 HTTPDNS 的**固有语义**：已建连的 host 不会重新解析 ⇒ 业务侧要紧跟 TTL / 换 host
+才能看到新 IP（已写进矩阵与类型注释，避免业务误以为"设了 httpDns 就每次都用新 IP"）。
+
+**★判据 `tests/httpdns-wire.test.ts` 9/9**
+（线格式 tag14 + 空表不写 / 五端编解码 / Android 三级回落 + ThreadLocal + clientKey 不含表 /
+鸿蒙 DYNAMIC + RAII 守卫 / iOS unsupported / **双端真机证据**）
+· **破坏性验证 7/7 全红**：删 tag14 · 空表也写 · tableHits→0 · inject_ok→true ·
+  鸿蒙 tableHits→0 · lastSource→system · ok→true。
+· ★**顺手修既有判据缺陷**：`fetch-wire-fields` 的 `objectKeys` 原按段判 `startsWith('//')`，
+  而本仓写法是「注释行 + 换行 + 字段」⇒ **带注释的字段被整段跳过**（假红）；
+  改为**先剥注释再切**（#1169 加 `httpDns` 时 `tlsPins` 与它双双被误报漏传）。同时修好第 51 行的
+  字面 `\n`（历史写入事故：`tlsPins` / `tlsPinOnly` 其实从未被这条判据真正检查过）。
+
+**★文件纪律（两次命中，都按纪律处理）**
+· `Superapp.ets` 加完 DNS 注入到 **1008 行**（上限 1000）⇒ 把 HTTP 探针整体抽到
+  `entry/src/main/ets/runtime/HttpProbe.ets`（与 `TransportProbe` / `KeyboardProbe` 同族）
+  ⇒ 回到 **956 行**；★**拆完复验真机**（`tableHits` 仍为 1）确认功能没坏。
+· `tests/fetch-wire-fields.test.ts` 的 JSDoc 里写了 `/* */` 字面量 ⇒ **提前闭合块注释** ⇒
+  esbuild 语法错误（本仓记过的"注释里的 `*/` 截断"复发）⇒ 改写措辞。
+
+**诚实边界**
+· 表只作用于**当次请求**；框架层不缓存解析结果（HTTPDNS 的 TTL 归业务/服务商）；
+· 表内 IP 全不可达 ⇒ 按网络错误失败，**不回退系统 DNS**（回退会掩盖 HTTPDNS 故障）；
+· **iOS 无此能力**（平台边界，不是待办）；
+· DoH（`Rcp_DnsOverHttps`）与 Static/DnsServers 规则仍未实测；
+· Android 的 `httpDns` 表**按线程**传递 ⇒ 未来若改异步 `enqueue()` 必须重新设计（已写进注释与判据）。
+
+**下一步**：① 真机对照 DoH 路径（鸿蒙的另一条路，优先级低于 Dynamic）② 解析结果缓存与 TTL（业务侧）
+③ iOS 若将来出现 DNS 钩子再补 ④ 把 `transport`/`dnsStats` 接进性能预算与排障面板。
