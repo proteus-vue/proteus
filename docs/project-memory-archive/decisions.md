@@ -12636,3 +12636,22 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 诚实边界**：a) **只验证渲染与字段映射**，Tauri IPC 真实往返是桩，WKWebView 与 Chromium 的渲染差异未验；b) **元素拾取仍无数据源**（设备侧视图树 + 拾取通道未接）——面板**明说**"这里不显示盒模型 / 计算样式"，不再用"占位"含混过去；c) `locateAssertion` 确认无注册表；d) 码率是估算口径（见 ⑥）。
 **⑧ ★顺手修掉一个更严重的仓储缺陷**：提交时才发现 `05-studio-shell/dist/index.html` **从来没进过库**——仓库根 `.gitignore:5` 有一条 `dist/`，把我们的**手写 HTML**（无打包器，本身就是源码）一起忽略了。后果：干净 clone 下 `frontendDist` 指向不存在的目录，**应用根本构建不出来**，而前几轮提交都以为它进去了。修法：目录改名 `dist/` → `web/`（语义上也更对——这不是构建产物），`tauri.conf.json` 的 `frontendDist` 同步改，并在本地 `.gitignore` 写明原因防复发。
 **⑨ 产物**：`native/embed_view.m`（直方图 + `poc_live_stats` + 报告加 `aus`/`mbps`）· `native/live_stream.h`（字节计数）· `src/main.rs`（20 字段 stats + 机型探测）· `web/index.html`（重写右栏）· `verify-panel.mjs`（新，9 判据）· `results/inspector-panel.png` · `results/panel-source.json`。
+
+1182. **★★★iOS HTTPDNS 生产落地：B 路线（进程内本地 CONNECT 代理）+ 按表缓存 session；真机双向对照通过 · 决策**（2026-10-22 · 承接 #1179「B 已验证可行，生产实现零行」）:
+**★编号勘误**：本条原拟编号 #1180，临提交前复核发现被并行会话（G-54 `affectedDevices`）先占用（#1181 亦已被占用）⇒ 让号改为 **#1182**；他人已入库的 #1180/#1181 未改动。
+**① 本轮交付**：iOS **真的支持 `httpDns`** 了——不再是「如实报 unsupported」。三处落点：
+  a) `hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift`（新，465 行）：进程内本地代理。loopback 监听（`127.0.0.1` + 系统分配临时端口）、解析 `CONNECT host:port`、**按表查 IP → 多个候选按序试**、表未命中**回落系统解析**、`http.dnsStats` 记账（`lookups/tableHits/misses/lastSource/lastHost/connectErrors/proxies`）。明文 http 的绝对 URI 请求**明确拒绝 501**（不静默改写语义）。
+  b) `hosts/ios/ProteusHost/runtime/http-capability-dns-session.swift`（新）：**按表缓存 session**。线格式 `httpDns` 是 name-values（值 = 逗号分隔 IP），归一成 `host → [ip...]`（顺序保留 = 优先级）；键 = 表内容；一表一代理端口一 session。
+  c) `http-capability.swift`：删掉「不支持自定义 DNS」的拒绝，改为 `session(for: f.httpDns)`；**只在表超上限时报错**（`HttpDnsProxies.maxTables = 8`）。`host-capabilities.swift` 新增 `http.dnsStats` 分派。
+**② 三条不能破的约束（都是实测踩出来的）**：
+  · **一表一 session**：`connectionProxyDictionary` 是 per-session 的 ⇒ 不同业务给不同表时必须各走各的代理，否则表会串。
+  · **session 必须按表缓存**：每请求 new `URLSession` = 连接池归零（#1155/#1160 实测两次：pinning 首版每次新建 SSLContext ⇒ 复用 4/1 退化 5/5）。
+  · **表未命中必须回落系统解析，且回落可见**（`lastSource='system'`）：否则 HTTPDNS 会把无关域名一起弄坏；而**回落不可见就等于静默**（#1171「假数据比缺数据更糟」同纪律）。超上限**如实报错**，绝不悄悄回落到默认 session。
+**③ 真机双向对照（`HTTPDNS_PROD_DEVICE_OK`，iPhone 12）**：入口 `bash hosts/ios/run-httpdns-prod-probe.sh` → `hosts/ios/results/httpdns-prod-device.json`。读数：注入 `203.0.113.1`（RFC 5737 TEST-NET-3）⇒ 请求**失败**（`fetch.failed`）；基线（不注入）⇒ **200**；`tableHits=1`；表未命中的域名（`httpbin.org`）⇒ 200 且 `lastSource=system`、`misses=1`、`proxies=1`。★**双向对照是必须的**：只报"注入后失败"无法区分"表生效"与"网络本来不通"（#1169 首跑就踩到）；只报"基线成功"则表完全没生效也照样绿。
+**④ 判据方向翻转（本条特有）**：#1169/#1176 时 `tests/httpdns-wire.test.ts` 断言 iOS **必须**明确 `fetch.unsupported`；现在**必须反过来**——再出现"不支持自定义 DNS"就是功能回退，且这种回退很隐蔽（请求照常成功，只是走了系统 DNS）。⇒ 新断言：不得出现 `不支持自定义 DNS|httpDns 仅在 Android/鸿蒙 生效`、必须真的 `session(for: f.httpDns)`、超上限必须如实报错。另加两条静态判据：① 代理关键约束（回落可见 / 多 IP 顺序 / **只监听 loopback** / name-values 归一化）；② 生产面真机证据校验。
+**⑤ 判据**：`tests/httpdns-wire.test.ts` **17/17** + `tests/host-probe-registry.test.ts` **7/7** = **24 条**。**破坏性验证 6/6 全红**：证据 `tableHits` 改 0 ⇒ 红 · 代理监听改 `0.0.0.0`（对外暴露）⇒ 红 · 删回落分支 ⇒ 红 · session 永远返回默认 ⇒ **真机"注入不可达 IP 却成功" + `tableHits=0`** ⇒ 脚本 `exit 1` · 探针不发请求 ⇒ 红 · 宿主忽略 `PROTEUS_B_PROXY` ⇒ 红；逐项恢复后全绿。
+**⑥ 又一次"判据自己错设"（本轮实测两次）**：
+  a) 探针内 `bridge.invoke('http.dnsStats')` 在当前 bridge 形态下取不到值 ⇒ `probe.dnsStats` 为空 ⇒ 若用 "JS 侧 `table_hit_seen`" 判就会**误红**（而宿主侧 `tableHits=1` 已成立）。修法：**以宿主 `extraReadings` 为唯一事实来源**（那是 Swift 在报告落盘那一刻直接读 `statsSnapshot()`，不依赖 JS 能否调 invoke）。
+  b) 我曾要求"落盘瞬间 `lastSource=='table'`"——但探针最后一条是**表未命中**的那条 ⇒ 落盘时 `lastSource` 必然是 `system`。⇒ 改为判"table 出现过"（由 `inject_failed` + `tableHits>0` 共同证明）+ 单独判 `misses>0`（回落路径被覆盖）。
+**⑦ 产物**：`HttpDnsProxy.swift` · `http-capability-dns-session.swift` · `http-capability.swift`（去拒绝 + 按表选 session）· `host-capabilities.swift`（`http.dnsStats`）· `entry-superapp-probes-httpdns-prod.ts`（生产面探针 + **三条 HTTPDNS 探针的统一安装**）· `run-httpdns-prod-probe.sh` · `hosts/ios/results/httpdns-prod-device.json` · 两处 Swift 源码清单 · 三处探针登记 · 02 篇 §8 · 能力矩阵 5 处（iOS 从 🟡→✅）· `tests/httpdns-wire.test.ts`。（`entry-superapp.ts` 曾因新增探针冲到 1005 行，按纪律**把三条 HTTPDNS 注册收成 `installHttpDnsProbes()`** 后回到 993 行——顺带减少将来 1000 行冲突面。）
+**⑧ 诚实边界**：a) 只做 HTTP/1.1 `CONNECT` 隧道，明文 http 经代理**明确 501**（不静默改写）；b) 不做解析缓存/TTL（表由业务给，与 Android/鸿蒙同边界）；c) App 进后台监听线程随挂起（iOS 后台限制），**未做后台保活评估**；d) 表上限 8 张（超出如实报错，不驱逐——驱逐会让连接池凭空归零）；e) `http.dnsStats` 已可读但**未接进 `FetchMeta`/排障面板**。

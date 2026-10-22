@@ -32,6 +32,9 @@ export { appBodyProbe } from './entry-superapp-probes-body'
 import { appHttpDnsProbe } from './entry-superapp-probes-httpdns'
 // ★★★#1179：iOS B 路线（本地 CONNECT 代理）真机探针——把 #1178 的模拟器结论升到真机
 import { appHttpDnsBProbe } from './entry-superapp-probes-httpdns-b'
+// ★★★#1180：HTTPDNS 三条探针的注册集中到该模块（主文件只留一行安装）
+import { installHttpDnsProbes } from './entry-superapp-probes-httpdns-prod'
+export { appHttpDnsProdProbe, installHttpDnsProbes } from './entry-superapp-probes-httpdns-prod'
 export { appHttpDnsProbe } from './entry-superapp-probes-httpdns'
 export { appHttpDnsBProbe } from './entry-superapp-probes-httpdns-b'
 
@@ -986,13 +989,5 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppBodyProbe?: (b: string) => string
 }).__proteusHostAppBodyProbe = (b: string) => appBodyProbe(b)
-// ★★★#1169：HTTPDNS 端到端探针（结果填 __proteusHostHttpDnsProbeResult）
-//   ★三件对照：基线成功 + 注入不可达 IP 后失败 ⇒ 表真的生效；iOS 则要求 fetch.unsupported。
-;(globalThis as unknown as {
-  __proteusHostAppHttpDnsProbe?: (b: string, h: string) => string
-}).__proteusHostAppHttpDnsProbe = (b: string, h: string) => appHttpDnsProbe(b, h)
-// ★★★#1179：iOS B 路线真机探针（结果填 __proteusHostHttpDnsBProbeResult）
-//   ★与上面那条的区别：上面测「业务 API 的 httpDns 表」，这条测「宿主配代理后传输通路能否走通」。
-;(globalThis as unknown as {
-  __proteusHostAppHttpDnsBProbe?: (u: string, p?: string, r?: number) => string
-}).__proteusHostAppHttpDnsBProbe = (u: string, p?: string, r?: number) => appHttpDnsBProbe(u, p, r)
+// ★★★#1169/#1179/#1180：HTTPDNS 三条探针统一安装（实现见 entry-superapp-probes-httpdns-prod）
+installHttpDnsProbes(appHttpDnsProbe, appHttpDnsBProbe)

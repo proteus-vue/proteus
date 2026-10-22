@@ -169,6 +169,17 @@ enum SuperappProbes {
         ["httpdns_b_proxy_env": ProcessInfo.processInfo.environment["PROTEUS_B_PROXY"] ?? ""]
       },
     ),
+    // ★★★#1180：**生产路径判据**——`useFetch({ httpDns })` 真的由 `HttpDnsProxy` 按表解析。
+    //   ★与上面两条的区别：#1179 测"传输通路"（表由探针脚本提供），本探针测**业务面**
+    //     （表从 JS 经线格式到宿主）。参数形态 `--httpdns-prod-probe=<hitUrl>[,<missUrl>[,<unreachableIp>]]`
+    ProbeConfig(
+      argPrefix: "--httpdns-prod-probe=",
+      kickFormat: "__proteusHostAppHttpDnsProdProbe(%@)",
+      resultKey: "__proteusHostHttpDnsProdProbeResult",
+      reportPrefix: "httpdns_prod",
+      deadlineSeconds: 180,
+      extraReadings: { _ in HttpDnsProxies.statsSnapshot() },
+    ),
   ]
 
   /// 找到命令行里出现的那个探针参数（返回配置 + 逗号分隔的参数串）。

@@ -1,14 +1,17 @@
 # 02 · iOS 上 HTTPDNS 到底怎么做：业内四条路线与微信实测参数
 
-> 决策 #1176 · 2026-10-22 · 触发：用户追问「一半业内怎么做的呢？比如微信小程序我看是支持的，他们走的 B 还是 C？」
+> 决策 #1176 / #1178 / #1179 / **#1180** · 2026-10-22 · 触发：用户追问「一半业内怎么做的呢？比如微信小程序我看是支持的，他们走的 B 还是 C？」
 > 前置：#1171 已把 `httpDns` 业务化（Android + 鸿蒙真机生效），iOS 当时写的是
-> 「平台边界、不支持」——**本文更正这个过强结论**。
+> 「平台边界、不支持」——**本文更正这个过强结论**；随后 #1178（模拟器）/#1179（真机）
+> 实证 B 路线可行，**#1180 已把 B 落地为生产实现（iOS 现已支持）**。
 
 ## 0. 一句话结论
 
-**微信小程序走的是 C（容器自建网络栈），不是 B。** 但微信**没有**把这张能力开放给开发者：
+**iOS 已支持 HTTPDNS（#1180：进程内本地 CONNECT 代理）。**
+微信小程序走的是 C（容器自建网络栈），不是 B——但微信**没有**把这张能力开放给开发者：
 小程序 API 只允许开发者选一个**服务商 ID**，不能传自己的域名→IP 表。
-iOS 上轻量接入的业内主流是 **A（IP 直连 + 改写证书校验主机名）**。
+云厂商 iOS SDK 的主流是 **A（IP 直连 + 改写证书校验主机名）**，代价是丢 SNI；
+本仓选 **B**，因为它是唯一同时保住 SNI 与 HTTP/2 的低成本路径（已真机实证）。
 
 ## 1. 微信小程序：能力形状是"选服务商"，不是"给表"
 
@@ -192,13 +195,34 @@ App 侧由 `PROTEUS_B_PROXY=<LAN_IP>:<port>` 注入 `connectionProxyDictionary`
 **破坏性验证（真机）**：① 探针不发请求 ⇒ `exit 1`（CONNECT/SNI 全 0）；
 ② 宿主忽略 `PROTEUS_B_PROXY` ⇒ `exit 1`（同样全 0）。恢复 ⇒ `exit 0`、`ROUTE_B_DEVICE_OK`。
 
-## 8. 判据（可回归）
+## 8. 生产实现（#1180）—— B 路线已落地
 
-- `tests/httpdns-wire.test.ts` 断言 iOS **必须**明确 `fetch.unsupported`，
-  且**不得**再声称"平台不支持"（只允许说"当前栈无注入点"）。
+| 文件 | 职责 |
+|---|---|
+| `hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift` | 本地 CONNECT 代理：监听 loopback、按表解析、多 IP 顺序试、表未命中回落系统、`http.dnsStats` 记账 |
+| `hosts/ios/ProteusHost/runtime/http-capability-dns-session.swift` | 按表缓存 `URLSession`（一表一代理端口一 session；**不能每请求新建**=连接池归零） |
+| `hosts/ios/ProteusHost/runtime/http-capability.swift` | 去掉 `fetch.unsupported`，改为 `session(for: f.httpDns)`；仅在**表超上限**时如实报错 |
+| `hosts/ios/ProteusHost/runtime/host-capabilities.swift` | `http.dnsStats` 分派（`lookups` / `tableHits` / `misses` / `lastSource` / `lastHost` / `connectErrors` / `proxies`） |
+
+**三条不能破的约束**（都是实测踩出来的）：
+1. **一表一 session**：`connectionProxyDictionary` 是 per-session 的 ⇒ 不同表不能共用一个 session（否则表串）。
+2. **session 必须按表缓存**：每请求 new `URLSession` = 连接池归零（#1155/#1160 实测两次）。
+3. **表未命中必须回落系统解析，且回落可见**：`lastSource='system'`；否则 HTTPDNS 会把无关域名一起弄坏。
+   超上限（`HttpDnsProxies.maxTables=8`）时**如实报错**，不悄悄回落（那会变成"以为走了表、其实走系统"的假数据）。
+
+**真机双向对照（#1180）**：`bash hosts/ios/run-httpdns-prod-probe.sh` → `HTTPDNS_PROD_DEVICE_OK`：
+注入 `203.0.113.1` ⇒ 请求失败；基线 ⇒ 200；`tableHits=1`；表未命中的域名 ⇒ 200 且 `lastSource=system`。
+**破坏性验证**：session 永远返回默认 ⇒ 注入不可达 IP 却**成功**（表没生效）+ `tableHits=0` ⇒ 判据红、脚本 `exit 1`；恢复 ⇒ 绿。
+
+## 9. 判据（可回归）
+
 - `bash hosts/ios/run-httpdns-route-b-probe.sh` —— **模拟器** B 路线 11 项判据（`exit 1` = 不可行）；
   证据 `hosts/ios/results/httpdns-route-b.json` 入库，`tests/httpdns-wire.test.ts` 校验其
   `verdict === 'ROUTE_B_FEASIBLE'` 且 `sniValues` 全是原域名。
-- `bash hosts/ios/run-httpdns-b-device-probe.sh` —— **真机** B 路线 13 项判据（`exit 1` = 失败）；
+- `bash hosts/ios/run-httpdns-b-device-probe.sh` —— **真机**传输通路 13 项判据（`exit 1` = 失败）；
   证据 `hosts/ios/results/httpdns-b-device.json` 的 `verdict === 'ROUTE_B_DEVICE_OK'` 由判据校验。
+- `bash hosts/ios/run-httpdns-prod-probe.sh` —— **真机生产面**判据（`exit 1` = 失败）；
+  证据 `hosts/ios/results/httpdns-prod-device.json` 的 `verdict === 'HTTPDNS_PROD_DEVICE_OK'` 由判据校验。
+- `tests/httpdns-wire.test.ts` **不得**再出现"iOS 不支持自定义 DNS"的报错（#1180 后方向翻转），
+  且必须真的按表选 session（`session(for: f.httpDns)`）+ 超上限如实报错。
 - 本文的 API 事实均可由 SDK 头文件复核；路线选择变更时必须同步本文与能力矩阵。

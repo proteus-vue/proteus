@@ -1,0 +1,28 @@
+{
+  "verdict": "HTTPDNS_PROD_DEVICE_OK",
+  "hitUrl": "https://www.cloudflare.com/cdn-cgi/trace",
+  "missUrl": "https://httpbin.org/get",
+  "inject": {
+    "ok": false,
+    "status": -1,
+    "code": "fetch.failed",
+    "message": "[proteus-cap] fetch.failed: [proteus-cap] fetch.failed: The operation couldn’t be completed. (kCFErrorDomainCFNetwork er"
+  },
+  "baseline": {
+    "ok": true,
+    "status": 200
+  },
+  "miss": {
+    "ok": true,
+    "status": 200
+  },
+  "dnsStats": {
+    "lookups": 2,
+    "tableHits": 1,
+    "misses": 1,
+    "lastSource": "system",
+    "lastHost": "httpbin.org",
+    "proxies": 1
+  },
+  "failedChecks": []
+}

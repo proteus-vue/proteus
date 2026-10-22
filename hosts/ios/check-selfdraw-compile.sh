@@ -70,6 +70,11 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/InvokeWire.swift"
   "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift"
   "$HERE/ProteusHost/runtime/http-capability.swift"
+  # ★#1180：HTTPDNS 生产实现（本地 CONNECT 代理 + 按表缓存 session）
+  #   ★必须与 http-capability 同编译单元：后者调 `session(for:)`（扩展在此）与 `HttpDnsProxies`
+  #     （漏加 ⇒ "cannot find 'HttpDnsProxies' in scope"）
+  "$HERE/ProteusHost/runtime/HttpDnsProxy.swift"
+  "$HERE/ProteusHost/runtime/http-capability-dns-session.swift"
   # ★#1153：TLS pinning（http-capability 引用 ⇒ 必须在同一编译单元里，否则 "cannot find 'TlsPinningIos' in scope"）
   "$HERE/ProteusHost/runtime/tls-pinning.swift"
   "$HERE/ProteusHost/dev/host-runtime-scene.swift"

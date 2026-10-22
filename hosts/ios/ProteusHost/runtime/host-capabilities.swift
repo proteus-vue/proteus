@@ -97,6 +97,17 @@ final class HostCapabilities: NSObject {
             // ★★★#1158：metrics 到达顺序（"为什么没有 transport 读数"的归因依据）
             tls["metrics"] = BodyLimitDelegate.metricsStatsSnapshot()
             return ok(tls)
+        // ★★★#1180：**HTTPDNS 记账**（排障/判据用）——回答"表到底有没有被用上"。
+        //   · `lookups`：代理收到并解析过的 host 次数；
+        //   · `tableHits`：命中业务给的表的次数（> 0 ⇒ 表真的生效）；
+        //   · `misses`：表未命中而回落系统解析的次数（**回落是显式的，不是静默**）；
+        //   · `lastSource`：`table` / `system` / `literal`（后者 = URL 本身就是 IP，不查 DNS）；
+        //   · `connectErrors`：候选 IP 全部连不上的次数（HTTPDNS 给了不可达 IP 时就会涨）。
+        //   ★与 `http.tlsStats` 同一族形态（只读记账，不改任何行为）。
+        //   ★为什么必须有它：`httpDns` 生效与否只有"请求成败"一个间接信号，而
+        //     "注入不可达 IP ⇒ 失败"与"网络本来就不通"从外部看起来一样（#1169 首跑就踩到）。
+        case "http.dnsStats":
+            return ok(HttpDnsProxies.statsSnapshot())
         case "window.setSize":
             return ok(windowSetSize(args))
         case "worker.create":

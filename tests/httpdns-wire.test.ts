@@ -83,25 +83,71 @@ describe('★★★#1169 HTTPDNS · 宿主可用性（三端如实分档）', ()
     expect(s, '★缺 HttpDnsTableGuard（表指针可能悬垂）').toMatch(/struct HttpDnsTableGuard/)
   })
 
-  it('★★★iOS：明确 `fetch.unsupported`（不静默忽略——假数据比缺数据更糟）', () => {
+  it('★★★#1180 iOS **已支持** httpDns（B 路线落地）：不得再返回 fetch.unsupported', () => {
     const s = read('hosts/ios/ProteusHost/runtime/http-capability.swift')
-    expect(s, '★iOS 未对 httpDns 明确报错（业务会以为生效了）').toMatch(
-      /httpDns[\s\S]{0,200}fetch\.unsupported/,
+    // ★#1169/#1176 时这里断言的是"**必须**明确 fetch.unsupported"——#1180 把 B 路线
+    //   （进程内本地 CONNECT 代理）落地后，iOS **真的支持**了 ⇒ 判据方向翻转：
+    //   再出现"因为不支持所以报错"就是功能回退（而且这种回退很隐蔽：请求照常成功，只是走了系统 DNS）。
+    //   ★唯一还允许的 `fetch.unsupported` 是"表数量超上限"（那是资源约束，不是能力缺失），
+    //   所以断言必须点名"不支持 DNS"这个语义已经消失，而不是简单 not.toMatch('fetch.unsupported')。
+    expect(s, '★iOS 又回到了"不支持自定义 DNS"的报错（B 路线被回退）').not.toMatch(
+      /不支持自定义 DNS|httpDns 仅在 Android\/鸿蒙 生效/,
     )
-    expect(s, '★缺少"为什么不能实现"的说明（URLSession 无 DNS 钩子）').toMatch(/URLSession.*没有.*DNS|自定义 DNS 钩子/)
+    // 必须真的按表选 session（而不是把表丢掉）
+    expect(s, '★iOS 没有按表选 session（httpDns 会被静默忽略）').toMatch(/session\(for:\s*f\.httpDns\)/)
+    // 超上限时的报错必须存在（资源约束要如实说，不能悄悄回落）
+    expect(s, '★表超上限时静默回落到默认 session（会变成走系统 DNS 的假数据）').toMatch(
+      /httpDns 表数量超过上限/,
+    )
   })
 
-  it('★★★#1176 iOS：只能把限制归给「当前栈」，不得写成「平台不支持」', () => {
-    const s = read('hosts/ios/ProteusHost/runtime/http-capability.swift')
-    // ★这是上一轮的真错：把实现限制说成平台限制（与 #1165「探针环境问题当成平台不支持」同源）
-    expect(s, '★iOS 注释仍把限制说成平台级（平台不支持/平台边界）').not.toMatch(
-      /iOS\s*(平台)?\s*不支持|平台边界|不可接受的降级/,
+  it('★★★#1180 iOS 代理实现的关键约束（一表一 session / 回落可见 / 候选顺序）', () => {
+    const proxy = read('hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift')
+    // ① 表未命中必须回落系统解析，且**记账可见**（不得静默）
+    expect(proxy, '★表未命中未回落系统解析（会把无关域名一起弄坏）').toMatch(/resolveSystem\(/)
+    expect(proxy, '★回落不可见（lastSource 没有 system 分支）').toMatch(/source = \.system/)
+    // ② 多 IP 按顺序试（表给多个 IP 时第一个连不上要试下一个）
+    expect(proxy, '★多 IP 未按顺序尝试').toMatch(/for ip in candidates/)
+    // ③ 只监听 loopback（不能把代理暴露到局域网）
+    expect(proxy, '★代理监听的地址不是 loopback（会对外暴露）').toMatch(/inet_addr\("127\.0\.0\.1"\)/)
+    // ④ 线格式是 name-values（值 = 逗号分隔 IP）⇒ 必须有归一化
+    expect(proxy, '★缺 name-values 归一化（线格式与内部结构不匹配）').toMatch(
+      /static func normalize\(_ nv: InvokeWire\.NameValues\?\)/,
     )
-    // 必须留下"平台有出口"的指路，否则下一个人会重犯同一个错
-    expect(s, '★未指出 iOS 平台的可行出口（SNI 可独立设置 / 证书可按原域名重校验）').toMatch(
-      /sec_protocol_options_set_tls_server_name[\s\S]{0,200}SecPolicyCreateSSL/,
+  })
+
+  it('★★★#1180 iOS 生产面**真机**证据入库（注入失败 / 基线成功 / tableHits>0 / 回落可见）', () => {
+    const p = 'hosts/ios/results/httpdns-prod-device.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺生产面真机证据 ${p}（跑 bash hosts/ios/run-httpdns-prod-probe.sh）`).toBe(true)
+    const r = JSON.parse(read(p))
+    expect(r.verdict, '★生产面结论不是 HTTPDNS_PROD_DEVICE_OK').toBe('HTTPDNS_PROD_DEVICE_OK')
+    // ★双向对照：这两条合起来才排除"碰巧失败"
+    expect(r.inject?.ok, '★注入不可达 IP 却没失败 ⇒ 表没生效（系统 DNS 解析成功）').toBe(false)
+    expect(r.baseline?.ok, '★基线失败 ⇒ 测试环境本身不通，判据不成立').toBe(true)
+    expect(Number(r.dnsStats?.tableHits ?? 0), '★tableHits=0 ⇒ 表没被采用').toBeGreaterThan(0)
+    expect(Number(r.dnsStats?.misses ?? 0), '★misses=0 ⇒ 没有验证"表未命中回落"这条路径').toBeGreaterThan(0)
+  })
+
+  it('★★★#1176 iOS：不得把实现限制说成「平台不支持」（#1180 已实现，形式随之调整）', () => {
+    // ★#1176 的教训仍在（把实现限制说成平台限制 = 与 #1165 同族的"夸大"），
+    //   但 #1180 落地 B 路线后，原来"必须留下 SNI/SecPolicyCreateSSL 指路"的那条断言
+    //   失去了对象（那是"还没实现时的出口说明"，现在实现在 `HttpDnsProxy.swift` 里）。
+    //   ⇒ 保留**语义判据**：全仓不得再出现"iOS 平台不支持 HTTPDNS"这类表述。
+    const files = [
+      'hosts/ios/ProteusHost/runtime/http-capability.swift',
+      'hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift',
+      'docs/proteus-network-plan/00-capability-matrix.md',
+    ]
+    for (const f of files) {
+      const s = read(f)
+      expect(s, `★${f} 仍把限制说成平台级（iOS 平台不支持 / 平台边界）`).not.toMatch(
+        /iOS\s*(平台)?\s*不支持\s*HTTPDNS|平台边界/,
+      )
+    }
+    // 路线评估文档必须仍被引用（换人接手时能找到"为什么选 B"）
+    expect(read('hosts/ios/ProteusHost/runtime/HttpDnsProxy.swift'), '★HttpDnsProxy 未指向路线评估文档').toMatch(
+      /02-ios-httpdns-industry-survey\.md/,
     )
-    expect(s, '★未指向四路线评估文档').toMatch(/02-ios-httpdns-industry-survey\.md/)
   })
 
   it('★★★#1176 业内调研文档：四条路线 + 微信走的是自建栈', () => {

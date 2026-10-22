@@ -34,35 +34,6 @@ import Foundation
 
 final class HttpCapability {
 
-    /// 进程级单例会话（复用连接池；★`URLSessionConfiguration.default` ⇒ 与 app 其它请求共用
-    ///   `HTTPCookieStorage.shared`，这正是 G-46 要的"同一份会话"）。
-    ///   ★#1115：**改用 delegate 驱动的会话**（而非 completion 的 `dataTask`）——
-    ///     原因见 `BodyLimitDelegate`：completion 回调时**数据已全部进内存**，事后拒绝等于没防住。
-    private static let session: URLSession = {
-        let cfg = URLSessionConfiguration.default
-        cfg.httpShouldSetCookies = true
-        cfg.httpCookieStorage = HTTPCookieStorage.shared
-        // ★★★#1178：**B 路线探针开关**（仅取证用；业务面不走这里）。
-        //   `PROTEUS_B_PROXY=host:port` ⇒ 只配**HTTP** 代理键（iOS 没有 HTTPS 代理键，
-        //   `kCFNetworkProxiesHTTPSEnable` 是 CF_AVAILABLE(10_6, NA)）⇒ 这正是要实测的问题：
-        //   https 请求会不会经 HTTP 代理键走 CONNECT 隧道。实测结论见
-        //   docs/proteus-network-plan/02-ios-httpdns-industry-survey.md §7。
-        //   ★不设这个变量时**一个键都不加**（生产路径零影响）。
-        if let proxy = ProcessInfo.processInfo.environment["PROTEUS_B_PROXY"], !proxy.isEmpty {
-            let parts = proxy.split(separator: ":")
-            if parts.count == 2, let port = Int(parts[1]) {
-                cfg.connectionProxyDictionary = [
-                    "HTTPEnable": 1,
-                    "HTTPProxy": String(parts[0]),
-                    "HTTPPort": port,
-                    "HTTPSEnable": 1,
-                    "HTTPSProxy": String(parts[0]),
-                    "HTTPSPort": port,
-                ]
-            }
-        }
-        return URLSession(configuration: cfg, delegate: BodyLimitDelegate.shared, delegateQueue: nil)
-    }()
 
     /// 处理一条 `http.request` 去程帧。
     /// - Returns: **立即**返回 `pending` 回程帧（JS 侧保持挂起）；最终结果经 `push` 回推。
@@ -70,18 +41,17 @@ final class HttpCapability {
         guard let url = buildURL(f) else {
             return try InvokeWire.encodeResolve(.makeErr(f.reqId, "http.request: url 非法或缺失（\(f.url ?? "<nil>")）"))
         }
-        // ★★★#1169 / #1176：**当前 URLSession 栈拿不到 DNS 注入点**——如实 `fetch.unsupported`，不静默忽略。
-        //   【为什么不能"忽略就算了"】业务传了 httpDns 就是期望绕过系统 DNS；静默忽略 ⇒
-        //   它以为走了 HTTPDNS、实际走系统 DNS（**假数据比缺数据更糟**，与"transport 缺键不填 0"同一纪律）。
-        //   【★这是栈的限制，不是平台的限制（#1176 更正）】`URLSession` **没有**自定义 DNS 钩子；
-        //   但 iOS 平台本身有出口：`sec_protocol_options_set_tls_server_name` 可独立设 SNI，
-        //   `SecPolicyCreateSSL` 能按原域名重校验证书 ⇒ "IP 直连"只丢 SNI，证书校验不必降级。
-        //   四条路线（A 改 IP / B 本地 CONNECT 代理 / C 自建栈 / D 系统 DNS Proxy）与代价见
-        //   docs/proteus-network-plan/02-ios-httpdns-industry-survey.md；立项见 T-ios-httpdns-options。
-        if let dns = f.httpDns, !dns.isEmpty {
+        // ★★★#1180：**HTTPDNS 生产实现（B 路线：进程内本地 CONNECT 代理）**
+        //   `f.httpDns` 有表 ⇒ 该表对应的本地代理（`HttpDnsProxy`）替 URLSession 解析，
+        //   隧道内 SNI/Host/h2/复用全保留（#1178 模拟器 + #1179 真机实测）。
+        //   · 表超上限（`HttpDnsProxies.maxTables`）⇒ **如实报错**（不能悄悄回落到默认 session：
+        //     那会让业务以为表生效了、实际走系统 DNS —— 假数据比缺数据更糟）。
+        //   · 无表 ⇒ `defaultSession`（零代理键），**生产默认路径完全不变**。
+        guard let sess = session(for: f.httpDns) else {
             return try InvokeWire.encodeResolve(.makeErr(
                 f.reqId,
-                "fetch.unsupported: iOS 的 URLSession 不支持自定义 DNS（httpDns 仅在 Android/鸿蒙 生效）"
+                "fetch.unsupported: httpDns 表数量超过上限（\(HttpDnsProxies.maxTables) 张独立表）。" +
+                "每张表需要一个独立代理端口与独立连接池——请合并域名或用同一张表"
             ))
         }
         var req = URLRequest(url: url)
@@ -141,7 +111,7 @@ final class HttpCapability {
                 req.setValue("multipart/form-data; boundary=\(up.boundary)", forHTTPHeaderField: "Content-Type")
             }
             NSLog("[proteus] UPLOAD_PACKED total=%lld file=%@", packed.bytes, up.path)
-            let task = session.uploadTask(with: req, fromFile: packed.url)
+            let task = sess.uploadTask(with: req, fromFile: packed.url)
             registerInflight(reqId, task)   // ★#1121：可取消
             BodyLimitDelegate.shared.registerUpload(task, reqId: reqId, push: push, tempFile: packed.url, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
             task.resume()
@@ -153,7 +123,7 @@ final class HttpCapability {
             guard let target = sandboxFile(savePath) else {
                 return try InvokeWire.encodeResolve(.makeErr(reqId, "fetch.failed: 落盘路径非法（只接受沙箱相对路径）：\(savePath)"))
             }
-            let task = session.dataTask(with: req)
+            let task = sess.dataTask(with: req)
             registerInflight(reqId, task)   // ★#1121：可取消
             BodyLimitDelegate.shared.registerSaving(task, reqId: reqId, push: push, target: target, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
             task.resume()
@@ -162,7 +132,7 @@ final class HttpCapability {
 
         // ★★★#1118：请求声明了流式 ⇒ 走「边读边推」路径（不整包进内存，也不受 32 MiB 上限约束）
         if f.stream == true {
-            let task = session.dataTask(with: req)
+            let task = sess.dataTask(with: req)
             registerInflight(reqId, task)   // ★#1121：可取消
             BodyLimitDelegate.shared.registerStreaming(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
             task.resume()
@@ -172,7 +142,7 @@ final class HttpCapability {
         //   这样数据是**逐块**送到 `didReceive data`，超限时能 `cancel()` **真正中止读取**。
         //   ★为什么不能沿用 completion：completion 回调时 `data` **已全部进内存**，
         //     那时再判上限等于"洪水过后才关闸"（#1114 的取证结论就是这一点）。
-        let task = session.dataTask(with: req)
+        let task = sess.dataTask(with: req)
         registerInflight(reqId, task)   // ★#1121：可取消
         BodyLimitDelegate.shared.register(task, reqId: reqId, push: push, manualRedirect: f.redirectManual == true, pins: f.tlsPins, pinOnly: f.tlsPinOnly == true)
         task.resume()
