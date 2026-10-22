@@ -664,15 +664,20 @@ let bodyRow = { state: '未检查' }
       const ctOk = p.post_ct_ok === true
       const getOk = p.get_ok === true
       const putOk = p.put_len_ok === true
+      // ★★★第三轮：**无体请求的显式 Content-Type 不得丢**（把 CT 一律搬进 cfg.contentType
+      //   会让 GET/DELETE/空体 POST 的头整条消失，与旧实现及 iOS/鸿蒙不一致）
+      const nobodyOk = p.nobody_no_body === true && p.nobody_ct_ok === true
       if (!lenOk) problems.push(`android: ★POST 体长不符（服务端 ${p.post_len_server} ≠ 期望 ${p.post_len_expected}）——整包路径可能又没装配 body`)
       if (!notEmpty) problems.push('android: ★POST 体为空——请求体没发出去（P0 形态）')
       if (!ctOk) problems.push(`android: ★Content-Type 与调用方给的不一致（实得 "${p.post_content_type}"，期望 "${p.post_content_type_expected}"）——encodeBody 的推导值可能覆盖了业务头`)
       if (!getOk) problems.push('android: ★GET（无体）失败——体可能被错挂到 GET（OkHttp 会抛 method GET must not have a request body）')
       if (!putOk) problems.push('android: ★PUT 带体失败（防"只对 POST 特判"）')
+      if (!nobodyOk) problems.push(`android: ★无体请求的显式 Content-Type 丢了（实得 "${p.nobody_ct_server}"，期望 "${p.nobody_ct_expected}"）——无体时 CT 必须留在 headers 里发出`)
       bodyRow = {
-        state: lenOk && notEmpty && ctOk && getOk && putOk ? 'ok' : '不达标',
+        state: lenOk && notEmpty && ctOk && getOk && putOk && nobodyOk ? 'ok' : '不达标',
         len: p.post_len_server,
         ct: p.post_content_type,
+        nobodyCt: p.nobody_ct_server,
       }
     }
   }
@@ -690,6 +695,6 @@ console.log(
     `持久层：${persistRows.map((r) => `${r.id} ${r.backend} 重启命中 ageMs=${r.ageMs}`).join(' · ')}；` +
     // ★#1156：传输层的三端读数也要出现在**成功摘要**里——否则"绿色"看不出鸿蒙是否真跑了
     `传输层：${transportRows.map((r) => `${r.id} 复用=${r.reused}（${r.httpsReqs}/${r.httpsConns}）h2=${r.http2}`).join(' · ')}；` +
-    // ★#1160：请求体证据（整包路径 POST/PUT 真的发出去 & Content-Type 不被推导值覆盖）
-    `请求体：android ${bodyRow.state}（POST ${bodyRow.len}B · ct=${bodyRow.ct}））`,
+    // ★#1160：请求体证据（整包路径 POST/PUT 真的发出去 & Content-Type 不被推导值覆盖 & 无体时 CT 不丢）
+    `请求体：android ${bodyRow.state}（POST ${bodyRow.len}B · ct=${bodyRow.ct} · 无体 ct=${bodyRow.nobodyCt}））`,
 )

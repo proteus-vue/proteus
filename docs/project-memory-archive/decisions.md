@@ -12131,4 +12131,31 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   `adb install | grep` 加 `|| true`（pipefail 下无匹配会终止脚本）·
   `check-cache-evidence` 新增**请求体证据段**（体长全等 + 非空 + CT 全等 + GET 无体 + PUT 带体）·
   `contract-index` 补 `run-body-probe.sh` · 矩阵两处过期行修正 · `thirdparty/README` 悬空引用改指判据。
+
+**【第三轮独立验证（2026-10-22）→ pass-with-issues；1 条 P2 回归 + 3 条可变异判据，已全修】**
+
+· **P2（我第二轮修 Content-Type 时引入）：无体请求的调用方 `Content-Type` 被丢弃** ——
+  把调用方 CT 一律从 headers 搬到 `cfg.contentType`，而 `body == null` 时 `requestBodyOf()`
+  返回 null ⇒ 该头**根本不会发出**（实测 GET/DELETE/空体 POST 都变 null），
+  与旧 `HttpURLConnection` 实现（`applyRequestHeaders` 无条件设头）及 iOS/鸿蒙都不一致。
+  ⇒ 修：`cfg.callerContentType` + `hasBodyForCt` —— **只在有体时**收口到 `cfg.contentType`
+  并剔除同名头；**无体时把头原样留着发出**。上传路径改从 `cfg.callerContentType` 取（体由 bodyWriter 产生）。
+  真机确认：无体 DELETE 的 `Content-Type` 到达服务端为 `application/json`，且体长 0（没凭空造体）。
+
+· **3 条仍可被变异骗过的判据（已补强）**：
+  X1 `unusedRf.transport = …`（写到非返回帧）与 X2 `readout(null, …)`（只剩 proto）原先全绿
+  ⇒ 断言第一实参是 `takeMetrics(f.reqId)`、赋值目标只能是 `rf`/`fin`；
+  X3「CT 首处赋值正确 + 后面再加一行覆盖」原先全绿 ⇒ 断言 `cfg.contentType =` **恰好 1 处**；
+  上传 boundary 只断言"有 boundary 串"（`up.fieldName` 也能过）⇒ 断言必须是 `up.boundary` 且两处同源。
+  **第三轮 5 处变异（X1/X2/X3/BND/NOBODY）现全部打红**。
+
+· **探针补用例**：`/body-echo` 新增「无体 + 显式 CT」（DELETE `application/json`），
+  `check-cache-evidence` 的请求体段增加 `nobody_ct_ok` / `nobody_no_body` 两条断言。
+
+· **判据强度小结（三轮累计）**：破坏性验证共 **28 处变异全部打红**
+  （第一轮 11 + 第二轮 8 + 第三轮 5 + 早期 4）；静态判据 28 条；
+  真机 9 组回归（transfer/stream/save/tls/upload/limit/cancel/redirect/body）+ transport 探针全绿。
+  ★三轮独立验证抓出的**全部**是真问题（P0 空体 → AAR 陈旧 → CT 覆盖 → CT 丢弃），
+  而**没有一轮**是我的自测或自建判据先发现的——这条记录本身是最有价值的产出：
+  「自测通过」只覆盖"我想到的形态"，覆盖洞只能靠**独立视角**与**变异测试**暴露。
 **下一步**：① HTTPDNS 能力化（`Dns` 线格式 tag + `fetch: { httpDns }` 门面 + 三端宿主）② 鸿蒙 RCP 接自定义 CA ⇒ 才可能协商 h2 ③ 把 `transport` 接进性能预算门禁（首字节 P95 告警）④ API 24/25 的 Base64 兼容（或抬 minSdk）⑤ 随包副本补齐探针模块。

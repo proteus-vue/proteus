@@ -156,6 +156,12 @@ public final class HttpTransport {
         public byte[] body;
         /** 请求体的内容类型（写进 RequestBody，**不是**同名头）。 */
         public String contentType;
+        /**
+         * ★#1160：调用方**显式**给的 Content-Type（若有）。
+         * <p>用途：上传路径要按「调用方 multipart 类型优先、否则兜底带 boundary」决定 `contentType`；
+         * 而 `buildCallConfig` 在有体时已把它搬进 `contentType` 并从 headers 剔除。
+         */
+        public String callerContentType;
         /** 非 null ⇒ 用回调式请求体（上传路径：边读文件边写）。 */
         public BodyWriter bodyWriter;
         /** 取消/读数归属键（帧的 reqId）。 */

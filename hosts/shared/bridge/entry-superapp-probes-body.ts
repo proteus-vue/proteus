@@ -118,6 +118,38 @@ export function appBodyProbe(base: string): string {
     }
     progress('get:done', { getOk: out['get_ok'] })
 
+    /**
+     * ②b ★★★第三轮独立验证抓出的 P2：**无体请求的显式 Content-Type 不能被丢弃**。
+     * 【缺陷形态】把调用方 CT 一律从 headers 搬到 `cfg.contentType`，而无体时没有 RequestBody
+     *   ⇒ 该头整条消失（实测 GET/DELETE/空体 POST 都变 null），与旧 `HttpURLConnection`
+     *   实现及 iOS/鸿蒙都不一致。
+     * ★用 **DELETE**（无体、且不是 GET/HEAD 这种"语义上通常不带 CT"的方法）来测最干净。
+     */
+    const wantNoBodyCt = 'application/json'
+    try {
+      const r = await caps.request({
+        url: `${base}/body-echo`,
+        method: 'DELETE',
+        headers: { 'Content-Type': wantNoBodyCt },
+        responseType: 'json',
+        timeout: 20000,
+      })
+      const echo = (r?.data ?? {}) as { length?: number; contentType?: string }
+      out['nobody_status'] = r?.status
+      out['nobody_len_server'] = echo.length
+      out['nobody_ct_server'] = echo.contentType
+      out['nobody_ct_expected'] = wantNoBodyCt
+      // 无体 ⇒ 长度必须 0（不能因为"带了 CT"就凭空造出体）
+      out['nobody_no_body'] = Number(echo.length ?? -1) === 0
+      // ★核心：调用方显式 CT 必须原样到达服务端（全等比较）
+      out['nobody_ct_ok'] = String(echo.contentType ?? '') === wantNoBodyCt
+    } catch (e) {
+      out['nobody_error'] = String((e as Error)?.message ?? e)
+      out['nobody_no_body'] = false
+      out['nobody_ct_ok'] = false
+    }
+    progress('nobody:done', { ctOk: out['nobody_ct_ok'] })
+
     // ③ PUT 带体（同一整包路径的另一个方法，防"只对 POST 特判"）
     try {
       const r = await caps.request({
@@ -139,6 +171,8 @@ export function appBodyProbe(base: string): string {
 
     out['ok'] = out['post_len_ok'] === true && out['post_not_empty'] === true
       && out['post_ct_ok'] === true && out['get_ok'] === true && out['put_len_ok'] === true
+      // ★★★无体请求的显式 CT 不得丢（第三轮 P2）：旧实现/旧栈会保留，本条守住
+      && out['nobody_no_body'] === true && out['nobody_ct_ok'] === true
     progress('done', { ok: out['ok'] })
     g['__proteusHostBodyProbeResult'] = JSON.stringify(out)
   }

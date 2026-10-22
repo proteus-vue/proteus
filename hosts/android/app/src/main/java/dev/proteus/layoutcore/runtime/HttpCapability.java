@@ -330,31 +330,37 @@ public final class HttpCapability {
         cfg.tlsPinOnly = Boolean.TRUE.equals(f.tlsPinOnly);
         cfg.redirectManual = Boolean.TRUE.equals(f.redirectManual);
         cfg.tag = f.reqId;
-        // ★★★Content-Type 的**唯一来源**：调用方显式头优先，否则用帧里的推导值（`encodeBody` 给的）。
-        //   【为什么必须在这里收口（第二轮独立验证抓出的语义回退）】
-        //     OkHttp 3.14.9 **实测**：`RequestBody` 的 MediaType **优先于**同名 `Content-Type` 头
-        //     （服务端收到的是 MediaType，显式头被覆盖）。而 `encodeBody` 会为字符串 data 自动填
-        //     `meta.contentType='text/plain'`、为对象填 `application/json` ⇒ 若只把 `f.contentType`
-        //     喂给 MediaType，调用方显式设的 `application/x-www-form-urlencoded` / `text/csv` /
-        //     带 charset 的类型会被**静默覆盖**（旧 `HttpURLConnection` 实现是调用方头优先）。
-        //   ⇒ 调用方头存在时把它搬进 contentType 并从 headers 剔除（两处并存只会漂移）。
-        String callerCt = headerValueIgnoreCase(f.headers, "content-type");
-        cfg.contentType = callerCt != null && !callerCt.isEmpty() ? callerCt : f.contentType;
         // ★★★请求体必须**在这里**装配（#1160 独立验证抓出的 P0 回归）
         //   【缺陷形态】换栈第一版只让落盘/流式两条路径各自 `cfg.body = …`，**整包路径漏了**
         //   ⇒ 所有带 `data` 的 POST/PUT 静默变成空体（功能全错、零报错、四条探针全是 GET/上传 ⇒ 都测不到）。
         //   ⇒ 正解 = 把 body 收进这个**唯一映射**，四条路径不再各自搬（新增路径天然覆盖）。
         //   ★`f.body` 恒非 null（默认 `EMPTY`）⇒ 必须判长度：GET/HEAD 挂空体数组会被 OkHttp 拒
         //     （`method GET must not have a request body`，实测）。第二轮独立验证的变异 M6 证明
-        //     去掉这个长度判断时 25 条判据全绿，而所有 GET 会直接抛 ⇒ 已有专门判据守着。
+        //     去掉这个长度判断时判据全绿，而所有 GET 会直接抛 ⇒ 已有专门判据守着。
         //   ★调用方若要覆盖（上传路径换成 bodyWriter）会显式置空 body。
         cfg.body = f.body != null && f.body.length > 0 ? f.body : null;
-        // 调用方头（剔除框架内部头——#1149 的统一入口；Content-Type 已收口到 cfg.contentType）
+        // ★★★Content-Type（第三轮独立验证抓出的 P2：**无体请求**的显式 CT 曾被我丢掉）
+        //   【两个来源】OkHttp 3.14.9 实测：`RequestBody` 的 MediaType **优先于**同名显式头。
+        //   【为什么有体时必须收口到一处】`encodeBody` 会给字符串 data 自动填 `text/plain`、
+        //     对象填 `application/json` ⇒ 只把 `f.contentType` 喂 MediaType 就会覆盖调用方的
+        //     `application/x-www-form-urlencoded` / `text/csv` / 带 charset 的类型（旧
+        //     `HttpURLConnection` 实现是调用方头优先；真机曾退化成 `text/plain` 抹掉 charset）。
+        //   【★★★为什么**无体**时不能收口】没有 `RequestBody` ⇒ 没人设头，若此时把头也剔除，
+        //     调用方的 `Content-Type` 会**整条消失**（第三轮实测：GET/DELETE/空体 POST 都变 null，
+        //     与旧实现及 iOS/鸿蒙都不一致）。⇒ 无体时把 CT **留在 headers** 里原样发出。
+        String callerCt = headerValueIgnoreCase(f.headers, "content-type");
+        cfg.callerContentType = callerCt;
+        boolean hasBodyForCt = cfg.body != null;
+        if (hasBodyForCt) {
+            cfg.contentType = callerCt != null && !callerCt.isEmpty() ? callerCt : f.contentType;
+        }
+        // 调用方头（剔除框架内部头——#1149 的统一入口）
+        // ★Content-Type 只在**有体**时剔除（已搬进 cfg.contentType）；无体时保留（见上）。
         if (f.headers != null) {
             for (Map.Entry<String, String> e : f.headers.entrySet()) {
                 if (e.getKey() == null) continue;
                 if (e.getKey().equalsIgnoreCase(BYPASS_PLATFORM_CACHE_HEADER)) continue;
-                if (e.getKey().equalsIgnoreCase("content-type")) continue;
+                if (hasBodyForCt && e.getKey().equalsIgnoreCase("content-type")) continue;
                 cfg.headers.put(e.getKey(), e.getValue());
             }
         }
@@ -446,12 +452,23 @@ public final class HttpCapability {
             //   ★★★真机抓到的回归（本单第一版）：只在"调用方没设头"时才赋值 ⇒ 调用方**设了**头
             //     （JS 侧 upload 会带 multipart/form-data + boundary）时既没写 contentType、又把头删了
             //     ⇒ 服务端收到 `missing boundary`。
-            if (cfg.contentType == null || cfg.contentType.isEmpty()) {
-                cfg.contentType = "multipart/form-data; boundary=" + up.boundary;
-            }
             // ★上传路径的体由 `bodyWriter` 产生 ⇒ 必须清掉 buildCallConfig 装配的整包 body
             //   （否则会走 byte[] 路径，文件根本没被发送）
             cfg.body = null;
+            // ★★Content-Type：上传的体是回调式产生 ⇒ buildCallConfig 的"无体分支"没设 contentType，
+            //   且把调用方的 CT **留在了 headers** 里。这里必须：
+            //   ① 调用方给了 multipart 类型 ⇒ 用它（★含它自己的 boundary，不能换）
+            //   ② 没给 ⇒ 兜底 `multipart/form-data; boundary=<up.boundary>`
+            //   ★★两处 boundary 必须**同源**（都用 `up.boundary`）：multipart 体是用 `up.boundary`
+            //     拼的，头里若写别的 boundary ⇒ 服务端必然 `missing boundary`（第三轮指出的形态）。
+            if (cfg.contentType == null || cfg.contentType.isEmpty()) {
+                cfg.contentType = cfg.callerContentType != null && !cfg.callerContentType.isEmpty()
+                        ? cfg.callerContentType
+                        : "multipart/form-data; boundary=" + up.boundary;
+            }
+            // 有体（回调式）⇒ 从 headers 剔除同名头（否则两处并存会漂移）
+            cfg.headers.remove("Content-Type");
+            cfg.headers.remove("content-type");
             // ★★#1160：回调式请求体——**边读文件边写**，内存只有缓冲块（与换栈前同语义）
             cfg.bodyWriter = new HttpTransport.BodyWriter() {
                 @Override public okhttp3.MediaType contentType() {

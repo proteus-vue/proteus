@@ -208,12 +208,48 @@ describe('★★#1160 Android 传输栈：唯一入口 + 连接复用不退化',
     expect(body, '★头里仍留着 content-type（与 cfg.contentType 两处并存会漂移）').toMatch(
       /equalsIgnoreCase\("content-type"\)\s*\)\s*continue/,
     )
+    // ★★★第三轮独立验证的 X3：保留正确的首处赋值、再在后面加一行 `cfg.contentType = f.contentType;`
+    //   （= 完整复现阻断 B）时，只匹配"首次赋值"的正则仍命中 ⇒ 全绿。
+    //   ⇒ 断言 `cfg.contentType =` 在 buildCallConfig 里**恰好 1 处**。
+    const assigns = body.match(/cfg\.contentType\s*=/g) ?? []
+    expect(assigns.length, `★buildCallConfig 里 cfg.contentType 被赋值 ${assigns.length} 处（应恰好 1 处，多出的是静默覆盖）`).toBe(1)
   })
 
-  it('★★★四条路径都必须把读数**写回帧**（删掉也不该绿——第二轮独立验证的 M9/M11）', () => {
+  it('★★★无体请求的调用方 Content-Type 必须**留在 headers**（第三轮抓出的 P2 回归）', () => {
+    // 【缺陷形态】把调用方 CT 一律从 headers 搬到 `cfg.contentType` ⇒ 无体时没有 RequestBody
+    //   ⇒ 该头**整条消失**（GET/DELETE/空体 POST 实测变 null），与旧 HttpURLConnection 实现
+    //   及 iOS/鸿蒙（先写头、仅缺失时补）都不一致。
+    const s = capabilityCode.indexOf('static HttpTransport.CallConfig buildCallConfig(')
+    const end = capabilityCode.indexOf('static String protoOf(')
+    const body = capabilityCode.slice(s, end)
+    // 只在有体时收口 CT（无体时保留头）
+    expect(body, '★未按「有体」条件决定是否收口 CT ⇒ 无体请求的显式 CT 会丢').toMatch(
+      /boolean\s+hasBodyForCt\s*=\s*cfg\.body\s*!=\s*null/,
+    )
+    expect(body, '★剔除 content-type 头时未加「有体」条件 ⇒ 无体请求的 CT 被删掉').toMatch(
+      /hasBodyForCt\s*&&\s*e\.getKey\(\)\.equalsIgnoreCase\("content-type"\)/,
+    )
+  })
+
+  it('★★★四条路径都必须把读数写回帧，且取的是**本次请求**的 metrics', () => {
     // 文件头明写要守"`meta.transport` 变空"这种形态，但旧判据零覆盖（只靠真机间接兜）。
     const writes = capabilityCode.match(/\.transport\s*=\s*HttpTransport\.readout\(/g) ?? []
     expect(writes.length, `★只有 ${writes.length} 条路径把读数写回帧（应有 4 条）`).toBe(4)
+    // ★★★第三轮独立验证的 X2：四处全改成 `readout(null, protoOf(resp))` ⇒ 次数仍 4 ⇒ 全绿，
+    //   而 `transport` 只剩 `proto`（`reused/dnsMs/connectMs/tlsMs/ttfbMs` 全丢 = 换栈的核心收益归零）。
+    //   ⇒ 必须断言第一实参是 `takeMetrics(f.reqId)`。
+    const withMetrics = capabilityCode.match(
+      /\.transport\s*=\s*HttpTransport\.readout\(\s*HttpTransport\.takeMetrics\(f\.reqId\)/g,
+    ) ?? []
+    expect(
+      withMetrics.length,
+      `★只有 ${withMetrics.length} 条路径的读数真的取了 metrics（其余传了 null ⇒ 只剩 proto）`,
+    ).toBe(4)
+    // ★★★第三轮独立验证的 X1：把读数写到**未被返回的局部帧**（`unusedRf.transport = …`）时次数仍 4。
+    //   ⇒ 断言赋值目标就是即将 return/push 的那个变量：出现 `rf.transport` 与 `fin.transport`，
+    //     且不得出现"其它变量名 + .transport ="。
+    const targets = [...capabilityCode.matchAll(/(\w+)\.transport\s*=\s*HttpTransport\.readout\(/g)].map((m) => m[1])
+    expect(targets.sort(), '★读数被写到了非返回帧的变量上（业务拿不到）').toEqual(['fin', 'rf', 'rf', 'rf'])
   })
 })
 
@@ -396,14 +432,20 @@ describe('★★#1160 上传路径的 Content-Type 搬运（真机抓到的回�
     expect(start, '找不到 performStreamUpload').toBeGreaterThan(0)
     const end = capability.indexOf('static final class UploadStats')
     const seg = capability.slice(start, end)
-    // 兜底必须带 boundary（否则 multipart 不可解析）
-    expect(seg, '★兜底 contentType 未带 boundary（服务端会 missing boundary）').toMatch(
-      /cfg\.contentType\s*=\s*"multipart\/form-data; boundary=" \+ up\.boundary/,
-    )
+    // 兜底必须带 **up.boundary**（★同源：multipart 体是用 up.boundary 拼的，头里写别的必然 missing boundary）
+    expect(seg, '★兜底 contentType 未带 boundary').toMatch(/multipart\/form-data; boundary=" \+ up\.boundary/);
+    // ★★★第三轮独立验证指出：只断言"有 boundary 串"不够——变异 `boundary=" + up.fieldName`
+    //   也满足 ⇒ 必须断言用的是 **up.boundary**（与 `fileFieldHead` 同源）。
+    const boundaryUses = seg.match(/boundary=" \+ up\.boundary/g) ?? []
+    expect(boundaryUses.length, '★上传路径的 boundary 未统一取自 up.boundary（两处不同源 ⇒ 服务端 missing boundary）').toBeGreaterThan(0);
+    expect(seg, '★上传兜底用了非 up.boundary 的字段（如 up.fieldName）').not.toMatch(/boundary=" \+ up\.(?!boundary)\w+/);
     // 只在空时兜底（不得覆盖调用方已经给好的类型）
     expect(seg, '★无条件覆盖 contentType（会抹掉调用方的 multipart 类型）').toMatch(
       /if\s*\(\s*cfg\.contentType\s*==\s*null\s*\|\|\s*cfg\.contentType\.isEmpty\(\)\s*\)/,
-    )
+    );
+    expect(seg, '★兜底未优先用调用方的 Content-Type（应 cfg.callerContentType 优先）').toMatch(
+      /cfg\.callerContentType\s*!=\s*null/,
+    );
   })
 })
 

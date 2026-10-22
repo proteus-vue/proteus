@@ -93,9 +93,11 @@ const checks = [
   ['探针已启动', String(r.probe_kick || '').includes('started')],
   ['★★POST 体长 = 期望（空体 ⇒ 这条红）', p.post_len_ok === true && Number(p.post_len_server) === Number(p.post_len_expected)],
   ['★★POST 体非空', p.post_not_empty === true],
-  ['POST Content-Type 按调用方落地', p.post_ct_ok === true],
+  ['POST Content-Type 按调用方落地（全等）', p.post_ct_ok === true],
   ['GET（无体）仍成功', p.get_ok === true],
   ['PUT 带体成功', p.put_len_ok === true],
+  ['★★无体 DELETE 不凭空造体', p.nobody_no_body === true],
+  ['★★无体请求的显式 Content-Type 未丢', p.nobody_ct_ok === true],
   ['整体 ok', p.ok === true],
 ]
 let bad = 0
@@ -104,6 +106,7 @@ const stats = {
   post: { status: p.post_status, server: p.post_len_server, expected: p.post_len_expected, ct: p.post_content_type },
   get: { status: p.get_status, server: p.get_len_server },
   put: { status: p.put_status, ok: p.put_len_ok },
+  nobody: { status: p.nobody_status, len: p.nobody_len_server, ct: p.nobody_ct_server },
 }
 console.log(`\n  读数：${JSON.stringify(stats)}`)
 if (bad) {
