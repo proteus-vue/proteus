@@ -241,6 +241,37 @@ int main() {
     expect(s, '★临时名不在目标同目录（rename 可能 EXDEV）').toMatch(/partPath\s*=\s*dir\s*\+/)
   })
 
+  it('★★★#1196 临时文件必须落在**目标同目录**（否则 rename 可能 EXDEV + 残包扫不到）', () => {
+    /**
+     * ★第四轮验证者实测的盲区：把临时文件改到 `/tmp`（错目录）**且**保留清理 ⇒ 判据全绿；
+     *   "错目录 + 不清理" ⇒ 也全绿，而 `/tmp` 实际留了 17 个残包。
+     *   ⇒ "同目录"这条此前只有**源码正则**，没有行为断言。
+     * 本判据：open 之后（finish 之前）在**目标子目录**应恰好有 1 个临时文件、在 root 里 0 个。
+     */
+    const out = runProbe(`
+int main() {
+  using namespace proteus::http;
+  setHttpSandboxRoot("/tmp/proteus-samedir");
+  system("mkdir -p /tmp/proteus-samedir/sub");
+  cleanTempFiles("/tmp/proteus-samedir/sub");
+  cleanTempFiles("/tmp/proteus-samedir");
+  SaveSession s; std::string err;
+  if (!s.open("sub/x.txt", &err)) { printf("OPEN_FAIL %s\\n", err.c_str()); return 2; }
+  const char* p = "abc"; s.write(reinterpret_cast<const uint8_t*>(p), 3);
+  printf("IN_SUB %d\\n", countTempFiles("/tmp/proteus-samedir/sub"));
+  printf("IN_ROOT %d\\n", countTempFiles("/tmp/proteus-samedir"));
+  bool ok = false; std::string e2; s.finish(&ok, &e2);
+  printf("FINISH %d\\n", ok ? 1 : 0);
+  printf("AFTER_SUB %d\\n", countTempFiles("/tmp/proteus-samedir/sub"));
+  return 0;
+}
+`)
+    expect(Number(/IN_SUB (\d)/.exec(out)?.[1]), '★临时文件不在目标同目录（rename 可能 EXDEV）').toBe(1)
+    expect(Number(/IN_ROOT (\d)/.exec(out)?.[1]), '★临时文件落到了 root 而非目标子目录').toBe(0)
+    expect(Number(/FINISH (\d)/.exec(out)?.[1]), '★同目录落盘失败').toBe(1)
+    expect(Number(/AFTER_SUB (\d)/.exec(out)?.[1]), '★成功后临时文件残留').toBe(0)
+  })
+
   it('★★★#1194（R1）真机：244 字符 basename 落盘成功且设备侧 size 一致', () => {
     // ★本地 clang 判据只证明"能 open/finish"；真机上还要过 RCP + 文件系统。
     //   本证据是 #1194 修完后补跑的真机读数（原缺陷下这一组会报"无法创建落盘文件"）。

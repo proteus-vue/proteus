@@ -486,7 +486,8 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    *   原实现从不清 ⇒ 本次是"复用连接/早退（没走到 timeInfo）"时，`lastTransport()` 仍留着
    *   **上一个请求**的读数 ⇒ 探针会把旧值当新值（真机上靠 `aa force-stop` 冷启动掩盖了）。
    */
-  lastTransport().clear();
+  lastTransport().clear(); lastLimitDiag() = LastLimitDiag{};   // ★#1196：入口重置（防早退路径带上一次读数）
+
   // ★#1193（B4）：记录请求前的进程峰值 RSS（落盘内存是否与文件大小无关，靠前后差值判）
   const unsigned long long vmHwmBefore = readVmHwmKb();
   if (!f.url || f.url.v.empty()) {

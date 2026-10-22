@@ -113,9 +113,16 @@ describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 
     for (const fn of ['HostAppBoot', 'HostAppRender']) {
       const b = fnBody(fn)
       expect(b, `★找不到 ${fn}（函数改名了？）`).toBeTruthy()
-      expect(b, `★${fn} 里没注入沙箱根（B5：首屏/后续 render 都走它）`).toMatch(
-        /if \(!\w+\.empty\(\)\) proteus::http::setHttpSandboxRoot\(\w+\);/,
-      )
+      /**
+       * ★★★#1196（第四轮 W3b 修复）：**必须用反向引用锁住"同一个变量"**。
+       *   原正则 `if \(!\w+\.empty\(\)\) ...setHttpSandboxRoot\(\w+\);` 是"两个独立的 \w+"
+       *   ⇒ 变异 `if (!fd2.empty()) setHttpSandboxRoot(fd);`（条件判 fd2、注入传空 fd）
+       *   **仍全绿**，而实际效果是**每次 render 都把沙箱根清空** ⇒ B5 变成"永远路径非法"。
+       *   ⇒ 用 `\1` 反向引用：条件与实参必须是**同一个标识符**。
+       */
+      const m = /if \(!(\w+)\.empty\(\)\) proteus::http::setHttpSandboxRoot\((\w+)\);/.exec(b)
+      expect(m, `★${fn} 里没注入沙箱根（B5：首屏/后续 render 都走它）`).toBeTruthy()
+      expect(m![1], `★${fn} 的注入用的是**另一个变量**（条件判 ${m![1]}、传参 ${m![2]}）⇒ 会把沙箱根清空`).toBe(m![2])
     }
     // CLI 模板首屏确实走 hostAppRender（而不是 Boot）
     const cli = read('packages/cli/templates-host/harmony/entry/src/main/ets/shell/MainPage.ets')
@@ -241,7 +248,23 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     )
     expect(sh, '★缺"设备大小 != 回执 size"的失败分支').toMatch(/SIZE_ON_DEVICE.*!=.*SIZE_REPORTED|!= "\$SIZE_REPORTED"/)
     // ★#1194（J-R1）：光有比较不算——失败分支必须**真的置 RC=1**
-    expect(sh, '★stat 不符时没置 RC=1（探针会假绿）').toMatch(/\.\s*echo\s+"✗[^\n]*\n?\s*RC=1|然后\s*RC=1|;\s*RC=1/)
+    /**
+     * ★★★#1196（第四轮 W1 修复）：**必须按分支锚定**。
+     *   原正则匹配全文任意位置的 `; RC=1`，而脚本有两个 stat 失败分支
+     *   （文件不存在 / 大小不符）⇒ **任何单分支失效都测不出来**（验证者变异实测：删掉
+     *   任一分支的 `; RC=1`，断言仍绿）。
+     *   ⇒ 两个分支各断言一次：`then` 之后 200 字符内必须出现 `RC=1`。
+     */
+    const statBlock = sh.slice(sh.indexOf('stat -c %s'), sh.indexOf('T-app-fetch 真机判据通过'))
+    const rcBranches = [
+      // ① 设备上找不到文件
+      /if \[ -z "\$SIZE_ON_DEVICE" \]; then[\s\S]{0,300}RC=1/,
+      // ② 大小不符
+      /elif \[ "\$SIZE_ON_DEVICE" != "\$SIZE_REPORTED" \]; then[\s\S]{0,300}RC=1/,
+    ]
+    rcBranches.forEach((re, i) => {
+      expect(statBlock, `★stat 第 ${i + 1} 个失败分支没置 RC=1（该分支失效也测不出来）`).toMatch(re)
+    })
     expect(sh, '★缺 --expect-reject 模式（穿越证据无法复现）').toMatch(/--expect-reject/)
   })
 
@@ -258,6 +281,17 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     const clearAt = body.indexOf('lastTransport().clear()')
     const firstReturn = body.indexOf('return ')
     expect(clearAt, '★clear 在第一个 return 之后（早退请求会把上次读数粘过去）').toBeLessThan(firstReturn)
+    /**
+     * ★★★#1196（第四轮 W3a 修复）：**必须是无条件整行**。
+     *   变异 `if (false) lastTransport().clear();` ⇒ 文本位置没变（仍在第一个 return 之前）
+     *   ⇒ 原判据**全绿**，而实际一次都不清。
+     *   ⇒ 断言该行**行首只有空白 + 语句**（不被包进 if/循环/条件表达式）。
+     */
+    // ★#1196：行首必须只有空白（不被包进 if/循环），但**允许同一行有后续语句**
+    //   （我们把 lastLimitDiag 重置与它并到了一行以省行数）
+    expect(body, '★clear 被包进了条件语句（`if (false) ...` 能骗过位置判据）').toMatch(
+      /^\s*lastTransport\(\)\.clear\(\);/m,
+    )
   })
 
   it('★stream：真机如实拒绝（fetch.unsupported + 点明根因 + 给替代）', () => {

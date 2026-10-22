@@ -3290,6 +3290,25 @@
         "T-studio-live-stream"
       ],
       "note": "【blocked · 决策 #1190（2026-10-22）】承接 #1187「G3 iOS 通道」。承接 #1187「G3 iOS 通道」。★选型：App 内 ReplayKit（只录本 App、零 entitlement）而非 Broadcast Upload Extension（录整机但要多 target + 用户每次控制中心启动）——Studio 要看的就是 Proteus 宿主自己。★链路：startCapture → VTCompressionSession（H.264 High/8Mbps/RealTime/无 B 帧）→ AVCC 逐 NAL 转 Annex-B（每 IDR 前重发 SPS/PPS）→ TCP 发 Mac。★Studio 侧零改动：live_stream.h 只认管道里的 Annex-B ⇒ Mac 端 /usr/bin/nc -l <port> 即可；default_live_source 改三分支（POC_LIVE > adb > iOS nc），PROTEUS_IOS_STREAM=0 可关。★已验：Swift 类型检查（抓到 1 个真错：label 是 imageBufferAttributes 不是 sourceImageBufferAttributes）、cargo build、接收端 ffmpeg 假源自测（120 帧/640x360/ffprobe 认 h264）、nc 等价路径。★blocked 的原因：codesign 要写 login 钥匙串，AI 执行沙箱实测拦死（连 dangerouslyDisableSandbox 也拦）⇒ 真机安装只能用户在自己终端跑 bash hosts/ios/run-screen-stream.sh 并点「允许录制屏幕」。★跑通后：改 done + 补 decision。★边界：进后台即停、仅局域网、横屏方向未处理、码率固定、PTS 与到达时刻不同源（接统计前要重打）。\n【Handoff】· 做到哪：iOS 侧捕获+编码+传输代码全部就绪、Studio 侧接收接线完成、接收端已用假源验证。· 已改：screen-stream.swift / lib/screen-stream.sh / run-selfdraw.sh(--stream) / run-screen-stream.sh / recv-h264.py / main.rs(default_live_source 三分支)。· 未做：真机上一次都没跑通（签名写钥匙串被 AI 沙箱拦）。· 下一步：用户在自己终端 bash hosts/ios/run-screen-stream.sh → 手机点「允许」→ 看到 ✅ 合法 H.264 后把本任务改 done 并补 decision。· 坑：run-selfdraw.sh 原本 999 行，加两行就撞 check:file-size（已抽 lib 降到 999）；lib 里若写 STREAM_ARG=\"\" 会覆盖已解析值（已用 ${x:-} 形式）。· 判据：check:ios-source-lists（38 文件）+ check-selfdraw-compile + recv-h264 假源自测（120 帧/ffprobe 认 h264）。"
+    },
+    {
+      "id": "T-fetch-save-durability",
+      "title": "savePath 落盘的持久性（fsync）：三端都缺 —— rename 只保证命名原子性，掉电可能留\"存在但空/截断\"的文件",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_save.h"
+      ],
+      "decision": 1196,
+      "verification": "真机掉电/强杀对照：写入过程中强杀 ⇒ 目标文件要么不存在、要么内容完整（不得出现 size>0 但内容截断）；辅以 fsync 调用点断言（写完后 fsync(fd) + rename 后 fsync(dir)）",
+      "branch": null,
+      "related": [
+        "T-ios-httpdns-options"
+      ],
+      "note": "【planned · 决策 #1196（2026-10-22）】第四轮独立验证指出：**三端都没有 fsync**（Android/iOS/鸿蒙 同缺，是非鸿蒙共性问题，故不塞进 #1186–#1196 那串鸿蒙单）。★现状：鸿蒙侧已用 `.proteus-tmp-*` 临时文件 + 成功后 `rename` 原子覆盖（#1194/#1195）⇒ 保证「要么旧文件、要么新文件」的**命名原子性**；`fclose` 也会 flush 到内核。★缺的是「rename 之后数据与目录项是否已落盘」：突然掉电时可能出现**目标文件存在但内容为空或截断**（hmfs 的 `inline_data` 更易）。进程崩溃不受影响。★优先级 P2（不是常态路径）。修法：① 写完后 `fflush` + `fsync(fd)`；② `rename` 后 `fsync(dirfd)`（保证目录项落盘）；③ 三端同判据。★诚实边界：Android/iOS 的 `savePath` 实现（`FileOutputStream` / `FileHandle`）同样没有 fsync，本单要三端一起改，否则又造出新的三端不一致。"
     }
   ]
 }

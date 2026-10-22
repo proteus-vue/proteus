@@ -12886,3 +12886,16 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   · 我上一轮"`static` 局部变量跨 TU 各一份"的**技术前提是错的**：`SaveSession::open` 是**类内定义的成员函数（隐式 inline）**，其函数内 static 在**同一 .so 内唯一**（验证者实测两 TU 序号连续 1→2→3）。真正各有一份的是**不同 .so**，而 `std::atomic` 对那个轴**同样无效** ⇒ 那次"修复"没解决它声称的问题，却引入了 R1。⇒ 现在保留 atomic（无害）+ 短临时名，并删掉纳秒字段。
 **⑦ 判据**：`harmony-save-session-raii` **6 条**（新增 R1 长文件名回归判据）· `harmony-http-gaps` **16 条** ⇒ 定向 **22 条全绿**；`check:harmony-host-compile` / `check:file-size` / `bash -n` 全绿。变异验证：R1（改回长后缀）⇒ 红、R2（去掉 remove）⇒ 红、J-R2（`if(false&&)`）⇒ 红、J-R3（挪到早退后）⇒ 红。
 **⑧ 诚实边界**：a) **真机未复跑**（设备在验证时又锁屏 `10106102`）——临时名重构后的真机落盘待解锁补验；b) 三端都**没有 `fsync`**（掉电可能留下"已改名但内容未落盘"），属**非本单**既有缺口，验证者已指出，建议未来统一补；c) 只测到 64 MiB 文件，不外推 1 GiB；d) `stream`/`abort`/SPKI pinning 仍是模型/平台限制。
+
+1196. **★★★第四轮独立验证 **PASS（可交付）**，但 3 条判据仍可被特定变异骗过 + 2 条实质残留 · 决策**（2026-10-22 · 承接 #1195）:
+**① 第四轮结论：PASS（无数据丢失/安全阻断）**。R1（长文件名）· R2（残包判据空跑）· R3（读数取早）· prebuilt 同步 · J-R2/J-R3 主形态 **全部真修好**（验证者逐条变异验证）。
+**② ★W3b（最危险）B5 判据可被「变量错配」骗过**：原正则 `if \(!\w+\.empty\(\)\) ...setHttpSandboxRoot\(\w+\);` 里两个 `\w+` **相互独立** ⇒ 变异 `if (!fd2.empty()) setHttpSandboxRoot(fd)`（条件判 `fd2`、注入传空 `fd`）**仍全绿**，而实际效果是**每次 render 都把沙箱根清空** ⇒ B5 变成"永远路径非法"。⇒ 改成**取出两个捕获组并用 `toBe` 断言同一标识符**。变异验证：`fd2` vs `fd` ⇒ 精确红（`expected 'fd2' to be 'fd'`）。
+**③ W3a：`clear` 位置判据可被 `if (false)` 骗过**：`clearAt < firstReturn` 只比文本位置 ⇒ `if (false) lastTransport().clear();` **全绿**但一次都不清。⇒ 加断言**行首只有空白**（`^\s*lastTransport\(\)\.clear\(\);`），允许同行有后续语句（为省行数与 `lastLimitDiag` 重置并行了）。变异验证：`if (false)` ⇒ 精确红。
+**④ W1（上一轮 J-R1 只修一半）stat 的 `RC=1` 未按分支锚定**：原正则匹配**全文任意位置**的 `; RC=1`，而脚本有**两个** stat 失败分支 ⇒ 删任一分支的 `RC=1` 断言仍绿。⇒ 改成**按分支各断言一次**（`then` 之后 300 字符内必须有 `RC=1`）。变异验证：删 mismatch 分支 ⇒ 精确红「第 2 个失败分支没置 RC=1」。
+**⑤ ★两条实质残留（已修）**：
+  · **临时文件"同目录"没有行为判据**：验证者实测「临时文件改到 `/tmp`（错目录）+ 不清理」⇒ 判据**全绿**，而 `/tmp` 真留了 17 个残包 ⇒ 也意味着 `rename` 可能 `EXDEV`。⇒ 新增行为判据：`open()` 后（`finish()` 前）**目标子目录应恰好 1 个临时文件、root 里 0 个**，成功后子目录 0 个。
+  · **`LastLimitDiag` 入口不重置** ⇒ 早退路径（url 缺失 / stream 拒绝 / 库缺失 / session·request 建失败 / savePath 非法 / 超时）**一步都不写** ⇒ `saveWritten` / `vmHwmAfterKb` 保留**上一次请求**的值。探针每场景冷启掩盖了它。⇒ 入口 `lastLimitDiag() = LastLimitDiag{};`（与 `lastTransport().clear()` 同一处）。**真机验证**：`stream` 拒绝时 `saveMode=false / saveWritten=0`（此前会带上一次的值）。
+**⑥ 两条诚实性小账**：a) #1194 的判据数字（"6 条/22 条"）与 `7306ea2d` 实际（7/23）差 1——**不回改历史条目**（时序台账），在此更正：**#1192 的"16/60"实际是 15/59，#1194 的"6/22"实际是 7/23**；b) 我此前说"真机 249/252 字符也成功"但**只入库了 244 的读数** ⇒ 本轮补跑后只在判据里锁 244（249/252 属"跑过但未入库"，不再宣称）。
+**⑦ 判据**：`harmony-save-session-raii` **9 条**（+同目录行为判据）· `harmony-http-gaps` **16 条** ⇒ 六份定向 **82 条全绿**；门禁 `file-size` / `content` / `prebuilt` / `ai-tasks` / `decision-numbers` 全绿；`proteus_http.h` 998 行（合并两处入口重置省行）。变异：W3b（变量错配）⇒ 红、W3a（`if(false)`）⇒ 红、W1（删分支 RC）⇒ 红。
+**⑧ 新登记（应独立成单，不塞本单）**：`T-fetch-save-durability` —— **三端都缺 `fsync`**（Android/iOS/鸿蒙 同缺，非鸿蒙特性）⇒ `rename` 保证"要么旧要么新"的**命名原子性**，但掉电窗口内可能出现"目标存在但内容为空/截断"（hmfs 的 `inline_data` 尤甚）。优先级 P2（进程崩溃不影响，`fclose` 已 flush 到内核；只在突然掉电时出现）。
+**⑨ 诚实边界**：a) 临时名唯一性靠 `pid + seq + 纳秒`，**不同设备/不同 pid 之间**理论上仍可能撞（时间上 seq 复位）——概率可忽略但未穷尽；b) `proteus_http_diag.h` 只搬了 `readVmHwmKb`，`LastLimitDiag` 仍在 `proteus_http.h`（命名略不一致，不影响正确性）；c) `saveWritten` 在失败路径是"写入后丢弃的量"而非"落盘成功的量"（判据走 `ok:true` 分支，不误判，但语义应在文档里说清）；d) 只测到 64 MiB；e) `stream`/`abort`/SPKI pinning 仍受限。
