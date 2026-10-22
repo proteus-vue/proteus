@@ -27,6 +27,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "live_stream.h"
+
 #define MAX_SAMPLES 40000
 #define WARMUP_MS 2000
 
@@ -104,7 +106,9 @@ static AVFrame *g_frm = NULL, *g_nv12 = NULL;
 static struct SwsContext *g_sws = NULL;
 static int g_vs = -1, g_W = 0, g_H = 0;
 static double g_fps = 30.0, g_budget = 33.333;
-static bool g_hw = false, g_eof = false;
+static bool g_hw = false, g_eof = false, g_live = false;
+static long g_recv_ok = 0, g_send_ok = 0;
+static AVFrame *g_last = NULL;   /* live：本拍解出的最后一帧 */
 
 static double g_t_start = 0, g_base_pts = -1, g_last_out = -1, g_wall0 = 0;
 static long g_frames = 0, g_late = 0;
@@ -149,7 +153,30 @@ static int poc_attach_impl(void *parent_nsview) {
     else g_parent = (NSView *)obj;
     if (!g_parent) { fprintf(stderr, "attach: contentView 为空\n"); return 2; }
 
-    /* ① 解码器 */
+    /* ① 解码器 —— 两条路：录制流（文件）或实时投屏（管道） */
+    const char *live_cmd = getenv("POC_LIVE");
+    if (live_cmd) {
+      g_live = true;
+      const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
+      g_cc = avcodec_alloc_context3(dec);
+      g_cc->flags |= AV_CODEC_FLAG_LOW_DELAY;
+      if (getenv("POC_LIVE_SW") == NULL &&
+          av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
+        g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
+        g_hw = true;
+      }
+      if (avcodec_open2(g_cc, dec, NULL) < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return 2; }
+      /* 尺寸由 screenrecord --size 决定；真到帧若不一致，下面上传时会按实际帧尺寸重设 */
+      g_W = getenv("POC_LIVE_W") ? atoi(getenv("POC_LIVE_W")) : 1280;
+      g_H = getenv("POC_LIVE_H") ? atoi(getenv("POC_LIVE_H")) : 720;
+      g_fps = 60.0; g_budget = 1000.0 / g_fps;
+      g_pkt = av_packet_alloc();
+      g_frm = av_frame_alloc();
+      g_nv12 = av_frame_alloc();
+      if (live_start(live_cmd) != 0) { fprintf(stderr, "实时：起读取线程失败\n"); return 2; }
+      fprintf(stderr, "实时投屏：%s（%dx%d）\n", live_cmd, g_W, g_H);
+      goto gl_init;   /* 跳过后面的文件打开/流信息 */
+    }
     const char *file = video_path();
     if (avformat_open_input(&g_fmt, file, NULL, NULL) < 0) { fprintf(stderr, "打开失败：%s\n", file); return 2; }
     if (avformat_find_stream_info(g_fmt, NULL) < 0) return 2;
@@ -167,6 +194,7 @@ static int poc_attach_impl(void *parent_nsview) {
     g_fps = av_q2d(st->avg_frame_rate); if (!(g_fps > 0)) g_fps = 30.0;
     g_budget = 1000.0 / g_fps;
 
+gl_init:
     /* ② 原生 GL 视图垫在 webview 下面 */
     NSOpenGLPixelFormatAttribute attrs[] = {
         NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
@@ -283,6 +311,10 @@ int poc_dump(const char *path) {
 }
 
 long poc_frames(void) { return g_frames; }
+long poc_recv_ok(void) { return g_recv_ok; }
+long poc_send_ok(void) { return g_send_ok; }
+long poc_live_aus(void) { return g_live_aus; }
+int poc_live_restarts(void) { return g_live_restarts; }
 long poc_late(void) { return g_late; }
 
 double poc_cpu_pct(void) {
@@ -299,6 +331,31 @@ static int poc_tick_impl(void) {
   @autoreleasepool {
     [g_ctx makeCurrentContext];
 
+    if (g_live) {
+      // ★必须**排空队列**：tick 60Hz 而流 ~120fps，只解一帧/拍会让队列积压并丢帧，
+      //   而 H.264 丢一帧参考帧 ⇒ 后续全花屏（实测：块状拖影）。
+      //   做法：把这一拍到达的 AU 全解掉，只把**最后一帧**拿去渲染。
+      LiveAu au;
+      int got = 0;
+      while (live_pop(&au)) {
+        if (av_new_packet(g_pkt, au.size) < 0) { free(au.data); continue; }
+        memcpy(g_pkt->data, au.data, (size_t)au.size);
+        free(au.data);
+        int sret = avcodec_send_packet(g_cc, g_pkt);
+        if (sret >= 0) g_send_ok++;
+        av_packet_unref(g_pkt);
+        if (sret < 0) continue;
+        while (avcodec_receive_frame(g_cc, g_frm) == 0) {
+          if (!g_last) g_last = av_frame_alloc();
+          av_frame_unref(g_last);
+          av_frame_move_ref(g_last, g_frm);
+          g_recv_ok++;
+          got = 1;
+        }
+      }
+      if (!got) return 0;
+      goto use_last;
+    }
     if (av_read_frame(g_fmt, g_pkt) < 0) {
       // 骨架要长期跑：回到片头重新解码（真机实时流不需要，这里是为了"有画面可看"）
       // 用 avformat_seek_file 而不是 av_seek_frame(…, AVSEEK_FLAG_BACKUP)：后者在 ffmpeg 7 的
@@ -315,9 +372,30 @@ static int poc_tick_impl(void) {
     if (avcodec_send_packet(g_cc, g_pkt) < 0) { av_packet_unref(g_pkt); return 0; }
     av_packet_unref(g_pkt);
 
+have_frame:
+    {
     AVFrame *frm = g_frm;
-    if (avcodec_receive_frame(g_cc, frm) < 0) return 0;
+    int rret;
+    if (g_live) {
+use_last:
+      frm = g_last;
+      rret = 0;
+    } else {
+      rret = avcodec_receive_frame(g_cc, frm);
+      if (rret >= 0) g_recv_ok++;
+    }
+    if (rret < 0) {
+      if (rret != AVERROR(EAGAIN)) {
+        static int once2 = 0;
+        if (once2++ < 5) fprintf(stderr, "live recv err=%d\n", rret);
+      }
+      return 0;
+    }
 
+    if (g_live) {
+      static int once = 0;
+      if (once++ < 2) fprintf(stderr, "live frame %dx%d fmt=%d linesize=%d/%d（我们按 %dx%d 上传）\n", frm->width, frm->height, frm->format, frm->linesize[0], frm->linesize[1], g_W, g_H);
+    }
     AVFrame *src = frm;
     if (frm->format == AV_PIX_FMT_VIDEOTOOLBOX) {
       av_frame_unref(g_nv12);
@@ -332,12 +410,15 @@ static int poc_tick_impl(void) {
       src = g_nv12;
     }
 
-    AVStream *st = g_fmt->streams[g_vs];
-    double show_ms = (src->pts != AV_NOPTS_VALUE && src->pts >= 0)
-                         ? (double)src->pts * 1000.0 * av_q2d(st->time_base)
-                         : (double)g_frames * g_budget;
-    if (g_base_pts < 0) g_base_pts = show_ms;
-    if (now_ms() > g_t_start + (show_ms - g_base_pts) + g_budget) g_late++;
+    // ★实时投屏：**到帧即出**（不按 PTS 等）——g_fmt 在 live 模式是 NULL，绝不能碰
+    if (!g_live) {
+      AVStream *st = g_fmt->streams[g_vs];
+      double show_ms = (src->pts != AV_NOPTS_VALUE && src->pts >= 0)
+                           ? (double)src->pts * 1000.0 * av_q2d(st->time_base)
+                           : (double)g_frames * g_budget;
+      if (g_base_pts < 0) g_base_pts = show_ms;
+      if (now_ms() > g_t_start + (show_ms - g_base_pts) + g_budget) g_late++;
+    }
 
     double c0 = now_ms();
     glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
@@ -371,6 +452,7 @@ static int poc_tick_impl(void) {
       g_last_out = p1;
     }
     av_frame_unref(frm);
+    }   /* have_frame 作用域 */
     return 0;
   }
 }

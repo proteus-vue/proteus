@@ -20,6 +20,10 @@ extern "C" {
     fn poc_late() -> i64;
     fn poc_cpu_pct() -> f64;
     fn poc_dump(path: *const c_char) -> c_int;
+    fn poc_live_aus() -> i64;
+    fn poc_recv_ok() -> i64;
+    fn poc_send_ok() -> i64;
+    fn poc_live_restarts() -> i32;
 }
 
 #[derive(Serialize)]
@@ -93,7 +97,10 @@ fn poll_window(handle: tauri::AppHandle, tries: u32) {
                             let c = CString::new(path).unwrap();
                             let _ = hh.run_on_main_thread(move || unsafe {
                                 let rc = poc_dump(c.as_ptr());
-                                eprintln!("[studio] dump rc={rc}");
+                                eprintln!(
+                                    "[studio] dump rc={rc} | aus={} restarts={} frames={} send_ok={} recv_ok={}",
+                                    poc_live_aus(), poc_live_restarts(), poc_frames(), poc_send_ok(), poc_recv_ok()
+                                );
                             });
                             std::thread::sleep(Duration::from_millis(600));
                             hh.exit(0);

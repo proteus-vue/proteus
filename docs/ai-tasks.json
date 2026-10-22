@@ -3036,6 +3036,26 @@
         "T-studio-poc-c-device-stream"
       ],
       "note": "【done · 决策 #1173（2026-10-22）】性能四个前提齐了之后，转产品形态第一步。★结构：Tauri 2 + 单文件 HTML；左栏 56 / 画布 / 右栏 340 / 状态栏；画布位置由 JS getBoundingClientRect → set_canvas_rect → 原生 setFrame。★两条接线证据（截图被 TCC 拦）：canvas rect 日志 80,68 996x748 与 CSS 网格手算一致；poc_dump 读回 FBO → PNG 内容是真机设置页。★抓到真 bug：画布上下颠倒（vUV = p，GL (0,0) 在左下而纹理首行在顶部）⇒ 修为 vUV=(p.x,1-p.y)。该 bug 从 PoC B2 就存在，当时只有性能数字没有视觉验证。★复用：原生视图抽到 native/embed_view.m，B2 与骨架共用；新增 poc_set_frame/poc_frames/poc_late/poc_cpu_pct/poc_dump。★边界：录制流非实时投屏；面板占位；无编辑器/终端（G-56.1 红线）；检查器依赖 G-54 的 locateAssertion/affectedDevices（仍 0 行）；整窗视觉未人眼确认。★下一步：CodeMirror 6 容器 / xterm.js+pty / 实时投屏管道 / 补 G-54 两方法。"
+    },
+    {
+      "id": "T-studio-live-stream",
+      "title": "Studio 实时投屏管道：裸 H.264 → 自建传输层 → 上屏（通了但没通干净：VT extradata 与残留失真未解）",
+      "type": "capability",
+      "status": "in_progress",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/native/live_stream.h",
+        "docs/proteus-studio-poc/native/embed_view.m",
+        "docs/proteus-studio-poc/05-studio-shell"
+      ],
+      "decision": 1174,
+      "branch": null,
+      "verification": "POC_LIVE=… POC_LIVE_SW=1 ./target/release/proteus-studio-shell → 期望 aus==send_ok==recv_ok 且画布无色块（当前有色块，未达）",
+      "related": [
+        "T-studio-shell-stage1",
+        "T-studio-poc-c-device-stream"
+      ],
+      "note": "【in_progress · 决策 #1174（2026-10-22）】承接 #1173「画布仍是录制流」。★已完成：自建传输层（popen 拉流 + Annex-B 拆 NAL + first_mb_in_slice 判帧 + 到帧 PTS + 环形队列）；三个缺陷修完（丢起始码/多 slice 切成半帧/积压丢参考帧）⇒ aus 649 = send_ok 649 = recv_ok 649 零丢包。★未完成：① VT 硬解在裸流上拒绝（需 SPS/PPS extradata，当前先读流后开解码器）；② 软解下仍有残留块状失真（非丢包，怀疑 AU/slice 边界）；③ 软解 CPU 未测。★下一步：抽 SPS/PPS 设 extradata 恢复 VT（一举解画质+CPU）；仍失真则改用 av_parser_parse2 代替手写拆包。"
     }
   ]
 }

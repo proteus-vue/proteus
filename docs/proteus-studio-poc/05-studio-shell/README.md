@@ -67,6 +67,41 @@ POC_VIDEO=/tmp/poc/device-720p.mp4 \
 DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
 ```
 
+
+## 实时投屏（决策 #1174）
+
+把画布输入从"录制流"换成**实时管道**：
+
+```bash
+POC_LIVE='adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -' \
+POC_LIVE_SW=1 DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
+```
+
+### 为什么要自己写传输层
+
+`screenrecord --output-format=h264` 出的是**裸 Annex-B，没有时间戳**（PoC C 的发现③）。
+ffmpeg 的 raw h264 demuxer 只能按默认 25fps 猜 ⇒ 慢动作。所以 `native/live_stream.h` 自己做了四件事：
+popen 拉流（进程退出自动重连）→ Annex-B 拆 NAL → **按 `first_mb_in_slice==0` 判新帧** →
+**到帧时刻 = PTS**（`CLOCK_MONOTONIC`）→ 环形队列交给主线程。
+
+### 三个实测踩坑（都修了）
+
+| # | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | 画布全黑，`send_packet` 返 `INVALIDDATA(-1094995529)` | 组 AU 时只拼 NAL 负载，**丢了起始码** | 每个 NAL 前补 `00 00 00 01` |
+| 2 | 画面花屏（块状拖影） | 用"一个 VCL = 一帧"，**一帧多 slice 时被切成半帧** | 按 `first_mb_in_slice==0` 判新帧；SPS/PPS/SEI 归下一帧 |
+| 3 | 仍然花屏，且 `aus 649 / send_ok 295` | tick 60Hz 追不上 120fps，队列积压**丢参考帧** | 每拍**排空队列**，只把最后一帧拿去渲染 ⇒ `649/649` 零丢包 |
+
+### 还没解决的（如实写）
+
+- **VT 硬解在裸流上直接拒绝**（`POC_LIVE_SW=1` 才出画面）：VideoToolbox 需要 SPS/PPS 作为 extradata，
+  而我们是"先读流再开解码器"。修法明确（先收首个 AU 抽 SPS/PPS → 设 extradata → 再 `avcodec_open2`），本轮没做。
+- 软解路径下画面**仍有残留块状失真**（`results/canvas-live-softdecode.png`），
+  但收发已经 649/649 零丢包 ⇒ 不是丢包问题，怀疑 AU/切片边界仍有错判，**未定位完**。
+- 软解 720p/120fps 的 CPU 明显高于硬解（未测准确值）。
+
+⇒ **结论：实时链路"通了但没通干净"**——数据流、拆包、解码、上屏都成立，画面质量还差一个 extradata/AU 边界的修复。
+
 ## 诚实边界
 
 1. **画面来自录制流**，不是实时投屏；循环播放靠 `avformat_seek_file` 回片头；
