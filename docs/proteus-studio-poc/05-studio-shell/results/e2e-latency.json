@@ -1,0 +1,14 @@
+{
+  "what": "设备出帧 → 我们 flushBuffer 的全链路延迟（跨时钟域对账）",
+  "method": "screenrecord --bugreport 把设备时间戳烧进画面 → 我们在 dump 时同时打出该帧的 arrive_epoch / present_epoch → 用设备↔Mac 时钟偏差换算",
+  "clock_offset_ms": -685.6,
+  "clock_offset_uncertainty_ms": 23,
+  "runs": [
+    { "run": 1, "device_burn": "13:17:34.190", "encode_transport_ms": 57.4, "ours_ms": 7.0, "total_ms": 64.4 },
+    { "run": 2, "device_burn": "13:18:18.156", "encode_transport_ms": 60.4, "ours_ms": 9.0, "total_ms": 69.4 },
+    { "run": 3, "device_burn": "13:18:25.095", "encode_transport_ms": 54.4, "ours_ms": 9.0, "total_ms": 63.4 }
+  ],
+  "total_ms_median": 64.4,
+  "our_share_pct": 11,
+  "note": "我们的 7–9ms 与同一构建的统计中位 7.8ms（lat-60hz-*.json）一致；编码+传输占 87–89%，不在我们控制范围（adb 管道 + 设备硬编）。"
+}

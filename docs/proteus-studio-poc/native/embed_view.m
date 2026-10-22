@@ -116,6 +116,10 @@ static long g_frames = 0, g_late = 0;
 static double g_iv[MAX_SAMPLES], g_rc[MAX_SAMPLES], g_pr[MAX_SAMPLES];
 static double g_tr[MAX_SAMPLES];   /* 硬解帧回拷 GPU→CPU 的耗时（用来判断零拷贝还有多少油水） */
 static int g_n_tr = 0;
+/* ── 延迟三段（全部同一时钟域 CLOCK_MONOTONIC，起点 = 该帧首字节到达）── */
+static double g_lat[MAX_SAMPLES], g_qw[MAX_SAMPLES], g_dec[MAX_SAMPLES];
+static int g_n_lat = 0, g_n_qw = 0, g_n_dec = 0;
+static double g_last_t_first = 0;  /* 当前渲染帧的首字节时刻 */
 static int g_n_iv = 0, g_n_rc = 0, g_n_pr = 0;
 static struct rusage g_ru0;
 static int g_probe_bits = 0;
@@ -331,6 +335,19 @@ int poc_dump(const char *path) {
     for (int y = g_H - 1; y >= 0; y--) fwrite(px + (size_t)y * g_W * 3, 1, (size_t)g_W * 3, f);
     fclose(f);
     free(px);
+    /* ★全链路延迟对账用：把「这一帧的首字节到达 / 上屏」换算成 epoch 毫秒打出来。
+       配合 `screenrecord --bugreport` 烧进画面左上角的设备时间戳，就能算
+       设备出帧 → 我们上屏 的总延迟（跨时钟域，误差 = 设备与 Mac 的时钟偏差）。 */
+    struct timespec rt;
+    clock_gettime(CLOCK_REALTIME, &rt);
+    double epoch_img = (double)rt.tv_sec * 1e3 + (double)rt.tv_nsec / 1e6;
+    double mono_img = now_ms();
+    fprintf(stderr,
+            "[lat] mono_now=%.0f epoch_now=%.0f present_epoch=%.0f arrive_epoch=%.0f hold_ms=%.1f\n",
+            mono_img, epoch_img,
+            epoch_img - (mono_img - g_last_out),
+            epoch_img - (mono_img - g_last_t_first),
+            mono_img - g_last_out);
     return 0;
   }
 }
@@ -381,9 +398,12 @@ static int poc_tick_impl(void) {
       LiveAu au;
       int got = 0;
       while (live_pop(&au)) {
+        double t_pop = now_ms();
+        if (g_n_qw < MAX_SAMPLES) g_qw[g_n_qw++] = t_pop - au.t_ms;   /* 在队列里躺了多久 */
         if (av_new_packet(g_pkt, au.size) < 0) { free(au.data); continue; }
         memcpy(g_pkt->data, au.data, (size_t)au.size);
         free(au.data);
+        double t_dec0 = now_ms();
         int sret = avcodec_send_packet(g_cc, g_pkt);
         if (sret >= 0) g_send_ok++;
         av_packet_unref(g_pkt);
@@ -395,6 +415,8 @@ static int poc_tick_impl(void) {
           g_recv_ok++;
           got = 1;
         }
+        if (g_n_dec < MAX_SAMPLES) g_dec[g_n_dec++] = now_ms() - t_dec0;  /* 解码（含 VT 异步等待） */
+        g_last_t_first = au.t_ms;
       }
       if (!got) { g_empty++; return 0; }
       goto use_last;
@@ -495,6 +517,8 @@ use_last:
       if (g_n_rc < MAX_SAMPLES) g_rc[g_n_rc++] = c1 - c0;
       if (g_n_pr < MAX_SAMPLES) g_pr[g_n_pr++] = p1 - b1;
       if (g_last_out > 0 && g_n_iv < MAX_SAMPLES) g_iv[g_n_iv++] = p1 - g_last_out;
+      // 端到端（我们这侧）：该帧首字节到达 → flushBuffer 完成
+      if (g_live && g_last_t_first > 0 && g_n_lat < MAX_SAMPLES) g_lat[g_n_lat++] = p1 - g_last_t_first;
       g_last_out = p1;
     }
     av_frame_unref(frm);
@@ -522,6 +546,9 @@ void poc_report(const char *path) {
     qsort(g_rc, g_n_rc, sizeof(double), cmp_double);
     qsort(g_pr, g_n_pr, sizeof(double), cmp_double);
     qsort(g_tr, g_n_tr, sizeof(double), cmp_double);
+    qsort(g_lat, g_n_lat, sizeof(double), cmp_double);
+    qsort(g_qw, g_n_qw, sizeof(double), cmp_double);
+    qsort(g_dec, g_n_dec, sizeof(double), cmp_double);
 
     char json[2560];
     snprintf(json, sizeof(json),
@@ -532,6 +559,9 @@ void poc_report(const char *path) {
              "  \"compose_ms\": {\"p50\": %.3f, \"p95\": %.3f, \"p99\": %.3f, \"max\": %.3f},\n"
              "  \"present_ms\": {\"p50\": %.3f, \"p95\": %.3f, \"p99\": %.3f, \"max\": %.3f},\n"
              "  \"hw_transfer_ms\": {\"p50\": %.3f, \"p95\": %.3f, \"max\": %.3f},\n"
+             "  \"latency_ms\": {\"p50\": %.2f, \"p95\": %.2f, \"p99\": %.2f, \"max\": %.2f},\n"
+             "  \"queue_ms\": {\"p50\": %.2f, \"p95\": %.2f, \"max\": %.2f},\n"
+             "  \"decode_ms\": {\"p50\": %.2f, \"p95\": %.2f, \"max\": %.2f},\n"
              "  \"ticks\": %ld, \"empty_ticks\": %ld,\n"
              "  \"late_frames\": %ld,\n  \"late_pct\": %.2f,\n"
              "  \"cpu\": {\"self_seconds\": %.2f, \"wall_seconds\": %.2f, \"single_core_pct\": %.1f}\n}\n",
@@ -542,6 +572,9 @@ void poc_report(const char *path) {
              pct(g_rc, g_n_rc, 0.50), pct(g_rc, g_n_rc, 0.95), pct(g_rc, g_n_rc, 0.99), g_n_rc ? g_rc[g_n_rc - 1] : -1,
              pct(g_pr, g_n_pr, 0.50), pct(g_pr, g_n_pr, 0.95), pct(g_pr, g_n_pr, 0.99), g_n_pr ? g_pr[g_n_pr - 1] : -1,
              pct(g_tr, g_n_tr, 0.50), pct(g_tr, g_n_tr, 0.95), g_n_tr ? g_tr[g_n_tr - 1] : -1,
+             pct(g_lat, g_n_lat, 0.50), pct(g_lat, g_n_lat, 0.95), pct(g_lat, g_n_lat, 0.99), g_n_lat ? g_lat[g_n_lat - 1] : -1,
+             pct(g_qw, g_n_qw, 0.50), pct(g_qw, g_n_qw, 0.95), g_n_qw ? g_qw[g_n_qw - 1] : -1,
+             pct(g_dec, g_n_dec, 0.50), pct(g_dec, g_n_dec, 0.95), g_n_dec ? g_dec[g_n_dec - 1] : -1,
              g_ticks, g_empty,
              g_late, g_frames ? 100.0 * (double)g_late / (double)g_frames : -1,
              cpu, wall / 1000.0, wall > 0 ? cpu / (wall / 1000.0) * 100.0 : -1);

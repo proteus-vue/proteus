@@ -145,8 +145,16 @@ fn poll_window(handle: tauri::AppHandle, tries: u32) {
 
 /// 60Hz 调度：原生侧自己按 PTS 决定"这一拍要不要出帧"（30fps 源 ⇒ 一半的拍是空转）。
 fn start_ticks(handle: tauri::AppHandle) {
+    // 取样节拍可配：60Hz 面板下"到得比刷新快"没意义，但节拍越慢 ⇒ 帧在队列里等得越久。
+    // 实测 60Hz 节拍下队列等待占端到端延迟的 ~80%（决策 #1176），所以这里必须可调、可测。
+    let hz: u64 = std::env::var("POC_TICK_HZ")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| *v >= 15 && *v <= 240)
+        .unwrap_or(60);
+    eprintln!("[studio] tick = {hz}Hz");
     std::thread::spawn(move || {
-        let period = Duration::from_millis(1000 / 60);
+        let period = Duration::from_micros(1_000_000 / hz);
         let mut due = Instant::now();
         loop {
             due += period;

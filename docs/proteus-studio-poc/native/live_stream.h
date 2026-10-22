@@ -35,7 +35,7 @@
 typedef struct {
   unsigned char *data;
   int size;
-  double t_ms;
+  double t_ms;   /* 这一帧**第一个字节到达**的时刻（不是凑齐时刻）——延迟统计的起点 */
 } LiveAu;
 
 static pthread_mutex_t g_live_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -54,7 +54,7 @@ static double live_now_ms(void) {
   return ts.tv_sec * 1e3 + ts.tv_nsec / 1e6;
 }
 
-static void live_push(const unsigned char *buf, int n) {
+static void live_push(const unsigned char *buf, int n, double t_first) {
   if (n <= 0) return;
   pthread_mutex_lock(&g_live_lock);
   if (g_live_count == LIVE_MAX_AU) { /* 实时优先：积压就丢最旧的 */
@@ -66,7 +66,7 @@ static void live_push(const unsigned char *buf, int n) {
   au->data = (unsigned char *)malloc((size_t)n);
   memcpy(au->data, buf, (size_t)n);
   au->size = n;
-  au->t_ms = live_now_ms();
+  au->t_ms = t_first;
   g_live_tail = (g_live_tail + 1) % LIVE_MAX_AU;
   g_live_count++;
   g_live_aus++;
@@ -124,11 +124,16 @@ typedef struct {
   unsigned char *pre; /* 攒着的 SPS/PPS/SEI/AUD，归下一帧 */
   int pre_len;
   int have_vcl;
+  int started;    /* 当前 AU 是否已开始（用来只记一次首字节时刻） */
+  double t_first; /* 当前 AU 首字节到达时刻 */
 } LiveAsm;
 
 static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
   if (len <= 0) return;
   static const unsigned char sc4[4] = {0, 0, 0, 1};
+  // ★延迟统计的起点 = 这一帧**第一个 NAL 的到达时刻**，不是"凑齐一整帧"的时刻。
+  //   凑齐时刻会把"等下一帧第一个 VCL 才知道上帧结束"的那一帧时间算进延迟（虚高 ~8ms@120fps）。
+  if (!a->started) { a->t_first = live_now_ms(); a->started = 1; }
   int type = nal[0] & 0x1f;
   int is_vcl = (type == 1 || type == 5);
   int first_mb_zero = 0;
@@ -136,9 +141,10 @@ static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
 
   /* 新一帧开始：先把上一帧推出去 */
   if (is_vcl && a->have_vcl && first_mb_zero) {
-    live_push(a->au, a->au_len);
+    live_push(a->au, a->au_len, a->t_first);
     a->au_len = 0;
     a->have_vcl = 0;
+    a->started = 0;
   }
   /* 参数集/SEI/AUD 归下一帧，不留在上一帧尾巴 */
   unsigned char *dst = a->au;
@@ -219,7 +225,7 @@ static void *live_reader(void *arg) {
     FILE *p = popen(g_live_cmd, "r");
     if (!p) { usleep(300000); continue; }
     g_live_restarts++;
-    LiveAsm a = {au_buf, 0, pre_buf, 0, 0};
+    LiveAsm a = {au_buf, 0, pre_buf, 0, 0, 0, 0};
     int carry = 0;
 
     while (g_live_run) {
