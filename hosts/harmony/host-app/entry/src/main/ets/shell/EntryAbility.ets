@@ -58,6 +58,13 @@ export default class EntryAbility extends UIAbility {
     // ★T-app-fetch：HTTP 探针目标 URL（`--ps url https://…`）
     const probeUrl = want?.parameters?.['url'];
     AppStorage.setOrCreate('proteusProbeUrl', typeof probeUrl === 'string' ? probeUrl : '');
+    // ★★★#1167：DNS 探针（`--ps dnsIp 203.0.113.1`）——把目标 host 强制解析到该 IP，
+    //   用于取证 `RCP_DNS_RULE_DYNAMIC` 这条路是否真接通（给不可达 IP ⇒ 请求必失败）。
+    //   ★不给就**不设置**这个键（HTTP 探针读不到 ⇒ 不安装假解析器，生产行为零影响）。
+    const probeDnsIp = want?.parameters?.['dnsIp'];
+    if (typeof probeDnsIp === 'string' && probeDnsIp.length > 0) {
+      AppStorage.setOrCreate('proteusProbeDnsIp', probeDnsIp);
+    }
     // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
     //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
     //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。

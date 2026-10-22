@@ -892,7 +892,7 @@ struct Superapp {
       hilog.error(DOMAIN, TAG, 'HTTP_PROBE_ARKTS_ENCODE_FAIL %{public}s', JSON.stringify(e) ?? '');
     }
     try {
-      result = hostHttpProbe(JSON.stringify({ 'url': url, 'frameHex': frameHex, 'filesDir': this.filesDir } as Record<string, Object>));
+      result = hostHttpProbe(JSON.stringify({ 'url': url, 'frameHex': frameHex, 'filesDir': this.filesDir, 'dnsForceIp': AppStorage.get<string>('proteusProbeDnsIp') } as Record<string, Object>));  // ★#1167 dnsForceIp：无此键⇒不装假解析器（生产零影响）
     } catch (e) {
       result = '{"ok":false,"host":"harmony","error":"' + JSON.stringify(e) + '"}';
     }

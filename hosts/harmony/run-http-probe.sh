@@ -30,11 +30,15 @@ FILES_DEV="/data/app/el2/100/base/$BUNDLE/haps/entry/files"
 WAIT="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 
 URL=""
+DNS_IP=""
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
     --url) shift_next=1 ;;  # 兼容 `--url <value>`：下面单独处理
-    *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0; fi ;;
+    --dns-ip=*) DNS_IP="${arg#--dns-ip=}" ;;
+    --dns-ip) shift_next_dns=1 ;;
+    *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
+       elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0; fi ;;
   esac
 done
 [ -n "$URL" ] || URL="https://httpbin.org/get"
@@ -58,7 +62,9 @@ if HDC shell "test -f $FILES_DEV/http-probe.json && echo STILL_EXISTS" 2>/dev/nu
 fi
 
 echo "==> ② 启动（scene=superapp-http）"
-HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL" 2>&1 \
+DNS_ARG=""
+[ -n "$DNS_IP" ] && DNS_ARG="--ps dnsIp $DNS_IP"
+HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 
 echo "==> ③ 等报告落盘（完成信号 = 文件存在；零盲等）"

@@ -141,8 +141,60 @@ inline LastLimitDiag& lastLimitDiag() {
   return d;
 }
 
+/* ══════════════ ★★★#1167：HTTPDNS 的**鸿蒙落点取证**（仅探针启用，生产零影响） ══════════════
+ *
+ * 【为什么要这段（用户「继续」后接着收 HTTPDNS）】
+ *   `rcp.h` 的 `Rcp_DnsConfiguration` 提供**四条**域名解析定制路径：
+ *     · `Rcp_DnsOverHttps`（DoH：给一个 HTTPS DNS 服务端 URL）
+ *     · `RCP_DNS_RULE_DNS_SERVERS`（指定 DNS 服务器 IP:port）
+ *     · `RCP_DNS_RULE_STATIC`（host → IP 的静态映射表）
+ *     · `RCP_DNS_RULE_DYNAMIC`（`Rcp_IpAddress* (*)(const char* host, uint16_t port)` 回调）
+ *   ★★★**第四条与 Android 的 `Dns.lookup(host) → List<InetAddress>` 语义同构**——
+ *     都是"框架调我们给的函数要 IP"。⇒ 矩阵里"鸿蒙需自建解析器"这个判断偏了：
+ *     鸿蒙**有**函数注入点，且形状与 Android 一致 ⇒ HTTPDNS 的线格式可以**两端同一套**。
+ *   ★但"头文件里有"≠"真生效"（本仓纪律：先取证再断言）⇒ 下面这段给探针用：
+ *     注入一个"假解析器"，把目标 host 解析到**一个不可达 IP**，若请求因此失败
+ *     且回调被调用过 ⇒ 证明这条路真的接通。
+ *
+ * 【★生产零影响】`installed=false` 时 `handle()` 完全不碰 `cfg.dnsConfiguration`；
+ *   探针改完会复位。默认走系统 DNS 的行为一字未变。
+ */
+struct DnsProbe {
+  bool installed = false;        // 探针是否安装假解析器
+  int calls = 0;                 // 假解析器被调用次数（>0 ⇒ 这条路真的接通）
+  std::string lastHost;          // 最后被解析的 host（判据核对"解析的是目标域名"）
+  unsigned int lastPort = 0;     // 最后被解析的 port
+  std::string forcedIp;          // 强制返回的 IP；空 ⇒ 返回 nullptr（让解析失败）
+};
+inline DnsProbe& dnsProbe() {
+  static DnsProbe p;
+  return p;
+}
+
+
 #if PROTEUS_HAVE_RCP
 namespace detail {
+
+/**
+ * ★★★#1167：**探针用的假解析器**（`RCP_DNS_RULE_DYNAMIC` 的回调）。
+ *
+ * 形状与 Android `okhttp3.Dns.lookup` 同构：`(host, port) → IP 地址链`。
+ * · `forcedIp` 非空 ⇒ 返回它（用于"解析到不可达 IP ⇒ 请求必失败"的因果实验）；
+ * · `forcedIp` 为空 ⇒ 返回 `nullptr`（RCP 视为解析失败）。
+ * ★返回的是 `static` 存储：RCP 在本次请求内读取，生命周期足够；且探针串行执行。
+ */
+inline Rcp_IpAddress* probeDnsLookup(const char* host, uint16_t port) {
+  DnsProbe& p = dnsProbe();
+  p.calls++;
+  p.lastHost = host != nullptr ? host : "";
+  p.lastPort = port;
+  if (p.forcedIp.empty()) return nullptr;
+  static Rcp_IpAddress ip;
+  ::memset(&ip, 0, sizeof(ip));
+  ::snprintf(ip.ipAddress, sizeof(ip.ipAddress), "%s", p.forcedIp.c_str());
+  ip.next = nullptr;
+  return &ip;
+}
 
 /**
  * 逐块接收闸的状态（栈上，生命周期 = 一次 `FetchSync`）。
@@ -457,6 +509,18 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    *   （不能留着上一次的读数 —— 那会成为"用旧值冒充新值"，本仓记过的形态）。
    */
   cfg.tracingConfiguration.collectTimeInfo = true;
+  /**
+   * ★★★#1167：**只有探针安装时才接自定义 DNS**（生产默认走系统 DNS，行为一字未变）。
+   *   `RCP_DNS_RULE_DYNAMIC` 的回调形状 = `(host, port) → Rcp_IpAddress*`，
+   *   与 Android `Dns.lookup(host) → List<InetAddress>` **语义同构** ⇒ HTTPDNS 可两端同一套语义。
+   * ★`dnsRule` 必须活到请求结束 ⇒ 声明在这里（与 `cfg` 同栈帧），不放进 if 块内。
+   */
+  Rcp_DnsRule dnsRule{};
+  if (dnsProbe().installed) {
+    dnsRule.type = RCP_DNS_RULE_DYNAMIC;
+    dnsRule.data.dynamicDnsRule = &detail::probeDnsLookup;
+    cfg.dnsConfiguration.dnsRules = &dnsRule;
+  }
   req->configuration = &cfg;
 
   // ③ 逐块闸：越线即中止（#1117）

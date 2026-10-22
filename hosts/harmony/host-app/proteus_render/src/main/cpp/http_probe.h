@@ -85,6 +85,21 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     //   （parity 门禁在本机验同一性质；真机上再验一次，防"本机绿、设备端不一致"）。
     std::string frameHexIn;
     jstr(argsJson.c_str(), argsJson.size(), "frameHex", &frameHexIn);
+    /**
+     * ★★★#1167：**DNS 探针参数**（只有给了才安装假解析器；缺省生产路径零影响）。
+     * · `dnsForceIp`：强制把目标 host 解析到这个 IP（给空串 ⇒ 让解析失败）。
+     *   判据用"不可达 IP（203.0.113.1 = TEST-NET-3）⇒ 请求必失败"来证明**这条 DNS 路真的接通**。
+     */
+    {
+      std::string v;
+      jstr(argsJson.c_str(), argsJson.size(), "dnsForceIp", &v);
+      if (argsJson.find("\"dnsForceIp\"") != std::string::npos) {
+        proteus::http::DnsProbe& dp = proteus::http::dnsProbe();
+        dp = proteus::http::DnsProbe{};    // 复位上一次读数
+        dp.installed = true;
+        dp.forcedIp = v;
+      }
+    }
 
     // ① 帧：优先用入参（ArkTS 编）；缺省由 C++ 用 SSOT 语义自编
     std::vector<uint8_t> frame;
@@ -170,6 +185,21 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         limitJson = lb;
     }
     body += limitJson;
+    /**
+     * ★★★#1167：DNS 探针读数（同样必须拼在**两条回执路径**上——见上面 limit 的教训）。
+     * `calls > 0` = 假解析器真被 RCP 调用过 ⇒ `RCP_DNS_RULE_DYNAMIC` 这条路接通。
+     */
+    std::string dnsJson;
+    {
+        const proteus::http::DnsProbe& dp = proteus::http::dnsProbe();
+        char db[640];
+        snprintf(db, sizeof(db),
+                 ",\"dns\":{\"installed\":%s,\"calls\":%d,\"host\":\"%s\",\"port\":%u,\"forcedIp\":\"%s\"}",
+                 dp.installed ? "true" : "false", dp.calls,
+                 jsonEscape(dp.lastHost).c_str(), dp.lastPort, jsonEscape(dp.forcedIp).c_str());
+        dnsJson = db;
+    }
+    body += dnsJson;
     if (!err.empty()) {
         body += ",\"error\":\"" + jsonEscape(err) + "\"}";
     } else if (hexOut == "NO_OUTPUT" || hexOut.empty()) {
@@ -196,6 +226,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
                      rf.reason ? jsonEscape(*rf.reason).c_str() : "");
             body = head;
             body += limitJson;   // ★同上：head 覆盖后必须重新拼
+            body += dnsJson;     // ★#1167：DNS 读数同理（覆盖后必须重拼）
             body += ",\"preview\":\"" + jsonEscape(preview) + "\"}";
         } catch (const std::exception& e) {
             body += ",\"error\":\"" + jsonEscape(std::string("回程帧解码失败：") + e.what()) + "\"}";
