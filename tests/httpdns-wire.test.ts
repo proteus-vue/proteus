@@ -90,6 +90,34 @@ describe('★★★#1169 HTTPDNS · 宿主可用性（三端如实分档）', ()
     )
     expect(s, '★缺少"为什么不能实现"的说明（URLSession 无 DNS 钩子）').toMatch(/URLSession.*没有.*DNS|自定义 DNS 钩子/)
   })
+
+  it('★★★#1176 iOS：只能把限制归给「当前栈」，不得写成「平台不支持」', () => {
+    const s = read('hosts/ios/ProteusHost/runtime/http-capability.swift')
+    // ★这是上一轮的真错：把实现限制说成平台限制（与 #1165「探针环境问题当成平台不支持」同源）
+    expect(s, '★iOS 注释仍把限制说成平台级（平台不支持/平台边界）').not.toMatch(
+      /iOS\s*(平台)?\s*不支持|平台边界|不可接受的降级/,
+    )
+    // 必须留下"平台有出口"的指路，否则下一个人会重犯同一个错
+    expect(s, '★未指出 iOS 平台的可行出口（SNI 可独立设置 / 证书可按原域名重校验）').toMatch(
+      /sec_protocol_options_set_tls_server_name[\s\S]{0,200}SecPolicyCreateSSL/,
+    )
+    expect(s, '★未指向四路线评估文档').toMatch(/02-ios-httpdns-industry-survey\.md/)
+  })
+
+  it('★★★#1176 业内调研文档：四条路线 + 微信走的是自建栈', () => {
+    const p = 'docs/proteus-network-plan/02-ios-httpdns-industry-survey.md'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺业内路线评估 ${p}`).toBe(true)
+    const s = read(p)
+    for (const route of ['**A. IP 直连', '**B. 本地 CONNECT 代理', '**C. 自建网络栈', '**D. 系统 DNS Proxy']) {
+      expect(s, `★02 篇缺路线 ${route}`).toContain(route)
+    }
+    // 微信的结论必须写明"自建栈(C)"，不能含糊说"B"
+    expect(s, '★02 篇未明确微信小程序走的是 C（自建栈）').toMatch(
+      /微信小程序走的是\W{0,2}C（容器自建网络栈）/,
+    )
+    // 能力形状差异（微信=服务商ID；我们=自定义表）是"不能照抄 API"的依据
+    expect(s, '★未写明微信只开放服务商 ID、不支持自定义 IP 表').toMatch(/httpDNSServiceId/)
+  })
 })
 
 describe('★★★#1169 HTTPDNS · 真机证据（Android）', () => {

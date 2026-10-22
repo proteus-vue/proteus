@@ -51,11 +51,14 @@ final class HttpCapability {
         guard let url = buildURL(f) else {
             return try InvokeWire.encodeResolve(.makeErr(f.reqId, "http.request: url 非法或缺失（\(f.url ?? "<nil>")）"))
         }
-        // ★★★#1169：**iOS 不支持 HTTPDNS**——如实 `fetch.unsupported`，不静默忽略。
+        // ★★★#1169 / #1176：**当前 URLSession 栈拿不到 DNS 注入点**——如实 `fetch.unsupported`，不静默忽略。
         //   【为什么不能"忽略就算了"】业务传了 httpDns 就是期望绕过系统 DNS；静默忽略 ⇒
         //   它以为走了 HTTPDNS、实际走系统 DNS（**假数据比缺数据更糟**，与"transport 缺键不填 0"同一纪律）。
-        //   【为什么不实现】`URLSession` **没有**自定义 DNS 钩子；要支持只能把 URL 改成 IP 直连——
-        //   那会**破坏 SNI 与证书主机名校验**（不可接受的降级）⇒ 诚实的边界：仅 Android/鸿蒙支持。
+        //   【★这是栈的限制，不是平台的限制（#1176 更正）】`URLSession` **没有**自定义 DNS 钩子；
+        //   但 iOS 平台本身有出口：`sec_protocol_options_set_tls_server_name` 可独立设 SNI，
+        //   `SecPolicyCreateSSL` 能按原域名重校验证书 ⇒ "IP 直连"只丢 SNI，证书校验不必降级。
+        //   四条路线（A 改 IP / B 本地 CONNECT 代理 / C 自建栈 / D 系统 DNS Proxy）与代价见
+        //   docs/proteus-network-plan/02-ios-httpdns-industry-survey.md；立项见 T-ios-httpdns-options。
         if let dns = f.httpDns, !dns.isEmpty {
             return try InvokeWire.encodeResolve(.makeErr(
                 f.reqId,

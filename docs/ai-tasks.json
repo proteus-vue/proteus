@@ -3056,6 +3056,27 @@
         "T-studio-poc-c-device-stream"
       ],
       "note": "【done · 决策 #1175（2026-10-22）】承接 #1174「通了但没通干净」，两个未解项全部落地。★VT 硬解恢复：先起读取线程 → live_peek_params 窥探首个含 SPS+PPS 的 AU（不取走，那是首个 IDR）→ 设 cc->extradata → avcodec_open2。实测 参数集 108 字节 / 硬解=1 / open rc=0。★残留失真真因（推翻 #1174 的\"AU/slice 边界\"猜测）：拆包循环找不到下一个起始码时，尾部数据既被当完整 NAL 处理、又留在 carry 带进下一轮 ⇒ 每个读边界往码流插一段重复字节。修法：无起始码即 break，尾部留给下一轮，只有缓冲塞满才硬切。★新抓两个缺陷：① fread 读满 64KB 才返回 ⇒ AU 成批到达（empty 74%、延迟 +64ms）⇒ 改 read(fileno)；empty 228→28、frames 51→175。② 上传按 g_W 当 stride，忽略 linesize ⇒ 新增 upload_plane() 逐行回退。★实测（真机 120fps 流，各 3 轮 18s 中位）：硬解 59.5fps / p99 37.7ms / compose 1.30ms / 回拷 0.05ms / CPU 20.5%；软解 59.8fps / p99 37.0ms / CPU 32.7% ⇒ 硬解省 37% CPU。★自我推翻：曾猜\"硬解 p99 差是 GPU→CPU 回拷\"——实测回拷 0.05ms（统一内存），假设不成立；单批 3 轮的 p99 差异是负载噪声。教训：机制结论要多轮 + 直接测量。★边界：只测 Android 一台；iOS ReplayKit 未接；adb 管道非网络投屏；端到端延迟未量；1280x720 对竖屏加黑边（有效像素仅 ~330x720）。"
+    },
+    {
+      "id": "T-ios-httpdns-options",
+      "title": "iOS HTTPDNS 落地：四条路线（A 改 IP / B 本地 CONNECT 代理 / C 自建栈 / D 系统 DNS Proxy）择一实施 + 真机判据",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "hosts/ios/lib/probe-args.sh",
+        "hosts/ios/run-httpdns-probe.sh",
+        "docs/proteus-network-plan/02-ios-httpdns-industry-survey.md",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": 1176,
+      "verification": "真机双向对照（与 Android #1171 同形）：注入不可达 IP ⇒ 请求失败、不注入 ⇒ 成功、回执 `dns.calls>0` 且 `lastSource=table`；`hosts/ios/run-httpdns-probe.sh` 产出 `hosts/ios/results/httpdns-probe.json`；`npx vitest run tests/httpdns-wire.test.ts` 断言 iOS 不再返回 `fetch.unsupported` 且证据文件在",
+      "branch": null,
+      "related": [
+        "T-harmony-httpdns-doh"
+      ],
+      "note": "【planned · 决策 #1176（2026-10-22）】承接用户质疑「iOS 不支持 HTTPDNS 吗？」——**上一轮把实现限制说成了平台边界，本次更正**。★取证（本机 iPhoneOS16.2.sdk 头文件，Xcode 在 /Volumes/data1/Applications/Xcode.app）：① NSURLSession.h 确实无 per-request DNS 钩子（只有 requiresDNSSECValidation 开关 + DomainResolutionProtocol 事后统计）⇒ 当前栈属实做不到；② 但 Security/SecProtocolOptions.h:338 sec_protocol_options_set_tls_server_name 可独立设 SNI（注释：override the server name obtained from the endpoint）；③ SecPolicy.h:180 SecPolicyCreateSSL(true, 原域名) 可按原域名重校验证书 ⇒ 上一轮「破坏证书主机名校验」是错的，只丢 SNI；④ Network/tls_options.h:73 nw_tls_copy_sec_protocol_options 把 Network.framework 接到 Security 那套 API，但 Network.framework 没有 HTTP 协议层（只有 tcp/tls/udp/quic/ws，全 SDK 无 nw_protocol_http）⇒ C 路线要自写 HTTP；⑤ iOS 不能 per-session 配 HTTPS 代理：CFProxySupport.h:489 kCFNetworkProxiesHTTPSEnable = CF_AVAILABLE(10_6, NA)（对比 kCFNetworkProxiesHTTPEnable iOS 可用）——但 https 经 per-session HTTP 代理是否发 CONNECT 隧道尚未实测，这是 B 路线唯一缺口，必须先用 30 分钟真机探针验证，不得按头文件推断。★业内对照：微信小程序走 C——wx.request 的 enableHttpDNS+httpDNSServiceId（自 2.19.1）只让开发者选服务商 ID，解析由微信代调，不支持自定义域名→IP 表（官方文档：需服务市场选购、按服务商 TTL 缓存、检测到系统代理会强制关闭）；TCPSocket.connect 也有同名字段 ⇒ 容器网络栈级能力。微信客户端自研栈见 Tencent/mars（README 自述 WeChat Mobile Team，mars/comm/ 下有 socket/ dns/ network/ http.cc）——注意 README 未出现 HTTPDNS/NewDNS 字样，不要把有 dns 模块当成 Mars 实现了 HTTPDNS。云厂商 iOS SDK 主流是 A（腾讯云 HTTPDNS 文档明确要求 hook 证书校验、将 IP 替换回原域名再验证 + 建议 120–600s 缓存/TTL 75% 预刷/网络切换重解析）。★建议顺序：A（最小，证书校验不降级，接受 SNI 丢）→ B 探针验证 → 不做 C → D 单列能力项（NEDNSProxyProvider 是进程/系统级策略、要 Network Extension entitlement，与 per-request Record<host, ip[]> 语义不同，混进 httpDns 会让语义失真）。★关键约束：不得静默回退——解析失败必须如实报错或显式标记（与 #1171 Android/鸿蒙同纪律）；不得像微信那样绑定服务商（我们的 httpDns 是开发者自给表的开放能力，API 形状不照搬）。"
     }
   ]
 }

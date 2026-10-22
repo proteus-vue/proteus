@@ -16,7 +16,7 @@
 
 | # | 能力 | 现状（取证） | 属哪一层 | 本轮 |
 |---|---|---|---|---|
-| 1 | **HTTPDNS** | ★★★**#1171 已业务化（Android + 鸿蒙）**：`useFetch({ httpDns })` ⇒ 线格式 `HttpDns=14`（name-values，五端 **45** 向量等价）⇒ **双端真机生效**（Android `lookups=2 · tableHits=1` + 注入不可达 IP ⇒ 失败；鸿蒙 `tableRules=1 · tableHits=1 · lastSource=table`）。★**iOS 如实 `fetch.unsupported`**（`URLSession` 无 DNS 钩子；改 IP 直连会破坏 SNI/主机名校验）——**不静默忽略**。★★**连接池优先于 DNS**（HTTPDNS 固有语义）：已建连的 host **不会再查 DNS** ⇒ 探针必须让注入侧先跑（池空才查）。★鸿蒙另有 `Rcp_DnsOverHttps`（DoH）未实测 | 宿主传输 / 业务 SDK | ✅ Android + 鸿蒙；**iOS 不支持（如实报错）** |
+| 1 | **HTTPDNS** | ★★★**#1171 已业务化（Android + 鸿蒙）**：`useFetch({ httpDns })` ⇒ 线格式 `HttpDns=14`（name-values，五端 **45** 向量等价）⇒ **双端真机生效**（Android `lookups=2 · tableHits=1` + 注入不可达 IP ⇒ 失败；鸿蒙 `tableRules=1 · tableHits=1 · lastSource=table`）。★**iOS 如实 `fetch.unsupported`**（当前 `URLSession` 栈无注入点；★**#1176 更正：不是平台边界**——A 改 IP / B 本地代理 / C 自建栈 / D 系统 DNS Proxy 四条路线与代价见 `02-ios-httpdns-industry-survey.md`）——**不静默忽略**。★★**连接池优先于 DNS**（HTTPDNS 固有语义）：已建连的 host **不会再查 DNS** ⇒ 探针必须让注入侧先跑（池空才查）。★鸿蒙另有 `Rcp_DnsOverHttps`（DoH）未实测 | 宿主传输 / 业务 SDK | ✅ Android + 鸿蒙；**iOS 🟡 未实现（如实报错；路线已评估，见 02 篇）** |
 | 2 | **高性能模式** | **无此概念**。Android ~~`HttpURLConnection` 默认连接池~~ ⇒ ★**#1160 换 OkHttp**（进程级 `ConnectionPool(8, 5min)`）；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）；★**#1160 换栈后 Android 仍 3/1**（未退化） | 宿主传输 | 🟡 连接复用✅（#1155 取证 · #1160 未退化）；余项见 §3 |
 | 3 | **HTTP/2** | ★★★**三端全具备**：**Android #1160** 换 OkHttp 3.14.9（`protocols(HTTP_2, HTTP_1_1)`，真机 `{"h2":3}`）· **iOS** 平台默认已协商（#1155）· ★★★**鸿蒙 #1166 已取证：本来就具备**（RCP 底层是 libcurl，公网真机 `http=http/2` + `tls=TLSv1.3`）——原记的"鸿蒙需先接 CA/pinning"**是误判**（把"探针连不上自签服务端"当成了"平台不支持"，见 §3 专项） | 宿主传输 | ✅ Android + iOS + 鸿蒙 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
@@ -30,9 +30,12 @@
 7 RequestTask · 8 网络调优的策略部分 · 9 观测）；**1 项已具备**（2 高性能模式的**连接复用**三端都在工作：
 Android/iOS `3 请求/1 连接`、鸿蒙 #1156 修后 3/1）· **3 HTTP/2 三端全具备**（iOS 平台默认 · Android #1160 换栈 ·
 鸿蒙 #1166 取证本来就有）；
-**真缺口：无**（★★★**#1171 已把 HTTPDNS 业务化**：Android/鸿蒙双端真机生效，
-iOS 如实 `fetch.unsupported` —— 这是**平台边界**不是缺口，因为 `URLSession` 没有 DNS 钩子，
-而"改 IP 直连"会破坏 SNI/主机名校验，属不可接受的降级）。
+**真缺口：iOS 端未实现**（★★★**#1171 已把 HTTPDNS 业务化**：Android/鸿蒙双端真机生效；
+★★**#1176 更正**：iOS 当前如实 `fetch.unsupported`——这是**当前 `URLSession` 栈的实现边界，不是平台边界**。
+`URLSession` 确实没有 DNS 钩子，但 iOS 平台提供了 `sec_protocol_options_set_tls_server_name`
+（可独立设 SNI）与 `SecPolicyCreateSSL`（可按原域名重校验证书）⇒ "IP 直连"**只丢 SNI、不丢证书校验**，
+是可工程化的降级；另有本地 CONNECT 代理 / 自建栈 / 系统 DNS Proxy 三条路。四条路线的行业对照
+（微信 = 自建栈 C；云厂商 iOS SDK = 改 IP A）与取舍见 `02-ios-httpdns-industry-survey.md`）。
 
 ---
 
@@ -42,12 +45,13 @@ iOS 如实 `fetch.unsupported` —— 这是**平台边界**不是缺口，因�
 
 HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点**只有一个**：宿主传输栈。
 - Android：`HttpURLConnection` 无法自定义 DNS（要换 OkHttp 的 `Dns` 接口）；
-- iOS：`URLSession` 的 DNS 由系统决定（要自定义需 `Network.framework` 或自建 socket）；
-- 鸿蒙：`RemoteCommunicationKit` 也走系统。
+- iOS：`URLSession` 的 DNS 由系统决定（自定义需在「A 改 IP / B 本地 CONNECT 代理 / C 自建栈」间取舍，
+  见 `02-ios-httpdns-industry-survey.md`）；
+- 鸿蒙：`RemoteCommunicationKit` 也走系统（但 RCP 提供了 `Rcp_DnsConfiguration` 四路定制，#1169 已真机证实）。
 
 ⇒ 换传输栈（Android → OkHttp）是**一个独立的大单**，涉及：
   · Android 新增 OkHttp 依赖（APK 体积 + ~500KB，需评估）；
-  · iOS 需评估 `Network.framework` 自建，或接受"DNS 交给系统"；
+  · iOS 需在 A/B/C 三条路线间取舍（成本从低到高；A 只丢 SNI、证书校验可保，见 02 篇）；
   · 三端要**同一套可观测字段**（否则判据无法跨端比对，违反本仓"三端同判据"纪律）。
   ⇒ 本轮先做**框架层**（平台无关、三端同一份、立刻可用），传输层按 §3 分期。
 
@@ -132,11 +136,13 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 > `server_protocols={"h2":3}` + `3 请求 / 1 TCP`（复用未退化）。同一笔换栈还买到了：
 > **全字段传输读数**（`EventListener` 的 dns/connect/tls/ttfb + reused）与
 > **HTTPDNS 的 `Dns` 注入 seam**（业务 API 仍属下一单）。
-> ⇒ **P1 真正剩余**：① HTTPDNS 业务化（seam 已就绪）② 鸿蒙 h2（需先接 CA/pinning）。
+> ⇒ **P1 剩余**：~~① HTTPDNS 业务化~~ ✅ **#1171 已落（Android+鸿蒙真机生效）**；
+> ~~② 鸿蒙 h2~~ ✅ **#1166 已取证本来就具备**（"需先接 CA/pinning"是误判）。
+> ★**新增唯一剩余项：iOS 的 HTTPDNS**——当前如实 `fetch.unsupported`，四条路线评估见 `02-ios-httpdns-industry-survey.md`。
 
 | 能力 | 落点 | 前置 | 判据设计（可执行） |
 |---|---|---|---|
-| HTTPDNS | Android ~~OkHttp `Dns` 接口~~ ⇒ ✅**seam 已落（#1160）**，待业务 API / 线格式 tag；iOS `NWConnection` 自定义解析 | ~~Android 需引入 OkHttp~~ ✅ 已引入（+180 KB）；iOS 需自建解析或 `Network.framework` | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
+| HTTPDNS | Android ✅**seam 已落（#1160）+ 业务化 #1171**；鸿蒙 ✅**业务化 #1171**；**iOS 未实现**——四条路线 A 改 IP（低）/ B 本地 CONNECT 代理（中）/ C 自建栈（高）/ D 系统 DNS Proxy（需 entitlement），见 `02-ios-httpdns-industry-survey.md` | ~~Android 需引入 OkHttp~~ ✅ 已引入（+180 KB）；iOS 取决于选哪条路线（A 最小、B 需先验代理是否发 CONNECT） | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务）——**Android/鸿蒙已真机成立**；iOS 待落地后补同形判据 |
 | **HTTP/2（Android）** | ✅ **#1160 已交付**：OkHttp `Protocol.HTTP_2` 显式协商 | — | 真机 `server_protocols` 含 `h2`（`bash hosts/android/run-transport-probe.sh` 现读数 **`http2_ok=true`**） |
 | **HTTP/2（鸿蒙）** | ★★★**#1166 已取证：本来就具备**——RCP 底层是 **libcurl**（真机响应头 `uag=libcurl-agent/1.0` 可证），走系统 TLS 栈自动 ALPN。见下方专项 | **无需任何前置**（原写"需先接自定义 CA/pinning"**是错的**） | 真机 `https://www.cloudflare.com/cdn-cgi/trace` 的 `http=http/2`（`hosts/harmony/results/http-probe-h2.json`）；静态判据 `tests/harmony-http2-evidence.test.ts` |
 
@@ -267,10 +273,11 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 1. ~~**本轮没有做任何传输层优化**~~ ⇒ ★**已按端分项收口（#1154 / #1155 / #1160 / #1166）**：
    证书 pinning ✅（Android+iOS 真机）· 连接复用 ✅（三端都在工作：两端 `3/1` 本来就具备、
    鸿蒙 #1156 修后 3/1）· HTTP/2 ✅（**三端全具备**：iOS 平台默认 · Android #1160 换 OkHttp ·
-   鸿蒙 #1166 取证 RCP 底层 libcurl 本就协商 h2）· HTTPDNS 🟡（**接入点三端已有两**：
-   Android `Dns` seam #1160 · 鸿蒙 RCP 内置 DoH #1166 · iOS 待定；**业务面全未做**）。
-   ⇒ 准确说法（更新后）：**"请求治理层达到超级应用可用；传输层里复用于 h2 三端都已具备，
-   唯一剩下的是 HTTPDNS 的业务化（三端同一份门面 + 线格式）"**。
+   鸿蒙 #1166 取证 RCP 底层 libcurl 本就协商 h2）· HTTPDNS ✅/🟡（**业务化已落 #1171**：
+   Android `Dns` seam + 鸿蒙 `RCP_DNS_RULE_DYNAMIC` 双端**真机生效**；**iOS 未实现**——如实
+   `fetch.unsupported`，#1176 已评估 A/B/C/D 四条路线，见 `02-ios-httpdns-industry-survey.md`）。
+   ⇒ 准确说法（更新后）：**"请求治理层达到超级应用可用；传输层里复用与 h2 三端都已具备，
+   HTTPDNS 已在 Android/鸿蒙 业务化，iOS 端是唯一未实现的一项（技术路线已评估、成本从低到高为 A<B<C）"**。
 2. ~~没有做 HTTP 缓存~~ ⇒ ★**已收口（#1149，框架层内存缓存）**：`config.cache` 六模式 +
    `Cache-Control` / `ETag` / `Last-Modified` / 304 合成 / `Vary` 分桶 / LRU 预算。
    **剩余真差异**：~~L2 **磁盘层**未做（重启即失效）~~ ⇒ ✅ **已收口（#1151）**：
@@ -299,7 +306,8 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
    ~~P1 HTTP/2（鸿蒙）~~ ⇒ ✅ **#1166 已取证：本来就具备**（RCP 底层 libcurl，公网真机 `http=http/2` +
    `tls=TLSv1.3`）——原以为要先做"接自定义 CA/pinning"，**实测不需要**（见 §3 的 #1166 专项）；
    ~~P1 HTTPDNS 业务化~~ ⇒ ✅ **#1171**：`useFetch({ httpDns })` + 线格式 `HttpDns=14`（五端 45 向量）
-   + Android/鸿蒙**双端真机生效**；iOS 如实 `fetch.unsupported`（平台无 DNS 钩子）。
+   + Android/鸿蒙**双端真机生效**；★**iOS 未实现**——如实 `fetch.unsupported`（当前栈无注入点，
+   非平台边界）；A/B/C/D 四路线评估见 `02-ios-httpdns-industry-survey.md`，立项 `T-ios-httpdns-options`。
    ⇒ **P1 全部收口**。
 5. **鸿蒙传输层的两处状态变化要单独记（#1156）**：
    ① **session 现在跨请求复用** ⇒ RCP 的 cookie / 认证状态**可能随之跨请求保留**——该行为**尚未取证**，
