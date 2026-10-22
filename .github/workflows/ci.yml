@@ -94,6 +94,18 @@ jobs:
       - name: 包级分层守护（★G-54/#1153：48 包的 L0–L5 依赖方向 + 环/自环 + 漏登记——与契约索引同为架构静态门禁）
         run: pnpm run check:knowledge
 
+      # ★#1164：三条原本被登记成「policy＝能跑但选择本地跑」的门禁**真接进 CI**。
+      #   核实依据（逐条实测，不是推断）：三者都只需要 node + 已构建的 workspace 包/入库产物，
+      #   零 Xcode、零 Android SDK、零真机 —— 之前留在本地纯属历史惯性。
+      - name: iOS 实验文档↔数据一致性（★只读入库的 experiments/results/*.json，零 Xcode）
+        run: pnpm run check:ios-exp-docs
+
+      - name: iOS 源码清单一致性（★纯 fs 比对两份手写清单，零 xcrun/swiftc）
+        run: pnpm run check:ios-source-lists
+
+      - name: Android JS bundle 产物一致性（★esbuild 重打包并同步 assets；dist 已 gitignore）
+        run: pnpm run check:android-bundle
+
       - name: 仓库卫生门禁（★#1136：构建产物不得被跟踪——本轮就因 `target/` vs `target-qjs/` 漏了 186MB）
         run: node scripts/check-repo-hygiene.mjs
 

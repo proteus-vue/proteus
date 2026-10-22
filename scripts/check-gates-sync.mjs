@@ -46,7 +46,6 @@ const LOCAL_ONLY = {
   //   覆盖：iOS 竖切 M1 链路（Vue → Dispatcher → native 后端 → JSC 桥 → 宿主树）。
   'check:ios-host': '需 macOS + Xcode（swiftc/JavaScriptCore）；CI 为 ubuntu-latest',
   'check:ios-perf': '同上（性能基线需真实 JavaScriptCore；真机数字另需模拟器/设备）',
-  'check:ios-exp-docs': '文档↔实验数字一致性（★2026-10-22 复核：产物 hosts/ios/experiments/results/*.json 已入库、脚本纯 node，本可接 CI——按实验族先例留本地，属政策豁免）',
   'check:ios-exp-compile': '实验代码（模拟器/真机两变体）可编译性；需 Xcode 工具链（CI 为 ubuntu-latest）',
   // ★iOS 自绘宿主的类型检查（零设备、零签名）——需 macOS + Xcode（iphoneos SDK）。
   //   背景：`run-selfdraw.sh` 是唯一编译 selfdraw-scene.swift 的地方且需真机+签名
@@ -55,7 +54,6 @@ const LOCAL_ONLY = {
   // ★决策 #1073：iOS 两份源码清单一致性 + 清单续行形态（纯静态，但检查对象是 macOS 工具链脚本）。
   //   实测事故：#1067/#1069 两轮各漏加一个 .swift 到 run-selfdraw.sh ⇒ 真机 "cannot find X in scope"；
   //   #1067 那轮还用脚本把清单续行写成了 `\\` ⇒ 后续文件全部不参与编译（bash -n 查不出来）。
-  'check:ios-source-lists': '检查 hosts/ios 的两份手写源码清单（★2026-10-22 复核：纯 fs 读 .sh 做集合比对，零 xcrun/swiftc，CI 也能跑——留本地属政策）',
   // ★玻璃像素等价门禁（决策 #834 · B6）：需 macOS Metal（xcrun swift 编译生成物 MSL 并渲染）——
   //   CI 为 ubuntu-latest、无 Metal ⇒ 归开发机（真机端另有 iOS --glass 截图取证）。
   'check:glass-pixel-parity': '需 macOS Metal（本机渲染生成物 MSL 与 Rust CPU oracle 逐像素比对）；CI 为 ubuntu-latest 无 Metal',
@@ -182,7 +180,6 @@ const LOCAL_ONLY = {
   'check:shell-i18n-vars': '扫 hosts/**/*.sh 的静态门禁；与 check:16kb-align 同批在开发机跑（改脚本后）',
   // ★S3b bundle 构建门禁：需 build-packages dist（render-backend）+ 产物断言。
   //   与 check:js-engine 同族（Android JS 链路的零设备判据）。
-  'check:android-bundle': '构建 Android 侧 IIFE bundle（需 render-backend dist）；与 check:js-engine 同族，开发机跑',
   // ★Android 宿主编译检查（2026-09-29，与 check:ios-selfdraw-compile 同源盲区）：
   //   编译宿主需 Android SDK（android.jar）+ JDK；CI 为 ubuntu-latest，不装 Android SDK ⇒ 跑不了。
   'check:android-host-compile': '需 Android SDK（android.jar）+ JDK 17；CI 为 ubuntu-latest，未装 Android SDK',
@@ -302,10 +299,8 @@ const LOCAL_ONLY_META = {
   // ── macos（需 Xcode / Swift / Metal / JSC）───────────────────────────
   'check:ios-host': { cat: 'macos', run: 'manual' },
   'check:ios-perf': { cat: 'macos', run: 'on-device' },
-  'check:ios-exp-docs': { cat: 'policy', run: 'manual' },
   'check:ios-exp-compile': { cat: 'macos', run: 'manual' },
   'check:ios-selfdraw-compile': { cat: 'macos', run: 'manual' },
-  'check:ios-source-lists': { cat: 'policy', run: 'verify' },
   'check:glass-pixel-parity': { cat: 'macos', run: 'verify' },
   'check:ios-cli-host-compile': { cat: 'macos', run: 'manual' },
   'check:ios-invoke-bytes': { cat: 'macos', run: 'manual' },
@@ -316,7 +311,6 @@ const LOCAL_ONLY_META = {
   //   它依赖的其实是 gitignored 的 `.tools/`（CI 无该目录）⇒ 正确类别是 `local-env`。
   'check:js-engine': { cat: 'local-env', run: 'verify' },
   'check:16kb-align': { cat: 'sdk', run: 'verify' },
-  'check:android-bundle': { cat: 'policy', run: 'verify' },
   'check:android-host-compile': { cat: 'sdk', run: 'verify' },
   'check:harmony-host-compile': { cat: 'sdk', run: 'verify' },
   'check:host-abi-aar': { cat: 'sdk', run: 'verify' },
@@ -361,7 +355,7 @@ const LOCAL_ONLY_META = {
 }
 
 /** ★棘轮（只减不增）：新增豁免必须同时抬这个数，diff 里看得见（同 check:file-size 先例） */
-const LOCAL_ONLY_MAX = 58
+const LOCAL_ONLY_MAX = 55
 
 /** 读取所有 workflow 文本（含 pages.yml / consistency.yml 等） */
 function workflowFiles() {

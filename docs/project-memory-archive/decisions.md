@@ -12274,3 +12274,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 
 **下一步**：① `T-harmony-http-cancel`（取消通道 + tlsStats 回执）② 鸿蒙 RCP 接 CA/pinning ⇒ 才可能 h2
 ③ 其余 10 个原生能力成员逐项落地（`T-app-runtime-capabilities`）。
+
+1164. **★★★三条「本可接 CI」的政策豁免真接进 CI：`ios-exp-docs` / `ios-source-lists` / `android-bundle`——豁免面 58→55，CI 覆盖 101→104 · 决策**（2026-10-22 · 承接 #1162 ⑧①「policy 逐条评估接 CI」）:
+**① 缺陷**：#1162 之后 `policy`（能跑但选择本地跑）14 条里，有 3 条已被**实测核实**"零 Xcode / 零 SDK / 零真机，CI 上本就能跑"，却因历史惯性一直挂在豁免表里。政策豁免的正当性来自"权衡过了"，而不是"从来没试过"——这三条属于后者。
+**② 取证（本地逐条实跑，rc 全 0）**：`check:ios-exp-docs`（`node scripts/check-ios-experiment-docs.mjs`，只读**已入库**的 `hosts/ios/experiments/results/*.json`）；`check:ios-source-lists`（纯 `fs` 比对两份手写清单，零 `xcrun`/`swiftc`）；`check:android-bundle`（`build-batch.mjs` 用 esbuild 重打包 + 同步 `assets`，`dist/` 已 gitignore，产物内容确定性）。三者的依赖面都只是 node + 已构建的 workspace 包。
+**③ 改法**：`ci.yml` 在「包级分层守护」之后加三步（此时 `build-packages` 已跑过，`packages/*/dist` 就绪）；同时把三条从 `LOCAL_ONLY` 与 `LOCAL_ONLY_META` 移除（不删会被 `STALE_DECL` 判红——这正是 #1159 加的「声明↔事实互斥」判据在起作用），棘轮 `LOCAL_ONLY_MAX` 58 → 55。
+**④ 效果**：CI 覆盖 **101 → 104**（名字命中 53 · 脚本命中 51）；台账 **58 → 55**；`policy` **14 → 11**；`run` 分布 verify 42→40、manual 10→9。`check:gates-sync` rc=0，判据 69/69。
+**⑤ 诚实边界（必须写明）**：本轮只验证了**本机**能跑，**没有实跑 GitHub Actions**。首次 push 后要按 CI 实际结果复核；若红，按各自原因处理（缺构建前置 ⇒ 挪步序；环境差异 ⇒ 回退成 policy 并写明具体差异），**不得因为"我本地过了"就 assume 绿**。这条与 #1159 的教训同源：`接了线` ≠ `真在跑`。
+**⑥ 未做**：剩余 `policy` 11 条（`host-rounding` / `host-kernel-keys` / `ios-style-keys` / `env-vars` / `screen-mount-helpers` / `evidence-tracked` / `host-layering` / `host-separation-ledger` / `host-invoke-contract` / `host-tab-spec` / `shell-i18n-vars`）逐条评估；下一轮优先看**静态扫描类**（前四条与最后一条），它们零设备依赖。
