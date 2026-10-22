@@ -3143,7 +3143,7 @@
         "docs/ai-tasks.json"
       ],
       "decision": 1181,
-      "verification": "node packages/studio/verify-panel.mjs（9 判据）&& POC_SECONDS=8 POC_JSON=results/panel-source.json POC_LIVE=… ./target/release/proteus-studio-shell",
+      "verification": "pnpm run check:studio-panel（10 判据）&& POC_SECONDS=8 POC_JSON=results/panel-source.json POC_LIVE=… ./target/release/proteus-studio-shell",
       "branch": null,
       "related": [
         "T-studio-shell-stage1",
@@ -3169,7 +3169,7 @@
         "docs/ai-tasks.json"
       ],
       "decision": 1183,
-      "verification": "packages/studio/build-ui.sh && node packages/studio/verify-panel.mjs（9 判据）&& cargo build --release",
+      "verification": "packages/studio/build-ui.sh && pnpm run check:studio-panel（10 判据）&& cargo build --release",
       "branch": null,
       "related": [
         "T-studio-inspector-real",
