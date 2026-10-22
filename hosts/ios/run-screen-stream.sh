@@ -74,6 +74,18 @@ rm -f "$OUT"
 #   `PORT<byte>: unbound variable` —— 就是 `$PORT` 后面直接跟全角左括号那一处。
 echo "==> 目标：iPhone → ${MAC}:${PORT}（${SECONDS_ARG}s）"
 echo "==> ① 起接收器（先无限等：安装/授权要几分钟，不能按秒数提前超时）"
+# ★★端口预检（用户实测踩到）：上一轮的接收器是 `--seconds 0` 无限等，若没被 kill 掉就会占着端口
+#   ⇒ 新接收器 `bind` 抛 `OSError: [Errno 48] Address already in use` 当场退出，
+#   而脚本继续往下跑，最后报"0 字节"——把「端口被占」误诊成「手机没推流」。
+# ★`|| true` 不能省：lsof 无匹配时返回 1，而 `VAR="$(cmd)"` 的退出码会传给赋值语句
+#   ⇒ `set -e` 下脚本**静默退出**（实测：无占用时脚本只打印前两行就没了，退出码 1）。
+OCCUPIED="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1" pid="$2}' || true)"
+if [ -n "$OCCUPIED" ]; then
+  echo "✗ 端口 ${PORT} 已被占用（${OCCUPIED}）—— 多半是上一轮接收器没退"
+  echo "    清理：kill $(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ')"
+  echo "    换口：$0 --port=$((PORT + 1))   ★手机侧 --stream 的端口也要同步改"
+  exit 4
+fi
 # ★★接收器**不能**用固定时限：编译+安装+用户在手机上点「允许」可能好几分钟，
 #   固定 N 秒的窗口会在 App 起来之前就到期 ⇒ 收到 0 字节，而根因是"等太短"（假失败）。
 #   ⇒ 先无限等，安装完再按 `--seconds` 采集，然后显式 kill。
@@ -85,29 +97,44 @@ for _ in $(seq 1 50); do
   if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then break; fi
   sleep 0.1
 done
+# ★启动后确认进程还活着（bind 失败 / 参数错会立刻退出）——否则后面的"0 字节"是假结论
+if ! kill -0 "$RECV_PID" 2>/dev/null; then
+  echo "✗ 接收器启动即退出，原因："
+  tail -6 "$HERE/results/screen-stream.recv.log" | sed 's/^/    /'
+  exit 4
+fi
 
 if [ "$SKIP_INSTALL" = "0" ]; then
   echo "==> ② 编译 + 安装 + 启动宿主（★手机弹「录制屏幕」时请点【允许】）"
   bash "$HERE/run-selfdraw.sh" --stream="$MAC:$PORT" | sed 's/^/    /'
 else
-  echo "==> ② 跳过安装（--skip-install）——请确认宿主已在跑且带 --stream=$MAC:$PORT"
+  echo "==> ② 跳过安装（--skip-install）"
+  echo "    ★前提：宿主**此刻正在手机上跑**，且是带 PROTEUS_SCREEN_STREAM 启动的。"
+  echo "      只是「装过」不够（App 退出即断流；--skip-install 不会替你启动它）。"
 fi
 
-echo "==> ③ 采集 ${SECONDS_ARG}s（期间请让手机画面**动起来**，静止时编码器可能不产帧）"
+echo "==> ③ 采集 ${SECONDS_ARG}s"
+# ★「让画面动」是**在 ProteusHost 这个 App 里**动（滑动/切页），不是滑桌面：
+#   iOS 用的是 **App 内 ReplayKit**，只录本 App 窗口；滑桌面、切到别的 App 都录不到。
+#   另外 iOS 的 ReplayKit 是**持续采样**（不像 Android screenrecord 静止就几乎不出帧），
+#   所以静止也能收到帧；动起来只是为了确认"是实时的、不是卡住的最后一帧"。
+echo "    ★请在手机的 ProteusHost 里滑动/切页（不是滑桌面）"
 # 这里的 sleep 是**度量窗口**（要收多久），不是"等某个状态"——不违反本仓的 no-blind-wait 纪律。
 sleep "$SECONDS_ARG"
 kill -TERM "$RECV_PID" 2>/dev/null || true
 wait "$RECV_PID" 2>/dev/null || true
 cat "$HERE/results/screen-stream.recv.log" | sed 's/^/    /'
 
-BYTES="$(wc -c < "$OUT" 2>/dev/null || echo 0)"
-BYTES="$(echo "$BYTES" | tr -d ' ')"
+BYTES=0
+[ -f "$OUT" ] && BYTES="$(wc -c < "$OUT" | tr -d ' ')"
 echo "==> ④ 判据"
 if [ "${BYTES:-0}" -lt 1000 ]; then
-  echo "✗ 只收到 ${BYTES} 字节 —— 三种可能："
-  echo "    a) 手机上没点「允许录制屏幕」"
-  echo "    b) iPhone 连不到 ${MAC}:${PORT}（不同 Wi-Fi / 隔离模式）"
-  echo "    c) 宿主不是本轮二进制（没带 PROTEUS_SCREEN_STREAM）—— 去掉 --skip-install 重跑"
+  echo "✗ 只收到 ${BYTES} 字节 —— 按可能性从高到低："
+  echo "    a) **宿主没在跑**（--skip-install 时最常见：装了但没启动，或者上次已退出）"
+  echo "       ⇒ 去掉 --skip-install 重跑（会重新编译安装并启动），或先在手机上点开 App"
+  echo "    b) 手机上没点「允许录制屏幕」（首次必弹；拒绝后不再弹，需 设置→隐私→屏幕录制 里打开）"
+  echo "    c) iPhone 连不到 ${MAC}:${PORT}（不同 Wi-Fi / 路由器开了 AP 隔离）"
+  echo "    d) 宿主不是本轮二进制（没带 PROTEUS_SCREEN_STREAM）—— 去掉 --skip-install 重跑"
   exit 1
 fi
 PROBE="$(ffprobe -v error -show_entries stream=codec_name,width,height -count_frames -show_entries stream=nb_read_frames -of default=nw=1 "$OUT" 2>&1 || true)"
