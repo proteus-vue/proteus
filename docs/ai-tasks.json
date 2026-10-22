@@ -3013,6 +3013,29 @@
         "T-studio-poc-b2-tauri"
       ],
       "note": "【done · 决策 #1172（2026-10-22）】判据 S1–S4 沿用 A/B，不新造。★真机流（ffprobe 实测）：h264 High / 720p / 6.17 Mbps / 标称 120fps / 实测 107.3fps（3215 帧/29.97s）/ 变帧率。★实测：离屏 107.32fps、render p50 1.32ms、迟到 3.40%、CPU 20.1%（S2 ❌）；窗口 107.33fps、compose+present 1.23ms、迟到 0.65%、CPU 21.3%（全过）。★三条发现：① 投屏不是 30fps 而是 100–120fps，帧预算 33.3→9.3ms；② 快节奏下离屏(glFinish)代价被放大、窗口才是产品路径；③ raw H.264 无容器时间戳（raw 报 25fps、mp4 报 120fps）⇒ 传输必须带 PTS。★含义：镜像帧率必须设上限且可配（默认 30/60）；必须定义迟到策略（丢帧保实时 vs 延迟累积）；CPU 与帧率近似线性。★边界：只测 Android 一台（120Hz）；iOS ReplayKit 未测；未测 60fps 上限（下一步第一件）；无网络抖动/丢包。"
+    },
+    {
+      "id": "T-studio-shell-stage1",
+      "title": "Studio 阶段 1 骨架：三栏布局 + 原生 GL 画布（HTML 布局驱动）+ 状态栏；抓到「画布上下颠倒」",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/05-studio-shell",
+        "docs/proteus-studio-poc/native/embed_view.m",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1173,
+      "verification": "cd docs/proteus-studio-poc/05-studio-shell && cargo build --release && POC_VIDEO=… POC_DUMP=/tmp/canvas.ppm ./target/release/proteus-studio-shell（日志核对 canvas rect 与 CSS 网格一致；dump 出 PNG 目视）",
+      "branch": null,
+      "related": [
+        "T-studio-poc-a-fbo",
+        "T-studio-poc-b1-window",
+        "T-studio-poc-b2-tauri",
+        "T-studio-poc-c-device-stream"
+      ],
+      "note": "【done · 决策 #1173（2026-10-22）】性能四个前提齐了之后，转产品形态第一步。★结构：Tauri 2 + 单文件 HTML；左栏 56 / 画布 / 右栏 340 / 状态栏；画布位置由 JS getBoundingClientRect → set_canvas_rect → 原生 setFrame。★两条接线证据（截图被 TCC 拦）：canvas rect 日志 80,68 996x748 与 CSS 网格手算一致；poc_dump 读回 FBO → PNG 内容是真机设置页。★抓到真 bug：画布上下颠倒（vUV = p，GL (0,0) 在左下而纹理首行在顶部）⇒ 修为 vUV=(p.x,1-p.y)。该 bug 从 PoC B2 就存在，当时只有性能数字没有视觉验证。★复用：原生视图抽到 native/embed_view.m，B2 与骨架共用；新增 poc_set_frame/poc_frames/poc_late/poc_cpu_pct/poc_dump。★边界：录制流非实时投屏；面板占位；无编辑器/终端（G-56.1 红线）；检查器依赖 G-54 的 locateAssertion/affectedDevices（仍 0 行）；整窗视觉未人眼确认。★下一步：CodeMirror 6 容器 / xterm.js+pty / 实时投屏管道 / 补 G-54 两方法。"
     }
   ]
 }

@@ -1,0 +1,4 @@
+[studio] canvas rect = 80.0,68.0 996.0x748.0
+[studio] attach rc=0
+[studio] canvas rect = 80.0,68.0 996.0x748.0
+[studio] canvas rect = 80.0,68.0 996.0x748.0

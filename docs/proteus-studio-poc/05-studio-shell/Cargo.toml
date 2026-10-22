@@ -1,0 +1,13 @@
+[package]
+name = "proteus-studio-shell"
+version = "0.1.0"
+edition = "2021"
+description = "Proteus Studio 阶段 1 骨架：三栏布局 + 原生设备画布 + 状态栏读数（决策 #1173）"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }

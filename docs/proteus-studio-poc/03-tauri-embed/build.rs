@@ -1,7 +1,7 @@
 fn main() {
     // 原生渲染视图（Objective-C）：编译成静态库，由 main.rs 里的 extern "C" 调用。
     cc::Build::new()
-        .file("native/embed_view.m")
+        .file("../native/embed_view.m")
         .flag("-fobjc-arc")
         .flag("-DGL_SILENCE_DEPRECATION")
         .include("/opt/homebrew/opt/ffmpeg/include")

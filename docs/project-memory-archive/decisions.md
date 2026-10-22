@@ -12543,3 +12543,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 判据纪律**：S1–S4 全部**沿用** A/B 的阈值（不新造、不事后放宽）；离屏 S2 不达标就照实写 ❌，没有换口径。
 **⑧ 补测 60fps 上限（同轮）**：同一段真机流重编码到 60fps → 窗口路径 60.04fps / 间隔 p50 16.64 · p99 24.98ms / 单帧 2.77ms / **迟到 0%** / **CPU 11.0%** ⇒ **60fps 完全宽裕**，107fps 才是紧的一档。三档成本：30fps 5.2% → 60fps 11.0% → 107fps 21%，近似线性。**建议 Studio 默认镜像 60fps**（可配），120 只在"必须看动画细节"时开。
 **⑨ 诚实边界**：只测了 Android 一台机（1200×2608 / 120Hz）；iOS ReplayKit 流未测；60fps 是**重编码**不是设备直出；走 `screenrecord` 本地录屏**不是**实时投屏链路（无网络抖动/丢包/RTP 重组）；滑动是脚本输入，画面比真实操作单调。
+
+1173. **★★★Studio 阶段 1 骨架：三栏布局 + 原生 GL 画布（位置由 HTML 布局驱动）+ 状态栏读数；并抓到「画布上下颠倒」这个从 B2 就存在的真 bug · 决策**（2026-10-22 · 承接 #1172「性能侧四个前提都有数据了」· 转产品形态第一步）:
+**① 这一版证明什么**：性能不是未知数了，缺的是"装进产品形态"。骨架 = 左栏 56px 图标 / 中间画布 / 右栏 340px 检查器 / 底部状态栏；**画布位置由 HTML 决定**：JS 量 `getBoundingClientRect()` → `invoke('set_canvas_rect')` → 原生 `setFrame`（而不是写死一个全屏 GL 视图）。
+**② 接线证据（截图被 TCC 拦，改用机器可查的两条）**：a) 日志 `canvas rect = 80.0,68.0 996.0x748.0` 与 CSS 网格手算**完全一致**（左栏 56+内边距 24=80；顶栏 44+24=68；宽 1440−56−340−48=996）⇒ HTML 真的驱动了原生画布；b) `poc_dump` 把画布 FBO `glReadPixels` 成 PPM → PNG，内容就是**手机设置页**（`results/canvas-device.png`）⇒ 真机画面确实经我们的管线进画布。
+**③ ★★抓到真 bug：画布上下颠倒（而且从 B2 就存在）**。第一次 dump 出来手机状态栏在画布**底部**。根因：顶点着色器 `vUV = p`，而 GL 的 (0,0) 在**左下**、纹理首行是画面**顶部** ⇒ 上下颠倒。修法 `vUV = vec2(p.x, 1.0 - p.y)`。**B2 当时只测了性能数字、没有视觉验证，所以这个 bug 一直没被发现** —— 又一次证明：**性能达标 ≠ 画面对**，能 dump 出来的东西才叫验证过。
+**④ 工程复用**：原生视图抽到 `docs/proteus-studio-poc/native/embed_view.m`，PoC B2 与 Studio 骨架**共用同一份**（`build.rs` 指 `../native/embed_view.m`）；新增 `poc_set_frame` / `poc_frames` / `poc_late` / `poc_cpu_pct` / `poc_dump`。骨架仍是 Tauri 2 + 单文件 HTML（无打包器），Rust 侧三个命令 + 60Hz 调度（原生按 PTS 决定这一拍出不出帧）。
+**⑤ 诚实边界**：a) 画面来自**录制流**不是实时投屏（循环靠 `avformat_seek_file` 回片头）；b) 面板是占位、无真实交互；c) **没有编辑器/终端**（编辑器按 G-56.1 红线只用现成的 CodeMirror 6）；d) 检查器数据依赖 G-54 的 `locateAssertion`/`affectedDevices`，那两个方法**仍是 0 行**——骨架把位置留好了，但填不进去。e) 截屏受 TCC 限制，**整窗视觉未经人眼确认**，只验证了"画布内容 + 矩形接线"两半。
+**⑥ 下一步**：a) 接编辑器（CodeMirror 6，只做容器不改内核）；b) 接终端（xterm.js + pty）；c) 把 C 的实时投屏接进来（`adb exec-out screenrecord` 管道 + 到帧时间戳）；d) 补 G-54 的 `affectedDevices`/`locateAssertion` 让检查器真的有数据。

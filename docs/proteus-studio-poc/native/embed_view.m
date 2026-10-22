@@ -49,7 +49,10 @@ static double pct(const double *v, int n, double p) {
 
 static const char *VS =
     "#version 150\nout vec2 vUV;\n"
-    "void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2); vUV = p;\n"
+    "void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);\n"
+    // ★v 轴必须翻：GL 的 (0,0) 在左下，而纹理首行是画面的**顶部**。
+    //   直接用 p 会让画面上下颠倒（实测：手机状态栏跑到画布底部）。
+    "  vUV = vec2(p.x, 1.0 - p.y);\n"
     "  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }\n";
 static const char *FS_YUV =
     "#version 150\nin vec2 vUV;\nout vec4 o;\n"
@@ -247,12 +250,67 @@ int poc_attach(void *parent_nsview) {
 
 int poc_probe(void) { return g_probe_bits; }
 
+/* ── Studio 骨架用：让 HTML 布局决定原生画布的位置/大小 ──
+   x/y 是 **CSS 坐标（左上原点）**，要翻成 AppKit 的左下原点。 */
+void poc_set_frame(double x, double y, double w, double h) {
+  if (!g_view) return;
+  double ph = [g_parent bounds].size.height;
+  NSRect r = NSMakeRect(x, ph - y - h, w, h);
+  [g_view setFrame:r];
+  [g_view.openGLContext update];
+}
+
+/* 调试用：把画布 FBO 读回成 PPM（截图权限被 TCC 拦时，用它自证"画布真的有画面"） */
+int poc_dump(const char *path) {
+  if (!g_inited || !g_W) return 2;
+  @autoreleasepool {
+    [g_ctx makeCurrentContext];
+    size_t n = (size_t)g_W * g_H * 3;
+    unsigned char *px = (unsigned char *)malloc(n);
+    if (!px) return 2;
+    glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, g_W, g_H, GL_RGB, GL_UNSIGNED_BYTE, px);
+    FILE *f = fopen(path, "wb");
+    if (!f) { free(px); return 2; }
+    fprintf(f, "P6\n%d %d\n255\n", g_W, g_H);
+    /* GL 原点在左下，PPM 在左上 ⇒ 逐行倒序写 */
+    for (int y = g_H - 1; y >= 0; y--) fwrite(px + (size_t)y * g_W * 3, 1, (size_t)g_W * 3, f);
+    fclose(f);
+    free(px);
+    return 0;
+  }
+}
+
+long poc_frames(void) { return g_frames; }
+long poc_late(void) { return g_late; }
+
+double poc_cpu_pct(void) {
+  struct rusage ru;
+  getrusage(RUSAGE_SELF, &ru);
+  double cpu = (ru.ru_utime.tv_sec - g_ru0.ru_utime.tv_sec) + (ru.ru_utime.tv_usec - g_ru0.ru_utime.tv_usec) / 1e6 +
+               (ru.ru_stime.tv_sec - g_ru0.ru_stime.tv_sec) + (ru.ru_stime.tv_usec - g_ru0.ru_stime.tv_usec) / 1e6;
+  double wall = (now_ms() - g_t_start + WARMUP_MS) / 1000.0;
+  return wall > 0 ? cpu / wall * 100.0 : -1;
+}
+
 static int poc_tick_impl(void) {
   if (!g_inited || g_eof) return g_eof ? 1 : 2;
   @autoreleasepool {
     [g_ctx makeCurrentContext];
 
-    if (av_read_frame(g_fmt, g_pkt) < 0) { g_eof = true; return 1; }
+    if (av_read_frame(g_fmt, g_pkt) < 0) {
+      // 骨架要长期跑：回到片头重新解码（真机实时流不需要，这里是为了"有画面可看"）
+      // 用 avformat_seek_file 而不是 av_seek_frame(…, AVSEEK_FLAG_BACKUP)：后者在 ffmpeg 7 的
+      // 头里没有直接暴露（实测 undeclared identifier）。
+      if (avformat_seek_file(g_fmt, g_vs, INT64_MIN, 0, INT64_MAX, 0) >= 0) {
+        avcodec_flush_buffers(g_cc);
+        g_base_pts = -1;
+        return 0;
+      }
+      g_eof = true;
+      return 1;
+    }
     if (g_pkt->stream_index != g_vs) { av_packet_unref(g_pkt); return 0; }
     if (avcodec_send_packet(g_cc, g_pkt) < 0) { av_packet_unref(g_pkt); return 0; }
     av_packet_unref(g_pkt);
