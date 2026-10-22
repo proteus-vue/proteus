@@ -12829,3 +12829,26 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   竖屏 1170×2532；Studio 画布按宽高比显示，横屏会侧躺）；e) 码率固定 8Mbps（未做自适应）；f) 帧到达时刻的 PTS 用的是
   `CMSampleBufferGetPresentationTimeStamp`（设备时钟域），与 `live_stream.h` 的"首字节到达时刻"不同源 —— 混用会让延迟读数失真，
   **接 Studio 统计前必须重打 CLOCK_MONOTONIC**（当前只是在 Mac 侧按到达顺序用，不取 PTS 值）。
+
+1192. **★★★独立验证第二轮又抓 3 条阻断 + 6 条假绿（含"我声称修好但实际没修"）· 决策**（2026-10-22 · 承接 #1191）:
+**① 第二轮结论**：第一次修复里有 5 项真做对了（B1 RAII 早退、B2 超限码、B3 flush 判定、B6 限制字段进 data、B7 miss→system、J1/J2 块级断言、J8、J9），但**B5 根本没修对**，且 `.part`+rename 引入了**新的数据丢失路径**。
+**② ★NB1（最严重，且是"我声称修好但没修"）**：我把沙箱根注入加在了 `hostAppBoot` / `hostAppDrive`，但
+  · CLI 模板**从不调** `hostAppBoot`（全仓 grep 只剩导出/注释）；
+  · 首屏 `renderCurrent` 调的是 **`hostAppRender`**；
+  · `hostAppDrive` 只在 `switchTab` 里。
+  ⇒ CLI 生成的项目**首屏用 savePath 仍报"路径非法"**，只有先切一次 tab 才碰巧能用。★更糟的是**真机证据绕开了它**：内部探针场景在 `Superapp.ets` 先手动 `injectSandboxRoot()` ⇒ `http-probe-save.json` 绿与"自动注入"无关。⇒ 已把注入加到 `HostAppRender`（现在 Boot/Drive/Render 三处）。
+**③ NB2（我引入的新缺陷）**：`.part` 成功后我写了 `std::remove(absPath)` 再 `rename`，理由"显式更稳"——**是错的**：POSIX `rename()` 本来原子覆盖，而先删目标制造了"旧文件已删、新文件未就位"的窗口 ⇒ rename 失败（EACCES/EROFS/进程被杀）时**用户的旧文件也没了**（实测：13B 旧文件 → `TARGET_EXISTS=0`）。这比不修更糟，还与本文件"失败时目标保持原样"的契约自相矛盾。⇒ **删掉 remove，直接 rename**。
+**④ NB2b**：`.part` 用固定名 ⇒ 同路径两个会话时，第二个 `finish()` 会删掉第一个刚 rename 成功的目标再失败（实测第一个"成功"文件被删）。⇒ 名字带 **pid + 自增序号**。
+**⑤ NB3（潜在）**：`finish()` 在"从未 open"时会一路走到 `ok=true, size:0`（实测 `open("../x")` 失败后 `finish()` 仍回成功摘要）。当前 `handle()` 走不到，但将来把 finish 提出判定就会踩。⇒ 显式拒绝 + `completed` 时幂等。
+**⑥ 六条假绿（第二轮新增）**：
+  · **J-NB1**：B5 判据只数全文出现 ≥2 次 ⇒ `Boot+Drive` 也过（正是 NB1 溜过去的原因）。⇒ 改成**按函数切块**，断言 `HostAppRender` 块内必须有注入。变异验证：删掉 Render 的注入 ⇒ 精确红。
+  · **J-B3-1**：只断言"出现过 `fclose(fp)`"，变异 `(void)closeRc`（取了不用）仍全绿 ⇒ 改断言 `closeRc != 0` 在 if 条件里。
+  · **J-RAII-1**：`opendir("/dev/fd")` 失败时 `openFds()` 返回 -1，前后都 -1 ⇒ `FD_DELTA=0` **恒绿**。⇒ 加 `FD_VALID` 自证。
+  · **J-J6-1**：设备侧 `stat` 脚本里有，但**没有判据守着** ⇒ 删掉 20 行仍全绿。⇒ 加脚本断言。
+  · **J-J6-2**：路径穿越证据**无法用脚本复现**（save 分支要求 ok:true）。⇒ 加 `--expect-reject` 模式（现在证据可重放）。
+  · **J-J4-1**：`kept==0` 旧断言未删，与同文件"它是恒真式"的说明自相矛盾。⇒ 删掉。
+  · **J-J8-1**：`lastTransport().clear()` 实现有、**无回归判据**。⇒ 加"handle() 块内必须有 clear"。
+**⑦ 诚实性修正**：代码注释里 4 处「内存有界 / 峰值 = 单块」**原样未改**（我上一轮只改了能力页）⇒ 全部降级为"只消除本层 body 累积；RCP 是否整包驻留**未取证**"。`run-http-probe.sh` 里 `kept 必须 0` 的旧口径同步改掉。
+**⑧ 判据与真机**：`harmony-http-gaps` 16 条 · `harmony-save-session-raii` 5 条 · 五份判据合计 **60 条全绿**；门禁 7 项全绿；**真机终验**：`saveWritten=219 == seen=219`、`cap=1GiB`、**设备侧 stat 核对 219B 一致**、路径穿越 `--expect-reject` 可重放通过。
+**⑨ 产物**：`proteus_http_save.h`（rename 原子覆盖 + `.part` 唯一名 + finish 未 open 拒绝）· `host_app_runtime_impl.h`（HostAppRender 注入，单行内联保持 1130 基线）· `proteus_http.h`（内存表述降级 + lastTransport clear 判据锚点）· `run-http-probe.sh`（`--expect-reject` + stat 门跳过）· `tests/harmony-http-gaps.test.ts`（+3 条，改 1 条）· `tests/harmony-save-session-raii.test.ts`（FD_VALID 自证 + closeRc 进条件）。
+**⑩ 诚实边界**：a) **B4 仍未取证**（RCP 是否整包驻留 → 需 64 MiB 级 + `VmHWM`）；b) 落盘 >219B 大文件未压测；c) 第二轮验证者还提出"`saveWritten` 快照在 `finish()` 之前、若走 resp->body 回填会漏计"——当前 minSdk 17 ≥ 13 不可达，但语义不严谨；d) `stream`/`abort`/SPKI pinning 三处仍是模型/平台限制。

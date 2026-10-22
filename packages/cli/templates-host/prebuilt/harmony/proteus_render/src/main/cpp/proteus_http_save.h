@@ -14,7 +14,8 @@
 //   ① 非空 ② 不以 `/` 开头（拒绝绝对路径）③ 任一段是 `..` ⇒ 拒绝
 //   ⇒ 返回空串 = 非法，调用方**必须如实报错**（不得回落到"写到别处"）。
 #pragma once
-#include <sys/stat.h>   // ★#1187：递归建父目录（mkdir）
+#include <sys/stat.h>
+#include <unistd.h>   // ★#1192：getpid() 用于 .part 唯一名   // ★#1187：递归建父目录（mkdir）
 
 #include <cstdio>
 #include <string>
@@ -126,7 +127,18 @@ struct SaveSession {
     //   Android/iOS 的 `savePath` 支持子目录 ⇒ 本端必须对齐：递归建父目录。
     mkdirParents(absPath);
     // ★B1：写临时文件（`.part`），成功才 rename——否则会先把用户已有文件截断。
-    partPath = absPath + ".part";
+    /**
+     * ★★★#1192（独立验证第二轮 NB2 第二条）：**`.part` 必须唯一**。
+     *   原来用固定名 `absPath + ".part"` ⇒ 同一路径两个会话并存时，第二个 `finish()`
+     *   会先删掉第一个刚 rename 成功的目标、再 rename 失败
+     *   ⇒ 实测第一个"成功"的文件被第二个失败的收尾删掉。
+     *   鸿蒙同步 napi 下同一时刻只有一个在跑，但"重试同一 savePath"这类**串行**场景已能命中。
+     * ⇒ 名字里带 pid + 自增序号（同进程内也不会撞）。
+     */
+    static unsigned long long sSeq;
+    char uniq[64];
+    std::snprintf(uniq, sizeof(uniq), ".part.%ld.%llu", static_cast<long>(::getpid()), ++sSeq);
+    partPath = absPath + uniq;
     fp = std::fopen(partPath.c_str(), "wb");
     if (fp == nullptr) {
       if (err) *err = "fetch.failed: 无法创建落盘文件：" + rel;
@@ -170,6 +182,25 @@ struct SaveSession {
    * @return `{path,size}` 摘要（成功时）；失败时为空
    */
   std::string finish(bool* ok, std::string* err) {
+    /**
+     * ★★★#1192（独立验证第二轮 NB3）：**从未 `open` 成功时不能报成功**。
+     *   原实现里 `fp==nullptr && partPath.empty()` 会一路走到 `ok=true` + `size:0`
+     *   ⇒ 实测 `open("../x")` 失败后 `finish()` 仍回 `{"path":"../x","size":0}`
+     *   （"成功但没文件"）。当前 `handle()` 走不到（`gate.save` 只在 open 成功后赋值），
+     *   但这是**潜在**缺陷：任何人将来把 finish 提到那个判定之外就会立刻踩。
+     * ★已收尾（`completed`）时幂等返回成功摘要——不二次删、不崩。
+     */
+    if (completed) {
+      if (ok) *ok = true;
+      char b2[64];
+      std::snprintf(b2, sizeof(b2), "\"size\":%llu", static_cast<unsigned long long>(written));
+      return "{" + std::string("\"path\":\"") + jsonEscapeH(relPath) + "\"," + b2 + "}";
+    }
+    if (fp == nullptr && partPath.empty()) {
+      if (ok) *ok = false;
+      if (err) *err = "fetch.failed: 落盘会话未打开（open 失败或从未调用）：" + relPath;
+      return "";
+    }
     // ★B3：`fwrite` 成功只代表进了 stdio 缓冲 ⇒ 磁盘满在 flush 时才暴露，必须显式检查。
     if (fp != nullptr) {
       const bool flushOk = (std::fflush(fp) == 0);
@@ -192,7 +223,15 @@ struct SaveSession {
     }
     // ★B1：成功才把 `.part` 换成目标名（业务永远看不到半个文件）
     if (!partPath.empty()) {
-      std::remove(absPath.c_str());   // rename 不覆盖（POSIX 会覆盖，但显式更稳）
+      /**
+       * ★★★#1192（独立验证第二轮 NB2 修复）：**绝不能先 `remove` 目标再 rename**。
+       *   原实现这么写（理由"显式更稳"）是**错的**：POSIX `rename()` 本来就原子覆盖；
+       *   而先删目标制造了"旧文件已删、新文件未就位"的窗口 ⇒ rename 失败
+       *   （EACCES / EROFS / 目标被占 / 进程在这两步之间被杀）时**用户的旧文件也没了**
+       *   —— 实测（rename 打桩必失败）：13 字节旧文件变成 `TARGET_EXISTS=0`。
+       *   对本文件"失败时目标文件保持原样"的契约来说，这比不修更糟。
+       * ⇒ 直接 rename（原子覆盖）；失败时旧文件原样保留，只删自己的临时文件。
+       */
       if (std::rename(partPath.c_str(), absPath.c_str()) != 0) {
         abortUnfinished();
         if (ok) *ok = false;

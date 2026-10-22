@@ -366,7 +366,8 @@ inline size_t recvGate(void* usr, Rcp_Buffer* buf) {
     return n;
   }
   const uint8_t* p = reinterpret_cast<const uint8_t*>(buf->buffer);
-  // ★★★#1187：落盘模式 ⇒ 交给 SaveSession 直写（不累积 body，峰值 = 单块）
+  // ★#1187：落盘模式 ⇒ 交给 SaveSession 直写。★#1192 更正：这只消除**本层**的 body 累积；
+  //   RCP 的 Rcp_Response.body 是否整包驻留未取证 ⇒ **不宣称"内存有界"**。
   if (g->save != nullptr) {
     if (!g->save->write(p, n)) {
       // 写失败 / 超限 ⇒ 同样按"越线"处理并 cancel（不能静默继续下载然后丢数据）
@@ -493,7 +494,8 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    *   ⇒ 在现有模型下无法实现真正的流式（这是 #540 实测的架构约束，不是漏写方法）。
    * 【为什么必须显式拒绝而不是降级成整包】静默降级会让 `onChunk` **永远不触发**而请求
    *   照常成功 ⇒ 业务以为在流式收数据、实际一次都没回调（**假数据比缺数据更糟**）。
-   * ⇒ 需要逐块消费的场景请用 `savePath`（宿主逐块落盘，内存有界）或 `timeout` + 整包。
+   * ⇒ 需要逐块消费的场景请用 `savePath`（宿主逐块落盘；★内存是否与文件大小无关**未取证**）
+   *   或 `timeout` + 整包。
    */
   if (f.stream && *f.stream) {
     stats().failures++;
@@ -714,7 +716,8 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   detail::RecvGate gate;
   gate.limit = MAX_BODY_BYTES;
   /**
-   * ★★★#1187：**`savePath` ⇒ 逐块落盘**（内存有界，峰值 = 单块）。
+   * ★★★#1187：**`savePath` ⇒ 逐块落盘**。★#1192 更正：本层不累积 body，但 RCP 侧是否整包驻留
+   *   **未取证**（`Rcp_Response.body` + 无关闭驻留开关）⇒ 不宣称"峰值 = 单块"。
    *   ★非法路径必须**如实报错**（不得回落到"写到别处"或静默忽略）。
    *   ★实现已抽到 `proteus_http_save.h`（本文件 1000 行上限）。
    */

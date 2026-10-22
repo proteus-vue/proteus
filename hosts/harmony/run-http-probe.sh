@@ -34,6 +34,7 @@ DNS_IP=""
 DNS_HOST=""
 SAVE_PATH=""   # ★#1187：savePath（沙箱相对路径）
 STREAM=""     # ★#1187：1 = 传 stream:true（应被如实拒绝）
+EXPECT_REJECT=""   # ★#1192：1 = 预期被拒（路径穿越/非法 savePath 的**可重放**判据）
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
@@ -43,6 +44,7 @@ for arg in "$@"; do
     --dns-host=*) DNS_HOST="${arg#--dns-host=}" ;;
     --save-path=*) SAVE_PATH="${arg#--save-path=}" ;;   # ★#1187
     --stream) STREAM=1 ;;                              # ★#1187
+    --expect-reject) EXPECT_REJECT=1 ;;                  # ★#1192
     --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
        elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
@@ -99,12 +101,13 @@ HDC file recv "$FILES_DEV/http-probe.json" "$RESULTS/http-probe.json" >/dev/null
 echo "    http-probe.json $(wc -c < "$RESULTS/http-probe.json" | tr -d ' ') 字节"
 cat "$RESULTS/http-probe.json"; echo
 
-python3 - "$RESULTS/http-probe.json" <<'PY'
-import json, sys
+EXPECT_REJECT="${EXPECT_REJECT:-}" python3 - "$RESULTS/http-probe.json" <<'PY'
+import json, os, sys
+EXPECT_REJECT = os.environ.get("EXPECT_REJECT") == "1"
 d = json.load(open(sys.argv[1]))
 ok = True
 # ★★★#1187：两种**预期失败**的形态（是设计，不是错误）：
-#   · 传了 savePath ⇒ 回 `{path,size}` 摘要（limit.kept 必须 0 = 响应体没进内存）
+#   · 传了 savePath ⇒ 回 `{path,size}` 摘要（★注意 `kept` 是恒真式，不作判据；看 saveWritten == seen）
 #   · 传了 stream   ⇒ 必须 `fetch.unsupported` 且点明根因
 diag = {}
 try:
@@ -113,6 +116,17 @@ except Exception:
     pass
 save_path = diag.get("savePath") or ""
 stream_on = (diag.get("stream") or "") == "1"
+if EXPECT_REJECT:
+    # ★#1192（J-J6-2）：**预期被拒**模式——让"路径穿越被拒"这份证据可重放
+    if d.get("ok") is not False:
+        print("✗ 期望被拒但请求成功了"); sys.exit(1)
+    if (d.get("limit") or {}).get("saveMode") is not False:
+        print("✗ 被拒却仍进了落盘分支"); sys.exit(1)
+    r = str(d.get("reason") or "")
+    if "savePath 非法" not in r:
+        print(f"✗ 拒绝原因不是路径非法：{r[:100]}"); sys.exit(1)
+    print(f"✅ 路径被如实拒绝：{r[:110]}")
+    sys.exit(0)
 if save_path:
     prev = d.get("preview") or ""
     if d.get("ok") is not True:
@@ -196,7 +210,8 @@ RC=$?
 # ★★★#1190（独立验证 J6 修复）：**设备侧 stat 校验**——不能只信探针自报的摘要。
 #   原判据全程只读 `preview.size`，写入 0 字节但摘要报 219 也能全绿。
 #   ⇒ 传了 savePath 时，用 hdc 在**设备上**核对文件真实存在且大小等于摘要。
-if [ "$RC" = "0" ] && [ -n "$SAVE_PATH" ]; then
+# ★#1192：expect-reject 模式没有落盘文件可核对 ⇒ 跳过 stat
+if [ "$RC" = "0" ] && [ -n "$SAVE_PATH" ] && [ -z "$EXPECT_REJECT" ]; then
   SIZE_REPORTED="$(python3 -c "
 import json,sys,re
 d=json.load(open('$RESULTS/http-probe.json'))

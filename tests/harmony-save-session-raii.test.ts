@@ -76,6 +76,10 @@ int main() {
   using namespace proteus::http;
   setHttpSandboxRoot("/tmp");
   int before = openFds();
+  // ★#1192（J-RAII-1）：先自证 fd 计数有效——opendir 失败时 openFds() 返回 -1，
+  //   前后都是 -1 ⇒ FD_DELTA=0 ⇒ 判据恒绿（哪怕真泄漏）。
+  printf("FD_VALID %d\\n", before > 0 ? 1 : 0);
+  if (before <= 0) return 3;
   for (int i = 0; i < 16; i++) {
     SaveSession s;
     std::string err;
@@ -92,6 +96,8 @@ int main() {
 }
 `);
     const fdDelta = Number(/FD_DELTA (-?\d+)/.exec(out)?.[1] ?? 'NaN')
+    // ★J-RAII-1：先自证计数有效（否则 -1 - (-1) = 0 恒绿）
+    expect(Number(/FD_VALID (\d)/.exec(out)?.[1]), '★fd 计数无效（/dev/fd 打不开）⇒ 这条判据会恒绿').toBe(1)
     expect(fdDelta, `★16 次早退后 fd 泄漏了 ${fdDelta} 个（原实现实测 64 次 +64）`).toBeLessThanOrEqual(2)
     expect(Number(/LEFTOVER (\d)/.exec(out)?.[1]), '★早退后留下 .part 残包').toBe(0)
     expect(Number(/TARGET_EXISTS (\d)/.exec(out)?.[1]), '★早退却生成了目标文件（业务会读到不完整文件）').toBe(0)
@@ -176,6 +182,13 @@ int main() {
     // ★这半条只能静态判（造"磁盘满"要特权）。所以注明它是静态的，不冒充行为判据。
     expect(s, '★没检查 fflush 返回值（磁盘满时会把失败报成成功）').toMatch(/fflush\(fp\)\s*==\s*0/)
     expect(s, '★没检查 ferror').toMatch(/ferror\(fp\)/)
-    expect(s, '★没检查 fclose 返回码').toMatch(/fclose\(fp\)/)
+    /**
+     * ★★★#1192（独立验证第二轮 J-B3-1）：只断言"出现过 `fclose(fp)`"**不够** ——
+     *   变异实测：保留 `closeRc` 赋值但把它从判定条件里去掉（`(void)closeRc;`）
+     *   三条旧断言**仍全绿**。⇒ 必须断言 `closeRc` **真的进了 if 条件**。
+     */
+    expect(s, '★fclose 返回码被取了却没用（writeFailed 判定里必须出现 closeRc != 0）').toMatch(
+      /flushOk\s*\|\|\s*errFlag\s*\|\|\s*closeRc\s*!=\s*0/,
+    )
   })
 })

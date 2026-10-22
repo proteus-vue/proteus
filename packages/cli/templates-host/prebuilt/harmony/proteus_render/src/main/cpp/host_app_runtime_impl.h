@@ -698,6 +698,7 @@ static napi_value HostAppRender(napi_env env, napi_callback_info info) {
     std::string bundle, page;
     jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
     jstr(argsJson.c_str(), argsJson.size(), "page", &page);
+    { std::string fd; jstr(argsJson.c_str(), argsJson.size(), "filesDir", &fd); if (!fd.empty()) proteus::http::setHttpSandboxRoot(fd); }   // ★#1192-B5：首屏走这里（CLI 不调 Boot）
     if (page.empty()) page = "index";
     double vpW = 390, vpH = 844;
     { std::string vpObj = extractValueAfterKey(argsJson, "viewport", '{', '}');

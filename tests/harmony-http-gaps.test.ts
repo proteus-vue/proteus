@@ -94,20 +94,33 @@ describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 
     expect(calls, `★injectSandboxRoot 只调了 ${calls} 处（三处 filesDir 赋值都要调）`).toBeGreaterThanOrEqual(3)
   })
 
-  it('★★★#1191（B5）沙箱根**在 hostAppRender/Boot 里自动注入**（覆盖 CLI 生成的宿主）', () => {
+  it('★★★#1192（B5）沙箱根在 **HostAppRender** 里注入（CLI 首屏只走它）', () => {
     /**
-     * ★B5：原实现只靠内部壳 `Superapp.ets` 手动调 `injectSandboxRoot()` ⇒
-     *   CLI 生成的宿主（`packages/cli/templates-host/harmony/.../MainPage.ets`）没接
-     *   ⇒ **框架用户一用 savePath 就报"路径非法"**（实际是根为空）。
-     *   ⇒ 修法 = 在 `hostAppBoot` / `hostAppRender` 里用入参 `filesDir` 自动注入
-     *     （两套壳都走这两个入口，不必再让每个壳记得调）。
+     * ★独立验证第二轮 NB1 抓出：上一轮我把注入加在 Boot / Drive，而
+     *   · CLI 模板**从不调** hostAppBoot；· 首屏 renderCurrent 调 **hostAppRender**；
+     *   · hostAppDrive 只在 switchTab 里。
+     *   ⇒ 原判据只数"全文出现 ≥2 次"，任何两处都过 ⇒ **假绿**（Boot+Drive 也满足）。
+     * ⇒ 现在**按函数切块**，断言 HostAppRender 块内必须有注入。
      */
     const impl = read('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h')
-    const injected = (impl.match(/setHttpSandboxRoot\(filesDir\)/g) || []).length
-    expect(injected, `★只在 ${injected} 个入口自动注入（hostAppBoot / hostAppRender 都要）`).toBeGreaterThanOrEqual(2)
-    // CLI 模板确实传了非空 filesDir 进这些入口（否则注入拿到空串也无用）
+    const fnBody = (name: string): string => {
+      const at = impl.indexOf(`static napi_value ${name}(`)
+      if (at < 0) return ''
+      // 到下一个 static napi_value 或文件末尾
+      const next = impl.indexOf('static napi_value ', at + 10)
+      return impl.slice(at, next < 0 ? impl.length : next)
+    }
+    for (const fn of ['HostAppBoot', 'HostAppRender']) {
+      const b = fnBody(fn)
+      expect(b, `★找不到 ${fn}（函数改名了？）`).toBeTruthy()
+      expect(b, `★${fn} 里没注入沙箱根（B5：首屏/后续 render 都走它）`).toMatch(
+        /setHttpSandboxRoot\(/,
+      )
+    }
+    // CLI 模板首屏确实走 hostAppRender（而不是 Boot）
     const cli = read('packages/cli/templates-host/harmony/entry/src/main/ets/shell/MainPage.ets')
     expect(cli, '★CLI 模板没把 filesDir 传给 hostAppRender').toMatch(/filesDir: this\.filesDir/)
+    expect(cli, '★CLI 模板首屏不是走 hostAppRender？').toMatch(/hostAppRender\(/)
   })
 })
 
@@ -133,7 +146,7 @@ describe('★★★#1187 鸿蒙 stream：模型限制 ⇒ 必须如实拒绝（�
 })
 
 describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', () => {
-  it('★savePath 落盘：回 {path,size} 摘要且内存保留 0（逐块直写成立）', () => {
+  it('★savePath 落盘：回 {path,size} 摘要（不回响应体）', () => {
     const p = 'hosts/harmony/results/http-probe-save.json'
     expect(fs.existsSync(path.join(ROOT, p)), `★缺落盘真机证据 ${p}`).toBe(true)
     const r = JSON.parse(read(p))
@@ -141,11 +154,13 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     // ★回执必须是摘要，不是响应体
     expect(String(r.preview), '★回执不是 {path,size} 摘要').toMatch(/"path":"download\//)
     expect(String(r.preview), '★摘要里没有 size').toMatch(/"size":\d+/)
-    // ★最关键的一条：落盘模式下**内存不保留响应体**
-    //   （limit.kept=0 而 limit.seen>0 ⇒ 真的是逐块写文件，不是先全进内存再写）
     expect(r.limit.seen, '★没收到数据').toBeGreaterThan(0)
-    expect(r.limit.kept, `★内存里保留了 ${r.limit.kept}B（落盘模式应为 0，否则大文件会打爆）`).toBe(0)
-    // 摘要长度应远小于实际字节数（响应体没有回传）
+    /**
+     * ★★★#1192（独立验证第二轮 J-J4-1）：**删掉原来的 `kept==0` 断言**。
+     *   它自相矛盾——同一文件下面已写清 `kept` 是恒真式（落盘分支不填 `gate.body`）。
+     *   "逐块写"与"内存有界"由 `saveWritten`（写进文件的量）与 `harmony-save-session-raii`
+     *   的真行为判据覆盖，不用 `kept` 冒充。
+     */
     expect(r.bodyBytes, '★回执 bodyBytes 等于全文（说明回的是响应体而非摘要）').toBeLessThan(r.limit.seen)
   })
 
@@ -172,6 +187,31 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     expect(String(r.reason), '★拒绝信息没说清是路径非法').toMatch(/savePath 非法/)
     // ★拒绝必须在**任何网络操作之前**（没进落盘分支、没装闸）
     expect(r.limit?.saveMode, '★拒绝了路径却仍进了落盘分支').toBe(false)
+  })
+
+  it('★★★#1192 探针脚本：设备侧 stat 核对 + 可重放的"预期拒绝"模式', () => {
+    /**
+     * ★独立验证第二轮 J-J6-1：脚本确实加了 `hdc shell stat -c %s`，但**没有任何机器判据守着它**
+     *   （删掉那 20 行，全部判据仍绿）⇒ 这是"实现有效但无回归防线"。
+     * ★J-J6-2：路径穿越证据**无法用脚本复现**（save 分支要求 ok:true，而穿越必须 ok:false）。
+     */
+    const sh = read('hosts/harmony/run-http-probe.sh')
+    expect(sh, '★脚本缺设备侧 stat 核对（只信探针自报摘要 ⇒ 写 0 字节也能全绿）').toMatch(
+      /stat -c %s/,
+    )
+    expect(sh, '★缺"设备大小 != 回执 size"的失败分支').toMatch(/SIZE_ON_DEVICE.*!=.*SIZE_REPORTED|!= "\$SIZE_REPORTED"/)
+    expect(sh, '★缺 --expect-reject 模式（穿越证据无法复现）').toMatch(/--expect-reject/)
+  })
+
+  it('★★★#1192 `lastTransport()` 每请求清空（否则上一请求读数"粘"到本次）', () => {
+    const s = read(HTTP)
+    // 必须在 handle() 入口清空（否则复用连接/早退时会残留上一请求的读数）
+    const fnAt = s.indexOf('inline proteus::wire::ResolveFrame handle(')
+    expect(fnAt, '★找不到 handle()').toBeGreaterThan(0)
+    const body = s.slice(fnAt, s.indexOf('\n}\n', fnAt))
+    expect(body, '★handle() 入口没清空 lastTransport（上一请求读数会粘到本次）').toMatch(
+      /lastTransport\(\)\.clear\(\)/,
+    )
   })
 
   it('★stream：真机如实拒绝（fetch.unsupported + 点明根因 + 给替代）', () => {
