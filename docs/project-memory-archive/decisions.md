@@ -12331,6 +12331,8 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 · 鸿蒙流式仍在 API 层回 `unsupported`（一次性 VM 无回推接收方，`capability-invoke.ts` 已写明）；
   这与取消 no-op 是**同一个根因**（同步 + 一次性 VM），未来改 VM 模型时应当一起解决。
 
-**下一步**：① （需人工解锁设备）跑真机 abort 探针做最终确认 ② 评估"鸿蒙宿主改常驻/可重入 VM"
+**【★补充：真机已验（2026-10-22 设备解锁后）】** 上轮因设备锁屏，只做到源码结构证据。解锁后补跑：`hosts/harmony/results/http-probe.json` 记录 `status=200 · bodyBytes=655360 · chunks=92 · cancelCalled=false`——那是 `GET /stream?chunks=40&size=1024&delayMs=200`（约 **8 秒**才发完）的**完整**响应体。★它回答最后一环疑问：如果 napi 不是同步阻塞的，这 8 秒里 JS 本该有机会跑 `onabort`；而它完整跑完、没有任何取消发生 ⇒ 请求全程在同一次同步调用内 ⇒ JS 无执行机会 ⇒ abort 无处介入。⇒ 「abort 是 no-op」现在有**两类证据**：源码结构（`attachAbort` 后紧接同步 `fn(frame)`）+ 真机行为（慢请求同步完成）。判据已固化：`fetch-cancel` 新增读证据断言（ok / 200 / bodyBytes>600KB / chunks>50 / cancelCalled=false），破坏性验证 3/3 全红。★下一步①已完成，剩②。
+
+**下一步**：① ~~（需人工解锁设备）跑真机 abort 探针做最终确认~~ ✅ 已完成（见上）② 评估"鸿蒙宿主改常驻/可重入 VM"
 的工程量——它同时解锁「取消 / 流式 / 传输读数回推」三件事，是 useFetch 鸿蒙侧的**根节点**
 ③ 在那之前，文档已明确 `timeout` 是鸿蒙唯一有效的限时手段。
