@@ -21,7 +21,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 
-PORT="${1:-8795}"
+PORT="${1:-}"
 PKG="dev.proteus.layoutcore"
 ADB="${ADB:-adb}"
 APK="${PROTEUS_APK:-$HERE/build/proteus-layoutcore.apk}"
@@ -32,6 +32,17 @@ mkdir -p "$HERE/results"
 
 [ -f "$APK" ] || { echo "✗ 找不到 APK：${APK}（先 build，或用 PROTEUS_APK= 指路径）"; exit 3; }
 "$ADB" get-state >/dev/null 2>&1 || { echo "✗ 设备未连接"; exit 3; }
+
+# ★端口不写死（写死会撞别的进程/上次残留）——与 run-transport-probe.sh 同口径
+pick_free_port() {
+  local p="$1"
+  while [ "$p" -lt $(( $1 + 100 )) ]; do
+    lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1 || { printf '%s' "$p"; return 0; }
+    p=$((p + 1))
+  done
+  return 1
+}
+if [ -z "$PORT" ]; then PORT="$(pick_free_port 8795)" || { echo "✗ 找不到空闲端口"; exit 3; }; fi
 
 echo "==> ① 起本地服务（port ${PORT}）"
 node "$HERE/tools/transfer-echo-server.mjs" "$PORT" 0.0.0.0 > "$SERVER_LOG" 2>&1 &
@@ -51,7 +62,9 @@ echo "==> ② adb reverse（设备 127.0.0.1:${PORT} → 本机 ${PORT}）"
 "$ADB" reverse "tcp:${PORT}" "tcp:${PORT}" >/dev/null 2>&1 || { echo "✗ adb reverse 失败"; exit 3; }
 
 echo "==> ③ 安装 + 触发 body-probe"
-"$ADB" install -r -t "$APK" 2>&1 | grep -E "Success|Failure" | head -2
+# ★`|| true` 必须有：`set -euo pipefail` 下 `grep` 无匹配会终止脚本
+#   （本仓踩过同族：iOS 安装失败原因被 `grep|head` 在 pipefail 下静默吞掉）
+"$ADB" install -r -t "$APK" 2>&1 | grep -E "Success|Failure" | head -2 || true
 "$ADB" shell "am force-stop $PKG" >/dev/null 2>&1 || true
 "$ADB" shell "rm -f ${REPORT}" >/dev/null 2>&1
 if "$ADB" shell "test -f ${REPORT}" >/dev/null 2>&1; then

@@ -111,7 +111,8 @@ describe('★★#1160 Android 传输栈：唯一入口 + 连接复用不退化',
   })
 
   it('★★HTTP/2 必须**显式**列在最前（删掉即回归到 h1，且无任何报错）', () => {
-    expect(transport, '★protocols 未显式列 HTTP_2 ⇒ 回到 h1（#1155 的端差异原状）').toMatch(
+    // ★★★必须去注释：第二轮独立验证的 M8（把真实 protocols 只留 h1、原串留在注释里）旧判据全绿。
+    expect(transportCode, '★protocols 未显式列 HTTP_2 ⇒ 回到 h1（#1155 的端差异原状）').toMatch(
       /protocols\(\s*java\.util\.Arrays\.asList\(\s*Protocol\.HTTP_2\s*,\s*Protocol\.HTTP_1_1\s*\)\s*\)/,
     )
   })
@@ -133,24 +134,34 @@ describe('★★#1160 Android 传输栈：唯一入口 + 连接复用不退化',
     )
   })
 
-  it('★★响应必须关闭（OkHttp 要关响应体才把连接还给池 ⇒ 否则下次不复用）', () => {
-    // 四处 finally 都要 closeResp / call.cancel
+  it('★★响应必须关闭，且**每条路径**都在读完体之后才关（OkHttp 要关响应体才还池）', () => {
     const closes = capabilityCode.match(/closeResp\(resp\)/g) ?? []
     expect(closes.length, `★只有 ${closes.length} 条路径关闭了响应（应有 4 条）`).toBe(4)
     expect(capabilityCode, '★closeResp 未真正调用 Response.close()（连接不会还池 ⇒ 下次不复用）').toMatch(
       /resp\.close\(\)/,
     )
-    // ★★★独立验证的变异 C2：在 `execute()` 之后立刻 `closeResp`（读体之前关闭）时，
-    //   "数出现次数"的旧判据仍全绿，而**每个请求都会坏掉**（读到已关闭的流）。
-    //   ⇒ 必须断言关闭发生在**读体之后**：`bodyStream(...)` 的位置必须早于同路径的 `closeResp`。
-    const seq = capabilityCode.indexOf('InputStream is = HttpTransport.bodyStream(resp)')
-    const seqClose = capabilityCode.indexOf('closeResp(resp)')
-    expect(seq, '找不到 bodyStream 调用').toBeGreaterThan(0)
-    expect(seqClose, '找不到 closeResp 调用').toBeGreaterThan(0)
-    expect(seq, '★bodyStream 出现在 closeResp 之后 ⇒ 读的是已关闭的响应（每请求必坏）').toBeLessThan(seqClose)
+    // ★★★第二轮独立验证的 M5c：把**落盘路径**的关闭移到读体之前、总数仍是 4 ⇒ 旧判据（只比全局
+    //   第一个 bodyStream 与第一个 closeResp）全绿，而那条路径每请求必坏。
+    //   ⇒ 必须**逐路径**检查：以每个 `perform*` 函数体为单位，bodyStream 必须在 closeResp 之前。
+    const fns = [
+      'private static InvokeWire.ResolveFrame perform(',
+      'private static InvokeWire.ResolveFrame performStreamUpload(',
+      'private static InvokeWire.ResolveFrame performSaveToFile(',
+      'private static void performStreaming(',
+    ]
+    for (const sig of fns) {
+      const start = capabilityCode.indexOf(sig)
+      expect(start, `找不到 ${sig}`).toBeGreaterThan(0)
+      const seg = capabilityCode.slice(start, start + 7000)
+      const readBody = seg.indexOf('HttpTransport.bodyStream(resp)')
+      const close = seg.indexOf('closeResp(resp)')
+      expect(readBody, `${sig} 里没有 bodyStream`).toBeGreaterThan(0)
+      expect(close, `${sig} 里没有 closeResp`).toBeGreaterThan(0)
+      expect(readBody, `★${sig} 里 closeResp 早于 bodyStream（读的是已关闭的响应 ⇒ 该路径每请求必坏）`).toBeLessThan(close)
+    }
   })
 
-  it('★★★请求体必须在**唯一映射**里装配（本单 P0：整包路径漏 body ⇒ POST 静默变空体）', () => {
+  it('★★★请求体必须在**唯一映射**里装配，且空体必须转成 null（GET 挂空体会被 OkHttp 拒）', () => {
     // 【缺陷形态（独立验证抓出）】换栈第一版让落盘/流式各自 `cfg.body = …`，整包路径漏了
     //   ⇒ 所有带 data 的 POST/PUT 发空体。⇒ 正解是收进 buildCallConfig，四条路径不再各自搬。
     const s = capabilityCode.indexOf('static HttpTransport.CallConfig buildCallConfig(')
@@ -160,12 +171,49 @@ describe('★★#1160 Android 传输栈：唯一入口 + 连接复用不退化',
     expect(body, '★buildCallConfig 未装配 body ⇒ 整包路径会发空体（POST/PUT 静默坏）').toMatch(
       /cfg\.body\s*=\s*f\.body/,
     )
+    // ★★★空体守卫（第二轮独立验证的变异 M6：去掉长度判断时 25 条判据全绿，而所有 GET 会抛
+    //   `method GET must not have a request body`）。`InvokeFrame.body` 恒非 null（默认 EMPTY）
+    //   ⇒ 必须 `length > 0` 才挂体。
+    expect(body, '★缺空体守卫（`f.body.length > 0`）⇒ GET 会被挂上空体数组 ⇒ OkHttp 直接抛异常').toMatch(
+      /cfg\.body\s*=\s*f\.body\s*!=\s*null\s*&&\s*f\.body\.length\s*>\s*0\s*\?\s*f\.body\s*:\s*null/,
+    )
     // ★各路径不得再各自搬 body（否则"新增一条路径又漏"的病根没除）
     const assignments = capabilityCode.match(/\bcfg\.body\s*=/g) ?? []
     expect(
       assignments.length,
       `★cfg.body 被赋值 ${assignments.length} 处（应只有 2 处：buildCallConfig 装配 + 上传清空）`,
     ).toBe(2)
+    // ★上传路径的体必须来自 bodyWriter（而不是"恰好 cfg.body=null 这个写法"）
+    const upStart = capabilityCode.indexOf('private static InvokeWire.ResolveFrame performStreamUpload')
+    const upEnd = capabilityCode.indexOf('static final class UploadStats')
+    const up = capabilityCode.slice(upStart, upEnd)
+    expect(up, '★上传路径未挂 bodyWriter（体应由回调产生）').toMatch(/cfg\.bodyWriter\s*=\s*new HttpTransport\.BodyWriter/)
+    expect(up, '★上传路径未清掉整包 body（否则走 byte[] 路径，文件不会被发送）').toMatch(/cfg\.body\s*=\s*null/)
+  })
+
+  it('★★★Content-Type 必须由**调用方头优先**决定（否则 encodeBody 的推导值会静默覆盖业务头）', () => {
+    // 【缺陷形态（第二轮独立验证抓出）】OkHttp 实测 MediaType 优先于同名头；而 `encodeBody`
+    //   会为字符串 data 自动填 `contentType='text/plain'`、对象填 `application/json`
+    //   ⇒ 若只把 `f.contentType` 喂给 MediaType，调用方显式设的 `application/x-www-form-urlencoded` /
+    //     `text/csv` / 带 charset 的类型会被**静默覆盖**（旧 HttpURLConnection 实现是调用方头优先）。
+    const s = capabilityCode.indexOf('static HttpTransport.CallConfig buildCallConfig(')
+    const end = capabilityCode.indexOf('static String protoOf(')
+    const body = capabilityCode.slice(s, end)
+    expect(body, '★未从调用方头取 Content-Type ⇒ 业务显式类型会被推导值覆盖').toMatch(
+      /headerValueIgnoreCase\(\s*f\.headers,\s*"content-type"\s*\)/,
+    )
+    expect(body, '★cfg.contentType 未按「调用方头优先，否则 f.contentType」决定').toMatch(
+      /cfg\.contentType\s*=\s*callerCt\s*!=\s*null[\s\S]{0,80}callerCt\s*:\s*f\.contentType/,
+    )
+    expect(body, '★头里仍留着 content-type（与 cfg.contentType 两处并存会漂移）').toMatch(
+      /equalsIgnoreCase\("content-type"\)\s*\)\s*continue/,
+    )
+  })
+
+  it('★★★四条路径都必须把读数**写回帧**（删掉也不该绿——第二轮独立验证的 M9/M11）', () => {
+    // 文件头明写要守"`meta.transport` 变空"这种形态，但旧判据零覆盖（只靠真机间接兜）。
+    const writes = capabilityCode.match(/\.transport\s*=\s*HttpTransport\.readout\(/g) ?? []
+    expect(writes.length, `★只有 ${writes.length} 条路径把读数写回帧（应有 4 条）`).toBe(4)
   })
 })
 
@@ -232,15 +280,23 @@ describe('★★#1160 传输读数：EventListener 采集 + 缺键不填 0', () 
     // 【缺陷形态】`takeMetrics()` 只在**成功 return 前**调用，而读数在 `TransportListener`
     //   构造时就写进 METRICS ⇒ DNS 失败 / 超时 / 用户取消 / 体积超限等异常出口都不 remove
     //   ⇒ 长跑应用里 key（reqId 递增）**无界增长**，与类注释"取走即删"直接矛盾。
-    //   （独立验证实测：取消一个阻塞请求后 METRICS.size()==1 且永不清除。）
     const dropCalls = stripLineComments(src(CAPABILITY)).match(/HttpTransport\.dropMetrics\(/g) ?? []
     expect(
       dropCalls.length,
       `★只有 ${dropCalls.length} 处 dropMetrics（四条路径的 finally 都应有：整包/上传/落盘/流式）`,
     ).toBe(4)
     // 每处必须与 unregisterRequest 成对（同一个 finally 里）
-    const unregs = stripLineComments(src(CAPABILITY)).match(/unregisterRequest\(f\.reqId\);[\s\S]{0,120}?HttpTransport\.dropMetrics\(/g) ?? []
+    const capCode = stripLineComments(src(CAPABILITY))
+    const unregs = capCode.match(/unregisterRequest\(f\.reqId\);[\s\S]{0,120}?HttpTransport\.dropMetrics\(/g) ?? []
     expect(unregs.length, '★dropMetrics 未与 unregisterRequest 配对（漏配的路径仍会泄漏）').toBe(4)
+    // ★★★第二轮独立验证的 M10：把 `dropMetrics` 函数体改成空操作、签名与调用全保留 ⇒ 旧判据全绿。
+    //   ⇒ 必须断言函数体真的 remove（不能只数调用点）。
+    const ds = transportCode.indexOf('static void dropMetrics(')
+    expect(ds, '找不到 dropMetrics 定义').toBeGreaterThan(0)
+    const fnBody = transportCode.slice(ds, ds + 400)
+    expect(fnBody, '★dropMetrics 函数体未真正 METRICS.remove（空实现也能骗过调用点断言）').toMatch(
+      /METRICS\.remove\(/,
+    )
   })
 })
 
@@ -314,11 +370,12 @@ describe('★★#1160 pinning 与 OkHttp 的配对约束', () => {
 })
 
 describe('★★#1160 重定向语义（#1134 的 open-redirect 防线不能因换栈失效）', () => {
-  const transport = src(TRANSPORT)
+  const transportCode = stripLineComments(src(TRANSPORT))
 
   it('★★★`redirectManual` 必须真的接到 `followRedirects(false)`', () => {
     // ★漏了它的后果：JS 以为自己在逐跳处理，而宿主已经跟完了 ⇒ #1134 要防的跨域凭据泄露复现
-    expect(transport, '★redirectManual 未接到 followRedirects（重定向拦截静默失效）').toMatch(
+    // ★★★必须去注释：第二轮独立验证的 M7（改成 `followRedirects(true)`、原串留在注释里）旧判据全绿。
+    expect(transportCode, '★redirectManual 未接到 followRedirects（重定向拦截静默失效）').toMatch(
       /followRedirects\(\s*!\s*cfg\.redirectManual\s*\)/,
     )
   })
@@ -327,29 +384,25 @@ describe('★★#1160 重定向语义（#1134 的 open-redirect 防线不能因�
 describe('★★#1160 上传路径的 Content-Type 搬运（真机抓到的回归）', () => {
   const capability = src(CAPABILITY)
 
-  it('★★★Content-Type 必须搬进 `cfg.contentType`，且**调用方优先**', () => {
+  it('★★★上传路径必须保留调用方的 multipart Content-Type（含 boundary），没给才兜底', () => {
     // 【真机回归（本单第一版）】只在"调用方没设头"时才写 contentType，随后无条件 `headers.remove` ⇒
     //   JS 侧 upload 会带 `Content-Type: multipart/form-data; boundary=…`，于是：
     //     · contentType 为空（因为"调用方设了头"这个分支没进）
     //     · header 又被删掉
     //   ⇒ 服务端收到 `missing boundary`。功能静默坏掉，只有真机上传探针能抓到。
+    //   ★第二轮收口：Content-Type 的"调用方优先"逻辑已上移到 `buildCallConfig`（四条路径共用），
+    //     上传路径只需**兜底**补 boundary。⇒ 断言落在"兜底 + 清 body"两件事上。
     const start = capability.indexOf('private static InvokeWire.ResolveFrame performStreamUpload')
     expect(start, '找不到 performStreamUpload').toBeGreaterThan(0)
     const end = capability.indexOf('static final class UploadStats')
     const seg = capability.slice(start, end)
-    expect(seg, '★未从调用方头里取值（headerValueIgnoreCase）⇒ 调用方 content-type 会丢失').toMatch(
-      /headerValueIgnoreCase\(\s*f\.headers,\s*"content-type"\s*\)/,
-    )
-    expect(seg, '★cfg.contentType 未由"调用方值优先 + 兜底带 boundary"决定').toMatch(
-      /cfg\.contentType\s*=\s*callerCt/,
-    )
     // 兜底必须带 boundary（否则 multipart 不可解析）
-    expect(seg, '★兜底 contentType 未带 boundary').toMatch(
-      /"multipart\/form-data; boundary=" \+ up\.boundary/,
+    expect(seg, '★兜底 contentType 未带 boundary（服务端会 missing boundary）').toMatch(
+      /cfg\.contentType\s*=\s*"multipart\/form-data; boundary=" \+ up\.boundary/,
     )
-    // ★剔头是必要的（OkHttp 里 MediaType 优先，同名头留着只会漂移），但必须在搬进 contentType 之后
-    expect(seg, '★未剔除 headers 里的 content-type（与 cfg.contentType 两处并存会漂移）').toMatch(
-      /cfg\.headers\.remove\("Content-Type"\)/,
+    // 只在空时兜底（不得覆盖调用方已经给好的类型）
+    expect(seg, '★无条件覆盖 contentType（会抹掉调用方的 multipart 类型）').toMatch(
+      /if\s*\(\s*cfg\.contentType\s*==\s*null\s*\|\|\s*cfg\.contentType\.isEmpty\(\)\s*\)/,
     )
   })
 })

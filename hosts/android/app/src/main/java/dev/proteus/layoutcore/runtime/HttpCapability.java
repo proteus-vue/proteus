@@ -330,17 +330,31 @@ public final class HttpCapability {
         cfg.tlsPinOnly = Boolean.TRUE.equals(f.tlsPinOnly);
         cfg.redirectManual = Boolean.TRUE.equals(f.redirectManual);
         cfg.tag = f.reqId;
-        cfg.contentType = f.contentType;
+        // ★★★Content-Type 的**唯一来源**：调用方显式头优先，否则用帧里的推导值（`encodeBody` 给的）。
+        //   【为什么必须在这里收口（第二轮独立验证抓出的语义回退）】
+        //     OkHttp 3.14.9 **实测**：`RequestBody` 的 MediaType **优先于**同名 `Content-Type` 头
+        //     （服务端收到的是 MediaType，显式头被覆盖）。而 `encodeBody` 会为字符串 data 自动填
+        //     `meta.contentType='text/plain'`、为对象填 `application/json` ⇒ 若只把 `f.contentType`
+        //     喂给 MediaType，调用方显式设的 `application/x-www-form-urlencoded` / `text/csv` /
+        //     带 charset 的类型会被**静默覆盖**（旧 `HttpURLConnection` 实现是调用方头优先）。
+        //   ⇒ 调用方头存在时把它搬进 contentType 并从 headers 剔除（两处并存只会漂移）。
+        String callerCt = headerValueIgnoreCase(f.headers, "content-type");
+        cfg.contentType = callerCt != null && !callerCt.isEmpty() ? callerCt : f.contentType;
         // ★★★请求体必须**在这里**装配（#1160 独立验证抓出的 P0 回归）
         //   【缺陷形态】换栈第一版只让落盘/流式两条路径各自 `cfg.body = …`，**整包路径漏了**
         //   ⇒ 所有带 `data` 的 POST/PUT 静默变成空体（功能全错、零报错、四条探针全是 GET/上传 ⇒ 都测不到）。
         //   ⇒ 正解 = 把 body 收进这个**唯一映射**，四条路径不再各自搬（新增路径天然覆盖）。
+        //   ★`f.body` 恒非 null（默认 `EMPTY`）⇒ 必须判长度：GET/HEAD 挂空体数组会被 OkHttp 拒
+        //     （`method GET must not have a request body`，实测）。第二轮独立验证的变异 M6 证明
+        //     去掉这个长度判断时 25 条判据全绿，而所有 GET 会直接抛 ⇒ 已有专门判据守着。
         //   ★调用方若要覆盖（上传路径换成 bodyWriter）会显式置空 body。
         cfg.body = f.body != null && f.body.length > 0 ? f.body : null;
-        // 调用方头（剔除框架内部头——#1149 的统一入口）
+        // 调用方头（剔除框架内部头——#1149 的统一入口；Content-Type 已收口到 cfg.contentType）
         if (f.headers != null) {
             for (Map.Entry<String, String> e : f.headers.entrySet()) {
-                if (e.getKey() != null && e.getKey().equalsIgnoreCase(BYPASS_PLATFORM_CACHE_HEADER)) continue;
+                if (e.getKey() == null) continue;
+                if (e.getKey().equalsIgnoreCase(BYPASS_PLATFORM_CACHE_HEADER)) continue;
+                if (e.getKey().equalsIgnoreCase("content-type")) continue;
                 cfg.headers.put(e.getKey(), e.getValue());
             }
         }
@@ -426,19 +440,15 @@ public final class HttpCapability {
         try {
             final HttpTransport.CallConfig cfg = buildCallConfig(f, url, method, timeoutMs);
             // ★Content-Type 必须带 boundary。
-            //   ★#1160 实测约束：`RequestBody` 的 MediaType 与显式 `Content-Type` 头是**两个来源**，
-            //     只设其中一个会让另一个（或默认值）生效 ⇒ 必须收口到 `cfg.contentType` 一处。
-            //     （★独立验证指出：OkHttp 3.14.9 实测是**显式头优先**、MediaType 被忽略——
-            //      与本文档早先写反的"MediaType 优先"相反；两种情况下"只留一处"的结论都成立。）
+            //   ★#1160 实测约束：`RequestBody` 的 MediaType **优先于**同名显式头（服务端收到的是
+            //     MediaType）⇒ 内容类型必须放在 `cfg.contentType` **一处**，header 里剔掉（两处并存会漂移）。
+            //     `buildCallConfig` 已按「调用方头优先、否则用帧推导值」收口；这里只管**没给**时兜底补 boundary。
             //   ★★★真机抓到的回归（本单第一版）：只在"调用方没设头"时才赋值 ⇒ 调用方**设了**头
-            //     （JS 侧 upload 会带一个不带 boundary 的 content-type）时既没写 contentType、又把头删了
-            //     ⇒ 服务端收到 `missing boundary`。⇒ 正确做法 = **调用方的头优先，但必须搬进 contentType**。
-            String callerCt = headerValueIgnoreCase(f.headers, "content-type");
-            cfg.contentType = callerCt != null && !callerCt.isEmpty()
-                    ? callerCt
-                    : "multipart/form-data; boundary=" + up.boundary;
-            cfg.headers.remove("Content-Type");
-            cfg.headers.remove("content-type");
+            //     （JS 侧 upload 会带 multipart/form-data + boundary）时既没写 contentType、又把头删了
+            //     ⇒ 服务端收到 `missing boundary`。
+            if (cfg.contentType == null || cfg.contentType.isEmpty()) {
+                cfg.contentType = "multipart/form-data; boundary=" + up.boundary;
+            }
             // ★上传路径的体由 `bodyWriter` 产生 ⇒ 必须清掉 buildCallConfig 装配的整包 body
             //   （否则会走 byte[] 路径，文件根本没被发送）
             cfg.body = null;

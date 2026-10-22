@@ -65,11 +65,12 @@ export function appBodyProbe(base: string): string {
     progress('import:done')
 
     // ① POST 带体 ⇒ 服务端必须收到**完全一致**的字节
+    const wantCt = 'text/plain; charset=utf-8'
     try {
       const r = await caps.request({
         url: `${base}/body-echo`,
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        headers: { 'Content-Type': wantCt },
         data: payload,
         responseType: 'json',
         timeout: 20000,
@@ -79,11 +80,18 @@ export function appBodyProbe(base: string): string {
       out['post_len_server'] = echo.length
       out['post_len_expected'] = expectedLen
       out['post_content_type'] = echo.contentType
+      out['post_content_type_expected'] = wantCt
       // ★★核心判据：服务端收到的长度必须等于期望长度（空体 ⇒ 0 ≠ 1024+ ⇒ 红）
       out['post_len_ok'] = Number(echo.length) === expectedLen
       // 空体时 length=0；这条把"没发出去"与"发出去但内容错"分开
       out['post_not_empty'] = Number(echo.length) > 0
-      out['post_ct_ok'] = String(echo.contentType ?? '').toLowerCase().includes('text/plain')
+      /**
+       * ★★★Content-Type 必须**全等**，不能用 `includes`（第二轮独立验证实证）：
+       *   框架的 `encodeBody` 会为字符串 data 自动填 `contentType='text/plain'`，
+       *   若那个推导值覆盖了调用方的 `text/plain; charset=utf-8`，用 `includes('text/plain')`
+       *   仍然绿——而**charset 已被静默抹掉**（真实语义回退）。
+       */
+      out['post_ct_ok'] = String(echo.contentType ?? '').toLowerCase() === wantCt
     } catch (e) {
       out['post_error'] = String((e as Error)?.message ?? e)
       out['post_len_ok'] = false

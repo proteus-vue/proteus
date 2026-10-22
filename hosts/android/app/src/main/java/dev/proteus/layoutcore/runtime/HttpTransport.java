@@ -28,8 +28,9 @@ package dev.proteus.layoutcore;
 // 【诚实边界】
 //   · OkHttp 自己管 `Content-Length` / `Transfer-Encoding` / `Accept-Encoding`（自动 gzip）；
 //     业务若显式设这些头会被它接管——已实测（见 `tests/android-okhttp-transport.test.ts` 的口径说明）。
-//   · **`Content-Type` 有两个来源**（显式头 / `RequestBody` 的 MediaType）且实测是**显式头优先**；
-//     为免"两处各一份漂移"，本仓口径 = 内容类型**只放 `cfg.contentType`**、头里剔掉（见上传路径）。
+//   · **`Content-Type` 有两个来源**（显式头 / `RequestBody` 的 MediaType），实测（OkHttp 3.14.9）
+//     **MediaType 优先、显式同名头被覆盖** ⇒ 本仓口径 = 内容类型**只放 `cfg.contentType`**、
+//     头里剔掉，`cfg.contentType` 由「调用方显式头优先，否则帧推导值」决定（单一来源，不漂移）。
 //   · `reused` 是**per-call 口径**：多跳重定向时取"任一跳是否新建连接"，
 //     `dnsMs/connectMs/tlsMs` 取**末跳**（中间跳的建连时间不累加）。
 //   · OkHttp 3.x 已停止维护线（安全修复不回移）；升 4.x 的代价见 thirdparty/README.md。

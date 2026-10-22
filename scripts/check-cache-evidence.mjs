@@ -633,11 +633,63 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`  · ${p}`)
   process.exit(1)
 }
+
+/* ══════════ ★★★#1160：请求体证据（整包路径 POST/PUT 真的把体发出去） ══════════
+ * 【为什么必须进 verify 链（不接门禁就静默腐烂）】#1160 第一版 `perform()` 漏了 `cfg.body`
+ *   ⇒ Android 所有带 `data` 的 POST/PUT **静默发空体**，而当时 9 组真机回归全绿
+ *   （探针全是 GET/上传/流式/落盘，**没有一条覆盖"整包路径 + 请求体"**）。
+ *   `run-body-probe.sh` 补上了这个洞；但证据不接门禁 ⇒ 下一次改动又没人看。
+ * 【判据】服务端收到的字节数必须**等于 JS 期望长度**（空体是 0 ⇒ 不等 ⇒ 红）；
+ *   Content-Type 必须与调用方给的值**全等**（用 includes 会放过"charset 被抹掉"）。
+ */
+let bodyRow = { state: '未检查' }
+{
+  const rel = 'hosts/android/results/body-probe.json'
+  const abs = path.join(ROOT, rel)
+  if (!fs.existsSync(abs)) {
+    problems.push(`android: 缺请求体证据 ${rel}——跑 \`bash hosts/android/run-body-probe.sh\` 生成并提交`)
+    bodyRow = { state: '缺失' }
+  } else if (!isTracked(rel)) {
+    problems.push(`android: 请求体证据 ${rel} 存在但未入库——git add -f ${rel}`)
+    bodyRow = { state: '未入库' }
+  } else {
+    let p = null
+    try { p = (JSON.parse(fs.readFileSync(abs, 'utf8')) || {}).probe || null } catch { p = null }
+    if (!p) {
+      problems.push(`android: ${rel} 解析失败或没有 probe 段（装置问题？）`)
+      bodyRow = { state: '解析失败' }
+    } else {
+      const lenOk = p.post_len_ok === true && Number(p.post_len_server) === Number(p.post_len_expected)
+      const notEmpty = p.post_not_empty === true && Number(p.post_len_server) > 0
+      const ctOk = p.post_ct_ok === true
+      const getOk = p.get_ok === true
+      const putOk = p.put_len_ok === true
+      if (!lenOk) problems.push(`android: ★POST 体长不符（服务端 ${p.post_len_server} ≠ 期望 ${p.post_len_expected}）——整包路径可能又没装配 body`)
+      if (!notEmpty) problems.push('android: ★POST 体为空——请求体没发出去（P0 形态）')
+      if (!ctOk) problems.push(`android: ★Content-Type 与调用方给的不一致（实得 "${p.post_content_type}"，期望 "${p.post_content_type_expected}"）——encodeBody 的推导值可能覆盖了业务头`)
+      if (!getOk) problems.push('android: ★GET（无体）失败——体可能被错挂到 GET（OkHttp 会抛 method GET must not have a request body）')
+      if (!putOk) problems.push('android: ★PUT 带体失败（防"只对 POST 特判"）')
+      bodyRow = {
+        state: lenOk && notEmpty && ctOk && getOk && putOk ? 'ok' : '不达标',
+        len: p.post_len_server,
+        ct: p.post_content_type,
+      }
+    }
+  }
+}
+
+if (problems.length > 0) {
+  console.error('✗ HTTP 条件请求缓存双端证据门禁未过（含请求体证据）：')
+  for (const p of problems) console.error(`  · ${p}`)
+  process.exit(1)
+}
 console.log(
   `✅ 条件请求缓存双端证据齐备（基础：${rows
     .map((r) => `${r.id} 命中 hits ${r.freshHits}/平台缓存介入=${r.platformCache}`)
     .join(' · ')}；RFC 5861：${staleRows.map((r) => `${r.id} SWR=${r.swr} ver=${r.ver}`).join(' · ')}；` +
     `持久层：${persistRows.map((r) => `${r.id} ${r.backend} 重启命中 ageMs=${r.ageMs}`).join(' · ')}；` +
     // ★#1156：传输层的三端读数也要出现在**成功摘要**里——否则"绿色"看不出鸿蒙是否真跑了
-    `传输层：${transportRows.map((r) => `${r.id} 复用=${r.reused}（${r.httpsReqs}/${r.httpsConns}）h2=${r.http2}`).join(' · ')}）`,
+    `传输层：${transportRows.map((r) => `${r.id} 复用=${r.reused}（${r.httpsReqs}/${r.httpsConns}）h2=${r.http2}`).join(' · ')}；` +
+    // ★#1160：请求体证据（整包路径 POST/PUT 真的发出去 & Content-Type 不被推导值覆盖）
+    `请求体：android ${bodyRow.state}（POST ${bodyRow.len}B · ct=${bodyRow.ct}））`,
 )

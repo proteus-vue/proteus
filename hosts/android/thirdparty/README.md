@@ -27,4 +27,5 @@ Maven 坐标：`com.squareup.okhttp3:okhttp:3.14.9` + `com.squareup.okio:okio:1.
 
 ★**诚实边界**：3.x 已进入停止维护线（安全修复不再回移）。若将来因 CVE 必须升 4.x，
 代价是 **+929 KB 且引入 Kotlin 运行时**——届时需重新评估（体积/启动/包大小预算），不能静默升级。
-**升级前先读本表重跑同一套 d8 测量**（口径见 `scripts/check-android-okhttp-vendor.mjs`）。
+**升级前先读本表重跑同一套 d8 测量**（口径见 `tests/android-okhttp-transport.test.ts` 的
+「vendor 目录有 OkHttp 3.x」组：它断言版本线、README 记录 sha256、以及不得混入 4.x）。

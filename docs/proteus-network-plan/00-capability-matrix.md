@@ -20,7 +20,7 @@
 | 2 | **高性能模式** | **无此概念**。Android ~~`HttpURLConnection` 默认连接池~~ ⇒ ★**#1160 换 OkHttp**（进程级 `ConnectionPool(8, 5min)`）；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）；★**#1160 换栈后 Android 仍 3/1**（未退化） | 宿主传输 | 🟡 连接复用✅（#1155 取证 · #1160 未退化）；余项见 §3 |
 | 3 | **HTTP/2** | ★★★**#1160 已收口（Android）**：宿主传输栈换 **OkHttp 3.14.9**（纯 Java，APK +180 KB），`protocols(HTTP_2, HTTP_1_1)` 显式协商 ⇒ **真机 `server_protocols={"h2":3}`**。★#1155 时 iOS **已协商 h2**（平台默认）· Android 全 `http/1.1`（AOSP `HttpURLConnection` 不开 h2）⇒ 那是**端差异**，本轮补齐 Android。★鸿蒙仍 `null`（未测，RCP 需先接 CA/pinning） | 宿主传输 | ✅ Android + iOS；鸿蒙未测 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
-| 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `setInstanceFollowRedirects(!manual)`（4 条路径统一 helper）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
+| 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `followRedirects(!manual)`（OkHttp，per-call 经 `newBuilder()` 派生，四条路径统一 `HttpTransport.CallConfig.redirectManual`）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
 | 6 | **请求缓存** | ★**#1149 已做（框架层）**：`config.cache`（对齐浏览器 `Request.cache` 六值）+ `Cache-Control`（max-age / no-store / no-cache / must-revalidate）+ `ETag`/`Last-Modified` 条件请求 + **304 ⇒ 缓存体合成 200** + `Vary` 分桶 + 内存 LRU 预算；★**#1150 已做**：RFC 5861 `stale-while-revalidate` / `stale-if-error` + `Age` 头；★**#1151 已做（L2 持久层）**：`cache: { persist: true }` ⇒ Web/MP 走 KV、App 走文件（`fs.*`），**跨进程重启仍命中**（真机双端各 13/13） | **框架策略（TS）** | ✅（含持久层） |
 | 7 | **RequestTask** | ★**本轮做了**：`useFetchTask()` → `FetchTask`（`result` / `state` / `abort(reason)`）。★形状是 Promise + abort，**不复刻** wx 的回调对象 | **框架策略（TS）** | ✅ |
 | 8 | **网络调优** | **无**：无并发上限（本轮前）、无优先级、无超时分级、无弱网退避 | **框架策略（TS）** | ✅ 并发/优先级/退避已做；**连接参数调优仍属宿主（未做）** |
@@ -231,7 +231,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 1. ~~**本轮没有做任何传输层优化**~~ ⇒ ★**已按端分项收口（#1154 / #1155）**：
    证书 pinning ✅（两端真机）· 连接复用 ✅（两端本来就在工作，且修掉了我们自己的回归）·
-   HTTP/2 🟡（iOS 平台默认已协商 · **Android 未协商**）· HTTPDNS ❌（全端零实现）。
+   HTTP/2 ✅（iOS 平台默认已协商 · **Android #1160 换 OkHttp 后已协商**）· HTTPDNS 🟡（Android 已有 `Dns` 注入 seam，业务 API 未做；其余端零实现）。
    ⇒ 准确说法（更新后）：**"请求治理层达到超级应用可用；传输层里 iOS 已用上 h2 + 复用、
    Android 有复用但无 h2；两端都没有 HTTPDNS"**。
 2. ~~没有做 HTTP 缓存~~ ⇒ ★**已收口（#1149，框架层内存缓存）**：`config.cache` 六模式 +

@@ -27,8 +27,23 @@ const ROOT = path.resolve(__dirname, '..')
 const TLS_JAVA = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TlsPinning.java'
 const src = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
+/** 去块注释 + 行注释（保留换行）。★理由见下面 describe 里的 M13 说明。 */
+function stripComments(s: string): string {
+  const noBlock = s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
+  return noBlock
+    .split('\n')
+    .map((l) => { const i = l.indexOf('//'); return i >= 0 ? l.slice(0, i) : l })
+    .join('\n')
+}
+
 describe('★★#1155 pinning 不得破坏连接复用（真机抓出的性能回归）', () => {
-  const java = src(TLS_JAVA)
+  const raw = src(TLS_JAVA)
+  /**
+   * ★★★必须去注释（第二轮独立验证的 M13 实证）：把 `MATERIAL_CACHE.get(cacheKey)` 改成
+   * `= null`、原串留在注释里 ⇒ 拿原文断言的版本**全绿**，而缓存实际已失效（复用归零）。
+   * 本仓已因"断言命中注释"踩过 N 次（#1156/#1159 都有记载）⇒ 这里统一去注释。
+   */
+  const java = stripComments(raw)
   // ★★★#1160：换栈后真实路径是 `sslMaterial`（OkHttp 要 factory + TrustManager 成对）；
   //   `socketFactory` 已成死代码（只被同样已死的 `applyTo` 调用）。
   //   ⇒ 判据靶子迁到**真实路径**——否则守的是一个永不执行的函数（"判据绿、行为坏"）。

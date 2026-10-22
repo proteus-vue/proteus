@@ -12099,4 +12099,36 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 · **既有风险（非本单引入）**：`TlsPinning` 用 `java.util.Base64`（Android **API 26+**），而 `minSdkVersion=24` 且手工链无 core-library desugaring ⇒ API 24/25 上做 pinning 会 `NoClassDefFoundError`——已登记待单修；
 · **既有缺口（非本单引入，已登记）**：`packages/cli/templates-host/shared/bridge/` 只随包 `entry-superapp.ts`，它 import 的 10 个探针模块**都没随包** ⇒ 纯 npm 安装的外部用户打 App 包会解析失败（框架仓内构建走真源，不受影响）。
 
+
+**【第二轮独立验证（2026-10-22）再抓 2 阻断 + 3 条仍假判据——全部修】**
+
+· **阻断 A：AAR 陈旧（门禁红）** —— 我提交的「补回空行」那一笔改了 `HttpCapability.java` 却没重建 AAR
+  ⇒ `check:android-runtime-aar-fresh` 当场红（源指纹 c204f6b1 ≠ AAR 建于 c9d14a4b）。
+  ★这正是该门禁存在的意义（本仓 AAR 陈旧出过两次事故）；**已重建 + 复绿**。
+  教训：改 `runtime/*.java` 后**任何**提交（含纯格式）都必须带 AAR 重建。
+
+· **阻断 B：Content-Type 语义回退（我第一轮修 P0 时引入，且第一轮验证者把方向报反了）** ——
+  OkHttp 3.14.9 **实测是 `RequestBody` 的 MediaType 优先、显式同名头被覆盖**
+  （第一轮报告写"头优先"，第二轮用 vendored jar 实测纠正）。而 `encodeBody` 会为字符串 `data`
+  自动填 `contentType='text/plain'`、对象填 `application/json` ⇒ 调用方显式设的
+  `application/x-www-form-urlencoded` / `text/csv` / 带 charset 的类型会被**静默覆盖**
+  （旧 `HttpURLConnection` 实现是调用方头优先）。
+  ★**证据就在探针自己的读数里**：旧证据 `post_content_type: "text/plain"`——调用方给的
+  `text/plain; charset=utf-8` 里的 charset 已被抹掉，而当时判据用 `.includes('text/plain')` **仍绿**。
+  ⇒ 修：`buildCallConfig` 统一按「调用方显式头优先，否则帧推导值」决定 `cfg.contentType`，
+  并从 headers 剔除同名头（单一来源）；探针 `post_ct_ok` 改**全等**比较。
+  真机确认：`ct` 由 `text/plain` → **`text/plain; charset=utf-8`**。
+
+· **3 条仍假判据（第二轮的 M6/M9-M11/M10）已补强**：
+  a) `cfg.body` 的**空体守卫**原无断言 ⇒ 变异 `cfg.body = f.body` 时全绿，而 `InvokeFrame.body`
+     恒非 null ⇒ **所有 GET 会抛** `method GET must not have a request body`；
+  b) **"读数写回帧"零覆盖** ⇒ 删掉任一/全部 `rf.transport = readout(...)` 全绿；
+  c) `dropMetrics` 只数调用点 ⇒ 函数体改空操作也绿；
+  d) `protocols` / `followRedirects` / pinning 缓存仍用**含注释原文**断言 ⇒ 原串留注释即绿。
+  ⇒ 全部改为去注释 + 断言函数体/调用点/右值。**第二轮 8 处变异（M6/M7/M8/M9/M10/M13/M5c/CT）现全部打红**。
+
+· **装置与接线（第二轮建议）**：`run-body-probe.sh` 端口改为 `pick_free_port`（原写死 8795）·
+  `adb install | grep` 加 `|| true`（pipefail 下无匹配会终止脚本）·
+  `check-cache-evidence` 新增**请求体证据段**（体长全等 + 非空 + CT 全等 + GET 无体 + PUT 带体）·
+  `contract-index` 补 `run-body-probe.sh` · 矩阵两处过期行修正 · `thirdparty/README` 悬空引用改指判据。
 **下一步**：① HTTPDNS 能力化（`Dns` 线格式 tag + `fetch: { httpDns }` 门面 + 三端宿主）② 鸿蒙 RCP 接自定义 CA ⇒ 才可能协商 h2 ③ 把 `transport` 接进性能预算门禁（首字节 P95 告警）④ API 24/25 的 Base64 兼容（或抬 minSdk）⑤ 随包副本补齐探针模块。
