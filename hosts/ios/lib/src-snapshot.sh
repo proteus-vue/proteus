@@ -20,6 +20,7 @@
 #   守卫是**独立职责**且 Android 构建将来也要用，内联会让脚本越线并重复实现。
 
 _PROTEUS_SRC_SNAP=""
+_PROTEUS_SRC_MTIMES=""
 
 # 取一棵源码树的指纹（按相对路径排序后整体 sha256 ⇒ 与遍历顺序无关）
 _snap_hash() {
@@ -27,9 +28,20 @@ _snap_hash() {
       | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | awk '{print $1}' )
 }
 
+# 取 mtime 清单（`<epoch> <相对路径>`，按路径排序）。
+# ★★为什么内容 hash 之外还要这一份（2026-10-22 实测）：swiftc 判"input file was modified during
+#   the build"看的是 **mtime/size**，不是内容。并发会话把同一份内容重写一遍（或 `touch`）时
+#   内容 hash **不变** ⇒ 原守卫一声不吭，而 swiftc 照样报错 ⇒ 用户只看到晦涩的编译器错误，
+#   根因（并发 touch）完全不可见。有了这份清单就能明确说"内容没变、只是被碰了"。
+_snap_mtimes() {
+  ( cd "$1" && find . -name '*.swift' -o -name '*.java' -o -name '*.h' -o -name '*.cpp' 2>/dev/null \
+      | sort | while IFS= read -r f; do printf '%s %s\n' "$(stat -f '%m' "$f" 2>/dev/null)" "$f"; done )
+}
+
 snap_before() {
   _PROTEUS_SRC_SNAP="$(_snap_hash "$1")"
-  export _PROTEUS_SRC_SNAP
+  _PROTEUS_SRC_MTIMES="$(_snap_mtimes "$1")"
+  export _PROTEUS_SRC_SNAP _PROTEUS_SRC_MTIMES
 }
 
 snap_check() {
@@ -40,6 +52,17 @@ snap_check() {
     echo "  ★纪律：破坏性验证 / 改源文件 **不能与真机构建并发**（本仓已踩过两次）"
     echo "  请重跑本脚本。"
     return 1
+  fi
+  # ★内容一致但 mtime 变了：**不阻断**（编译输入相同 ⇒ 产物必然相同），但要明确归因，
+  #   否则下次还是只能看到 swiftc 那句晦涩的 "input file was modified during the build"。
+  local after_mtimes
+  after_mtimes="$(_snap_mtimes "$1")"
+  if [ -n "$_PROTEUS_SRC_MTIMES" ] && [ "$after_mtimes" != "$_PROTEUS_SRC_MTIMES" ]; then
+    echo "⚠ 构建期间有源码被「碰过」但**内容没变**（并发会话 touch / 重写同内容）——产物仍然可信"
+    diff <(printf '%s\n' "$_PROTEUS_SRC_MTIMES") <(printf '%s\n' "$after_mtimes") 2>/dev/null \
+      | awk '/^[<>]/{sub(/^[<>] [0-9]+ /,""); print "    " $0}' | sort -u
+    echo "  ★若编译器恰好报了 'input file was modified during the build'，根因就是上面这些文件"
+    echo "    （swiftc 判 mtime/size，不判内容）⇒ 重跑即可，不用怀疑代码。"
   fi
   return 0
 }
