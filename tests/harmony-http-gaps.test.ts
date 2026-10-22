@@ -184,6 +184,17 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     expect(lim.saveWritten, '★saveWritten != seen（写盘量与收到量不符）').toBe(lim.seen)
     expect(lim.cap, '★cap 不是 1 GiB（J5：硬编码 32 MiB 的旧缺陷）').toBe(1024 * 1024 * 1024)
     expect(lim.saveLimit, '★saveLimit 不是 1 GiB').toBe(1024 * 1024 * 1024)
+    /**
+     * ★★★#1197（第四轮验证者指出）：**证据里必须有设备侧 stat 读数**。
+     *   原来只信探针自报的 `preview.size` ⇒ 离线/判据都**无法复判**"文件真的在设备上、
+     *   大小真的对得上"。⇒ 脚本已把 `hdc stat -c %s` 的结果写进 `deviceStat`，
+     *   这里断言三件：设备大小 == 回执 size、match 为真、且 `saveWritten` 与设备大小一致。
+     */
+    expect(r.deviceStat, '★证据里缺 deviceStat（离线无法复判设备文件真实大小）').toBeTruthy()
+    expect(r.deviceStat.sizeOnDevice, '★设备侧大小缺失（stat 没跑或文件不存在）').toBeGreaterThan(0)
+    expect(r.deviceStat.sizeOnDevice, '★设备侧大小 != 回执 size（摘要不可信）').toBe(r.deviceStat.sizeReported)
+    expect(r.deviceStat.match, '★脚本没把 match 判为真').toBe(true)
+    expect(r.deviceStat.sizeOnDevice, '★设备文件大小 != saveWritten（写入量与落盘量不符）').toBe(lim.saveWritten)
   })
 
   it('★★★#1193（B4）落盘内存**不随文件大小增长**（64MiB 实测 VmHWM 只涨 3.4MiB）', () => {

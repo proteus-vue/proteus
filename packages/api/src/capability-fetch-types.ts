@@ -67,7 +67,7 @@ export interface FetchConfig {
    *   真机两组对照（`/proc/self/status` 的 `VmHWM` 峰值 RSS）：
    *     · 1 MiB 文件 → 进程峰值 +2.76 MiB（chunks=116）
    *     · **64 MiB 文件 → 峰值只 +3.41 MiB**（chunks=4260，`seen == saveWritten == 67108864`）
-   *   ⇒ 文件大 64 倍而内存增量几乎不变（只剩固定开销）⇒ RCP **没有**整包驻留。
+   *   ⇒ 文件大 64 倍而内存增量几乎不变（只剩固定开销）⇒ **在 64 MiB 量级未观测到整包驻留**（VmHWM 只能证明"没观测到"，不能证明机制上"不会"）。
    *   证据 `hosts/harmony/results/http-probe-save-{1m,64m}.json`，判据
    *   `tests/harmony-http-gaps.test.ts` 的「落盘内存不随文件大小增长」。
    * ★诚实边界：只测到 **64 MiB**，不外推到 1 GiB（上限未压测）。

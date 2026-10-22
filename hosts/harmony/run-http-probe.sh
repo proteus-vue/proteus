@@ -226,6 +226,20 @@ d=json.load(open('$RESULTS/http-probe.json'))
 m=re.search(r'\"size\":(\d+)', d.get('preview') or '')
 print(m.group(1) if m else '')" 2>/dev/null)"
   SIZE_ON_DEVICE="$(HDC shell "stat -c %s '$FILES_DEV/$SAVE_PATH'" 2>/dev/null | tr -d ' \r\n')"
+  # ★★★#1197（第四轮验证者指出）：**把设备侧 stat 结果写进证据文件**，否则离线和判据都
+  #   只能信探针自报的 preview.size（"证据里没有 size-on-device 字段 ⇒ 无法离线复判"）。
+  python3 - "$RESULTS/http-probe.json" "$SIZE_ON_DEVICE" "$SIZE_REPORTED" <<'PY'
+import json, sys
+p, on_dev, reported = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    d = json.load(open(p))
+except Exception:
+    sys.exit(0)
+d["deviceStat"] = {"sizeOnDevice": int(on_dev) if on_dev.isdigit() else None,
+                   "sizeReported": int(reported) if reported.isdigit() else None,
+                   "match": on_dev == reported}
+json.dump(d, open(p, "w"), ensure_ascii=False)
+PY
   if [ -z "$SIZE_ON_DEVICE" ]; then
     echo "  ✗ 设备上找不到落盘文件：$FILES_DEV/$SAVE_PATH"; RC=1
   elif [ "$SIZE_ON_DEVICE" != "$SIZE_REPORTED" ]; then

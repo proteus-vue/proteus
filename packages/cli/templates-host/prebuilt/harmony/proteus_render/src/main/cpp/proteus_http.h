@@ -130,35 +130,6 @@ inline SessionSlot& sessionSlot() {
 constexpr size_t MAX_BODY_BYTES = 32u * 1024u * 1024u;
 
 /** 最近一次请求的逐块闸读数（真机探针读它证明"逐块 + 真中止"，不是事后自报）。 */
-struct LastLimitDiag {
-  bool gateInstalled = false;   // 逐块回调是否注册成功（false ⇒ 只能事后拒绝）
-  int chunks = 0;               // 回调被调用的块数
-  unsigned long long seen = 0;  // 网络侧实际到达的字节（含越线后的丢弃）
-  bool exceeded = false;        // 是否越线
-  bool cancelCalled = false;    // 是否调用了 CancelRequest
-  unsigned int cancelRc = 0;    // CancelRequest 的返回码（0 = 成功受理）
-  size_t kept = 0;              // 越线前保留在内存里的字节数（≤ MAX_BODY_BYTES）
-  /**
-   * ★★★#1191（独立验证 J4/J5 修复）：落盘模式的实际读数。
-   *
-   * 【为什么必须有】原判据拿 `kept==0` 当"逐块直写"的证据，但那是**恒真式**：
-   *   落盘模式下 `recvGate` 直接走 `save->write` 且 `gate.limit=0` ⇒ `gate.body` 永不增长
-   *   ⇒ `kept` 必然是 0。把 `write()` 改成 no-op 也还是 0。**证明不了任何事**。
-   * ⇒ 补三个可核对的量：`saveMode`（走了落盘分支）、`saveWritten`（真的写进文件多少）、
-   *   `saveLimit`（实际生效的上限——落盘是 1 GiB，不是 32 MiB）。
-   */
-  bool saveMode = false;
-  unsigned long long saveWritten = 0;
-  unsigned long long saveLimit = 0;
-  // ★#1193/#1194（B4）：进程峰值 RSS（VmHWM，kB）；0 = 读不到（不是"内存 0"）。见 proteus_http_diag.h
-  unsigned long long vmHwmBeforeKb = 0;
-  unsigned long long vmHwmAfterKb = 0;
-};
-
-inline LastLimitDiag& lastLimitDiag() {
-  static LastLimitDiag d;
-  return d;
-}
 
 /* ══════════════ ★★★#1169：HTTPDNS 的**鸿蒙落点取证**（仅探针启用，生产零影响） ══════════════
  *

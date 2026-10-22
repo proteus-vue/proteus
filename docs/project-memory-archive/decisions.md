@@ -12899,3 +12899,15 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 判据**：`harmony-save-session-raii` **9 条**（+同目录行为判据）· `harmony-http-gaps` **16 条** ⇒ 六份定向 **82 条全绿**；门禁 `file-size` / `content` / `prebuilt` / `ai-tasks` / `decision-numbers` 全绿；`proteus_http.h` 998 行（合并两处入口重置省行）。变异：W3b（变量错配）⇒ 红、W3a（`if(false)`）⇒ 红、W1（删分支 RC）⇒ 红。
 **⑧ 新登记（应独立成单，不塞本单）**：`T-fetch-save-durability` —— **三端都缺 `fsync`**（Android/iOS/鸿蒙 同缺，非鸿蒙特性）⇒ `rename` 保证"要么旧要么新"的**命名原子性**，但掉电窗口内可能出现"目标存在但内容为空/截断"（hmfs 的 `inline_data` 尤甚）。优先级 P2（进程崩溃不影响，`fclose` 已 flush 到内核；只在突然掉电时出现）。
 **⑨ 诚实边界**：a) 临时名唯一性靠 `pid + seq + 纳秒`，**不同设备/不同 pid 之间**理论上仍可能撞（时间上 seq 复位）——概率可忽略但未穷尽；b) `proteus_http_diag.h` 只搬了 `readVmHwmKb`，`LastLimitDiag` 仍在 `proteus_http.h`（命名略不一致，不影响正确性）；c) `saveWritten` 在失败路径是"写入后丢弃的量"而非"落盘成功的量"（判据走 `ok:true` 分支，不误判，但语义应在文档里说清）；d) 只测到 64 MiB；e) `stream`/`abort`/SPKI pinning 仍受限。
+
+1197. **★★★收尾：证据可离线复判（deviceStat 入库）+ 机制断言降级 + `LastLimitDiag` 搬家 · 决策**（2026-10-22 · 承接 #1196「第四轮 PASS」）:
+**① 触发**：第四轮 PASS 的残留里有三条我**没处理**：a) 能力页写「RCP **没有**整包驻留」是**机制断言**，而 VmHWM 只能证明"64 MiB 量级未观测到"；b) `saveWritten` 在失败路径是"写入后丢弃的量"而非"落盘成功的量"，语义没写进代码；c) **证据里没有设备侧 size 字段** ⇒ 离线/判据都只能信探针自报的 `preview.size`。
+**② ①②修复（文案与语义）**：
+  · 能力页/类型注释：「RCP **没有**整包驻留」→ **「在 64 MiB 量级未观测到整包驻留」**（VmHWM 只能证伪"没观测到"，不能断言机制）。
+  · `LastLimitDiag.saveWritten` 加一行语义：**成功 = 落盘字节；失败 = 写入后丢弃的字节**（`finish` 失败时文件已删）⇒ 判据只在 `ok:true` 分支断言 `saveWritten == seen`。
+**③ ★c 的修复（这轮最有价值的）**：`run-http-probe.sh` 在设备侧 `stat` 之后**把结果写回证据文件** `deviceStat = {sizeOnDevice, sizeReported, match}`。这样：离线可复判、判据可直接断言"设备文件大小 == saveWritten"。
+  真机实测：`deviceStat={"sizeOnDevice":214,"sizeReported":214,"match":true}`。
+  判据新增 4 条断言（缺 deviceStat / sizeOnDevice>0 / == sizeReported / match 为真 / == saveWritten）；**变异验证**：从证据里删掉 `deviceStat` ⇒ 精确红「证据里缺 deviceStat（离线无法复判设备文件真实大小）」。
+**④ 结构性（这次不贴边了）**：`proteus_http.h` 因为加语义注释反复贴 1000 行（998→1005→1001→999）⇒ 按纪律**把 `LastLimitDiag` + `lastLimitDiag()` 整体搬到 `proteus_http_diag.h`**（30 行）⇒ `proteus_http.h` **969 行**（余量 31）。★这解决了"每加一行注释就要腾一行"的反复摩擦，不是为过门禁删注释。
+**⑤ 判据与真机**：四份定向 **58 条全绿**；`file-size` / `harmony-host-compile` 全绿；真机落盘 `saveWritten=214` + `deviceStat.match=true`。
+**⑥ 诚实边界**：a) `deviceStat` 只在 `--save-path` 分支写入（其它模式没有落盘文件，属正确缺省）；b) 掉电持久性（fsync）仍是 `T-fetch-save-durability`（P2，三端共缺）；c) 只测到 64 MiB；d) `stream`/`abort`/SPKI pinning 仍受限。
