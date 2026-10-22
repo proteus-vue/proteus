@@ -438,8 +438,17 @@ const PENDING_HOST_CALLS_MAX = 1024
  *   只 reject 不改宿主：网络传输仍在跑、内存仍在涨（流式下尤其明显）⇒ 变成"用户以为取消了，
  *   其实后台还在下载"。⇒ 必须让宿主真的停。
  *
- * 【★诚实边界】宿主不支持 `http.cancel`（老壳 / 鸿蒙）时：JS 侧照常 reject，
+ * 【★诚实边界（#1164 更正）】宿主不支持 `http.cancel`（老壳）时：JS 侧照常 reject，
  *   但**后端传输不会停**——这是能力位差异，不是本函数能兜住的（已在能力页登记）。
+ *
+ *   ★★★**鸿蒙不能混为一谈**（#1164 源码复核 + 判据固化）：鸿蒙宿主是**同步 napi**
+ *   （一次性 VM ⇒ `invokeHostAsyncBytes` 里就是 `out = fn(frame)` 同步取结果），
+ *   请求期间 JS 线程**被占** ⇒ `signal.onabort` **根本没有执行机会**。
+ *   ⇒ 鸿蒙上 `abort()` 是 **no-op**：**连本函数的 reject 都不会发生**，请求照常成功返回。
+ *   ★而且**不存在"后台还在跑"**——没有后台，请求就在调用线程里同步跑完。
+ *   ⇒ 鸿蒙上要"别等太久"必须用 **`timeout`**（宿主有界等待 + 超时主动 cancel），不是 `abort()`。
+ *   ★这条区分的意义：写成"只 reject 本地"会让业务以为取消能兜住、于是不设 `timeout`——
+ *     **夸大与贬低同样是假信息**。判据：`tests/fetch-cancel.test.ts` 的「鸿蒙 abort 是 no-op」段。
  */
 function attachAbort(
   signal: AbortSignalImpl | undefined,

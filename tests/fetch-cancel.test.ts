@@ -172,6 +172,46 @@ describe('★#1121 取消 · 两端宿主', () => {
     expect(read('hosts/ios/ProteusHost/runtime/host-capabilities.swift'), 'iOS').toMatch(/case "http\.cancel":/)
   })
 
+  /**
+   * ★★★#1164：**鸿蒙的取消是 no-op**——这是「调度模型差异」，不是"少写一个方法"。
+   *
+   * 【实证链（三层，全部可从源码复核）】
+   *   ① 鸿蒙 `handle()` 在 napi 调用内**同步完成往返**（一次性 VM：`proteus_http.h` 头注 +
+   *      `HMS_Rcp_Fetch` + 有界 `wait_for`，napi 返回时 VM 已销毁 ⇒ 异步回推无接收方）；
+   *   ② JS 侧 `invokeHostAsyncBytes` 是 `out = fn(frame)` **同步取结果**
+   *      （`capability-invoke.ts`：`attachAbort(...)` 之后**第 4 行**就同步调用）；
+   *   ③ ⇒ 请求进行中 JS 线程**被占**，`signal.onabort` 没有执行机会；App 精简引擎也无
+   *      `setTimeout` 可以"稍后取消"。
+   *   ⇒ **准确结论**：鸿蒙上 `abort()` 是 no-op（**连 JS 侧 reject 都不会发生**），
+   *     而**不存在"后台还在下载"**——根本没有后台，请求就在调用线程里跑完。
+   *   ⇒ 鸿蒙上限时的手段是 **`timeout`**（宿主有界等待 + 超时主动 cancel）。
+   *
+   * ★为什么这条必须有判据：#1163 曾写成"abort 只 reject 本地、宿主传输不停"（错）。
+   *   那个写法会让业务以为"取消至少能兜住"，于是不去设 `timeout`——**夸大与贬低都是假信息**。
+   */
+  it('★★★鸿蒙：取消是 no-op（同步 napi 占满 JS 线程）——文档必须如实写，且这是模型限制不是缺方法', () => {
+    const md = read('website/content/capabilities/fetch.md')
+    const row = /^\| 鸿蒙 \| ([^|]+) \| (.+) \|$/m.exec(md)
+    expect(row, '找不到 fetch 页鸿蒙行').toBeTruthy()
+    expect(row![2], '★鸿蒙行必须写明 abort() 是 no-op（不能只写"未实现 http.cancel"）').toMatch(/abort\(\)[^。]*no-op/)
+    expect(row![2], '★必须指出正确替代：用 timeout 限时（否则业务没有可用的兜底手段）').toMatch(/timeout/)
+    // ★不得再出现#1163 的错误说法（会让业务误以为本地会 reject）
+    expect(md, '★"abort() 只 reject 本地"是错误描述（实际连 reject 都不发生）——见 #1164').not.toMatch(
+      /abort\(\)\s*只\s*reject\s*本地/,
+    )
+  })
+
+  it('★★★鸿蒙同步语义的结构证据：attachAbort 之后紧接同步 fn(frame)，中间无 await', () => {
+    const s = read('packages/api/src/capability-invoke.ts')
+    const iA = s.indexOf('attachAbort(signal, reqId, fn, timer, reject)')
+    expect(iA, '找不到 attachAbort 调用点').toBeGreaterThan(0)
+    const seg = s.slice(iA, iA + 600)
+    // ★关键：注册取消后**同一同步段内**就发请求 ⇒ 中间没有让出事件循环的机会
+    expect(seg, '★attachAbort 之后未同步调用 fn(frame)（若改成 await，本判据需重评鸿蒙语义）').toMatch(
+      /attachAbort\([^)]*\)\s*\n\s*let out: Uint8Array \| undefined\s*\n\s*try \{\s*\n\s*out = fn\(frame\)/,
+    )
+  })
+
   it('★探针必须验证"后续块停止"与"宿主命中"（只验 reject 太弱）', () => {
     const s = read('hosts/shared/bridge/entry-superapp-probes.ts')
     expect(s, '缺 appCancelProbe').toMatch(/export function appCancelProbe/)

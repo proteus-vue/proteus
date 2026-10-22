@@ -290,16 +290,28 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
       }
     }
     const where = files.size ? [...files].join(' / ') : 'host'
-    // ★★★#1163：网络域的 ✅ 必须带**真机证据**与**真实缺口**，否则"✅"会盖住两件事：
-    //   ① 真机验过什么（`hosts/harmony/results/transport-probe.json`：3 请求全 200、连接复用 3/1、
-    //      传输读数 dns/connect/ttfb 有值）——只用静态分派证明不了"网络真的通"；
-    //   ② 鸿蒙**没有实现** `http.cancel` / `http.cancelStats` / `http.tlsStats`（源码查无分派）
-    //      ⇒ `abort()` 只 reject 本地、宿主传输不停（`capability-invoke.ts:441` 已如实登记）。
-    //   ★这一段不是"多余文案"：它是防止 ✅ 被读成"和三端完全一致"的唯一手段。
+    /**
+     * ★★★#1164：网络域的 ✅ 必须带**真机证据**与**真实的调度语义差异**，否则 ✅ 会被读成"三端一致"。
+     *
+     * 【★本轮更正了 #1163 的一处错误描述（重要）】
+     *   #1163 写的是「`http.cancel` 未实现 ⇒ `abort()` 只 reject 本地、宿主传输不停」——
+     *   **前半句对、后半句错**。取证（`capability-invoke.ts:853-885` + `proteus_http.h` 头注）：
+     *     · 鸿蒙 `handle()` 是**同步阻塞**（一次性 VM：napi 返回时 VM 已销毁，异步回推没有接收方）；
+     *     · JS 侧 `invokeHostAsyncBytes` 也是 `out = fn(frame)` **同步取结果**；
+     *     · ⇒ 请求进行中 JS 线程**被占**，`signal.onabort` 根本**没有机会执行**
+     *       （而且 App 精简引擎无 `setTimeout`，也没法"稍后取消"）。
+     *   ⇒ 准确说法：**鸿蒙上 `abort()` 是 no-op（连 JS 侧 reject 都不会发生）**，
+     *     而**不存在"后台还在下载"**——因为没有后台：请求就在调用线程里同步跑完。
+     *     鸿蒙上"别等太久"的手段是 **`timeout`**（宿主有界等待），不是 `abort()`。
+     *   ★为什么必须改这一段：#1163 的写法会让业务以为"取消至少能 reject"，去写 `try { abort() }` 兜底；
+     *     而真实是"取消什么都不做，请求照常返回成功"。**夸大与贬低都是假信息。**
+     */
     const isNet = hosts.includes('http.request')
     const netNote = en
-      ? 'device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); **no `http.cancel`/`http.tlsStats`** → `abort()` only rejects locally'
-      : '真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★**`http.cancel` / `http.tlsStats` 未实现** ⇒ `abort()` 只 reject 本地、宿主传输不停'
+      ? 'device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); ' +
+        '**`abort()` is a no-op here** (one-shot VM + synchronous napi ⇒ no in-flight request to cancel); use `timeout` to bound it'
+      : '真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ' +
+        '★**`abort()` 在本端是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout`'
     return {
       status: '✅',
       note: en ? `Harmony host wired (${where})${isNet ? ' · ' + netNote : ''}` : `鸿蒙宿主已接线（${where}）${isNet ? ' · ' + netNote : ''}`,

@@ -83,7 +83,7 @@ Param,Type,Required,Doc
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · bridge method wired |
 | Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · bridge method wired |
-| HarmonyOS | ✅ | native-harmony (ArkUI RenderNode) · Harmony host wired (invoke_bytes_bridge.h / proteus_http.h) · device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); **no `http.cancel`/`http.tlsStats`** → `abort()` only rejects locally |
+| HarmonyOS | ✅ | native-harmony (ArkUI RenderNode) · Harmony host wired (invoke_bytes_bridge.h / proteus_http.h) · device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); **`abort()` is a no-op here** (one-shot VM + synchronous napi ⇒ no in-flight request to cancel); use `timeout` to bound it |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 

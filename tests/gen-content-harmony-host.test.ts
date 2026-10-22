@@ -191,15 +191,17 @@ describe('★★★#1163 鸿蒙网络域（useFetch）接线判定', () => {
     expect([...ex('if (method == std::string("device.battery")) {')]).toEqual(['device.battery'])
   })
 
-  it('★★★fetch 页鸿蒙必须是 ✅，且说明含**真机证据**与**真实缺口**', () => {
+  it('★★★fetch 页鸿蒙必须是 ✅，且说明含**真机证据**与**真实的调度语义差异**', () => {
     const md = fs.readFileSync(path.join(ROOT, 'website/content/capabilities/fetch.md'), 'utf8')
     const row = /^\| 鸿蒙 \| ([^|]+) \| (.+) \|$/m.exec(md)
     expect(row, '找不到 fetch 页的鸿蒙行').toBeTruthy()
     expect(row![1].trim(), '★鸿蒙应为 ✅（http.request 已实现且真机验过）').toBe('✅')
-    // ★✅ 不能裸着写——必须点明分派文件、真机读数、以及**未实现**的取消通道
+    // ★✅ 不能裸着写——必须点明分派文件、真机读数、以及**取消语义的真实差异**
     expect(row![2], '★说明必须点名真实分派文件').toMatch(/invoke_bytes_bridge\.h|proteus_http\.h/)
     expect(row![2], '★说明必须带真机证据（transport-probe）').toMatch(/transport-probe|3\/3 200|3 请求\/1 连接/)
-    expect(row![2], '★说明必须如实指出 `http.cancel` 未实现（否则 ✅ 会被读成三端一致）').toMatch(/http\.cancel/)
+    // ★#1164 更正：不再要求写"http.cancel 未实现"（那种写法把模型限制说成了"漏一个方法"，
+    //   且会让业务误以为"本地至少会 reject"）。正确要求 = 写清 abort 是 no-op + 给 timeout 替代。
+    expect(row![2], '★说明必须指出 abort() 是 no-op（否则 ✅ 会被读成三端一致）').toMatch(/abort\(\)[^。]*no-op/)
   })
 
   it('★★鸿蒙**确实没有** http.cancel / tlsStats 分派（缺口是事实，不是文案）', () => {
