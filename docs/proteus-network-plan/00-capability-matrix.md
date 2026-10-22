@@ -254,6 +254,32 @@ DNS 来源本就是"这次连接怎么建立的"的一部分，复用容器 ⇒ 
 ⇒ Android 用 `CallMetrics.dnsSource`（线程绑定）、iOS 用 proxy 的 `host → 来源` 映射、
 鸿蒙用 `callDnsSource()` + RAII 守卫。
 
+### 4.y `useFetch({ savePath })` 落盘：鸿蒙端状态（#1197 收尾）
+
+★**鸿蒙已真机可用**（此前 `savePath` 在帧里解出来了但宿主从没用 —— **静默忽略**）：
+
+| 项 | 读数 / 证据 |
+|---|---|
+| 逐块直写（不累积 body） | `chunks=4260`（64 MiB）、`saveWritten == seen` |
+| **内存与文件大小无关** | 1 MiB → VmHWM +2.76 MiB；**64 MiB → 只 +3.41 MiB** ⇒ 64 MiB 量级未观测到整包驻留 |
+| 落盘上限 | 1 GiB（与 Android/iOS 同值；此前 `cap` 误报 32 MiB） |
+| 长文件名 | **244 / 249 / 252 字符 basename 全部成功**（临时名不占 basename 预算） |
+| 路径防护 | `../../etc/passwd` 真机被拒（`saveMode:false` ⇒ 拒绝发生在任何网络操作之前） |
+| 证据可离线复判 | 证据含 `deviceStat={sizeOnDevice,sizeReported,match}`（设备侧 `stat` 结果入库） |
+
+★**实现要点（改它必读，每条都对应一个实测缺陷）**：
+1. **写 `.part` 成功后 `rename`**（原子覆盖）；**不要**先 `remove` 目标 —— 那样 rename 失败会连旧文件一起丢。
+2. **临时名必须在同目录且短**：`<dir>/.proteus-tmp-<pid>-<seq>-<nsec>` —— 拼在业务名后面会把可用
+   basename 上限从 ~249 压到 ~231（实测 244 字符名字从"能用"变"失败"）。
+3. **`SaveSession` 必须有 RAII 析构**：`handle()` 有 4 个早退出口，只有 `finish()` 会 `fclose`/`remove`
+   ⇒ 无析构会泄漏 fd + 留残包（实测 64 次失败 fd +64、残包 8192B）。
+4. **读数（`saveWritten` / `vmHwmAfter`）必须在 `finish()` 之后取** —— 闸未安装时 `resp->body` 回填
+   发生在快照之后会漏计。
+5. **`stream: true` 在本端如实拒绝**（一次性 VM + 同步 napi ⇒ 逐块回推没有接收方）。
+
+★**待办（已立项）**：`T-fetch-save-durability` —— 三端都缺 `fsync`（`rename` 只保证命名原子性，
+掉电可能留"存在但空/截断"）。
+
 ★**P1 的共同前提**：三端要有**同一套可观测字段**（`transport`：`{ protocol, dnsMs, connectMs, tlsMs, reused }`），
 否则判据只能各端各写、无法比对——这与本仓"三端同判据"纪律冲突。
 
