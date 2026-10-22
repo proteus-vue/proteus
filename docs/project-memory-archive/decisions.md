@@ -12959,3 +12959,33 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   **破坏性验证 4/4 全红**：Android 去掉 `getFD().sync()` ⇒ 红；鸿蒙去掉 fsync ⇒ 红；iOS 谎报 `true` ⇒ 红；证据 `durable` 改 false ⇒ 红。
 **⑥ 真机验证**：**Android 8 MiB 落盘 `durable = true`**（1026 块、峰值块 8192B、`data_is_path:true`）⇒ fsync 真的执行了。鸿蒙真机**待补**（设备在验证时又锁屏 `10106102`）。
 **⑦ 诚实边界**：a) **iOS 的 `durable:"partial"` 是诚实的未证明**——`synchronizeFile()` 是否触发 `fsync` 需真机掉电对照才能定，本轮不做；b) 鸿蒙真机未验（锁屏）；c) **掉电对照本身没做**（要真断电/强杀才能复现"存在但空"，属破坏性实验）；d) 三端都只保证"数据 + 目录项已提交给存储"，**不保证存储设备自身的写缓存**（`F_FULLFSYNC` 只有 macOS 有，iOS 无公开等价物）。
+1201. **★★★鸿蒙落盘回执主路径漏 `durable`（#1200 的"写了一半"）——真机解锁后立刻抓到 · 决策**（2026-10-22 · 收口 `T-fetch-save-durability`）:
+**① 现象**：鸿蒙真机解锁后跑 `--save-path=download/durable-check.txt`，回执是 `{"path":"download/durable-check.txt","size":214}` —— **没有 `durable`**。而 Android 同场景回执是 `{"path":...,"size":...,"durable":true}` ⇒ **三端契约不一致**，业务拿到鸿蒙回执**无从判断"这份文件抗不抗掉电"**（正是 #1200 要解决的问题本身）。
+**② 根因（`SaveSession::finish()` 有两个返回摘要的分支，只有一个带 durable）**：
+  · `completed` **幂等分支**（重复调 finish）→ 带 `"durable":…`；
+  · **主成功路径**（第一次正常收尾，也是**真机唯一会走的那条**）→ `{"path","size"}`，漏了。
+  ⇒ 这不是"极端路径"，是**唯一路径**。真机证据一跑就露。
+**③ 为什么判据没拦住（★又一个"只断言出现过、不断言真的用了"）**：#1200 的静态判据是
+  `expect(read(HARMONY)).toContain('\\"durable\\"')` —— **幂等分支那一处就把它喂绿了**。
+  与 #1192 的 J1/J2（正则命中在注释里）、#1200 的 Android（注释里也有 `getFD().sync()`）**完全同族**。
+  ★教训升级：**"源码里存在某个字符串"永远不足以证明"执行路径上真的有"**；凡是有多分支/多出口的
+  收尾逻辑，判据必须是**真跑**（本仓已有真编译真跑 C++ 探针的基础设施，直接复用）。
+**④ 修复**：主路径 return 补 `"durable":(true|false)`；注释写清这次是"主路径漏、幂等分支有"。
+**⑤ 判据加固（两条）**：
+  · `tests/harmony-save-session-raii.test.ts` 的「成功路径」用例（**真编译真跑**，`runProbe` 里 `-DPROTEUS_HAVE_RCP=0`）
+    新增 `expect(SUMMARY).toMatch(/"durable":(true|false)/)` —— **只认主路径实际输出的 JSON**；
+    破坏性验证：删掉主路径的 durable ⇒ 当场红（`expected '{"path":"proteus-ok/a/b.txt","size":1…' to match`）✅；
+  · 新增 `tests/fetch-save-durability.test.ts` 真机证据条：读 `hosts/harmony/results/http-probe-save-durable.json`，
+    断言 `preview.durable === true` + `deviceStat.verified === true` + 设备侧 size == 回执 size；
+  · 同时把原来那条 `toContain` 的注释降级说明「这只是字段名一致的浅层检查，真正的判据在 raii 真编译用例」——**避免下次有人以为它已经守住**。
+**⑥ 真机证据（这次拿到了）**：`bash hosts/harmony/run-http-probe.sh --url=https://www.cloudflare.com/cdn-cgi/trace --save-path=download/durable-check.txt`
+  ⇒ `{"path":"download/durable-check.txt","size":243,"durable":true}`，设备侧 stat 243 B 一致、`verified:true`。
+  ★**鸿蒙 fsync 真的执行了**（`::fsync(::fileno(fp))` + rename 后目录 `::fsync(dirFd)` 都返回 0）。
+**⑦ 装置产物与证据分离**：`results/http-probe.json` 是**装置工作文件**（每次跑都被覆盖，且入库版是"默认探针 655360 字节"的另一份证据）
+  ⇒ **不拿它当 durable 证据**，另存 `results/http-probe-save-durable.json` 并把装置文件 `git checkout` 还原。
+  ★同源纪律：「测试装置的临时输出」与「要长期引用的验收证据」必须**分开落盘**——否则下一次跑探针就把证据覆盖了。
+**⑧ `T-fetch-save-durability` 收口状态**：Android 真机 `durable=true`（#1200）· 鸿蒙真机 `durable=true`（本条）· iOS 诚实 `"partial"`（未证明）。
+  ⇒ 两端**已验证**，iOS 的 `partial` 是**已登记的能力边界**（无公开 fsync 入口）⇒ 任务翻 `done`，边界写进 Handoff。
+  掉电对照本身仍未做（需真断电，属破坏性实验），作为长期项保留。
+**⑨ 诚实边界**：a) iOS `durable:"partial"` 仍**未证明**等价 fsync（`FileHandle.fd` 非公开 API）；b) 掉电对照未做；
+  c) 三端都只保证"数据 + 目录项交给存储"，不保证存储设备自身写缓存；d) 鸿蒙这条只测 243 B（大文件的内存行为见 #1193 的 64 MiB 实测，两件事不同）。

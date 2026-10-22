@@ -3295,20 +3295,23 @@
       "id": "T-fetch-save-durability",
       "title": "savePath 落盘的持久性（fsync）：三端都缺 —— rename 只保证命名原子性，掉电可能留\"存在但空/截断\"的文件",
       "type": "capability",
-      "status": "in_progress",
+      "status": "done",
       "owner": "zcode",
       "scope": [
         "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
         "hosts/ios/ProteusHost/runtime/http-capability.swift",
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_save.h"
       ],
-      "decision": 1196,
+      "decision": 1201,
       "verification": "真机掉电/强杀对照：写入过程中强杀 ⇒ 目标文件要么不存在、要么内容完整（不得出现 size>0 但内容截断）；辅以 fsync 调用点断言（写完后 fsync(fd) + rename 后 fsync(dir)）",
       "branch": null,
       "related": [
-        "T-ios-httpdns-options"
+        "T-ios-httpdns-options",
+        "T-harmony-http-cancel",
+        "T-harmony-http-stream",
+        "T-harmony-tls-pinning"
       ],
-      "note": "【in_progress · 决策 #1200】三端加 fsync（数据 + 目录项）+ 回执暴露 `durable`。【planned · 决策 #1196（2026-10-22）】第四轮独立验证指出：**三端都没有 fsync**（Android/iOS/鸿蒙 同缺，是非鸿蒙共性问题，故不塞进 #1186–#1196 那串鸿蒙单）。★现状：鸿蒙侧已用 `.proteus-tmp-*` 临时文件 + 成功后 `rename` 原子覆盖（#1194/#1195）⇒ 保证「要么旧文件、要么新文件」的**命名原子性**；`fclose` 也会 flush 到内核。★缺的是「rename 之后数据与目录项是否已落盘」：突然掉电时可能出现**目标文件存在但内容为空或截断**（hmfs 的 `inline_data` 更易）。进程崩溃不受影响。★优先级 P2（不是常态路径）。修法：① 写完后 `fflush` + `fsync(fd)`；② `rename` 后 `fsync(dirfd)`（保证目录项落盘）；③ 三端同判据。★诚实边界：Android/iOS 的 `savePath` 实现（`FileOutputStream` / `FileHandle`）同样没有 fsync，本单要三端一起改，否则又造出新的三端不一致。"
+      "note": "【done · 决策 #1200 + #1201】三端加 fsync（数据 + 目录项）+ 回执暴露 `durable`。★真机验证：Android `durable=true`（8 MiB / 1026 块，`hosts/android/results/save-probe.json`）；鸿蒙 `durable=true`（`hosts/harmony/results/http-probe-save-durable.json`，设备侧 stat 一致 + `verified:true`）。★#1201 补的真实缺陷：鸿蒙 `finish()` 有**两个**返回摘要的分支（幂等 / 主成功路径），只有幂等分支带 durable ⇒ 真机唯一会走的主路径漏了字段，而静态判据 `toContain('\\\\\"durable\\\\\"')` 被幂等分支喂绿（又一个\"只断言出现过、不断言真的用了\"）。⇒ 判据改成**真编译真跑**（`tests/harmony-save-session-raii.test.ts` 的「成功路径」用例只认主路径实际输出的 JSON），变异必红；另加真机证据条（`tests/fetch-save-durability.test.ts`）。★诚实边界（不是\"已全部解决\"）：a) **iOS `durable:\"partial\"` 是诚实的未证明**——`FileHandle.fd` 非公开 API，`synchronizeFile()` 是否等价 fsync 未取证，故**不谎报 true**；b) **掉电对照本身没做**（要真断电/强杀复现\"存在但空\"，属破坏性实验）；c) 三端都只保证\"数据 + 目录项已提交给存储\"，**不保证存储设备自身写缓存**（`F_FULLFSYNC` 只有 macOS）；d) 鸿蒙只测 243 B（大文件内存行为见 #1193 的 64 MiB 实测，两件事不同）。"
     }
   ]
 }

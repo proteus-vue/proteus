@@ -231,6 +231,16 @@ int main() {
     expect(Number(/OK (\d)/.exec(out)?.[1]), '★成功路径 finish() 没报 ok').toBe(1)
     expect(Number(/REAL_SIZE (-?\d+)/.exec(out)?.[1]), '★磁盘上文件大小 != 写入量').toBe(10)
     expect(String(/SUMMARY (.*)/.exec(out)?.[1]), '★摘要里 size 与实际不符').toContain('"size":10')
+    /**
+     * ★★★#1201：**主成功路径的回执必须带 `durable`**。
+     *   原实现只让 `completed` 幂等分支带 durable，主路径漏了 ⇒ 真机回执是
+     *   `{"path":"download/durable-check.txt","size":214}`，而 Android 是 `{...,"durable":true}`
+     *   ⇒ **三端契约不一致**，业务无从判断"这份文件抗不抗掉电"。
+     *   当时的静态判据 `toContain('\\"durable\\"')` 被幂等分支一处喂绿（又一个
+     *   "只断言出现过、不断言真的用了"）⇒ 这里真编译真跑，只认主路径的实际输出。
+     */
+    expect(String(/SUMMARY (.*)/.exec(out)?.[1]), '★成功回执缺 durable 键（业务无从判断抗不抗掉电）')
+      .toMatch(/"durable":(true|false)/)
     expect(Number(/PART_LEFT (\d)/.exec(out)?.[1]), '★成功后 .part 残留').toBe(0)
   })
 

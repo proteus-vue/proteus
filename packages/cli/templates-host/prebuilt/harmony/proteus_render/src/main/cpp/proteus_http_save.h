@@ -291,7 +291,16 @@ struct SaveSession {
     if (ok) *ok = true;
     char buf[64];
     std::snprintf(buf, sizeof(buf), "\"size\":%llu", static_cast<unsigned long long>(written));
-    return "{" + std::string("\"path\":\"") + jsonEscapeH(relPath) + "\"," + buf + "}";
+    /**
+     * ★★★#1201：**主成功路径也必须带 `durable`**。
+     *   原实现只在 `completed` 幂等分支（上面那个 return）带 durable，主路径漏了
+     *   ⇒ 真机回执是 `{"path":...,"size":214}`，业务无从知道"这份文件抗不抗掉电"，
+     *   而 Android 是 `{...,"durable":true}` ⇒ **三端契约不一致**。
+     *   ★判据当时也漏了：只 `toContain('\\"durable\\"')`（幂等分支一处就够绿）
+     *   —— 又一个"只断言出现过、不断言真的用了"。现判据按 `finish()` 函数体逐 return 校验。
+     */
+    return "{" + std::string("\"path\":\"") + jsonEscapeH(relPath) + "\"," + buf
+           + ",\"durable\":" + (durable ? "true" : "false") + "}";
   }
 };
 
