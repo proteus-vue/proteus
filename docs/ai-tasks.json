@@ -3061,7 +3061,7 @@
       "id": "T-ios-httpdns-options",
       "title": "iOS HTTPDNS 落地：四条路线（A 改 IP / B 本地 CONNECT 代理 / C 自建栈 / D 系统 DNS Proxy）择一实施 + 真机判据",
       "type": "capability",
-      "status": "planned",
+      "status": "blocked",
       "owner": null,
       "scope": [
         "hosts/ios/ProteusHost/runtime/http-capability.swift",
@@ -3076,7 +3076,29 @@
       "related": [
         "T-harmony-httpdns-doh"
       ],
-      "note": "【planned · 决策 #1176（2026-10-22）】承接用户质疑「iOS 不支持 HTTPDNS 吗？」——**上一轮把实现限制说成了平台边界，本次更正**。★取证（本机 iPhoneOS16.2.sdk 头文件，Xcode 在 /Volumes/data1/Applications/Xcode.app）：① NSURLSession.h 确实无 per-request DNS 钩子（只有 requiresDNSSECValidation 开关 + DomainResolutionProtocol 事后统计）⇒ 当前栈属实做不到；② 但 Security/SecProtocolOptions.h:338 sec_protocol_options_set_tls_server_name 可独立设 SNI（注释：override the server name obtained from the endpoint）；③ SecPolicy.h:180 SecPolicyCreateSSL(true, 原域名) 可按原域名重校验证书 ⇒ 上一轮「破坏证书主机名校验」是错的，只丢 SNI；④ Network/tls_options.h:73 nw_tls_copy_sec_protocol_options 把 Network.framework 接到 Security 那套 API，但 Network.framework 没有 HTTP 协议层（只有 tcp/tls/udp/quic/ws，全 SDK 无 nw_protocol_http）⇒ C 路线要自写 HTTP；⑤ iOS 不能 per-session 配 HTTPS 代理：CFProxySupport.h:489 kCFNetworkProxiesHTTPSEnable = CF_AVAILABLE(10_6, NA)（对比 kCFNetworkProxiesHTTPEnable iOS 可用）——但 https 经 per-session HTTP 代理是否发 CONNECT 隧道尚未实测，这是 B 路线唯一缺口，必须先用 30 分钟真机探针验证，不得按头文件推断。★业内对照：微信小程序走 C——wx.request 的 enableHttpDNS+httpDNSServiceId（自 2.19.1）只让开发者选服务商 ID，解析由微信代调，不支持自定义域名→IP 表（官方文档：需服务市场选购、按服务商 TTL 缓存、检测到系统代理会强制关闭）；TCPSocket.connect 也有同名字段 ⇒ 容器网络栈级能力。微信客户端自研栈见 Tencent/mars（README 自述 WeChat Mobile Team，mars/comm/ 下有 socket/ dns/ network/ http.cc）——注意 README 未出现 HTTPDNS/NewDNS 字样，不要把有 dns 模块当成 Mars 实现了 HTTPDNS。云厂商 iOS SDK 主流是 A（腾讯云 HTTPDNS 文档明确要求 hook 证书校验、将 IP 替换回原域名再验证 + 建议 120–600s 缓存/TTL 75% 预刷/网络切换重解析）。★建议顺序：A（最小，证书校验不降级，接受 SNI 丢）→ B 探针验证 → 不做 C → D 单列能力项（NEDNSProxyProvider 是进程/系统级策略、要 Network Extension entitlement，与 per-request Record<host, ip[]> 语义不同，混进 httpDns 会让语义失真）。★关键约束：不得静默回退——解析失败必须如实报错或显式标记（与 #1171 Android/鸿蒙同纪律）；不得像微信那样绑定服务商（我们的 httpDns 是开发者自给表的开放能力，API 形状不照搬）。"
+      "note": "【blocked · 决策 #1176 + #1178（2026-10-22）】承接用户质疑「iOS 不支持 HTTPDNS 吗？」——上一轮把实现限制说成了平台边界，已更正。★★★#1178 已把 B 路线（本地 CONNECT 代理）**实测定性为可行**：配 `connectionProxyDictionary` 的 HTTP 代理键后，`https://` 由 CFNetwork 以 `CONNECT host:443` 隧道交给代理；读数 11 项全绿——代理收到 CONNECT、无明文绝对 URI、**SNI = 原域名（不是 IP）**、无 DNS 记录的假域名 `sni-probe.local` 经代理 200、Host 保留、3 请求 1 隧道、公网经代理 `http/http/2` + `TLSv1.3` + `visit_scheme=https`。证据 `hosts/ios/results/httpdns-route-b.json`（`verdict=ROUTE_B_FEASIBLE`）、入口 `bash hosts/ios/run-httpdns-route-b-probe.sh`、判据 `tests/httpdns-wire.test.ts` 13/13（破坏性验证 3/3 全红）。★路线优先级因此调整：**B 为首选**（唯一同时保 SNI 与 h2 的低成本路；A 必丢 SNI）；**A 降为兜底**（企业 MDM 强制全局代理等场景）；C 不做；D 单列能力项（进程/系统级、要 entitlement，与 per-request `Record<host, ip[]>` 语义不同）。★【为什么 blocked 而不是 done】**只完成可行性定性，生产实现零行**：a) 代理进程本身（loopback 监听、CONNECT、按表连 IP、失败不静默回落）未写；b) 与 `fetch.unsupported` 的切换点未改；c) `httpDns` 表 → 代理查询的通路未接；d) **真机未跑**——本机 Xcode 14.2 无 `devicectl`（需 15+），模拟器与真机同一份 CFNetwork 但**真机复验是落地前提**。★【Handoff】做到哪：B 路线可行性已实证（11 项判据全绿）。已改：新增探针入口 + 4 个探针源码 + 5 份读数 + 02 篇 §5/§6/§7/§8 + `tests/httpdns-wire.test.ts` 2 条新判据。未做：生产代理 / Session 配置切换 / 表查询通路 / 真机复验。下一步：① 在 `hosts/ios/ProteusHost/runtime/` 新增本地代理（建议 `HttpDnsProxy.swift`：`NWListener` 或 BSD socket 均可，注意 iOS 后台限制）；② `HttpCapability` 的 `session` 按\"是否有 httpDns 表\"选配置（不用每请求新建 session，否则连接池归零——#1155/#1160 同族纪律）；③ 代理侧查表未命中必须回落系统解析**并在回执里标记**（不得静默）；④ 真机复验用与 Android #1171 同形判据：注入不可达 IP ⇒ 失败、不注入 ⇒ 成功、`dns.calls>0` + `lastSource=table`。坑：端口占用会让新进程 bind 静默失败、`wait_for --port` 被旧进程冒充（改用 `--file`）；空数组 `every()` 恒真（先判 `length>0`）。判据状态：静态 13/13 绿 + 破坏性 3/3 红；真机判据尚未建立。★【诚实边界】模拟器运行、自签证书 + 探针无条件信任（仅读 SNI）、隧道内 HTTP/1.1（公网那轮才是 h2）。"
+    },
+    {
+      "id": "T-studio-latency",
+      "title": "Studio 延迟实测：我们这侧 7.7–8.0ms、全链路 64.4ms（我们占 11%）；提高取样节拍不降延迟",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/native/embed_view.m",
+        "docs/proteus-studio-poc/native/live_stream.h",
+        "docs/proteus-studio-poc/05-studio-shell",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1177,
+      "verification": "POC_SECONDS=18 POC_JSON=results/x.json POC_LIVE=…（latency_ms/queue_ms/decode_ms 三段）；全链路用 screenrecord --bugreport + POC_DUMP 对账（results/e2e-latency.json）",
+      "branch": null,
+      "related": [
+        "T-studio-live-stream",
+        "T-studio-shell-stage1"
+      ],
+      "note": "【done · 决策 #1177（2026-10-22）】承接 #1175 ⑤「端到端延迟未量」。★方法：我们这侧 = 首字节到达 → flushBuffer（同一 CLOCK_MONOTONIC），逐段记 队列/解码/合成/上屏；全链路用 screenrecord --bugreport 把设备时间戳烧进画面 + dump 时输出 arrive_epoch/present_epoch + 时钟偏差换算（长连接取最小 RTT，offset -685.6ms ±23）。★我们这侧：队列 6.1–6.3ms · 解码 2.0–2.1ms · 合成 1.3ms · 上屏 0.4–0.5ms ⇒ p50 7.7–8.0ms / p95 13.5–15.1 / p99 22.0–22.6。★全链路 64.4 / 69.4 / 63.4ms（中位 64.4），我们只占 11%；其余是设备硬编 + adb 管道。★否掉一个直觉：POC_TICK_HZ 60→120 让队列等待 6.57→3.41ms，但端到端 8.78→9.15ms（没降）、CPU 25.4→34.7% ⇒ 呈现被 60Hz vsync 锁住，加倍节拍只是把同一帧算两遍。默认 60Hz。★用法：60ms 对\"看手机\"够，对\"触摸回传\"不够（双向控制要换 RTP/WebRTC 类低延迟通道）；我们这侧 8ms 里 6ms 是 60Hz 取样边界，已接近该架构下限。★边界：跨时钟域 ±23ms；终点是 flushBuffer 不含面板出光；只测 Android 一台 + adb 管道；全链路只 3 帧对账（分布来自 1000+ 帧统计）。"
     }
   ]
 }

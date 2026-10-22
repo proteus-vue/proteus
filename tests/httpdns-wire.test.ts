@@ -118,6 +118,35 @@ describe('★★★#1169 HTTPDNS · 宿主可用性（三端如实分档）', ()
     // 能力形状差异（微信=服务商ID；我们=自定义表）是"不能照抄 API"的依据
     expect(s, '★未写明微信只开放服务商 ID、不支持自定义 IP 表').toMatch(/httpDNSServiceId/)
   })
+
+  it('★★★#1178 B 路线：探针证据入库且结论为「可行」（SNI 是原域名、h2 保住）', () => {
+    const p = 'hosts/ios/results/httpdns-route-b.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺 B 路线证据 ${p}（跑 bash hosts/ios/run-httpdns-route-b-probe.sh）`).toBe(true)
+    const r = JSON.parse(read(p))
+    expect(r.verdict, '★B 路线结论不是 ROUTE_B_FEASIBLE（探针红过会留下这个字段）').toBe('ROUTE_B_FEASIBLE')
+    // ★SNI 必须是原域名——若退化成 IP，整条 B 路线的价值（保 SNI）就没了
+    expect(Array.isArray(r.sniValues) && r.sniValues.length > 0, '★没有 SNI 读数（空数组时 every() 恒真，必须显式要求非空）').toBe(true)
+    expect(r.sniValues.every((v: string) => v === 'sni-probe.local'), `★SNI 退化了（实得 ${JSON.stringify(r.sniValues)}）`).toBe(true)
+    // ★h2 必须保住（否则 B 相对 A 的核心优势没了）
+    expect(r.publicTrace?.http, '★经代理后 h2 丢了（B 的核心优势是做得到 http/2）').toBe('http/2')
+    expect(r.publicTrace?.visit_scheme, '★端到端不再是 https').toBe('https')
+    // 隧道复用：3 次请求 1 个 CONNECT（探针默认 repeats=3）
+    expect(r.connectCount, '★代理一个 CONNECT 都没收到（配置没生效）').toBeGreaterThan(0)
+  })
+
+  it('★★★#1178 B 路线：探针脚本本身有端口预检（防「旧进程冒充就绪」）', () => {
+    const s = read('hosts/ios/run-httpdns-route-b-probe.sh')
+    // 剥掉注释再判——否则注释里提到 `wait_for --port` 会让 not.toMatch 假红
+    const code = s
+      .split('\n')
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n')
+    // ★装置坑教训：端口被残留进程占着时，新进程 bind 失败被静默吞掉，
+    //   而 `wait_for --port` 因旧进程在监听照样通过 ⇒ 判据读别人的记账。
+    expect(code, '★缺端口占用预检（会被残留进程冒充）').toMatch(/lsof -nP -iTCP:"\$p" -sTCP:LISTEN/)
+    expect(code, '★就绪判据不应依赖 --port（会被别人的监听冒充）').not.toMatch(/--port "127\.0\.0\.1/)
+    expect(code, '★就绪判据应用文件（= 自己的进程真的 listen 过）').toMatch(/--file "\$OUT_DIR\/httpdns-route-b-proxy\.json"/)
+  })
 })
 
 describe('★★★#1169 HTTPDNS · 真机证据（Android）', () => {

@@ -1,0 +1,1 @@
+{"error":"","proxyConfigured":false,"proxyPort":0,"repeatCount":1,"status":200,"statuses":[200],"target":"https:\/\/www.cloudflare.com\/cdn-cgi\/trace","trace":{"http":"http\/2","sni":"plaintext","tls":"TLSv1.3","visit_scheme":"https"},"traceLast":{"http":"http\/2","sni":"plaintext","tls":"TLSv1.3","visit_scheme":"https"}}

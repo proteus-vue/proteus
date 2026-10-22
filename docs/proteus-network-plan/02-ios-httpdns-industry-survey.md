@@ -84,7 +84,7 @@ SDK：`iPhoneOS16.2.sdk`。
 | 路线 | 做法 | 保 SNI | 保 h2 | 成本 | 谁在用 |
 |---|---|---|---|---|---|
 | **A. IP 直连 + 证书策略改写** | URL 用 IP、设 `Host` 头、`SecPolicyCreateSSL(true, 原域名)` 重校验 | ❌（SNI=IP） | 🟡 需确认 `:authority` | **低** | 云厂商 iOS SDK（主流） |
-| **B. 本地 CONNECT 代理** | 进程内 loopback 监听；`connectionProxyDictionary` 把会话指过去，代理查表后连 IP | ✅ | ✅ | 中 | 少见（需自研） |
+| **B. 本地 CONNECT 代理** | 进程内 loopback 监听；`connectionProxyDictionary` 把会话指过去，代理查表后连 IP | ✅**已实测** | ✅**已实测 h2** | 中 | 本仓选定路线（#1178） |
 | **C. 自建网络栈** | `Network.framework`/BSD socket 自己实现 HTTP | ✅ | ✅ | **极高** | 微信 / 超大 App |
 | **D. 系统 DNS Proxy / DoH** | `NEDNSProxyProvider` / `NEDNSSettingsManager` | ✅ | ✅ | 中（但要 entitlement） | 企业/MDM、DoH 类产品 |
 
@@ -93,8 +93,10 @@ SDK：`iPhoneOS16.2.sdk`。
 它更接近"把系统 DNS 换成 DoH"，与我们的 `Record<host, ip[]>` 语义不同。
 
 **B 的可行性缺口**：iOS 头文件层面只支持 HTTP 代理键（HTTPS 代理键标 `NA`）。
-`https://` 请求经 per-session HTTP 代理时**是否**发起 `CONNECT` 隧道，**本仓尚未实测**——
-这是 B 路线唯一的验证缺口，不能凭头文件推断。若成立，B 是唯一同时保住 SNI 与 h2 的低成本路径。
+★★★ **#1178 已实测推翻"B 不可行"的推断**：配 `connectionProxyDictionary` 的 **HTTP** 代理键后，
+`https://` 请求**确实**由 CFNetwork 以 `CONNECT host:443` 隧道交给代理，且隧道内
+**SNI / Host / HTTP/2 / 连接复用全部保留**。⇒ **B 是本仓在 iOS 上唯一同时保住 SNI 与 h2 的低成本路径**。
+证据：`bash hosts/ios/run-httpdns-route-b-probe.sh`（11 项判据，见 §8）。
 
 **A 的真实代价（更正上一轮的错误）**：
 - 上一轮我写"改 IP 直连会破坏 SNI **与证书主机名校验**"——**证书校验那一半是错的**：
@@ -105,15 +107,61 @@ SDK：`iPhoneOS16.2.sdk`。
 ## 6. 对本仓的建议
 
 1. **短期**：iOS 保持 `fetch.unsupported`（**如实报错，不静默忽略**——这一点不变）。
-2. **中期**：先做 **A**。它能覆盖"防 DNS 劫持 / 指定调度 IP"的主诉求，实现量最小，
-   且证书校验不降级；把"SNI 敏感域名"登记为已知边界。
-3. **增强**：为 **B** 做一个 30 分钟的真机可行性探针（本地 loopback 代理 + 一个 https 请求，
-   看 CFNetwork 是否发 `CONNECT`）。**先验证再决定**，不要按头文件推断。
+2. **中期**：**做 B**（#1178 已实测可行：CONNECT 隧道 + SNI/Host/h2/复用全保）。
+   原计划的"先做 A"被本次取证下调：B 的成本集中在"实现一个 CONNECT 代理"，
+   但**不牺牲任何安全语义**（A 必丢 SNI）；而 A 的实现量虽小，却要在每次请求上
+   改写信任评估，长期维护面更脏。
+3. **A 仍作为 B 的降级兜底**：若 B 代理在某种网络形态下不可用（例如企业 MDM 已强制全局代理），
+   A 是唯一的退路。两条路线**不互斥**。
 4. **不做 C**：为了一个字段重造 HTTP 栈不划算；除非将来要接 QUIC/自研协议。
 5. **不把 D 混进 `httpDns` 语义**；若要支持 DoH，单列一个能力项。
 
-## 7. 判据（可回归）
+## 7. B 路线实测证据（#1178）
+
+**入口**：`bash hosts/ios/run-httpdns-route-b-probe.sh [repeats]`
+→ `hosts/ios/results/httpdns-route-b.json`（汇总）+ 4 份原始读数。
+
+**装置**：本地 HTTP 代理（记录 `CONNECT`）+ 本地自签 TLS 服务端（`SNICallback` 直接读 SNI）
++ 两个 iOS 侧探针（`URLSessionConfiguration.connectionProxyDictionary`）。
+★关键设计：用**无 DNS 记录的假域名** `sni-probe.local` 做假域名实验——
+系统解析必然失败，**只有代理**（按固定映射转发到本地 TLS 服务端）能让它返回 200
+⇒ "200" 本身就是"代理真的接管了解析"的证据，而不是"碰巧直连成功"。
+
+| 判据 | 读数 | 说明 |
+|---|---|---|
+| 代理收到 `CONNECT` | `www.cloudflare.com:443` + `sni-probe.local:18443` | https 走隧道，**不是**明文绝对 URI |
+| 无明文绝对 URI 请求 | 0 | 排除"降级成明文代理" |
+| TLS 服务端读到 SNI | `sni-probe.local` | **原域名，不是 IP** |
+| 假域名经代理成功 | `status=200` | 系统 DNS 解析不出，只有代理能通 |
+| `Host` 头 | `sni-probe.local:18443` | 原域名保留 |
+| 3 次请求的隧道数 | **1** | 隧道内连接复用未退化 |
+| 对照组（不配代理） | `200` | 测试环境本身可用 |
+| 公网经代理 | `200` + `http/http/2` + `visit_scheme=https` | **h2 与 TLS 端到端都保住** |
+
+**破坏性验证**：把 `cfg.connectionProxyDictionary` 整段移除 ⇒ 5 条判据红、
+`verdict=ROUTE_B_BLOCKED`、**脚本 `exit 1`**；恢复 ⇒ 11 项全绿、`exit 0`。
+
+**装置层踩的两个坑（都修了，记下来防复发）**：
+1. **端口占用冒充就绪**：残留进程占着 18898，新代理 bind 失败被静默吞掉，而
+   `wait_for --port` 因旧进程在监听照样通过 ⇒ 判据读的是**别人的记账**
+   （表现为"假域名 200 但 connectCount=0"这种自相矛盾）。修法：起服务前 `lsof` 预检端口，
+   就绪判据改用**文件**（文件出现 = 我们自己的进程真的活到 listen 之后）。
+2. **空数组假绿**：`sniValues.every(...)` 在空数组时恒为 `true` ⇒ 读不到 SNI 也判绿。
+   修法：先要求 `length > 0` 再判内容。
+
+**诚实边界**：
+- 跑在**模拟器**（与真机同一份 CFNetwork），**真机未跑**——本机 Xcode 14.2 无 `devicectl`（需 15+）。
+  真机复验是落地 B 的前提条件，不能拿模拟器结果当"iOS 端已支持"。
+- TLS 服务端用**自签证书 + 探针无条件信任**（仅为读 SNI，绝不进生产）。
+- 隧道内是 HTTP/1.1（本地服务端未开 h2）；公网那轮实测是 `http/2`，两条互补。
+- **B 的生产实现尚未开始**：本单只定性"可行"，代理进程、表查询、降级链、
+  与 `fetch.unsupported` 的切换点都还没写。
+
+## 8. 判据（可回归）
 
 - `tests/httpdns-wire.test.ts` 断言 iOS **必须**明确 `fetch.unsupported`，
   且**不得**再声称"平台不支持"（只允许说"当前栈无注入点"）。
+- `bash hosts/ios/run-httpdns-route-b-probe.sh` —— B 路线 11 项判据（`exit 1` = 不可行）；
+  证据 `hosts/ios/results/httpdns-route-b.json` 入库，`tests/httpdns-wire.test.ts` 校验其
+  `verdict === 'ROUTE_B_FEASIBLE'` 且 `sniValues` 全是原域名。
 - 本文的 API 事实均可由 SDK 头文件复核；路线选择变更时必须同步本文与能力矩阵。

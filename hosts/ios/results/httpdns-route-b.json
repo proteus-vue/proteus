@@ -1,0 +1,18 @@
+{
+  "verdict": "ROUTE_B_FEASIBLE",
+  "connectCount": 2,
+  "connectTargets": [
+    "www.cloudflare.com:443",
+    "sni-probe.local:18443"
+  ],
+  "sniValues": [
+    "sni-probe.local"
+  ],
+  "publicTrace": {
+    "http": "http/2",
+    "sni": "plaintext",
+    "tls": "TLSv1.3",
+    "visit_scheme": "https"
+  },
+  "failedChecks": []
+}

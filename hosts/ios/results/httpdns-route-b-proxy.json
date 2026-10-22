@@ -1,0 +1,31 @@
+{
+  "port": 18898,
+  "events": [
+    {
+      "kind": "listening",
+      "port": 18898,
+      "atMs": 11
+    },
+    {
+      "kind": "connect",
+      "url": "www.cloudflare.com:443",
+      "host": "www.cloudflare.com",
+      "atMs": 9271
+    },
+    {
+      "kind": "connect",
+      "url": "sni-probe.local:18443",
+      "host": "sni-probe.local:18443",
+      "atMs": 12786
+    }
+  ],
+  "summary": {
+    "connectCount": 2,
+    "plainRequestCount": 0,
+    "connectTargets": [
+      "www.cloudflare.com:443",
+      "sni-probe.local:18443"
+    ],
+    "verdict": "CONNECT_SUPPORTED"
+  }
+}

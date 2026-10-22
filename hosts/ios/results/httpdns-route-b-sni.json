@@ -1,0 +1,53 @@
+{
+  "port": 18443,
+  "events": [
+    {
+      "kind": "listening",
+      "port": 18443,
+      "atMs": 49
+    },
+    {
+      "kind": "sni",
+      "servername": "sni-probe.local",
+      "atMs": 12802
+    },
+    {
+      "kind": "request",
+      "method": "GET",
+      "url": "/",
+      "host": "sni-probe.local:18443",
+      "alpn": "http/1.1",
+      "atMs": 12864
+    },
+    {
+      "kind": "request",
+      "method": "GET",
+      "url": "/",
+      "host": "sni-probe.local:18443",
+      "alpn": "http/1.1",
+      "atMs": 12882
+    },
+    {
+      "kind": "request",
+      "method": "GET",
+      "url": "/",
+      "host": "sni-probe.local:18443",
+      "alpn": "http/1.1",
+      "atMs": 12890
+    }
+  ],
+  "summary": {
+    "sniCount": 1,
+    "sniValues": [
+      "sni-probe.local"
+    ],
+    "distinctSni": [
+      "sni-probe.local"
+    ],
+    "alpnSeen": [
+      "http/1.1",
+      "http/1.1",
+      "http/1.1"
+    ]
+  }
+}
