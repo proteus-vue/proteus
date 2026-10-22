@@ -150,6 +150,14 @@ fn ensure_tool_path() {
 
 /// 没有显式指定输入时**默认接真机**——双击启动不可能带环境变量，
 /// 否则用户看到的是一个永远空白的画布，还以为坏了。
+///
+/// ★★两条腿（决策 #1190 · G3）：
+///   · **Android**：`adb exec-out screenrecord`（整机录屏，裸 Annex-B）
+///   · **iOS**：宿主把画面（ReplayKit + VT 硬编）推 TCP 裸 Annex-B ⇒ 本侧 `/usr/bin/nc -l <port>` 收。
+///     用 `nc` 而不是自己写监听器：`live_stream.h` 只认「管道里的字节」，而 `nc` 系统自带、
+///     `.app` 里也在；断线由 native 侧的「子进程退出自动重连」兜底（与 adb 那条腿同款）。
+///     ★iPhone 侧：`bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:9001`
+///   · 想关掉 iOS 等待：`PROTEUS_IOS_STREAM=0`（否则没有 Android 设备时会一直挂着 nc）
 fn default_live_source() {
     if std::env::var("POC_LIVE").is_ok() || std::env::var("POC_VIDEO").is_ok() {
         return;
@@ -167,10 +175,18 @@ fn default_live_source() {
     if connected {
         let cmd = "adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -";
         std::env::set_var("POC_LIVE", cmd);
-        eprintln!("[studio] 未指定输入，默认接真机");
-    } else {
-        eprintln!("[studio] 未检测到已连接设备（adb devices 为空），画布会保持空白");
+        eprintln!("[studio] 未指定输入，默认接真机（Android / adb screenrecord）");
+        return;
     }
+    if std::env::var("PROTEUS_IOS_STREAM").ok().as_deref() == Some("0") {
+        eprintln!("[studio] 未检测到 Android 设备；PROTEUS_IOS_STREAM=0 ⇒ 不等待 iOS 推流，画布保持空白");
+        return;
+    }
+    let port = std::env::var("PROTEUS_IOS_STREAM_PORT").unwrap_or_else(|_| "9001".to_string());
+    std::env::set_var("POC_LIVE", format!("/usr/bin/nc -l {port}"));
+    eprintln!("[studio] 未检测到 Android 设备 ⇒ 改等 iOS 推流（/usr/bin/nc -l {port}）");
+    eprintln!("[studio]   iPhone 侧：bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:{port}");
+    eprintln!("[studio]   不想等：PROTEUS_IOS_STREAM=0");
 }
 
 fn main() {

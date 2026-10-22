@@ -3265,6 +3265,31 @@
         "T-harmony-http-cancel"
       ],
       "note": "【blocked · 决策 #1188】取证：`rcp.h` 的 `Rcp_SecurityConfiguration` 只有 `remoteValidationType`（SYSTEM / SKIP / CERTIFICATE_AUTHORITY）+ `Rcp_CertificateAuthority`（PEM 内容/文件/目录）——**没有**\"收到证书后让我们校验 fingerprint\"的回调。Android 有 `X509TrustManager`、iOS 有 `URLAuthenticationChallenge`，鸿蒙**两者都没有**。★当前状态：`http.tlsStats` 已接线并**如实上报**全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立」。★这是安全语义：假成立比没有更危险。★可能的出路（需先验证，不能直接宣称）：① 用 `CERTIFICATE_AUTHORITY` + 自带 CA 做\"只信任指定 CA\"（弱于 SPKI pin，但可接受）；② 换成自建 TLS 层（大工程）；③ 等 RCP 提供校验回调。★【Handoff】做到哪：已如实上报（tlsStats 全 0 + note）。已改：`proteus_http_stubs.h`。未做：真正的 pin 校验。下一步：先验证\"用 CERTIFICATE_AUTHORITY 自带 CA\"能否达到可接受的安全强度（比 SPKI pin 弱但可能够用），再决定是否值得自建 TLS 层。坑：`Rcp_SecurityConfiguration` 只有 SYSTEM/SKIP/CA 三档，没有校验回调。判据状态：静态 8/8 绿；真机未验。"
+    },
+    {
+      "id": "T-studio-ios-stream",
+      "title": "Studio G3：iOS 真机画面 → Mac（ReplayKit + VT 硬编 + TCP 裸 Annex-B）· 真机联调待用户跑",
+      "type": "capability",
+      "status": "blocked",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "hosts/ios/ProteusHost/runtime/screen-stream.swift",
+        "hosts/ios/lib/screen-stream.sh",
+        "hosts/ios/run-selfdraw.sh",
+        "hosts/ios/run-screen-stream.sh",
+        "hosts/ios/check-selfdraw-compile.sh",
+        "packages/studio/scripts/recv-h264.py",
+        "packages/studio/src/main.rs",
+        "packages/studio/README.md",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "branch": null,
+      "related": [
+        "T-studio-out-of-poc",
+        "T-studio-live-stream"
+      ],
+      "note": "【blocked · 决策 #1190（2026-10-22）】承接 #1187「G3 iOS 通道」。承接 #1187「G3 iOS 通道」。★选型：App 内 ReplayKit（只录本 App、零 entitlement）而非 Broadcast Upload Extension（录整机但要多 target + 用户每次控制中心启动）——Studio 要看的就是 Proteus 宿主自己。★链路：startCapture → VTCompressionSession（H.264 High/8Mbps/RealTime/无 B 帧）→ AVCC 逐 NAL 转 Annex-B（每 IDR 前重发 SPS/PPS）→ TCP 发 Mac。★Studio 侧零改动：live_stream.h 只认管道里的 Annex-B ⇒ Mac 端 /usr/bin/nc -l <port> 即可；default_live_source 改三分支（POC_LIVE > adb > iOS nc），PROTEUS_IOS_STREAM=0 可关。★已验：Swift 类型检查（抓到 1 个真错：label 是 imageBufferAttributes 不是 sourceImageBufferAttributes）、cargo build、接收端 ffmpeg 假源自测（120 帧/640x360/ffprobe 认 h264）、nc 等价路径。★blocked 的原因：codesign 要写 login 钥匙串，AI 执行沙箱实测拦死（连 dangerouslyDisableSandbox 也拦）⇒ 真机安装只能用户在自己终端跑 bash hosts/ios/run-screen-stream.sh 并点「允许录制屏幕」。★跑通后：改 done + 补 decision。★边界：进后台即停、仅局域网、横屏方向未处理、码率固定、PTS 与到达时刻不同源（接统计前要重打）。\n【Handoff】· 做到哪：iOS 侧捕获+编码+传输代码全部就绪、Studio 侧接收接线完成、接收端已用假源验证。· 已改：screen-stream.swift / lib/screen-stream.sh / run-selfdraw.sh(--stream) / run-screen-stream.sh / recv-h264.py / main.rs(default_live_source 三分支)。· 未做：真机上一次都没跑通（签名写钥匙串被 AI 沙箱拦）。· 下一步：用户在自己终端 bash hosts/ios/run-screen-stream.sh → 手机点「允许」→ 看到 ✅ 合法 H.264 后把本任务改 done 并补 decision。· 坑：run-selfdraw.sh 原本 999 行，加两行就撞 check:file-size（已抽 lib 降到 999）；lib 里若写 STREAM_ARG=\"\" 会覆盖已解析值（已用 ${x:-} 形式）。· 判据：check:ios-source-lists（38 文件）+ check-selfdraw-compile + recv-h264 假源自测（120 帧/ffprobe 认 h264）。"
     }
   ]
 }

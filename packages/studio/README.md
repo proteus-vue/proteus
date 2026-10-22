@@ -350,11 +350,42 @@ pnpm run check:studio-panel     # ⇒ results/inspector-panel.png（10 判据）
 4. `stats` 的 fps 是原生侧按 240 帧滑动窗口算的（不是前端差分），但仍不是逐帧时序；
 5. 状态栏读数取自**原生侧累计值**，页面刷新不清零。
 
+## iOS 通道（G3 · 决策 #1190）
+
+Android 那条腿是 `adb exec-out screenrecord`（整机录屏）。iOS 没有等价物，但有两条路：
+
+| 方案 | 能录什么 | 代价 |
+|---|---|---|
+| **App 内 ReplayKit**（本仓采用） | **只录本 App 窗口** | 零额外 target / 零 entitlement；App 进后台即停 |
+| Broadcast Upload Extension | 整机 | 额外 target + 每次从控制中心手动启动 + 独立签名档 |
+
+Studio 要看的**就是 Proteus 宿主自己**（编译出的页面跑在 ProteusHost 里）⇒ 前者足够。
+
+**链路**：`RPScreenRecorder.startCapture` → `VTCompressionSession`（H.264 High · 8Mbps · 实时模式）
+→ **AVCC 转 Annex-B**（每 NAL 前补 `00 00 00 01`，IDR 前重发 SPS/PPS）→ TCP 发 Mac。
+
+**为什么 Studio 侧几乎不用改**：`live_stream.h` 只认「管道里的 Annex-B」，所以 Mac 端只要
+`/usr/bin/nc -l 9001` 就能收——`default_live_source()` 在没有 Android 设备时自动走这条路
+（`PROTEUS_IOS_STREAM=0` 可关掉，`PROTEUS_IOS_STREAM_PORT` 可改端口）。
+
+```bash
+# 一条命令：起接收器 → 装 App → 收 10s → ffprobe 判合法
+bash hosts/ios/run-screen-stream.sh
+# 之后直接开 Studio（它会自己 nc -l 9001）
+./target/release/proteus-studio-shell
+```
+
+**已验 / 未验（别混）**：
+- ✅ Swift 类型检查（`check:ios-selfdraw-compile`）、Rust 编译、接收端（`ffprobe` 认 640×360/120 帧）、
+  `nc -l` 与接收器两条接收路径；
+- ❌ **真机链路本身**：`codesign` 要写 login 钥匙串，AI 执行沙箱实测被拦
+  （`[sandbox] login.keychain-db (file-write)`）⇒ 必须在你的交互式终端跑上面那条命令，并**在手机上点「允许」**。
+
 ## 出门 ≠ 完成：还没做的（按顺序）
 
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
-| **G3** | iOS 通道 | 只有 Android（`adb exec-out screenrecord`） | iOS ReplayKit 编码 + 同一套 Annex-B 传输层；`hosts/ios` 已有真机链路可复用 |
+| **G3** | iOS 通道 | **代码就绪（#1190）**：ReplayKit 捕获 + VideoToolbox 硬编 + TCP 裸 Annex-B；接收端与 Studio 默认输入源已接线并**用假源验证过**（`ffprobe` 认 H.264）；**真机联调待跑**（签名写钥匙串只能在交互式终端做） | 一条命令：`bash hosts/ios/run-screen-stream.sh`，手机弹窗点「允许」 |
 | **G4** | 编辑器容器 | **零行** | CodeMirror 6（G-56.1 红线：绝不自研编辑器内核）+ 元素拾取（需设备侧视图树 + 拾取通道）+ 触摸回传 |
 | **G5** | 持久化 / 模块化 | `src/main.rs` 单文件 291 行 | 会话配置落盘、面板可插拔；先按命令分组拆 Rust，再谈模块化 |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |

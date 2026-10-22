@@ -88,8 +88,7 @@ final class SelfDrawViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
-        // ★★★状态栏显示策略（2026-10-08 · 决策 #594）：读 .app/app-config.json 的 `safeArea.statusBar`。
+        view.backgroundColor = .black        // ★★★状态栏显示策略（2026-10-08 · 决策 #594）：读 .app/app-config.json 的 `safeArea.statusBar`。
         //   缺省 **显示**（与 Web 手机端 viewport-fit=cover + edge-to-edge 对齐）：内容背景铺到状态栏区、
         //   页根用 --pf-inset-top 让位。`'hide'` = 沉浸式（隐藏状态栏）。
         statusBarHiddenCfg = Self.readStatusBarHidden()
@@ -333,6 +332,15 @@ final class SelfDrawViewController: UIViewController {
         } else {
             schedulePhases(ctx: ctx, url: url)
         }
+    }
+
+    /// ★★★Studio G3（决策 #1190）：屏幕流只在**窗口真的到前台后**启动。
+    ///   `viewDidLoad` 时 App 尚未 active，`RPScreenRecorder.startCapture` 会拿不到帧（本仓
+    ///   `showcase-scene.swift` 的录屏也是等首帧，同一类约束）。
+    ///   ★未配置 `PROTEUS_SCREEN_STREAM` 时是**空操作**（不引入任何授权弹窗）。
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        ScreenStream.shared.startIfConfigured()
     }
 
     /// ★★★六端 SFC 压力夹具驱动器（iOS 第三条链的落点）。

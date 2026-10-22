@@ -97,10 +97,9 @@ UDID=""
 # ★用例过滤（仅 --bench 有效）：`--cases=S5` 只跑 S5* 用例——定向验证不跑全套
 #   （效率纪律：bench 46 用例整套数分钟，验证单改动通常只需 2–4 个）
 CASE_FILTER=""
-# ★--record：炫技场模式额外用 **ReplayKit 录屏**（App 内录真机屏幕，零外部工具）——
-#   产物 Documents/showcase.mp4 随报告一起取回；之后由 `make-showcase-video.sh` 转网页格式。
-# ★PROTEUS_SHOWCASE_SOAK_MS=<ms>：炫技场**长跑压力测量**（内存泄漏 + 热节流；默认 0 = 不跑）。
-#   开启时报告本地另存 `results/showcase-soak.json`（canonical `showcase.json` 保持不变）。
+# ★--record：炫技场模式额外用 **ReplayKit 录屏**（App 内录真机，零外部工具）——产物 Documents/showcase.mp4
+#   随报告取回，由 `make-showcase-video.sh` 转网页格式。`PROTEUS_SHOWCASE_SOAK_MS=<ms>` = 长跑压力测量
+#   （默认 0 不跑；开启时报告另存 `results/showcase-soak.json`，canonical `showcase.json` 不变）。
 RECORD=0
 # ★★批次 44：superapp 模式是否"驱动"（`--drive`）——驱动 = 脚本切 tab + 落报告后自退（可自动化）；
 #   不带 = 常驻（真·桌面点开形态）。
@@ -130,6 +129,7 @@ for a in "$@"; do
     --tap=*) TAP="${a#--tap=}" ;;
     # ★★★v-pump/动画判据（本批）：`--pump=<page>[,<ms>]`——导航到屏后让泵周期驱动跑一段 → 读数+截图+报告自退
     --pump=*) PUMP="${a#--pump=}" ;;
+    --stream=*) STREAM_ARG="${a#--stream=}" ;;
     # ★★★批 A⑤（2026-10-08 · 决策 #656）：`--screen=<name>` + `--scroll=<dy>`——导航到屏 + 注入滚动
     #   → 截图 → 落报告自退（fixed/sticky 滚动锚定证据；与 Android `--es screen`/`--es scroll` 同语义）
     --screen=*) SCREEN_ARG="${a#--screen=}" ;;
@@ -220,6 +220,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift" "$HERE/ProteusHost/runtime/host-tree-diff.swift" "$HERE/ProteusHost/runtime/host-abi.swift" "$HERE/ProteusHost/runtime/host-support.swift" "$HERE/ProteusHost/runtime/host-exports-protocol.swift" "$HERE/ProteusHost/runtime/selfdraw-glass.swift" \
   "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" "$HERE/ProteusHost/runtime/tls-pinning.swift" "$HERE/ProteusHost/runtime/HttpDnsProxy.swift" "$HERE/ProteusHost/runtime/http-capability-dns-session.swift" \
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
+  "$HERE/ProteusHost/runtime/screen-stream.swift" \
   "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \
   "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/superapp-probes.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1
 COMPILE_RC=$?
@@ -698,8 +699,8 @@ elif [ "$MODE" = "glass-bench" ]; then
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --glass-bench > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?
 else
-  # ★自绘模式**显式传参**：从桌面点开（无参数）走 Info.plist 的缺省场景 = showcase，
-  #   而脚本要的是自绘 ⇒ 必须显式声明（否则脚本跑起来的是演示）
+  # ★自绘模式**显式传参**：桌面点开（无参数）走 Info.plist 缺省场景 = showcase ⇒ 脚本必须显式声明
+  [ -n "${STREAM_ARG:-}" ] && { source "$HERE/lib/screen-stream.sh"; ios_stream_launch "$HERE" "$UDID" "$BUNDLE_ID" "$STREAM_ARG"; exit 0; }
   xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables '{"PROTEUS_EXIT_AFTER_REPORT":"1"}' \
     --device "$UDID" "$BUNDLE_ID" --selfdraw > "$LAUNCH_LOG" 2>&1 || LAUNCH_RC=$?

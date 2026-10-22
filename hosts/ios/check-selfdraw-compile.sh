@@ -86,6 +86,9 @@ HOST_SRCS=(
   # ★#1121：探针 runner（从 superapp-scene 抽出；新文件必须进检查清单）
   "$HERE/ProteusHost/shell/superapp-probes.swift"
   "$HERE/ProteusHost/shell/selfdraw-app.swift"
+  # ★★★Studio G3（决策 #1190）：真机画面 → Mac（ReplayKit + VideoToolbox → TCP 裸 Annex-B）
+  #   ★不在这里就会"静态绿、真机红"（#1067/#1069 同族）；run-selfdraw.sh 的 swiftc 行必须同集
+  "$HERE/ProteusHost/runtime/screen-stream.swift"
 )
 for f in "${HOST_SRCS[@]}"; do
   [ -f "$f" ] || { echo "✗ 找不到宿主源码：$f"; exit 2; }
