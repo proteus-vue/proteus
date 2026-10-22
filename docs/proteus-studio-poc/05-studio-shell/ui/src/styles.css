@@ -1,0 +1,49 @@
+/* docs/proteus-studio-poc/05-studio-shell/ui/src/styles.css
+   全局样式（决策 #1183）。三栏布局是**全局 grid**，不适合塞进组件 scoped 样式。 */
+:root{
+  --bg:#17181c; --panel:#1f2126; --panel2:#24262c; --line:#2e3138;
+  --fg:#e6e8ee; --dim:#9aa1ad; --accent:#4c8dff; --ok:#39c07a; --warn:#e2b341; --bad:#e5534b;
+}
+html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
+  font:13px/1.45 -apple-system,"PingFang SC",system-ui,sans-serif;color:var(--fg);
+  user-select:none;-webkit-user-select:none}
+
+/* 顶部条 + 三栏 + 状态栏 */
+.app{display:grid;height:100vh;
+     grid-template-columns:56px minmax(0,1fr) 340px;
+     grid-template-rows:44px minmax(0,1fr) 28px;
+     grid-template-areas:"top top top" "rail main side" "status status status";}
+
+.top{grid-area:top;display:flex;align-items:center;gap:12px;padding:0 14px;
+     background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:600;letter-spacing:.2px}
+.brand span{color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
+      background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:12px;
+      white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.dot.off{background:#6b7280}
+
+.rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0;
+      background:var(--panel);border-right:1px solid var(--line)}
+.rail button{width:38px;height:38px;border-radius:9px;border:1px solid transparent;background:transparent;
+      color:var(--dim);font-size:16px;cursor:default}
+.rail button.on{background:var(--panel2);border-color:var(--line);color:var(--fg)}
+
+.main{grid-area:main;position:relative;background:#0e0f12;overflow:hidden}
+/* ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 */
+#canvas{position:absolute;left:24px;top:24px;right:24px;bottom:24px;background:transparent}
+.frame{position:absolute;left:24px;top:24px;right:24px;bottom:24px;border:1px solid #3a3f49;
+       border-radius:6px;pointer-events:none}
+.cross{position:absolute;inset:24px;pointer-events:none;opacity:.55}
+.cross:before,.cross:after{content:"";position:absolute;background:rgba(76,141,255,.8)}
+.cross:before{left:50%;top:0;bottom:0;width:1px}
+.cross:after{top:50%;left:0;right:0;height:1px}
+.tag{position:absolute;left:32px;top:32px;padding:4px 8px;border-radius:6px;
+     background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.14);font-size:11px;color:#cfd5e1}
+
+.side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
+.status{grid-area:status;display:flex;align-items:center;gap:16px;padding:0 14px;
+        background:var(--panel2);border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);
+        font-variant-numeric:tabular-nums}
+.status .k{color:#727a88}

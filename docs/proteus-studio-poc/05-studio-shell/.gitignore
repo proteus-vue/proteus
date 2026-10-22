@@ -1,2 +1,6 @@
 target/
-# ★web/ 是源码（手写 HTML，无打包器）；仓库根的 .gitignore 里 dist/ 是构建产物规则，别把这里命名成 dist
+# 构建产物（源码是 ui/，产物 web-dist/ 不入库）
+web-dist/
+.vite/
+# ★别把源码目录命名成 dist/：仓库根 .gitignore:5 有 `dist/` 规则，会把源码一起忽略
+#   （本仓已被这条规则坑过一次：手写 HTML 从没进过库）

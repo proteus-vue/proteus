@@ -33,7 +33,7 @@ Tauri 2 窗口（1440×900）
 
 - 原生侧：`native/embed_view.m`（与 PoC B2 **共用同一份**），新增 `poc_set_frame` / `poc_frames` / `poc_late` / `poc_cpu_pct` / `poc_dump`；
 - Rust：`set_canvas_rect` / `stats` / `dump_frame` 三个命令；60Hz 调度（原生按 PTS 决定这一拍出不出帧）；
-- 前端：单文件 `web/index.html`，无打包器。
+- 前端：**Vue 3 + Vite**（`ui/` 源码 → `web-dist/` 产物），见下节。
 
 ## ★这一版抓到的真 bug（画布上下颠倒）
 
@@ -121,6 +121,63 @@ popen 拉流（进程退出自动重连）→ Annex-B 拆 NAL → **按 `first_m
    与解码方式无关；修完后**硬解与软解画面都干净**（`results/canvas-live-hw.png` / `canvas-live-sw.png`）。
 2. 本轮中途猜"硬解 p99 更差是 GPU→CPU 回拷造成的"——量出来 `hw_transfer_ms.p50 = 0.05ms`
    （Apple Silicon 统一内存），**假设不成立**；首批看到的 p99 差异是机器负载噪声，不是机制。
+
+## UI 技术栈：Vue 3 + Vite（决策 #1183）
+
+原来是一个 247 行的**单文件手写 HTML**。占位原型这样写没问题，产品不行——20 个字段散在 5 个区域，
+**状态同步全靠人记**（已经出过"漏改一处就显示假数据"的事故）。
+
+### 定稿
+
+| 层 | 用什么 | 红线 |
+|---|---|---|
+| **壳**（Studio 自身 UI） | **Vue 3 + Vite**，`@vitejs/plugin-vue` | **不接 Proteus** |
+| 被调试视图 | 原生 GL 画布（已有） | 像素层**绝不走虚拟 DOM** |
+| 自举试点（未做） | Proteus 编译的非关键子面板 | 坏了不影响打开 Studio |
+
+**为什么壳不能依赖 Proteus —— 自举死锁**：Studio 是排查 Proteus 的工具。如果它的 UI 由 Proteus
+运行时渲染，Proteus 一旦有 bug，可能**连打开调试器都做不到**。调试器不能依赖被调试对象的运行时。
+
+**为什么是 Vue 而不是别的**：全仓 368 个 `.vue`、包前缀 `@proteus-vue/*`、`packages/devtools` 的
+peer 是 `@vue/devtools-api` —— Studio 要展示的「被调试对象」就是 `.vue`，用同一套心智模型冲突最少。
+
+### 结构
+
+```
+ui/
+  index.html            构建入口（只有 #app 一个空壳）
+  src/main.ts           createApp + 全局样式
+  src/App.vue           三栏布局 + 状态栏（画布矩形在此同步给原生）
+  src/bridge.ts         Tauri IPC 唯一入口（缺桥时**明确报错**，不返回 undefined）
+  src/useStats.ts       500ms 轮询 + 统一格式化（负值 → "—"）
+  src/panels/PanelShell.vue     面板外壳（标题/内容/脚注）
+  src/panels/DevicePanel.vue    设备与流
+  src/panels/PipelinePanel.vue  管线四段
+  src/panels/RuntimePanel.vue   出帧/迟到/AU/空转/CPU
+  src/panels/InspectorPanel.vue 检查器（**显式说明无数据源**）
+```
+
+```bash
+./build-ui.sh      # ⇒ web-dist/（约 70KB JS / 29KB gzip）
+```
+
+★**依赖不在这里装**：本目录不是 pnpm workspace 成员，`build-ui.sh` 直接借用仓库根的
+`vite` / `vue` / `@vitejs/plugin-vue`，避免第二套 `node_modules` 和版本漂移。
+
+★**输出目录为什么叫 `web-dist` 而不是 `dist`**：仓库根 `.gitignore:5` 有 `dist/` 规则，
+我们已经在这条规则上栽过一次（手写 HTML 从没进过库）。构建产物该被忽略，换个不会被误伤的名字。
+
+### 迁移的证据：判据一行没改
+
+`verify-panel.mjs` 的 9 条判据**原样通过**——因为所有 `id`（`kdev` / `klat` / `kqw` …）在组件里保持不变。
+**这就是"迁移没丢验证能力"的证据**，而不是"看起来还行"。
+
+### 诚实边界
+
+1. 只迁移了**右栏与布局**，左栏图标仍是占位、画布区仍是原生 GL（本就不该由 Vue 管）；
+2. **没装 TypeScript 类型检查**（Vite 只做 transpile，`vue-tsc` 没接）；类型错误目前只能靠 IDE；
+3. 没做组件测试（`vitest` + `@vue/test-utils` 未接），只有端到端的 9 条渲染判据；
+4. 单文件 70KB 里有 60KB 是 Vue 运行时——**没做按需/预编译优化**，也没必要（桌面应用，本地加载）。
 
 ## 右栏检查器：接真数据（决策 #1181）
 

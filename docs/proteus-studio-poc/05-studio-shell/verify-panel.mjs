@@ -15,8 +15,9 @@
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import http from 'node:http'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -72,6 +73,27 @@ const stats = {
   device: probeDevice(),
 }
 
+// ★必须走 http：Vite 产物是 ES module，`file://` 下会被 CORS 挡掉（origin=null）。
+//   这也更接近真实运行（Tauri 用 tauri:// 自定义协议，同样是"有 origin"的环境）。
+const DIST = path.join(HERE, 'web-dist')
+if (!fs.existsSync(path.join(DIST, 'index.html'))) {
+  console.error(`✗ 没有构建产物：${DIST}\n  先构建：./node_modules/.bin/vite build --config docs/proteus-studio-poc/05-studio-shell/vite.config.mjs`)
+  process.exit(1)
+}
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' }
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent((req.url || '/').split('?')[0])
+  const file = path.join(DIST, rel === '/' ? 'index.html' : rel)
+  if (!file.startsWith(DIST) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    res.writeHead(404).end('not found')
+    return
+  }
+  res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' })
+  fs.createReadStream(file).pipe(res)
+})
+await new Promise((r) => server.listen(0, '127.0.0.1', r))
+const port = server.address().port
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
 
@@ -95,7 +117,7 @@ const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 
-await page.goto(pathToFileURL(path.join(HERE, 'web/index.html')).href)
+await page.goto(`http://127.0.0.1:${port}/index.html`)
 await page.waitForTimeout(1200) // 轮询 500ms，等两拍
 await page.screenshot({ path: outPath })
 
@@ -118,6 +140,7 @@ const seen = await page.evaluate(() => {
   }
 })
 await browser.close()
+server.close()
 
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],

@@ -3136,7 +3136,7 @@
         "docs/proteus-studio-poc/native/embed_view.m",
         "docs/proteus-studio-poc/native/live_stream.h",
         "docs/proteus-studio-poc/05-studio-shell/src/main.rs",
-        "docs/proteus-studio-poc/05-studio-shell/web/index.html",
+        "docs/proteus-studio-poc/05-studio-shell/ui",
         "docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs",
         "docs/proteus-studio-poc/05-studio-shell/results",
         "docs/project-memory-archive/decisions.md",
@@ -3151,6 +3151,31 @@
         "T-knowledge-affected-devices"
       ],
       "note": "【done · 决策 #1181（2026-10-22）】承接 #1173「面板占位」——实际更糟：有两行是硬编码假值（\"Android · 1200×2608\"、\"6.2 Mbps\"）。★原生侧：240 帧滑动窗口直方图（间隔/延迟/队列/解码/合成/上屏）+ poc_live_stats 一揽子取数 + 入队字节计数（码率）+ 报告加 aus/mbps。★Rust：stats 扩到 20 字段；新增机型探测（adb getprop + wm size，OnceLock 缓存），失败返回 null 不编。★前端三个不糊弄：负值显示 —（-1=样本不足，toFixed 会变 0.0 被读成\"很快\"）；机型未知就显示未知；帧率由原生按墙钟算不用前端差分。★验证方法：TCC 让 screencapture 与 WKWebView 都截不到 ⇒ Playwright 渲染纯 HTML 面板，桩只替换 IPC，读数取自真实跑机 JSON，机型走真 adb；9 判据全过，产出 results/inspector-panel.png。★判据 ⑨（正文无裸 **）是被自己坑出来的：把 Markdown 粗体写进 HTML，第一次看截图就露馅。★边界：只验证渲染与字段映射（IPC 是桩、WebKit/Chromium 差异未验）；元素拾取仍无数据源，面板明说；码率按入队 AU 估算（9.6 高于 --bit-rate 8M）。"
+    },
+    {
+      "id": "T-studio-ui-vue",
+      "title": "Studio 壳迁到 Vue 3 + Vite：9 条渲染判据原样通过；立「壳不依赖 Proteus」自举红线",
+      "type": "governance",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/05-studio-shell/ui",
+        "docs/proteus-studio-poc/05-studio-shell/vite.config.mjs",
+        "docs/proteus-studio-poc/05-studio-shell/build-ui.sh",
+        "docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs",
+        "docs/proteus-studio-poc/05-studio-shell/tauri.conf.json",
+        "docs/proteus-studio-poc/05-studio-shell/.gitignore",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1183,
+      "verification": "docs/proteus-studio-poc/05-studio-shell/build-ui.sh && node docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs（9 判据）&& cargo build --release",
+      "branch": null,
+      "related": [
+        "T-studio-inspector-real",
+        "T-studio-shell-stage1"
+      ],
+      "note": "【done · 决策 #1183（2026-10-22）】承接 #1181，出门前置第一步。★为什么：247 行单文件 HTML 里 20 个字段散在 5 区域，状态同步靠人记，已出过\"漏改一处显示假值\"的事故。★栈：壳=Vue 3 + Vite；@proteus-vue/plugin-vite 也是 Vite 插件 ⇒ \"自家框架\"与\"Vue\"是同一栈两层，不是二选一。★★红线：壳不依赖 Proteus（自举死锁——调试器不能依赖被调试对象的运行时）。三层：L1 壳纯 Vue / L2 被调试视图走原生 GL / L3 自举试点先用非关键子面板。像素层绝不走虚拟 DOM。★实现：本目录非 workspace 成员 ⇒ build-ui.sh 借仓库根 vite/vue/plugin-vue，不装第二套依赖；bridge.ts 是 IPC 唯一入口（缺桥明确抛错）；useStats 统一\"负值→—\"。★输出目录 web-dist（不是 dist——根 .gitignore:5 的 dist/ 规则已坑过一次）；verify-panel 改起本地 http（ES module 在 file:// 下被 CORS 挡）。★证据：9 条判据一行没改就全过（组件 id 与原版一致）；产物 70.43KB JS / 28.86 gzip；真机 canvas rect 仍 80,68 996x748。★边界：只迁右栏与布局；未接 vue-tsc；无组件测试；Proteus 自举试点未开始。"
     }
   ]
 }
