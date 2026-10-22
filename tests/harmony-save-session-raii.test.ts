@@ -23,6 +23,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const ROOT = path.resolve(__dirname, '..')
+const read = (p: string): string => fs.readFileSync(path.join(ROOT, p), 'utf8')
 const SAVE_HEADER = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_save.h')
 
 function hasClang(): boolean {
@@ -220,6 +221,18 @@ int main() {
     expect(out, '★长文件名（244）被临时名挤掉了 —— 临时名不能拼在 basename 后面').toContain('BASENAME_LEN 244')
     expect(Number(/OPEN (\d)/.exec(out)?.[1]), '★244 字符 basename 打不开（R1 回归）').toBe(1)
     expect(Number(/FINISH (\d)/.exec(out)?.[1]), '★244 字符 basename 收尾失败（R1 回归）').toBe(1)
+  })
+
+  it('★★★#1194（R1）真机：244 字符 basename 落盘成功且设备侧 size 一致', () => {
+    // ★本地 clang 判据只证明"能 open/finish"；真机上还要过 RCP + 文件系统。
+    //   本证据是 #1194 修完后补跑的真机读数（原缺陷下这一组会报"无法创建落盘文件"）。
+    const p = 'hosts/harmony/results/http-probe-save-longname.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺长文件名真机证据 ${p}`).toBe(true)
+    const r = JSON.parse(read(p))
+    const rel = JSON.parse(r.probe_diag).savePath as string
+    expect(rel.split('/').pop()!.length, '★证据里的 basename 不是 244 字符（验错了对象）').toBe(244)
+    expect(r.ok, '★244 字符 basename 在真机上落盘失败（R1 回归）').toBe(true)
+    expect(r.limit.saveWritten, '★真机没写进文件').toBeGreaterThan(0)
   })
 
   it('★路径防护：.. / 绝对路径被拒；子目录能建', () => {
