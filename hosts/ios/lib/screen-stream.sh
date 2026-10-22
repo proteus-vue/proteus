@@ -29,6 +29,8 @@ ios_stream_launch() {
   nohup xcrun devicectl device process launch --console --terminate-existing \
     --environment-variables "{\"PROTEUS_SCREEN_STREAM\":\"$target\"}" \
     --device "$udid" "$bundle" --selfdraw > "$log" 2>&1 &
+  # ★`$!` 后面紧跟全角「）」会触发同一个坑（bash 3.2 非 UTF-8 locale 吞首字节）⇒ 先落变量
+  local pid=$!
   disown 2>/dev/null || true
-  echo "    已在后台启动（PID $!）；本脚本立即返回，不再等报告"
+  echo "    已在后台启动（PID ${pid}）；本脚本立即返回，不再等报告"
 }

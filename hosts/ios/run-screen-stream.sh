@@ -69,9 +69,15 @@ OUT="${OUT:-/tmp/proteus-ios-stream.h264}"
 mkdir -p "$(dirname "$OUT")"
 rm -f "$OUT"
 
-echo "==> 目标：iPhone → $MAC:$PORT（${SECONDS_ARG}s）"
-echo "==> ① 起接收器"
-python3 "$RECV" --port "$PORT" --seconds "$((SECONDS_ARG + 20))" --out "$OUT" > "$HERE/results/screen-stream.recv.log" 2>&1 &
+# ★★`$VAR` 后面一律写 `${VAR}`：macOS 自带 bash 3.2 在**非 UTF-8 locale** 下会把全角字符的
+#   首字节吞进变量名（本仓已踩过多次，`run-selfdraw.sh` 文件头也写着这条）。实测报错：
+#   `PORT<byte>: unbound variable` —— 就是 `$PORT` 后面直接跟全角左括号那一处。
+echo "==> 目标：iPhone → ${MAC}:${PORT}（${SECONDS_ARG}s）"
+echo "==> ① 起接收器（先无限等：安装/授权要几分钟，不能按秒数提前超时）"
+# ★★接收器**不能**用固定时限：编译+安装+用户在手机上点「允许」可能好几分钟，
+#   固定 N 秒的窗口会在 App 起来之前就到期 ⇒ 收到 0 字节，而根因是"等太短"（假失败）。
+#   ⇒ 先无限等，安装完再按 `--seconds` 采集，然后显式 kill。
+python3 "$RECV" --port "$PORT" --seconds 0 --out "$OUT" > "$HERE/results/screen-stream.recv.log" 2>&1 &
 RECV_PID=$!
 # ★不 sleep 盲等：轮询"端口已在监听"这个**事实**（最多 5s）
 #   ★用 lsof 判监听而**不是** `nc -z`——后者会真的建一次连接，接收器的统计里会多一个空连接
@@ -87,8 +93,11 @@ else
   echo "==> ② 跳过安装（--skip-install）——请确认宿主已在跑且带 --stream=$MAC:$PORT"
 fi
 
-echo "==> ③ 等接收器收满 ${SECONDS_ARG}s（期间请让手机画面**动起来**，静止时编码器可能不产帧）"
-wait "$RECV_PID" || true
+echo "==> ③ 采集 ${SECONDS_ARG}s（期间请让手机画面**动起来**，静止时编码器可能不产帧）"
+# 这里的 sleep 是**度量窗口**（要收多久），不是"等某个状态"——不违反本仓的 no-blind-wait 纪律。
+sleep "$SECONDS_ARG"
+kill -TERM "$RECV_PID" 2>/dev/null || true
+wait "$RECV_PID" 2>/dev/null || true
 cat "$HERE/results/screen-stream.recv.log" | sed 's/^/    /'
 
 BYTES="$(wc -c < "$OUT" 2>/dev/null || echo 0)"
@@ -97,7 +106,7 @@ echo "==> ④ 判据"
 if [ "${BYTES:-0}" -lt 1000 ]; then
   echo "✗ 只收到 ${BYTES} 字节 —— 三种可能："
   echo "    a) 手机上没点「允许录制屏幕」"
-  echo "    b) iPhone 连不到 $MAC:$PORT（不同 Wi-Fi / 隔离模式）"
+  echo "    b) iPhone 连不到 ${MAC}:${PORT}（不同 Wi-Fi / 隔离模式）"
   echo "    c) 宿主不是本轮二进制（没带 PROTEUS_SCREEN_STREAM）—— 去掉 --skip-install 重跑"
   exit 1
 fi
@@ -108,7 +117,7 @@ if echo "$PROBE" | grep -q "codec_name=h264"; then
   H="$(echo "$PROBE" | sed -n 's/^height=//p')"
   F="$(echo "$PROBE" | sed -n 's/^nb_read_frames=//p')"
   echo "✅ 合法 H.264：${W}x${H} · ${F} 帧 · $(awk -v b="$BYTES" 'BEGIN{printf "%.2f", b/1048576}') MB"
-  echo "    样本：$OUT（默认 /tmp，不入库）"
+  echo "    样本：${OUT}（默认 /tmp，不入库）"
   echo "    接 Studio：PROTEUS_IOS_STREAM_PORT=$PORT ./packages/studio/target/release/proteus-studio-shell"
   exit 0
 fi

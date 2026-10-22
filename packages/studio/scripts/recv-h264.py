@@ -22,6 +22,7 @@
 """
 
 import argparse
+import signal
 import socket
 import sys
 import time
@@ -55,7 +56,17 @@ def main() -> int:
     conns = 0
     deadline = (t0 + args.seconds) if args.seconds > 0 else None
 
-    while True:
+    # ★SIGTERM 走"置标志 + 收尾"而不是直接终止：调用方（run-screen-stream.sh）采集完会 kill 本进程，
+    #   若不收尾就拿不到最终统计行（排障时最需要的就是那一行）。
+    #   accept/recv 都有 1s 超时 ⇒ 置标志后最多 1 秒退出，不会挂住。
+    stop = {"v": False}
+
+    def _on_term(*_a: object) -> None:
+        stop["v"] = True
+
+    signal.signal(signal.SIGTERM, _on_term)
+
+    while not stop["v"]:
         if deadline is not None and time.time() >= deadline:
             print(f"[recv] 到时限 {args.seconds}s", file=sys.stderr, flush=True)
             break
@@ -67,7 +78,7 @@ def main() -> int:
         conn.settimeout(1.0)
         print(f"[recv] 连接 #{conns} 来自 {peer[0]}:{peer[1]}", file=sys.stderr, flush=True)
         while True:
-            if deadline is not None and time.time() >= deadline:
+            if stop["v"] or (deadline is not None and time.time() >= deadline):
                 break
             try:
                 chunk = conn.recv(65536)
