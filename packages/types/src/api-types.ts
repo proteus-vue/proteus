@@ -61,6 +61,14 @@ export interface RequestConfig {
   tlsPins?: string
   /** ★#1153：true ⇒ 用 pin 替代系统信任；缺省 = 叠加（系统信任 + pin 都要过） */
   tlsPinOnly?: boolean
+  /**
+   * ★★★#1169 **HTTPDNS**（仅 App 端；Web/MP 腿遇到本字段明确 `fetch.unsupported`）：
+   * 本次请求的域名 → IP 映射（值 = 逗号分隔 IP 串，按序尝试）。
+   * · 只影响表里出现的域名；表里没有的域名照旧走系统 DNS；
+   * · **SNI 与证书主机名校验仍用原域名**（不是 IP）；
+   * · **iOS 无自定义 DNS 钩子 ⇒ `fetch.unsupported`**（不静默忽略）。
+   */
+  httpDns?: Record<string, string>
 }
 
 export interface RequestResponse<T> {

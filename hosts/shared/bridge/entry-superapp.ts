@@ -28,6 +28,9 @@ export { appTransportProbe } from './entry-superapp-probes-transport'
 // ★★★#1160：POST 带请求体探针（补"整包路径 + 请求体"的用例空白）
 import { appBodyProbe } from './entry-superapp-probes-body'
 export { appBodyProbe } from './entry-superapp-probes-body'
+// ★★★#1169：HTTPDNS 端到端探针（表生效 / 基线对照 / iOS unsupported）
+import { appHttpDnsProbe } from './entry-superapp-probes-httpdns'
+export { appHttpDnsProbe } from './entry-superapp-probes-httpdns'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -980,5 +983,10 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppBodyProbe?: (b: string) => string
 }).__proteusHostAppBodyProbe = (b: string) => appBodyProbe(b)
+// ★★★#1169：HTTPDNS 端到端探针（结果填 __proteusHostHttpDnsProbeResult）
+//   ★三件对照：基线成功 + 注入不可达 IP 后失败 ⇒ 表真的生效；iOS 则要求 fetch.unsupported。
+;(globalThis as unknown as {
+  __proteusHostAppHttpDnsProbe?: (b: string, h: string) => string
+}).__proteusHostAppHttpDnsProbe = (b: string, h: string) => appHttpDnsProbe(b, h)
 
 

@@ -31,14 +31,18 @@ WAIT="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 
 URL=""
 DNS_IP=""
+DNS_HOST=""
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
     --url) shift_next=1 ;;  # 兼容 `--url <value>`：下面单独处理
     --dns-ip=*) DNS_IP="${arg#--dns-ip=}" ;;
     --dns-ip) shift_next_dns=1 ;;
+    --dns-host=*) DNS_HOST="${arg#--dns-host=}" ;;
+    --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
-       elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0; fi ;;
+       elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
+       elif [ "${shift_next_host:-0}" = "1" ]; then DNS_HOST="$arg"; shift_next_host=0; fi ;;
   esac
 done
 [ -n "$URL" ] || URL="https://httpbin.org/get"
@@ -64,6 +68,8 @@ fi
 echo "==> ② 启动（scene=superapp-http）"
 DNS_ARG=""
 [ -n "$DNS_IP" ] && DNS_ARG="--ps dnsIp $DNS_IP"
+# ★#1169：dnsHost + dnsIp 配对 ⇒ 往帧里塞 httpDns 表（验证宿主表解析生效）
+[ -n "$DNS_HOST" ] && DNS_ARG="$DNS_ARG --ps dnsHost $DNS_HOST"
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 

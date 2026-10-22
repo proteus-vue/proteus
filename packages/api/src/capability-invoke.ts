@@ -217,6 +217,15 @@ function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array 
       meta.redirectManual = v
     } else if (k === 'tlsPinOnly' && typeof v === 'boolean') {
       meta.tlsPinOnly = v
+    } else if (k === 'httpDns' && v !== null && typeof v === 'object' && !Array.isArray(v)) {
+      // ★★★#1169：HTTPDNS 映射表（name-values）——**不能落到 body**（否则整张表会被 JSON 编进请求体）
+      //   ★值已是逗号分隔串（`runFetch` 归一）；这里只做形态收敛，不改写语义。
+      const nv: Record<string, string> = {}
+      for (const [host, ips] of Object.entries(v as Record<string, unknown>)) {
+        const s = Array.isArray(ips) ? ips.join(',') : String(ips ?? '')
+        if (host && s) nv[host] = s
+      }
+      if (Object.keys(nv).length > 0) meta.httpDns = nv
     } else if (k === 'data' || k === 'body') {
       rest[k] = v
     } else {

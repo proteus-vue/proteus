@@ -69,6 +69,11 @@ export interface AppRequestConfig {
   tlsPins?: string
   /** ★#1153：true ⇒ 用 pin 替代系统信任（见 `MetaTagInvoke.PinOnly`） */
   tlsPinOnly?: boolean
+  /**
+   * ★★★#1169：**HTTPDNS 域名→IP 映射**（值 = 逗号分隔 IP 串；见 `MetaTagInvoke.HttpDns`）。
+   * ★端差异：Android/鸿蒙支持；**iOS 无自定义 DNS 钩子 ⇒ `fetch.unsupported`**（不静默忽略）。
+   */
+  httpDns?: Record<string, string>
 }
 
 /** 请求响应（对齐 `RequestResponse`） */

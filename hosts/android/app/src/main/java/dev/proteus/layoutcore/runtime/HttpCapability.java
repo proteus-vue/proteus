@@ -271,9 +271,10 @@ public final class HttpCapability {
         okhttp3.Call call = null;
         okhttp3.Response resp = null;
         try {
-            call = HttpTransport.newCall(buildCallConfig(f, url, method, timeoutMs));
+            final HttpTransport.CallConfig cfg = buildCallConfig(f, url, method, timeoutMs);
+            call = HttpTransport.newCall(cfg);
             registerRequest(f.reqId, call);   // ★#1121：可取消
-            resp = HttpTransport.execute(call);
+            resp = HttpTransport.execute(call, cfg.httpDns);   // ★#1169：带 per-call DNS 表
 
             int status = resp.code();
             // ★#1150 排障：非 2xx 记一行（真机抓过「503 到了但响应没回 JS」；只在异常档打，不污染正常路径）
@@ -330,6 +331,8 @@ public final class HttpCapability {
         cfg.tlsPinOnly = Boolean.TRUE.equals(f.tlsPinOnly);
         cfg.redirectManual = Boolean.TRUE.equals(f.redirectManual);
         cfg.tag = f.reqId;
+        // ★★★#1169：HTTPDNS 表（帧里的 name-values：域名 → 逗号分隔 IP）
+        cfg.httpDns = (f.httpDns == null || f.httpDns.isEmpty()) ? null : f.httpDns;
         // ★★★请求体必须**在这里**装配（#1160 独立验证抓出的 P0 回归）
         //   【缺陷形态】换栈第一版只让落盘/流式两条路径各自 `cfg.body = …`，**整包路径漏了**
         //   ⇒ 所有带 `data` 的 POST/PUT 静默变成空体（功能全错、零报错、四条探针全是 GET/上传 ⇒ 都测不到）。
@@ -502,7 +505,7 @@ public final class HttpCapability {
             };
             call = HttpTransport.newCall(cfg);
             registerRequest(f.reqId, call);   // ★#1121：可取消
-            resp = HttpTransport.execute(call);
+            resp = HttpTransport.execute(call, cfg.httpDns);   // ★#1169：带 per-call DNS 表
 
             int status = resp.code();
             LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());
@@ -631,7 +634,7 @@ public final class HttpCapability {
             // ★body 已由 buildCallConfig 统一装配（#1160 P0 修正），此处不再重复
             call = HttpTransport.newCall(cfg);
             registerRequest(f.reqId, call);   // ★#1121：可取消
-            resp = HttpTransport.execute(call);
+            resp = HttpTransport.execute(call, cfg.httpDns);   // ★#1169：带 per-call DNS 表
 
             int status = resp.code();
             LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());
@@ -794,7 +797,7 @@ public final class HttpCapability {
             // ★body 已由 buildCallConfig 统一装配（#1160 P0 修正），此处不再重复
             call = HttpTransport.newCall(cfg);
             registerRequest(f.reqId, call);   // ★#1121：可取消
-            resp = HttpTransport.execute(call);
+            resp = HttpTransport.execute(call, cfg.httpDns);   // ★#1169：带 per-call DNS 表
 
             int status = resp.code();
             LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());

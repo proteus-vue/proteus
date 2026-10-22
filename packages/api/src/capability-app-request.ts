@@ -65,6 +65,8 @@ export function appHttpRequest(
     redirectManual: config.redirectManual,
     // ★★★#1153 TLS pinning（换行分隔的 base64 SPKI 指纹；`runFetch` 已把数组归一成串）
     tlsPins: config.tlsPins, tlsPinOnly: config.tlsPinOnly,
+    // ★★★#1169 HTTPDNS（name-values：域名→逗号分隔 IP；`runFetch` 已归一）
+    httpDns: config.httpDns,
   }
   const budget = (config.timeout ?? 15000) + 2000
   // 有 `onChunk` ⇒ 流式（内存不随响应体增长）；否则整包（受 32 MiB 上限）

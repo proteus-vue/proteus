@@ -85,6 +85,10 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     //   （parity 门禁在本机验同一性质；真机上再验一次，防"本机绿、设备端不一致"）。
     std::string frameHexIn;
     jstr(argsJson.c_str(), argsJson.size(), "frameHex", &frameHexIn);
+    // ★★★#1169：HTTPDNS 注入参数（域名 + 强制 IP）——见帧构造处注释
+    std::string dnsHostIn, dnsIpIn;
+    jstr(argsJson.c_str(), argsJson.size(), "dnsHost", &dnsHostIn);
+    jstr(argsJson.c_str(), argsJson.size(), "dnsIp", &dnsIpIn);
     /**
      * ★★★#1169：**DNS 探针参数**（只有给了才安装假解析器；缺省生产路径零影响）。
      * · `dnsForceIp`：强制把目标 host 解析到这个 IP（给空串 ⇒ 让解析失败）。
@@ -93,7 +97,17 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     {
       std::string v;
       jstr(argsJson.c_str(), argsJson.size(), "dnsForceIp", &v);
-      if (argsJson.find("\"dnsForceIp\"") != std::string::npos) {
+      /**
+       * ★★★#1169：**表注入优先**——`dnsHost`+`dnsIp` 给了就**不装**假解析器。
+       * 【为什么必须互斥】两者都走 `RCP_DNS_RULE_DYNAMIC`（同一条 `Rcp_DnsRule`）⇒
+       *   后设的覆盖先设的；若同时装，测出来的永远是 `lastSource='probe'`（假解析器），
+       *   **业务表根本没被验证**（本轮实测踩到：`tableRules=0 · lastSource='probe'`）。
+       */
+      std::string hostV, ipV;
+      jstr(argsJson.c_str(), argsJson.size(), "dnsHost", &hostV);
+      jstr(argsJson.c_str(), argsJson.size(), "dnsIp", &ipV);
+      const bool tableInject = !hostV.empty() && !ipV.empty();
+      if (!tableInject && argsJson.find("\"dnsForceIp\"") != std::string::npos) {
         proteus::http::DnsProbe& dp = proteus::http::dnsProbe();
         dp = proteus::http::DnsProbe{};    // 复位上一次读数
         dp.installed = true;
@@ -112,6 +126,15 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         f.url = url;
         f.httpMethod = "GET";
         f.responseType = proteus::wire::RESPONSE_TEXT;
+        /**
+         * ★★★#1169：`dnsHost` + `dnsIp` ⇒ 往帧里塞 HTTPDNS 表（name-values，域名 → 逗号分隔 IP）。
+         * 用途：真机验证"宿主的表解析真的生效"（同 Android 探针的注入手法：
+         * 把目标域名解析到不可达 IP ⇒ 请求必失败）。
+         * ★ArkTS 编帧时不走这条（它自己编 frameHex）⇒ 本参数只对 C++ 自编路径有效。
+         */
+        if (!dnsHostIn.empty() && !dnsIpIn.empty()) {
+            f.httpDns = proteus::wire::NameValues{ { dnsHostIn, dnsIpIn } };
+        }
         frame = proteus::wire::encodeInvoke(f);
     }
     const std::string frameHex = toHex(frame);
@@ -194,9 +217,11 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         const proteus::http::DnsProbe& dp = proteus::http::dnsProbe();
         char db[640];
         snprintf(db, sizeof(db),
-                 ",\"dns\":{\"installed\":%s,\"calls\":%d,\"host\":\"%s\",\"port\":%u,\"forcedIp\":\"%s\"}",
+                 ",\"dns\":{\"installed\":%s,\"calls\":%d,\"host\":\"%s\",\"port\":%u,\"forcedIp\":\"%s\","
+                 "\"tableRules\":%d,\"tableHits\":%d,\"lastSource\":\"%s\"}",
                  dp.installed ? "true" : "false", dp.calls,
-                 jsonEscape(dp.lastHost).c_str(), dp.lastPort, jsonEscape(dp.forcedIp).c_str());
+                 jsonEscape(dp.lastHost).c_str(), dp.lastPort, jsonEscape(dp.forcedIp).c_str(),
+                 dp.tableRules, dp.tableHits, jsonEscape(dp.lastSource).c_str());
         dnsJson = db;
     }
     body += dnsJson;

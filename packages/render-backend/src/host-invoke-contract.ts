@@ -64,6 +64,11 @@ export const HOST_CAPABILITY_METHODS = [
   //   ★同族形态（与 #1121 的 `http.cancel` 一字不差）：宿主早已实现、真机验过，但**没登记进契约**
   //     ⇒ 门禁报「未知方法」，覆盖率数字低报。2026-10-21 由 `check:host-invoke-contract` 抓出并补登。
   'http.tlsStats',
+  // ★★★#1169 HTTPDNS 的可观测面：宿主自报 `{lookups, tableHits, lastSource, lastHost}`。
+  //   ★为什么必须有：`httpDns` 生效与否只有"请求成败"一个间接信号，而**不可达 IP ⇒ 失败**
+  //     与"网络本来就不通"在外部看起来一样（#1169 首跑就踩到：注入侧失败，但基线也失败 ⇒
+  //     无法归因）。有了 `tableHits > 0` + `lastSource='table'` 才能把"表被采用"变成**直接证据**。
+  'http.dnsStats',
   // ★★C29/C30 上传/下载的文件腿（#1095）：沙箱二进制读写（宿主拒绝绝对路径与 '..'）
   'fs.writeBytes',
   'fs.readBytes',

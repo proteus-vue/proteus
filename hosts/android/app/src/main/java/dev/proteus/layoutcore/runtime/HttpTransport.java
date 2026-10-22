@@ -35,6 +35,8 @@ package dev.proteus.layoutcore;
 //     `dnsMs/connectMs/tlsMs` 取**末跳**（中间跳的建连时间不累加）。
 //   · OkHttp 3.x 已停止维护线（安全修复不回移）；升 4.x 的代价见 thirdparty/README.md。
 
+import android.util.Log;
+
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -71,6 +73,9 @@ public final class HttpTransport {
 
     private HttpTransport() { }
 
+    /** ★#1169：logcat tag（与 HttpCapability 的 `proteus-http` 分开，便于按层过滤）。 */
+    private static final String TAG = "proteus-http-dns";
+
     /** 回调式请求体（上传路径用：边读文件边写，内存只有缓冲块）。 */
     public interface BodyWriter {
         /** 内容类型（可为 null ⇒ 不设）；★必须经此传入，显式同名头会被 OkHttp 忽略。 */
@@ -102,7 +107,7 @@ public final class HttpTransport {
     public static int clientsCreated() { return CLIENTS_CREATED.get(); }
 
     /**
-     * HTTPDNS 接入点（★★本单只做 seam：业务 API + 线格式 tag 属下一单）。
+     * HTTPDNS 接入点（进程级解析器；#1160 落的 seam）。
      *
      * <p>为 null ⇒ 用系统 DNS（`Dns.SYSTEM`）。非 null ⇒ 域名解析走注入实现。
      * ★这是 `HttpURLConnection` **根本给不了**的接入点（它没有 Dns 注入）。
@@ -114,6 +119,23 @@ public final class HttpTransport {
     public interface HttpDns {
         List<InetAddress> lookup(String hostname) throws UnknownHostException;
     }
+
+    /**
+     * ★★★#1169：**per-call 的 HTTPDNS 表**（域名 → IP 列表）。
+     *
+     * <p>【为什么用 ThreadLocal 而不是"按表分 client"】
+     * OkHttp 的 DNS 是 **client 级**配置（没有 per-call 入口）。若把表做进 client 缓存键，
+     * 不同表就会**各自一个连接池**——而 HTTPDNS 的典型形态正是"IP 按 TTL 轮换"
+     * ⇒ 几乎每次请求一张新表 ⇒ **每请求一个新池 ⇒ 连接复用归零**（#1155 同族缺陷）。
+     * <p>⇒ 改成：client 只装**一个**转发式 Dns，真正的表按**调用线程**取。
+     *
+     * <p>【★前提（已取证，改则必须重评）】`OkHttpClient.newCall(...).execute()`（**同步**）
+     * 的 DNS 查询发生在**调用 execute() 的那个线程**上——本机实测（vendored 3.14.9）：
+     * `caller-thread=main` / `lookup-thread=main`。
+     * 若将来改用 `enqueue()`（异步派发到 dispatcher 线程），本机制**失效**（表会取不到）。
+     * 本仓四条路径都是"每请求一个 NET 线程 + 同步 execute" ⇒ 当前形态成立。
+     */
+    private static final ThreadLocal<Map<String, String>> CALL_DNS = new ThreadLocal<>();
 
     /**
      * 安装/清除 HTTPDNS 解析器（进程级）。
@@ -129,9 +151,25 @@ public final class HttpTransport {
     /** DNS 记账（判据读它证明"注入的解析器真的被调用"）。 */
     private static volatile int dnsLookups = 0;
     private static volatile String lastDnsHost = null;
+    /** ★#1169：per-call 表命中次数（判据读它证明"业务给的表真的被用了"）。 */
+    private static volatile int dnsTableHits = 0;
+    private static volatile String lastDnsSource = null;   // "table" / "resolver" / "system"
 
     public static int dnsLookupCount() { return dnsLookups; }
     public static String lastDnsHost() { return lastDnsHost; }
+    public static int dnsTableHitCount() { return dnsTableHits; }
+    public static String lastDnsSource() { return lastDnsSource; }
+
+    /**
+     * 在当前**调用线程**上绑定本次请求的 DNS 表（`null`/空表 ⇒ 解绑）。
+     * ★必须在 `execute()` **之前**调用、在 `finally` 里 `clearCallDns()`（防线程复用串味）。
+     */
+    static void bindCallDns(Map<String, String> table) {
+        if (table == null || table.isEmpty()) CALL_DNS.remove();
+        else CALL_DNS.set(table);
+    }
+
+    static void clearCallDns() { CALL_DNS.remove(); }
 
     /* ══════════════════ ★★★per-call 配置 ══════════════════ */
 
@@ -166,6 +204,12 @@ public final class HttpTransport {
         public BodyWriter bodyWriter;
         /** 取消/读数归属键（帧的 reqId）。 */
         public String tag;
+        /**
+         * ★★★#1169：**本次请求的 HTTPDNS 表**（域名 → 逗号分隔 IP）。
+         * null/空 ⇒ 本请求不做 HTTPDNS（走进程级 resolver 或系统 DNS）。
+         * ★只影响表内域名；SNI 与证书主机名校验仍用原域名。
+         */
+        public Map<String, String> httpDns;
     }
 
     /**
@@ -193,6 +237,21 @@ public final class HttpTransport {
     /** 发出并返回响应（**阻塞**；调用方保证不在 JS 线程上跑）。 */
     public static Response execute(Call call) throws java.io.IOException {
         return call.execute();
+    }
+
+    /**
+     * ★★★#1169：带 per-call DNS 表的执行。
+     *
+     * <p>★**必须在同一个线程**上 bind → execute → clear：OkHttp 同步 `execute()` 在本线程做 DNS
+     * （已实测：`caller-thread == lookup-thread`）。`finally` 里 clear 防线程复用串味。
+     */
+    public static Response execute(Call call, Map<String, String> dnsTable) throws java.io.IOException {
+        bindCallDns(dnsTable);
+        try {
+            return call.execute();
+        } finally {
+            clearCallDns();
+        }
     }
 
     /** 从一次调用上摘下发起的 reqId（取消通道用；未设置 ⇒ null）。 */
@@ -234,8 +293,10 @@ public final class HttpTransport {
                 .retryOnConnectionFailure(false)
                 .eventListenerFactory(new TransportListenerFactory());
 
-        Dns dns = httpDnsSeam();
-        if (dns != null) b.dns(dns);
+        // ★★★#1169：**总是**装转发式 Dns（表/解析器/系统三级回落）。
+        //   为什么不按"有没有表"决定装不装：表是 per-call 的，client 级装不装无法表达
+        //   ⇒ 一律装，由 ForwardingDns 在解析时按当时上下文决定走哪级。
+        b.dns(new ForwardingDns());
 
         // ★TLS pinning：与 #1153/#1155 同一套 TrustManager（同源，不另写一份）
         TlsPinning.SslMaterial ssl = TlsPinning.sslMaterial(cfg.tlsPins, cfg.tlsPinOnly);
@@ -243,19 +304,53 @@ public final class HttpTransport {
         return b.build();
     }
 
-    /** 把 HTTPDNS seam 包成 OkHttp 的 `Dns`（顺带记账，判据能证明它真的被调用）。 */
-    private static Dns httpDnsSeam() {
-        final HttpDns impl = httpDns;
-        if (impl == null) return null;
-        return new Dns() {
-            @Override public List<InetAddress> lookup(String hostname) throws UnknownHostException {
-                dnsLookups++;
-                lastDnsHost = hostname;
-                List<InetAddress> out = impl.lookup(hostname);
+    /**
+     * 转发式 Dns：**per-call 表 → 进程级 resolver → 系统 DNS**，逐级回落。
+     *
+     * ★为什么不按表分 client：见 {@link #CALL_DNS} 的注释（会退化成"每请求一个池"）。
+     * ★"表里没有的域名 ⇒ 系统 DNS"是**语义要求**（#1169）：HTTPDNS 只接管业务显式给的域名，
+     *   不改变其他域名的解析行为——否则会静默改变无关请求的行为。
+     * ★表内的值 = 逗号分隔 IP 串；空/非法 ⇒ 视为该域名不在表里（继续回落，**不静默成功**）。
+     */
+    private static final class ForwardingDns implements Dns {
+        @Override public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+            dnsLookups++;
+            lastDnsHost = hostname;
+            final Map<String, String> table = CALL_DNS.get();
+            if (table != null) {
+                final String raw = table.get(hostname == null ? "" : hostname.toLowerCase(java.util.Locale.ROOT));
+                if (raw != null && !raw.isEmpty()) {
+                    final List<InetAddress> out = new java.util.ArrayList<>();
+                    for (String part : raw.split(",")) {
+                        final String ip = part.trim();
+                        if (ip.isEmpty()) continue;
+                        try {
+                            // ★InetAddress.getByName 对标量 IP 不做 DNS 查询（只做字面量解析）。
+                            out.add(InetAddress.getByName(ip));
+                        } catch (Throwable t) {
+                            Log.w(TAG, "httpDns 表内 IP 非法（跳过）：" + ip);
+                        }
+                    }
+                    if (!out.isEmpty()) {
+                        dnsTableHits++;
+                        lastDnsSource = "table";
+                        return out;
+                    }
+                    // ★表里有这个域名但全不可解析 ⇒ **抛错**（不回退系统 DNS）：
+                    //   回退会掩盖"业务给的 IP 是错的"，而这类错误越早暴露越好。
+                    throw new UnknownHostException("httpDns 表内无可用 IP：" + hostname + " → " + raw);
+                }
+            }
+            final HttpDns impl = httpDns;
+            if (impl != null) {
+                lastDnsSource = "resolver";
+                final List<InetAddress> out = impl.lookup(hostname);
                 if (out == null || out.isEmpty()) throw new UnknownHostException("HTTPDNS 无结果：" + hostname);
                 return out;
             }
-        };
+            lastDnsSource = "system";
+            return Dns.SYSTEM.lookup(hostname);
+        }
     }
 
     private static Request buildRequest(CallConfig cfg) {

@@ -157,6 +157,24 @@ export const MetaTagInvoke = {
    *   塞成一个结构体 tag 反而要给五端各写一套结构解码。
    */
   PinOnly: 13,
+  /**
+   * ★★★#1169 **HTTPDNS 的域名→IP 映射**（name-values：键 = 域名，值 = **逗号分隔的 IP 列表**）。
+   *
+   * 【为什么是"映射表"而不是"解析函数"】线格式只能传数据，传不了函数。
+   *   而 HTTPDNS 的典型用法本来就是"业务先向 HTTPDNS 服务要一批 IP，再拿这批 IP 发请求"
+   *   ⇒ 业务给的是一张**表**，不是回调。这张表正好能被三端各自翻译：
+   *     · **Android**：OkHttp `Dns` 实现（按表查，查不到回落系统 DNS）；
+   *     · **鸿蒙**：#1169 真机实证 `RCP_DNS_RULE_STATIC`（静态规则就是一张表）
+   *       —— 与 `RCP_DNS_RULE_DYNAMIC` 的**回调形状**同源（同一条 `Rcp_DnsRule` 联合体）；
+   *     · **iOS**：`URLSession` **没有**自定义 DNS 钩子 ⇒ 如实 `fetch.unsupported`（不伪造成功）。
+   *
+   * 【为什么用 name-values 而不是"每域名一个 tag"】域名数量业务决定（1~N），
+   *   name-values 是既有原语（`Headers` / `Params` / `Transport` 都用它）⇒ 零新增编码形态。
+   *
+   * 【★缺省不写 tag】不写 = "本请求不做 HTTPDNS"（宿主走系统 DNS）——与既有行为完全一致。
+   * 【★空表也不写】空表与"不写"语义相同（都等于不用 HTTPDNS）⇒ 不占带宽、不产生两种等价形态。
+   */
+  HttpDns: 14,
 } as const
 
 
@@ -282,6 +300,13 @@ export interface InvokeMeta {
   tlsPins?: string
   /** ★★★#1153：`1` = 用 pin **替代**系统信任（见 `MetaTagInvoke.PinOnly`）；缺省 = 叠加 */
   tlsPinOnly?: boolean
+  /**
+   * ★★★#1169：**HTTPDNS 域名→IP 映射**（见 `MetaTagInvoke.HttpDns`）。
+   * 键 = 域名（精确匹配，大小写不敏感由宿主归一），值 = **逗号分隔的 IP 列表**（按序尝试）。
+   * ★只影响**本请求**的域名解析；表里没有的域名一律走系统 DNS（不改变其他域名的行为）。
+   * ★端差异：Android ✅ · 鸿蒙 ✅（#1169 真机实证）· **iOS ❌（无钩子 ⇒ `fetch.unsupported`）**。
+   */
+  httpDns?: Record<string, string>
 }
 
 export interface InvokeFrame {
@@ -395,6 +420,14 @@ function encodeInvokeMeta(meta: InvokeMeta): Uint8Array {
   const pins = meta.tlsPins
   if (pins !== undefined && pins.length > 0) writeTlv(w, MetaTagInvoke.Pins, () => w.str(pins))
   if (meta.tlsPinOnly === true) writeTlv(w, MetaTagInvoke.PinOnly, () => w.u8(1))
+  /**
+   * ★★★#1169：HTTPDNS 映射表——**空表不写**（空表与"不写"语义相同：不用 HTTPDNS）
+   * ⇒ 不产生"两种等价形态"（判据会因此变成一对多，parity 对拍也会失去唯一期望值）。
+   */
+  const dns = meta.httpDns
+  if (dns !== undefined && Object.keys(dns).length > 0) {
+    writeTlv(w, MetaTagInvoke.HttpDns, () => writeNameValues(w, dns))
+  }
   return w.done()
 }
 
@@ -468,6 +501,10 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeMeta): void {
         break
       case MetaTagInvoke.PinOnly:
         into.tlsPinOnly = p.u8() !== 0
+        break
+      // ★★★#1169：HTTPDNS 映射表（name-values）
+      case MetaTagInvoke.HttpDns:
+        into.httpDns = readNameValues(p)
         break
       // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
       default:

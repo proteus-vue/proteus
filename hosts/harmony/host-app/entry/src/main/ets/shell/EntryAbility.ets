@@ -65,6 +65,11 @@ export default class EntryAbility extends UIAbility {
     if (typeof probeDnsIp === 'string' && probeDnsIp.length > 0) {
       AppStorage.setOrCreate('proteusProbeDnsIp', probeDnsIp);
     }
+    // ★#1169：域名（与 dnsIp 配对 ⇒ 往帧里塞 httpDns 表，验证宿主的表解析生效）
+    const probeDnsHost = want?.parameters?.['dnsHost'];
+    if (typeof probeDnsHost === 'string' && probeDnsHost.length > 0) {
+      AppStorage.setOrCreate('proteusProbeDnsHost', probeDnsHost);
+    }
     // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
     //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
     //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。

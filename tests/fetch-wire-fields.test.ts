@@ -48,7 +48,10 @@ const WIRE_FIELDS = [
   'onChunk',
   'upload',
   'signal',
-  'redirectManual', // ★#1134\n  'tlsPins', // ★#1153\n  'tlsPinOnly', // ★#1153
+  'redirectManual', // ★#1134
+  'tlsPins', // ★#1153
+  'tlsPinOnly', // ★#1153
+  'httpDns', // ★#1169（线格式 tag 14；name-values）
 ]
 
 /** 只在 `FetchConfig` / `runFetch` 层出现、**不落到 App 线格式**的字段。 */
@@ -79,10 +82,21 @@ function objectKeys(src: string, startMarker: string): string[] {
   if (end < 0) return []
   const body = src.slice(braceAt + 1, end)
   const keys: string[] = []
-  // 顶层按逗号切（值里可能含 `?.` / 三元 / 字符串，但本仓这些 args 对象都是扁平 key: value）
-  for (const part of body.split(',')) {
+  /**
+   * ★★★#1169：先**剥掉注释**再按逗号切。
+   * 【为什么必须剥】原实现逐段判 `startsWith('//')` ⇒ 只对"注释紧贴字段同一段"有效；
+   *   而本仓的写法是「若干 `//` 注释行 + 换行 + 字段」，切分后那一段**以注释开头** ⇒
+   *   整个字段被跳过 ⇒ **假红**（实测：#1169 加 `httpDns` 时 `tlsPins`/`httpDns` 双双被误报漏传）。
+   * 【口径】剥行注释与块注释（保留换行，不影响其余结构）。
+   */
+  const stripped = body
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
+    .split('\n')
+    .map((l) => l.replace(/\/\/.*$/, ''))
+    .join('\n')
+  for (const part of stripped.split(',')) {
     const t = part.trim()
-    if (!t || t.startsWith('//') || t.startsWith('/*')) continue
+    if (!t) continue
     const m = /^([a-zA-Z_$][\w$]*)\s*(?::|$)/.exec(t)
     if (m) keys.push(m[1]!)
   }

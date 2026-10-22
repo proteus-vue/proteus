@@ -83,6 +83,8 @@ public final class InvokeWire {
     public static final int TAG_PINS = 12;
     /** ★#1153：pinning 信任语义（1 = 用 pin **替代**系统信任；缺省/null = 叠加在系统信任之上） */
     public static final int TAG_PIN_ONLY = 13;
+    /** ★★★#1169：HTTPDNS 域名→IP 映射（name-values：域名 → 逗号分隔 IP 串） */
+    public static final int TAG_HTTP_DNS = 14;
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     public static final int RTAG_HTTP_STATUS = 16;
@@ -177,6 +179,8 @@ public final class InvokeWire {
         public String tlsPins;
         /** ★#1153：true ⇒ 用 tlsPins **替代**系统信任；缺省/false ⇒ 叠加（系统信任也要过） */
         public Boolean tlsPinOnly;
+        /** ★★★#1169：HTTPDNS 域名→IP 映射（域名 → 逗号分隔 IP 串）；null ⇒ 全部走系统 DNS */
+        public java.util.LinkedHashMap<String, String> httpDns;
         public byte[] body = EMPTY;
 
         /** 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可空字段。 */
@@ -380,6 +384,7 @@ public final class InvokeWire {
                 case TAG_REDIRECT: f.redirectManual = p.u8() != 0; break;
                 case TAG_PINS: f.tlsPins = p.str(); break;
                 case TAG_PIN_ONLY: f.tlsPinOnly = p.u8() != 0; break;
+                case TAG_HTTP_DNS: f.httpDns = readNameValues(p); break;
                 // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
                 default: break;
             }
@@ -425,6 +430,8 @@ public final class InvokeWire {
         if (Boolean.TRUE.equals(f.redirectManual)) writeTlv(w, TAG_REDIRECT, () -> w.u8(1));
         if (f.tlsPins != null && !f.tlsPins.isEmpty()) writeTlv(w, TAG_PINS, () -> w.str(f.tlsPins));
         if (Boolean.TRUE.equals(f.tlsPinOnly)) writeTlv(w, TAG_PIN_ONLY, () -> w.u8(1));
+        // ★★★#1169：空表不写（与"不写"语义相同：不用 HTTPDNS）⇒ 不产生两种等价线格式形态
+        if (f.httpDns != null && !f.httpDns.isEmpty()) writeTlv(w, TAG_HTTP_DNS, () -> writeNameValues(w, f.httpDns));
         return w.done();
     }
 

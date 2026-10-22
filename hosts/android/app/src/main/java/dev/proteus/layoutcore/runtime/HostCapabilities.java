@@ -197,6 +197,22 @@ public final class HostCapabilities {
                 }
                 return ok(o);
             }
+            /**
+             * ★★★#1169：**HTTPDNS 记账**（排障/判据用）——回答"表到底有没有被用上"。
+             * · `lookups`：DNS 回调被调用次数；
+             * · `tableHits`：命中 per-call 表的次数（>0 ⇒ 业务给的表真的生效）；
+             * · `lastSource`：最后一次解析走的哪一级（`table` / `resolver` / `system`）；
+             * · `lastHost`：最后一次解析的域名。
+             * ★与 `http.tlsStats` 同一族形态（只读记账，不改任何行为）。
+             */
+            case "http.dnsStats": {
+                JSONObject o = new JSONObject();
+                o.put("lookups", HttpTransport.dnsLookupCount());
+                o.put("tableHits", HttpTransport.dnsTableHitCount());
+                o.put("lastSource", HttpTransport.lastDnsSource() == null ? "" : HttpTransport.lastDnsSource());
+                o.put("lastHost", HttpTransport.lastDnsHost() == null ? "" : HttpTransport.lastDnsHost());
+                return ok(o);
+            }
             // ── C27 WebSocket（#1093：RFC 6455 客户端，见 WebSocketCapability）──
             //   ★三个方法都**受理即返**；连接结果与消息经壳推 `__proteusHostWs` 到达 JS。
             case "ws.open":

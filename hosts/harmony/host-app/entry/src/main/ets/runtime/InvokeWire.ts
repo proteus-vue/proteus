@@ -57,6 +57,8 @@ export const TAG_REDIRECT: number = 11
 export const TAG_PINS: number = 12
 // ★#1153：pinning 信任语义（1 = 用 pin 替代系统信任；undefined = 叠加）
 export const TAG_PIN_ONLY: number = 13
+/** ★★★#1169：HTTPDNS 域名→IP 映射（name-values：域名 → 逗号分隔 IP 串） */
+export const TAG_HTTP_DNS: number = 14
 
 /** 回程 TLV tag（16 起；与去程段不重叠） */
 export const RTAG_HTTP_STATUS: number = 16
@@ -331,6 +333,8 @@ export class InvokeFrame {
   tlsPins: string | undefined = undefined
   /** ★#1153：true ⇒ 用 tlsPins 替代系统信任；undefined/false ⇒ 叠加 */
   tlsPinOnly: boolean | undefined = undefined
+  /** ★★★#1169：HTTPDNS 域名→IP 映射（域名 → 逗号分隔 IP 串）；undefined ⇒ 全部走系统 DNS */
+  httpDns: Map<string, string> | undefined = undefined
   /** ★#1120：非 undefined ⇒ 宿主边读文件边拼 multipart 边发 */
   upload: UploadSpec | undefined = undefined
   body: Uint8Array = EMPTY
@@ -442,6 +446,8 @@ function encodeInvokeMeta(f: InvokeFrame): Uint8Array {
   // ★#1153：pinning 只在显式要求时写（缺省 = 平台默认信任链）
   if (f.tlsPins !== undefined && f.tlsPins.length > 0) writeTlv(w, TAG_PINS, (x: Writer) => x.str(f.tlsPins as string))
   if (f.tlsPinOnly === true) writeTlv(w, TAG_PIN_ONLY, (x: Writer) => x.u8(1))
+  // ★★★#1169：空表不写（与"不写"语义相同）
+  if (f.httpDns !== undefined && f.httpDns.size > 0) writeTlv(w, TAG_HTTP_DNS, (x: Writer) => writeNameValues(x, f.httpDns as Map<string, string>))
   return w.done()
 }
 
@@ -484,6 +490,7 @@ function decodeInvokeMeta(bytes: Uint8Array, into: InvokeFrame): void {
     else if (tag === TAG_REDIRECT) into.redirectManual = p.u8() !== 0
     else if (tag === TAG_PINS) into.tlsPins = p.str()
     else if (tag === TAG_PIN_ONLY) into.tlsPinOnly = p.u8() !== 0
+    else if (tag === TAG_HTTP_DNS) into.httpDns = readNameValues(p)
     // 未知 tag 跳过（版本演进）
   }
 }

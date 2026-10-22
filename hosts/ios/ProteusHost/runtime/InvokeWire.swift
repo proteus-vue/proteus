@@ -92,6 +92,8 @@ enum InvokeWire {
     static let TAG_PINS: UInt8 = 12
     /// ★#1153：pinning 信任语义（1 = 用 pin **替代**系统信任；nil = 叠加）
     static let TAG_PIN_ONLY: UInt8 = 13
+    /// ★★★#1169：HTTPDNS 域名→IP 映射（name-values：域名 → 逗号分隔 IP 串）
+    static let TAG_HTTP_DNS: UInt8 = 14
 
     /* 回程 meta 的 TLV tag（★16 起留回程，两段不重叠） */
     static let RTAG_HTTP_STATUS: UInt8 = 16
@@ -179,6 +181,9 @@ enum InvokeWire {
         var tlsPins: String?
         /// ★#1153：true ⇒ 用 tlsPins **替代**系统信任；nil/false ⇒ 叠加
         var tlsPinOnly: Bool?
+        /// ★★★#1169：HTTPDNS 域名→IP 映射（域名 → 逗号分隔 IP 串）；nil ⇒ 全部走系统 DNS。
+        /// ★iOS：`URLSession` **没有**自定义 DNS 钩子 ⇒ 宿主如实回 `fetch.unsupported`（不静默忽略）。
+        var httpDns: NameValues?
         var body: [UInt8] = []
 
         /// 取值语义（缺省 = text）——宿主消费时用这个，不要直接读可选字段。
@@ -372,6 +377,7 @@ enum InvokeWire {
             case TAG_REDIRECT: f.redirectManual = try p.u8() != 0
             case TAG_PINS: f.tlsPins = try p.str()
             case TAG_PIN_ONLY: f.tlsPinOnly = try p.u8() != 0
+            case TAG_HTTP_DNS: f.httpDns = try readNameValues(p)
             // ★未知 tag 跳过（版本演进：老解码头遇到新 tag 应忽略，而非报错）
             default: break
             }
@@ -418,6 +424,8 @@ enum InvokeWire {
         // ★#1153：pinning 只在显式要求时写（缺省 = 平台默认信任链）
         if let pins = f.tlsPins, !pins.isEmpty { try writeTlv(w, TAG_PINS) { try w.str(pins) } }
         if f.tlsPinOnly == true { try writeTlv(w, TAG_PIN_ONLY) { w.u8(1) } }
+        // ★★★#1169：空表不写（与"不写"语义相同）
+        if let dns = f.httpDns, !dns.isEmpty { try writeTlv(w, TAG_HTTP_DNS) { try writeNameValues(w, dns) } }
         return w.done()
     }
 

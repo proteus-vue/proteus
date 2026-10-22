@@ -71,6 +71,8 @@ constexpr uint8_t TAG_REDIRECT = 11;
 constexpr uint8_t TAG_PINS = 12;
 // ★#1153：pinning 信任语义（1 = 用 pin 替代系统信任；缺省 = 叠加）
 constexpr uint8_t TAG_PIN_ONLY = 13;
+/** ★★★#1169：HTTPDNS 域名→IP 映射（name-values：域名 → 逗号分隔 IP 串） */
+constexpr uint8_t TAG_HTTP_DNS = 14;
 
 /* 回程 TLV tag（16 起；与去程段不重叠） */
 constexpr uint8_t RTAG_HTTP_STATUS = 16;
@@ -142,6 +144,8 @@ struct InvokeFrame {
   Opt<std::string> tlsPins;
   /** ★#1153：true ⇒ 用 tlsPins 替代系统信任；缺省/false ⇒ 叠加 */
   Opt<bool> tlsPinOnly;
+  /** ★★★#1169：HTTPDNS 域名→IP 映射（域名 → 逗号分隔 IP 串）；缺省 ⇒ 全部走系统 DNS */
+  Opt<NameValues> httpDns;
   std::vector<uint8_t> body;
 
   int responseKind() const { return responseType ? static_cast<int>(*responseType) : RESPONSE_TEXT; }
@@ -357,6 +361,8 @@ inline std::vector<uint8_t> encodeInvokeMeta(const InvokeFrame& f) {
   //   ★`Opt<T>` 是 `.has` + `operator*` 语义（不是指针）⇒ 不能写 `->empty()`（首版这么写直接编译失败）
   if (f.tlsPins.has && !f.tlsPins.v.empty()) writeTlv(w, TAG_PINS, [&](Writer& x) { x.str(f.tlsPins.v); });
   if (f.tlsPinOnly.has && f.tlsPinOnly.v) writeTlv(w, TAG_PIN_ONLY, [&](Writer& x) { x.u8(1u); });
+  // ★★★#1169：空表不写（与"不写"语义相同）。★`Opt<T>` 有 `operator bool` + `operator*`，**不是指针**
+  if (f.httpDns.has && !f.httpDns.v.empty()) writeTlv(w, TAG_HTTP_DNS, [&](Writer& x) { writeNameValues(x, f.httpDns.v); });
   return w.take();
 }
 
@@ -398,6 +404,7 @@ inline void decodeInvokeMeta(const std::vector<uint8_t>& bytes, InvokeFrame& f) 
       case TAG_REDIRECT: f.redirectManual = p.u8() != 0; break;
       case TAG_PINS: f.tlsPins = p.str(); break;
       case TAG_PIN_ONLY: f.tlsPinOnly = p.u8() != 0; break;
+      case TAG_HTTP_DNS: f.httpDns = readNameValues(p); break;
       default: break;  // 未知 tag 跳过（版本演进）
     }
   }

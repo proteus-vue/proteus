@@ -27,6 +27,7 @@ import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
 import { runTransportProbeScene } from '../runtime/TransportProbe';   // ★★★#1156 传输层取证（逻辑单列）
+import { runHttpProbe as runHttpProbeImpl } from '../runtime/HttpProbe';   // ★★★#1169 HTTP 探针（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
 import { readElementProbes, elementReportFragment, measureElementRect, ElementProbeReadout } from '../runtime/ElementProbe';
 import { inputMethod } from '@kit.IMEKit';   // ★决策 #1077：键盘探针主动收键盘（IMEKit 输入会话控制）
@@ -855,56 +856,13 @@ struct Superapp {
   }
 
   /**
-   * ★★★T-app-fetch 真机判据：`scene=superapp-http` ⇒ **不 boot 应用**，只跑一次真实网络往返。
-   *
-   * 【为什么单开一个场景（而不是塞进 superapp-drive）】本判据要 Answer 的问题是
-   *   「鸿蒙宿主的 `http.request` 二进制腿在真机上通不通」——它与应用 bundle/路由无关。
-   *   单开场景 ⇒ 判据不受应用层故障干扰（应用白屏时仍能独立判定网络腿）。
-   *
-   * 【链路】`hostHttpProbe`（proteus_host.so）内部：C++ 用 SSOT 编 `PINV` 帧 →
-   *   建一个**空 JSVM** → 只注入 `proteusHost.invokeBytes` → eval 一段 hex↔Uint8Array 脚本 →
-   *   JS 调桥（真实 `Uint8Array` 进出）→ C++ 解 `PRSP`。⇒ 证明「JS 字节交接 + 线格式 + 宿主 HTTP」三段。
-   *   ★诚实边界：不覆盖 `useFetch` 的业务封装（那由单测 + parity 门禁覆盖，见 http_probe.h 头注）。
-   *
-   * 【完成信号】落 `<filesDir>/http-probe.json` + hilog `PROTEUS_HTTP_PROBE_DONE`（脚本零盲等）。
+   * ★★★T-app-fetch 真机判据：`scene=superapp-http` ⇒ 不 boot 应用，只跑一次真实网络往返。
+   * ★★★#1169：实现已抽到 `runtime/HttpProbe.ets`——`Superapp.ets` 加完 DNS 表注入后到 1008 行
+   *   （`check:file-size` 硬上限 1000）；而探针是**判据装置**，本就不该长在应用壳里
+   *   （与 `TransportProbe.ets` / `KeyboardProbe` 同族）。
    */
   private runHttpProbe(): void {
-    let url: string = AppStorage.get<string>('proteusProbeUrl') ?? '';
-    if (url.length === 0) url = 'https://httpbin.org/get';
-    let result: string = '';
-    // ★ArkTS 自己编一帧（frameHex 入参）——C++ 侧解它 ⇒ 真机上的跨语言逐字节契约
-    let frameHex: string = '';
-    try {
-      const f: InvokeFrame = new InvokeFrame();
-      f.method = 'http.request';
-      f.reqId = 'probe-http-arkts-1';
-      f.url = url;
-      f.httpMethod = 'GET';
-      f.responseType = 0;   // RESPONSE_TEXT
-      const bytes: Uint8Array = encodeInvoke(f);
-      let hex: string = '';
-      for (let i = 0; i < bytes.length; i++) {
-        const b: number = bytes[i];
-        hex += (b < 16 ? '0' : '') + b.toString(16);
-      }
-      frameHex = hex;
-    } catch (e) {
-      hilog.error(DOMAIN, TAG, 'HTTP_PROBE_ARKTS_ENCODE_FAIL %{public}s', JSON.stringify(e) ?? '');
-    }
-    try {
-      result = hostHttpProbe(JSON.stringify({ 'url': url, 'frameHex': frameHex, 'filesDir': this.filesDir, 'dnsForceIp': AppStorage.get<string>('proteusProbeDnsIp') } as Record<string, Object>));  // ★#1167 dnsForceIp：无此键⇒不装假解析器（生产零影响）
-    } catch (e) {
-      result = '{"ok":false,"host":"harmony","error":"' + JSON.stringify(e) + '"}';
-    }
-    try {
-      const path: string = this.filesDir + '/http-probe.json';
-      const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
-      fileIo.writeSync(fd.fd, result);
-      fileIo.closeSync(fd.fd);
-    } catch (e) {
-      hilog.error(DOMAIN, TAG, 'HTTP_PROBE_WRITE_FAIL %{public}s', JSON.stringify(e) ?? '');
-    }
-    hilog.info(DOMAIN, TAG, 'PROTEUS_HTTP_PROBE_DONE %{public}s', result);
+    runHttpProbeImpl(this.filesDir);
   }
 
   private startKeyboardProbe(): void {

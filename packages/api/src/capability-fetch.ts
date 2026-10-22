@@ -68,6 +68,38 @@ export function normalizePins(pins: string | string[] | undefined): string | und
 }
 
 /**
+ * ★★★#1169：把 `httpDns` 归一成**线格式形态**（`Record<string, string>`，值 = 逗号分隔 IP）。
+ *
+ * 接受：`Record<string, string>`（已是逗号串）/ `Record<string, string[]>`（最常见）。
+ * 归一理由与 `normalizePins` 同源：线格式是 name-values（值为单个字符串），
+ * 若三处各自处理数组形态，迟早有一处漏掉（#1134 的"四层白名单"同族）。
+ *
+ * ★**域名小写归一**（DNS 域名大小写不敏感）：否则宿主查表时 `API.example.com` 与
+ *   `api.example.com` 会被当成两个键，业务传了大写就静默不命中。
+ * ★**去空白 / 去空 IP / 去重（保序）**：空 IP 会让宿主解析失败（且难归因）。
+ * ★**空表返回 undefined**（与"不传"语义相同：不用 HTTPDNS）——避免产生两种等价线格式形态。
+ */
+export function normalizeHttpDns(
+  dns: Record<string, string | string[]> | undefined,
+): Record<string, string> | undefined {
+  if (dns === undefined || dns === null) return undefined
+  const out: Record<string, string> = {}
+  for (const [rawHost, rawIps] of Object.entries(dns)) {
+    const host = String(rawHost).trim().toLowerCase()
+    if (!host) continue
+    const list = Array.isArray(rawIps) ? rawIps : String(rawIps ?? '').split(/[\s,]+/)
+    const ips: string[] = []
+    for (const raw of list) {
+      const ip = String(raw).trim()
+      if (!ip) continue
+      if (!ips.includes(ip)) ips.push(ip)
+    }
+    if (ips.length > 0) out[host] = ips.join(',')
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/**
  * 发一次网络请求（`useFetch` 的实现）。
  *
  * @returns 成功 = `{ ok:true, data, status, headers }`；失败 = `{ ok:false, error }`（**不抛**，G-32.3）。
@@ -111,6 +143,10 @@ export async function runFetch<T>(
       //     否则三处各写一遍归一逻辑（且容易有一处漏掉数组形态）。
       tlsPins: normalizePins(config?.tlsPins),
       tlsPinOnly: config?.tlsPinOnly,
+      // ★★★#1169 HTTPDNS：域名→IP 表（Android/鸿蒙支持；iOS 会明确 reject）
+      //   ★归一在本层做（`string[]` → 逗号串），与 `normalizePins` 同源理由：
+      //     下游（appHttpRequest / 线格式）只认一种形态，避免三处各写一遍归一。
+      httpDns: normalizeHttpDns(config?.httpDns),
     })
     /**
      * ★★★#1158：`transport` 必须透传 —— 第 4 段链路。

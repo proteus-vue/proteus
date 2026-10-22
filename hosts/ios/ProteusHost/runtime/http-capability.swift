@@ -51,6 +51,17 @@ final class HttpCapability {
         guard let url = buildURL(f) else {
             return try InvokeWire.encodeResolve(.makeErr(f.reqId, "http.request: url 非法或缺失（\(f.url ?? "<nil>")）"))
         }
+        // ★★★#1169：**iOS 不支持 HTTPDNS**——如实 `fetch.unsupported`，不静默忽略。
+        //   【为什么不能"忽略就算了"】业务传了 httpDns 就是期望绕过系统 DNS；静默忽略 ⇒
+        //   它以为走了 HTTPDNS、实际走系统 DNS（**假数据比缺数据更糟**，与"transport 缺键不填 0"同一纪律）。
+        //   【为什么不实现】`URLSession` **没有**自定义 DNS 钩子；要支持只能把 URL 改成 IP 直连——
+        //   那会**破坏 SNI 与证书主机名校验**（不可接受的降级）⇒ 诚实的边界：仅 Android/鸿蒙支持。
+        if let dns = f.httpDns, !dns.isEmpty {
+            return try InvokeWire.encodeResolve(.makeErr(
+                f.reqId,
+                "fetch.unsupported: iOS 的 URLSession 不支持自定义 DNS（httpDns 仅在 Android/鸿蒙 生效）"
+            ))
+        }
         var req = URLRequest(url: url)
         req.httpMethod = f.httpMethod ?? "GET"
         req.timeoutInterval = Double(f.timeoutOrDefault) / 1000.0

@@ -310,6 +310,25 @@ addInvoke('invoke-tls-no-pins-no-tag', {
   meta: { url: 'https://api.example.cn/v1/plain', responseType: 'text' },
 })
 
+// ⑨o ★★★#1169 HTTPDNS 映射表（name-values；域名 → 逗号分隔 IP 串）
+//   ★为什么用 name-values 而不是"每域名一个 tag"：域名数量业务决定（1~N），
+//     name-values 是既有原语（Headers/Params/Transport 都用它）⇒ 零新增编码形态。
+addInvoke('invoke-http-dns-table', {
+  method: 'http.request',
+  reqId: 'r-dns-1',
+  meta: {
+    url: 'https://api.example.cn/v1/x',
+    httpDns: { 'api.example.cn': '203.0.113.10,203.0.113.11', 'img.example.cn': '203.0.113.20' },
+  },
+})
+
+// ⑨p ★#1169 判据配对：**空表不写 tag**（与"不写"语义相同 ⇒ 不产生两种等价线格式形态）
+addInvoke('invoke-http-dns-empty-no-tag', {
+  method: 'http.request',
+  reqId: 'r-dns-2',
+  meta: { url: 'https://api.example.cn/v1/plain', httpDns: {} },
+})
+
 /* ══════════════════ 回程向量 ══════════════════ */
 
 // ⑩ 受理回执（pending）—— 决定 JS 侧"保持挂起"的那一帧
