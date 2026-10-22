@@ -3121,6 +3121,32 @@
         "T-knowledge-kernel-m0"
       ],
       "note": "【done · 决策 #1180（2026-10-22）】承接 #1153 的 ⑤。★先纠正自己：#1153 判「无机器可读的 SPI→端映射」是错的 —— scanCapabilities 的 adapters 键名就是平台集合，数据源一直在。★实现：capabilities.ts（parseCapabilityManifest / affectedDevicesOf / summarizeCapabilities，纯函数无 IO）+ provider 第二参数 + devices 子命令（动态 import 扫描器，check 路径不付 esbuild 开销）。★三条不糊弄：未加载 ≠ 查无 ≠ 无端实现（loaded/known 分开，且 loaded=false 时即便有数据也拒绝回答）；未知 id 绝不返回全部端；platforms 坏值记 malformed 不静默。★实测：clipboard → skyline web（不含 app ⇒ 改剪贴板不必回归 App 端）；未知 id exit 1 且明说「不是无影响面，是查无此能力」。★判据 23→30（+7）；4 个变异全部命中；其中 M2 首次未被抓 —— 用空清单测「未加载」等于没测到守卫，补断言后命中。★边界：platforms 只表达「有 adapter」不表达实现差异；清单当前 1 条（数据少非功能假）；③ locateAssertion 确认无注册表，不硬造。"
+    },
+    {
+      "id": "T-studio-inspector-real",
+      "title": "Studio 右栏检查器接真数据：删硬编码假值 + 240 帧滑动窗口 + Playwright 绕 TCC 截图验证",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/native/embed_view.m",
+        "docs/proteus-studio-poc/native/live_stream.h",
+        "docs/proteus-studio-poc/05-studio-shell/src/main.rs",
+        "docs/proteus-studio-poc/05-studio-shell/dist/index.html",
+        "docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs",
+        "docs/proteus-studio-poc/05-studio-shell/results",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1181,
+      "verification": "node docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs（9 判据）&& POC_SECONDS=8 POC_JSON=results/panel-source.json POC_LIVE=… ./target/release/proteus-studio-shell",
+      "branch": null,
+      "related": [
+        "T-studio-shell-stage1",
+        "T-studio-latency",
+        "T-knowledge-affected-devices"
+      ],
+      "note": "【done · 决策 #1181（2026-10-22）】承接 #1173「面板占位」——实际更糟：有两行是硬编码假值（\"Android · 1200×2608\"、\"6.2 Mbps\"）。★原生侧：240 帧滑动窗口直方图（间隔/延迟/队列/解码/合成/上屏）+ poc_live_stats 一揽子取数 + 入队字节计数（码率）+ 报告加 aus/mbps。★Rust：stats 扩到 20 字段；新增机型探测（adb getprop + wm size，OnceLock 缓存），失败返回 null 不编。★前端三个不糊弄：负值显示 —（-1=样本不足，toFixed 会变 0.0 被读成\"很快\"）；机型未知就显示未知；帧率由原生按墙钟算不用前端差分。★验证方法：TCC 让 screencapture 与 WKWebView 都截不到 ⇒ Playwright 渲染纯 HTML 面板，桩只替换 IPC，读数取自真实跑机 JSON，机型走真 adb；9 判据全过，产出 results/inspector-panel.png。★判据 ⑨（正文无裸 **）是被自己坑出来的：把 Markdown 粗体写进 HTML，第一次看截图就露馅。★边界：只验证渲染与字段映射（IPC 是桩、WebKit/Chromium 差异未验）；元素拾取仍无数据源，面板明说；码率按入队 AU 估算（9.6 高于 --bit-rate 8M）。"
     }
   ]
 }

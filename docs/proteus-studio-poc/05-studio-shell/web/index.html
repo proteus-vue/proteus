@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Proteus Studio</title>
+<style>
+  :root{
+    --bg:#17181c; --panel:#1f2126; --panel2:#24262c; --line:#2e3138;
+    --fg:#e6e8ee; --dim:#9aa1ad; --accent:#4c8dff; --ok:#39c07a; --warn:#e2b341; --bad:#e5534b;
+  }
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;
+    font:13px/1.45 -apple-system,"PingFang SC",system-ui,sans-serif;color:var(--fg);
+    user-select:none;-webkit-user-select:none}
+
+  /* 顶部条 + 三栏 + 状态栏 */
+  .app{display:grid;height:100vh;
+       grid-template-columns:56px minmax(0,1fr) 340px;
+       grid-template-rows:44px minmax(0,1fr) 28px;
+       grid-template-areas:"top top top" "rail main side" "status status status";}
+
+  .top{grid-area:top;display:flex;align-items:center;gap:12px;padding:0 14px;
+       background:var(--panel);border-bottom:1px solid var(--line)}
+  .brand{font-weight:600;letter-spacing:.2px}
+  .brand span{color:var(--accent)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
+        background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:12px;
+        white-space:nowrap}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  .dot.off{background:#6b7280}
+
+  .rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0;
+        background:var(--panel);border-right:1px solid var(--line)}
+  .rail button{width:38px;height:38px;border-radius:9px;border:1px solid transparent;background:transparent;
+        color:var(--dim);font-size:16px;cursor:default}
+  .rail button.on{background:var(--panel2);border-color:var(--line);color:var(--fg)}
+
+  .main{grid-area:main;position:relative;background:#0e0f12;overflow:hidden}
+  /* ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 */
+  #canvas{position:absolute;left:24px;top:24px;right:24px;bottom:24px;background:transparent}
+  .frame{position:absolute;left:24px;top:24px;right:24px;bottom:24px;border:1px solid #3a3f49;
+         border-radius:6px;pointer-events:none}
+  .cross{position:absolute;inset:24px;pointer-events:none;opacity:.55}
+  .cross:before,.cross:after{content:"";position:absolute;background:rgba(76,141,255,.8)}
+  .cross:before{left:50%;top:0;bottom:0;width:1px}
+  .cross:after{top:50%;left:0;right:0;height:1px}
+  .tag{position:absolute;left:32px;top:32px;padding:4px 8px;border-radius:6px;
+       background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.14);font-size:11px;color:#cfd5e1}
+
+  .side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
+  .sec{border-bottom:1px solid var(--line);padding:12px 14px}
+  .sec h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.4px}
+  .kv{display:grid;grid-template-columns:86px 1fr;gap:5px 10px;font-size:12px}
+  .kv b{font-weight:500;color:var(--dim)}
+  .kv span{color:var(--fg);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+  /* 分阶段耗时：缩进体现"合计 = 四段之和"，避免读成四个并列指标 */
+  .kv span.sub{padding-left:14px;color:#c3c9d4}
+  .kv span.sub:before{content:"└ ";color:#5c626e}
+  .todo{font-size:12px;color:var(--dim);line-height:1.7}
+  .todo i{color:var(--warn);font-style:normal}
+  .todo b{color:#e6e8ee;font-weight:600}
+  .todo code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+             padding:0 4px;font-size:11px;color:#c3c9d4}
+  .note{font-size:11.5px;color:#6f7783;margin-top:6px;line-height:1.6}
+
+  .status{grid-area:status;display:flex;align-items:center;gap:16px;padding:0 14px;
+          background:var(--panel2);border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);
+          font-variant-numeric:tabular-nums}
+  .status .k{color:#727a88}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">Proteus <span>Studio</span></div>
+    <div class="chip"><span class="dot" id="linkDot"></span> <span id="linkChip">等待画布</span></div>
+    <div class="chip" id="modeChip">镜像 60fps 上限</div>
+    <div style="flex:1"></div>
+    <div class="chip">阶段 1 骨架 · 画布由 HTML 布局驱动</div>
+  </div>
+
+  <div class="rail">
+    <button class="on" title="设备">▣</button>
+    <button title="样式">◈</button>
+    <button title="断言">✓</button>
+    <button title="录制">●</button>
+  </div>
+
+  <div class="main">
+    <div id="canvas"></div>
+    <div class="frame"></div>
+    <div class="cross"></div>
+    <div class="tag">device.native · 原生 GL 画布（下方）· HTML 叠加（本层）</div>
+  </div>
+
+  <div class="side">
+    <div class="sec">
+      <h3>设备与流</h3>
+      <div class="kv">
+        <b>机型</b><span id="kdev">—</span>
+        <b>画面</b><span id="kstream">—</span>
+        <b>解码</b><span id="kdec">—</span>
+        <b>帧率</b><span id="kfps">—</span>
+        <b>到达间隔</b><span id="kiv">—</span>
+      </div>
+      <div class="note" id="kdevNote"></div>
+    </div>
+
+    <div class="sec">
+      <h3>管线（首字节到达 → 上屏）</h3>
+      <div class="kv">
+        <b>合计 p50</b><span id="klat">—</span>
+        <b>合计 p95</b><span id="klat95">—</span>
+        <b>队列等待</b><span class="sub" id="kqw">—</span>
+        <b>解码</b><span class="sub" id="kdecms">—</span>
+        <b>合成</b><span class="sub" id="kcmp">—</span>
+        <b>上屏</b><span class="sub" id="kpres">—</span>
+      </div>
+      <div class="note">合计 ≈ 上四段之和；数值来自原生侧滑动窗口（最近 240 帧）。</div>
+    </div>
+
+    <div class="sec">
+      <h3>运行</h3>
+      <div class="kv">
+        <b>出帧</b><span id="kframes">0</span>
+        <b>迟到</b><span id="klate">0</span>
+        <b>入队 AU</b><span id="kaus">0</span>
+        <b>空转拍</b><span id="kempty">—</span>
+        <b>CPU</b><span id="kcpu">—</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>检查器（无数据源）</h3>
+      <div class="todo">
+        元素拾取这一层<b>还没有数据源</b>，所以这里不显示盒模型 / 计算样式：
+        <br>· 需要设备侧的视图树 + 元素拾取通道（未接）
+        <br>· 源码定位（G-54 <code>locateAssertion</code>）——仓库里没有「断言 id → 代码位置」注册表
+      </div>
+      <div class="note">
+        已经能查的是<b>能力影响面</b>（G-54 <code>affectedDevices</code>，决策 #1180）：<br>
+        <code>proteus knowledge devices &lt;id&gt;</code> ⇒ 例如 <code>clipboard → skyline web</code>（不含 app，改它不必回归 App 端）。
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>本骨架没做的</h3>
+      <div class="todo">
+        <i>· 编辑器内核</i>（G-56.1 红线：绝不自研）<br>
+        <i>· 终端 / pty</i><br>
+        <i>· 元素拾取</i><br>
+        <i>· 双向控制（触摸回传）</i>
+      </div>
+    </div>
+  </div>
+
+  <div class="status">
+    <span><span class="k">canvas</span> <span id="srect">—</span></span>
+    <span><span class="k">frames</span> <span id="sframes">0</span></span>
+    <span><span class="k">fps</span> <span id="sfps">—</span></span>
+    <span><span class="k">lat</span> <span id="slat">—</span></span>
+    <span><span class="k">late</span> <span id="slate">0</span></span>
+    <span><span class="k">cpu</span> <span id="scpu">—</span></span>
+    <span style="flex:1"></span>
+    <span id="shint">等待原生画布…</span>
+  </div>
+</div>
+
+<script>
+const T = window.__TAURI__;
+const invoke = T?.core?.invoke;
+const el = (id) => document.getElementById(id);
+
+/** 数值格式化：**负值一律显示为 "—"**（原生侧用 -1 表示"样本不足"，0 会被读成"很快"） */
+const num = (v, digits = 1, unit = '') =>
+  (typeof v !== 'number' || !isFinite(v) || v < 0) ? '—' : v.toFixed(digits) + unit;
+const ms = (v) => num(v, 1, ' ms');
+const pct = (v) => (typeof v !== 'number' || v < 0) ? '—' : (v * 100).toFixed(0) + '%';
+
+function syncRect() {
+  const r = el('canvas').getBoundingClientRect();
+  // ★画布位置/大小由 HTML 决定，传给原生侧；坐标是 CSS 点、左上原点
+  invoke?.('set_canvas_rect', { x: r.x, y: r.y, w: r.width, h: r.height });
+  el('srect').textContent = `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}×${Math.round(r.height)}`;
+}
+
+function render(s) {
+  const running = s.frames > 0;
+  el('linkChip').textContent = running ? '画布运行中' : '等待首帧';
+  el('linkDot').className = 'dot' + (running ? '' : ' off');
+
+  // 设备与流
+  el('kdev').textContent = s.device || '未知（adb 未探测到）';
+  el('kdevNote').textContent = s.device ? '' : '注：没查到机型时不编造型号；画面尺寸来自解码器而非设备上报。';
+  el('kstream').textContent =
+    `H.264 · ${s.width}×${s.height} · ${s.mbps < 0 ? '—' : s.mbps.toFixed(1) + ' Mbps'}`;
+  el('kdec').textContent = s.hwdec ? 'VideoToolbox 硬解' : '软件解码';
+  el('kfps').textContent = s.fps < 0 ? '—' : s.fps.toFixed(1) + ' fps';
+  el('kiv').textContent = `p50 ${num(s.iv_p50, 1)} / p95 ${num(s.iv_p95, 1)} ms`;
+
+  // 管线
+  el('klat').textContent = ms(s.lat_p50);
+  el('klat95').textContent = ms(s.lat_p95);
+  el('kqw').textContent = ms(s.qw_p50);
+  el('kdecms').textContent = ms(s.dec_p50);
+  el('kcmp').textContent = ms(s.cmp_p50);
+  el('kpres').textContent = ms(s.pres_p50);
+
+  // 运行
+  el('kframes').textContent = s.frames;
+  el('klate').textContent = s.late + ' 帧';
+  el('kaus').textContent = s.aus;
+  el('kempty').textContent = s.ticks > 0 ? `${s.empty} / ${s.ticks}` : '—';
+  el('kcpu').textContent = s.cpu_pct < 0 ? '—' : s.cpu_pct.toFixed(1) + '% 单核';
+
+  // 状态栏
+  el('sframes').textContent = s.frames;
+  el('sfps').textContent = s.fps < 0 ? '—' : s.fps.toFixed(1);
+  el('slat').textContent = s.lat_p50 < 0 ? '—' : s.lat_p50.toFixed(1) + 'ms';
+  el('slate').textContent = s.late;
+  el('scpu').textContent = s.cpu_pct < 0 ? '—' : s.cpu_pct.toFixed(1) + '%';
+  if (running) el('shint').textContent = '原生画布运行中 · 60Hz 调度 · VT 解码';
+  // 自检：正文里出现裸 ** 说明有人把 Markdown 粗体写进了 HTML（本轮已犯过一次）
+  if (!window.__mdChecked) {
+    window.__mdChecked = true;
+    if (document.body.innerText.includes('**')) console.warn('面板正文里出现裸 ** —— 应改用 <b>');
+  }
+}
+
+async function poll() {
+  try {
+    const s = await invoke('stats');
+    render(s);
+  } catch (e) {
+    el('shint').textContent = 'stats 调用失败：' + e;
+  }
+}
+
+addEventListener('resize', () => { syncRect(); });
+addEventListener('DOMContentLoaded', () => {
+  syncRect();
+  setInterval(syncRect, 1000);
+  setInterval(poll, 500);
+  poll();
+});
+</script>
+</body>
+</html>

@@ -45,6 +45,7 @@ static pthread_t g_live_thread;
 static volatile int g_live_run = 0;
 static volatile int g_live_restarts = 0;
 static volatile long g_live_aus = 0;
+static volatile long long g_live_bytes = 0;   /* 累加入队 AU 的字节数（码率估算用） */
 
 static char g_live_cmd[512];
 
@@ -70,6 +71,7 @@ static void live_push(const unsigned char *buf, int n, double t_first) {
   g_live_tail = (g_live_tail + 1) % LIVE_MAX_AU;
   g_live_count++;
   g_live_aus++;
+  g_live_bytes += n;
   pthread_mutex_unlock(&g_live_lock);
 }
 

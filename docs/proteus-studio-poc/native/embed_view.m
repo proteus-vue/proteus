@@ -120,6 +120,37 @@ static int g_n_tr = 0;
 static double g_lat[MAX_SAMPLES], g_qw[MAX_SAMPLES], g_dec[MAX_SAMPLES];
 static int g_n_lat = 0, g_n_qw = 0, g_n_dec = 0;
 static double g_last_t_first = 0;  /* 当前渲染帧的首字节时刻 */
+
+/* ── 实时直方图（面板用）：固定窗口的环形缓冲，取值时排序求分位 ──
+   为什么不用 g_iv/g_lat 那批：那些是"给最终报告用"的一次性全量数组，只增不滑；
+   面板要的是**最近**表现，所以这里单独一套滑动窗口（240 帧 ≈ 4s@60fps）。 */
+#define HIST_N 240
+typedef struct { double v[HIST_N]; int n, i; } PocoHist;
+static PocoHist h_iv, h_lat, h_qw, h_dec, h_cmp, h_pres;
+static int g_rec = 0;   /* 预热结束、开始记账 */
+
+static void hist_add(PocoHist *h, double v) {
+  h->v[h->i] = v;
+  h->i = (h->i + 1) % HIST_N;
+  if (h->n < HIST_N) h->n++;
+}
+
+static int cmp_d(const void *a, const void *b) {
+  double x = *(const double *)a, y = *(const double *)b;
+  return (x < y) ? -1 : (x > y) ? 1 : 0;
+}
+
+/** 分位；样本不足返回 -1（**不返回 0**——0ms 会被读成"很快"） */
+static double hist_pct(const PocoHist *h, double q) {
+  if (h->n == 0) return -1;
+  double tmp[HIST_N];
+  memcpy(tmp, h->v, sizeof(double) * (size_t)h->n);
+  qsort(tmp, (size_t)h->n, sizeof(double), cmp_d);
+  int idx = (int)(q * (double)(h->n - 1) + 0.5);
+  if (idx < 0) idx = 0;
+  if (idx >= h->n) idx = h->n - 1;
+  return tmp[idx];
+}
 static int g_n_iv = 0, g_n_rc = 0, g_n_pr = 0;
 static struct rusage g_ru0;
 static int g_probe_bits = 0;
@@ -356,6 +387,32 @@ long poc_frames(void) { return g_frames; }
 long poc_recv_ok(void) { return g_recv_ok; }
 long poc_send_ok(void) { return g_send_ok; }
 long poc_live_aus(void) { return g_live_aus; }
+/* 面板取数：把实时读数写进 out（调用方按固定下标读，避免每次改结构就动 IPC）。
+   返回字段数。★分位样本不足时写 -1（不是 0）。 */
+int poc_live_stats(double *out) {
+  double wall = (g_last_out > 0 && g_wall0 > 0) ? (g_last_out - g_wall0) : 0;
+  double mbps = wall > 0 ? (double)g_live_bytes * 8.0 / (wall / 1000.0) / 1e6 : -1;
+  out[0] = wall > 0 ? (double)g_frames / (wall / 1000.0) : -1;   /* fps */
+  out[1] = hist_pct(&h_iv, 0.50);
+  out[2] = hist_pct(&h_iv, 0.95);
+  out[3] = hist_pct(&h_lat, 0.50);
+  out[4] = hist_pct(&h_lat, 0.95);
+  out[5] = hist_pct(&h_qw, 0.50);
+  out[6] = hist_pct(&h_dec, 0.50);
+  out[7] = hist_pct(&h_cmp, 0.50);
+  out[8] = hist_pct(&h_pres, 0.50);
+  out[9] = (double)g_late;
+  out[10] = (double)g_frames;
+  out[11] = (double)g_live_aus;
+  out[12] = mbps;
+  out[13] = (double)g_empty;
+  out[14] = (double)g_ticks;
+  out[15] = (double)g_W;
+  out[16] = (double)g_H;
+  out[17] = g_hw ? 1.0 : 0.0;
+  return 18;
+}
+
 long poc_ticks(void) { return g_ticks; }
 long poc_empty(void) { return g_empty; }
 int poc_live_restarts(void) { return g_live_restarts; }
@@ -400,6 +457,7 @@ static int poc_tick_impl(void) {
       while (live_pop(&au)) {
         double t_pop = now_ms();
         if (g_n_qw < MAX_SAMPLES) g_qw[g_n_qw++] = t_pop - au.t_ms;   /* 在队列里躺了多久 */
+        if (g_rec) hist_add(&h_qw, t_pop - au.t_ms);
         if (av_new_packet(g_pkt, au.size) < 0) { free(au.data); continue; }
         memcpy(g_pkt->data, au.data, (size_t)au.size);
         free(au.data);
@@ -415,7 +473,9 @@ static int poc_tick_impl(void) {
           g_recv_ok++;
           got = 1;
         }
-        if (g_n_dec < MAX_SAMPLES) g_dec[g_n_dec++] = now_ms() - t_dec0;  /* 解码（含 VT 异步等待） */
+        double dec_ms = now_ms() - t_dec0;
+        if (g_n_dec < MAX_SAMPLES) g_dec[g_n_dec++] = dec_ms;  /* 解码（含 VT 异步等待） */
+        if (g_rec) hist_add(&h_dec, dec_ms);
         g_last_t_first = au.t_ms;
       }
       if (!got) { g_empty++; return 0; }
@@ -519,6 +579,11 @@ use_last:
       if (g_last_out > 0 && g_n_iv < MAX_SAMPLES) g_iv[g_n_iv++] = p1 - g_last_out;
       // 端到端（我们这侧）：该帧首字节到达 → flushBuffer 完成
       if (g_live && g_last_t_first > 0 && g_n_lat < MAX_SAMPLES) g_lat[g_n_lat++] = p1 - g_last_t_first;
+      g_rec = 1;
+      if (g_last_out > 0) hist_add(&h_iv, p1 - g_last_out);
+      hist_add(&h_cmp, c1 - c0);
+      hist_add(&h_pres, p1 - b1);
+      if (g_live && g_last_t_first > 0) hist_add(&h_lat, p1 - g_last_t_first);
       g_last_out = p1;
     }
     av_frame_unref(frm);
@@ -533,6 +598,11 @@ int poc_tick(void) {
     fprintf(stderr, "poc_tick NSException: %s — %s\n", [[e name] UTF8String], [[e reason] UTF8String]);
     return 4;
   }
+}
+
+/** 码率（按入队 AU 的字节数估）—— 与面板口径一致 */
+static double mbps_of(double wall_ms) {
+  return wall_ms > 0 ? (double)g_live_bytes * 8.0 / (wall_ms / 1000.0) / 1e6 : -1;
 }
 
 void poc_report(const char *path) {
@@ -563,6 +633,7 @@ void poc_report(const char *path) {
              "  \"queue_ms\": {\"p50\": %.2f, \"p95\": %.2f, \"max\": %.2f},\n"
              "  \"decode_ms\": {\"p50\": %.2f, \"p95\": %.2f, \"max\": %.2f},\n"
              "  \"ticks\": %ld, \"empty_ticks\": %ld,\n"
+             "  \"aus\": %ld, \"mbps\": %.2f,\n"
              "  \"late_frames\": %ld,\n  \"late_pct\": %.2f,\n"
              "  \"cpu\": {\"self_seconds\": %.2f, \"wall_seconds\": %.2f, \"single_core_pct\": %.1f}\n}\n",
              g_live ? "(live pipe)" : video_path(), g_W, g_H, g_hw ? "videotoolbox" : "software",
@@ -575,7 +646,7 @@ void poc_report(const char *path) {
              pct(g_lat, g_n_lat, 0.50), pct(g_lat, g_n_lat, 0.95), pct(g_lat, g_n_lat, 0.99), g_n_lat ? g_lat[g_n_lat - 1] : -1,
              pct(g_qw, g_n_qw, 0.50), pct(g_qw, g_n_qw, 0.95), g_n_qw ? g_qw[g_n_qw - 1] : -1,
              pct(g_dec, g_n_dec, 0.50), pct(g_dec, g_n_dec, 0.95), g_n_dec ? g_dec[g_n_dec - 1] : -1,
-             g_ticks, g_empty,
+             g_ticks, g_empty, g_live_aus, mbps_of(wall),
              g_late, g_frames ? 100.0 * (double)g_late / (double)g_frames : -1,
              cpu, wall / 1000.0, wall > 0 ? cpu / (wall / 1000.0) * 100.0 : -1);
     fputs(json, stdout);

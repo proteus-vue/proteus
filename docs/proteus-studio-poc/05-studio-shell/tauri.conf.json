@@ -3,14 +3,27 @@
   "productName": "proteus-studio",
   "version": "0.1.0",
   "identifier": "dev.proteus.studio.shell",
-  "build": { "frontendDist": "dist" },
+  "build": {
+    "frontendDist": "web"
+  },
   "app": {
     "withGlobalTauri": true,
     "windows": [
-      { "label": "main", "title": "Proteus Studio (PoC)", "width": 1440, "height": 900,
-        "minWidth": 1080, "minHeight": 700, "resizable": true }
+      {
+        "label": "main",
+        "title": "Proteus Studio (PoC)",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1080,
+        "minHeight": 700,
+        "resizable": true
+      }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
-  "bundle": { "active": false }
+  "bundle": {
+    "active": false
+  }
 }

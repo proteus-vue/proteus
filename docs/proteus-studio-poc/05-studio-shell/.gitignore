@@ -1,1 +1,2 @@
 target/
+# ★web/ 是源码（手写 HTML，无打包器）；仓库根的 .gitignore 里 dist/ 是构建产物规则，别把这里命名成 dist

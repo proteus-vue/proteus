@@ -33,7 +33,7 @@ Tauri 2 窗口（1440×900）
 
 - 原生侧：`native/embed_view.m`（与 PoC B2 **共用同一份**），新增 `poc_set_frame` / `poc_frames` / `poc_late` / `poc_cpu_pct` / `poc_dump`；
 - Rust：`set_canvas_rect` / `stats` / `dump_frame` 三个命令；60Hz 调度（原生按 PTS 决定这一拍出不出帧）；
-- 前端：单文件 `dist/index.html`，无打包器。
+- 前端：单文件 `web/index.html`，无打包器。
 
 ## ★这一版抓到的真 bug（画布上下颠倒）
 
@@ -121,6 +121,49 @@ popen 拉流（进程退出自动重连）→ Annex-B 拆 NAL → **按 `first_m
    与解码方式无关；修完后**硬解与软解画面都干净**（`results/canvas-live-hw.png` / `canvas-live-sw.png`）。
 2. 本轮中途猜"硬解 p99 更差是 GPU→CPU 回拷造成的"——量出来 `hw_transfer_ms.p50 = 0.05ms`
    （Apple Silicon 统一内存），**假设不成立**；首批看到的 p99 差异是机器负载噪声，不是机制。
+
+## 右栏检查器：接真数据（决策 #1181）
+
+上一版右栏是**占位**，而且几行是**硬编码的假值**（"Android · 1200×2608"、"6.2 Mbps"）。这一版全部换成真读数。
+
+### 数据从哪来
+
+| 面板行 | 来源 | 备注 |
+|---|---|---|
+| 机型 | `adb shell getprop ro.product.model` + `wm size` | **探测不到就显示"未知"，不编一个** |
+| 画面 | 解码器实际 `width×height` + 码率 | 码率按入队 AU 字节数估（含起始码，略高于 `--bit-rate` 目标值） |
+| 解码 | `hwdec` 位 | VideoToolbox 硬解 / 软件 |
+| 帧率 / 到达间隔 | 原生侧按墙钟 + 240 帧滑动窗口 | **不用前端差分**（丢帧时会跳） |
+| 管线四段 | 首字节到达 → 上屏，逐段记账 | 队列 / 解码 / 合成 / 上屏 |
+| 出帧 / 迟到 / 入队 AU / 空转拍 / CPU | 原生计数器 | 空转拍 = 没有新 AU 的渲染拍（能一眼看出取样是否跟得上） |
+
+★**负值一律显示 `—`**：原生侧用 `-1` 表示"样本不足"，直接 `toFixed` 会显示成 `0.0`——0ms 会被读成"很快"。
+
+### 怎么验证的（这是本轮的关键）
+
+macOS 的屏幕录制权限（TCC）不给本进程，`screencapture` 直接失败，**WKWebView 内容截不到**。
+但面板是**纯 HTML** ⇒ 用 Playwright 渲染一遍就有真截图：
+
+```bash
+node verify-panel.mjs          # ⇒ results/inspector-panel.png
+```
+
+桩只替换**"值怎么送到页面"**这一步：
+
+- 读数来自 `results/panel-source.json`（同一次真实跑机采的 JSON），**不是编的**；
+- 机型仍走**真实 adb**（与应用内同一条命令）；
+- 9 条判据：IPC 调到 stats / 画布矩形被同步 / 三行有值 / 解码方式与读数一致 / 延迟是真实值 /
+  管线四段都渲染 / 状态灯切运行中 / 无 JS 错误 / **正文无裸 `**`**。
+
+★最后一条是**被自己坑出来的**：我把 Markdown 粗体写进了 HTML，页面上直接露出 `**`，
+第一次看截图就看到了。现在既有自检也有判据挡复发。
+
+### 诚实边界
+
+1. **只验证了渲染与字段映射**，没验证 Tauri IPC 真实往返（那是桩）、也没验证 WKWebView 与 Chromium 的渲染差异；
+2. **元素拾取仍无数据源**——设备侧视图树 + 拾取通道未接，所以面板明说"这里不显示盒模型 / 计算样式"；
+3. 源码定位（G-54 `locateAssertion`）**确认没有**「断言 id → 代码位置」注册表，不硬造；
+4. 能查的只有能力影响面（G-54 `affectedDevices`），且要走 CLI：`proteus knowledge devices <id>`。
 
 ## 延迟（决策 #1177）
 
