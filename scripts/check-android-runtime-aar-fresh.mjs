@@ -27,6 +27,12 @@ export function runtimeSourcesHash() {
   const files = fs.readdirSync(RT_SRC).filter((f) => f.endsWith('.java')).sort()
   const h = crypto.createHash('sha256')
   for (const f of files) { h.update(f); h.update('\0'); h.update(fs.readFileSync(path.join(RT_SRC, f))); h.update('\0') }
+  // ★★★#1160：**第三方 jar 也进哈希**——OkHttp/Okio 是 AAR 的组成部分（runtime 直接引用它们，
+  //   且会并入 classes.jar）。若只哈希 `runtime/*.java`，换/升第三方 jar 时 AAR 不会判陈旧
+  //   ⇒ 消费方拿到旧 jar 里的类（"生成物没在构建路径上"的同族事故）。
+  const tpDir = path.join(ROOT, 'hosts/android/thirdparty')
+  const jars = fs.existsSync(tpDir) ? fs.readdirSync(tpDir).filter((f) => f.endsWith('.jar')).sort() : []
+  for (const f of jars) { h.update(f); h.update('\0'); h.update(fs.readFileSync(path.join(tpDir, f))); h.update('\0') }
   return h.digest('hex')
 }
 

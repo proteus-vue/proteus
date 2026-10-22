@@ -12038,3 +12038,65 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 判据与破坏性验证**：`tests/gates-sync.test.ts` **63/63**（原 37 → +26：台账 17 条 + 解析器 6 条 + 独立验证打回 6 条）；**9 个变异全部独立命中**（删 meta / run 改 verify / 理由敷衍 / 去 also / CI 覆盖项混进台账 / 压上限 / meta 置 `{}` / also 改裸词 / 整对删 `:strict`），复原后复绿。`check:gates-sync` `check:ai-tasks` `check:file-size` `check:script-compile` `check:decision-numbers` 全 rc=0。
 **⑦ 诚实边界（残余通道，逐条具名）**：1) **5 类 cat 仍只是标签**（macos / sdk / policy / machine-noise / local-env）——报告显式点名"cat 仅标签（无结构谓词）"，不假装验证过；2) `manual/on-device/closeout` 15 条**判不出是否真跑过**（报告单列，属诚实边界；本轮消灭的是"无成本进入该桶"，不是"判不出"）；3) `RATCHET` 改个数字就能过（与 `check:file-size` 同一威胁模型：抬数字留在 diff 里被看见）；4) 语义级参数仍只做 token 匹配（`knowledge --check` 仍判命中）；5) `cd website && …` 的入口路径解析未建模（当前台账无此类条目）；6) YAML 仍行级解析（`if:`/matrix/`uses:` 复用 workflow 未建模，失败方向为假红）。
 **⑧ 未做 / 下一步**：① 把 5 类"仅标签"逐步补谓词（`sdk` 可判"命令/脚本出现 ndk/javac/hvigor"、`macos` 可判"出现 xcrun/swiftc/simctl"）；② `manual` 桶逐条收敛（能进 verify 的进 verify，进不了的写明触发脚本并用 `build-script` 取证）；③ `policy` 14 条逐条评估是否接 CI（`ios-exp-docs` / `ios-source-lists` / `android-bundle` 三条已核实"本可接 CI"，只差决策）；④ 仓内遗留红**已在本轮顺手修掉**（同提交）：`check:host-rounding` 6 处（`DeviceCapability.java:172,173` 屏幕度量 px÷density / `:230` 亮度量化 0..255 / `GlassInteraction.java:385` 物理积分子步数 / `device-capability.swift:130,131` pt 度量）——逐处核实属门禁口径的**合法例外**（度量报告/位图量化/步数），补 `I2-ALLOW:` 理由（登记例外 248→254）；`check:shell-i18n-vars` 9 处——6 处 `$VAR<全角>`（实测 bash 把全角「（」的首字节吃进变量名，`set -u` 下 `APK?: unbound variable` 直接崩）改 `${VAR}`，3 处 `//` 注释（bash 当命令执行）改 `#`。★这两条**早已在 `pnpm verify` 链里**，却因本机 `pnpm` 不在 PATH、verify 长期没跑而无人发现——"接了线"与"真在跑"是两件事。
+
+---
+
+1160. **★★★Android 传输栈换 OkHttp 3.14.9——一次换栈同时收口 HTTP/2（P1 剩余缺口）+ 全字段传输读数 + HTTPDNS 的 `Dns` 注入接入点；独立验证抓出「9 组真机回归全绿而 POST/PUT 静默发空体」的覆盖洞 · 决策**（2026-10-22 · 承接 #1158「下一步①」）:
+
+**决策**：Android 宿主的 HTTP 传输栈从 `HttpURLConnection` 换成 **OkHttp 3.14.9（纯 Java 线，vendored +180 KB）**。
+一次换栈同时买到三样：① **HTTP/2 协商**（矩阵 P1 剩余缺口）② **全字段传输读数**（dns/connect/tls/ttfb + reused）③ **HTTPDNS 的 `Dns` 注入 seam**。
+
+**为什么换（`HttpURLConnection` 三项都做不到）**：
+- HTTP/2：#1155 真机实测 `server_protocols={"http/1.1":3}`——AOSP 的 `HttpURLConnection` 底层虽是 `com.android.okhttp`，但**不开 h2、也不暴露协议**；
+- HTTPDNS：**没有 `Dns` 注入点**。把 URL 换成 IP 会破坏 SNI 与证书主机名校验（不是等价方案）；
+- 读数：`dnsMs/connectMs/tlsMs/reused` 平台全不暴露（#1158 时 Android 只有 `proto`+`ttfbMs`）。
+
+**选型（实测体积差 5 倍，用本仓同一套 d8 参数 `--release --min-api 24 --lib android.jar`）**：
+| 组合 | dex 未压缩 | APK 内（压缩后） |
+|---|---|---|
+| 现状（无 OkHttp） | 627,800 B | 292,290 B |
+| **OkHttp 3.14.9 + Okio 1.17.2** | 388,392 B | **184,549 B（+180 KB）** |
+| OkHttp 4.12 + Okio 3.6 + kotlin-stdlib 1.8.21 | 2,879,144 B | 951,024 B（+929 KB） |
+
+⇒ 取 3.14.9（最后一个纯 Java 稳定线）。★**只为 Android 一端付费**：iOS 的 h2 是平台默认（#1155），鸿蒙 RCP 本次不动。
+
+**★三条不能破的既有语义（换栈最容易静默弄坏的部分）**：
+· **连接复用**（#1155 真回归教训）：连接池挂在 `OkHttpClient` 实例上 ⇒ **每请求 new client = 池归零**。⇒ 按「pin 串 + pinOnly + 是否注入 DNS」缓存 client；per-call 的 timeout/redirect/读数一律走 `client.newBuilder()`（实测共享同一 `ConnectionPool` 与 `Dispatcher`）。**真机复验 3 请求 / 1 TCP，未退化**。
+· **唯一建连入口**（#1153 教训）：四条路径（整包/落盘/流式/上传）全部经 `HttpTransport.newCall`；`HttpURLConnection` 时代的 `TlsPinning.open`/`applyTo`/`RedirectPolicy` 全部删除（留着会被新路径"顺手"复用 ⇒ 回到 h1 + 无读数）。
+· **缺键 = 不可得**（#1158 硬约定）：`EventListener` 测不到就不写键，绝不填 0/false。
+
+**★★★真机结果（核心判据）**：
+| 判据 | 换栈前 | 换栈后 |
+|---|---|---|
+| HTTP/2 | `http/1.1` × 3 | **`h2` × 3** ✅ |
+| 连接复用 | 3 请求 / 1 TCP | **3 请求 / 1 TCP**（未退化）✅ |
+| 传输读数 | `{proto, ttfbMs}` | **`{proto, reused, dnsMs, connectMs, tlsMs, ttfbMs}` 全字段** ✅ |
+| 复用印证 | — | 首轮 `reused:false, connect:19ms, tls:16ms` → 末轮 `reused:true`（无 connect/tls 键）|
+
+服务端记账（唯一的"事实"）：`{"h2":3}` · 请求 3 / TCP 1 · 同一对端端口复用 3 次。
+★`ttfbMs` 口径**由"连接+首字节+响应头"变为纯首字节**（更细，不是"变快"）——已写进矩阵。
+
+**★★★独立验证（异会话子代理）抓出 1 条 P0 + 1 条无界泄漏 + 3 条弱判据，全部修**：
+- **P0：`perform()`（整包路径）漏了 `cfg.body`** ⇒ **Android 所有带 `data` 的 POST/PUT 静默变空体**（功能全错、零报错、日志干净）。
+  - **为什么 9 组真机回归全绿而功能已坏**：四条探针全是 GET/上传/流式/落盘——**没有任何一条覆盖"整包路径 + 请求体"**。这是本轮最贵的教训：**"回归全绿"只在已覆盖的形态上成立**。
+  - 修法（按验证者建议）：body **收进 `buildCallConfig` 唯一映射**（不再让四条路径各自搬）；上传路径显式清空（体由 `bodyWriter` 产生）。判据断言 `cfg.body` 赋值**恰好 2 处**。
+  - ★**补了覆盖洞并实证有效性**：`/body-echo` 端点 + `entry-superapp-probes-body.ts` + `BodyProbe.java` + `run-body-probe.sh`。真机 POST 1050B = 期望 1050B、PUT 通、GET 0B；**注入 P0（删 body 装配）重建 ⇒ 探针红（`post_len_server=0`）⇒ 恢复 ⇒ 绿**。
+- **无界泄漏**：`METRICS` 只在成功 return 前 `remove`，而读数在 `TransportListener` 构造时就写入 ⇒ DNS 失败/超时/取消/体积超限都不清 ⇒ key（reqId 递增）无界增长。修法：`dropMetrics(reqId)` + 四条路径 `finally` 与 `unregisterRequest` 配对。
+- **3 条弱判据（"断言命中注释/只查名字"）**：① `newCall` 可直接 `buildClient`（绕过缓存）原判据仍绿；② `newBuilder` 派生结果可不被使用（`redirectManual` 静默失效）；③ EventListener 只查方法名存在（`dnsEnd = -1` 也绿）⇒ 全部改为**去注释 + 断言调用点 + 断言右值是真实时间戳 + 断言派生 client 真的用于发请求**。
+
+**判据（可执行）**：`tests/android-okhttp-transport.test.ts` **25/25**（含"body 唯一映射"、"dropMetrics 四处配对"、"body-probe 覆盖洞"）；**破坏性验证 15 条全部命中**（第一轮 11 条 + 独立验证点名的 F/G1/G2/I/I2 五处，其中 G/I 首版未红 ⇒ 已补强到能红）。
+配套：`tests/tls-pinning-reuse.test.ts` 靶子迁到真实路径 `sslMaterial`；`fetch-body-limit` / `fetch-cancel` / `upload-stream` / `capability-app-transfer` 的断言由"锁 API 名"改为"锁性质"（换栈不削弱语义）。
+
+**门禁接线**：`build-and-run.sh` / `check-host-compile.sh` / `build-runtime-aar.sh` 三处都带 `thirdparty/*.jar`（漏一处 = 编译过真机崩）；AAR **把第三方 class 并入 classes.jar** 并断言 `okhttp3/OkHttpClient.class` 等四类；AAR 新鲜度指纹**纳入第三方 jar**（否则换 jar 不判陈旧）；`contract-index.md` 新增"改 Android 传输栈本身"一行。
+
+**诚实边界**：
+· **只为 Android 一端付费**（iOS 平台默认已有 h2，鸿蒙 RCP 未动）；
+· **OkHttp 3.x 已停止维护线**（安全修复不回移）；升 4.x 代价 +929 KB + Kotlin 运行时，见 `hosts/android/thirdparty/README.md`；
+· **HTTPDNS 只落接入点**（`setHttpDns` seam 可测但**无调用方**——业务 API + 线格式 tag 属下一单）；
+· **鸿蒙 h2 仍 `null`（未测）**，不是 false；
+· `reused` 是 **per-call 口径**（多跳重定向取"任一跳建连"，`dns/connect/tls` 取末跳）；
+· `proto` 字面值从 `HTTP/1.1`（状态行）变为 `http/1.1`（`Protocol.toString()`）——已 grep 无消费者按字面比较；
+· **既有风险（非本单引入）**：`TlsPinning` 用 `java.util.Base64`（Android **API 26+**），而 `minSdkVersion=24` 且手工链无 core-library desugaring ⇒ API 24/25 上做 pinning 会 `NoClassDefFoundError`——已登记待单修；
+· **既有缺口（非本单引入，已登记）**：`packages/cli/templates-host/shared/bridge/` 只随包 `entry-superapp.ts`，它 import 的 10 个探针模块**都没随包** ⇒ 纯 npm 安装的外部用户打 App 包会解析失败（框架仓内构建走真源，不受影响）。
+
+**下一步**：① HTTPDNS 能力化（`Dns` 线格式 tag + `fetch: { httpDns }` 门面 + 三端宿主）② 鸿蒙 RCP 接自定义 CA ⇒ 才可能协商 h2 ③ 把 `transport` 接进性能预算门禁（首字节 P95 告警）④ API 24/25 的 Base64 兼容（或抬 minSdk）⑤ 随包副本补齐探针模块。

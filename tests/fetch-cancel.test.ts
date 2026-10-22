@@ -139,13 +139,17 @@ describe('★#1121 取消 · 两端宿主', () => {
   const ANDROID_HTTP = 'hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java'
   const IOS_HTTP = 'hosts/ios/ProteusHost/runtime/http-capability.swift'
 
-  it('Android：在途表 + 四处请求都注册 + cancel 真 disconnect', () => {
+  it('Android：在途表 + 四处请求都注册 + cancel 真中止调用', () => {
     const s = read(ANDROID_HTTP)
-    expect(s, '缺在途请求表').toMatch(/ConcurrentHashMap<String,\s*\n?\s*java\.util\.concurrent\.atomic\.AtomicReference<HttpURLConnection>>/)
+    // ★★★#1160 换栈后口径：句柄由 `HttpURLConnection` 改为 `okhttp3.Call`。
+    //   性质不变（按 reqId 找到在途请求并**真中止**），所以断言锁"在途表 + 真中止调用点"，
+    //   不锁某个具体传输类型（那是实现细节，随栈走）。
+    expect(s, '缺在途请求表').toMatch(/ConcurrentHashMap<String,\s*\n?\s*java\.util\.concurrent\.atomic\.AtomicReference<okhttp3\.Call>>/)
     // ★四个请求路径（整包/流式/落盘/上传）都要注册，少一个就有一条腿取消不了
-    const regs = (s.match(/registerRequest\(f\.reqId, conn\)/g) ?? []).length
+    const regs = (s.match(/registerRequest\(f\.reqId, call\)/g) ?? []).length
     expect(regs, `★只有 ${regs} 个请求路径注册了取消（应有 4 个：整包/流式/落盘/上传）`).toBe(4)
-    expect(s, '★cancel 未真 disconnect（只是从表里删）').toMatch(/conn\.disconnect\(\)[\s\S]{0,120}http\.cancel/)
+    // ★判据锁**调用点**（不是符号名）：`call.cancel()` 必须在 cancel() 方法里真被调用
+    expect(s, '★cancel 未真中止底层调用（只是从表里删）').toMatch(/call\.cancel\(\)[\s\S]{0,200}http\.cancel/)
   })
 
   it('Android：结算时从在途表注销（防泄漏 + 防取消错杀已完成的）', () => {

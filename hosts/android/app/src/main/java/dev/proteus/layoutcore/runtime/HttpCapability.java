@@ -24,10 +24,10 @@ package dev.proteus.layoutcore;
 //       要的语义：JS 读不到会话 cookie）；登出级联清空（`CMP090+`）属 ResourcePool 门面，**本单未做**（已登记）。
 //
 // 【★诚实边界（不粉饰为"三端一致"）】
-//   · 重定向：`HttpURLConnection` **默认跟随**（GET）；不暴露 `redirect: 'manual'`；
-//   · 超时：`setConnectTimeout` / `setReadTimeout` 各自生效（不等于"总时限"，与 fetch 的 `AbortSignal.timeout`
+//   · 重定向：`HttpTransport` 按帧的 `redirectManual` 决定跟不跟（#1134）；缺省跟随；
+//   · 超时：`connectTimeout` / `readTimeout` 各自生效（不等于"总时限"，与 fetch 的 `AbortSignal.timeout`
 //     语义有差）——如实登记，不谎称等价；
-//   · HTTP/2 / 压缩：走平台默认（`Accept-Encoding` 由系统协商）。
+//   · HTTP/2 / 压缩：★#1160 换 OkHttp 后**显式**协商（`Protocol.HTTP_2` 优先），压缩由 OkHttp 自动协商。
 //
 // 【★零 JSON】（用户 2026-10-13 指令）：本文件**不解析也不产出 JSON**——帧是字节、响应体是字节。
 //   响应体**原样回字节**，由 JS 侧按 `responseType` 解释（`interpretBody`）——宿主不猜业务语义。
@@ -39,9 +39,7 @@ import android.webkit.CookieManager;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
-import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,22 +78,25 @@ public final class HttpCapability {
     /* ══════════════════ ★★★#1121 取消通道（S3 回收维度） ══════════════════ */
 
     /**
-     * **在途请求表**（reqId → 连接）。取消时按 reqId 找到连接并 `disconnect()`。
+     * **在途请求表**（reqId → 调用句柄）。取消时按 reqId 找到调用并 `cancel()`。
      *
      * 【★为什么必须让宿主真停，而不是"JS 侧 reject 就算了"】
      *   只 reject 不改宿主 ⇒ 网络传输仍在跑、内存仍在涨（流式下尤其明显）⇒
      *   变成"用户以为取消了，其实后台还在下载"。⇒ 取消必须打到宿主。
      *
+     * 【★#1160 形态变化】句柄从 `HttpURLConnection` 换成 `okhttp3.Call`：
+     *   `Call.cancel()` 会**立即**中止（含正在阻塞的 read），语义比 `disconnect()` 更直接。
+     *
      * 【★并发安全】`ConcurrentHashMap`：网络线程注册/注销、主线程（JS 调用）取消，
      *   两侧都可能并发访问。
      */
     private static final java.util.concurrent.ConcurrentHashMap<String,
-            java.util.concurrent.atomic.AtomicReference<HttpURLConnection>> INFLIGHT =
+            java.util.concurrent.atomic.AtomicReference<okhttp3.Call>> INFLIGHT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static void registerRequest(String reqId, HttpURLConnection conn) {
+    private static void registerRequest(String reqId, okhttp3.Call call) {
         if (reqId == null || reqId.isEmpty()) return;
-        INFLIGHT.put(reqId, new java.util.concurrent.atomic.AtomicReference<>(conn));
+        INFLIGHT.put(reqId, new java.util.concurrent.atomic.AtomicReference<>(call));
     }
 
     private static void unregisterRequest(String reqId) {
@@ -127,21 +128,21 @@ public final class HttpCapability {
             try { out.put("hit", false); } catch (Throwable ignored) { }
             return out;
         }
-        java.util.concurrent.atomic.AtomicReference<HttpURLConnection> ref = INFLIGHT.remove(reqId);
+        java.util.concurrent.atomic.AtomicReference<okhttp3.Call> ref = INFLIGHT.remove(reqId);
         if (ref == null) {
             CANCEL_STATS.misses++;
             try { out.put("hit", false); } catch (Throwable ignored) { }
             return out;
         }
         CANCEL_STATS.hits++;
-        HttpURLConnection conn = ref.get();
-        if (conn != null) {
+        okhttp3.Call call = ref.get();
+        if (call != null) {
             try {
-                // ★`disconnect()` 会强制关闭底层 socket ⇒ 正在阻塞的 read 抛异常 ⇒ 读线程退出
-                conn.disconnect();
+                // ★`cancel()` 会立即中止底层 socket ⇒ 正在阻塞的 read 抛 IOException ⇒ 读线程退出
+                call.cancel();
                 Log.i(TAG, "http.cancel 已中止 reqId=" + reqId);
             } catch (Throwable t) {
-                Log.w(TAG, "http.cancel disconnect 失败（reqId=" + reqId + "）：" + t);
+                Log.w(TAG, "http.cancel 失败（reqId=" + reqId + "）：" + t);
             }
         }
         try { out.put("hit", true); } catch (Throwable ignored) { }
@@ -262,66 +263,33 @@ public final class HttpCapability {
     }
 
     /** 真正发请求（**网络线程**上执行——本方法内绝不触碰 JS）。
-     *  ★建连统一走 `TlsPinning.open`（四条路径共用一处 ⇒ 新增传输策略不会漏路径，#1153）；
-     *    它是本文件的**唯一建连入口**，不要在任何路径里再写 `new URL(...).openConnection()`。 */
+     *  ★★★#1160：传输栈换 OkHttp ⇒ 建连统一走 `HttpTransport.newCall`（四条路径共用一处）；
+     *    它是本文件的**唯一建连入口**，不要在任何路径里再写 `new URL(...).openConnection()`。
+     *  ★既有语义（体积闸 / cookie / 内部头剔除 / 重定向策略）全部保留，只换传输原语。 */
     private static InvokeWire.ResolveFrame perform(InvokeWire.InvokeFrame f, String url, String method, int timeoutMs)
             throws Exception {
-        HttpURLConnection conn = null;
+        okhttp3.Call call = null;
+        okhttp3.Response resp = null;
         try {
-            conn = TlsPinning.open(f, url);
-            registerRequest(f.reqId, conn);   // ★#1121：可取消
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(timeoutMs);
-            conn.setReadTimeout(timeoutMs);
-            // ★#1134：重定向跟随策略由去程帧决定（manual ⇒ 交回 JS 逐步处理）
-            RedirectPolicy.apply(conn, f);
+            call = HttpTransport.newCall(buildCallConfig(f, url, method, timeoutMs));
+            registerRequest(f.reqId, call);   // ★#1121：可取消
+            resp = HttpTransport.execute(call);
 
-            // ★#1149：统一入口（顺带剔除框架内部头——四条路径共用这一份，见 applyRequestHeaders）
-            applyRequestHeaders(conn, f.headers);
-            // ★G-46：会话共享 —— 注入平台 cookie 存储里的会话 cookie（调用方已显式设 Cookie 头则不覆盖）
-            String jarCookie = null;
-            try {
-                jarCookie = CookieManager.getInstance().getCookie(url);
-            } catch (Throwable t) {
-                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
-            }
-            if (jarCookie != null && !jarCookie.isEmpty() && f.headers != null
-                    && !containsKeyIgnoreCase(f.headers, "cookie")) {
-                conn.setRequestProperty("Cookie", jarCookie);
-            }
-
-            byte[] body = f.body != null ? f.body : new byte[0];
-            if (body.length > 0) {
-                if (f.contentType != null && !containsKeyIgnoreCase(f.headers, "content-type")) {
-                    conn.setRequestProperty("Content-Type", f.contentType);
-                }
-                conn.setDoOutput(true);
-                conn.setFixedLengthStreamingMode(body.length);
-                OutputStream os = conn.getOutputStream();
-                try {
-                    os.write(body);
-                    os.flush();
-                } finally {
-                    closeQuietly(os);
-                }
-            }
-
-            final long ttfbT0 = System.nanoTime();
-            int status = conn.getResponseCode();
+            int status = resp.code();
             // ★#1150 排障：非 2xx 记一行（真机抓过「503 到了但响应没回 JS」；只在异常档打，不污染正常路径）
             if (status >= 300) Log.w(TAG, "HTTP_STATUS " + status + " reqId=" + f.reqId);
-            Map<String, List<String>> fields = conn.getHeaderFields();
-            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
+            LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());
 
-            // ★G-46：会话共享 —— 响应里的 Set-Cookie 回灌平台存储，并**同步 flush**（否则进程被杀即丢登录态）
-            //   ★这里取**原始 List**（不经 `collectHeaders` 的逗号合并）——合并后的 Set-Cookie 无法可靠还原逐条
-            storeCookies(url, rawSetCookie(fields));
+            // ★G-46：会话共享 —— 响应里的 Set-Cookie 回灌平台存储，并**同步 flush**
+            //   ★这里取**原始多值**（不经 collectHeaders 的逗号合并）——合并后的 Set-Cookie 无法可靠还原逐条
+            storeCookies(url, HttpTransport.rawSetCookie(resp.headers()));
 
-            InputStream is = RedirectPolicy.bodyStream(status, conn);
+            InputStream is = HttpTransport.bodyStream(resp);
             // ★#1115 第一道闸：Content-Length 预判（有声明就直接拒，避免白读一遍再丢）
             long declared = -1;
             try {
-                declared = conn.getContentLengthLong();
+                okhttp3.ResponseBody rb = resp.body();
+                declared = rb != null ? rb.contentLength() : -1;
             } catch (Throwable ignored) { /* 未知长度（chunked）⇒ 交给读取时累计闸 */ }
             if (declared > MAX_BODY_BYTES) {
                 throw new BodyTooLargeException(declared);
@@ -330,14 +298,76 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
             rf.status = status;
-            rf.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
+            // ★#1160：读数来自 OkHttp EventListener（全字段）；缺键 = 不可得，不填 0
+            rf.transport = HttpTransport.readout(HttpTransport.takeMetrics(f.reqId), protoOf(resp));
             rf.headers = respHeaders;
             rf.body = respBody;
             return rf;
         } finally {
             unregisterRequest(f.reqId);
-            if (conn != null) conn.disconnect();
+            HttpTransport.dropMetrics(f.reqId);   // ★#1160：失败/取消路径也要清读数（否则 METRICS 无界增长）
+            closeResp(resp);
+            if (call != null) call.cancel();   // ★取消已完成的 call 是无操作；放 finally 防泄漏
         }
+    }
+    /**
+     * ★★★#1160：把去程帧翻成传输层配置（**四条路径共用一处**）。
+     *
+     * 【为什么集中】#1153 的教训：传输策略（pinning / 重定向 / 头 / cookie）若在每条路径各写一遍，
+     *   新增一项必漏一条。这里把「帧 → 传输配置」收成唯一映射，四条路径只决定**体与响应处理方式**。
+     *
+     * 【★cookie 为什么在这里注入】会话共享要在**建连前**把平台 cookie 写进请求头；
+     *   调用方已显式设 `Cookie` 时不覆盖（调用方语义优先）——与换栈前完全一致。
+     */
+    static HttpTransport.CallConfig buildCallConfig(
+            InvokeWire.InvokeFrame f, String url, String method, int timeoutMs) {
+        HttpTransport.CallConfig cfg = new HttpTransport.CallConfig();
+        cfg.url = url;
+        cfg.method = method;
+        cfg.timeoutMs = timeoutMs;
+        cfg.tlsPins = f.tlsPins;
+        cfg.tlsPinOnly = Boolean.TRUE.equals(f.tlsPinOnly);
+        cfg.redirectManual = Boolean.TRUE.equals(f.redirectManual);
+        cfg.tag = f.reqId;
+        cfg.contentType = f.contentType;
+        // ★★★请求体必须**在这里**装配（#1160 独立验证抓出的 P0 回归）
+        //   【缺陷形态】换栈第一版只让落盘/流式两条路径各自 `cfg.body = …`，**整包路径漏了**
+        //   ⇒ 所有带 `data` 的 POST/PUT 静默变成空体（功能全错、零报错、四条探针全是 GET/上传 ⇒ 都测不到）。
+        //   ⇒ 正解 = 把 body 收进这个**唯一映射**，四条路径不再各自搬（新增路径天然覆盖）。
+        //   ★调用方若要覆盖（上传路径换成 bodyWriter）会显式置空 body。
+        cfg.body = f.body != null && f.body.length > 0 ? f.body : null;
+        // 调用方头（剔除框架内部头——#1149 的统一入口）
+        if (f.headers != null) {
+            for (Map.Entry<String, String> e : f.headers.entrySet()) {
+                if (e.getKey() != null && e.getKey().equalsIgnoreCase(BYPASS_PLATFORM_CACHE_HEADER)) continue;
+                cfg.headers.put(e.getKey(), e.getValue());
+            }
+        }
+        // ★G-46：会话共享 —— 注入平台 cookie 存储里的会话 cookie（调用方已显式设 Cookie 头则不覆盖）
+        String jarCookie = null;
+        try {
+            jarCookie = CookieManager.getInstance().getCookie(url);
+        } catch (Throwable t) {
+            Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
+        }
+        if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
+            cfg.headers.put("Cookie", jarCookie);
+        }
+        return cfg;
+    }
+
+    /** 协议名（`h2` / `http/1.1`）——读数缺协议时返回 null（不写该键）。 */
+    static String protoOf(okhttp3.Response resp) {
+        try {
+            return resp != null && resp.protocol() != null ? resp.protocol().toString() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 关响应（**必须**关：OkHttp 要关掉响应体才会把连接还给池 ⇒ 否则下次不复用）。 */
+    static void closeResp(okhttp3.Response resp) {
+        try { if (resp != null) resp.close(); } catch (Throwable ignored) { }
     }
 
     /* ══════════════════ ★★★#1120 流式上传（S3） ══════════════════ */
@@ -390,77 +420,81 @@ public final class HttpCapability {
         long total = headNormal.length + headFile.length + fileLen + tail.length;
         stats.totalBytes = total;
 
-        HttpURLConnection conn = null;
+        okhttp3.Call call = null;
+        okhttp3.Response resp = null;
         try {
-            conn = TlsPinning.open(f, url);
-            registerRequest(f.reqId, conn);   // ★#1121：可取消
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(timeoutMs);
-            conn.setReadTimeout(timeoutMs);
-            RedirectPolicy.apply(conn, f);
-            conn.setDoOutput(true);
-            // ★定长流式（不是 chunked）：multipart 长度可预知
-            conn.setFixedLengthStreamingMode(total);
-            applyRequestHeaders(conn, f.headers);   // ★#1149：统一入口（含剔除内部头）
-            // ★G-46 会话共享（与其余路径同口径：调用方显式设了 Cookie 就不覆盖）
-            String jarCookie = null;
-            try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
-                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
-            }
-            if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
-                conn.setRequestProperty("Cookie", jarCookie);
-            }
-            // ★Content-Type 必须带 boundary（JS 组好传下来；这里只兜底，不覆盖调用方）
-            if (!containsKeyIgnoreCase(f.headers, "content-type")) {
-                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + up.boundary);
-            }
-
-            java.io.OutputStream os = new java.io.BufferedOutputStream(conn.getOutputStream(), STREAM_CHUNK);
-            try {
-                os.write(headNormal);
-                os.write(headFile);
-                // ★★核心：边读文件边写，内存只有缓冲块
-                java.io.InputStream in = new java.io.FileInputStream(src);
-                try {
-                    byte[] buf = new byte[STREAM_CHUNK];
-                    int n;
-                    long sent = 0;
-                    while ((n = in.read(buf)) > 0) {
-                        os.write(buf, 0, n);
-                        sent += n;
-                        stats.sentBytes = sent;
-                        stats.chunks++;
-                        if (n > stats.peakChunkBytes) stats.peakChunkBytes = n;
-                        if (sent > MAX_SAVE_BYTES) throw new UploadFileTooLarge(sent);
-                    }
-                } finally {
-                    closeQuietly(in);
+            final HttpTransport.CallConfig cfg = buildCallConfig(f, url, method, timeoutMs);
+            // ★Content-Type 必须带 boundary。
+            //   ★#1160 实测约束：`RequestBody` 的 MediaType 与显式 `Content-Type` 头是**两个来源**，
+            //     只设其中一个会让另一个（或默认值）生效 ⇒ 必须收口到 `cfg.contentType` 一处。
+            //     （★独立验证指出：OkHttp 3.14.9 实测是**显式头优先**、MediaType 被忽略——
+            //      与本文档早先写反的"MediaType 优先"相反；两种情况下"只留一处"的结论都成立。）
+            //   ★★★真机抓到的回归（本单第一版）：只在"调用方没设头"时才赋值 ⇒ 调用方**设了**头
+            //     （JS 侧 upload 会带一个不带 boundary 的 content-type）时既没写 contentType、又把头删了
+            //     ⇒ 服务端收到 `missing boundary`。⇒ 正确做法 = **调用方的头优先，但必须搬进 contentType**。
+            String callerCt = headerValueIgnoreCase(f.headers, "content-type");
+            cfg.contentType = callerCt != null && !callerCt.isEmpty()
+                    ? callerCt
+                    : "multipart/form-data; boundary=" + up.boundary;
+            cfg.headers.remove("Content-Type");
+            cfg.headers.remove("content-type");
+            // ★上传路径的体由 `bodyWriter` 产生 ⇒ 必须清掉 buildCallConfig 装配的整包 body
+            //   （否则会走 byte[] 路径，文件根本没被发送）
+            cfg.body = null;
+            // ★★#1160：回调式请求体——**边读文件边写**，内存只有缓冲块（与换栈前同语义）
+            cfg.bodyWriter = new HttpTransport.BodyWriter() {
+                @Override public okhttp3.MediaType contentType() {
+                    return cfg.contentType == null ? null : okhttp3.MediaType.parse(cfg.contentType);
                 }
-                os.write(tail);
-                os.flush();
-            } finally {
-                closeQuietly(os);
-            }
+                @Override public long contentLength() { return total; }
+                @Override public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
+                    sink.write(headNormal);
+                    sink.write(headFile);
+                    // ★★核心：边读文件边写，内存只有缓冲块
+                    java.io.InputStream in = new java.io.FileInputStream(src);
+                    try {
+                        byte[] buf = new byte[STREAM_CHUNK];
+                        int n;
+                        long sent = 0;
+                        while ((n = in.read(buf)) > 0) {
+                            sink.write(buf, 0, n);
+                            sent += n;
+                            stats.sentBytes = sent;
+                            stats.chunks++;
+                            if (n > stats.peakChunkBytes) stats.peakChunkBytes = n;
+                            if (sent > MAX_SAVE_BYTES) throw new java.io.IOException(
+                                    new UploadFileTooLarge(sent).getMessage());
+                        }
+                    } finally {
+                        closeQuietly(in);
+                    }
+                    sink.write(tail);
+                    sink.flush();
+                }
+            };
+            call = HttpTransport.newCall(cfg);
+            registerRequest(f.reqId, call);   // ★#1121：可取消
+            resp = HttpTransport.execute(call);
 
-            final long ttfbT0 = System.nanoTime();
-            int status = conn.getResponseCode();
-            Map<String, List<String>> fields = conn.getHeaderFields();
-            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
-            storeCookies(url, rawSetCookie(fields));
+            int status = resp.code();
+            LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());
+            storeCookies(url, HttpTransport.rawSetCookie(resp.headers()));
             // 读响应（服务器通常回一小段 JSON；仍按整包但受 32 MiB 上限约束）
-            InputStream ris = RedirectPolicy.bodyStream(status, conn);
+            InputStream ris = HttpTransport.bodyStream(resp);
             byte[] respBody = ris != null ? readAll(ris) : new byte[0];
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
             rf.status = status;
-            rf.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
+            rf.transport = HttpTransport.readout(HttpTransport.takeMetrics(f.reqId), protoOf(resp));   // ★#1160
             rf.headers = respHeaders;
             rf.body = respBody;
             stats.completed = true;
             return rf;
         } finally {
             unregisterRequest(f.reqId);
-            if (conn != null) conn.disconnect();
+            HttpTransport.dropMetrics(f.reqId);   // ★#1160：失败/取消路径也要清读数
+            closeResp(resp);
+            if (call != null) call.cancel();
         }
     }
 
@@ -551,7 +585,8 @@ public final class HttpCapability {
         lastSaveStats = stats;
         stats.path = f.savePath;
         java.io.File out = null;
-        HttpURLConnection conn = null;
+        okhttp3.Call call = null;
+        okhttp3.Response resp = null;
         java.io.OutputStream os = null;
         try {
             android.content.Context ctx = appContext();
@@ -564,38 +599,17 @@ public final class HttpCapability {
                 return InvokeWire.ResolveFrame.err(f.reqId, "fetch.failed: 无法创建目录 " + parent);
             }
 
-            conn = TlsPinning.open(f, url);
-            registerRequest(f.reqId, conn);   // ★#1121：可取消
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(timeoutMs);
-            conn.setReadTimeout(timeoutMs);
-            RedirectPolicy.apply(conn, f);
-            applyRequestHeaders(conn, f.headers);   // ★#1149：统一入口（含剔除内部头）
-            String jarCookie = null;
-            try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
-                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
-            }
-            if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
-                conn.setRequestProperty("Cookie", jarCookie);
-            }
-            byte[] reqBody = f.body != null ? f.body : new byte[0];
-            if (reqBody.length > 0) {
-                if (f.contentType != null && !containsKeyIgnoreCase(f.headers, "content-type")) {
-                    conn.setRequestProperty("Content-Type", f.contentType);
-                }
-                conn.setDoOutput(true);
-                conn.setFixedLengthStreamingMode(reqBody.length);
-                java.io.OutputStream ros = conn.getOutputStream();
-                try { ros.write(reqBody); ros.flush(); } finally { closeQuietly(ros); }
-            }
+            HttpTransport.CallConfig cfg = buildCallConfig(f, url, method, timeoutMs);
+            // ★body 已由 buildCallConfig 统一装配（#1160 P0 修正），此处不再重复
+            call = HttpTransport.newCall(cfg);
+            registerRequest(f.reqId, call);   // ★#1121：可取消
+            resp = HttpTransport.execute(call);
 
-            final long ttfbT0 = System.nanoTime();
-            int status = conn.getResponseCode();
-            Map<String, List<String>> fields = conn.getHeaderFields();
-            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
-            storeCookies(url, rawSetCookie(fields));
+            int status = resp.code();
+            LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());
+            storeCookies(url, HttpTransport.rawSetCookie(resp.headers()));
 
-            InputStream is = RedirectPolicy.bodyStream(status, conn);
+            InputStream is = HttpTransport.bodyStream(resp);
             // ★边收边写：内存占用 = 单个缓冲块，与文件大小无关
             os = new java.io.BufferedOutputStream(new java.io.FileOutputStream(out, false), STREAM_CHUNK);
             byte[] buf = new byte[STREAM_CHUNK];
@@ -618,7 +632,7 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame rf = InvokeWire.ResolveFrame.ok(f.reqId);
             rf.status = status;
-            rf.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
+            rf.transport = HttpTransport.readout(HttpTransport.takeMetrics(f.reqId), protoOf(resp));   // ★#1160
             rf.headers = respHeaders;
             // ★回程 body = 一句可读摘要（JS 侧只需要 path/size；**不回字节**）
             String summary = "{\"path\":" + org.json.JSONObject.quote(f.savePath)
@@ -643,7 +657,9 @@ public final class HttpCapability {
         } finally {
             closeQuietly(os);
             unregisterRequest(f.reqId);
-            if (conn != null) conn.disconnect();
+            HttpTransport.dropMetrics(f.reqId);   // ★#1160：失败/取消路径也要清读数
+            closeResp(resp);
+            if (call != null) call.cancel();
         }
     }
 
@@ -713,7 +729,8 @@ public final class HttpCapability {
             throws Exception {
         final StreamStats stats = new StreamStats();
         lastStreamStats = stats;
-        HttpURLConnection conn = null;
+        okhttp3.Call call = null;
+        okhttp3.Response resp = null;
         final java.util.concurrent.ArrayBlockingQueue<byte[]> q =
                 new java.util.concurrent.ArrayBlockingQueue<>(STREAM_QUEUE_DEPTH);
 
@@ -745,38 +762,17 @@ public final class HttpCapability {
         consumer.start();
 
         try {
-            conn = TlsPinning.open(f, url);
-            registerRequest(f.reqId, conn);   // ★#1121：可取消
-            conn.setRequestMethod(method);
-            conn.setConnectTimeout(timeoutMs);
-            conn.setReadTimeout(timeoutMs);
-            RedirectPolicy.apply(conn, f);
-            applyRequestHeaders(conn, f.headers);   // ★#1149：统一入口（含剔除内部头）
-            String jarCookie = null;
-            try { jarCookie = CookieManager.getInstance().getCookie(url); } catch (Throwable t) {
-                Log.w(TAG, "读 CookieManager 失败（继续无 cookie 请求）：" + t);
-            }
-            if (jarCookie != null && !jarCookie.isEmpty() && !containsKeyIgnoreCase(f.headers, "cookie")) {
-                conn.setRequestProperty("Cookie", jarCookie);
-            }
-            byte[] reqBody = f.body != null ? f.body : new byte[0];
-            if (reqBody.length > 0) {
-                if (f.contentType != null && !containsKeyIgnoreCase(f.headers, "content-type")) {
-                    conn.setRequestProperty("Content-Type", f.contentType);
-                }
-                conn.setDoOutput(true);
-                conn.setFixedLengthStreamingMode(reqBody.length);
-                OutputStream os = conn.getOutputStream();
-                try { os.write(reqBody); os.flush(); } finally { closeQuietly(os); }
-            }
+            HttpTransport.CallConfig cfg = buildCallConfig(f, url, method, timeoutMs);
+            // ★body 已由 buildCallConfig 统一装配（#1160 P0 修正），此处不再重复
+            call = HttpTransport.newCall(cfg);
+            registerRequest(f.reqId, call);   // ★#1121：可取消
+            resp = HttpTransport.execute(call);
 
-            final long ttfbT0 = System.nanoTime();
-            int status = conn.getResponseCode();
-            Map<String, List<String>> fields = conn.getHeaderFields();
-            LinkedHashMap<String, String> respHeaders = collectHeaders(fields);
-            storeCookies(url, rawSetCookie(fields));
+            int status = resp.code();
+            LinkedHashMap<String, String> respHeaders = HttpTransport.collectHeaders(resp.headers());
+            storeCookies(url, HttpTransport.rawSetCookie(resp.headers()));
 
-            InputStream is = RedirectPolicy.bodyStream(status, conn);
+            InputStream is = HttpTransport.bodyStream(resp);
             byte[] buf = new byte[STREAM_CHUNK];
             int n;
             if (is != null) {
@@ -800,7 +796,7 @@ public final class HttpCapability {
 
             InvokeWire.ResolveFrame fin = InvokeWire.ResolveFrame.ok(f.reqId);
             fin.status = status;
-            fin.transport = TransportReadout.collect(fields, ttfbT0);   // ★#1158
+            fin.transport = HttpTransport.readout(HttpTransport.takeMetrics(f.reqId), protoOf(resp));   // ★#1160
             fin.headers = respHeaders;
             fin.body = new byte[0];   // ★最终帧不回 body（数据块已逐块给过）
             stats.completed = true;
@@ -812,7 +808,9 @@ public final class HttpCapability {
             throw t;
         } finally {
             unregisterRequest(f.reqId);
-            if (conn != null) conn.disconnect();
+            HttpTransport.dropMetrics(f.reqId);   // ★#1160：失败/取消路径也要清读数
+            closeResp(resp);
+            if (call != null) call.cancel();
         }
     }
 
@@ -832,66 +830,30 @@ public final class HttpCapability {
     }
 
     private static boolean containsKeyIgnoreCase(Map<String, String> m, String key) {
-        if (m == null) return false;
-        for (String k : m.keySet()) {
-            if (k != null && k.equalsIgnoreCase(key)) return true;
+        return headerValueIgnoreCase(m, key) != null;
+    }
+
+    /**
+     * 取头值（大小写不敏感）。
+     *
+     * ★#1160：OkHttp 要求内容类型经 `RequestBody` 的 MediaType 传入（显式同名头会被它忽略），
+     * 而调用方的头是 `Content-Type` / `content-type` 混用 ⇒ 需要一个大小写不敏感的取值口。
+     */
+    private static String headerValueIgnoreCase(Map<String, String> m, String key) {
+        if (m == null) return null;
+        for (Map.Entry<String, String> e : m.entrySet()) {
+            if (e.getKey() != null && e.getKey().equalsIgnoreCase(key)) return e.getValue();
         }
-        return false;
+        return null;
     }
 
     /**
      * ★★★#1149：框架内部约定头——语义「本次请求请勿使用平台自带的 HTTP 缓存」。
      * ★Android 本就无 ResponseCache ⇒ 这里只做**剔除**（一致性 + 防外泄给业务服务端），不改传输行为。
-     * ★为什么收敛到一处：同样的 header 循环原本在本文件出现 **4 次**，任一处漏剔除就会外泄。
+     * ★剔除点在 {@link #buildCallConfig}（四条路径共用一处，新增路径天然覆盖；#1160 从
+     *   `applyRequestHeaders` 收口上来——换栈后不再有"每条路径各写一遍头"的形态）。
      */
     static final String BYPASS_PLATFORM_CACHE_HEADER = "x-proteus-bypass-platform-cache";
-
-    /** 把调用方头逐条写入连接，并**剔除框架内部头**（四条路径共用，新增路径天然覆盖）。 */
-    private static void applyRequestHeaders(HttpURLConnection conn, Map<String, String> headers) {
-        if (headers == null) return;
-        for (Map.Entry<String, String> e : headers.entrySet()) {
-            if (e.getKey() != null && e.getKey().equalsIgnoreCase(BYPASS_PLATFORM_CACHE_HEADER)) continue;
-            conn.setRequestProperty(e.getKey(), e.getValue());
-        }
-    }
-
-    /**
-     * 响应头拍平（同名多值取**逗号连接**——与 HTTP 语义一致，且不丢信息）。
-     * ★`Set-Cookie` 的合并结果**只**用于回给 JS 看；回灌 cookie 存储走 {@link #rawSetCookie}（原始逐条）。
-     */
-    private static LinkedHashMap<String, String> collectHeaders(Map<String, List<String>> fields) {
-        LinkedHashMap<String, String> out = new LinkedHashMap<>();
-        if (fields == null) return out;
-        for (Map.Entry<String, List<String>> e : fields.entrySet()) {
-            String name = e.getKey();
-            if (name == null) continue; // 状态行（形如 "HTTP/1.1 200 OK"）——不是头
-            List<String> vals = e.getValue();
-            if (vals == null || vals.isEmpty()) continue;
-            out.put(name, join(vals));
-        }
-        return out;
-    }
-
-    /** 取原始 `Set-Cookie` 逐条值（不经合并——回灌 cookie 存储必须逐条）。 */
-    private static List<String> rawSetCookie(Map<String, List<String>> fields) {
-        if (fields == null) return java.util.Collections.emptyList();
-        for (Map.Entry<String, List<String>> e : fields.entrySet()) {
-            if (e.getKey() != null && "Set-Cookie".equalsIgnoreCase(e.getKey()) && e.getValue() != null) {
-                return e.getValue();
-            }
-        }
-        return java.util.Collections.emptyList();
-    }
-
-    private static String join(List<String> vals) {
-        if (vals.size() == 1) return vals.get(0);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < vals.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(vals.get(i));
-        }
-        return sb.toString();
-    }
 
     /** 把响应里的 `Set-Cookie`（逐条原始值）写进平台 cookie 存储并 flush。 */
     private static void storeCookies(String url, List<String> setCookies) {

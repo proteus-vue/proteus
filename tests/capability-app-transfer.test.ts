@@ -173,7 +173,11 @@ describe('★#1120 上传 · 宿主侧自己拼 multipart（JS 不再拼）', ()
     expect(seg, '★未边读边写（应在循环里 os.write）').toMatch(/while \(\(n = in\.read\(buf\)\) > 0\)/)
     expect(seg, '缺峰值块记账').toMatch(/peakChunkBytes/)
     // ★定长流式（不是 chunked）：multipart 长度可预知
-    expect(seg, '未用 setFixedLengthStreamingMode（应能预知总长）').toMatch(/setFixedLengthStreamingMode\(total\)/)
+    //   ★★★#1160 换栈后口径：OkHttp 用 `RequestBody.contentLength()` 表达"总长已知"
+    //   （换栈前是 `conn.setFixedLengthStreamingMode(total)`）。锁性质，不锁 API 名。
+    expect(seg, '未声明定长（应能预知总长：contentLength() 返回 total）').toMatch(
+      /contentLength\(\)\s*\{\s*return\s+total/,
+    )
     // ★必须复用沙箱校验
     expect(seg, '未复用沙箱路径校验').toMatch(/FileTransferCapability\.resolve/)
   })

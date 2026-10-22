@@ -25,6 +25,9 @@ export { appTlsProbe } from './entry-superapp-probes-tls'
 // ★★★#1155：传输层事实取证探针（HTTP/2 与连接复用**是否已在工作**——决定 P1 要不要引 OkHttp）
 import { appTransportProbe } from './entry-superapp-probes-transport'
 export { appTransportProbe } from './entry-superapp-probes-transport'
+// ★★★#1160：POST 带请求体探针（补"整包路径 + 请求体"的用例空白）
+import { appBodyProbe } from './entry-superapp-probes-body'
+export { appBodyProbe } from './entry-superapp-probes-body'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -971,5 +974,11 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppTransportProbe?: (b: string, p: string, r?: number, pb?: string) => string
 }).__proteusHostAppTransportProbe = (b: string, p: string, r?: number, pb?: string) => appTransportProbe(b, p, r, pb)
+// ★★★#1160：POST 带请求体探针（结果填 __proteusHostBodyProbeResult）
+//   ★补的是**用例空白**：换栈时"整包路径漏 body"会让所有 Android POST/PUT 静默变空体，
+//     而当时四条真机探针全是 GET/上传 ⇒ 9 组回归全绿、功能已坏（独立验证抓出）。
+;(globalThis as unknown as {
+  __proteusHostAppBodyProbe?: (b: string) => string
+}).__proteusHostAppBodyProbe = (b: string) => appBodyProbe(b)
 
 

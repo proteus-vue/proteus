@@ -107,114 +107,114 @@ public final class TlsPinning {
     }
 
     /**
-     * ★★★#1155：**按 (pins, pinOnly) 缓存 `SSLSocketFactory`**。
+     * ★★★#1160：**成对给出 factory 与它对应的 TrustManager**（OkHttp 强制的配对）。
      *
-     * 【为什么必须缓存（真机实测抓出的性能回归）】
-     *   `HttpsURLConnection` 的连接池**按 `SSLSocketFactory` 实例分桶**。
-     *   #1154 首版每次请求都 `SSLContext.getInstance()` 新建一个 ⇒ **每次请求都是新连接**，
-     *   连接池与 TLS 会话复用**完全失效**。
-     *   ★真机对照实验（`run-transport-probe.sh` 的明文基线）读数：
-     *     · 明文（无 pinning）：5 次请求 / **3** 条 TCP 连接（`plain:c2` 复用了 **4** 次）
-     *     · TLS + pinning（首版）：4 次请求 / **4** 条 TCP 连接（每条只用 1 次，零复用）
+     * 【为什么必须配对】OkHttp 3.x 的 `sslSocketFactory(SSLSocketFactory)` 单参重载
+     * 在 **JDK 9+ 直接抛** `UnsupportedOperationException`
+     * （「clientBuilder.sslSocketFactory(SSLSocketFactory) not supported on JDK 9+」，本机实测）。
+     * 它需要 TrustManager 来建 `CertificateChainCleaner`（证书链清理）。
+     *
+     * 【★★为什么必须缓存（#1155 的真回归教训，换成 OkHttp 后同理）】
+     *   连接池的"连接身份"包含 TLS 配置。若每次请求都新建 `SSLContext`/TrustManager，
+     *   新连接无法命中旧池条目 ⇒ **复用归零，且零日志**（#1154 首版实测：5 请求/5 连接）。
+     *   ★真机对照（`run-transport-probe.sh` 明文基线）：
+     *     · 明文：5 次请求 / **3** 条连接（`plain:c2` 复用 4 次）
+     *     · TLS + pinning（首版）：4 次请求 / **4** 条连接（零复用）
      *   ⇒ 基线能复用、带 pin 不能 ⇒ 责任在 pinning 实现，不在平台。
-     *   ★这也是"同一份源码三端一致"的一部分：Web 的浏览器连接池、iOS 的 `URLSession`
-     *     都会复用连接；若 Android 因 pinning 而退化，"性能"这一维就与其他两端分叉了。
+     *
+     * 【★同源纪律】两个对象必须来自**同一次**构造：factory 用 A 的 TrustManager、
+     *   却把 B 的交给 OkHttp ⇒ 两套信任语义并存（pin 判定用的与实际握手用的不是同一个）。
+     *   ⇒ 本方法的返回值**成对产出**，调用方不得各自去取。
      */
-    private static final java.util.Map<String, SSLSocketFactory> FACTORY_CACHE =
+    public static final class SslMaterial {
+        public final SSLSocketFactory socketFactory;
+        public final X509TrustManager trustManager;
+        SslMaterial(SSLSocketFactory f, X509TrustManager tm) { this.socketFactory = f; this.trustManager = tm; }
+    }
+
+    /** 成对材料的进程级缓存（键 = pin 串 + pinOnly：同一业务配置 ⇒ 同一实例 ⇒ 连接池可复用）。 */
+    private static final java.util.Map<String, SslMaterial> MATERIAL_CACHE =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
-     * 造一个带 pinning 的 `SSLSocketFactory`（**同一配置复用同一实例**）。
+     * 取（缓存的）pinning 材料；{@code null} ⇒ 没有可用 pin（调用方保持平台默认信任链）。
      *
      * @param pinsRaw 帧里的指纹串（换行分隔）
      * @param pinOnly true ⇒ 替代系统信任；false ⇒ 叠加
-     * @return `null` ⇒ **没有可用 pin**（调用方应保持平台默认行为，而不是"用了但没生效"）
      */
-    public static SSLSocketFactory socketFactory(String pinsRaw, boolean pinOnly) {
+    public static SslMaterial sslMaterial(String pinsRaw, boolean pinOnly) {
         List<byte[]> pins = parsePins(pinsRaw);
-        // ★空 pin 列表 ⇒ 返回 null（**不**返回一个"什么都不校验"的 factory——那会静默降级成无保护）
+        // ★空 pin 列表 ⇒ 返回 null（**不**返回一个"什么都不校验"的材料——那会静默降级成无保护）
         if (pins.isEmpty()) {
             Log.w(TAG, "tlsPins 为空/无法解析 ⇒ 不做 pinning（保持平台默认信任链）");
             return null;
         }
-        // ★缓存键 = 归一后的指纹串 + pinOnly（同一业务配置 ⇒ 同一 factory ⇒ 连接池可复用）
         String cacheKey = pinsRaw + "|" + pinOnly;
-        SSLSocketFactory cached = FACTORY_CACHE.get(cacheKey);
+        SslMaterial cached = MATERIAL_CACHE.get(cacheKey);
         if (cached != null) return cached;
-        SSLSocketFactory created = buildSocketFactory(pins, pinOnly);
-        if (created != null) FACTORY_CACHE.put(cacheKey, created);
+        SslMaterial created = buildMaterial(pins, pinOnly);
+        if (created != null) MATERIAL_CACHE.put(cacheKey, created);
         return created;
     }
 
-    /** 真正的构造（只在缓存未命中时调用）。 */
-    private static SSLSocketFactory buildSocketFactory(List<byte[]> pins, boolean pinOnly) {
+    /** 真正的构造（只在缓存未命中时调用）——factory 与 trustManager **成对**产生。 */
+    private static SslMaterial buildMaterial(List<byte[]> pins, boolean pinOnly) {
         try {
-            // 叠加模式需要系统默认 TrustManager 做代理；替代模式不需要
             final X509TrustManager system = pinOnly ? null : defaultTrustManager();
-            final X509TrustManager pinningTm = new X509TrustManager() {
-                @Override public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                    // 客户端证书（mTLS）不在本能力范围内：原样交给系统（未配置则系统会拒）
-                    if (system != null) system.checkClientTrusted(chain, authType);
-                }
-
-                @Override public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-                    synchronized (TlsPinning.class) { stChallenges++; }
-                    note("pins");
-                    // ① 叠加模式：系统信任必须先过（自签/私有 CA 在这里就被挡住）
-                    if (system != null) system.checkServerTrusted(chain, authType);
-                    // ② pin 必须命中
-                    boolean ok;
-                    try {
-                        ok = chainMatches(pins, chain);
-                    } catch (Exception e) {
-                        note("reject");
-                        throw new CertificateException("pin 校验异常：" + e);
-                    }
-                    if (!ok) {
-                        note("reject");
-                        throw new PinMismatchException(
-                                "证书公钥指纹不匹配（pin 未命中）：链上 " + chain.length + " 张证书都不匹配任何 pin");
-                    }
-                    note("accept");
-                }
-
-                @Override public X509Certificate[] getAcceptedIssuers() {
-                    return system != null ? system.getAcceptedIssuers() : new X509Certificate[0];
-                }
-            };
+            final X509TrustManager pinningTm = pinningTrustManager(pins, system);
             SSLContext ctx = SSLContext.getInstance("TLS");
             ctx.init(null, new TrustManager[] { pinningTm }, null);
-            return ctx.getSocketFactory();
+            return new SslMaterial(ctx.getSocketFactory(), pinningTm);
         } catch (Throwable t) {
-            // ★造不出来 ⇒ 返回 null（保持默认信任链）+ 记日志；**不**让请求带着半个配置发出去
-            Log.w(TAG, "构造 pinning SSLSocketFactory 失败（保持平台默认）：" + t);
+            Log.w(TAG, "构造 pinning 材料失败（保持平台默认）：" + t);
             return null;
         }
     }
 
     /**
-     * ★★★#1153：**建立连接并挂上传输策略**（`http.request` 四条路径的唯一入口）。
+     * pin 校验 TrustManager（**唯一构造点**：`buildMaterial` 用它，别处不得另建）。
      *
-     * · 非 HTTPS ⇒ pinning **忽略**（对明文无意义；"禁止明文"是另一个策略，不在这里隐式做）；
-     * · 帧里没有 pins ⇒ 什么都不做（保持平台默认信任链）；
-     * · pin 串无法解析 ⇒ `socketFactory` 返回 null ⇒ 保持平台默认**并记日志**（不静默假装生效）。
+     * @param system 叠加模式下用于代理的默认 TrustManager；`pinOnly` 时传 null
      */
-    public static java.net.HttpURLConnection open(InvokeWire.InvokeFrame f, String url) throws Exception {
-        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-        applyTo(conn, f);
-        return conn;
+    private static X509TrustManager pinningTrustManager(final List<byte[]> pins, final X509TrustManager system) {
+        return new X509TrustManager() {
+            @Override public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                // 客户端证书（mTLS）不在本能力范围内：原样交给系统（未配置则系统会拒）
+                if (system != null) system.checkClientTrusted(chain, authType);
+            }
+
+            @Override public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+                synchronized (TlsPinning.class) { stChallenges++; }
+                note("pins");
+                // ① 叠加模式：系统信任必须先过（自签/私有 CA 在这里就被挡住）
+                if (system != null) system.checkServerTrusted(chain, authType);
+                // ② pin 必须命中
+                boolean ok;
+                try {
+                    ok = chainMatches(pins, chain);
+                } catch (Exception e) {
+                    note("reject");
+                    throw new CertificateException("pin 校验异常：" + e);
+                }
+                if (!ok) {
+                    note("reject");
+                    throw new PinMismatchException(
+                            "证书公钥指纹不匹配（pin 未命中）：链上 " + chain.length + " 张证书都不匹配任何 pin");
+                }
+                note("accept");
+            }
+
+            @Override public X509Certificate[] getAcceptedIssuers() {
+                return system != null ? system.getAcceptedIssuers() : new X509Certificate[0];
+            }
+        };
     }
 
-    /**
-     * 把 pinning 挂到一条已建好的连接上。
-     * ★单独暴露（不只给 `open` 用）：若将来某条路径需要自己的建连方式，也能复用挂载逻辑。
-     */
-    public static void applyTo(java.net.HttpURLConnection conn, InvokeWire.InvokeFrame f) {
-        if (f == null || f.tlsPins == null || f.tlsPins.isEmpty()) return;
-        if (!(conn instanceof javax.net.ssl.HttpsURLConnection)) return;
-        javax.net.ssl.SSLSocketFactory factory = socketFactory(f.tlsPins, Boolean.TRUE.equals(f.tlsPinOnly));
-        if (factory != null) ((javax.net.ssl.HttpsURLConnection) conn).setSSLSocketFactory(factory);
-    }
+    /* ★★★#1160：`open()` / `applyTo()` / `socketFactory()` / `buildSocketFactory()` 已删除——
+     *   它们是 `HttpURLConnection` 时代的建连入口。换栈后**唯一**建连入口是
+     *   `HttpTransport.newCall(...)`，pinning 经 `sslMaterial()` 成对给出（见上）。
+     *   ★留着死入口的风险：新路径可能"顺手"用它 ⇒ 那条路径回到 h1 + 无读数（与 #1153
+     *     "四条路径都必须经同一处"同源的漏网形态）。 */
 
     /** ★★★#1153：TLS 记账（真机判据读它区分"宿主没校验"与"pin 判定错"）。 */
     private static int stChallenges = 0;

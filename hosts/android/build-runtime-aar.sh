@@ -64,9 +64,28 @@ mkdir -p "$WORK/classes"
 PLATFORM_JAVA_DIR="$ROOT/platform/android/proteus-platform/src"
 find "$RT_SRC" "$PLATFORM_JAVA_DIR" -name '*.java' > "$WORK/srcs.txt" 2>/dev/null
 [ -s "$WORK/srcs.txt" ] || { echo "✗ runtime 源为空（${RT_SRC}）"; exit 2; }
-"$JDK/bin/javac" -nowarn -encoding UTF-8 --release 17 -cp "$PLATFORM" -d "$WORK/classes" @"$WORK/srcs.txt" || { echo "✗ runtime 编译失败"; exit 3; }
+# ★★★决策 #1160：第三方运行时依赖（OkHttp/Okio）——runtime 直接引用 okhttp3/okio 类型。
+#   ★AAR 必须让**消费方**（CLI 生成的壳）也能编译并运行 ⇒ 第三方 class 要一起进 classes.jar。
+#     否则：① CLI 侧 javac 报"找不到符号"；② 侥幸打出 APK 也会在真机 `NoClassDefFoundError`。
+#   ★"一起打进去"而不是"让消费方自己引"：宿主构建链是手工 aapt2/javac/d8，没有依赖解析，
+#     消费方无从得知需要哪些 jar（这正是 vendor 入库的理由，见 thirdparty/README.md）。
+THIRDPARTY_JARS="$(find "$HERE/thirdparty" -name '*.jar' 2>/dev/null | sort)"
+[ -n "$THIRDPARTY_JARS" ] || { echo "✗ 缺 thirdparty/*.jar（OkHttp/Okio）——见 hosts/android/thirdparty/README.md"; exit 2; }
+THIRDPARTY_CP="$(printf '%s\n' "$THIRDPARTY_JARS" | tr '\n' ':')"
+THIRDPARTY_CP="${THIRDPARTY_CP%:}"
+"$JDK/bin/javac" -nowarn -encoding UTF-8 --release 17 -cp "$PLATFORM:$THIRDPARTY_CP" -d "$WORK/classes" @"$WORK/srcs.txt" || { echo "✗ runtime 编译失败"; exit 3; }
+# ★把第三方 class **解出来**并入 classes.jar（而不是嵌套 jar：AAR 的 classes.jar 必须是扁平 class 集合）
+mkdir -p "$WORK/thirdparty-classes"
+for jar in $THIRDPARTY_JARS; do
+  (cd "$WORK/thirdparty-classes" && "$JDK/bin/jar" xf "$jar") || { echo "✗ 解第三方 jar 失败：$jar"; exit 3; }
+done
+# ★去掉 META-INF（多个 jar 各有 MANIFEST.MF / 签名文件 ⇒ 合并时互相覆盖，且 dex 不需要它们；
+#   第三方签名文件进了 classes.jar 反而会让人误以为是被签过的产物）
+rm -rf "$WORK/thirdparty-classes/META-INF"
+N_TP="$(find "$WORK/thirdparty-classes" -name '*.class' | wc -l | tr -d ' ')"
+cp -R "$WORK/thirdparty-classes/." "$WORK/classes/" || { echo "✗ 合并第三方 class 失败"; exit 3; }
 (cd "$WORK/classes" && "$JDK/bin/jar" cf "$WORK/classes.jar" .) || { echo "✗ jar 打包失败"; exit 3; }
-echo "    classes.jar $(du -h "$WORK/classes.jar" | awk '{print $1}')（$(find "$WORK/classes" -name '*.class' | wc -l | tr -d ' ') 个 class）"
+echo "    classes.jar $(du -h "$WORK/classes.jar" | awk '{print $1}')（$(find "$WORK/classes" -name '*.class' | wc -l | tr -d ' ') 个 class，含第三方 $N_TP 个）"
 
 echo "==> ③ 组装 AAR（manifest / classes.jar / jni / R.txt）"
 mkdir -p "$WORK/aar/jni/arm64-v8a"
@@ -99,8 +118,14 @@ done
 CJ_LIST="$("$JDK/bin/jar" tf "$WORK/classes.jar" 2>/dev/null)"
 # ★断言含**运行期壳必需类**（2026-10-08 补 SuperappRuntimeHost——它曾是"AAR 陈旧"的漏网证据：
 #   CLI 生成的运行期壳引用它，而 AAR 里没有 ⇒ 打包必失败）
-for cls in "dev/proteus/layoutcore/VaporRenderHost.class" "dev/proteus/layoutcore/ProteusHostView.class" "dev/proteus/layoutcore/RustLayout.class" "dev/proteus/layoutcore/SuperappRuntimeHost.class" "dev/proteus/layoutcore/QuickJsEngine.class" "dev/proteus/layoutcore/HostBridge.class" "dev/proteus/layoutcore/ScreenHost.class" "dev/proteus/layoutcore/HostCapabilities.class" "dev/proteus/platform/ProteusTextPlatform.class"; do
+for cls in "dev/proteus/layoutcore/VaporRenderHost.class" "dev/proteus/layoutcore/ProteusHostView.class" "dev/proteus/layoutcore/RustLayout.class" "dev/proteus/layoutcore/SuperappRuntimeHost.class" "dev/proteus/layoutcore/QuickJsEngine.class" "dev/proteus/layoutcore/HostBridge.class" "dev/proteus/layoutcore/ScreenHost.class" "dev/proteus/layoutcore/HostCapabilities.class" "dev/proteus/layoutcore/HttpTransport.class" "dev/proteus/platform/ProteusTextPlatform.class"; do
   printf '%s' "$CJ_LIST" | grep -q "$cls" && echo "    ✓ classes.jar 含 $(basename "$cls")" || { echo "    ✗ classes.jar 缺 $cls"; FAILS=$((FAILS + 1)); }
+done
+# ★★★#1160：第三方依赖必须真的进 AAR（否则 CLI 侧"编译不过"或"真机 NoClassDefFoundError"）
+#   ★断言**具体类**而不是 jar 名：AAR 的 classes.jar 是扁平 class 集合，jar 名不存在，
+#     只有"类在不在"才是消费方真正需要的性质。
+for cls in "okhttp3/OkHttpClient.class" "okhttp3/Dns.class" "okhttp3/EventListener.class" "okio/BufferedSink.class"; do
+  printf '%s' "$CJ_LIST" | grep -q "$cls" && echo "    ✓ classes.jar 含第三方 $(basename "$cls")" || { echo "    ✗ classes.jar 缺第三方 ${cls}（OkHttp/Okio 未并入）"; FAILS=$((FAILS + 1)); }
 done
 READELF="$(ls "$NDK"/toolchains/llvm/prebuilt/*/bin/llvm-readelf 2>/dev/null | head -1)"
 if [ -n "$READELF" ] && [ -x "$READELF" ]; then
@@ -131,15 +156,21 @@ if [ "$FAILS" -eq 0 ]; then
   echo "✅ 随包副本已同步（$PREBUILT/proteus-runtime.aar · $(du -h "$PREBUILT/proteus-runtime.aar" | awk '{print $1}')）"
   # ★★★新鲜度指纹（决策 #721）：记下**本次构建**时 `runtime/*.java` 的内容哈希 ⇒ 门禁
   #   `scripts/check-android-runtime-aar-fresh.mjs` 重算比对，抓"源改了 AAR 没重建"（本仓栽过 2 次）。
+  # ★★★#1160：**第三方 jar 也进指纹**（OkHttp/Okio 会并入 classes.jar）——
+  #   否则换/升 jar 时 AAR 不判陈旧，消费方拿到旧 jar 里的类。
+  #   ★算法必须与 `check-android-runtime-aar-fresh.mjs` 的 `runtimeSourcesHash()` **逐字节一致**
+  #     （两处各写一份的代价：改一处忘另一处 ⇒ 门禁永久红，本轮已踩一次）。
   node -e '
     const fs=require("fs"),path=require("path"),crypto=require("crypto");
-    const rt=process.argv[1], stamp=process.argv[2];
-    const files=fs.readdirSync(rt).filter(f=>f.endsWith(".java")).sort();
+    const rt=process.argv[1], stamp=process.argv[2], tp=process.argv[3];
     const h=crypto.createHash("sha256");
+    const files=fs.readdirSync(rt).filter(f=>f.endsWith(".java")).sort();
     for(const f of files){h.update(f);h.update("\0");h.update(fs.readFileSync(path.join(rt,f)));h.update("\0")}
+    const jars=fs.existsSync(tp)?fs.readdirSync(tp).filter(f=>f.endsWith(".jar")).sort():[];
+    for(const f of jars){h.update(f);h.update("\0");h.update(fs.readFileSync(path.join(tp,f)));h.update("\0")}
     fs.writeFileSync(stamp,h.digest("hex")+"\n");
-  ' "$RT_SRC" "$PREBUILT/proteus-runtime.sources.sha256"
-  echo "✅ 源指纹已写入（proteus-runtime.sources.sha256）"
+  ' "$RT_SRC" "$PREBUILT/proteus-runtime.sources.sha256" "$HERE/thirdparty"
+  echo "✅ 源指纹已写入（proteus-runtime.sources.sha256 · 含第三方 jar）"
 else
   echo "✗ AAR 有 $FAILS 项断言失败"; exit 1
 fi

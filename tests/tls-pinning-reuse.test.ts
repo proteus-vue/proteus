@@ -29,41 +29,43 @@ const src = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), 'utf8
 
 describe('★★#1155 pinning 不得破坏连接复用（真机抓出的性能回归）', () => {
   const java = src(TLS_JAVA)
+  // ★★★#1160：换栈后真实路径是 `sslMaterial`（OkHttp 要 factory + TrustManager 成对）；
+  //   `socketFactory` 已成死代码（只被同样已死的 `applyTo` 调用）。
+  //   ⇒ 判据靶子迁到**真实路径**——否则守的是一个永不执行的函数（"判据绿、行为坏"）。
 
-  it('★★★`socketFactory` 必须**先查缓存**再构造（否则每次请求新建 SSLContext ⇒ 零复用）', () => {
-    // 找到 socketFactory 的方法体（从签名到下一个 "private static SSLSocketFactory buildSocketFactory"）
-    const start = java.indexOf('public static SSLSocketFactory socketFactory(')
-    expect(start, `没找到 socketFactory（${TLS_JAVA} 形态变了？）`).toBeGreaterThan(0)
-    const end = java.indexOf('private static SSLSocketFactory buildSocketFactory')
-    expect(end, '没找到 buildSocketFactory（构造未收口到独立方法？）').toBeGreaterThan(start)
+  it('★★★`sslMaterial` 必须**先查缓存**再构造（否则每请求新建 SSLContext ⇒ 零复用）', () => {
+    const start = java.indexOf('public static SslMaterial sslMaterial(')
+    expect(start, `没找到 sslMaterial（${TLS_JAVA} 形态变了？）`).toBeGreaterThan(0)
+    const end = java.indexOf('private static SslMaterial buildMaterial(')
+    expect(end, '没找到 buildMaterial（构造未收口到独立方法？）').toBeGreaterThan(start)
     const body = java.slice(start, end)
-    expect(body, '★socketFactory 里没有缓存查询（FACTORY_CACHE.get）⇒ 每次请求新建 SSLContext ⇒ 连接池失效').toMatch(
-      /FACTORY_CACHE\.get\(/,
+    expect(body, '★sslMaterial 里没有缓存查询（MATERIAL_CACHE.get）⇒ 每次请求新建 SSLContext ⇒ 连接池失效').toMatch(
+      /MATERIAL_CACHE\.get\(/,
     )
-    expect(body, '★socketFactory 里没有缓存写入（FACTORY_CACHE.put）').toMatch(/FACTORY_CACHE\.put\(/)
+    expect(body, '★sslMaterial 里没有缓存写入（MATERIAL_CACHE.put）').toMatch(/MATERIAL_CACHE\.put\(/)
     // ★必须"命中即返回"（不能查了却继续往下走）
     expect(body, '★查了缓存但没有提前返回（命中后仍会新建）').toMatch(/if\s*\(cached\s*!=\s*null\)\s*return\s+cached/)
   })
 
-  it('★★缓存键必须含 `pinOnly`（否则叠加/替代两档共用同一 factory，信任语义错乱）', () => {
-    const start = java.indexOf('public static SSLSocketFactory socketFactory(')
-    const end = java.indexOf('private static SSLSocketFactory buildSocketFactory')
+  it('★★缓存键必须含 `pinOnly`（否则叠加/替代两档共用同一材料，信任语义错乱）', () => {
+    const start = java.indexOf('public static SslMaterial sslMaterial(')
+    const end = java.indexOf('private static SslMaterial buildMaterial(')
     const body = java.slice(start, end)
-    expect(body, '★缓存键不含 pinOnly —— 不同信任语义会命中同一个 factory').toMatch(/cacheKey\s*=\s*[^;]*pinOnly/)
+    expect(body, '★缓存键不含 pinOnly —— 不同信任语义会命中同一个材料').toMatch(/cacheKey\s*=\s*[^;]*pinOnly/)
   })
 
   it('★缓存必须是**进程级**（static）且线程安全（ConcurrentHashMap）', () => {
-    expect(java, '★FACTORY_CACHE 不是 static（实例级缓存等于没有缓存）').toMatch(
-      /static\s+final\s+java\.util\.Map<\s*String\s*,\s*SSLSocketFactory\s*>\s*FACTORY_CACHE/,
+    expect(java, '★MATERIAL_CACHE 不是 static（实例级缓存等于没有缓存）').toMatch(
+      /static\s+final\s+java\.util\.Map<\s*String\s*,\s*SslMaterial\s*>\s+MATERIAL_CACHE/,
     )
-    expect(java, '★FACTORY_CACHE 不是 ConcurrentHashMap（多线程请求会竞争）').toMatch(/ConcurrentHashMap/)
+    expect(java, '★MATERIAL_CACHE 不是 ConcurrentHashMap（多线程请求会竞争）').toMatch(/ConcurrentHashMap/)
   })
 
-  it('★构造逻辑只有一处（`buildSocketFactory`），`socketFactory` 不自己 new', () => {
-    const start = java.indexOf('public static SSLSocketFactory socketFactory(')
-    const end = java.indexOf('private static SSLSocketFactory buildSocketFactory')
+  it('★构造逻辑只有一处（`buildMaterial`），`sslMaterial` 不自己 new SSLContext', () => {
+    const start = java.indexOf('public static SslMaterial sslMaterial(')
+    const end = java.indexOf('private static SslMaterial buildMaterial(')
     const body = java.slice(start, end)
-    expect(body, '★socketFactory 里自己调了 SSLContext.getInstance（应只经 buildSocketFactory）').not.toMatch(
+    expect(body, '★sslMaterial 里自己调了 SSLContext.getInstance（应只经 buildMaterial）').not.toMatch(
       /SSLContext\.getInstance/,
     )
   })

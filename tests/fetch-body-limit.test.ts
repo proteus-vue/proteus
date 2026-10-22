@@ -71,7 +71,10 @@ describe('★#1115 两端实现同值同语义（防"换端就成败不同"）',
     expect(s, '累计比较必须是 `total > MAX_BODY_BYTES`（`>=` 会少一字节）').toMatch(/total\s*>\s*MAX_BODY_BYTES/)
     expect(s, '超限必须抛专用异常（否则只能给笼统 failed）').toMatch(/BodyTooLargeException/)
     // 预判闸：Content-Length 超限时直接拒
-    expect(s, 'Android 缺 Content-Length 预判').toMatch(/getContentLengthLong\(\)/)
+    // ★★★#1160 换栈后口径：#1158 时读 `conn.getContentLengthLong()`，换 OkHttp 后读
+    //   `ResponseBody.contentLength()`——**性质不变**（有声明长度时先判，避免白读一遍再丢），
+    //   所以断言锁"有预判 + 有抛"，不锁某个具体 API 名（API 随传输栈走，性质不随）。
+    expect(s, 'Android 缺 Content-Length 预判（应从响应体读声明长度）').toMatch(/contentLength\(\)/)
     expect(s, 'Android 预判后未抛超限异常').toMatch(/declared\s*>\s*MAX_BODY_BYTES[\s\S]{0,120}BodyTooLargeException/)
   })
 

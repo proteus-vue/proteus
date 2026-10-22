@@ -149,7 +149,16 @@ find "$ROOT/platform/android/proteus-platform/src" -name '*.java' >> "$BUILD/jav
 #      仍会建出 `dev/` 目录 ⇒ 判据通过 ⇒ **编译失败照样打包 APK**。
 #   实测现象：报「找不到符号」却继续走完 ③④⑤⑥⑦ 打出 APK —— 等于在测旧产物（白跑一轮）。
 #   ⇒ 正解：输出落盘 + `if ! javac …`（`set -e` 下唯一可靠的形态）。
-if ! javac --release 17 -classpath "$PLATFORM" \
+# ★★★决策 #1160：第三方运行时依赖（OkHttp/Okio，vendor 在 `thirdparty/`，见其 README）
+#   · javac 需要它（`HttpTransport` 直接用 okhttp3/okio 类型）
+#   · d8 需要它（否则打出的 dex 引用 `okhttp3.*`，运行时 `NoClassDefFoundError`）
+#   ★必须**同一份 jar 集合**同时进 javac 与 d8；只进一端 = "编译过真机崩" 或 "编译不过"。
+THIRDPARTY_JARS="$(find "$HERE/thirdparty" -name '*.jar' 2>/dev/null | sort)"
+[ -n "$THIRDPARTY_JARS" ] || { echo "✗ 缺 thirdparty/*.jar（OkHttp/Okio）——见 hosts/android/thirdparty/README.md"; exit 2; }
+THIRDPARTY_CP="$(printf '%s\n' "$THIRDPARTY_JARS" | tr '\n' ':')"
+THIRDPARTY_CP="${THIRDPARTY_CP%:}"
+echo "    第三方依赖：$(printf '%s\n' "$THIRDPARTY_JARS" | xargs -n1 basename | tr '\n' ' ')"
+if ! javac --release 17 -classpath "$PLATFORM:$THIRDPARTY_CP" \
      -d "$CLASSES" @"$BUILD/java-sources.txt" > "$BUILD/javac.log" 2>&1; then
   echo "✗ javac 失败 —— 完整输出见 $BUILD/javac.log（末尾 20 行如下）："
   grep -v "^注:" "$BUILD/javac.log" | tail -20
@@ -483,7 +492,7 @@ echo "==> ④ dex（d8）"
 # ★d8 要求输出目录**已存在**（否则 "Invalid output"，实测踩到）
 mkdir -p "$BUILD/dex"; rm -f "$BUILD/dex"/*.dex
 "$BT/d8" --release --min-api 24 --lib "$PLATFORM" \
-  --output "$BUILD/dex" $(find "$CLASSES" -name '*.class') 2>&1 | head -10
+  --output "$BUILD/dex" $(find "$CLASSES" -name '*.class') $THIRDPARTY_JARS 2>&1 | head -10
 [ -f "$BUILD/dex/classes.dex" ] || { echo "✗ d8 未产出 classes.dex"; exit 3; }
 
 echo "==> ⑤ 组装 APK（加入 dex 与 native 库）"

@@ -57,7 +57,12 @@ echo "    android.jar: $ANDROID_JAR"
 #   ⇒ 有编译错照样 ✅。实测影响：MainActivity 变量名冲突（`se` 重复定义）未被拦，
 #   打出的 APK 不含新测试组，真机跑完判据全缺——"假绿门禁"比没有门禁更贵（排查一轮）。
 JAVAC_LOG="$OUT/javac.log"
-if ! "$JDK/bin/javac" -nowarn -encoding UTF-8 -d "$OUT" -cp "$ANDROID_JAR" \
+# ★★★决策 #1160：第三方运行时依赖（OkHttp/Okio）——与 `build-and-run.sh` / `build-runtime-aar.sh`
+#   **同一份** jar 集合（第三方 jar 已入库 `thirdparty/`，见其中 README 的版本与升级口径）。
+#   ★为什么必须在这里也加：本脚本是"改宿主代码后最先跑的零设备判据"，若 classpath 与真机构建
+#     不一致 ⇒ 本地全绿、真机 javac 报"找不到符号"（本仓 AAR 陈旧事故的同族）。
+THIRDPARTY_JARS="$(find "$HERE/thirdparty" -name '*.jar' 2>/dev/null | sort | tr '\n' ':')"
+if ! "$JDK/bin/javac" -nowarn -encoding UTF-8 -d "$OUT" -cp "$ANDROID_JAR:${THIRDPARTY_JARS%:}" \
     $(find "$SRC_DIR" "$PLATFORM_JAVA_DIR" "$CLI_TPL_JAVA_DIR" -name '*.java') > "$JAVAC_LOG" 2>&1; then
   grep -vE '^注:|^Note:|使用或覆盖了已过时的 API|uses or overrides a deprecated API|unchecked|deprecat' "$JAVAC_LOG" || true
   echo "✗ javac 编译失败（退出码非 0，见上方输出）"

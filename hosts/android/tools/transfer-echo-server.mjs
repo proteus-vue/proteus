@@ -10,6 +10,7 @@
 // 【为什么不用公网】判据要可复现：公网服务会限流/断连，而"连不上"与"宿主腿有 bug"无法区分。
 
 import http from 'node:http'
+import crypto from 'node:crypto'
 
 const port = Number(process.argv[2] ?? 8788)
 const host = process.argv[3] ?? '127.0.0.1'
@@ -120,6 +121,37 @@ const server = http.createServer((req, res) => {
       console.error(`[transfer] huge ${size}B chunked=${chunked}`)
     }
     pump()
+    return
+  }
+  /**
+   * `ANY /body-echo` —— ★★★#1160：**请求体回显**（POST/PUT 带体探针的服务端）。
+   *
+   * 【为什么必须加这个端点】换栈第一版 `perform()`（整包路径）漏了 `cfg.body` ⇒
+   *   Android 所有带 `data` 的 POST/PUT **静默变空体**。而原有探针全是 GET/上传/流式/落盘
+   *   ⇒ **没有任何一条覆盖"整包路径 + 请求体"**，9 组真机回归全绿而功能已坏。
+   *   本端点把"服务端到底收到多少字节"变成可断言的事实（length / 首末字节 / Content-Type）。
+   *
+   * ★也接受 GET（返回 length=0），用来证明"没有把体错挂到 GET"（OkHttp 会直接抛）。
+   */
+  if (url.pathname === '/body-echo') {
+    const ct = String(req.headers['content-type'] ?? '')
+    const chunks = []
+    req.on('data', (c) => chunks.push(c))
+    req.on('end', () => {
+      const body = Buffer.concat(chunks)
+      const digest = crypto.createHash('sha256').update(body).digest('hex')
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({
+        ok: true,
+        method: req.method,
+        length: body.length,
+        sha: digest,
+        first: body.length > 0 ? body[0] : -1,
+        last: body.length > 0 ? body[body.length - 1] : -1,
+        contentType: ct,
+      }))
+      console.error(`[transfer] body-echo ${req.method} ${body.length}B sha=${digest.slice(0, 12)} ct=${ct}`)
+    })
     return
   }
   if (url.pathname === '/upload' && req.method === 'POST') {

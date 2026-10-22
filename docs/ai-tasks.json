@@ -2669,7 +2669,7 @@
         "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
         "hosts/ios/ProteusHost/runtime/InvokeWire.swift",
         "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
-        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TransportReadout.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpTransport.java",
         "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/InvokeWire.java",
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
         "hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_wire.h",
@@ -2693,7 +2693,7 @@
         "T-transport-facts-probe",
         "T-harmony-transport-reuse"
       ],
-      "note": "【done · 决策 #1158】承接 #1155/#1156「下一步②：把 transport 读数接进 FetchMeta」。★**为什么算\"补完\"而非\"加功能\"**：矩阵 §3 末尾的 `transport:{proto,dnsMs,connectMs,tlsMs,reused}` 此前是**愿景**（探针证明可度量，业务只有 totalMs）。现在它是已交付的 `res.meta.transport`。★★**三端可得性不同（缺键不填 0）**：iOS 全字段（URLSessionTaskMetrics）· Android 只有 proto+ttfbMs （状态行的 null 键 + 自量 TTFB）· 鸿蒙四个毫秒项（Rcp_TimeInfo）· Web 只 proto（TAO 限制会全 0）· MP 整项不出现。★**\"缺键 = 不可得\"是硬约定**——填 0/false 会让业务读成\"DNS 花了 0ms\"（假数据比缺数据更糟）。★★★**判据当场抓出两个真缺陷**：① `Number('') === 0` ⇒ 空串被解析成\"DNS 花了 0ms\" （`fetch-transport-meta` ⑤ 抓到）；② 五段链路断在 `runFetch`（它是\"挑三个字段重拼对象\"的形态 ⇒ 新字段默认被丢；`fetch-pipeline` 的端到端断言首跑红）——与 #1134/#1122 同族\"底层做完、门面没接\"。★★★**鸿蒙 `Rcp_TimeInfo` 的真实单位是微秒**（SDK 头注释写 milliseconds）：首跑 ttfbMs=26785 比整轮墙钟 39ms 长 26 倍 ⇒ 按 µs 换算后 26.8/16/9ms 三次自洽。另有 tlsMs 在明文/复用连接上算出 0 ⇒ 改为不写该键。★线格式：回程 TLV `Transport=22`（name-values），**不塞进 Headers**（那是服务端头，会污染 + 互相覆盖，判据 ⑫ 断言互不污染）；空对象/缺省不写 tag（判据 ⑩ 配对）。五端 43 向量逐字节等价。★判据：`fetch-transport-meta` **12/12** · `fetch-pipeline` **25/25**（+2 端到端）· `check:cache-evidence` 新增\"业务侧真的拿到读数\"（破坏性验证：清空 ⇒ 红并指名五段链路）。★真机三端：Android {proto,ttfbMs:16→1} · iOS {h2,reused:false,dns:0,connect:41,tls:32,ttfb:11.5} → {h2,reused:true,ttfb:11.1} · 鸿蒙 {dns:0.2,connect:26.7,ttfb:37.9} → {dns:0.1,ttfb:6.1}（后两轮无 connectMs = 复用连接的独立印证）。★**两次按纪律拆文件（不抬基线）**：`capability-invoke.ts` 998→937（抽 `capability-app-request-types.ts`）· `HttpCapability.java` 990→998（抽 `TransportReadout.java`；抽时误删 collectHeaders 的 Javadoc 已补回）。★诚实边界：Android TTFB 含连接+响应头（不细分）· 鸿蒙探针是 C++ napi、**不经过 JS useFetch** ⇒ 那条只证明\"宿主采集+编码\"，不证明 JS 拿到（后者由 Android/iOS 覆盖）· Web 只 proto · MP 无读数 · 鸿蒙 proto/reused 不可得 ⇒ http2_ok 仍为 null（未测）· 微秒结论来自三次墙钟对账。"
+      "note": "【done · 决策 #1158】承接 #1155/#1156「下一步②：把 transport 读数接进 FetchMeta」。★**为什么算\"补完\"而非\"加功能\"**：矩阵 §3 末尾的 `transport:{proto,dnsMs,connectMs,tlsMs,reused}` 此前是**愿景**（探针证明可度量，业务只有 totalMs）。现在它是已交付的 `res.meta.transport`。★★**三端可得性不同（缺键不填 0）**：iOS 全字段（URLSessionTaskMetrics）· Android 只有 proto+ttfbMs （状态行的 null 键 + 自量 TTFB）· 鸿蒙四个毫秒项（Rcp_TimeInfo）· Web 只 proto（TAO 限制会全 0）· MP 整项不出现。★**\"缺键 = 不可得\"是硬约定**——填 0/false 会让业务读成\"DNS 花了 0ms\"（假数据比缺数据更糟）。★★★**判据当场抓出两个真缺陷**：① `Number('') === 0` ⇒ 空串被解析成\"DNS 花了 0ms\" （`fetch-transport-meta` ⑤ 抓到）；② 五段链路断在 `runFetch`（它是\"挑三个字段重拼对象\"的形态 ⇒ 新字段默认被丢；`fetch-pipeline` 的端到端断言首跑红）——与 #1134/#1122 同族\"底层做完、门面没接\"。★★★**鸿蒙 `Rcp_TimeInfo` 的真实单位是微秒**（SDK 头注释写 milliseconds）：首跑 ttfbMs=26785 比整轮墙钟 39ms 长 26 倍 ⇒ 按 µs 换算后 26.8/16/9ms 三次自洽。另有 tlsMs 在明文/复用连接上算出 0 ⇒ 改为不写该键。★线格式：回程 TLV `Transport=22`（name-values），**不塞进 Headers**（那是服务端头，会污染 + 互相覆盖，判据 ⑫ 断言互不污染）；空对象/缺省不写 tag（判据 ⑩ 配对）。五端 43 向量逐字节等价。★判据：`fetch-transport-meta` **12/12** · `fetch-pipeline` **25/25**（+2 端到端）· `check:cache-evidence` 新增\"业务侧真的拿到读数\"（破坏性验证：清空 ⇒ 红并指名五段链路）。★真机三端：Android {proto,ttfbMs:16→1} · iOS {h2,reused:false,dns:0,connect:41,tls:32,ttfb:11.5} → {h2,reused:true,ttfb:11.1} · 鸿蒙 {dns:0.2,connect:26.7,ttfb:37.9} → {dns:0.1,ttfb:6.1}（后两轮无 connectMs = 复用连接的独立印证）。★**两次按纪律拆文件（不抬基线）**：`capability-invoke.ts` 998→937（抽 `capability-app-request-types.ts`）· `HttpCapability.java` 990→998（抽 `TransportReadout.java`；抽时误删 collectHeaders 的 Javadoc 已补回）。★诚实边界：Android TTFB 含连接+响应头（不细分）· 鸿蒙探针是 C++ napi、**不经过 JS useFetch** ⇒ 那条只证明\"宿主采集+编码\"，不证明 JS 拿到（后者由 Android/iOS 覆盖）· Web 只 proto · MP 无读数 · 鸿蒙 proto/reused 不可得 ⇒ http2_ok 仍为 null（未测）· 微秒结论来自三次墙钟对账。★#1160 换 OkHttp 后 `TransportReadout.java` 已删除，Android 读数改由 `HttpTransport` 的 EventListener 采集（本行 scope 已同步指向接替文件）。"
     },
     {
       "id": "T-gates-local-only-ledger",
@@ -2715,6 +2715,89 @@
         "T-gates-sync-false-green"
       ],
       "note": "【done · 决策 #1159（2026-10-22）】承接 #1157 ⑥「LOCAL_ONLY 是自证的」。★缺陷（实测）：58/159 条自由文本豁免，其中 20 条**既不在 CI 也不在 verify**（默认流程谁都不跑，报表却像“本地有跑”）；理由无下限；CI 已在跑的条目挂“仅本地”不报（① 循环 covered 即 continue）。★改法：LOCAL_ONLY_META（cat 10 类 × run 8 种 + at/also/evidence）+ 8 条判据（NO_META 三向 · ORPHAN_META · STALE_NAME · THIN_WHY · UNKNOWN_CAT/RUN · STALE_DECL · RUN_UNPROVEN · RUN_MISLABEL · NO_TRIGGER · CAT_STRUCTURE · RATCHET · DEVICE_NO_ARTIFACT），报告按 cat/run 分组并点名“仅标签”的 cat。★新增 cat=policy：原 host-src 的理由“CI 无宿主源码语境 ⇒ 扫不到文件”不成立（hosts/** 入库源码，本机实测 host-rounding 扫 117 文件）⇒ 11 条从“跑不了”改判“选择不跑”，政策豁免不得伪装成能力所限。★独立验证（异会话子代理）打回四类真缺陷并修：① `{}`/`{cat}`/`{run}` 可整段跳过 ⑥–⑪（`{}` truthy + `!m.run` continue）；② covered.also 裸子串（`also:'node'` 遍地命中）⇒ 只收套件名/--flag 且按执行段判；③ build-script 取证按文本包含（注释/echo/`# old: x.mjs` 全骗过）⇒ scriptInvokes（剥注释+切段+非执行段过滤+完整 token）；④ entryFileOf 缺 (?!\\w) ⇒ `data/package.json` 读成 `data/package.js`（#1157 d 同款复现）。另修 runsFile flag 子串（--check 被 --check-output 冒充）· at 路径安全（EISDIR 崩栈 / ../ 逃逸）· closeout 单向（整对删掉不报警）· suite 只认字面 test · extractRunCommands 块标量重复消费 + 引号尾注释。★判据 63/63（原 37，+26）；9 个变异全部独立命中。★落地收紧：run 分布 verify 38→42 / manual 14→10；4 条 Kairos 真机产物判据（android-lights/flip/ink/ink-scroll，产物入库、零设备可跑）新接进 verify（同形态 9 条早在链里，属口径不一）。★诚实边界：5 类 cat 仍只是标签（macos/sdk/policy/machine-noise/local-env，报告显式点名）；manual/on-device/closeout 15 条判不出是否真跑过；RATCHET 可抬数字；`cd website` 入口路径未建模；YAML 仍行级。★仓内遗留红已顺手修掉（同提交）：check:host-rounding 6 处（DeviceCapability.java:172,173 屏幕度量 px÷density · :230 亮度量化 0..255 · GlassInteraction.java:385 物理积分子步数 · device-capability.swift:130,131 pt 度量）——逐处核实属门禁口径的**合法例外**（度量报告 / 位图量化 / 步数），补 I2-ALLOW 理由（登记例外 248→254）；check:shell-i18n-vars 9 处（6 处 $VAR<全角字符> 改 ${VAR}——实测 bash 把全角「（」首字节吃进变量名，set -u 下直接 unbound variable 崩；3 处 // 注释改 #）。★教训：这两条**早就在 pnpm verify 链里**，却因本机 pnpm 不在 PATH、verify 长期没跑而无人发现——「接了线」与「真在跑」是两件事。"
+    },
+    {
+      "id": "T-android-okhttp-transport",
+      "title": "#1160 Android 传输栈换 OkHttp 3.14.9：HTTP/2 协商 + 全字段传输读数 + HTTPDNS 接入点（P1 缺口收口）",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpTransport.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TlsPinning.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/BodyProbe.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java",
+        "hosts/android/thirdparty",
+        "hosts/android/build-and-run.sh",
+        "hosts/android/build-runtime-aar.sh",
+        "hosts/android/check-host-compile.sh",
+        "hosts/android/run-body-probe.sh",
+        "hosts/android/tools/transfer-echo-server.mjs",
+        "hosts/android/results/transport-probe.json",
+        "hosts/android/results/body-probe.json",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "hosts/shared/bridge/entry-superapp-probes-body.ts",
+        "packages/cli/templates-host/shared/bridge/entry-superapp.ts",
+        "scripts/check-android-runtime-aar-fresh.mjs",
+        "tests/android-okhttp-transport.test.ts",
+        "tests/tls-pinning-reuse.test.ts",
+        "tests/fetch-body-limit.test.ts",
+        "tests/fetch-cancel.test.ts",
+        "tests/upload-stream.test.ts",
+        "tests/capability-app-transfer.test.ts",
+        "tests/download-stream-save.test.ts",
+        "docs/contract-index.md",
+        "docs/proteus-network-plan/00-capability-matrix.md",
+        "docs/proteus-network-plan/01-android-transport-okhttp.md",
+        "docs/ai-tasks.json",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 1160,
+      "verification": "npx vitest run tests/android-okhttp-transport.test.ts tests/tls-pinning-reuse.test.ts tests/fetch-body-limit.test.ts tests/fetch-cancel.test.ts tests/upload-stream.test.ts tests/capability-app-transfer.test.ts tests/download-stream-save.test.ts && bash hosts/android/check-host-compile.sh && node scripts/check-android-runtime-aar-fresh.mjs && node scripts/check-invoke-wire-parity.mjs && bash hosts/android/run-transport-probe.sh && bash hosts/android/run-body-probe.sh && node scripts/check-cache-evidence.mjs",
+      "branch": null,
+      "related": [
+        "T-fetch-transport-readout",
+        "T-transport-facts-probe",
+        "T-harmony-transport-reuse"
+      ],
+      "note": "【done · 决策 #1160（2026-10-22）】承接 #1158「下一步①：HTTPDNS + HTTP/2 合并立项，先量 OkHttp APK 增量」。★**先量体积再选型**：同一套 d8 参数实测 OkHttp 3.14.9 压缩后 **+180 KB**、4.12 + kotlin-stdlib **+929 KB** ⇒ 取 3.14.9（最后一个纯 Java 稳定线）。★★★**真机结果**：HTTP/2 `http/1.1`×3 → **`h2`×3**；连接复用 **3 请求 / 1 TCP 未退化**；读数从 `{proto,ttfbMs}` → **`{proto,reused,dnsMs,connectMs,tlsMs,ttfbMs}` 全字段**（首轮 reused:false+connect:19+tls:16 → 末轮 reused:true 且无 connect/tls 键）。服务端记账 `{\"h2\":3}` + 同对端端口复用 3 次。★三条不能破的语义：① 连接池按「pin 串+pinOnly+DNS 开关」缓存 client（每请求 new = 池归零，#1155 同族）；② 唯一建连入口 `HttpTransport.newCall`（删掉 `TlsPinning.open`/`applyTo`/`RedirectPolicy` 三个 HttpURLConnection 时代入口）；③ 缺键=不可得。★★★**独立验证（异会话）抓出 P0**：`perform()` 整包路径漏了 `cfg.body` ⇒ **Android 所有带 data 的 POST/PUT 静默变空体**（零报错、日志干净）；而当时四条真机探针全是 GET/上传 ⇒ **9 组回归全绿而功能已坏**。修法 = body 收进 `buildCallConfig` 唯一映射（判据断言赋值恰好 2 处）。★另修无界泄漏：`METRICS` 只在成功 return 前 remove ⇒ 失败/取消路径永不清 ⇒ reqId 递增无界增长；加 `dropMetrics` 并四处 finally 配对。★**补覆盖洞并实证有效性**：新增 `/body-echo` + `entry-superapp-probes-body.ts` + `BodyProbe.java` + `run-body-probe.sh`；真机 POST 1050B=期望 1050B、PUT 通、GET 0B；**注入 P0 重建 ⇒ 探针红（post_len_server=0）⇒ 恢复 ⇒ 绿**。★3 条弱判据被独立验证打回并补强：`newCall` 可直接 buildClient（绕过缓存）/ newBuilder 派生结果可不用（redirectManual 静默失效）/ EventListener 只查方法名（dnsEnd=-1 也绿）⇒ 改为去注释 + 断言调用点 + 断言右值是真实时间戳 + 断言派生 client 真被用于发请求；第二轮 G1/G2/I/I2 四处变异全部打红。★判据：`android-okhttp-transport` **25/25**；破坏性验证 **15 条全命中**（11 + G1/G2/I/I2）；`tls-pinning-reuse` 靶子迁到真实路径 `sslMaterial`；`fetch-body-limit`/`fetch-cancel`/`upload-stream`/`capability-app-transfer` 由\"锁 API 名\"改为\"锁性质\"。★门禁接线：三处构建脚本都带 thirdparty jar（漏一处=编译过真机崩）；AAR 并入第三方 class 并断言 4 个 okhttp3 类；AAR 指纹纳入 jar（换 jar 也判陈旧）；contract-index +1 行。★诚实边界：只为 Android 一端付费（iOS 平台默认 h2）· OkHttp 3.x 停止维护（升 4.x +929KB，见 thirdparty/README）· HTTPDNS 只落 seam（无调用方，业务 API 属下一单）· 鸿蒙 h2 仍 null（未测）· reused 是 per-call 口径 · proto 字面值 HTTP/1.1→http/1.1 · **既有风险（非本单引入）**：TlsPinning 用 java.util.Base64（API 26+）而 minSdk=24 ⇒ API 24/25 pinning 会 NoClassDefFoundError · **既有缺口（非本单引入）**：templates-host/shared/bridge 只随包 entry-superapp.ts，其 import 的 10 个探针模块都没随包 ⇒ 纯 npm 安装的外部用户打 App 包会解析失败。"
+    },
+    {
+      "id": "T-android-baseline-api26",
+      "title": "Android TlsPinning 用 java.util.Base64（API 26+）而 minSdk=24 ⇒ API 24/25 上 pinning 会 NoClassDefFoundError（#1160 独立验证发现的既有风险）",
+      "type": "bugfix",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/TlsPinning.java"
+      ],
+      "decision": null,
+      "verification": "bash hosts/android/check-host-compile.sh && npx vitest run tests/android-okhttp-transport.test.ts（并补一条静态判据：不得直接用 java.util.Base64）",
+      "branch": null,
+      "related": [
+        "T-android-okhttp-transport"
+      ],
+      "note": "【planned】#1160 独立验证指出（非本单引入）：`TlsPinning.parsePins` 用 `java.util.Base64.getDecoder()`，该类自 **Android API 26** 起可用；而宿主 `minSdkVersion=24`、d8 `--min-api 24`，且手工构建链**没有 core-library desugaring** ⇒ 在 API 24/25 设备上启用 pinning 会 `NoClassDefFoundError`（未启用 pinning 的请求不受影响，因为该路径不解析 pins）。两条修法：① 换 `android.util.Base64`（API 1+，注意它用 `NO_WRAP` 且解码失败返回 null 而非抛异常）；② 抬 minSdk 到 26（影响面更大，需评估）。★先取证：本机真机是 API 37，无法直接复现 ⇒ 需模拟器 API 24/25 或静态断言 + 反射可用性检查。"
+    },
+    {
+      "id": "T-cli-host-bridge-probes-sync",
+      "title": "CLI 随包桥源只含 entry-superapp.ts，其 import 的 10 个探针模块都没随包 ⇒ 纯 npm 安装的外部用户打 App 包会解析失败（#1160 发现的既有缺口）",
+      "type": "bugfix",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "scripts/sync-host-bridge.mjs",
+        "packages/cli/templates-host/shared/bridge",
+        "packages/cli/src/app-bundle.ts"
+      ],
+      "decision": null,
+      "verification": "node scripts/sync-host-bridge.mjs --check && node -e \"检查副本目录含 entry-superapp-probes*.ts\" && npx vitest run tests/app-host-cli.test.ts",
+      "branch": null,
+      "related": [
+        "T-android-okhttp-transport"
+      ],
+      "note": "【planned】#1160 加探针时发现（非本单引入）：`scripts/sync-host-bridge.mjs` 只同步 `entry-superapp.ts` **单文件**到 `packages/cli/templates-host/shared/bridge/`，而该文件 `import` 了 `entry-superapp-probes{,-stale,-persist,-tls,-transport,-body}.ts` 等 **10 个模块**，这些**都不在随包目录**。⇒ 框架仓内构建（走真源目录）不受影响；但**纯 npm 安装 CLI、无框架 checkout** 的外部用户执行 `proteus build --target android --package` 时 esbuild 解析相对 import 会失败。修法：同步脚本改为同步**整个 bridge 目录**（排除 generated/dist），门禁对应改为逐文件比对；同时评估 `packages/cli/package.json` 的 `files` 是否已包含该目录（已含 `templates-host`）。"
     }
   ]
 }

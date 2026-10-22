@@ -16,9 +16,9 @@
 
 | # | 能力 | 现状（取证） | 属哪一层 | 本轮 |
 |---|---|---|---|---|
-| 1 | **HTTPDNS** | **零实现**（全仓 `grep enableHttpDNS/httpDNSServiceId` = 0 处）。三端都走系统 DNS | 宿主传输 / 业务 SDK | ❌ 见 §3 分期 |
-| 2 | **高性能模式** | **无此概念**。Android `HttpURLConnection` 默认连接池；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）⇒ "高性能模式"若只指连接复用，则**已具备**；若指 TLS 会话复用/预连接/多路复用，见第 3 项 | 宿主传输 | 🟡 连接复用✅（#1155）；余项见 §3 |
-| 3 | **HTTP/2** | **走平台默认**（Android `HttpCapability.java:30` / iOS `http-capability.swift:30` 均注明"HTTP/2、压缩、连接池全走平台默认，不自造"）。★**#1155 真机取证**：iOS **已协商 h2**；Android **未协商**（AOSP `HttpURLConnection` 默认不开 h2）⇒ 这是**端差异**，不是"都没做" | 宿主传输 | 🟡 iOS✅（平台默认即具备）；Android❌（需换栈） |
+| 1 | **HTTPDNS** | **零实现**（全仓 `grep enableHttpDNS/httpDNSServiceId` = 0 处）。三端都走系统 DNS。★**#1160**：Android 已落 **`Dns` 注入 seam**（`HttpTransport.setHttpDns`，`HttpURLConnection` 根本给不了这个接入点）——但**业务 API + 线格式 tag 未做**，seam 目前无调用方 ⇒ 仍算「未实现」，只是**前置已具备** | 宿主传输 / 业务 SDK | 🟡 Android 接入点✅（#1160 seam）；业务面 ❌ |
+| 2 | **高性能模式** | **无此概念**。Android ~~`HttpURLConnection` 默认连接池~~ ⇒ ★**#1160 换 OkHttp**（进程级 `ConnectionPool(8, 5min)`）；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）；★**#1160 换栈后 Android 仍 3/1**（未退化） | 宿主传输 | 🟡 连接复用✅（#1155 取证 · #1160 未退化）；余项见 §3 |
+| 3 | **HTTP/2** | ★★★**#1160 已收口（Android）**：宿主传输栈换 **OkHttp 3.14.9**（纯 Java，APK +180 KB），`protocols(HTTP_2, HTTP_1_1)` 显式协商 ⇒ **真机 `server_protocols={"h2":3}`**。★#1155 时 iOS **已协商 h2**（平台默认）· Android 全 `http/1.1`（AOSP `HttpURLConnection` 不开 h2）⇒ 那是**端差异**，本轮补齐 Android。★鸿蒙仍 `null`（未测，RCP 需先接 CA/pinning） | 宿主传输 | ✅ Android + iOS；鸿蒙未测 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
 | 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `setInstanceFollowRedirects(!manual)`（4 条路径统一 helper）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
 | 6 | **请求缓存** | ★**#1149 已做（框架层）**：`config.cache`（对齐浏览器 `Request.cache` 六值）+ `Cache-Control`（max-age / no-store / no-cache / must-revalidate）+ `ETag`/`Last-Modified` 条件请求 + **304 ⇒ 缓存体合成 200** + `Vary` 分桶 + 内存 LRU 预算；★**#1150 已做**：RFC 5861 `stale-while-revalidate` / `stale-if-error` + `Age` 头；★**#1151 已做（L2 持久层）**：`cache: { persist: true }` ⇒ Web/MP 走 KV、App 走文件（`fs.*`），**跨进程重启仍命中**（真机双端各 13/13） | **框架策略（TS）** | ✅（含持久层） |
@@ -87,7 +87,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 | 端 | 实现 | 状态 |
 |---|---|---|
-| Android | `setInstanceFollowRedirects(!manual)`（四条请求路径统一 `applyRedirectPolicy`） | ✅ |
+| Android | `followRedirects(!manual)`（OkHttp，per-call 经 `newBuilder()` 派生；四条请求路径统一 `HttpTransport.CallConfig.redirectManual`） | ✅ |
 | iOS | `URLSessionTaskDelegate.willPerformHTTPRedirection` ⇒ manual 时 `completionHandler(nil)` | ✅ |
 | Web | 原生 `fetch(url, { redirect: 'manual' })`（比 JS 逐跳重发省一次往返） | ✅ |
 | **MP** | `wx.request` **隐式跟随且不可关** | **❌ `fetch.unsupported`**（如实） |
@@ -123,11 +123,19 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 > 生产路径每请求建/关 RCP session + 用同步 `HMS_Rcp_FetchSync` ⇒ 真机 `3 请求 / 3 TCP`；
 > 修为「进程级 session + **异步** `HMS_Rcp_Fetch`」后 `3 请求 / 1 TCP`。
 > ⇒ **P1 只剩两项**：HTTPDNS（两端都需要自定义解析）与 **HTTP/2（Android 与鸿蒙都缺）**。
+>
+> ★★★**#1160 收口了 HTTP/2 的 Android 侧**：宿主传输栈换成 **OkHttp 3.14.9**
+> （纯 Java 线；APK **+180 KB**，对比 4.x + Kotlin stdlib 的 **+929 KB**）。真机
+> `server_protocols={"h2":3}` + `3 请求 / 1 TCP`（复用未退化）。同一笔换栈还买到了：
+> **全字段传输读数**（`EventListener` 的 dns/connect/tls/ttfb + reused）与
+> **HTTPDNS 的 `Dns` 注入 seam**（业务 API 仍属下一单）。
+> ⇒ **P1 真正剩余**：① HTTPDNS 业务化（seam 已就绪）② 鸿蒙 h2（需先接 CA/pinning）。
 
 | 能力 | 落点 | 前置 | 判据设计（可执行） |
 |---|---|---|---|
-| HTTPDNS | Android OkHttp `Dns` 接口 / iOS `NWConnection` 自定义解析 | **Android 需引入 OkHttp**（APK +Δ）；iOS 需自建解析或 `Network.framework` | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
-| **HTTP/2（Android + 鸿蒙）** | Android 同上（OkHttp `Protocol.HTTP_2`）；鸿蒙 RCP 需先接自定义 CA/pinning 才可能协商 | 同 HTTPDNS（鸿蒙另需 TLS 信任配置） | 断言：服务端记录 `h2` 协商（**判据已现成**：`bash hosts/android/run-transport-probe.sh`，现读数 `http2_ok=false`；鸿蒙为 `null`＝未测） |
+| HTTPDNS | Android ~~OkHttp `Dns` 接口~~ ⇒ ✅**seam 已落（#1160）**，待业务 API / 线格式 tag；iOS `NWConnection` 自定义解析 | ~~Android 需引入 OkHttp~~ ✅ 已引入（+180 KB）；iOS 需自建解析或 `Network.framework` | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
+| **HTTP/2（Android）** | ✅ **#1160 已交付**：OkHttp `Protocol.HTTP_2` 显式协商 | — | 真机 `server_protocols` 含 `h2`（`bash hosts/android/run-transport-probe.sh` 现读数 **`http2_ok=true`**） |
+| **HTTP/2（鸿蒙）** | 鸿蒙 RCP 需先接自定义 CA/pinning 才可能协商 | TLS 信任配置 | 鸿蒙 `http2_ok` 现为 `null`＝**未测**（不是 false） |
 
 ★**为什么"HTTP/2 只剩 Android"这条很重要（它改变了工程量判断）**：
 矩阵原先写"HTTP/2 + 连接池：需 Android 引入 OkHttp"，读起来像"三端都要补"。

@@ -88,7 +88,12 @@ describe('★#1120 宿主实现 · 边读边发', () => {
       /f\.upload != null && f\.upload\.path != null[\s\S]{0,400}performStreamUpload\(f, url, method, timeoutMs\)/,
     )
     expect(seg, '缺峰值块记账').toMatch(/peakChunkBytes/)
-    expect(seg, '★未用定长流式（应能预知 multipart 总长）').toMatch(/setFixedLengthStreamingMode\(total\)/)
+    // ★★★#1160 换栈后口径：换栈前是 `conn.setFixedLengthStreamingMode(total)`，
+    //   换 OkHttp 后是 **`RequestBody.contentLength()` 返回已知总长**（OkHttp 据此发定长请求，
+    //   不用 chunked）。性质相同：multipart 总长可预知 ⇒ 定长发送。⇒ 断言锁性质，不锁 API 名。
+    expect(seg, '★未用定长流式（应能预知 multipart 总长：contentLength() 返回 total）').toMatch(
+      /contentLength\(\)\s*\{\s*return\s+total/,
+    )
     expect(seg, '未复用沙箱校验').toMatch(/FileTransferCapability\.resolve/)
     // 不得用 readAll 读上传文件（那是整包）
     expect(seg, '★用 readAll 读了文件（整包进内存）').not.toMatch(/readAll\(\s*new java\.io\.FileInputStream/)

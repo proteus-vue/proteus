@@ -49,12 +49,19 @@ describe('★#1119 download 流式落盘 · JS 侧契约', () => {
 describe('★#1119 线格式 · savePath', () => {
   it('TS 侧 tag 9 编解码往返', () => {
     // ★tag 定义在 invoke-wire.ts（线格式 SSOT），InvokeMeta 字段在 capability-invoke.ts
+    //   ★★#1160 顺手修正（既有失败）：#1158 把请求参数类型拆到
+    //   `capability-app-request-types.ts`（`savePath?: string` 搬过去了），本断言仍指旧文件 ⇒ 恒红。
+    //   ⇒ 类型声明查新文件，**消费点**（`META_STR` / 赋值分支）仍查 capability-invoke.ts。
     const w = read('packages/api/src/invoke-wire.ts')
     const s = read(INVOKE)
+    const types = read('packages/api/src/capability-app-request-types.ts')
     expect(w, '缺 SavePath tag').toMatch(/SavePath:\s*9,?/)
     expect(w, 'encode 未写 SavePath TLV').toMatch(/MetaTagInvoke\.SavePath/)
-    expect(s, 'savePath 未进 InvokeMeta').toMatch(/savePath\?: string/)
-    expect(s, 'splitFramePayload 未识别 savePath（会被当成 body 字段）').toMatch(/META_STR = \['url', 'contentType', 'savePath'\]/)
+    expect(types, 'savePath 未进 InvokeMeta 类型（#1158 拆到 capability-app-request-types.ts）').toMatch(/savePath\?: string/)
+    // ★META_STR 是**增长型清单**（#1154 加了 tlsPins）⇒ 断言只要求 savePath 在列，不锁整串
+    expect(s, 'splitFramePayload 未识别 savePath（会被当成 body 字段）').toMatch(
+      /META_STR = \[[^\]]*'savePath'[^\]]*\]/,
+    )
     expect(w, 'decode 未读 SavePath TLV').toMatch(/case MetaTagInvoke\.SavePath/)
   })
 
