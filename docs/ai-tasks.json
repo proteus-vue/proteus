@@ -2516,7 +2516,7 @@
       "verification": "npx vitest run tests/knowledge-kernel.test.ts tests/knowledge-command.test.ts && npx tsx packages/cli/src/index.ts knowledge check && node scripts/check-gates-sync.mjs && node scripts/check-ai-tasks.mjs --check && node scripts/check-file-size.mjs",
       "branch": null,
       "related": [],
-      "note": "【done · 决策 #1153】G-54 六方法里数据源最厚的两个（②分层 / ④拓扑）。★落地位置：放 packages/cli/src/knowledge/ 而非新建包——CLI 已是仓库静态分析聚集地且在依赖图顶层 L3；新建包会牵动 check:pkg + 构建链 + 发布三条线。抽包时机 = 出现第二个消费者（Studio/VSCode 适配器）时按 #870 机械搬迁。★口径决策：同层依赖判 OK + sameLayer 信息位（按 G-55 §6；文档 §1「同层只经 contracts」暂不判红）；UNKNOWN 不兜底 L0；devDeps 不入图但由 diagnoseDevDeps 单列（不判红）。★★★独立验证（异会话子代理）打回三处真缺陷并全部修复：① 裸三色 DFS 漏报具体环（随机对拍 9.5%/5.5% 少报，最小反例 a→e,b→c,c→b,c→e,e→b,e→c 的真实环 c→e→c 未报）⇒ 改 Tarjan SCC（完备性看 sccs）+ 代表回路 + isValidCycle 独立 oracle；② findCycles 对「节点子集 + 全量边」静默丢边（邻接表只为 nodes 建）⇒ 改 nodes ∪ 端点；③ 自环被 continue 吞掉 ⇒ 单列 selfLoops；④ devDeps 口径失明（图说无边、判定说 UPWARD）⇒ diagnoseDevDeps 信息位。★判据 23/23 + tsc --strict 零错 + file-size 绿（310 行）+ 破坏性验证 7 条各自独立命中（层标错 2 红 / 环检测恒空 2 红 / 兜底 L0 1 红 / 反向依赖不记录 1 红 / 邻接表丢边 1 红 / 自环吞掉 1 红 / devDeps 失明 1 红）。★诚实边界：分层表是为现有 78 条边定标的（L2 收 23 包，层内约束力弱）；代表回路不保证覆盖分量全部节点；未实现 ①③⑤⑥ 四方法；无 CLI 命令面（index.ts 已 1101 行 / 基线 1102，接命令前须先拆）。★后续同轮补：① 命令面 `packages/cli/src/knowledge/command.ts`（`proteus knowledge <layers|graph|check|why>`、全支持 --json）+ 入口 1 行 import/1 行 case（把相邻 router:check 5 行压成 3 行抵消，净值 0 仍 1101 行，**未调高基线**）+ args.ts 帮助目录 + gate.ts 注册（框架自检）；② 三条硬约束各有判据：非仓库目录抛错不返空图（空集恒真 = 假绿，与 #1139 同族）/ --json 时 stdout 只有 JSON / 漏登记与幽灵条目 exit 1；③ `evaluateKnowledgeCheck()` 命令面与 gate 共用一份（两处各写必漂口径）；④ check:knowledge 接进 verify + ci.yml（接线前查重：check:layers 是 z-index、check:platform-layering 是目录方向、check:host-layering 是 hosts 三端，本单是唯一的 npm 包级→L0-L5）；⑤ 判据 17/17（合计 40/40）+ 破坏性验证 5 条各自命中。★顺手挖出既有缺陷（未修，建议另立单）：check-gates-sync 的 coveredByCi() 会拿「脚本路径出现在 CI 文本」当接线证据，而 cli/src/index.ts 被 CI 广泛提及 ⇒ 引用它的 check:* 在真加步骤前就判「已接线」。★并发事故：f773abca 用 add -A 卷走内核代码+测试；b19b02fb 又把本轮 docs 改动（ai-tasks scope/note、decisions ⑥e/⑧/⑨/⑩）整段回退成旧版 ⇒ 本单用 **显式路径提交**（不用 add -A/commit -a）并重新落盘文档。★test:coupled 未闭环：pnpm 不在 PATH，且其建议的 check:bridge-sync 红来自**异会话未提交的 hosts/** 改动**（与本单无关，按纪律不碰）。"
+      "note": "【更新 2026-10-22 · 决策 #1180】⑤ affectedDevices 已落地（数据源=capabilities 的 adapters 键）；剩余未实现三个：① resolveCall / ③ locateAssertion / ⑥ previewVariants（确认无数据源，非未找）。【done · 决策 #1153】G-54 六方法里数据源最厚的两个（②分层 / ④拓扑）。★落地位置：放 packages/cli/src/knowledge/ 而非新建包——CLI 已是仓库静态分析聚集地且在依赖图顶层 L3；新建包会牵动 check:pkg + 构建链 + 发布三条线。抽包时机 = 出现第二个消费者（Studio/VSCode 适配器）时按 #870 机械搬迁。★口径决策：同层依赖判 OK + sameLayer 信息位（按 G-55 §6；文档 §1「同层只经 contracts」暂不判红）；UNKNOWN 不兜底 L0；devDeps 不入图但由 diagnoseDevDeps 单列（不判红）。★★★独立验证（异会话子代理）打回三处真缺陷并全部修复：① 裸三色 DFS 漏报具体环（随机对拍 9.5%/5.5% 少报，最小反例 a→e,b→c,c→b,c→e,e→b,e→c 的真实环 c→e→c 未报）⇒ 改 Tarjan SCC（完备性看 sccs）+ 代表回路 + isValidCycle 独立 oracle；② findCycles 对「节点子集 + 全量边」静默丢边（邻接表只为 nodes 建）⇒ 改 nodes ∪ 端点；③ 自环被 continue 吞掉 ⇒ 单列 selfLoops；④ devDeps 口径失明（图说无边、判定说 UPWARD）⇒ diagnoseDevDeps 信息位。★判据 23/23 + tsc --strict 零错 + file-size 绿（310 行）+ 破坏性验证 7 条各自独立命中（层标错 2 红 / 环检测恒空 2 红 / 兜底 L0 1 红 / 反向依赖不记录 1 红 / 邻接表丢边 1 红 / 自环吞掉 1 红 / devDeps 失明 1 红）。★诚实边界：分层表是为现有 78 条边定标的（L2 收 23 包，层内约束力弱）；代表回路不保证覆盖分量全部节点；未实现 ①③⑤⑥ 四方法；无 CLI 命令面（index.ts 已 1101 行 / 基线 1102，接命令前须先拆）。★后续同轮补：① 命令面 `packages/cli/src/knowledge/command.ts`（`proteus knowledge <layers|graph|check|why>`、全支持 --json）+ 入口 1 行 import/1 行 case（把相邻 router:check 5 行压成 3 行抵消，净值 0 仍 1101 行，**未调高基线**）+ args.ts 帮助目录 + gate.ts 注册（框架自检）；② 三条硬约束各有判据：非仓库目录抛错不返空图（空集恒真 = 假绿，与 #1139 同族）/ --json 时 stdout 只有 JSON / 漏登记与幽灵条目 exit 1；③ `evaluateKnowledgeCheck()` 命令面与 gate 共用一份（两处各写必漂口径）；④ check:knowledge 接进 verify + ci.yml（接线前查重：check:layers 是 z-index、check:platform-layering 是目录方向、check:host-layering 是 hosts 三端，本单是唯一的 npm 包级→L0-L5）；⑤ 判据 17/17（合计 40/40）+ 破坏性验证 5 条各自命中。★顺手挖出既有缺陷（未修，建议另立单）：check-gates-sync 的 coveredByCi() 会拿「脚本路径出现在 CI 文本」当接线证据，而 cli/src/index.ts 被 CI 广泛提及 ⇒ 引用它的 check:* 在真加步骤前就判「已接线」。★并发事故：f773abca 用 add -A 卷走内核代码+测试；b19b02fb 又把本轮 docs 改动（ai-tasks scope/note、decisions ⑥e/⑧/⑨/⑩）整段回退成旧版 ⇒ 本单用 **显式路径提交**（不用 add -A/commit -a）并重新落盘文档。★test:coupled 未闭环：pnpm 不在 PATH，且其建议的 check:bridge-sync 红来自**异会话未提交的 hosts/** 改动**（与本单无关，按纪律不碰）。"
     },
     {
       "id": "T-fetch-tls-pinning",
@@ -3099,6 +3099,28 @@
         "T-studio-shell-stage1"
       ],
       "note": "【done · 决策 #1177（2026-10-22）】承接 #1175 ⑤「端到端延迟未量」。★方法：我们这侧 = 首字节到达 → flushBuffer（同一 CLOCK_MONOTONIC），逐段记 队列/解码/合成/上屏；全链路用 screenrecord --bugreport 把设备时间戳烧进画面 + dump 时输出 arrive_epoch/present_epoch + 时钟偏差换算（长连接取最小 RTT，offset -685.6ms ±23）。★我们这侧：队列 6.1–6.3ms · 解码 2.0–2.1ms · 合成 1.3ms · 上屏 0.4–0.5ms ⇒ p50 7.7–8.0ms / p95 13.5–15.1 / p99 22.0–22.6。★全链路 64.4 / 69.4 / 63.4ms（中位 64.4），我们只占 11%；其余是设备硬编 + adb 管道。★否掉一个直觉：POC_TICK_HZ 60→120 让队列等待 6.57→3.41ms，但端到端 8.78→9.15ms（没降）、CPU 25.4→34.7% ⇒ 呈现被 60Hz vsync 锁住，加倍节拍只是把同一帧算两遍。默认 60Hz。★用法：60ms 对\"看手机\"够，对\"触摸回传\"不够（双向控制要换 RTP/WebRTC 类低延迟通道）；我们这侧 8ms 里 6ms 是 60Hz 取样边界，已接近该架构下限。★边界：跨时钟域 ±23ms；终点是 flushBuffer 不含面板出光；只测 Android 一台 + adb 管道；全链路只 3 帧对账（分布来自 1000+ 帧统计）。"
+    },
+    {
+      "id": "T-knowledge-affected-devices",
+      "title": "G-54 ⑤ affectedDevices 落地：能力 → 设备等价类影响面（纠正 #1153「数据源未就绪」的误判）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "packages/cli/src/knowledge/capabilities.ts",
+        "packages/cli/src/knowledge/index.ts",
+        "packages/cli/src/knowledge/command.ts",
+        "tests/knowledge-kernel.test.ts",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1180,
+      "verification": "npx tsx packages/cli/src/index.ts knowledge devices clipboard --json && npx vitest run tests/knowledge-kernel.test.ts && npx tsx packages/cli/src/index.ts knowledge check",
+      "branch": null,
+      "related": [
+        "T-knowledge-kernel-m0"
+      ],
+      "note": "【done · 决策 #1180（2026-10-22）】承接 #1153 的 ⑤。★先纠正自己：#1153 判「无机器可读的 SPI→端映射」是错的 —— scanCapabilities 的 adapters 键名就是平台集合，数据源一直在。★实现：capabilities.ts（parseCapabilityManifest / affectedDevicesOf / summarizeCapabilities，纯函数无 IO）+ provider 第二参数 + devices 子命令（动态 import 扫描器，check 路径不付 esbuild 开销）。★三条不糊弄：未加载 ≠ 查无 ≠ 无端实现（loaded/known 分开，且 loaded=false 时即便有数据也拒绝回答）；未知 id 绝不返回全部端；platforms 坏值记 malformed 不静默。★实测：clipboard → skyline web（不含 app ⇒ 改剪贴板不必回归 App 端）；未知 id exit 1 且明说「不是无影响面，是查无此能力」。★判据 23→30（+7）；4 个变异全部命中；其中 M2 首次未被抓 —— 用空清单测「未加载」等于没测到守卫，补断言后命中。★边界：platforms 只表达「有 adapter」不表达实现差异；清单当前 1 条（数据少非功能假）；③ locateAssertion 确认无注册表，不硬造。"
     }
   ]
 }

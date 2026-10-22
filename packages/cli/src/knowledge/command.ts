@@ -14,8 +14,10 @@
 //     找不到就报错并给 `--packages <dir>` 的修法（不静默跑空图 —— 空图会给出"0 违规"的假绿）。
 //
 // 【未实现的能力不假装】
-//   ① resolveCall / ③ locateAssertion / ⑤ affectedDevices / ⑥ previewVariants 尚无数据源，
+//   ① resolveCall / ③ locateAssertion / ⑥ previewVariants 尚无数据源，
 //   本命令面**不接受**它们的子命令（`proteus knowledge call` 会明确报"未实现"，不是 "未知子命令"）。
+//   ⑤ affectedDevices 已在 #1178 落地（`knowledge devices`）——数据源 = capabilities 的
+//   `adapters` 键名（平台集合），不是新造的表。
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -33,7 +35,7 @@ import {
 } from './index'
 
 /** 已实现的能力（子命令 → 能力编号）；未实现的能力在这里**不出现** */
-const SUBCOMMANDS = ['layers', 'graph', 'check', 'why'] as const
+const SUBCOMMANDS = ['layers', 'graph', 'check', 'why', 'devices'] as const
 type Subcommand = (typeof SUBCOMMANDS)[number]
 
 const HELP = `proteus knowledge —— 框架知识内核（G-54 M0 · 决策 #1153）
@@ -43,15 +45,17 @@ const HELP = `proteus knowledge —— 框架知识内核（G-54 M0 · 决策 #1
   proteus knowledge graph  [--json] [--reverse <pkg>] SPI 拓扑：节点/边/环/自环 + 反向依赖
   proteus knowledge check  [--json] [--dev]          分层守护：生产边越层 → exit 1（--dev 附带 devDeps 信息位）
   proteus knowledge why <from> <to> [--json]         单条判定（from 依赖 to 是否越层）
+  proteus knowledge devices [<spiId>] [--json]       ⑤ 能力 → 设备等价类影响面（不传 id = 列全部）
 
 通用选项：
   --packages <dir>   packages/ 所在目录（缺省从 cwd 向上找仓库根）
   --json             机器可读输出（stdout 只有 JSON）
 
 能力边界（诚实声明）：
-  已实现 ② checkLayering（分层守护）/ ④ buildGraph（SPI 拓扑）
-  未实现 ① resolveCall / ③ locateAssertion / ⑤ affectedDevices / ⑥ previewVariants
-         —— 数据源未就绪，不提供子命令、不返回占位假数据。`
+  已实现 ② checkLayering（分层守护）/ ④ buildGraph（SPI 拓扑）/ ⑤ affectedDevices（能力影响面）
+  未实现 ① resolveCall / ③ locateAssertion / ⑥ previewVariants
+         —— 数据源未就绪，不提供子命令、不返回占位假数据。
+  ⑤ 的数据源 = capabilities 描述文件的 adapters 键（= 平台集合），与 check:capability-golden 同源。`
 
 interface Flags {
   json: boolean
@@ -332,6 +336,80 @@ function runWhy(rest: readonly string[], flags: Flags): number {
   return r.verdict === 'OK' ? 0 : 1
 }
 
+// ── devices（⑤ affectedDevices）────────────────────────────────────
+async function runDevices(rest: readonly string[], flags: Flags): Promise<number> {
+  const packagesDir = resolvePackagesDir(flags.packagesDir)
+  const root = path.dirname(packagesDir)
+  const examples = path.join(root, 'examples')
+  if (!existsSync(examples)) {
+    console.error(`[proteus-knowledge] 找不到能力描述目录：${examples}`)
+    console.error('  修法：⑤ 的数据源是 examples/**/ *.capability.ts（scanCapabilities 扫描根）')
+    return 1
+  }
+  // 动态 import：只有 devices 子命令才拉起扫描器（esbuild），`check` 等门禁路径不付这份开销
+  const { scanCapabilities } = await import('@proteus-vue/capabilities/scan')
+  const { manifest, files } = await scanCapabilities(examples)
+  const bad = files.filter((f) => !f.ok)
+  const provider = createKnowledgeProvider([], manifest)
+  const summary = provider.capabilitiesSummary()
+  const spiId = rest[0]
+
+  if (spiId) {
+    const r = provider.affectedDevices(spiId)
+    if (flags.json) {
+      console.log(JSON.stringify({ kind: 'knowledge.devices', ...r }, null, 2))
+      return r.known ? 0 : 1
+    }
+    if (!r.known) {
+      // ★这里必须把"查无此能力"和"无影响面"分开说，否则读起来像"它不影响任何端"
+      console.log(`[proteus-knowledge] ✗ 清单里没有能力「${spiId}」（已加载 ${summary.total} 条）`)
+      console.log(`  这不是"无影响面"，是"查无此能力"。现有：${summary.ids.join(' ') || '（清单为空）'}`)
+      return 1
+    }
+    console.log(`[proteus-knowledge] ✓ ${r.spiId} → ${r.deviceClasses.join(' ') || '（无端实现）'}`)
+    if (r.entry?.name) console.log(`  名称：${r.entry.name}（tier ${r.entry.tier}）`)
+    console.log(`  源：${r.entry?.source || '（清单未记录）'}`)
+    if (r.deviceClasses.length === 0) console.log('  注：该能力当前没有任何端实现 —— 影响面为空是**事实**，不是数据缺失')
+    return 0
+  }
+
+  if (flags.json) {
+    console.log(
+      JSON.stringify(
+        {
+          kind: 'knowledge.devices',
+          loaded: true,
+          total: summary.total,
+          byDeviceClass: summary.byDeviceClass,
+          unknownDeviceClasses: summary.unknownDeviceClasses,
+          capabilities: manifest.capabilities,
+          scanErrors: bad,
+        },
+        null,
+        2,
+      ),
+    )
+    return bad.length ? 1 : 0
+  }
+  console.log(`[proteus-knowledge] 能力影响面（清单 ${summary.total} 条）`)
+  for (const c of manifest.capabilities) {
+    console.log(`  ${pad(c.id, 22)} T${c.tier}  ${pad(c.name ?? '', 12)} → ${c.platforms.join(' ') || '（无端实现）'}`)
+  }
+  const dist = Object.entries(summary.byDeviceClass)
+    .map(([k, v]) => `${k} ${v}`)
+    .join(' · ')
+  console.log(`  按端：${dist || '（空）'}`)
+  if (summary.unknownDeviceClasses.length) {
+    console.log(`  ⚠ 未登记端：${summary.unknownDeviceClasses.join(' ')}（不在 web/skyline/app 内，核对 Platform 枚举）`)
+  }
+  if (bad.length) {
+    console.log(`  ✗ ${bad.length} 个描述文件扫描失败：`)
+    for (const b of bad.slice(0, 5)) console.log(`    ${b.file} —— ${b.error}`)
+    return 1
+  }
+  return 0
+}
+
 /**
  * `proteus knowledge` 入口。
  * @param argv 子命令之后的参数（`process.argv.slice(2)` 去掉 `knowledge`）
@@ -348,14 +426,16 @@ export async function runKnowledgeCommand(argv: readonly string[]): Promise<numb
   if (!(SUBCOMMANDS as readonly string[]).includes(sub)) {
     console.error(`[proteus-knowledge] 未知子命令：${sub}`)
     console.error(`  支持：${SUBCOMMANDS.join(' / ')}`)
-    if (['call', 'resolve', 'assert', 'devices', 'variants'].includes(sub)) {
-      console.error('  注：① resolveCall / ③ locateAssertion / ⑤ affectedDevices / ⑥ previewVariants 尚未实现（数据源未就绪），不是拼写问题。')
+    if (['call', 'resolve', 'assert', 'variants'].includes(sub)) {
+      console.error('  注：① resolveCall / ③ locateAssertion / ⑥ previewVariants 尚未实现（数据源未就绪），不是拼写问题。')
     }
     return 1
   }
 
   // `why` 不需要读磁盘（纯查表）——避免在非仓库目录下也无法回答"这两个包能不能依赖"
   if (sub === 'why') return runWhy(flags.rest, flags)
+  // `devices` 只需要能力清单，不需要包清单（⑤ 与分层/拓扑无关）
+  if (sub === 'devices') return runDevices(flags.rest, flags)
 
   const packagesDir = resolvePackagesDir(flags.packagesDir)
   const manifests = loadManifests(packagesDir)
