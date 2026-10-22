@@ -149,3 +149,44 @@ describe('★★#1134 门面 → 线格式：字段白名单必须逐层齐全',
     expect(/\burl\??\s*:/.test(s), 'FetchConfig 不该有 url（它是首参）').toBe(false)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★★#1171 收尾自查：**App 专属能力在 Web/MP 腿必须明确拒绝**（不静默忽略）
+//
+// 【为什么单独一组（这是本轮自查抓到的真缺陷）】
+//   `httpDns` 上线时只做了 Android/鸿蒙 实现 + iOS 明确报错，**Web/MP 两条腿漏了守卫**
+//   ⇒ 业务传了 `httpDns` 表，请求**照常成功**、而它以为绕过了系统 DNS，
+//     实际走的是浏览器/微信容器的解析 —— **假数据比缺数据更糟**（与本仓"transport 缺键不填 0"同族）。
+//   ★这个缺陷**任何单测都不会报**：Web/MP 腿本来就不认识这个字段，"不认识"和"拒绝"在行为上都
+//     不会崩——只有**专门断言"必须报 unsupported"** 才能守。
+//
+// 【判据口径】对每个"某端做不到"的字段，`capability-fetch-legs.ts` 里必须有
+//   `config.<字段>` ⇒ `CapError('fetch.unsupported', …)` 的**配对出现**；
+//   且文件头的"两端能力矩阵"表必须登记该字段（SSOT 与代码同步）。
+describe('★★★#1171 App 专属能力必须在 Web/MP 腿明确拒绝（不静默忽略）', () => {
+  const LEGS = 'packages/api/src/capability-fetch-legs.ts'
+
+  it('★★★`httpDns` 在 Web/MP 两条腿都有 unsupported 守卫', () => {
+    const s = src(LEGS)
+    // 两处出现 config.httpDns 的**判定**（不是只在注释里提）
+    const guards = s.match(/if\s*\(\s*config\.httpDns[\s\S]{0,300}?fetch\.unsupported/g) ?? []
+    expect(guards.length, `★只有 ${guards.length} 条腿拒绝 httpDns（Web/MP 应各一条）`).toBe(2)
+    // 且错误信息要**点明端差异**（否则业务不知道该换哪端）
+    expect(s, '★httpDns 的拒绝信息未说明仅 Android/鸿蒙 生效').toMatch(/httpDns[\s\S]{0,500}仅 Android\/鸿蒙/)
+  })
+
+  it('★★★文件头能力矩阵必须登记 `tlsPins` 与 `httpDns`（SSOT 与代码同步）', () => {
+    const s = src(LEGS)
+    // 矩阵表里要有这两行的 unsupported 标记
+    expect(s, '★能力矩阵未登记 tlsPins').toMatch(/\|\s*tlsPins[^|]*\|[^|]*unsupported[^|]*\|[^|]*unsupported/)
+    expect(s, '★能力矩阵未登记 httpDns').toMatch(/\|\s*\*?\*?httpDns[^|]*\|[^|]*unsupported/)
+  })
+
+  it('★★其余 App 专属字段同样双端有守卫（防"只补了新字段、旧字段漏了"）', () => {
+    const s = src(LEGS)
+    for (const f of ['savePath', 'upload', 'tlsPins', 'httpDns']) {
+      const n = (s.match(new RegExp(`if\\s*\\(\\s*config\\.${f}\\b`, 'g')) ?? []).length
+      expect(n, `★${f} 只有 ${n} 条腿守卫（Web/MP 应各一条）`).toBeGreaterThanOrEqual(2)
+    }
+  })
+})

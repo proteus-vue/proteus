@@ -15,6 +15,12 @@
 //   | onChunk（流式） | ✅ ReadableStream | ❌ unsupported |
 //   | savePath（落盘） | ❌ unsupported | ❌ unsupported |
 //   | upload（流式上传） | ❌ unsupported | ❌ unsupported |
+//   | tlsPins（证书 pinning） | ❌ unsupported | ❌ unsupported |
+//   | **httpDns（HTTPDNS 表）** | **❌ unsupported**（浏览器不暴露 DNS 层） | **❌ unsupported**（wx.request 无注入点） |
+//
+//   ★★`httpDns` 的两端拒绝是 #1171 **收尾自查**补上的：它先只做了 Android/鸿蒙 与 iOS 的
+//     明确报错，**Web/MP 腿漏了** ⇒ 业务传表后请求照常成功、而实际走系统 DNS（假数据）。
+//     ⇒ 本矩阵是 SSOT：**任何"某端做不到"的能力都必须在此登记，且代码里有对应 reject**。
 
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
@@ -73,6 +79,21 @@ export function webRequest(ctx: FetchLegCtx, g: WebGlobals, config: RequestConfi
       throw new ctx.CapError(
         'fetch.unsupported',
         'tlsPins 是 App 宿主语义——Web 的 TLS 由浏览器管理，无法在应用层 pin（请用浏览器侧的 CSP/证书策略）',
+      )
+    }
+    /**
+     * ★★★#1171：**HTTPDNS 在 Web 不可行 ⇒ 明确拒绝**（不静默忽略）。
+     * 【缺陷形态（#1171 收尾自查抓出）】本文件对 `tlsPins` / `savePath` / `upload` 都明确报
+     *   `fetch.unsupported`，**唯独漏了 `httpDns`** ⇒ 业务传了表、请求照常成功，
+     *   而它以为绕过了系统 DNS，实际走的是浏览器/系统解析（**假数据比缺数据更糟**）。
+     * 【为什么不实现】浏览器 `fetch` **不暴露 DNS 层**（无 resolver 钩子）；唯一替代是
+     *   "把 URL 改成 IP 直连"，但那会破坏 **SNI 与证书主机名校验**（不可接受的降级）。
+     * ⇒ 与 iOS 同一条边界：**只有 App 的 Android/鸿蒙支持**。
+     */
+    if (config.httpDns && Object.keys(config.httpDns).length > 0) {
+      throw new ctx.CapError(
+        'fetch.unsupported',
+        'httpDns 是 App 宿主语义——浏览器 fetch 不暴露 DNS 层，无法注入解析结果（仅 Android/鸿蒙 生效）',
       )
     }
     const url = urlJoiner(ctx)(config.url, config.params)
@@ -229,6 +250,16 @@ export function mpRequest(
     if (config.tlsPins) {
       return reject(
         new ctx.CapError('fetch.unsupported', 'tlsPins 是 App 宿主语义——wx.request 不暴露 TLS 层，无法 pin 证书'),
+      )
+    }
+    /**
+     * ★★★#1171：**HTTPDNS 在 MP 不可行 ⇒ 明确拒绝**（与 Web / iOS 同一条边界）。
+     * `wx.request` 把 DNS 完全交给微信容器，**没有任何解析注入点**；
+     * 静默忽略会让业务误以为绕过了系统 DNS（假数据比缺数据更糟）。
+     */
+    if (config.httpDns && Object.keys(config.httpDns).length > 0) {
+      return reject(
+        new ctx.CapError('fetch.unsupported', 'httpDns 是 App 宿主语义——wx.request 不暴露 DNS 层，无法注入解析结果（仅 Android/鸿蒙 生效）'),
       )
     }
     if (config.signal) {
