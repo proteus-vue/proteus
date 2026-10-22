@@ -113,7 +113,7 @@ public final class SaveProbe {
                             org.json.JSONObject p = new org.json.JSONObject(v);
                             baseOut.put("probe", p);
                             // ★宿主记账：证明"内存只与块大小相关"（peak_chunk_bytes ≈ 16 KiB）
-                            HttpCapability.SaveStats st = HttpCapability.lastSaveStats();
+                            SaveStats st = HttpCapability.lastSaveStats();
                             org.json.JSONObject hs = new org.json.JSONObject();
                             hs.put("bytes", st.bytes);
                             hs.put("chunks", st.chunks);

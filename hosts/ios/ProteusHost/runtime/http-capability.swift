@@ -871,6 +871,21 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         if let tmp = st.uploadTemp { try? FileManager.default.removeItem(at: tmp) }
         // ★★★#1119：落盘收尾——回 path/size 摘要（不回字节），并处理写文件失败/超限
         if let target = st.saveTo {
+            /**
+             * ★★★#1200：**`FileHandle.close()` 不等于落盘**——它只 flush 到内核页缓存
+             *   （抗进程被杀，不抗**突然掉电**）。抗掉电需要把数据真正写到存储介质。
+             *   ⚠️本仓诚实边界：iOS 上**没有公开的 `fsync` 入口**——
+             *     · `FileHandle.fd` 不是公开 API（编译不过，实测）；
+             *     · `synchronizeFile()` 是公开的，文档说 "flushes any buffered data"，
+             *       但**它是否等价 `fsync` 未被本仓真机取证**（Apple 论坛有"它只到内核"的说法）。
+             *   ⇒ 这里用 `synchronizeFile()`，并把 `durable` 标成 `"partial"`（= 已尽力但未证明）。
+             *     ★不谎报 `true`：Android 的 `getFD().sync()` 是明确 fsync，本端不是。
+             */
+            var durableState = "false"
+            if let h = st.savedHandle, st.saveError == nil, error == nil {
+                h.synchronizeFile()
+                durableState = "\"partial\""   // 尽力 flush；未证明等价 fsync
+            }
             try? st.savedHandle?.close()
             let path = st.savePath ?? HttpCapability.relativePath(target)
             var frame: [UInt8]
@@ -884,7 +899,7 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
                 r.status = UInt32(max(0, st.status))
                 r.headers = st.headers
                 r.transport = st.transport.isEmpty ? nil : st.transport   // ★#1158
-                let summary = "{\"path\":\(HttpCapability.jsonQuote(path)),\"size\":\(st.savedBytes)}"
+                let summary = "{\"path\":\(HttpCapability.jsonQuote(path)),\"size\":\(st.savedBytes),\"durable\":\(durableState)}"
                 r.body = Array(summary.utf8)
                 HttpCapability.lastSaveStats.completed = true
                 HttpCapability.lastSaveStats.bytes = st.savedBytes

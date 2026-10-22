@@ -12937,3 +12937,25 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ ★D5（未做，登记为下一步）**：`proteus_http.h` 969 行里 **`handle()` 一个函数 496 行（占 51%）**；余量只剩 31 行，撑不了下一次语义改动。验证者建议下一步拆 `handle()` 的三段（建 session/request · 发请求+等待 · 装配回程），**而不是继续抠注释**。★本单不做（第五轮验证刚结束，动结构会让验证对象漂移），但已明确。
 **⑧ 判据与门禁**：六份定向 **83 条全绿**；`file-size` / `content` / `prebuilt` / `ai-tasks` / `decision-numbers` / `memory` 全绿。
 **⑨ 诚实边界**：a) 只测到 64 MiB；b) `T-fetch-save-durability`（三端缺 fsync）仍 planned；c) `handle()` 496 行的拆分未做；d) `stream`/`abort`/SPKI pinning 仍是模型/平台限制；e) 259/252 长名不再宣称（见 ④）。
+
+1200. **★★★`savePath` 落盘持久性：三端加 fsync（数据 + 目录项）+ 回执暴露 `durable` · 决策**（2026-10-22 · 承接 #1196 立项的 `T-fetch-save-durability`）:
+**① 问题（为什么这是"还会丢用户数据"的唯一残留）**：三端此前都**只 flush 到内核页缓存**：
+  · **Android**：`BufferedOutputStream.flush()` → `FileOutputStream`，**没有** `getFD().sync()`；
+  · **iOS**：`FileHandle.close()`，**没有任何 sync**；
+  · **鸿蒙**：`fflush` + `fclose`（#1187 起）。
+  ⇒ 进程被杀**安全**（内核会写回），但**突然掉电**后可能出现"目标文件存在但内容为空/被截断"。鸿蒙 #1194/#1195 的 `.proteus-tmp-*` + `rename` 只保证**命名原子性**（要么旧文件、要么新文件），不保证数据已落盘。
+**② 三端实现（各自的真实能力不同，如实标注）**：
+  · **Android**：`fos.getFD().sync()`（**明确等价 fsync**）⇒ `durable: true/false`；
+  · **鸿蒙**：`::fsync(::fileno(fp))`（在 `fclose` **之前**，之后 fd 就没了）+ **`rename` 后 `::fsync(dirFd)`**（保证目录项落盘，否则掉电后"新名字不存在"= 文件凭空消失）⇒ `durable: true/false`；
+  · **iOS**：⚠️**没有公开的 fsync 入口**——`FileHandle.fd` 不是公开 API（实测编译不过）；`synchronizeFile()` 是公开的，但**是否等价 fsync 未被本仓取证** ⇒ 用 `synchronizeFile()` 并把 `durable` 标成 **`"partial"`**（尽力但未证明）。★**不谎报 `true`**：Android 是明确 fsync，iOS 不是（「夸大与贬低同样是假信息」）。
+**③ 回执暴露 `durable`**（三端同一字段名）：业务终于能知道"这份文件抗不抗掉电"。`capability-transfer.ts` 把宿主的 `durable` 透传到 `AppDownload` 结果（**缺键不填 true**，本仓「缺省 ≠ 已达成」纪律）。
+**④ 结构性（两次撞 1000 行门禁，都按职责拆）**：`HttpCapability.java` 加 fsync 后到 1011 行 ⇒ 抽 `SaveStats` + `SaveTooLarge` 到 **`SaveTypes.java`**（它们本就是数据类，与"一条请求怎么走"无关）⇒ 991 行。★没有加 ALLOW 豁免。
+**⑤ 判据（新增 `tests/fetch-save-durability.test.ts` 5 条）**：
+  · Android 必须 `fos.getFD().sync()`（★**先剥注释再判**——`fos` 声明那行的注释里也写了 `getFD().sync()`，整文件 grep 会让"删掉真实调用"的变异仍绿，本判据首版就这么假绿过）；
+  · 鸿蒙必须 `::fsync(::fileno(fp))` 且**在 `fclose` 之前**（★只在 `finish()` 函数体内比顺序——全文 `indexOf` 会命中 `abortUnfinished()` 那处，首版就是这么假红的）；
+  · 鸿蒙 `rename` 后必须 `::fsync(dirFd)`；
+  · iOS **不得谎报 `true`**（必须 `"partial"` + 注释说清"没有公开 fsync 入口"）；
+  · 真机证据：Android `save-probe.json` 的 `probe.durable === true`。
+  **破坏性验证 4/4 全红**：Android 去掉 `getFD().sync()` ⇒ 红；鸿蒙去掉 fsync ⇒ 红；iOS 谎报 `true` ⇒ 红；证据 `durable` 改 false ⇒ 红。
+**⑥ 真机验证**：**Android 8 MiB 落盘 `durable = true`**（1026 块、峰值块 8192B、`data_is_path:true`）⇒ fsync 真的执行了。鸿蒙真机**待补**（设备在验证时又锁屏 `10106102`）。
+**⑦ 诚实边界**：a) **iOS 的 `durable:"partial"` 是诚实的未证明**——`synchronizeFile()` 是否触发 `fsync` 需真机掉电对照才能定，本轮不做；b) 鸿蒙真机未验（锁屏）；c) **掉电对照本身没做**（要真断电/强杀才能复现"存在但空"，属破坏性实验）；d) 三端都只保证"数据 + 目录项已提交给存储"，**不保证存储设备自身的写缓存**（`F_FULLFSYNC` 只有 macOS 有，iOS 无公开等价物）。

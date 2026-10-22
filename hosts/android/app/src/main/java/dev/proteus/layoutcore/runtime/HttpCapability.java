@@ -598,15 +598,7 @@ public final class HttpCapability {
      */
     static final long MAX_SAVE_BYTES = 1024L * 1024 * 1024;
 
-    /** 落盘记账（真机判据读它证明"内存不随文件增长"）。 */
-    static final class SaveStats {
-        volatile long bytes = 0;
-        volatile int chunks = 0;
-        volatile int peakChunkBytes = 0;
-        volatile boolean completed = false;
-        volatile String path = null;
-        volatile String error = null;
-    }
+    // ★#1200：SaveStats / SaveTooLarge 已抽到同包的 SaveTypes.java（本文件已到 1000 行上限）
     private static SaveStats lastSaveStats = new SaveStats();
     public static SaveStats lastSaveStats() { return lastSaveStats; }
 
@@ -619,6 +611,7 @@ public final class HttpCapability {
         okhttp3.Call call = null;
         okhttp3.Response resp = null;
         java.io.OutputStream os = null;
+        java.io.FileOutputStream fos = null;   // ★#1200：留给 getFD().sync()（flush 不等于落盘）
         try {
             android.content.Context ctx = appContext();
             if (ctx == null) {
@@ -642,7 +635,7 @@ public final class HttpCapability {
 
             InputStream is = HttpTransport.bodyStream(resp);
             // ★边收边写：内存占用 = 单个缓冲块，与文件大小无关
-            os = new java.io.BufferedOutputStream(new java.io.FileOutputStream(out, false), STREAM_CHUNK);
+            os = new java.io.BufferedOutputStream(fos = new java.io.FileOutputStream(out, false), STREAM_CHUNK);
             byte[] buf = new byte[STREAM_CHUNK];
             int n;
             if (is != null) {
@@ -651,13 +644,24 @@ public final class HttpCapability {
                     stats.chunks++;
                     if (n > stats.peakChunkBytes) stats.peakChunkBytes = n;
                     if (stats.bytes > MAX_SAVE_BYTES) {
-                        throw new SaveTooLarge(stats.bytes);
+                        throw new SaveTooLarge(MAX_SAVE_BYTES, stats.bytes);
                     }
                     os.write(buf, 0, n);
                 }
                 closeQuietly(is);
             }
             os.flush();
+            // ★#1200：flush() 只进内核页缓存（抗进程被杀，不抗掉电）⇒ 必须 fsync 才算落盘。
+            //   失败不使请求失败（数据已可见）⇒ 如实记进回执 durable。
+            boolean durable = false;
+            if (fos != null) {
+                try {
+                    fos.getFD().sync();
+                    durable = true;
+                } catch (Throwable t) {
+                    android.util.Log.w("proteus", "落盘 fsync 失败（数据可能未落盘）：" + t);
+                }
+            }
             closeQuietly(os);
             os = null;
 
@@ -667,7 +671,8 @@ public final class HttpCapability {
             rf.headers = respHeaders;
             // ★回程 body = 一句可读摘要（JS 侧只需要 path/size；**不回字节**）
             String summary = "{\"path\":" + org.json.JSONObject.quote(f.savePath)
-                    + ",\"size\":" + stats.bytes + ",\"chunks\":" + stats.chunks + "}";
+                    + ",\"size\":" + stats.bytes + ",\"chunks\":" + stats.chunks
+                    + ",\"durable\":" + durable + "}";
             rf.body = summary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             stats.completed = true;
             return rf;
@@ -695,11 +700,6 @@ public final class HttpCapability {
     }
 
     /** 落盘总量超限（1 GiB）——独立异常以便给出准确原因并清残包。 */
-    static final class SaveTooLarge extends Exception {
-        SaveTooLarge(long atLeast) {
-            super("fetch.tooLarge: 落盘超过上限 " + MAX_SAVE_BYTES + "B（已收 " + atLeast + "B）");
-        }
-    }
 
     /** 应用上下文（落盘要解析沙箱路径；由装配处注入一次）。 */
     private static android.content.Context _appCtx = null;

@@ -213,7 +213,7 @@ export function appSaveProbe(base: string, sizeMiB = 8): string {
         url: string,
         options?: Record<string, unknown>,
         onProgress?: (p: number) => void,
-      ) => Promise<{ status?: number; data?: unknown; path?: string }>
+      ) => Promise<{ status?: number; data?: unknown; path?: string; durable?: unknown }>
     }
     const progress: number[] = []
     try {
@@ -221,6 +221,7 @@ export function appSaveProbe(base: string, sizeMiB = 8): string {
       out['ok_return'] = true
       out['status'] = r.status
       out['path'] = r.path
+      out['durable'] = r.durable ?? null   // ★#1200：宿主 fsync 结果（true/"partial"/false/缺）
       // ② JS 侧不碰字节：data 必须是字符串路径（是字节数组 ⇒ 整包回推了）
       const d = r.data
       out['data_kind'] = Array.isArray(d) ? 'array' : (d instanceof Uint8Array ? 'uint8array' : typeof d)

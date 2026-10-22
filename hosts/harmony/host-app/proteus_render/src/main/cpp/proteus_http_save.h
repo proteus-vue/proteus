@@ -15,6 +15,7 @@
 //   ⇒ 返回空串 = 非法，调用方**必须如实报错**（不得回落到"写到别处"）。
 #pragma once
 #include <sys/stat.h>
+#include <fcntl.h>   // ★#1200：open(dirfd) 做目录 fsync
 #include <unistd.h>   // ★#1192：getpid() 用于 .part 唯一名   // ★#1187：递归建父目录（mkdir）
 
 #include <atomic>
@@ -102,6 +103,8 @@ struct SaveSession {
   size_t limit = MAX_SAVE_BYTES_H;
   /** ★B1：收尾已完成（成功 rename）。未完成 ⇒ 析构会清掉临时文件。 */
   bool completed = false;
+  /** ★#1200：数据是否已 fsync 落盘（false = 只到内核页缓存，掉电可能丢） */
+  bool durable = false;
 
   /** ★B1：任何出口（含早退/异常展开）都保证不留残包、不泄漏 fd。 */
   ~SaveSession() { abortUnfinished(); }
@@ -223,7 +226,8 @@ struct SaveSession {
       if (ok) *ok = true;
       char b2[64];
       std::snprintf(b2, sizeof(b2), "\"size\":%llu", static_cast<unsigned long long>(written));
-      return "{" + std::string("\"path\":\"") + jsonEscapeH(relPath) + "\"," + b2 + "}";
+      return "{" + std::string("\"path\":\"") + jsonEscapeH(relPath) + "\"," + b2
+             + ",\"durable\":" + (durable ? "true" : "false") + "}";
     }
     if (fp == nullptr && partPath.empty()) {
       if (ok) *ok = false;
@@ -233,10 +237,13 @@ struct SaveSession {
     // ★B3：`fwrite` 成功只代表进了 stdio 缓冲 ⇒ 磁盘满在 flush 时才暴露，必须显式检查。
     if (fp != nullptr) {
       const bool flushOk = (std::fflush(fp) == 0);
+      // ★#1200：fflush 只到内核页缓存（抗进程被杀、不抗掉电）⇒ 必须在 fclose **之前** fsync。
+      //   失败不使请求失败（数据已可见）⇒ 记 durable=false，如实标注。
+      if (flushOk && ::fsync(::fileno(fp)) == 0) durable = true;
       const bool errFlag = (std::ferror(fp) != 0);
       const int closeRc = std::fclose(fp);
       fp = nullptr;
-      if (!flushOk || errFlag || closeRc != 0) writeFailed = true;
+      if (!flushOk || errFlag || closeRc != 0) { writeFailed = true; durable = false; }
     }
     if (writeFailed) {
       abortUnfinished();
@@ -268,6 +275,17 @@ struct SaveSession {
         return "";
       }
       partPath.clear();
+      // ★#1200：rename 后还要 fsync **目录**，否则目录项只在页缓存 ⇒ 掉电后"新名字不存在"
+      //   （数据已落盘但文件凭空消失）。失败不使请求失败，但 durable 降级。
+      const size_t dslash = absPath.rfind('/');
+      const std::string parentDir = (dslash == std::string::npos) ? std::string(".") : absPath.substr(0, dslash);
+      const int dirFd = ::open(parentDir.c_str(), O_RDONLY);
+      if (dirFd >= 0) {
+        if (::fsync(dirFd) != 0) durable = false;
+        ::close(dirFd);
+      } else {
+        durable = false;
+      }
     }
     completed = true;
     if (ok) *ok = true;

@@ -95,15 +95,21 @@ export function createAppDownload(): (url: string, options?: DownloadOptions, on
       const r = (d ?? {}) as { data?: unknown; status?: number; headers?: Record<string, string> }
       const status = Number(r.status ?? 0)
       // ★宿主回的 `data` 是 `{path,size}` 摘要（也可能是字符串化的 JSON——两种都接）
-      let summary: { path?: unknown; size?: unknown } = {}
+      let summary: { path?: unknown; size?: unknown; durable?: unknown } = {}
       if (typeof r.data === 'string') {
-        try { summary = JSON.parse(r.data) as { path?: unknown; size?: unknown } } catch { /* 非 JSON ⇒ 用 target 兜底 */ }
+        try { summary = JSON.parse(r.data) as { path?: unknown; size?: unknown; durable?: unknown } } catch { /* 非 JSON ⇒ 用 target 兜底 */ }
       } else if (r.data && typeof r.data === 'object') {
-        summary = r.data as { path?: unknown; size?: unknown }
+        summary = r.data as { path?: unknown; size?: unknown; durable?: unknown }
       }
       const path = typeof summary.path === 'string' ? summary.path : (typeof (summary as { savePath?: unknown }).savePath === 'string' ? (summary as { savePath: string }).savePath : target)
       onProgress?.(100)
-      return { status, data: path, path, progress: 100 }
+      /**
+       * ★★★#1200：把宿主的 `durable` 透传给业务。
+       *   语义：`true` = 已 fsync（Android）；`"partial"` = 尽力 sync 但未证明等价 fsync（iOS）；
+       *   `false`/缺 = 只到内核页缓存（掉电可能丢）。★缺键不填 true（本仓「缺省 ≠ 已达成」纪律）。
+       */
+      const durable = summary.durable
+      return { status, data: path, path, progress: 100, ...(durable !== undefined ? { durable } : {}) }
     }
     const responseType = wantJson ? 'text' : options.responseType === 'blob' ? 'arraybuffer' : 'text'
     const d = await invokeHostAsync(
