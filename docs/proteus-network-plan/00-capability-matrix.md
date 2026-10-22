@@ -18,7 +18,7 @@
 |---|---|---|---|---|
 | 1 | **HTTPDNS** | **零实现**（全仓 `grep enableHttpDNS/httpDNSServiceId` = 0 处）。三端都走系统 DNS。★**#1160**：Android 已落 **`Dns` 注入 seam**（`HttpTransport.setHttpDns`，`HttpURLConnection` 根本给不了这个接入点）——但**业务 API + 线格式 tag 未做**，seam 目前无调用方 ⇒ 仍算「未实现」，只是**前置已具备** | 宿主传输 / 业务 SDK | 🟡 Android 接入点✅（#1160 seam）；业务面 ❌ |
 | 2 | **高性能模式** | **无此概念**。Android ~~`HttpURLConnection` 默认连接池~~ ⇒ ★**#1160 换 OkHttp**（进程级 `ConnectionPool(8, 5min)`）；iOS `URLSessionConfiguration.default` 复用会话。★**#1155 取证：连接复用两端都已在工作**（真机各 3 请求 / 1 连接）；★**#1160 换栈后 Android 仍 3/1**（未退化） | 宿主传输 | 🟡 连接复用✅（#1155 取证 · #1160 未退化）；余项见 §3 |
-| 3 | **HTTP/2** | ★★★**#1160 已收口（Android）**：宿主传输栈换 **OkHttp 3.14.9**（纯 Java，APK +180 KB），`protocols(HTTP_2, HTTP_1_1)` 显式协商 ⇒ **真机 `server_protocols={"h2":3}`**。★#1155 时 iOS **已协商 h2**（平台默认）· Android 全 `http/1.1`（AOSP `HttpURLConnection` 不开 h2）⇒ 那是**端差异**，本轮补齐 Android。★鸿蒙仍 `null`（未测，RCP 需先接 CA/pinning） | 宿主传输 | ✅ Android + iOS；鸿蒙未测 |
+| 3 | **HTTP/2** | ★★★**三端全具备**：**Android #1160** 换 OkHttp 3.14.9（`protocols(HTTP_2, HTTP_1_1)`，真机 `{"h2":3}`）· **iOS** 平台默认已协商（#1155）· ★★★**鸿蒙 #1166 已取证：本来就具备**（RCP 底层是 libcurl，公网真机 `http=http/2` + `tls=TLSv1.3`）——原记的"鸿蒙需先接 CA/pinning"**是误判**（把"探针连不上自签服务端"当成了"平台不支持"，见 §3 专项） | 宿主传输 | ✅ Android + iOS + 鸿蒙 |
 | 4 | **请求拦截** | ★**本轮做了**：`requestInterceptors` / `responseInterceptors`（洋葱模型，可改 url/headers、可短路） | **框架策略（TS）** | ✅ |
 | 5 | **重定向拦截** | ★**本轮做了**：`redirect: follow\|manual\|error` · `maxRedirects` · `onRedirect` 逐跳回调 · ★**跨域自动剥离 Authorization/Cookie**。宿主侧：Android `followRedirects(!manual)`（OkHttp，per-call 经 `newBuilder()` 派生，四条路径统一 `HttpTransport.CallConfig.redirectManual`）· iOS `willPerformHTTPRedirection`（manual ⇒ `completionHandler(nil)`）· 线格式新增 `Redirect=11` tag（五端逐字节对拍） | **框架策略（TS）+ 宿主最小能力** | ✅ |
 | 6 | **请求缓存** | ★**#1149 已做（框架层）**：`config.cache`（对齐浏览器 `Request.cache` 六值）+ `Cache-Control`（max-age / no-store / no-cache / must-revalidate）+ `ETag`/`Last-Modified` 条件请求 + **304 ⇒ 缓存体合成 200** + `Vary` 分桶 + 内存 LRU 预算；★**#1150 已做**：RFC 5861 `stale-while-revalidate` / `stale-if-error` + `Age` 头；★**#1151 已做（L2 持久层）**：`cache: { persist: true }` ⇒ Web/MP 走 KV、App 走文件（`fs.*`），**跨进程重启仍命中**（真机双端各 13/13） | **框架策略（TS）** | ✅（含持久层） |
@@ -135,7 +135,39 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 |---|---|---|---|
 | HTTPDNS | Android ~~OkHttp `Dns` 接口~~ ⇒ ✅**seam 已落（#1160）**，待业务 API / 线格式 tag；iOS `NWConnection` 自定义解析 | ~~Android 需引入 OkHttp~~ ✅ 已引入（+180 KB）；iOS 需自建解析或 `Network.framework` | 断言：域名解析走注入的解析器（假解析器返回假 IP，请求仍到达测试服务） |
 | **HTTP/2（Android）** | ✅ **#1160 已交付**：OkHttp `Protocol.HTTP_2` 显式协商 | — | 真机 `server_protocols` 含 `h2`（`bash hosts/android/run-transport-probe.sh` 现读数 **`http2_ok=true`**） |
-| **HTTP/2（鸿蒙）** | 鸿蒙 RCP 需先接自定义 CA/pinning 才可能协商 | TLS 信任配置 | 鸿蒙 `http2_ok` 现为 `null`＝**未测**（不是 false） |
+| **HTTP/2（鸿蒙）** | ★★★**#1166 已取证：本来就具备**——RCP 底层是 **libcurl**（真机响应头 `uag=libcurl-agent/1.0` 可证），走系统 TLS 栈自动 ALPN。见下方专项 | **无需任何前置**（原写"需先接自定义 CA/pinning"**是错的**） | 真机 `https://www.cloudflare.com/cdn-cgi/trace` 的 `http=http/2`（`hosts/harmony/results/http-probe-h2.json`）；静态判据 `tests/harmony-http2-evidence.test.ts` |
+
+★★★**#1166 专项：鸿蒙 HTTP/2 ——「需先接 CA/pinning」这个前提被实测推翻**
+
+矩阵与决策 #1163/#1165 一路记着「鸿蒙 RCP 需先接自定义 CA/pinning 才可能协商 h2」——**这句是错的**。
+**这是错的**，两层误判叠在一起：
+
+1. **把"探针连不上自签服务端"当成了"平台不支持 h2"**：`run-transport-probe.sh` 用**自签证书**的
+   本地 h2 服务端（为了能核对 SPKI pin），而鸿蒙宿主未接自定义 CA ⇒ 那个服务端连不上
+   ⇒ `http2_ok=null`（未测）。**这是装置限制，不是能力缺失**。
+2. **没验证 RCP 的底层**：`librcp_c.so` 的能力面取决于它链接的 HTTP 栈。#1166 实测：
+   请求 `https://www.cloudflare.com/cdn-cgi/trace`，响应体回显 `uag=libcurl-agent/1.0`
+   ⇒ **RCP 底层就是 libcurl**；libcurl 原生支持 ALPN + h2，而**公网证书是系统信任的**，
+   根本不需要自定义 CA。
+   ★RCP 头文件也印证：`Rcp_TransferConfiguration` **没有 HTTP 版本选项**
+   （只有 `autoRedirect` / `timeout` / `assumesHTTP3Capable` / `pathPreference`）
+   ⇒ 协议版本完全交给 libcurl 的 ALPN 协商，我们**无需也无法**显式指定。
+
+**真机读数（2026-10-22 · HUAWEI KLE-AL00U · 公网）**：
+`http=http/2` · `tls=TLSv1.3` · `kex=X25519` · `sni=plaintext` · `visit_scheme=https`
+⇒ **鸿蒙端已在用 HTTP/2 + TLS 1.3**，且不是我们配置的结果，是平台默认行为。
+
+★**这意味着两件事**：
+· P1 的「HTTP/2（鸿蒙）」**可以销项**——原以为要先做一笔"接 CA/pinning"的前置工程，实际不需要；
+· `run-transport-probe.sh` 的 `http2_ok=null` 会**继续**是 null（它连自签服务端，测不了这本就正常），
+  ⇒ 鸿蒙 h2 的判据**不能用那份证据**，必须用公网端点（本单已加 `http-probe-h2.json` + 判据）。
+
+★★**顺带发现的更大一件事：RCP 内置 DoH**。`rcp.h` 里有
+`Rcp_DnsOverHttps { url, skipCertificatesValidation }` 与注释
+「DNS configuration on HTTPS. If set, the address resolved by the DOH dns server is preferred.」
+⇒ **鸿蒙的 HTTPDNS 落点是现成的**（配置 `doh.url` 即可，不需要自建解析器）。
+这直接改写矩阵第 1 项（HTTPDNS）的鸿蒙侧工程量：从"需自建解析"降为"接一个配置项 + 对齐线格式语义"。
+★诚实边界：本单只做了**头文件取证**，未实测 DoH 生效（需可达的 DoH 服务端 + 真机对照）⇒ 已登记后续单。
 
 ★**为什么"HTTP/2 只剩 Android"这条很重要（它改变了工程量判断）**：
 矩阵原先写"HTTP/2 + 连接池：需 Android 引入 OkHttp"，读起来像"三端都要补"。
@@ -259,9 +291,11 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
    ~~P1 连接池（鸿蒙）~~ ⇒ ✅ **#1156：原本零复用（3/3），修为 3/1**（进程级 session + 异步 `Rcp_Fetch`）；
    ~~P1 HTTP/2（iOS 侧）~~ ⇒ ✅ **平台默认已具备**（真机 h2 已协商）；
    ~~P1 HTTP/2（Android 侧）~~ ⇒ ✅ **#1160 换 OkHttp 3.14.9**（真机 `{"h2":3}` + 3 请求/1 TCP 未退化）；
-   **P1 剩余两项**：① **HTTP/2（鸿蒙）**——RCP 需先接自定义 CA/pinning（否则 h2 的 TLS+ALPN 无从验证），
-   其 `http2_ok` 现为 `null`＝**未测**（不是 false）；
-   ② **HTTPDNS 业务化**（Android 的 `Dns` seam 已落 #1160，待业务 API + 线格式 tag；iOS 需自建解析或 `Network.framework`）。
+   ~~P1 HTTP/2（鸿蒙）~~ ⇒ ✅ **#1166 已取证：本来就具备**（RCP 底层 libcurl，公网真机 `http=http/2` +
+   `tls=TLSv1.3`）——原以为要先做"接自定义 CA/pinning"，**实测不需要**（见 §3 的 #1166 专项）；
+   **P1 剩余一项**：**HTTPDNS 业务化**——★#1166 另发现**鸿蒙有现成落点**（`Rcp_DnsOverHttps`），
+   Android 的 `Dns` seam 已落 #1160（iOS 需自建解析或 `Network.framework`）；
+   待业务 API + 线格式 tag（三端同一份门面）。
 5. **鸿蒙传输层的两处状态变化要单独记（#1156）**：
    ① **session 现在跨请求复用** ⇒ RCP 的 cookie / 认证状态**可能随之跨请求保留**——该行为**尚未取证**，
    在取证前**不宣称**"鸿蒙端已具备会话共享"（与 Android `CookieManager` / iOS `HTTPCookieStorage` 对齐是目标，不是现状）；

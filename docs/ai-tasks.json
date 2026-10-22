@@ -2906,6 +2906,26 @@
         "T-gates-local-only-ledger"
       ],
       "note": "【done · 决策 #1164（2026-10-22）】承接 #1162 ⑧①。★缺陷：policy 14 条里有 3 条已实测「零 Xcode / 零 SDK / 零真机」，却因历史惯性挂在豁免表里 —— 政策豁免的正当性应来自「权衡过了」，不是「从来没试过」。★取证（本地逐条 rc=0）：ios-exp-docs 只读已入库 experiments/results/*.json；ios-source-lists 纯 fs 比对手写清单；android-bundle 用 esbuild 重打包 + 同步 assets（dist gitignore）。★改法：ci.yml 在 check:knowledge 之后加三步（此前 build-packages 已跑，packages/*/dist 就绪）；三条从 LOCAL_ONLY/LOCAL_ONLY_META 移除（不删会被 STALE_DECL 判红）；棘轮 MAX 58→55。★效果：CI 覆盖 101→104；台账 58→55；policy 14→11；verify 42→40；manual 10→9；gates-sync rc=0；判据 69/69。★诚实边界：只在本机验证，**未实跑 GitHub Actions**。首次 push 后按 CI 实际结果复核；若红按原因处理（挪步序 / 回退 policy 并写明差异），不得因「本地过了」assume 绿。★未做：剩余 policy 11 条逐条评估（优先静态扫描类：host-rounding / host-kernel-keys / ios-style-keys / env-vars / shell-i18n-vars）。"
+    },
+    {
+      "id": "T-harmony-httpdns-doh",
+      "title": "鸿蒙 HTTPDNS 有现成落点：RCP 内置 Rcp_DnsOverHttps（DoH）——只需接配置项，不必自建解析器（#1166 头文件取证）",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "packages/api/src/invoke-wire.ts",
+        "packages/api/src/capability-fetch-types.ts",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": null,
+      "verification": "真机对照：同一域名分别用 系统 DNS / DoH 解析 ⇒ 服务端记账的源 IP 或解析路径不同；并断言 DoH 不可达时**不静默降级**（如实报错或标记）",
+      "branch": null,
+      "related": [
+        "T-android-okhttp-transport"
+      ],
+      "note": "【planned · #1166 头文件取证】查 `$PROTEUS_HMS_SDK/native/sysroot/usr/include/RemoteCommunicationKit/rcp.h` 发现 RCP **内置 DoH**：`typedef struct Rcp_DnsOverHttps { const char *url; bool skipCertificatesValidation; }`，注释为「DNS configuration on HTTPS. If set, the address resolved by the DOH dns server is preferred.」⇒ 矩阵里「鸿蒙需自建解析器或 Network.framework」这个工程量判断**对鸿蒙是错的**——它只需配一个 `doh.url`。★这条与 Android 的 `Dns` seam（#1160）形成两端对照：Android 注入解析函数、鸿蒙注入 DoH URL，语义不同但都能实现 HTTPDNS。★**待办**：① 实测 DoH 是否真的生效（需可达的 DoH 服务端 + 真机；当前只做了头文件取证，不能宣称\"已具备\"）；② 线格式设计要能表达两端不同的注入形态（Android 是 resolver 函数、鸿蒙是 URL）；③ `skipCertificatesValidation` **不要默认打开**（那是关证书校验，安全风险）。★注意：#1166 同时发现 `Rcp_DnsOverHttps` 的存在**不**等于\"鸿蒙已在用 DoH\"——默认不配置就是系统 DNS。"
     }
   ]
 }

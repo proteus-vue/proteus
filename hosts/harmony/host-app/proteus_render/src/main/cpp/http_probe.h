@@ -179,7 +179,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             proteus::wire::ResolveFrame rf = proteus::wire::decodeResolve(fromHex(hexOut));
             std::string preview;
             if (!rf.body.empty()) {
-                size_t n = rf.body.size() < 120 ? rf.body.size() : 120;
+                size_t n = rf.body.size() < 400 ? rf.body.size() : 400;
                 for (size_t i = 0; i < n; i++) {
                     // ★预览是"人可读摘要"⇒ 不可打印字符一律换成 '.'（二进制响应别把回执撑成乱码）。
                     //   （JSON 合法性由 jsonEscape 兜住；这里只管可读性。）
