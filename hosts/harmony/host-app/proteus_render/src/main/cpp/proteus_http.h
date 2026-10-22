@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "invoke_wire.h"
+#include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -323,6 +324,10 @@ struct RecvGate {
   Rcp_Session* session = nullptr;
   const Rcp_Request* req = nullptr;
   unsigned int (*cancelFn)(Rcp_Session*, const Rcp_Request*) = nullptr;
+  /**
+   * ★★★#1187：**落盘会话**（实现见 `proteus_http_save.h`）。非 null ⇒ 逐块直写文件、body 不累积。
+   */
+  SaveSession* save = nullptr;
 };
 
 /**
@@ -348,6 +353,18 @@ inline size_t recvGate(void* usr, Rcp_Buffer* buf) {
     return n;
   }
   const uint8_t* p = reinterpret_cast<const uint8_t*>(buf->buffer);
+  // ★★★#1187：落盘模式 ⇒ 交给 SaveSession 直写（不累积 body，峰值 = 单块）
+  if (g->save != nullptr) {
+    if (!g->save->write(p, n)) {
+      // 写失败 / 超限 ⇒ 同样按"越线"处理并 cancel（不能静默继续下载然后丢数据）
+      g->exceeded = true;
+      if (!g->cancelCalled && g->cancelFn != nullptr && g->session != nullptr) {
+        g->cancelCalled = true;
+        g->cancelRc = g->cancelFn(g->session, g->req);
+      }
+    }
+    return n;
+  }
   g->body.insert(g->body.end(), p, p + n);
   return n;
 }
@@ -448,6 +465,23 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   if (!f.url || f.url.v.empty()) {
     stats().failures++;
     return proteus::wire::ResolveFrame::err(f.reqId, "http.request 需要 url（meta 里没带）");
+  }
+  /**
+   * ★★★#1187：**`stream: true` 如实拒绝**（此前是**静默忽略**——帧里解出来了但没人用）。
+   *
+   * 【为什么不能"接上就算"】流式的本质是**边收边回推 JS**（`onChunk`）。而鸿蒙宿主是
+   *   一次性 VM + 同步 napi：请求期间 JS 线程被占、napi 返回时 VM 已销毁 ⇒ **回推没有接收方**。
+   *   ⇒ 在现有模型下无法实现真正的流式（这是 #540 实测的架构约束，不是漏写方法）。
+   * 【为什么必须显式拒绝而不是降级成整包】静默降级会让 `onChunk` **永远不触发**而请求
+   *   照常成功 ⇒ 业务以为在流式收数据、实际一次都没回调（**假数据比缺数据更糟**）。
+   * ⇒ 需要逐块消费的场景请用 `savePath`（宿主逐块落盘，内存有界）或 `timeout` + 整包。
+   */
+  if (f.stream && *f.stream) {
+    stats().failures++;
+    return proteus::wire::ResolveFrame::err(
+        f.reqId,
+        "fetch.unsupported: 鸿蒙宿主暂不支持 stream（一次性 VM + 同步 napi ⇒ 无法逐块回推）。"
+        "请改用 savePath（宿主逐块落盘）或默认整包");
   }
   const std::string url = appendParams(*f.url, f.params ? *f.params : proteus::wire::NameValues{});
   const std::string method = f.httpMethod ? *f.httpMethod : "GET";
@@ -660,6 +694,21 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   // ③ 逐块闸：越线即中止（#1117）
   detail::RecvGate gate;
   gate.limit = MAX_BODY_BYTES;
+  /**
+   * ★★★#1187：**`savePath` ⇒ 逐块落盘**（内存有界，峰值 = 单块）。
+   *   ★非法路径必须**如实报错**（不得回落到"写到别处"或静默忽略）。
+   *   ★实现已抽到 `proteus_http_save.h`（本文件 1000 行上限）。
+   */
+  SaveSession save;
+  if (f.savePath.has && !f.savePath.v.empty()) {
+    std::string err;
+    if (!save.open(f.savePath.v, &err)) {
+      stats().failures++;
+      return proteus::wire::ResolveFrame::err(f.reqId, err);
+    }
+    gate.save = &save;
+    gate.limit = 0;   // 落盘不受内存上限约束（磁盘配额由 SaveSession::limit 守）
+  }
   bool gateInstalled = false;
   if (pSetOnBinaryRecv != nullptr) {
     gate.session = session;
@@ -853,7 +902,24 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     // 响应体原样回字节（不解析）
     // ★#1117：逐块闸生效时用它累计的 body（resp->body 可能是同一份数据的二次副本）；
     //   闸未安装/未被调用时回落到 resp->body，并在此做**事后拒绝**（诚实边界：内存峰值不有界）。
-    if (gateInstalled && gate.chunks > 0) {
+    // ★★★#1187：**落盘模式** ⇒ 关文件 + 回 `{path,size}` 摘要（不回字节，与 Android/iOS 同语义）。
+    if (gate.save != nullptr) {
+      // 先把"可能尚未写进文件"的 resp->body 补齐（闸未装时没有逐块回调）
+      if ((!gateInstalled || gate.chunks == 0) && resp->body.buffer != nullptr && resp->body.length > 0) {
+        gate.save->write(reinterpret_cast<const uint8_t*>(resp->body.buffer),
+                         static_cast<size_t>(resp->body.length));
+      }
+      bool saveOk = false;
+      std::string saveErr;
+      const std::string summary = gate.save->finish(&saveOk, &saveErr);
+      if (!saveOk) {
+        stats().failures++;
+        if (gate.save->exceeded) stats().tooLarge++;
+        out = proteus::wire::ResolveFrame::err(f.reqId, saveErr);
+      } else {
+        out.body.assign(summary.begin(), summary.end());
+      }
+    } else if (gateInstalled && gate.chunks > 0) {
       out.body = std::move(gate.body);
     } else if (resp->body.buffer != nullptr && resp->body.length > 0) {
       const size_t respLen = static_cast<size_t>(resp->body.length);

@@ -19,7 +19,7 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe, hostTransportProbe } from 'proteus_render';
+import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe, hostTransportProbe, setHttpSandboxRoot } from 'proteus_render';
 // ★T-app-fetch：ArkTS 侧编解码器（本端唯一实现）——真机判据用它**自己编码**一帧交给 C++，
 //   验的就是「ArkTS 编的字节 → C++ 解」这条真实跨语言契约（parity 门禁在本机验同一性质）。
 import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
@@ -121,11 +121,20 @@ struct Superapp {
   private dactylT0Ms: number = -1;
   private dactylSamplesArr: number[][] = [];
 
+  /**
+   * ★★★#1187：把沙箱根交给 C++（`savePath` 落盘用）。
+   * 放在一处、三处 `filesDir` 赋值后各调一次——避免每处各写一份（那是本仓最忌的"N 份复制"）。
+   */
+  private injectSandboxRoot(): void {
+    try { setHttpSandboxRoot(this.filesDir); } catch (e) { /* 老 HAR 无此导出 ⇒ 落盘会如实报错 */ }
+  }
+
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'SUPERAPP_PAGE_APPEAR scene=%{public}s', this.scene);
     // ★T-app-fetch / #1156：探针场景（传输层取证逻辑在 `runtime/TransportProbe.ets`——本文件已到行数上限）
     if (this.scene === 'superapp-http' || this.scene === 'superapp-transport') {
       try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
+      this.injectSandboxRoot();
       if (this.scene === 'superapp-transport') runTransportProbeScene(this.filesDir); else this.runHttpProbe();
       return;
     }
@@ -133,6 +142,7 @@ struct Superapp {
     if (this.scene === 'superapp-keyboard') {
       const ctxK = getContext(this); // ★#1077：本场景提前 return，自行取窗口装监听
       this.filesDir = ctxK.filesDir;
+      this.injectSandboxRoot();
       window.getLastWindow(ctxK).then((win: window.Window) => {
         this.win = win;
         this.installKeyboardWatch(win);
@@ -146,6 +156,7 @@ struct Superapp {
     try {
       const ctx = getContext(this);
       this.filesDir = ctx.filesDir;
+      this.injectSandboxRoot();
       // ★底部安全区（手势条）→ 并入 Tab 栏高度：白底铺到屏底（Web `.sa-tabbar{padding-bottom:safe}`
       //   同义；此前 Tab 栏下方露出一条灰带——独立视觉验收抓出）。
       // ★先给**保守默认 16vp**（手势条标准高）——本机实测 `TYPE_SYSTEM` 避让区返回 0（见日志

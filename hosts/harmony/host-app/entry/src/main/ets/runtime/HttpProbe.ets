@@ -51,6 +51,14 @@ export function runHttpProbe(filesDir: string): void {
       t.set(dnsHost, dnsIp);
       f.httpDns = t;
     }
+    /**
+     * ★★★#1187：`savePath`（宿主逐块落盘）与 `stream`（应被如实拒绝）两个入参。
+     * ★探针侧必须能分别驱动它们——否则这两个语义在鸿蒙端**无法真机验证**。
+     */
+    const savePathIn: string | undefined = AppStorage.get<string>('proteusProbeSavePath');
+    if (savePathIn !== undefined && savePathIn.length > 0) f.savePath = savePathIn;
+    const streamIn: string | undefined = AppStorage.get<string>('proteusProbeStream');
+    if (streamIn === '1') f.stream = true;
     const bytes: Uint8Array = encodeInvoke(f);
     let hex: string = '';
     for (let i = 0; i < bytes.length; i++) {

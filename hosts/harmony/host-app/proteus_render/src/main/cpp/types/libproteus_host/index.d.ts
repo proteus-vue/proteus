@@ -19,6 +19,8 @@ export const appScreenAnimTick: (json?: string) => string;
 export const appScreenFollowField: (json: string) => string;
 /** 建立持久壳 VM（注入 proteusHost + 平台全局 → eval bundle → 探测生命周期钩子） */
 export const hostRtShellInstall: (json: string) => string;
+/** ★★★#1187：由 ArkTS 壳注入沙箱根目录（`savePath` 落盘需要；不注入 ⇒ 落盘如实报错） */
+export const setHttpSandboxRoot: (dir: string) => string;
 /** ★T-app-fetch 真机判据：空 VM + 真实 `invokeBytes` + 真网络（入参 {url}）→ JSON 回执 */
 export const hostHttpProbe: (json: string) => string;
 /** ★★★#1156 鸿蒙传输层事实取证：同一 VM 连发 N 轮同 host:port（入参 {url, rounds}）→ JSON 读数。

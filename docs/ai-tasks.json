@@ -2869,8 +2869,8 @@
       "id": "T-harmony-http-cancel",
       "title": "鸿蒙 useFetch 限时语义：abort() 是 no-op（同步 napi 占满 JS 线程）——要么改 VM 调度模型，要么以 timeout 为官方手段（#1165 更正定性）",
       "type": "bugfix",
-      "status": "planned",
-      "owner": null,
+      "status": "blocked",
+      "owner": "zcode",
       "scope": [
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
         "hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_bytes_bridge.h",
@@ -2878,13 +2878,13 @@
         "hosts/harmony/run-cancel-probe.sh",
         "docs/proteus-network-plan/00-capability-matrix.md"
       ],
-      "decision": null,
-      "verification": "bash hosts/harmony/run-cancel-probe.sh（目标：JS reject + 后续块停止 + 宿主 hits>0，与 Android/iOS 同判据）",
+      "decision": 1188,
+      "verification": "`npx vitest run tests/harmony-http-gaps.test.ts`（8 条）+ `pnpm check:harmony-host-compile`；真机 `bash hosts/harmony/run-http-probe.sh --stream` 应看到 `fetch.unsupported`",
       "branch": null,
       "related": [
         "T-android-okhttp-transport"
       ],
-      "note": "【planned · #1163 实测发现】鸿蒙网络域已接线（`http.request` 经 `invoke_bytes_bridge.h` → `proteus_http.h`，真机 transport-probe 3/3 200、fetch-limit 两道闸全通），但**三个配套方法查无分派**：`http.cancel` / `http.cancelStats` / `http.tlsStats`。后果：JS 侧 `abort()` 只 reject 本地 promise，**宿主传输仍在跑**（`capability-invoke.ts:441` 已如实登记\"鸿蒙）\"）。这正是 #1121 当初立单要防的形态（\"用户以为取消了，其实后台还在下载\"）——Android/iOS 已修，鸿蒙未修。修法：① `proteus_http.h` 里维护 reqId → `HMS_Rcp_Request` 的在途表；② 在字节桥加 `http.cancel` 分支（`HMS_Rcp_CancelRequest`）；③ `http.tlsStats` 至少要能回 `{ challenges: 0, note: \"鸿蒙未做 pinning 回调\" }` 而不是 missing（否则 `host_stats` 恒 null，传输探针的归因链断）。④ 判据沿用 Android 的 `run-cancel-probe.sh` 三件（reject / chunks_stopped / host hits）。★注意鸿蒙是**一次性 VM**（#540）——原生 napi 同步返回，\"在飞请求\"的取消要在 C++ 侧持有句柄，不能依赖 JS 侧保留引用。 ★★★**#1164 重大更正（本条原先的定性错了）**：不是\"缺 `http.cancel` 方法\"，而是**调度模型限制**。取证链：① 鸿蒙 `handle()` 在 napi 内**同步完成往返**（一次性 VM：`proteus_http.h` 头注 + `HMS_Rcp_Fetch` + 有界 `wait_for`，napi 返回即 VM 销毁 ⇒ 异步回推无接收方）；② JS 侧 `invokeHostAsyncBytes` 就是 `out = fn(frame)` **同步取结果**（`attachAbort` 之后第 4 行，中间无 await）；③ ⇒ 请求期间 JS 线程被占，`signal.onabort` **没有执行机会**；App 精简引擎也无 `setTimeout` 可\"稍后取消\"。⇒ **准确结论：鸿蒙上 `abort()` 是 no-op（连 JS 侧 reject 都不会发生）**，且**不存在\"后台还在下载\"**——根本没有后台。⇒ 鸿蒙限时的唯一有效手段是 **`timeout`**（宿主有界等待 + 超时主动 `HMS_Rcp_CancelRequest`，已真机验：`fetch-limit` 越线时 cancelCalled=true）。★因此本单的**优先级下调**：它不是\"修一个漏实现\"，而是**要么改调度模型**（鸿蒙宿主换成可重入/常驻 VM ⇒ 才能有在飞请求与异步回推，见 #540 一次性 VM 约束）**要么接受现状并把 `timeout` 作为官方限时手段**（后者已由文档+判据固化）。★若未来改 VM 模型：需同时补 `http.cancel` / `http.cancelStats` / `http.tlsStats` 三个方法 + 流式回推（当前流式在鸿蒙明确回 unsupported）。★真机已验（2026-10-22 设备解锁后补跑）：慢请求（8s）在同步 napi 内完整返回（bodyBytes=655360 · chunks=92 · cancelCalled=false）⇒ 该结论有了「源码结构 + 真机行为」两类证据，不再只是推论。★决策号 #1165（原写 #1164，与并发会话的 policy-CI 条撞号）。★判据已固化：`tests/fetch-cancel.test.ts` 新增「鸿蒙 abort 是 no-op」三条（文档必须写 no-op + 必须给 timeout 替代 + 禁止\"只 reject 本地\"的错误说法），破坏性验证 3/3 全红。"
+      "note": "【blocked · 决策 #1188（2026-10-22）】**三个方法已接线**（`proteus_http_stubs.h`）：`http.cancel` 回 `{ok:false, reason:\"harmony-sync-napi\"}`（**绝不报取消成功**）、`http.cancelStats` 全 0 + 同一句 reason、`http.tlsStats` 全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）」。★根因未变：鸿蒙 `handle()` 是同步阻塞（一次性 VM + 同步 napi，#540 实测跨 napi 复用 VM ⇒ SIGSEGV）⇒ 请求期间 JS 线程被占 ⇒ `signal.onabort` 无执行机会 ⇒ **abort() 是 no-op**。这不是\"漏写方法\"，改不了。★【Handoff】做到哪：分派已存在（不再 missing，`host_stats` 不再恒 null）；已改：`proteus_http_stubs.h` + `invoke_bytes_bridge.h` include + `host_app_runtime_impl.h` 一行转发。未做：真机读数（设备当时锁屏 `10106102`）。下一步：解锁后跑 `bash hosts/harmony/run-http-probe.sh`，确认 host_stats 有值且 `http.cancel` 回 ok:false。★若要真正支持取消：只能改 VM 调度模型（napi 异步化 + 常驻 VM 可回推），那是独立大单，且与 #540 的结论冲突需重新验证。"
     },
     {
       "id": "T-gates-policy-to-ci",
@@ -3021,13 +3021,13 @@
       "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
-        "docs/proteus-studio-poc/05-studio-shell",
-        "docs/proteus-studio-poc/native/embed_view.m",
+        "packages/studio",
+        "packages/studio/native/embed_view.m",
         "docs/project-memory-archive/decisions.md",
         "docs/ai-tasks.json"
       ],
       "decision": 1173,
-      "verification": "cd docs/proteus-studio-poc/05-studio-shell && cargo build --release && POC_VIDEO=… POC_DUMP=/tmp/canvas.ppm ./target/release/proteus-studio-shell（日志核对 canvas rect 与 CSS 网格一致；dump 出 PNG 目视）",
+      "verification": "cd packages/studio && cargo build --release && POC_VIDEO=… POC_DUMP=/tmp/canvas.ppm ./target/release/proteus-studio-shell（日志核对 canvas rect 与 CSS 网格一致；dump 出 PNG 目视）",
       "branch": null,
       "related": [
         "T-studio-poc-a-fbo",
@@ -3044,9 +3044,9 @@
       "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
-        "docs/proteus-studio-poc/native/live_stream.h",
-        "docs/proteus-studio-poc/native/embed_view.m",
-        "docs/proteus-studio-poc/05-studio-shell"
+        "packages/studio/native/live_stream.h",
+        "packages/studio/native/embed_view.m",
+        "packages/studio"
       ],
       "decision": 1175,
       "branch": null,
@@ -3089,9 +3089,9 @@
       "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
-        "docs/proteus-studio-poc/native/embed_view.m",
-        "docs/proteus-studio-poc/native/live_stream.h",
-        "docs/proteus-studio-poc/05-studio-shell",
+        "packages/studio/native/embed_view.m",
+        "packages/studio/native/live_stream.h",
+        "packages/studio",
         "docs/project-memory-archive/decisions.md",
         "docs/ai-tasks.json"
       ],
@@ -3133,17 +3133,17 @@
       "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
-        "docs/proteus-studio-poc/native/embed_view.m",
-        "docs/proteus-studio-poc/native/live_stream.h",
-        "docs/proteus-studio-poc/05-studio-shell/src/main.rs",
-        "docs/proteus-studio-poc/05-studio-shell/ui",
-        "docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs",
-        "docs/proteus-studio-poc/05-studio-shell/results",
+        "packages/studio/native/embed_view.m",
+        "packages/studio/native/live_stream.h",
+        "packages/studio/src/main.rs",
+        "packages/studio/ui",
+        "scripts/check-studio-panel.mjs",
+        "packages/studio/results",
         "docs/project-memory-archive/decisions.md",
         "docs/ai-tasks.json"
       ],
       "decision": 1181,
-      "verification": "node docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs（9 判据）&& POC_SECONDS=8 POC_JSON=results/panel-source.json POC_LIVE=… ./target/release/proteus-studio-shell",
+      "verification": "node packages/studio/verify-panel.mjs（9 判据）&& POC_SECONDS=8 POC_JSON=results/panel-source.json POC_LIVE=… ./target/release/proteus-studio-shell",
       "branch": null,
       "related": [
         "T-studio-shell-stage1",
@@ -3159,17 +3159,17 @@
       "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
-        "docs/proteus-studio-poc/05-studio-shell/ui",
-        "docs/proteus-studio-poc/05-studio-shell/vite.config.mjs",
-        "docs/proteus-studio-poc/05-studio-shell/build-ui.sh",
-        "docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs",
-        "docs/proteus-studio-poc/05-studio-shell/tauri.conf.json",
-        "docs/proteus-studio-poc/05-studio-shell/.gitignore",
+        "packages/studio/ui",
+        "packages/studio/vite.config.mjs",
+        "packages/studio/build-ui.sh",
+        "scripts/check-studio-panel.mjs",
+        "packages/studio/tauri.conf.json",
+        "packages/studio/.gitignore",
         "docs/project-memory-archive/decisions.md",
         "docs/ai-tasks.json"
       ],
       "decision": 1183,
-      "verification": "docs/proteus-studio-poc/05-studio-shell/build-ui.sh && node docs/proteus-studio-poc/05-studio-shell/verify-panel.mjs（9 判据）&& cargo build --release",
+      "verification": "packages/studio/build-ui.sh && node packages/studio/verify-panel.mjs（9 判据）&& cargo build --release",
       "branch": null,
       "related": [
         "T-studio-inspector-real",
@@ -3184,24 +3184,87 @@
       "status": "done",
       "owner": "session:wb-studio-poc",
       "scope": [
-        "docs/proteus-studio-poc/05-studio-shell/package-app.sh",
-        "docs/proteus-studio-poc/05-studio-shell/bundle-dylibs.py",
-        "docs/proteus-studio-poc/05-studio-shell/icons/make-icon.py",
-        "docs/proteus-studio-poc/05-studio-shell/icons/icon.icns",
-        "docs/proteus-studio-poc/05-studio-shell/tauri.conf.json",
-        "docs/proteus-studio-poc/05-studio-shell/src/main.rs",
-        "docs/proteus-studio-poc/05-studio-shell/.gitignore",
+        "packages/studio/package-app.sh",
+        "packages/studio/bundle-dylibs.py",
+        "packages/studio/icons/make-icon.py",
+        "packages/studio/icons/icon.icns",
+        "packages/studio/tauri.conf.json",
+        "packages/studio/src/main.rs",
+        "packages/studio/.gitignore",
         "docs/project-memory-archive/decisions.md",
         "docs/ai-tasks.json"
       ],
       "decision": 1184,
-      "verification": "docs/proteus-studio-poc/05-studio-shell/package-app.sh && env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/sbin:/sbin \"<app>/Contents/MacOS/proteus-studio-shell\"（应打印 PATH 补充 + 默认接真机 + 硬解=1）",
+      "verification": "packages/studio/package-app.sh && env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/sbin:/sbin \"<app>/Contents/MacOS/proteus-studio-shell\"（应打印 PATH 补充 + 默认接真机 + 硬解=1）",
       "branch": null,
       "related": [
         "T-studio-ui-vue",
         "T-studio-inspector-real"
       ],
       "note": "【done · 决策 #1184（2026-10-22）】出门清单 G2。★陷阱1：二进制硬链接 Homebrew ffmpeg ⇒ bundle-dylibs.py 收 65 个 dylib/59MB 进 Frameworks，改 182 处引用为 @rpath，加 LC_RPATH，逐个重签。★陷阱2：双击启动 PATH 只有 /usr/bin:/bin:… ⇒ adb 找不到 ⇒ ensure_tool_path 补 /opt/homebrew/bin、/usr/local/bin。★陷阱3：双击带不了环境变量 ⇒ default_live_source 探测 adb devices，有设备默认接真机，无设备明确打印。★打包器自己也错了两次：① 只收绝对路径依赖，漏了 libwebp 里以 @rpath/libsharpyuv 写的库 ⇒ 启动 Library not loaded；② 收尾判据把 @rpath（目标状态）当失败 ⇒ 永远报错。改成「无绝对 Homebrew 路径 + 每条 @rpath 都在包内」。★干净环境实测：PATH 补充 → 默认接真机 → 参数集 108 字节 → 硬解=1；otool 外部引用 0 条；@rpath 4 条全在包内；plutil 通过；adhoc 签名；产物 70MB。★测量纪律：屏幕静止时 screenrecord 3 秒只出 2 帧；每 0.3s 新起 adb 会话造滑动会抢占流（aus 275→6）。性能读数必须在持续运动下取。★边界：ad-hoc 非公证（别人机器仍被 Gatekeeper 拦）；仍依赖 adb；只测 arm64。"
+    },
+    {
+      "id": "T-studio-out-of-poc",
+      "title": "Studio 出门：迁入 packages/studio + 面板判据升为门禁 check:studio-panel（10 判据）并接 CI/verify",
+      "type": "governance",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "packages/studio",
+        "scripts/check-studio-panel.mjs",
+        "package.json",
+        ".github/workflows/ci.yml",
+        "docs/proteus-studio-poc/README.md",
+        "docs/proteus-studio-poc/03-tauri-embed/build.rs",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1187,
+      "verification": "pnpm run check:studio-panel（10/10）&& node scripts/check-gates-sync.mjs && node scripts/check-ai-tasks.mjs --check && node scripts/check-file-size.mjs && node scripts/check-repo-hygiene.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-shell-stage1",
+        "T-studio-ui-vue",
+        "T-studio-package-app",
+        "T-studio-inspector-real"
+      ],
+      "note": "【done · 决策 #1187（2026-10-22，用户指令「PoC 验证完成就正式出门开始做」）】★搬家的理由不是洁癖：docs/ 不在任何门禁的扫描面里，改坏原生层/Rust 壳不会红。★位置取舍：packages/studio 但**刻意不放 package.json**——(a) 不是发布包；(b) build-packages 会在 postinstall 跑它的 build（要 Cargo+Xcode，卡死干净克隆）；(c) check:docs-stats 的包数按 @proteus-vue/* 统计，假包会让文档数字集体漂移。★真源单一：native/ 迁入产品包，PoC B2 反向引用 ../../packages/studio/native/embed_view.m，不复制。★门禁：verify-panel.mjs → scripts/check-studio-panel.mjs，原 9 条一条没放松，新增第 ⑩ 条校验 fixture 与 results/panel-source.json 数值一致（堵\"改 fixture 让判据变绿\"）。★CI 可跑性：无 adb 时机型回落 fixture 记录的采集机型（M098FE · 1200x2608，真实 adb 读数），输出标注来源，不把\"CI 没设备\"误报成缺陷。★任务板 6 条 done 任务 scope 同步迁址（否则 check:ai-tasks 判据 7 当场红）。★诚实边界：G3（iOS ReplayKit）/G4（编辑器+拾取+触摸回传）/G5（持久化/模块化）一行没动；vue-tsc 与组件测试未接；CI 不编 Rust。"
+    },
+    {
+      "id": "T-harmony-http-stream",
+      "title": "鸿蒙 stream 流式回推：一次性 VM + 同步 napi ⇒ 当前如实拒绝（fetch.unsupported）；要真支持需改 VM 调度模型",
+      "type": "capability",
+      "status": "blocked",
+      "owner": "zcode",
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h"
+      ],
+      "decision": 1188,
+      "verification": "`npx vitest run tests/harmony-http-gaps.test.ts`（stream 必须显式拒绝）；若将来真支持，须补真机 `onChunk` 逐块到达判据（对齐 `hosts/ios/run-stream-probe.sh` / `run-usefetch-probe.sh`）",
+      "branch": null,
+      "related": [
+        "T-harmony-http-cancel"
+      ],
+      "note": "【blocked · 决策 #1188】此前 `stream: true` 是**静默忽略**（帧里解出来了但 `proteus_http.h` 从没用过）⇒ `onChunk` 永不触发而请求照常成功 = **假数据**。本轮改为**如实拒绝**：`fetch.unsupported` + 点明根因（一次性 VM + 同步 napi ⇒ 逐块回推没有接收方）+ 给替代（`savePath` 宿主逐块落盘 / 默认整包）。★要真支持 stream：需让 napi 异步化且请求期间 VM 存活（可回推）——与 #540「跨 napi 复用 VM ⇒ HandleScope 溢出/SIGSEGV」直接冲突，必须先重新验证那条结论。★RCP 本身**提供** `Rcp_OnDataReceiveCallback`（逐块）与 `Rcp_EventsHandler` ⇒ 底层能力在，缺的是\"回推通道\"。★【Handoff】做到哪：已改为如实拒绝（编译通过 + 判据 8/8）。已改：`proteus_http.h` 的 stream 分支。未做：真支持流式（需改 VM 模型）。下一步：若要推进，先重验 #540 的\"跨 napi 复用 VM ⇒ SIGSEGV\"是否仍成立（那是当前结论的唯一支柱）。坑：RCP 的 `Rcp_OnDataReceiveCallback` 逐块回调**是有的**，缺的是回推通道。判据状态：静态 8/8 绿；真机未验（设备锁屏）。"
+    },
+    {
+      "id": "T-harmony-tls-pinning",
+      "title": "鸿蒙 SPKI pinning：RCP 只提供 CA 配置、无 fingerprint 校验回调 ⇒ 本端 pin 不生效（已如实上报，勿读成已支持）",
+      "type": "capability",
+      "status": "blocked",
+      "owner": "zcode",
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_stubs.h"
+      ],
+      "decision": 1188,
+      "verification": "`npx vitest run tests/harmony-http-gaps.test.ts`（tlsStats 必须说清 pinning 不生效）；实现后需真机判据对齐 `hosts/android/run-tls-probe.sh` / `hosts/ios/run-tls-probe.sh`",
+      "branch": null,
+      "related": [
+        "T-harmony-http-cancel"
+      ],
+      "note": "【blocked · 决策 #1188】取证：`rcp.h` 的 `Rcp_SecurityConfiguration` 只有 `remoteValidationType`（SYSTEM / SKIP / CERTIFICATE_AUTHORITY）+ `Rcp_CertificateAuthority`（PEM 内容/文件/目录）——**没有**\"收到证书后让我们校验 fingerprint\"的回调。Android 有 `X509TrustManager`、iOS 有 `URLAuthenticationChallenge`，鸿蒙**两者都没有**。★当前状态：`http.tlsStats` 已接线并**如实上报**全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立」。★这是安全语义：假成立比没有更危险。★可能的出路（需先验证，不能直接宣称）：① 用 `CERTIFICATE_AUTHORITY` + 自带 CA 做\"只信任指定 CA\"（弱于 SPKI pin，但可接受）；② 换成自建 TLS 层（大工程）；③ 等 RCP 提供校验回调。★【Handoff】做到哪：已如实上报（tlsStats 全 0 + note）。已改：`proteus_http_stubs.h`。未做：真正的 pin 校验。下一步：先验证\"用 CERTIFICATE_AUTHORITY 自带 CA\"能否达到可接受的安全强度（比 SPKI pin 弱但可能够用），再决定是否值得自建 TLS 层。坑：`Rcp_SecurityConfiguration` 只有 SYSTEM/SKIP/CA 三档，没有校验回调。判据状态：静态 8/8 绿；真机未验。"
     }
   ]
 }

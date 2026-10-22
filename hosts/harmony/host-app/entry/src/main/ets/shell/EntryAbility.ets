@@ -70,6 +70,15 @@ export default class EntryAbility extends UIAbility {
     if (typeof probeDnsHost === 'string' && probeDnsHost.length > 0) {
       AppStorage.setOrCreate('proteusProbeDnsHost', probeDnsHost);
     }
+    // ★★★#1187：`savePath`（宿主逐块落盘）与 `stream`（应被如实拒绝）——两个语义各需真机验证
+    const probeSavePath = want?.parameters?.['savePath'];
+    if (typeof probeSavePath === 'string' && probeSavePath.length > 0) {
+      AppStorage.setOrCreate('proteusProbeSavePath', probeSavePath);
+    }
+    const probeStream = want?.parameters?.['stream'];
+    if (probeStream !== undefined) {
+      AppStorage.setOrCreate('proteusProbeStream', String(probeStream) === '1' ? '1' : '');
+    }
     // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
     //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
     //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。

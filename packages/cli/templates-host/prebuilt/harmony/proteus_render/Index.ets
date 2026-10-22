@@ -48,6 +48,8 @@ export {
   appScreenFollowField,
   hostRtShellInstall,
   hostRtShellEvent,
+  // ★★★#1187：沙箱根注入（savePath 落盘）
+  setHttpSandboxRoot,
   // ★T-app-fetch：真机 HTTP 通路判据（空 VM + 真实 invokeBytes + 真网络）
   hostHttpProbe,
   // ★★★#1156：传输层事实取证（同一 VM 连发 N 轮同 host:port ⇒ 服务端判连接复用）

@@ -52,6 +52,7 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<FetchResult<T>
 | `bypassPlatformCache` | `boolean` | 否 | ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开， 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。 |
 | `tlsPins` | `string \| string[]` | 否 | ★★★#1153 **TLS 证书 pinning**（仅 App 三端；Web 由浏览器管 TLS、MP 的 `wx.request` 不暴露）。  传 **base64 SHA-256 SPKI 指纹**数组（换行/逗号/空格分隔的字符串也接受）。  【为什么钉 SPKI 而不是钉整张证书】整张证书在**续期**（同一密钥）时指纹就变了 ⇒ 每次续期都得改代码； SPKI 跨续期稳定，且能自然覆盖"链上任意一张证书"（含中间 CA）。  【默认语义 = 叠加】系统信任必须通过 **且** pin 必须命中（防 MITM 的额外一道防线）。 要"只看 pin"（企业自签场景）须显式 `tlsPinOnly: true`。  【命中即通过】`sniHostname` 仍按平台默认校验（pinning **不**替代主机名校验）。  ★失败 ⇒ `fetch.tlsError`（独立错误码，不混进 `fetch.failed`）——业务据此区分"证书不对"与"网络不好"。 |
 | `tlsPinOnly` | `boolean` | 否 | ★★★#1153 `tlsPins` 的**信任语义**： · 缺省/`false` = **叠加**（系统信任 + pin 都要过）——生产默认，最安全； · `true` = **替代**（只看 pin，仍校验主机名）——企业内网/自签证书场景。 ★它**放宽**了信任锚，所以只由业务显式开启，绝不默认。 |
+| `httpDns` | `Record<string, string \| string[]>` | 否 | ★★★#1169 **HTTPDNS**：本次请求的**域名 → IP 映射**（键 = 域名，值 = `string[]` 或逗号分隔串）。  【什么时候用它】业务已通过 HTTPDNS 服务（自建/云厂商）拿到 IP，希望**绕过系统 DNS**直连—— 典型动机：系统 DNS 被投毒/劫持、需要就近调度、或首包延迟敏感（省一次 DNS 往返）。  【★语义（三端同一套）】 · 只影响**表里出现的域名**；表里没有的域名**照旧走系统 DNS**（不改变其他域名行为）； · IP 顺序即**尝试顺序**（多 IP 时宿主按序回退，与浏览器 Happy Eyeballs 精神一致但不做竞速）； · **SNI 与证书主机名校验仍用原域名**（不是 IP）——否则 TLS 会失败或退化成不安全模式。 ★这条是硬约束：把 URL 换成 IP 直连会破坏 SNI/主机名校验，HTTPDNS 必须走"解析注入"而非"URL 改写"。  【★端差异：如实，不粉饰】 · **Android** ✅ OkHttp `Dns`（#1160 已有注入点） · **鸿蒙** ✅ RCP 静态 DNS 规则（#1169 真机实证注入生效） · **iOS** ❌ `URLSession` **没有**自定义 DNS 钩子 ⇒ 传了本字段 ⇒ **`fetch.unsupported`** （不静默忽略——否则业务以为用了 HTTPDNS，实际走了系统 DNS，属于"假数据比缺数据更糟"）  【★与缓存/失败的关系】 · 本字段只作用于**当次请求**；框架层不缓存解析结果（HTTPDNS 的 TTL 归业务/服务商管）； · 表里的 IP 全部不可达 ⇒ 请求按网络错误失败（**不回退系统 DNS**——回退会掩盖 HTTPDNS 故障）。  @example ```ts useFetch('https://api.example.com/data', { httpDns: { 'api.example.com': ['203.0.113.10', '203.0.113.11'] }, }) ``` |
 
 ## 返回值
 
@@ -95,6 +96,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `bypassPlatformCache` | `boolean` | — | ★#1149 **内部字段**（一般不写）：让 Web 腿把浏览器自带的 HTTP 缓存让开， 使缓存语义在本框架层成为唯一来源（否则"浏览器命中"与"我们命中"两套计数/语义会漂移）。 |
 | `tlsPins` | `string \| string[]` | — | ★★★#1153 **TLS 证书 pinning**（仅 App 三端；Web 由浏览器管 TLS、MP 的 `wx.request` 不暴露）。  传 **base64 SHA-256 SPKI 指纹**数组（换行/逗号/空格分隔的字符串也接受）。  【为什么钉 SPKI 而不是钉整张证书】整张证书在**续期**（同一密钥）时指纹就变了 ⇒ 每次续期都得改代码； SPKI 跨续期稳定，且能自然覆盖"链上任意一张证书"（含中间 CA）。  【默认语义 = 叠加】系统信任必须通过 **且** pin 必须命中（防 MITM 的额外一道防线）。 要"只看 pin"（企业自签场景）须显式 `tlsPinOnly: true`。  【命中即通过】`sniHostname` 仍按平台默认校验（pinning **不**替代主机名校验）。  ★失败 ⇒ `fetch.tlsError`（独立错误码，不混进 `fetch.failed`）——业务据此区分"证书不对"与"网络不好"。 |
 | `tlsPinOnly` | `boolean` | — | ★★★#1153 `tlsPins` 的**信任语义**： · 缺省/`false` = **叠加**（系统信任 + pin 都要过）——生产默认，最安全； · `true` = **替代**（只看 pin，仍校验主机名）——企业内网/自签证书场景。 ★它**放宽**了信任锚，所以只由业务显式开启，绝不默认。 |
+| `httpDns` | `Record<string, string \| string[]>` | — | ★★★#1169 **HTTPDNS**：本次请求的**域名 → IP 映射**（键 = 域名，值 = `string[]` 或逗号分隔串）。  【什么时候用它】业务已通过 HTTPDNS 服务（自建/云厂商）拿到 IP，希望**绕过系统 DNS**直连—— 典型动机：系统 DNS 被投毒/劫持、需要就近调度、或首包延迟敏感（省一次 DNS 往返）。  【★语义（三端同一套）】 · 只影响**表里出现的域名**；表里没有的域名**照旧走系统 DNS**（不改变其他域名行为）； · IP 顺序即**尝试顺序**（多 IP 时宿主按序回退，与浏览器 Happy Eyeballs 精神一致但不做竞速）； · **SNI 与证书主机名校验仍用原域名**（不是 IP）——否则 TLS 会失败或退化成不安全模式。 ★这条是硬约束：把 URL 换成 IP 直连会破坏 SNI/主机名校验，HTTPDNS 必须走"解析注入"而非"URL 改写"。  【★端差异：如实，不粉饰】 · **Android** ✅ OkHttp `Dns`（#1160 已有注入点） · **鸿蒙** ✅ RCP 静态 DNS 规则（#1169 真机实证注入生效） · **iOS** ❌ `URLSession` **没有**自定义 DNS 钩子 ⇒ 传了本字段 ⇒ **`fetch.unsupported`** （不静默忽略——否则业务以为用了 HTTPDNS，实际走了系统 DNS，属于"假数据比缺数据更糟"）  【★与缓存/失败的关系】 · 本字段只作用于**当次请求**；框架层不缓存解析结果（HTTPDNS 的 TTL 归业务/服务商管）； · 表里的 IP 全部不可达 ⇒ 请求按网络错误失败（**不回退系统 DNS**——回退会掩盖 HTTPDNS 故障）。  @example ```ts useFetch('https://api.example.com/data', { httpDns: { 'api.example.com': ['203.0.113.10', '203.0.113.11'] }, }) ``` |
 
 ### `UploadSpec`
 
@@ -236,6 +238,8 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `connectMs` | `number` | — | TCP 建连耗时（ms；**不含** DNS） |
 | `tlsMs` | `number` | — | TLS 握手耗时（ms；**不含** DNS/TCP） |
 | `ttfbMs` | `number` | — | 首字节耗时（ms；从发起请求到收到响应首字节） |
+| `dnsSource` | `'table' \| 'system' \| 'literal' \| 'resolver'` | — | ★★★#1183：**本次请求的域名解析走了哪一级**（HTTPDNS 可观测面）。  - `'table'`：命中业务给的 `httpDns` 表（**这是"表真的生效"的唯一直接证据**）； - `'system'`：表未命中 ⇒ 回落系统 DNS（**回落是显式的，不是静默**）； - `'literal'`：URL 本身就是 IP ⇒ 根本没有解析； - `'resolver'`：命中进程级解析器（Android 的 `setHttpDns`）。  ★**为什么必须有这个字段**：`httpDns` 生效与否，从外部只有"请求成败"一个间接信号； 而"注入不可达 IP ⇒ 失败"与"网络本来就不通"看起来一样（#1169 首跑踩到）。 ★缺 = 该端不上报（不写 `'system'` 冒充"确定走了系统"——那是假数据）。 |
+| `dnsTableHit` | `boolean` | — | ★★★#1183：本次请求是否命中了 `httpDns` 表（与 `dnsSource === 'table'` 同义，但更直白） |
 
 ### `FetchCacheStatus`
 
@@ -268,7 +272,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
 | Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（invoke_bytes_bridge.h / proteus_http.h） · 真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★**`abort()` 在本端是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout` |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（invoke_bytes_bridge.h / proteus_http.h） · 真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★**三处受限**：① **`abort()` 是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout`；② **`stream: true` 如实拒绝**（`fetch.unsupported`——逐块回推没有接收方）⇒ 要边收边处理请用 `savePath`（宿主逐块落盘）；③ **SPKI pinning 未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立 |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

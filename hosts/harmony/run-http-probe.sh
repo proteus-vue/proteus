@@ -32,6 +32,8 @@ WAIT="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 URL=""
 DNS_IP=""
 DNS_HOST=""
+SAVE_PATH=""   # ★#1187：savePath（沙箱相对路径）
+STREAM=""     # ★#1187：1 = 传 stream:true（应被如实拒绝）
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
@@ -39,6 +41,8 @@ for arg in "$@"; do
     --dns-ip=*) DNS_IP="${arg#--dns-ip=}" ;;
     --dns-ip) shift_next_dns=1 ;;
     --dns-host=*) DNS_HOST="${arg#--dns-host=}" ;;
+    --save-path=*) SAVE_PATH="${arg#--save-path=}" ;;   # ★#1187
+    --stream) STREAM=1 ;;                              # ★#1187
     --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
        elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
@@ -70,6 +74,9 @@ DNS_ARG=""
 [ -n "$DNS_IP" ] && DNS_ARG="--ps dnsIp $DNS_IP"
 # ★#1169：dnsHost + dnsIp 配对 ⇒ 往帧里塞 httpDns 表（验证宿主表解析生效）
 [ -n "$DNS_HOST" ] && DNS_ARG="$DNS_ARG --ps dnsHost $DNS_HOST"
+# ★★★#1187：savePath（逐块落盘）/ stream（应被如实拒绝）
+[ -n "$SAVE_PATH" ] && DNS_ARG="$DNS_ARG --ps savePath $SAVE_PATH"
+[ "$STREAM" = "1" ] && DNS_ARG="$DNS_ARG --ps stream 1"
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 

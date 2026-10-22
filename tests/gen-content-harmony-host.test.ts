@@ -202,14 +202,28 @@ describe('★★★#1163 鸿蒙网络域（useFetch）接线判定', () => {
     // ★#1164 更正：不再要求写"http.cancel 未实现"（那种写法把模型限制说成了"漏一个方法"，
     //   且会让业务误以为"本地至少会 reject"）。正确要求 = 写清 abort 是 no-op + 给 timeout 替代。
     expect(row![2], '★说明必须指出 abort() 是 no-op（否则 ✅ 会被读成三端一致）').toMatch(/abort\(\)[^。]*no-op/)
+    // ★★★#1187：三处受限都要写在能力页上（只写 abort 会让 stream/pinning 的缺口继续隐身）
+    // ★markdown 加粗星号会被原样保留 ⇒ 正则要容忍 `**`
+    expect(row![2], '★说明必须指出 stream 被如实拒绝（否则 ✅ 会被读成"支持流式"）').toMatch(
+      /stream[^。]{0,80}如实拒绝/,
+    )
+    expect(row![2], '★说明必须指出 SPKI pinning 未接（安全策略假成立比没有更危险）').toMatch(/pinning[^。]{0,30}未接|SPKI pinning[^。]{0,40}不生效/)
   })
 
-  it('★★鸿蒙**确实没有** http.cancel / tlsStats 分派（缺口是事实，不是文案）', () => {
+  it('★★鸿蒙三个 http.* 方法：**有分派但语义受限**（#1187 已接线，缺口从"无分派"变为"如实受限"）', () => {
     const dir = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp')
     const all = fs.readdirSync(dir).filter((f) => f.endsWith('.h') || f.endsWith('.cpp'))
       .map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n')
-    // ★这条断言的方向是"**没有**"——若哪天实现了，这里会红 ⇒ 提醒同步更新文档与本节文案。
-    expect(all, '★鸿蒙已实现 http.cancel？请同步 fetch 页文案并翻转本断言').not.toMatch(/method\s*==\s*"http\.cancel"/)
-    expect(all, '★鸿蒙已实现 http.tlsStats？请同步 fetch 页文案并翻转本断言').not.toMatch(/method\s*==\s*"http\.tlsStats"/)
+    // ★★★#1187：这条判据原先断言"**没有** http.cancel / tlsStats 分派"——
+    //   那是 #1163/#1165 时的事实。本轮把三个方法接上了（`proteus_http_stubs.h`），
+    //   于是**判据方向必须翻转**：现在要断言"**有**分派"，但同时要求语义如实受限。
+    //   ★这正是原判据写"若哪天实现了这里会红 ⇒ 提醒同步文档"的用意——它按设计红了。
+    expect(all, '★鸿蒙没有 http.cancel 分派（#1187 已接线，回退了？）').toMatch(/"http\.cancel"/)
+    expect(all, '★鸿蒙没有 http.tlsStats 分派').toMatch(/"http\.tlsStats"/)
+    expect(all, '★鸿蒙没有 http.cancelStats 分派').toMatch(/"http\.cancelStats"/)
+    // 但**不得**伪造能力：cancel 必须 ok:false；tlsStats 必须说清 pinning 未接
+    const stubs = fs.readFileSync(path.join(dir, 'proteus_http_stubs.h'), 'utf8')
+    expect(stubs, '★鸿蒙 http.cancel 报了成功（abort 是 no-op，模型限制）').toMatch(/ok\\":false/)
+    expect(stubs, '★鸿蒙 tlsStats 没说明 pinning 不生效').toMatch(/pinning/i)
   })
 })

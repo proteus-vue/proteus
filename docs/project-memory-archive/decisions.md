@@ -12712,3 +12712,37 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑧ 装置侧记录**：鸿蒙设备**锁屏时 `aa start` 报 10106102**（"screen is locked during the application launch"）⇒ 必须先手动解锁（`power-shell wakeup` 只亮屏、解不了锁）。这不是探针缺陷，但会让"跑不动"看起来像"实现坏了"——记下来。
 **⑨ 产物**：`hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h`（`lastTransport()` + move 前 copy）· `.../http_probe.h`（transportJson 两处拼接）· `hosts/harmony/run-http-probe.sh`（双向断言）· `hosts/harmony/results/http-probe-dns-table.json`（真机证据）· `tests/fetch-dns-source.test.ts` +2 · 矩阵 §4.x。
 **⑩ 诚实边界**：a) 无表时 `dnsSource` **不可得**（回调不被调用，宿主无法知道系统 DNS 走了哪条路）——这是语义正确而非缺陷；b) 本轮仍**没有**排障面板 UI（数据可读、UI 归 Studio）；c) 鸿蒙探针仍是"一次性 VM + 原生直调"，不覆盖 `useFetch` 的业务封装（那条由 Android/iOS 的 JS 探针 + 单测覆盖）。
+
+1187. **★★★Studio 正式出门：从 `docs/proteus-studio-poc/05-studio-shell` 迁入 `packages/studio`，面板判据升为门禁 `check:studio-panel` 并接 CI/verify；`native/` 升为产品代码（PoC B2 反向引用）**（2026-10-22 · 用户指令「如果 PoC 已经验证完成就正式出门开始做」）:
+**① 出门的依据（不是感觉，是清单）**：PoC 阶段 A/B1/B2/C + 实时投屏 + 延迟 + Vue 3 迁移 + `.app` 打包全部实测收口（#1167/#1168/#1170/#1172/#1175/#1177/#1183/#1184）。出门前我给的 G1–G5 清单里：**G1（迁包+接门禁）本单落地**、**G2（可分发 .app）已完成 #1184**、G3/G4/G5 明确列为"出门 ≠ 完成"写进 README。
+**② 为什么必须搬（不能继续放 docs/）**：`docs/` 是文档目录，**没有任何门禁扫它**——改坏 `main.rs`/`embed_view.m` 不会红，只有下次手动跑起来才发现。产品代码放在不受判据覆盖的地方，等于把"能不能跑"交给记性（本仓已反复验证：红线写在 markdown 里拦不住）。搬进 `packages/` 后 `check:file-size` / `check:script-compile` / 新增的 `check:studio-panel` 才真正看得到它。
+**③ ★位置选择的关键取舍：`packages/studio/` 但**刻意不放 `package.json`**。三条理由：
+  a) 它不是可发布的 npm 包（Cargo + Vite 项目），放进去会让 `check:pkg` / `check:publish-contents` 按库的形态要求它；
+  b) `scripts/build-packages.mjs` 会遍历 `packages/*/package.json`，有 `build` 脚本就**在每次 `postinstall` 里跑**——而它的"构建"要 Cargo + Xcode，会把干净克隆卡死；
+  c) ★最隐蔽的一条：`check:docs-stats` 的包数口径是「`packages/*/package.json` 且 name 以 `@proteus-vue/` 开头」——加一个假包 ⇒ 官网/文档里所有"43 个包"之类的声明集体漂移。**它不是框架包，就不该被算成框架包。**
+  ⇒ 代价是前端依赖只能借仓库根 `node_modules`（`build-ui.sh` 里 `git rev-parse --show-toplevel` 定位），已在 `.gitignore` 顶部写明原因。
+**④ 真源单一（不复制）**：`native/embed_view.m` + `live_stream.h` 迁入 `packages/studio/native/` 成为**唯一真源**；`docs/proteus-studio-poc/03-tauri-embed/build.rs` 改成 `../../packages/studio/native/embed_view.m` **反向引用**。原 `docs/proteus-studio-poc/native/` 目录删除 —— 两份代码必然分叉，历史靠 git log 保留。
+**⑤ 门禁升级（判据一条没放松）**：`docs/.../verify-panel.mjs` → `scripts/check-studio-panel.mjs`（仓库惯例：所有 `check:*` 在 `scripts/`，判据与被测物分离）。原 9 条**原样保留**（IPC 接线 / 画布矩形同步 / 三行有值 / 解码方式一致 / 延迟真实值 / 管线四段 / 状态灯 / 无 JS 错误 / 无 Markdown 泄漏），**新增第 ⑩ 条**：`fixtures/panel-source.json` 与 `results/panel-source.json` 的 5 个关键数值必须一致 —— 否则"改 fixture 让判据变绿"是一条静默假绿通道。
+**⑥ ★CI 可跑性（这里有个必须处理的坑）**：判据原本依赖真实 `adb` 查机型，CI（ubuntu-latest）没有 adb ⇒ 面板显示"未知"，不会假红但信息量为零。修法：`probeDevice() ?? fixture.device` —— **无 adb 时回落 fixture 记录的采集机型**（`M098FE · 1200x2608`，来自真实 `adb shell getprop`+`wm size`，不是编的），并在输出里标注机型来源（`adb` / `fixture`）。这样同一份判据本地/CI 都有效，且不会把"CI 没设备"误报成缺陷。
+**⑦ 任务板必须同步迁址**：`check:ai-tasks` 判据 7 要求 done/in_progress 任务的 scope 静态前缀**在磁盘真实存在**。搬走后 4 条 done 任务（`T-studio-shell-stage1` / `T-studio-live-stream` / `T-studio-latency` / `T-studio-inspector-real` / `T-studio-ui-vue` / `T-studio-package-app`）的 scope 若不改，会当场红（"指向已删目录"）—— 这不是门禁噪音，而是它正确抓到了"任务台账与实际位置脱节"。
+**⑧ 判据**：`pnpm run check:studio-panel` **10/10 全过**（机型来源 adb）；`check:gates-sync` 报 **CI 覆盖 105 个**（新门禁被识别为"名字命中/脚本命中"，非 LOCAL_ONLY）；`check:ai-tasks --check` 通过；`check:file-size` / `check:repo-hygiene` 无新增越线（`embed_view.m` 656 行 / `main.rs` 291 行）。
+**⑨ 产物**：`packages/studio/{README.md,Cargo.toml,Cargo.lock,build.rs,tauri.conf.json,.gitignore,build-ui.sh,package-app.sh,bundle-dylibs.py,vite.config.mjs}` · `packages/studio/{src,ui,native,icons,gen,fixtures,results}` · `scripts/check-studio-panel.mjs`（新） · `package.json`（`build:studio-ui` / `check:studio-panel` + verify 链接线） · `.github/workflows/ci.yml`（chromium 之后新增一步） · `packages/studio/fixtures/panel-source.json`（新，含 provenance） · `docs/proteus-studio-poc/README.md`（标注已出门） · `docs/proteus-studio-poc/03-tauri-embed/build.rs`（反向引用） · `docs/ai-tasks.json`。
+**⑩ 诚实边界**：a) **G3（iOS ReplayKit 通道）/ G4（编辑器容器 + 元素拾取 + 触摸回传）/ G5（持久化/模块化）一行没动**——出门只是"把已验证的东西放进受门禁管辖的位置"，不是功能完成；b) `vue-tsc` 未接（本目录没有 tsconfig，接的话要单独一份 `tsconfig.studio.json`）；c) 没有组件测试（10 条判据是端到端渲染/映射，不覆盖组件内部逻辑）；d) 元素拾取**仍无数据源**（G-54 `locateAssertion` 0 行），面板继续明说"不显示盒模型/计算样式"；e) CI 只跑 UI 侧判据，**不编 Rust**（Tauri 构建需 macOS + ffmpeg），`cargo build` 仍在开发机。
+
+1188. **★★★鸿蒙 HTTP 三处缺口收口：savePath 落盘接通 / stream 如实拒绝 / 三个 http.* 方法接线（语义如实受限）· 决策**（2026-10-22 · 承接用户「那补齐鸿蒙的」）:
+**① 取证先行（三件事决定了修法，不能凭推断）**：
+  · **RCP 有** `HMS_Rcp_CancelRequest` / `Rcp_OnDataReceiveCallback`（逐块接收）/ `Rcp_CertificateAuthority`（CA 配置）⇒ 缺口都是"我们没接"，**不是平台做不到**；
+  · **一次性 VM 是 #540 实测结论**（跨 napi 复用同一 JSVM ⇒ HandleScope 溢出/SIGSEGV）⇒ 不能靠"改成常驻 VM"来解；
+  · **`stream` 与 `savePath` 在帧里都解出来了，但 `proteus_http.h` 从没用过** ⇒ 两者此前都是**静默忽略**（本仓最忌的形态）。
+**② 三类缺口性质不同 ⇒ 三种处理（这是本轮最重要的判断）**：
+  · **只是没接、同步模型下做得到** ⇒ **必须做**：`savePath`（落盘不需要回推 JS，写完把 `{path,size}` 放进回程帧即可）。实现：`SaveSession` 逐块直写文件，**内存峰值 = 单块**（此前响应体全进内存）。
+  · **模型限制、做不到** ⇒ **必须如实拒绝**：`stream: true` 现在回 `fetch.unsupported`（一次性 VM + 同步 napi ⇒ `onChunk` 没有接收方），并给替代方案（`savePath` / 整包）。★此前静默忽略 ⇒ `onChunk` 永不触发但请求成功 = **假数据**。
+  · **方法缺失、可接但语义受限** ⇒ **接上 + 如实标注**：`http.cancel` / `http.cancelStats` / `http.tlsStats` 此前**查无分派** ⇒ 字节桥回 `missing` ⇒ `host_stats` 恒 null、归因链断。现接上：`http.cancel` 回 `{ok:false, reason:'harmony-sync-napi'}`（**绝不报"取消成功"**——`abort()` 在鸿蒙是 no-op）、`tlsStats` 如实说"鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）"。
+**③ 安全判据与 iOS 逐条对齐**：`resolveSandboxPath` 三层防护（非空 / 不以 `/` 开头 / 任一段 `..` ⇒ 拒绝），沙箱根未注入时也拒绝（否则会写到进程 cwd）；写失败 / 超限 ⇒ **删半截文件 + 回错误**（否则业务读到损坏文件）；落盘上限 1 GiB 与 Android/iOS **同值**。
+**④ 沙箱根由 ArkTS 注入**（C++ 拿不到 `getContext(this).filesDir`）：新增导出 `setHttpSandboxRoot`，四方接线（`.so` 导出 / `index.d.ts` / `Index.ets` 重导出 / ArkTS 三处 `filesDir` 赋值后调用）。判据 `harmony-napi-registry` 7/7 绿 ⇒ 四方一致。
+**⑤ 判据（新增 `tests/harmony-http-gaps.test.ts` 8 条）**：savePath 走 SaveSession（含"逐块回调必须走 save->write"——否则内存峰值等于整个响应体）/ 三层路径防护 / 失败删半截文件 / 四方接线（含"三处都要注入"）；stream 必须显式拒绝且点明根因 + 给替代；三个 http.* 方法必须存在且**不得伪造成功**（cancel 必须 `ok:false` + no-op + timeout；tlsStats 必须说清 pinning 未生效）。**破坏性验证**：删掉 stream 拒绝 ⇒ 红；savePath 不校验绝对路径 ⇒ 红。
+**⑥ 能力页文案同步（`harmony-host-keys.mjs`）**：鸿蒙网络域 ✅ 从"只写 abort no-op"改为**明确三处受限**（abort no-op / stream 如实拒绝 / SPKI pinning 未接）——否则 ✅ 会被读成"三端一致"。★这里有个**判据按设计红了**：`tests/gen-content-harmony-host.test.ts` 原先断言"鸿蒙**没有** http.cancel 分派"，本轮实现后它当场红并提示"请同步文档并翻转断言"——正是它当初写下的用意。
+**⑦ 结构性纪律（踩到两次 1000 行门禁）**：`proteus_http.h` 一度到 1050 行、`host_app_runtime_impl.h` 涨到 1161 行（存量棘轮 1130 只减不增）⇒ 两次都按职责拆：落盘抽到 `proteus_http_save.h`、三个 http.* 分派抽到 `proteus_http_stubs.h`，转发压成一行后 **1129 行**（比基线少 1）。★没有用"加 ALLOW 豁免"绕过。
+**⑧ 产物**：`proteus_http_save.h`（新，落盘）· `proteus_http_stubs.h`（新，三方法）· `proteus_http.h`（stream 拒绝 + 接 SaveSession）· `invoke_bytes_bridge.h`（include stub）· `host_app_runtime_impl.h`（一行转发）· `proteus_host.cpp`（导出，走宏不增行）· `index.d.ts` / `Index.ets` / `Superapp.ets` / `EntryAbility.ets` / `HttpProbe.ets`（四方接线 + savePath/stream 探针入参）· `run-http-probe.sh`（`--save-path` / `--stream`）· `tests/harmony-http-gaps.test.ts`（新）· `tests/gen-content-harmony-host.test.ts`（断言翻转 + 三处受限）· 能力页生成物。
+**⑨ 真机验证状态（诚实边界，勿读成已验证）**：`--save-path` / `--stream` 两个真机分支**已实现但未跑通**——鸿蒙设备在验证时**再次锁屏**（`aa start` 报 `10106102`，`power-shell wakeup` 只亮屏解不了锁）。⇒ 本轮交付的是**编译 + 静态判据全绿**，真机读数待解锁后补。★不要把"编译通过 + 判据绿"写成"真机生效"。
+**⑩ 诚实边界**：a) `stream` 在鸿蒙**永远不支持**（除非改 VM 调度模型，那是独立大单）；b) `abort()` 仍是 no-op（同上）；c) SPKI pinning 未接（RCP 无 fingerprint 校验回调，只有 CA 配置 ⇒ 若要 pinning 需换路子，如自建 TLS 层）；d) 落盘的真机行为（大文件内存有界、路径穿越被拒）**未真机取证**。

@@ -1069,7 +1069,7 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimReset", nullptr, HostAppAnimReset, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
-        PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe),
+        PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot),
         // ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 / 取走待执行动作
         {"setDeviceSnapshot", nullptr, SetDeviceSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"drainDeviceActions", nullptr, DrainDeviceActions, nullptr, nullptr, nullptr, napi_default, nullptr},

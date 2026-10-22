@@ -58,6 +58,33 @@ static std::vector<uint8_t> fromHex(const std::string& s) {
 }
 
 /**
+ * ★★★#1187：`setHttpSandboxRoot(filesDir)` —— 由 ArkTS 壳注入沙箱根目录。
+ *
+ * 【为什么需要它】`savePath` 落盘要一个沙箱根，而 C++ 层拿不到
+ *   `getContext(this).filesDir`（那是 ArkTS/Ability 的上下文）。
+ *   与 `hostAppBoot(…{filesDir})` 同一手法：**上下文归壳，语义归 C++**。
+ * 【不注入时】`savePath` 请求**如实报错**（不静默忽略）。
+ */
+static napi_value HostSetHttpSandboxRoot(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string dir;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        dir.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &dir[0], len + 1, &len);
+        dir.resize(len);
+    }
+    proteus::http::setHttpSandboxRoot(dir);
+    OH_LOG_INFO(LOG_APP, "PROTEUS_HTTP_SANDBOX_ROOT %{public}s", dir.c_str());
+    napi_value r;
+    napi_create_string_utf8(env, dir.empty() ? "{\"ok\":false}" : "{\"ok\":true}", NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
+/**
  * `hostHttpProbe(argsJson {url, method?, timeoutMs?, expect?})` → JSON
  *   `{ok, host:'harmony', bridge:'invokeBytes', reqId, status, bodyBytes, preview, wire, error?}`
  *

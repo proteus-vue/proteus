@@ -307,11 +307,22 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
      *     而真实是"取消什么都不做，请求照常返回成功"。**夸大与贬低都是假信息。**
      */
     const isNet = hosts.includes('http.request')
+    /**
+     * ★★★#1187：网络域的 ✅ 必须带**三处受限**（否则 ✅ 会被读成"三端一致"）。
+     *   · `abort()` no-op（一次性 VM + 同步 napi）⇒ 用 `timeout`；
+     *   · `stream: true` **如实拒绝**（`fetch.unsupported`，因为 onChunk 无法回推）⇒ 用 `savePath`；
+     *   · SPKI pinning **未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）。
+     *   ★这三条各有判据守着：`tests/harmony-http-gaps.test.ts`。
+     */
     const netNote = en
       ? 'device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); ' +
-        '**`abort()` is a no-op here** (one-shot VM + synchronous napi ⇒ no in-flight request to cancel); use `timeout` to bound it'
+        '**three limits here**: ① `abort()` is a **no-op** (one-shot VM + synchronous napi ⇒ no in-flight request to cancel; use `timeout`); ' +
+        '② `stream: true` is **honestly rejected** (`fetch.unsupported` — chunks cannot be pushed back; use `savePath`); ' +
+        '③ **SPKI pinning not wired** (RCP exposes CA config only, no fingerprint verification)'
       : '真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ' +
-        '★**`abort()` 在本端是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout`'
+        '★**三处受限**：① **`abort()` 是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout`；' +
+        '② **`stream: true` 如实拒绝**（`fetch.unsupported`——逐块回推没有接收方）⇒ 要边收边处理请用 `savePath`（宿主逐块落盘）；' +
+        '③ **SPKI pinning 未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立'
     return {
       status: '✅',
       note: en ? `Harmony host wired (${where})${isNet ? ' · ' + netNote : ''}` : `鸿蒙宿主已接线（${where}）${isNet ? ' · ' + netNote : ''}`,
