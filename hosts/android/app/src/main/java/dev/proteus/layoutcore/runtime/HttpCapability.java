@@ -310,6 +310,7 @@ public final class HttpCapability {
             if (call != null) call.cancel();   // ★取消已完成的 call 是无操作；放 finally 防泄漏
         }
     }
+
     /**
      * ★★★#1160：把去程帧翻成传输层配置（**四条路径共用一处**）。
      *
