@@ -291,7 +291,7 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
     }
     const where = files.size ? [...files].join(' / ') : 'host'
     /**
-     * ★★★#1164：网络域的 ✅ 必须带**真机证据**与**真实的调度语义差异**，否则 ✅ 会被读成"三端一致"。
+     * ★★★#1165：网络域的 ✅ 必须带**真机证据**与**真实的调度语义差异**，否则 ✅ 会被读成"三端一致"。
      *
      * 【★本轮更正了 #1163 的一处错误描述（重要）】
      *   #1163 写的是「`http.cancel` 未实现 ⇒ `abort()` 只 reject 本地、宿主传输不停」——

@@ -12282,3 +12282,55 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **④ 效果**：CI 覆盖 **101 → 104**（名字命中 53 · 脚本命中 51）；台账 **58 → 55**；`policy` **14 → 11**；`run` 分布 verify 42→40、manual 10→9。`check:gates-sync` rc=0，判据 69/69。
 **⑤ 诚实边界（必须写明）**：本轮只验证了**本机**能跑，**没有实跑 GitHub Actions**。首次 push 后要按 CI 实际结果复核；若红，按各自原因处理（缺构建前置 ⇒ 挪步序；环境差异 ⇒ 回退成 policy 并写明具体差异），**不得因为"我本地过了"就 assume 绿**。这条与 #1159 的教训同源：`接了线` ≠ `真在跑`。
 **⑥ 未做**：剩余 `policy` 11 条（`host-rounding` / `host-kernel-keys` / `ios-style-keys` / `env-vars` / `screen-mount-helpers` / `evidence-tracked` / `host-layering` / `host-separation-ledger` / `host-invoke-contract` / `host-tab-spec` / `shell-i18n-vars`）逐条评估；下一轮优先看**静态扫描类**（前四条与最后一条），它们零设备依赖。
+
+1165. **★★★【★编号勘误：原写 #1164，与并发会话的「policy 三条接 CI」撞号 ⇒ 按 check:decision-numbers 提示改为 #1165】更正鸿蒙取消语义——`abort()` 是 **no-op**（同步 napi 占满 JS 线程），不是"只 reject 本地"；并立"夸大与贬低同样是假信息" · 决策**（2026-10-22 · 更正 #1163 的一处错误描述）:
+
+**背景（用户：「继续收尾 useFetch」）**：上一轮 #1163 修好鸿蒙 fetch 页的接线判定后，我把取消语义写成
+「`http.cancel` 未实现 ⇒ `abort()` 只 reject 本地、宿主传输不停」。本轮按"继续收尾"去补 `http.cancel` 时，
+**先取证发现这条描述本身是错的**。
+
+**★实证链（三层，都可从源码复核）**
+· ① 鸿蒙 `handle()` 在 napi 调用内**同步完成往返**：`proteus_http.h` 头注写明一次性 VM
+  （`hostAppRender` 每次新建 VM、同步跑完、返回即销毁 ⇒ 异步回推**没有接收方**），
+  实现是 `HMS_Rcp_Fetch` + 有界 `cv.wait_for(timeoutMs + 5s)`。
+· ② JS 侧 `invokeHostAsyncBytes` 就是 `out = fn(frame)` **同步取结果**——
+  `attachAbort(...)` 之后**第 4 行**就同步调用（中间无 `await`）。
+· ③ ⇒ 请求进行中 JS 线程**被占**，`signal.onabort` **没有执行机会**；
+  且 App 精简引擎无 `setTimeout`，也没有"稍后取消"的路径。
+
+**★准确结论（替换 #1163 的错误说法）**
+· 鸿蒙上 `abort()` 是 **no-op**：**连 JS 侧的 `reject` 都不会发生**，请求照常成功返回；
+· **不存在"后台还在下载"**——没有后台，请求就在调用线程里同步跑完；
+· 鸿蒙上要限时**只能用 `timeout`**（宿主有界等待 + 超时主动 `HMS_Rcp_CancelRequest`；
+  真机 `fetch-limit` 越线时 `cancelCalled=true` 可证这条路径真的工作）。
+
+**★为什么必须改（而不是"措辞更好"）**
+写成"只 reject 本地"会让业务以为"取消至少能兜住"，于是**不去设 `timeout`** ⇒
+线上出现"点了取消没反应、请求还成功回来"且没有任何兜底。
+**夸大与贬低同样是假信息**——这是本仓第一次把这条写成纪律。
+
+**★判据（零设备可跑，把语义固定住）**
+· `tests/fetch-cancel.test.ts` 新增「鸿蒙 abort 是 no-op」三条：
+  ① fetch 页鸿蒙行必须写 `abort()` 是 no-op；② 必须给出 `timeout` 替代；
+  ③ **禁止**出现"abort 只 reject 本地"的错误说法（正则反向断言）；
+· 结构判据：`attachAbort(...)` 之后必须紧接同步 `fn(frame)`——若有人改成 `await`，
+  这条会红，提醒重评鸿蒙语义（那就是"能有了在飞请求"的分水岭）；
+· **破坏性验证 3/3 全红**：文档回退错误说法 / 删 `timeout` 提示 / 把 `fn(frame)` 改成 `await`。
+· 同时修正 #1163 那条判据的要求（从"必须写 `http.cancel` 未实现"改为"必须写 `abort` no-op"）。
+
+**★任务板定性更正**：`T-harmony-http-cancel` 从"修一个漏实现"改为
+「**要么改 VM 调度模型**（可重入/常驻 VM ⇒ 才可能有在飞请求与异步回推，这是 #540 一次性 VM 约束的直接后果），
+**要么以 `timeout` 为官方限时手段**」。优先级相应下调：现状已是"如实登记 + 有可用替代"，
+不再是"文档说谎"或"用户没有兜底手段"。
+
+**诚实边界**
+· 本轮取证是**源码 + 结构判据**，**未跑真机 abort 场景**：鸿蒙设备当前**锁屏**
+  （`aa start` 报 `10106102 The device screen is locked … cannot be unlocked automatically`，
+  开发者模式下 hdc 不允许代解）⇒ 需人工解锁后才能跑真机版 abort 探针。
+  结论不依赖该跑：①② 是静态事实，③ 是它们的直接推论；真机跑只是把推论再确认一次。
+· 鸿蒙流式仍在 API 层回 `unsupported`（一次性 VM 无回推接收方，`capability-invoke.ts` 已写明）；
+  这与取消 no-op 是**同一个根因**（同步 + 一次性 VM），未来改 VM 模型时应当一起解决。
+
+**下一步**：① （需人工解锁设备）跑真机 abort 探针做最终确认 ② 评估"鸿蒙宿主改常驻/可重入 VM"
+的工程量——它同时解锁「取消 / 流式 / 传输读数回推」三件事，是 useFetch 鸿蒙侧的**根节点**
+③ 在那之前，文档已明确 `timeout` 是鸿蒙唯一有效的限时手段。

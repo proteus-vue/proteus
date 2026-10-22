@@ -173,7 +173,7 @@ describe('★#1121 取消 · 两端宿主', () => {
   })
 
   /**
-   * ★★★#1164：**鸿蒙的取消是 no-op**——这是「调度模型差异」，不是"少写一个方法"。
+   * ★★★#1165：**鸿蒙的取消是 no-op**——这是「调度模型差异」，不是"少写一个方法"。
    *
    * 【实证链（三层，全部可从源码复核）】
    *   ① 鸿蒙 `handle()` 在 napi 调用内**同步完成往返**（一次性 VM：`proteus_http.h` 头注 +
@@ -196,7 +196,7 @@ describe('★#1121 取消 · 两端宿主', () => {
     expect(row![2], '★鸿蒙行必须写明 abort() 是 no-op（不能只写"未实现 http.cancel"）').toMatch(/abort\(\)[^。]*no-op/)
     expect(row![2], '★必须指出正确替代：用 timeout 限时（否则业务没有可用的兜底手段）').toMatch(/timeout/)
     // ★不得再出现#1163 的错误说法（会让业务误以为本地会 reject）
-    expect(md, '★"abort() 只 reject 本地"是错误描述（实际连 reject 都不发生）——见 #1164').not.toMatch(
+    expect(md, '★"abort() 只 reject 本地"是错误描述（实际连 reject 都不发生）——见 #1165').not.toMatch(
       /abort\(\)\s*只\s*reject\s*本地/,
     )
   })
