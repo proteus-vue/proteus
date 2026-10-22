@@ -194,6 +194,8 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     expect(r.deviceStat.sizeOnDevice, '★设备侧大小缺失（stat 没跑或文件不存在）').toBeGreaterThan(0)
     expect(r.deviceStat.sizeOnDevice, '★设备侧大小 != 回执 size（摘要不可信）').toBe(r.deviceStat.sizeReported)
     expect(r.deviceStat.match, '★脚本没把 match 判为真').toBe(true)
+    // ★#1198：**只看 deviceStat 存在不够**——必须有 `verified:true`（= 整条判据通过时才写）
+    expect(r.deviceStat.verified, '★证据未标记 verified（可能是校验失败时写下的坏证据）').toBe(true)
     expect(r.deviceStat.sizeOnDevice, '★设备文件大小 != saveWritten（写入量与落盘量不符）').toBe(lim.saveWritten)
   })
 

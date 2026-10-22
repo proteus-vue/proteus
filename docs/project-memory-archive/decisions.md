@@ -12911,3 +12911,14 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **④ 结构性（这次不贴边了）**：`proteus_http.h` 因为加语义注释反复贴 1000 行（998→1005→1001→999）⇒ 按纪律**把 `LastLimitDiag` + `lastLimitDiag()` 整体搬到 `proteus_http_diag.h`**（30 行）⇒ `proteus_http.h` **969 行**（余量 31）。★这解决了"每加一行注释就要腾一行"的反复摩擦，不是为过门禁删注释。
 **⑤ 判据与真机**：四份定向 **58 条全绿**；`file-size` / `harmony-host-compile` 全绿；真机落盘 `saveWritten=214` + `deviceStat.match=true`。
 **⑥ 诚实边界**：a) `deviceStat` 只在 `--save-path` 分支写入（其它模式没有落盘文件，属正确缺省）；b) 掉电持久性（fsync）仍是 `T-fetch-save-durability`（P2，三端共缺）；c) 只测到 64 MiB；d) `stream`/`abort`/SPKI pinning 仍受限。
+
+1198. **★★★第五轮自查：`deviceStat` 会在校验失败时写下「坏证据」 · 决策**（2026-10-22 · 承接 #1197）:
+**① 缺陷（我自己在发起第五轮验证后立刻查出来的）**：#1197 给证据加了 `deviceStat={sizeOnDevice,sizeReported,match}`，但写法是在 stat 校验**之前**就写 ⇒ **校验失败时 `match:false` 也会被当成一个正常字段入库**。下游判据只要"`deviceStat` 存在 + `match:true`"就会读；而更糟的是"存在即视为已验"的读法会把坏证据当合格证据。
+**② 修复**：调到**校验之后**写，并补 `verified`（= 整条判据是否通过）。三态齐全：
+  · `sizeOnDevice` / `sizeReported` / `match`（设备 vs 回执）
+  · **`verified`（整条判据通过才 true）**
+  真机读数：`{"sizeOnDevice":219,"sizeReported":219,"match":true,"verified":true}`。
+**③ 判据**：`harmony-http-gaps` 新增断言 **`deviceStat.verified === true`**（不只看 `deviceStat` 存在）。**变异验证**：把证据里的 `verified` 改成 `false` ⇒ 精确红「证据未标记 verified（可能是校验失败时写下的坏证据）」。
+**④ 这条的形态值得记**：`match` 与 `verified` 是**两件事**——`match` 说"这两个数相等"，`verified` 说"这一整轮判据通过"。上一轮我把两者混成一个字段，就等于"局部相等 ⇒ 整体通过"（本仓反复踩的"用部分证据代替整体结论"）。
+**⑤ 判据与门禁**：六份定向 **82 条全绿**；`file-size` / `content` / `prebuilt` / `ai-tasks` / `decision-numbers` 全绿。
+**⑥ 诚实边界**：a) `verified` 只覆盖"设备侧 size 与回执一致"这一条，不代表整轮所有判据（若将来判据扩项，`verified` 语义要跟着更新）；b) 掉电持久性仍是 `T-fetch-save-durability`；c) 第五轮独立验证仍在跑。

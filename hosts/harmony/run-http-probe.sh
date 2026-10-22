@@ -226,20 +226,6 @@ d=json.load(open('$RESULTS/http-probe.json'))
 m=re.search(r'\"size\":(\d+)', d.get('preview') or '')
 print(m.group(1) if m else '')" 2>/dev/null)"
   SIZE_ON_DEVICE="$(HDC shell "stat -c %s '$FILES_DEV/$SAVE_PATH'" 2>/dev/null | tr -d ' \r\n')"
-  # ★★★#1197（第四轮验证者指出）：**把设备侧 stat 结果写进证据文件**，否则离线和判据都
-  #   只能信探针自报的 preview.size（"证据里没有 size-on-device 字段 ⇒ 无法离线复判"）。
-  python3 - "$RESULTS/http-probe.json" "$SIZE_ON_DEVICE" "$SIZE_REPORTED" <<'PY'
-import json, sys
-p, on_dev, reported = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    d = json.load(open(p))
-except Exception:
-    sys.exit(0)
-d["deviceStat"] = {"sizeOnDevice": int(on_dev) if on_dev.isdigit() else None,
-                   "sizeReported": int(reported) if reported.isdigit() else None,
-                   "match": on_dev == reported}
-json.dump(d, open(p, "w"), ensure_ascii=False)
-PY
   if [ -z "$SIZE_ON_DEVICE" ]; then
     echo "  ✗ 设备上找不到落盘文件：$FILES_DEV/$SAVE_PATH"; RC=1
   elif [ "$SIZE_ON_DEVICE" != "$SIZE_REPORTED" ]; then
@@ -247,5 +233,24 @@ PY
   else
     echo "  ✓ 设备侧核对：$SAVE_PATH 真实存在且大小 = $SIZE_ON_DEVICE B（与回执一致）"
   fi
+  # ★★★#1198（第五轮自查）：**把设备侧 stat 结果写进证据文件**，且**失败也要如实记**。
+  #   上一轮我在校验**之前**就写 ⇒ `match:false` 的坏证据也会被写成一个正常字段，
+  #   下游判据只看 `deviceStat` 存在就以为"验过了"。
+  #   ⇒ 现在写全三态：`verified`（校验通过与否）+ `match` + 两个 size；判据要求 `verified:true`。
+  python3 - "$RESULTS/http-probe.json" "$SIZE_ON_DEVICE" "$SIZE_REPORTED" "$RC" <<'PY'
+import json, sys
+p, on_dev, reported, rc = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+try:
+    d = json.load(open(p))
+except Exception:
+    sys.exit(0)
+d["deviceStat"] = {
+    "sizeOnDevice": int(on_dev) if on_dev.isdigit() else None,
+    "sizeReported": int(reported) if reported.isdigit() else None,
+    "match": on_dev == reported,
+    "verified": rc == "0",   # ★只有整条判据通过才算"已验证"
+}
+json.dump(d, open(p, "w"), ensure_ascii=False)
+PY
 fi
 [ "$RC" = "0" ] && echo "  ✓ 鸿蒙 T-app-fetch 真机判据通过" || { echo "  ✗ 判据失败"; exit "$RC"; }
