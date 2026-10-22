@@ -2,7 +2,7 @@
 name = "proteus-studio-shell"
 version = "0.1.0"
 edition = "2021"
-description = "Proteus Studio 阶段 1 骨架：三栏布局 + 原生设备画布 + 状态栏读数（决策 #1173）"
+description = "Proteus Studio 宿主壳：三栏布局 + 原生设备画布 + 状态栏读数（G-56；决策 #1173 起，2026-10-22 出门）"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

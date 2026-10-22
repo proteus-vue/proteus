@@ -75,7 +75,11 @@ DNS_ARG=""
 # ★#1169：dnsHost + dnsIp 配对 ⇒ 往帧里塞 httpDns 表（验证宿主表解析生效）
 [ -n "$DNS_HOST" ] && DNS_ARG="$DNS_ARG --ps dnsHost $DNS_HOST"
 # ★★★#1187：savePath（逐块落盘）/ stream（应被如实拒绝）
-[ -n "$SAVE_PATH" ] && DNS_ARG="$DNS_ARG --ps savePath $SAVE_PATH"
+# ★★★#1187 真机踩坑（实测）：`aa start --ps savePath download/x.txt` 的**斜杠会被 aa 吃掉**
+#   ⇒ `want.parameters` 里根本没有 `savePath` 这个键（而 scene/url 都在）。
+#   加引号也无效（试过）⇒ 探针侧传 `%2F`，ArkTS 侧解回 `/`。
+SAVE_PATH_ENC="$(printf '%s' "$SAVE_PATH" | sed 's|/|%2F|g')"
+[ -n "$SAVE_PATH" ] && DNS_ARG="$DNS_ARG --ps savePath $SAVE_PATH_ENC"
 [ "$STREAM" = "1" ] && DNS_ARG="$DNS_ARG --ps stream 1"
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
@@ -99,6 +103,43 @@ python3 - "$RESULTS/http-probe.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 ok = True
+# ★★★#1187：两种**预期失败**的形态（是设计，不是错误）：
+#   · 传了 savePath ⇒ 回 `{path,size}` 摘要（limit.kept 必须 0 = 响应体没进内存）
+#   · 传了 stream   ⇒ 必须 `fetch.unsupported` 且点明根因
+diag = {}
+try:
+    diag = json.loads(d.get("probe_diag") or "{}")
+except Exception:
+    pass
+save_path = diag.get("savePath") or ""
+stream_on = (diag.get("stream") or "") == "1"
+if save_path:
+    prev = d.get("preview") or ""
+    if d.get("ok") is not True:
+        print(f"✗ 落盘请求未成功：{d.get('error') or d.get('reason')}"); ok = False
+    elif '"path"' not in prev or '"size"' not in prev:
+        print(f"✗ 落盘回执不是 {{path,size}} 摘要：{prev[:120]}"); ok = False
+    else:
+        lim = d.get("limit") or {}
+        print(f"✅ 落盘回执：{prev}")
+        if (lim.get("seen") or 0) <= 0:
+            print("✗ limit.seen=0（没收到数据）"); ok = False
+        if (lim.get("kept") or 0) != 0:
+            print(f"✗ limit.kept={lim.get('kept')}（落盘模式不应在内存保留响应体）"); ok = False
+        else:
+            print(f"   逐块接收 {lim.get('seen')}B · 内存保留 {lim.get('kept')}B（落盘模式应为 0）")
+    sys.exit(0 if ok else 1)
+if stream_on:
+    reason = str(d.get("reason") or "")
+    if d.get("ok") is not False:
+        print("✗ stream 未被拒绝（仍静默降级？）"); ok = False
+    elif "fetch.unsupported" not in reason:
+        print(f"✗ stream 拒绝码不是 fetch.unsupported：{reason[:100]}"); ok = False
+    elif "一次性 VM" not in reason or "同步 napi" not in reason:
+        print(f"✗ stream 拒绝信息没点明根因：{reason[:120]}"); ok = False
+    else:
+        print(f"✅ stream 如实拒绝：{reason[:110]}")
+    sys.exit(0 if ok else 1)
 if d.get("host") != "harmony":
     print(f"✗ host 应为 harmony，实得 {d.get('host')}"); ok = False
 if d.get("bridge") != "invokeBytes":

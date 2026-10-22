@@ -14,6 +14,8 @@
 //   ① 非空 ② 不以 `/` 开头（拒绝绝对路径）③ 任一段是 `..` ⇒ 拒绝
 //   ⇒ 返回空串 = 非法，调用方**必须如实报错**（不得回落到"写到别处"）。
 #pragma once
+#include <sys/stat.h>   // ★#1187：递归建父目录（mkdir）
+
 #include <cstdio>
 #include <string>
 
@@ -93,12 +95,29 @@ struct SaveSession {
       if (err) *err = "fetch.failed: savePath 非法（必须是沙箱内的相对路径，不得为绝对路径或含 ..）：" + rel;
       return false;
     }
+    // ★★★#1187 真机踩坑：`fopen("wb")` **不会建父目录** ⇒ `savePath=download/x.txt`
+    //   在真机上直接失败（实测 `fetch.failed: 无法创建落盘文件`）。
+    //   Android/iOS 的 `savePath` 支持子目录 ⇒ 本端必须对齐：递归建父目录。
+    mkdirParents(absPath);
     fp = std::fopen(absPath.c_str(), "wb");
     if (fp == nullptr) {
       if (err) *err = "fetch.failed: 无法创建落盘文件：" + rel;
       return false;
     }
     return true;
+  }
+
+  /** 递归创建文件的父目录（已存在则跳过；失败不致命，交给 fopen 报错） */
+  static void mkdirParents(const std::string& absPath) {
+    const size_t slash = absPath.rfind('/');
+    if (slash == std::string::npos || slash == 0) return;
+    const std::string dir = absPath.substr(0, slash);
+    for (size_t i = 1; i <= dir.size(); i++) {
+      if (i == dir.size() || dir[i] == '/') {
+        const std::string part = dir.substr(0, i);
+        ::mkdir(part.c_str(), 0755);   // EEXIST 也当成功
+      }
+    }
   }
 
   /** 写一块。返回 false ⇒ 该中止（调用方据此 cancel 传输）。 */

@@ -1,7 +1,9 @@
 fn main() {
     // 原生渲染视图（Objective-C）：编译成静态库，由 main.rs 里的 extern "C" 调用。
+    // ★2026-10-22 出门（决策 #1187）：真源迁到 packages/studio/native/（产品代码）。
+    //   本 PoC 保留为历史取证入口，引用同一份源码——不复制。
     cc::Build::new()
-        .file("../native/embed_view.m")
+        .file("../../packages/studio/native/embed_view.m")
         .flag("-fobjc-arc")
         .flag("-DGL_SILENCE_DEPRECATION")
         .include("/opt/homebrew/opt/ffmpeg/include")

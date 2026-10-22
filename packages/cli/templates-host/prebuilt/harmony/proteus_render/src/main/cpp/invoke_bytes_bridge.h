@@ -22,6 +22,7 @@
 
 #include "invoke_wire.h"
 #include "proteus_http.h"
+#include "proteus_http_stubs.h"   // ★#1187：http.cancel/tlsStats 诚实分派
 #include "proteus_host_helpers.h"
 
 /**

@@ -1,5 +1,5 @@
-// docs/proteus-studio-poc/05-studio-shell/vite.config.mjs
-// ★ Studio 壳的构建配置（决策 #1183）
+// packages/studio/vite.config.mjs
+// ★ Studio 壳的构建配置（决策 #1183；2026-10-22 出门迁入 packages/studio，决策 #1187）
 //
 // 【为什么是 Vite + Vue 3，而不是继续手写单文件 HTML】
 //   手写版的状态同步全靠人记（20 个字段散在 5 个区域），已经出过"漏改一处就显示假数据"的事故。
@@ -15,8 +15,6 @@
 
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
-
-const here = fileURLToPath(new URL('.', import.meta.url))
 
 export default {
   root: fileURLToPath(new URL('./ui', import.meta.url)),
@@ -36,6 +34,4 @@ export default {
   // 依赖从仓库根 node_modules 解析（本目录不装 node_modules，避免第二套依赖）
   cacheDir: fileURLToPath(new URL('./.vite', import.meta.url)),
   logLevel: 'info',
-  // 记录一下：本目录不是 pnpm workspace 成员（pnpm-workspace.yaml 只含 packages/*、website、examples…）
-  __here: here,
 }

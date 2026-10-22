@@ -147,9 +147,8 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         char b[128]; snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"started\":%d}}", started);
         return b;
     }
-    // ★★★决策 #1081：元素几何（`useElement` → selector→nodeId → 内核矩形）
-    // ★★★决策 #1083：录屏/截屏状态（C71）——快照 + 事件队列（一次性 VM 的必然形态）
-    if (method == "device.capture") return proteus::capture::stateJson();
+    // ★★★决策 #1081/#1083/#1187：元素几何 · 录屏截屏 · http.cancel/cancelStats/tlsStats 诚实分派
+    if (method == "device.capture") return proteus::capture::stateJson(); if (method.rfind("http.", 0) == 0) { std::string o; if (proteus::http::httpStubDispatch(method, &o)) return o; }
     if (method == "element.rect") return scElementRect(argsJson);
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";

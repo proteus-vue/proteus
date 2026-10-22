@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "invoke_wire.h"
+#include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -141,8 +142,172 @@ inline LastLimitDiag& lastLimitDiag() {
   return d;
 }
 
+/* ══════════════ ★★★#1169：HTTPDNS 的**鸿蒙落点取证**（仅探针启用，生产零影响） ══════════════
+ *
+ * 【为什么要这段（用户「继续」后接着收 HTTPDNS）】
+ *   `rcp.h` 的 `Rcp_DnsConfiguration` 提供**四条**域名解析定制路径：
+ *     · `Rcp_DnsOverHttps`（DoH：给一个 HTTPS DNS 服务端 URL）
+ *     · `RCP_DNS_RULE_DNS_SERVERS`（指定 DNS 服务器 IP:port）
+ *     · `RCP_DNS_RULE_STATIC`（host → IP 的静态映射表）
+ *     · `RCP_DNS_RULE_DYNAMIC`（`Rcp_IpAddress* (*)(const char* host, uint16_t port)` 回调）
+ *   ★★★**第四条与 Android 的 `Dns.lookup(host) → List<InetAddress>` 语义同构**——
+ *     都是"框架调我们给的函数要 IP"。⇒ 矩阵里"鸿蒙需自建解析器"这个判断偏了：
+ *     鸿蒙**有**函数注入点，且形状与 Android 一致 ⇒ HTTPDNS 的线格式可以**两端同一套**。
+ *   ★但"头文件里有"≠"真生效"（本仓纪律：先取证再断言）⇒ 下面这段给探针用：
+ *     注入一个"假解析器"，把目标 host 解析到**一个不可达 IP**，若请求因此失败
+ *     且回调被调用过 ⇒ 证明这条路真的接通。
+ *
+ * 【★生产零影响】`installed=false` 时 `handle()` 完全不碰 `cfg.dnsConfiguration`；
+ *   探针改完会复位。默认走系统 DNS 的行为一字未变。
+ */
+struct DnsProbe {
+  bool installed = false;        // 探针是否安装假解析器
+  int calls = 0;                 // 假解析器被调用次数（>0 ⇒ 这条路真的接通）
+  std::string lastHost;          // 最后被解析的 host（判据核对"解析的是目标域名"）
+  unsigned int lastPort = 0;     // 最后被解析的 port
+  std::string forcedIp;          // 强制返回的 IP；空 ⇒ 返回 nullptr（让解析失败）
+  /** ★#1169：本次请求装了几条表规则（判据可证"表真被装上"，>0 即装上） */
+  int tableRules = 0;
+  /** ★#1169：表命中的次数（>0 ⇒ 业务的表真的被用于解析） */
+  int tableHits = 0;
+  /** ★#1169：最后一次解析的来源（`table` / `probe` / `miss`） */
+  std::string lastSource;
+};
+inline DnsProbe& dnsProbe() {
+  static DnsProbe p;
+  return p;
+}
+
+/**
+ * ★★★#1169：**当前请求的 HTTPDNS 表**（`handle()` 栈上对象的地址；请求结束即失效）。
+ * ★只在 `handle()` 内有效——所以 `handle()` 必须在退出前清空（见 finally）。
+ */
+inline const proteus::wire::NameValues*& httpDnsTable() {
+  static const proteus::wire::NameValues* t = nullptr;
+  return t;
+}
+
+/**
+ * ★★★#1183：**本次请求**的域名解析来源（`table` / `miss`）。
+ *
+ * 【为什么不能复用 `dnsProbe().lastSource`】那是**进程级**最后一次——并发/连续请求时
+ *   会被别的请求覆盖（与 Android 的 `lastDnsSource` 同一个坑）。
+ * ★空串 = 本次没有发生解析（URL 本身是 IP、或连接复用）⇒ 上层**不写**该字段
+ *   （"没解析" ≠ "走了系统 DNS"，本仓纪律：不拿缺省值冒充已知）。
+ */
+inline std::string& callDnsSource() {
+  static std::string s;
+  return s;
+}
+
+/** ★#1183：请求开始时清空（由 `handle()` 的 RAII 守卫一并负责） */
+struct CallDnsSourceGuard {
+  ~CallDnsSourceGuard() { callDnsSource().clear(); }
+};
+
+/**
+ * ★★★#1186：**最近一次请求的传输读数**（供 `http_probe.h` 的探针回执读取）。
+ *
+ * 【为什么需要一份进程级副本】回程帧里的 `transport` 只有走 `useFetch` 的业务看得到；
+ *   而鸿蒙 HTTP 探针走**原生直调**（ArkTS 自编帧 → C++ 执行），JS 侧拿不到 `meta` ⇒
+ *   没有这份副本就**无法在鸿蒙真机验证 `dnsSource`**（#1185 的诚实边界 b）。
+ * ★只用于取证探针，**不参与**业务读数生成（业务仍读回程帧）。
+ */
+inline proteus::wire::NameValues& lastTransport() {
+  static proteus::wire::NameValues t;
+  return t;
+}
+
+/**
+ * ★★★#1169：**RAII 守卫**——`handle()` 有十余个 return 出口，逐个加清理太脆
+ * （漏一个就是"表指针悬垂 ⇒ 下一个请求读到已析构对象"）。
+ * ⇒ 用析构函数清空：无论从哪个出口返回、还是抛异常，都会执行。
+ */
+struct HttpDnsTableGuard {
+  ~HttpDnsTableGuard() { httpDnsTable() = nullptr; }
+};
+
+
 #if PROTEUS_HAVE_RCP
 namespace detail {
+
+/**
+ * ★★★#1169：**探针用的假解析器**（`RCP_DNS_RULE_DYNAMIC` 的回调）。
+ *
+ * 形状与 Android `okhttp3.Dns.lookup` 同构：`(host, port) → IP 地址链`。
+ * · `forcedIp` 非空 ⇒ 返回它（用于"解析到不可达 IP ⇒ 请求必失败"的因果实验）；
+ * · `forcedIp` 为空 ⇒ 返回 `nullptr`（RCP 视为解析失败）。
+ * ★返回的是 `static` 存储：RCP 在本次请求内读取，生命周期足够；且探针串行执行。
+ */
+inline Rcp_IpAddress* probeDnsLookup(const char* host, uint16_t port) {
+  DnsProbe& p = dnsProbe();
+  p.calls++;
+  p.lastHost = host != nullptr ? host : "";
+  p.lastPort = port;
+  p.lastSource = "probe";
+  if (p.forcedIp.empty()) return nullptr;
+  static Rcp_IpAddress ip;
+  ::memset(&ip, 0, sizeof(ip));
+  ::snprintf(ip.ipAddress, sizeof(ip.ipAddress), "%s", p.forcedIp.c_str());
+  ip.next = nullptr;
+  return &ip;
+}
+
+/**
+ * ★★★#1169：**按业务给的表解析**（`RCP_DNS_RULE_DYNAMIC` 回调，生产路径用）。
+ *
+ * · 表里**没有**该域名 ⇒ 返回 `nullptr` ⇒ RCP 回落系统 DNS（**不改变无关请求的行为**）；
+ * · 表里有且 IP 可解析 ⇒ 返回链头（多 IP 用 `next` 串起来，按序尝试）；
+ * · 表里有但 IP 全非法 ⇒ 也返回 `nullptr`（RCP 会当解析失败）——**不静默用系统 DNS**，
+ *   否则业务给的错 IP 会被掩盖。
+ *
+ * 【★返回的链表存在 `static` 池里】RCP 在本次请求内读取；探针/生产都串行执行（一次 handle 一个），
+ *   池在每次调用时重置 ⇒ 不会跨请求串味。
+ * ★域名匹配**大小写不敏感**（DNS 语义；业务可能传大写）。
+ */
+inline Rcp_IpAddress* tableDnsLookup(const char* host, uint16_t port) {
+  DnsProbe& p = dnsProbe();
+  p.calls++;
+  p.lastHost = host != nullptr ? host : "";
+  p.lastPort = port;
+  const proteus::wire::NameValues* table = httpDnsTable();
+  // ★#1183：per-request 来源（miss 也要记——"回落系统"本身是可观测事实）
+  if (table == nullptr) { callDnsSource() = "miss"; p.lastSource = "miss"; return nullptr; }
+  std::string want = host != nullptr ? host : "";
+  for (auto& ch : want) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
+  std::string ipsCsv;
+  for (const auto& kv : *table) {
+    std::string k = kv.first;
+    for (auto& ch : k) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
+    if (k == want) { ipsCsv = kv.second; break; }
+  }
+  if (ipsCsv.empty()) { callDnsSource() = "miss"; p.lastSource = "miss"; return nullptr; }
+  // 静态池：每次调用重置（一次 handle 内只有一个域名在被解析）
+  static std::vector<Rcp_IpAddress> pool;
+  pool.clear();
+  size_t start = 0;
+  while (start <= ipsCsv.size()) {
+    const size_t comma = ipsCsv.find(',', start);
+    const size_t end = (comma == std::string::npos) ? ipsCsv.size() : comma;
+    std::string ip = ipsCsv.substr(start, end - start);
+    while (!ip.empty() && (ip.front() == ' ' || ip.front() == '\t')) ip.erase(ip.begin());
+    while (!ip.empty() && (ip.back() == ' ' || ip.back() == '\t')) ip.pop_back();
+    if (!ip.empty()) {
+      Rcp_IpAddress a{};
+      ::snprintf(a.ipAddress, sizeof(a.ipAddress), "%s", ip.c_str());
+      a.next = nullptr;
+      pool.push_back(a);
+    }
+    if (comma == std::string::npos) break;
+    start = comma + 1;
+  }
+  if (pool.empty()) { callDnsSource() = "miss"; p.lastSource = "miss"; return nullptr; }
+  for (size_t i = 0; i + 1 < pool.size(); i++) pool[i].next = &pool[i + 1];
+  p.tableHits++;
+  p.lastSource = "table";
+  callDnsSource() = "table";
+  return &pool[0];
+}
 
 /**
  * 逐块接收闸的状态（栈上，生命周期 = 一次 `FetchSync`）。
@@ -159,6 +324,10 @@ struct RecvGate {
   Rcp_Session* session = nullptr;
   const Rcp_Request* req = nullptr;
   unsigned int (*cancelFn)(Rcp_Session*, const Rcp_Request*) = nullptr;
+  /**
+   * ★★★#1187：**落盘会话**（实现见 `proteus_http_save.h`）。非 null ⇒ 逐块直写文件、body 不累积。
+   */
+  SaveSession* save = nullptr;
 };
 
 /**
@@ -184,6 +353,18 @@ inline size_t recvGate(void* usr, Rcp_Buffer* buf) {
     return n;
   }
   const uint8_t* p = reinterpret_cast<const uint8_t*>(buf->buffer);
+  // ★★★#1187：落盘模式 ⇒ 交给 SaveSession 直写（不累积 body，峰值 = 单块）
+  if (g->save != nullptr) {
+    if (!g->save->write(p, n)) {
+      // 写失败 / 超限 ⇒ 同样按"越线"处理并 cancel（不能静默继续下载然后丢数据）
+      g->exceeded = true;
+      if (!g->cancelCalled && g->cancelFn != nullptr && g->session != nullptr) {
+        g->cancelCalled = true;
+        g->cancelRc = g->cancelFn(g->session, g->req);
+      }
+    }
+    return n;
+  }
   g->body.insert(g->body.end(), p, p + n);
   return n;
 }
@@ -284,6 +465,23 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   if (!f.url || f.url.v.empty()) {
     stats().failures++;
     return proteus::wire::ResolveFrame::err(f.reqId, "http.request 需要 url（meta 里没带）");
+  }
+  /**
+   * ★★★#1187：**`stream: true` 如实拒绝**（此前是**静默忽略**——帧里解出来了但没人用）。
+   *
+   * 【为什么不能"接上就算"】流式的本质是**边收边回推 JS**（`onChunk`）。而鸿蒙宿主是
+   *   一次性 VM + 同步 napi：请求期间 JS 线程被占、napi 返回时 VM 已销毁 ⇒ **回推没有接收方**。
+   *   ⇒ 在现有模型下无法实现真正的流式（这是 #540 实测的架构约束，不是漏写方法）。
+   * 【为什么必须显式拒绝而不是降级成整包】静默降级会让 `onChunk` **永远不触发**而请求
+   *   照常成功 ⇒ 业务以为在流式收数据、实际一次都没回调（**假数据比缺数据更糟**）。
+   * ⇒ 需要逐块消费的场景请用 `savePath`（宿主逐块落盘，内存有界）或 `timeout` + 整包。
+   */
+  if (f.stream && *f.stream) {
+    stats().failures++;
+    return proteus::wire::ResolveFrame::err(
+        f.reqId,
+        "fetch.unsupported: 鸿蒙宿主暂不支持 stream（一次性 VM + 同步 napi ⇒ 无法逐块回推）。"
+        "请改用 savePath（宿主逐块落盘）或默认整包");
   }
   const std::string url = appendParams(*f.url, f.params ? *f.params : proteus::wire::NameValues{});
   const std::string method = f.httpMethod ? *f.httpMethod : "GET";
@@ -457,11 +655,60 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    *   （不能留着上一次的读数 —— 那会成为"用旧值冒充新值"，本仓记过的形态）。
    */
   cfg.tracingConfiguration.collectTimeInfo = true;
+  /**
+   * ★★★#1169：**只有探针安装时才接自定义 DNS**（生产默认走系统 DNS，行为一字未变）。
+   *   `RCP_DNS_RULE_DYNAMIC` 的回调形状 = `(host, port) → Rcp_IpAddress*`，
+   *   与 Android `Dns.lookup(host) → List<InetAddress>` **语义同构** ⇒ HTTPDNS 可两端同一套语义。
+   * ★`dnsRule` 必须活到请求结束 ⇒ 声明在这里（与 `cfg` 同栈帧），不放进 if 块内。
+   */
+  /**
+   * ★★★#1169：**per-call HTTPDNS 表**（走 `RCP_DNS_RULE_DYNAMIC`，该路径已真机证实生效）。
+   *
+   * 【为什么用 Dynamic 而不是 Static】
+   *   `Rcp_StaticDnsRule` 是**指针链**（rule→item→ipAddresses→next），在栈上构链要保证
+   *   每个节点的生命周期覆盖整个请求、且 `vector` 扩容会让先前取的指针失效——
+   *   而 Dynamic 只需一个函数指针，表放在**栈上对象**里由回调读取，生命周期天然正确。
+   *   两者同在一条 `Rcp_DnsRule` 联合体上，语义等价；Dynamic 已被 #1169 真机证实。
+   *
+   * 【★只影响表内域名】回调返回 `nullptr` ⇒ RCP 回落系统 DNS（**不改变无关请求的行为**）。
+   *   这是"表里没有该域名"的正确语义；而"表里有但 IP 全非法"⇒ 由我们显式判失败（不静默回退）。
+   */
+  Rcp_DnsRule dnsRule{};
+  HttpDnsTableGuard dnsGuard;   // ★#1169：任何出口都清空表指针（防悬垂）
+  CallDnsSourceGuard srcGuard;  // ★#1183：任何出口都清空 per-request 解析来源（防跨请求串味）
+  if (f.httpDns.has && !f.httpDns.v.empty()) {   // ★`Opt<T>` 用 `.has` / `.v`（不是指针）
+    // 表放到栈上（lifecycle = 本次 handle），回调通过全局指针读取
+    httpDnsTable() = &f.httpDns.v;
+    dnsRule.type = RCP_DNS_RULE_DYNAMIC;
+    dnsRule.data.dynamicDnsRule = &detail::tableDnsLookup;
+    cfg.dnsConfiguration.dnsRules = &dnsRule;
+    DnsProbe& dp = dnsProbe();
+    dp.tableRules = static_cast<int>(f.httpDns.v.size());
+  } else if (dnsProbe().installed) {
+    dnsRule.type = RCP_DNS_RULE_DYNAMIC;
+    dnsRule.data.dynamicDnsRule = &detail::probeDnsLookup;
+    cfg.dnsConfiguration.dnsRules = &dnsRule;
+  }
   req->configuration = &cfg;
 
   // ③ 逐块闸：越线即中止（#1117）
   detail::RecvGate gate;
   gate.limit = MAX_BODY_BYTES;
+  /**
+   * ★★★#1187：**`savePath` ⇒ 逐块落盘**（内存有界，峰值 = 单块）。
+   *   ★非法路径必须**如实报错**（不得回落到"写到别处"或静默忽略）。
+   *   ★实现已抽到 `proteus_http_save.h`（本文件 1000 行上限）。
+   */
+  SaveSession save;
+  if (f.savePath.has && !f.savePath.v.empty()) {
+    std::string err;
+    if (!save.open(f.savePath.v, &err)) {
+      stats().failures++;
+      return proteus::wire::ResolveFrame::err(f.reqId, err);
+    }
+    gate.save = &save;
+    gate.limit = 0;   // 落盘不受内存上限约束（磁盘配额由 SaveSession::limit 守）
+  }
   bool gateInstalled = false;
   if (pSetOnBinaryRecv != nullptr) {
     gate.session = session;
@@ -640,12 +887,39 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
        */
       if (ti->tlsHandshakeTime > 0.0) putMs("tlsMs", ti->tlsHandshakeTime - ti->connectTime);
       putMs("ttfbMs", ti->startTransferTime);
-      if (!tp.empty()) out.transport = std::move(tp);
+      // ★★★#1183：本次请求的域名解析来源（`table` = 命中业务给的表）
+      //   ★空 = 本次没发生解析（URL 是 IP / 连接复用）⇒ **不写**，绝不填 "miss" 冒充
+      if (!callDnsSource().empty()) {
+        tp.emplace_back("dnsSource", callDnsSource());
+        tp.emplace_back("dnsTableHit", callDnsSource() == "table" ? "1" : "0");
+      }
+      if (!tp.empty()) {
+        // ★#1186：留一份给取证探针（必须在 move **之前**——move 后 tp 已空）
+        lastTransport() = tp;
+        out.transport = std::move(tp);
+      }
     }
     // 响应体原样回字节（不解析）
     // ★#1117：逐块闸生效时用它累计的 body（resp->body 可能是同一份数据的二次副本）；
     //   闸未安装/未被调用时回落到 resp->body，并在此做**事后拒绝**（诚实边界：内存峰值不有界）。
-    if (gateInstalled && gate.chunks > 0) {
+    // ★★★#1187：**落盘模式** ⇒ 关文件 + 回 `{path,size}` 摘要（不回字节，与 Android/iOS 同语义）。
+    if (gate.save != nullptr) {
+      // 先把"可能尚未写进文件"的 resp->body 补齐（闸未装时没有逐块回调）
+      if ((!gateInstalled || gate.chunks == 0) && resp->body.buffer != nullptr && resp->body.length > 0) {
+        gate.save->write(reinterpret_cast<const uint8_t*>(resp->body.buffer),
+                         static_cast<size_t>(resp->body.length));
+      }
+      bool saveOk = false;
+      std::string saveErr;
+      const std::string summary = gate.save->finish(&saveOk, &saveErr);
+      if (!saveOk) {
+        stats().failures++;
+        if (gate.save->exceeded) stats().tooLarge++;
+        out = proteus::wire::ResolveFrame::err(f.reqId, saveErr);
+      } else {
+        out.body.assign(summary.begin(), summary.end());
+      }
+    } else if (gateInstalled && gate.chunks > 0) {
       out.body = std::move(gate.body);
     } else if (resp->body.buffer != nullptr && resp->body.length > 0) {
       const size_t respLen = static_cast<size_t>(resp->body.length);

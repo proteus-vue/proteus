@@ -2884,7 +2884,7 @@
       "related": [
         "T-android-okhttp-transport"
       ],
-      "note": "【blocked · 决策 #1188（2026-10-22）】**三个方法已接线**（`proteus_http_stubs.h`）：`http.cancel` 回 `{ok:false, reason:\"harmony-sync-napi\"}`（**绝不报取消成功**）、`http.cancelStats` 全 0 + 同一句 reason、`http.tlsStats` 全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）」。★根因未变：鸿蒙 `handle()` 是同步阻塞（一次性 VM + 同步 napi，#540 实测跨 napi 复用 VM ⇒ SIGSEGV）⇒ 请求期间 JS 线程被占 ⇒ `signal.onabort` 无执行机会 ⇒ **abort() 是 no-op**。这不是\"漏写方法\"，改不了。★【Handoff】做到哪：分派已存在（不再 missing，`host_stats` 不再恒 null）；已改：`proteus_http_stubs.h` + `invoke_bytes_bridge.h` include + `host_app_runtime_impl.h` 一行转发。未做：真机读数（设备当时锁屏 `10106102`）。下一步：解锁后跑 `bash hosts/harmony/run-http-probe.sh`，确认 host_stats 有值且 `http.cancel` 回 ok:false。★若要真正支持取消：只能改 VM 调度模型（napi 异步化 + 常驻 VM 可回推），那是独立大单，且与 #540 的结论冲突需重新验证。"
+      "note": "【blocked · 决策 #1188（2026-10-22）】**三个方法已接线**（`proteus_http_stubs.h`）：`http.cancel` 回 `{ok:false, reason:\"harmony-sync-napi\"}`（**绝不报取消成功**）、`http.cancelStats` 全 0 + 同一句 reason、`http.tlsStats` 全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）」。★根因未变：鸿蒙 `handle()` 是同步阻塞（一次性 VM + 同步 napi，#540 实测跨 napi 复用 VM ⇒ SIGSEGV）⇒ 请求期间 JS 线程被占 ⇒ `signal.onabort` 无执行机会 ⇒ **abort() 是 no-op**。这不是\"漏写方法\"，改不了。★【Handoff】做到哪：分派已存在（不再 missing，`host_stats` 不再恒 null）；已改：`proteus_http_stubs.h` + `invoke_bytes_bridge.h` include + `host_app_runtime_impl.h` 一行转发。真机：设备已解锁（`aa start` 成功），落盘/stream 两条已验；三个 http.* 方法本身仍是**静态判据绿**（未单独真机取 `host_stats`）。下一步：跑一次 `bash hosts/harmony/run-http-probe.sh` 并读 `host_stats` 确认非 null。★若要真正支持取消：只能改 VM 调度模型（napi 异步化 + 常驻 VM 可回推），那是独立大单，且与 #540 的结论冲突需重新验证。"
     },
     {
       "id": "T-gates-policy-to-ci",
@@ -3246,7 +3246,7 @@
       "related": [
         "T-harmony-http-cancel"
       ],
-      "note": "【blocked · 决策 #1188】此前 `stream: true` 是**静默忽略**（帧里解出来了但 `proteus_http.h` 从没用过）⇒ `onChunk` 永不触发而请求照常成功 = **假数据**。本轮改为**如实拒绝**：`fetch.unsupported` + 点明根因（一次性 VM + 同步 napi ⇒ 逐块回推没有接收方）+ 给替代（`savePath` 宿主逐块落盘 / 默认整包）。★要真支持 stream：需让 napi 异步化且请求期间 VM 存活（可回推）——与 #540「跨 napi 复用 VM ⇒ HandleScope 溢出/SIGSEGV」直接冲突，必须先重新验证那条结论。★RCP 本身**提供** `Rcp_OnDataReceiveCallback`（逐块）与 `Rcp_EventsHandler` ⇒ 底层能力在，缺的是\"回推通道\"。★【Handoff】做到哪：已改为如实拒绝（编译通过 + 判据 8/8）。已改：`proteus_http.h` 的 stream 分支。未做：真支持流式（需改 VM 模型）。下一步：若要推进，先重验 #540 的\"跨 napi 复用 VM ⇒ SIGSEGV\"是否仍成立（那是当前结论的唯一支柱）。坑：RCP 的 `Rcp_OnDataReceiveCallback` 逐块回调**是有的**，缺的是回推通道。判据状态：静态 8/8 绿；真机未验（设备锁屏）。"
+      "note": "【blocked · 决策 #1188】此前 `stream: true` 是**静默忽略**（帧里解出来了但 `proteus_http.h` 从没用过）⇒ `onChunk` 永不触发而请求照常成功 = **假数据**。本轮改为**如实拒绝**：`fetch.unsupported` + 点明根因（一次性 VM + 同步 napi ⇒ 逐块回推没有接收方）+ 给替代（`savePath` 宿主逐块落盘 / 默认整包）。★要真支持 stream：需让 napi 异步化且请求期间 VM 存活（可回推）——与 #540「跨 napi 复用 VM ⇒ HandleScope 溢出/SIGSEGV」直接冲突，必须先重新验证那条结论。★RCP 本身**提供** `Rcp_OnDataReceiveCallback`（逐块）与 `Rcp_EventsHandler` ⇒ 底层能力在，缺的是\"回推通道\"。★【Handoff】做到哪：已改为如实拒绝（编译通过 + 判据 8/8）。已改：`proteus_http.h` 的 stream 分支。未做：真支持流式（需改 VM 模型）。下一步：若要推进，先重验 #540 的\"跨 napi 复用 VM ⇒ SIGSEGV\"是否仍成立（那是当前结论的唯一支柱）。坑：RCP 的 `Rcp_OnDataReceiveCallback` 逐块回调**是有的**，缺的是回推通道。判据状态：静态 10/10 绿 + **真机已验证**（`http-probe-stream-reject.json`：`fetch.unsupported` + 点明根因 + 给 savePath 替代）。"
     },
     {
       "id": "T-harmony-tls-pinning",

@@ -29,6 +29,8 @@ export function runHttpProbe(filesDir: string): void {
   let url: string = AppStorage.get<string>('proteusProbeUrl') ?? '';
   if (url.length === 0) url = 'https://httpbin.org/get';
   let result: string = '';
+  /** ★#1187 诊断：探针实际拿到的入参（savePath 没生效时用来归因） */
+  let probeDiag: Record<string, string> = {};
   // ★ArkTS 自己编一帧（frameHex 入参）——C++ 侧解它 ⇒ 真机上的跨语言逐字节契约
   let frameHex: string = '';
   try {
@@ -59,6 +61,8 @@ export function runHttpProbe(filesDir: string): void {
     if (savePathIn !== undefined && savePathIn.length > 0) f.savePath = savePathIn;
     const streamIn: string | undefined = AppStorage.get<string>('proteusProbeStream');
     if (streamIn === '1') f.stream = true;
+    /** ★#1187 诊断：把"探针实际拿到的入参"回显进报告（否则 savePath 没生效时无从归因） */
+    probeDiag = { 'savePath': savePathIn ?? '', 'stream': streamIn ?? '', 'filesDir': filesDir };
     const bytes: Uint8Array = encodeInvoke(f);
     let hex: string = '';
     for (let i = 0; i < bytes.length; i++) {
@@ -78,6 +82,7 @@ export function runHttpProbe(filesDir: string): void {
       'dnsForceIp': AppStorage.get<string>('proteusProbeDnsIp'),
       'dnsHost': AppStorage.get<string>('proteusProbeDnsHost'),
       'dnsIp': AppStorage.get<string>('proteusProbeDnsIp'),
+      'probeDiag': JSON.stringify(probeDiag),
     } as Record<string, Object>));
   } catch (e) {
     result = '{"ok":false,"host":"harmony","error":"' + JSON.stringify(e) + '"}';

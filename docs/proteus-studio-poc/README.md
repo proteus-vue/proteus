@@ -22,8 +22,8 @@ plan 的诚实边界里有一条是**决定生死**的：
 | **B1** | 同一条管线放进**真实窗口**：compose / present 分开量 | ✅ 已测 | **窗口内 1.4ms/帧**（合计 p50 1.15–2.00），0 迟到，CPU 7–8%；并更正 A 的 P2 高估 |
 | **B2** | 把这层 NSView 挂进 **Tauri 2 的 WKWebView 窗口** | ✅ 已测 | **成立**：`attach rc=0`、WebView 透明叠加成功、单帧 **1.4ms**；代价是间隔 p99 **+8ms**（余量 13→4ms） |
 | **C** | 真机投屏流（不是合成源）复测 | ✅ 已测 | **真机是 100–120fps**（预算 33.3→9.3ms）；窗口路径迟到 0.65% 通过、离屏 3.40% 不通过 |
-| **阶段 1** | 三栏 Studio 骨架：画布位置由 HTML 布局驱动 | ✅ 已落地 | 画布矩形与 CSS 网格手算一致；并抓到「画布上下颠倒」这个从 B2 就存在、只因没做视觉验证而漏掉的 bug |
-| **实时投屏** | `adb exec-out screenrecord` 裸 H.264 → 自建传输层 → 硬解 → 画布 | ✅ 已收口 | **VT 硬解 59.5fps / CPU 20.5%（比软解省 37%）**；拆包修完画面干净；`empty` 空转 74%→2.5% |
+| **阶段 1** | 三栏 Studio 骨架：画布位置由 HTML 布局驱动 | ✅ 已测 | 画布矩形与 CSS 网格手算一致；并抓到「画布上下颠倒」这个从 B2 就存在、只因没做视觉验证而漏掉的 bug —— **已出门 → `packages/studio/`（#1187）** |
+| **实时投屏** | `adb exec-out screenrecord` 裸 H.264 → 自建传输层 → 硬解 → 画布 | ✅ 已收口 | **VT 硬解 59.5fps / CPU 20.5%（比软解省 37%）**；拆包修完画面干净；`empty` 空转 74%→2.5% —— **已出门 → `packages/studio/`（#1187）** |
 
 ## 环境（本机实测，别照抄网上的）
 
@@ -54,16 +54,14 @@ git clone --depth=1 "https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
 
 ## 目录
 
+> ★**2026-10-22 出门**（决策 #1187）：`native/` 与 `05-studio-shell/` 已迁到 **`packages/studio/`**，
+> 那两个目录不再是"PoC 代码"而是**产品代码**（门禁 `pnpm run check:studio-panel`，已接 CI）。
+> 本目录保留 A/B1/B2/C 的 harness 与读数作为**历史取证**；`03-tauri-embed/build.rs` 现在反向引用
+> `../../packages/studio/native/embed_view.m` —— 同一份源码，两处引用，不复制。
+
 ```
-native/              共用原生层（B2 与骨架共用同一份，别复制）
-  embed_view.m        解码 → FBO → blit → swap；poc_attach/set_frame/dump/report
-  live_stream.h       实时流传输层：拆 NAL / 判帧 / 打 PTS / 环形队列 / 取参数集
 01-offscreen-fbo/     PoC A：无窗口 CGL，离屏基线
 02-window-present/    PoC B1：真实 NSWindow，compose/present 分开量
-03-tauri-embed/       PoC B2：Tauri 2 + 透明 WKWebView 叠加
+03-tauri-embed/       PoC B2：Tauri 2 + 透明 WKWebView 叠加（引用 packages/studio/native）
 04-device-stream/     PoC C：真机 screenrecord 流（读参数 + 帧率档位）
-05-studio-shell/      阶段 1 骨架 + 实时投屏（默认硬解）
-  dist/index.html     三栏布局（左栏/画布/检查器/状态栏）
-  src/main.rs         Tauri 侧：set_canvas_rect / stats / dump / POC_SECONDS 取数
-  results/            画布自证 PNG + 硬解/软解各 3 轮读数
 ```

@@ -71,9 +71,14 @@ export default class EntryAbility extends UIAbility {
       AppStorage.setOrCreate('proteusProbeDnsHost', probeDnsHost);
     }
     // ★★★#1187：`savePath`（宿主逐块落盘）与 `stream`（应被如实拒绝）——两个语义各需真机验证
+    // ★#1187 诊断：把 want.parameters 的**全部键**打出来（判断是 key 名变了还是值丢了）
+    try { hilog.info(DOMAIN, TAG, 'WANT_PARAMS %{public}s', JSON.stringify(want?.parameters ?? {})); } catch (e) { }
     const probeSavePath = want?.parameters?.['savePath'];
     if (typeof probeSavePath === 'string' && probeSavePath.length > 0) {
-      AppStorage.setOrCreate('proteusProbeSavePath', probeSavePath);
+      // ★★★#1187 真机踩坑：`aa start --ps savePath download/x.txt` 的**斜杠会被 aa 吃掉**
+      //   （实测 want.parameters 里根本没有 savePath 这个键，而 scene/url 都在）。
+      //   ⇒ 探针脚本传 `%2F`，这里解回 `/`（只解这一种，避免误伤路径里的 %）。
+      AppStorage.setOrCreate('proteusProbeSavePath', probeSavePath.split('%2F').join('/'));
     }
     const probeStream = want?.parameters?.['stream'];
     if (probeStream !== undefined) {

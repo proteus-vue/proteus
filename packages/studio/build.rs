@@ -1,7 +1,8 @@
 fn main() {
-    // 与 PoC B2 共用同一份原生视图（docs/proteus-studio-poc/native/embed_view.m）
+    // 原生视图的唯一真源：packages/studio/native/embed_view.m（决策 #1187 —— 出门时从
+    // docs/proteus-studio-poc/native/ 升为产品代码；PoC B2 反过来引用这里，不再各存一份）
     cc::Build::new()
-        .file("../native/embed_view.m")
+        .file("native/embed_view.m")
         .flag("-fobjc-arc")
         .flag("-DGL_SILENCE_DEPRECATION")
         .include("/opt/homebrew/opt/ffmpeg/include")

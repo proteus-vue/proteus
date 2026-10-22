@@ -1,0 +1,32 @@
+{
+  "_provenance": {
+    "what": "右栏面板判据的输入读数（不是编的：来自一次真实的真机投屏跑机）",
+    "raw": "results/panel-source.json —— 同一批数值的原始采集输出，保留为历史证据",
+    "collected": "2026-10-22",
+    "device": "adb shell getprop ro.product.model + wm size（采集时同一台设备）",
+    "note": "本文件比 raw 多两个字段：device（采集时机型）与 _provenance。判据 ⑩ 会核对两者数值一致，防止 fixture 悄悄漂移。"
+  },
+  "mode": "tauri-window",
+  "video": "(live pipe)",
+  "size": "1280x720",
+  "device": "M098FE · 1200x2608",
+  "hwdec": "videotoolbox",
+  "webview_found": true,
+  "webview_transparent": true,
+  "frames_presented": 649,
+  "measured_fps": 54.15,
+  "interval_ms": { "p50": 16.79, "p95": 33.22, "p99": 36.1, "max": 47.81 },
+  "compose_ms": { "p50": 1.319, "p95": 1.564, "p99": 1.691, "max": 2.285 },
+  "present_ms": { "p50": 0.383, "p95": 2.89, "p99": 4.759, "max": 8.081 },
+  "hw_transfer_ms": { "p50": 0.061, "p95": 0.125, "max": 0.554 },
+  "latency_ms": { "p50": 7.74, "p95": 15.59, "p99": 18.73, "max": 20.15 },
+  "queue_ms": { "p50": 6.73, "p95": 16.32, "max": 291.18 },
+  "decode_ms": { "p50": 2.01, "p95": 2.31, "max": 210.75 },
+  "ticks": 839,
+  "empty_ticks": 105,
+  "aus": 1689,
+  "mbps": 9.57,
+  "late_frames": 0,
+  "late_pct": 0.0,
+  "cpu": { "self_seconds": 2.52, "wall_seconds": 11.98, "single_core_pct": 21.1 }
+}

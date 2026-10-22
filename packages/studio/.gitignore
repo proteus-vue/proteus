@@ -8,3 +8,6 @@ build-app/
 icons/AppIcon.iconset/
 # ★别把源码目录命名成 dist/：仓库根 .gitignore:5 有 `dist/` 规则，会把源码一起忽略
 #   （本仓已被这条规则坑过一次：手写 HTML 从没进过库）
+# ★本目录**没有** package.json（决策 #1187）：它是 Cargo + Vite 项目，不是可发布的 npm 包。
+#   ⇒ pnpm workspace 不接管它，build-packages / check:deps / check:pkg 也就不会误判；
+#   前端依赖从仓库根 node_modules 解析（scripts/build-ui.sh）。

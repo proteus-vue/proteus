@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Proteus Studio (PoC)",
+        "title": "Proteus Studio",
         "width": 1440,
         "height": 900,
         "minWidth": 1080,
@@ -35,6 +35,6 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Proteus Studio",
-    "longDescription": "Proteus 跨端调试器（PoC）"
+    "longDescription": "Proteus 跨端调试器"
   }
 }

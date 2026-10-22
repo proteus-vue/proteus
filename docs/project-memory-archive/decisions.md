@@ -12746,3 +12746,20 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑧ 产物**：`proteus_http_save.h`（新，落盘）· `proteus_http_stubs.h`（新，三方法）· `proteus_http.h`（stream 拒绝 + 接 SaveSession）· `invoke_bytes_bridge.h`（include stub）· `host_app_runtime_impl.h`（一行转发）· `proteus_host.cpp`（导出，走宏不增行）· `index.d.ts` / `Index.ets` / `Superapp.ets` / `EntryAbility.ets` / `HttpProbe.ets`（四方接线 + savePath/stream 探针入参）· `run-http-probe.sh`（`--save-path` / `--stream`）· `tests/harmony-http-gaps.test.ts`（新）· `tests/gen-content-harmony-host.test.ts`（断言翻转 + 三处受限）· 能力页生成物。
 **⑨ 真机验证状态（诚实边界，勿读成已验证）**：`--save-path` / `--stream` 两个真机分支**已实现但未跑通**——鸿蒙设备在验证时**再次锁屏**（`aa start` 报 `10106102`，`power-shell wakeup` 只亮屏解不了锁）。⇒ 本轮交付的是**编译 + 静态判据全绿**，真机读数待解锁后补。★不要把"编译通过 + 判据绿"写成"真机生效"。
 **⑩ 诚实边界**：a) `stream` 在鸿蒙**永远不支持**（除非改 VM 调度模型，那是独立大单）；b) `abort()` 仍是 no-op（同上）；c) SPKI pinning 未接（RCP 无 fingerprint 校验回调，只有 CA 配置 ⇒ 若要 pinning 需换路子，如自建 TLS 层）；d) 落盘的真机行为（大文件内存有界、路径穿越被拒）**未真机取证**。
+
+1189. **★★★鸿蒙 savePath 落盘 / stream 拒绝**真机跑通**（解锁后补验）+ 三个装置坑 · 决策**（2026-10-22 · 收口 #1188 的「真机未跑」）:
+**① 承接**：#1188 把 savePath / stream / 三个 http.* 方法都接了线，但真机被锁屏挡住（`aa start` 报 `10106102`），只交付了编译 + 静态判据。本轮解锁后补真机。
+**② 真机结果（两条都成立）**：
+  · **savePath 落盘**：回执 `preview = {"path":"download/trace.txt","size":219}`，且 **`limit.seen=219` / `limit.kept=0`** —— `kept=0` 是"逐块直写、内存不保留响应体"的**直接证据**（否则大文件会打爆）。设备侧 `ls -la .../files/download/trace.txt` 确认 **214/219 字节真实存在**，`head` 内容就是 cloudflare trace。
+  · **stream 如实拒绝**：`ok:false` + `fetch.unsupported: 鸿蒙宿主暂不支持 stream（一次性 VM + 同步 napi ⇒ 无法逐块回推）。请改用 savePath（宿主逐块落盘）或默认整包`。
+  · 证据：`hosts/harmony/results/http-probe-save.json` / `http-probe-stream-reject.json`。
+**③ ★三个装置坑（都是"看起来像实现坏了"，实际是装置/框架行为）**：
+  a) **`aa start --ps savePath download/x.txt` 的斜杠会被 aa 吃掉**：`want.parameters` 里**根本没有 `savePath` 这个键**，而同一命令里的 `url`（含 `/` 和 `:`）却在。⇒ 探针脚本传 `%2F`，ArkTS 侧解回 `/`。
+     ★注意：我最初误判成"斜杠"，加引号也无效——真正定位靠**把 `want.parameters` 全部键打出来**（`WANT_PARAMS` 日志），看到 `scene`/`url` 在而 `savePath` 不在，才排除"解析代码写错"。
+  b) **`--save-path <值>`（空格形态）不被脚本接受**：`run-http-probe.sh` 的 case 只写 `--save-path=*`。我连跑三次都拿到空值，最后靠 `bash -x` 看到 `DNS_ARG=` 才定位。⇒ **用 `=` 形态**。
+  c) **`fopen("wb")` 不建父目录**：`savePath=download/x.txt` 首次真机直接 `fetch.failed: 无法创建落盘文件`。⇒ 加 `mkdirParents()` 递归建目录（Android/iOS 都支持子目录，必须对齐）。
+**④ 探针判据升级**：`run-http-probe.sh` 现在**按入参分三种预期**（而不是一律要求"请求成功"）：传了 savePath ⇒ 断言回执是 `{path,size}` 摘要 + `limit.kept==0`；传了 stream ⇒ 断言 `fetch.unsupported` + 点明根因 + 给替代；否则走原来的整包判据。★这条修正是必要的：否则"预期失败"会被当成"功能坏了"（我第一版连报两次"✗ 判据失败"）。
+**⑤ 诊断字段（保留，勿删）**：`HttpProbe.ets` 把 `{savePath, stream, filesDir}` 回显进 `probe_diag`，`http_probe.h` 在两条回执路径都拼。★这是本轮**唯一**能定位 (a) 的手段——没有它只能猜。
+**⑥ 判据**：`tests/harmony-http-gaps.test.ts` 从 8 条增到 **10 条**（新增真机证据 2 条：落盘摘要 + `kept=0`、stream 拒绝根因）。**破坏性验证**：把证据的 `kept` 改成 219 ⇒ 判据红（"内存里保留了 219B"）；恢复 ⇒ 10/10 绿。三份判据合计 **42 条全绿**。
+**⑦ 产物**：`proteus_http_save.h`（`mkdirParents`）· `HttpProbe.ets`（`probe_diag`）· `http_probe.h`（诊断回显，两处）· `EntryAbility.ets`（`%2F` 解码 + `WANT_PARAMS` 日志）· `run-http-probe.sh`（`%2F` 编码 + 三态判据）· 两份真机证据。
+**⑧ 诚实边界**：a) 落盘的**大文件**未实测（219B 只证明通路与内存语义，1 GiB 上限未压测）；b) 路径穿越/绝对路径的**拒绝**只有静态判据，未真机跑（但那三条是纯函数判断，风险低）；c) `stream` 仍不支持（模型限制，已单列 `T-harmony-http-stream`）；d) `abort()` 仍是 no-op；e) SPKI pinning 仍未接。

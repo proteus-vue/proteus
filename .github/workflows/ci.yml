@@ -192,6 +192,12 @@ jobs:
       - name: 安装 Chromium（★必须在 pnpm test 之前：consistency-web-probe 等非 e2e 测试用 Playwright）
         run: npx playwright install --with-deps chromium
 
+      # ★Studio 壳面板门禁（决策 #1187 出门接入）：Vite 构建 + Playwright 渲染右栏面板，
+      #   10 条判据（IPC 接线 / 画布矩形同步 / 读数映射 / 无 JS 错误 / 无 Markdown 泄漏 /
+      #   fixture 与原始采集输出一致）。★无 adb 时机型回落 fixture 记录的采集机型（不假红）。
+      - name: Studio 壳面板门禁（10 判据）
+        run: pnpm run check:studio-panel
+
       - name: 构建示例 App 屏内容产物（★必须在 pnpm test 之前：app-screen-content-gate 读它）
         run: pnpm run build:android
 

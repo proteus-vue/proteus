@@ -1,8 +1,22 @@
-# Proteus Studio 阶段 1 骨架（PoC）
+# Proteus Studio 宿主壳（G-56）
 
-> 决策 #1173 · 承接 A / B1 / B2 / C
+> 决策 #1173 起（阶段 1 骨架）· **2026-10-22 出门**（决策 #1187：从 `docs/proteus-studio-poc/05-studio-shell` 迁入 `packages/studio`，判据升为门禁 `check:studio-panel` 并接 CI）
 >
-> 前四个 PoC 证明的是**性能**；本单把它装进**产品形态**：三栏布局 + 原生设备画布 + 状态栏读数。
+> 前四个 PoC 证明的是**性能**；本目录把它做成**产品形态**：三栏布局 + 原生设备画布 + 状态栏读数。
+
+## 出门后的位置与入口
+
+| 事项 | 位置 |
+|---|---|
+| 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
+| 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
+| 构建应用 | `cargo build --release`；双击版 `./package-app.sh` → `build-app/Proteus Studio.app` |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **10 判据**；已接 CI 与 `pnpm verify`） |
+| 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
+| 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
+
+★**历史 PoC 仍在 `docs/proteus-studio-poc/`**（A/B1/B2/C 的 harness 与读数），它们现在反过来引用本目录的
+`native/embed_view.m` —— 一份源码，两处引用，**不复制**。
 
 ## 这一版证明了什么（以及没证明什么）
 
@@ -31,7 +45,7 @@ Tauri 2 窗口（1440×900）
 └─ status canvas rect · frames · fps · late · cpu
 ```
 
-- 原生侧：`native/embed_view.m`（与 PoC B2 **共用同一份**），新增 `poc_set_frame` / `poc_frames` / `poc_late` / `poc_cpu_pct` / `poc_dump`；
+- 原生侧：`native/embed_view.m`（**唯一真源**，PoC B2 反向引用它），`poc_set_frame` / `poc_frames` / `poc_late` / `poc_cpu_pct` / `poc_dump`；
 - Rust：`set_canvas_rect` / `stats` / `dump_frame` 三个命令；60Hz 调度（原生按 PTS 决定这一拍出不出帧）；
 - 前端：**Vue 3 + Vite**（`ui/` 源码 → `web-dist/` 产物），见下节。
 
@@ -61,7 +75,7 @@ ffmpeg -y -i /tmp/poc/canvas.ppm /tmp/poc/canvas.png
 ## 复跑
 
 ```bash
-cd docs/proteus-studio-poc/05-studio-shell
+cd packages/studio
 cargo build --release
 POC_VIDEO=/tmp/poc/device-720p.mp4 \
 DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
@@ -207,7 +221,7 @@ ui/
 ./build-ui.sh      # ⇒ web-dist/（约 70KB JS / 29KB gzip）
 ```
 
-★**依赖不在这里装**：本目录不是 pnpm workspace 成员，`build-ui.sh` 直接借用仓库根的
+★**依赖不在这里装**：本目录不是 npm 包（刻意没有 `package.json`，决策 #1187），`build-ui.sh` 直接借用仓库根的
 `vite` / `vue` / `@vitejs/plugin-vue`，避免第二套 `node_modules` 和版本漂移。
 
 ★**输出目录为什么叫 `web-dist` 而不是 `dist`**：仓库根 `.gitignore:5` 有 `dist/` 规则，
@@ -215,8 +229,11 @@ ui/
 
 ### 迁移的证据：判据一行没改
 
-`verify-panel.mjs` 的 9 条判据**原样通过**——因为所有 `id`（`kdev` / `klat` / `kqw` …）在组件里保持不变。
+面板判据的 9 条**原样通过**——因为所有 `id`（`kdev` / `klat` / `kqw` …）在组件里保持不变。
 **这就是"迁移没丢验证能力"的证据**，而不是"看起来还行"。
+
+出门时判据从 `verify-panel.mjs` 升级为 `scripts/check-studio-panel.mjs`（`pnpm run check:studio-panel`）：
+**9 条一条没放松**，另加第 ⑩ 条 —— fixture 与原始采集输出的数值必须一致（防"改 fixture 让判据变绿"）。
 
 ### 诚实边界
 
@@ -248,15 +265,15 @@ macOS 的屏幕录制权限（TCC）不给本进程，`screencapture` 直接失�
 但面板是**纯 HTML** ⇒ 用 Playwright 渲染一遍就有真截图：
 
 ```bash
-node verify-panel.mjs          # ⇒ results/inspector-panel.png
+pnpm run check:studio-panel     # ⇒ results/inspector-panel.png（10 判据）
 ```
 
 桩只替换**"值怎么送到页面"**这一步：
 
-- 读数来自 `results/panel-source.json`（同一次真实跑机采的 JSON），**不是编的**；
-- 机型仍走**真实 adb**（与应用内同一条命令）；
-- 9 条判据：IPC 调到 stats / 画布矩形被同步 / 三行有值 / 解码方式与读数一致 / 延迟是真实值 /
-  管线四段都渲染 / 状态灯切运行中 / 无 JS 错误 / **正文无裸 `**`**。
+- 读数来自 `fixtures/panel-source.json`（同一次真实跑机采的 JSON，**不是编的**；原始输出留在 `results/panel-source.json`）；
+- 机型仍走**真实 adb**（与应用内同一条命令）；**无 adb 时回落 fixture 记录的采集机型**（CI 上不假红）；
+- 10 条判据：IPC 调到 stats / 画布矩形被同步 / 三行有值 / 解码方式与读数一致 / 延迟是真实值 /
+  管线四段都渲染 / 状态灯切运行中 / 无 JS 错误 / **正文无裸 `**`** / **fixture 与原始采集输出一致**。
 
 ★最后一条是**被自己坑出来的**：我把 Markdown 粗体写进了 HTML，页面上直接露出 `**`，
 第一次看截图就看到了。现在既有自检也有判据挡复发。
@@ -326,9 +343,20 @@ node verify-panel.mjs          # ⇒ results/inspector-panel.png
 1. **实时链路仍未覆盖的**：只测了 Android 一台（1200×2608 / 120Hz）；iOS ReplayKit 未接；
    走 `adb` 管道**不是**网络投屏（无 RTP 重组 / 丢包 / 抖动），真实无线链路未测；
    端到端延迟（设备出帧 → 画布上屏）**还没量**——PTS 已经打好了，接统计即可；
-2. **只证明了"画布 + 布局 + 叠加"这一层**，面板内容是占位，没有真实交互；
+2. **只证明了"画布 + 布局 + 叠加 + 读数"这一层**：没有真实交互（不能点、不能选、不能改）；
    `screenrecord --size 1280x720` 会把竖屏**加黑边**塞进 16:9（实测有效像素只有约 330×720），
    带宽与 FBO 面积浪费约 74% —— 产品上应按设备宽高比取分辨率；
 3. **没有编辑器/终端**——那是阶段 1 的另外两块，且编辑器按 G-56.1 只用现成的（CodeMirror 6）；
-4. `stats` 的 fps 是前端按帧数差算的（500ms 窗口），不是精确到帧的时序；
+4. `stats` 的 fps 是原生侧按 240 帧滑动窗口算的（不是前端差分），但仍不是逐帧时序；
 5. 状态栏读数取自**原生侧累计值**，页面刷新不清零。
+
+## 出门 ≠ 完成：还没做的（按顺序）
+
+| # | 缺口 | 现状 | 前置 |
+|---|---|---|---|
+| **G3** | iOS 通道 | 只有 Android（`adb exec-out screenrecord`） | iOS ReplayKit 编码 + 同一套 Annex-B 传输层；`hosts/ios` 已有真机链路可复用 |
+| **G4** | 编辑器容器 | **零行** | CodeMirror 6（G-56.1 红线：绝不自研编辑器内核）+ 元素拾取（需设备侧视图树 + 拾取通道）+ 触摸回传 |
+| **G5** | 持久化 / 模块化 | `src/main.rs` 单文件 291 行 | 会话配置落盘、面板可插拔；先按命令分组拆 Rust，再谈模块化 |
+| — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
+| — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |
+| — | 组件测试 | 无 | 只有端到端 10 判据；加 `vitest` 需先有 package.json（与"不是 npm 包"冲突，要先决定） |

@@ -15,8 +15,11 @@
 //
 // 【扫描面（源码，排除生成物/产物/依赖/夹具 bundle）】roots = packages hosts scripts tests examples
 //   showcase superapp website；扩展名 = .ts .tsx .vue .rs .java .kt .swift .ets .mjs .cjs .py .sh；
-//   排除 = node_modules / dist / build / .proteus / generated / .tools / assets / rawfile /
+//   排除 = node_modules / dist / build / target / .proteus / generated / .tools / assets / rawfile /
 //   __snapshots__ / *.generated.* / *.min.* / bundle-*.js。
+//   ★`target`（2026-10-22 加）：Cargo 构建缓存。此前扫描面里没有 Cargo 项目，`packages/studio` 进门后
+//     它的 target/ 有 878MB —— 门禁会走完整棵树才判（实测把脚本拖到 >120s 被超时杀掉）。
+//     同名目录不可能是源码（与 #1136「忽略规则必须跟着真实形态走」同族）。
 //
 // 用法：node scripts/check-file-size.mjs [--write|--list] [--cap N]
 //   --write  把当前 ≥cap 的文件按行数写回基线（拆分/收缩后**显式重生成**）
@@ -38,7 +41,7 @@ const ROOTS = ['packages', 'hosts', 'scripts', 'tests', 'examples', 'showcase', 
 //   从未被这份门禁看过（门禁报 51 个越线，实际源码面是 58 个）。
 //   ★与 #1136「忽略规则写错后缀 ⇒ 静默失效」同族：判据的覆盖面必须跟着真实文件类型走。
 const EXT = ['.ts', '.tsx', '.vue', '.rs', '.java', '.kt', '.swift', '.ets', '.mjs', '.cjs', '.py', '.sh', '.h', '.cpp', '.hpp', '.cc']
-const SKIP_SEG = /(^|\/)(node_modules|dist|build|\.proteus|generated|\.tools|assets|rawfile|__snapshots__)(\/|$)/
+const SKIP_SEG = /(^|\/)(node_modules|dist|build|target|\.proteus|generated|\.tools|assets|rawfile|__snapshots__)(\/|$)/
 const SKIP_NAME = /(\.generated\.|\.min\.|bundle-.*\.js$|\.d\.ts$)/
 
 /** 具名豁免（path → 理由）。默认空；每一项 = 一个登记在案的例外（须写明不可拆理由）。 */

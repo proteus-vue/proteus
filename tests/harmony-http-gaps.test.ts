@@ -87,6 +87,35 @@ describe('★★★#1187 鸿蒙 stream：模型限制 ⇒ 必须如实拒绝（�
   })
 })
 
+describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', () => {
+  it('★savePath 落盘：回 {path,size} 摘要且内存保留 0（逐块直写成立）', () => {
+    const p = 'hosts/harmony/results/http-probe-save.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺落盘真机证据 ${p}`).toBe(true)
+    const r = JSON.parse(read(p))
+    expect(r.ok, '★落盘请求未成功').toBe(true)
+    // ★回执必须是摘要，不是响应体
+    expect(String(r.preview), '★回执不是 {path,size} 摘要').toMatch(/"path":"download\//)
+    expect(String(r.preview), '★摘要里没有 size').toMatch(/"size":\d+/)
+    // ★最关键的一条：落盘模式下**内存不保留响应体**
+    //   （limit.kept=0 而 limit.seen>0 ⇒ 真的是逐块写文件，不是先全进内存再写）
+    expect(r.limit.seen, '★没收到数据').toBeGreaterThan(0)
+    expect(r.limit.kept, `★内存里保留了 ${r.limit.kept}B（落盘模式应为 0，否则大文件会打爆）`).toBe(0)
+    // 摘要长度应远小于实际字节数（响应体没有回传）
+    expect(r.bodyBytes, '★回执 bodyBytes 等于全文（说明回的是响应体而非摘要）').toBeLessThan(r.limit.seen)
+  })
+
+  it('★stream：真机如实拒绝（fetch.unsupported + 点明根因 + 给替代）', () => {
+    const p = 'hosts/harmony/results/http-probe-stream-reject.json'
+    expect(fs.existsSync(path.join(ROOT, p)), `★缺 stream 真机证据 ${p}`).toBe(true)
+    const r = JSON.parse(read(p))
+    expect(r.ok, '★stream 没被拒绝（仍静默降级 = 假数据）').toBe(false)
+    const reason = String(r.reason)
+    expect(reason, '★拒绝码不是 fetch.unsupported').toContain('fetch.unsupported')
+    expect(reason, '★没点明根因（一次性 VM + 同步 napi）').toMatch(/一次性 VM[\s\S]{0,40}同步 napi/)
+    expect(reason, '★没给替代方案').toMatch(/savePath/)
+  })
+})
+
 describe('★★★#1187 鸿蒙三个 http.* 方法：必须有分派（不再 missing）且不得伪造成功', () => {
   it('★cancel / cancelStats / tlsStats 三个都要有', () => {
     const s = read(STUBS)

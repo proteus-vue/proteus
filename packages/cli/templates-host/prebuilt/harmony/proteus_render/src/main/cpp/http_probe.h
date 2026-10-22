@@ -58,6 +58,33 @@ static std::vector<uint8_t> fromHex(const std::string& s) {
 }
 
 /**
+ * ★★★#1187：`setHttpSandboxRoot(filesDir)` —— 由 ArkTS 壳注入沙箱根目录。
+ *
+ * 【为什么需要它】`savePath` 落盘要一个沙箱根，而 C++ 层拿不到
+ *   `getContext(this).filesDir`（那是 ArkTS/Ability 的上下文）。
+ *   与 `hostAppBoot(…{filesDir})` 同一手法：**上下文归壳，语义归 C++**。
+ * 【不注入时】`savePath` 请求**如实报错**（不静默忽略）。
+ */
+static napi_value HostSetHttpSandboxRoot(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string dir;
+    if (argc >= 1 && args[0] != nullptr) {
+        size_t len = 0;
+        napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+        dir.resize(len + 1);
+        napi_get_value_string_utf8(env, args[0], &dir[0], len + 1, &len);
+        dir.resize(len);
+    }
+    proteus::http::setHttpSandboxRoot(dir);
+    OH_LOG_INFO(LOG_APP, "PROTEUS_HTTP_SANDBOX_ROOT %{public}s", dir.c_str());
+    napi_value r;
+    napi_create_string_utf8(env, dir.empty() ? "{\"ok\":false}" : "{\"ok\":true}", NAPI_AUTO_LENGTH, &r);
+    return r;
+}
+
+/**
  * `hostHttpProbe(argsJson {url, method?, timeoutMs?, expect?})` → JSON
  *   `{ok, host:'harmony', bridge:'invokeBytes', reqId, status, bodyBytes, preview, wire, error?}`
  *
@@ -85,6 +112,38 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     //   （parity 门禁在本机验同一性质；真机上再验一次，防"本机绿、设备端不一致"）。
     std::string frameHexIn;
     jstr(argsJson.c_str(), argsJson.size(), "frameHex", &frameHexIn);
+    // ★★★#1169：HTTPDNS 注入参数（域名 + 强制 IP）——见帧构造处注释
+    std::string dnsHostIn, dnsIpIn;
+    jstr(argsJson.c_str(), argsJson.size(), "dnsHost", &dnsHostIn);
+    jstr(argsJson.c_str(), argsJson.size(), "dnsIp", &dnsIpIn);
+    /** ★#1187 诊断：ArkTS 侧实际拿到的入参（savePath 没生效时用来归因是哪一环断的） */
+    std::string probeDiagIn;
+    jstr(argsJson.c_str(), argsJson.size(), "probeDiag", &probeDiagIn);
+    /**
+     * ★★★#1169：**DNS 探针参数**（只有给了才安装假解析器；缺省生产路径零影响）。
+     * · `dnsForceIp`：强制把目标 host 解析到这个 IP（给空串 ⇒ 让解析失败）。
+     *   判据用"不可达 IP（203.0.113.1 = TEST-NET-3）⇒ 请求必失败"来证明**这条 DNS 路真的接通**。
+     */
+    {
+      std::string v;
+      jstr(argsJson.c_str(), argsJson.size(), "dnsForceIp", &v);
+      /**
+       * ★★★#1169：**表注入优先**——`dnsHost`+`dnsIp` 给了就**不装**假解析器。
+       * 【为什么必须互斥】两者都走 `RCP_DNS_RULE_DYNAMIC`（同一条 `Rcp_DnsRule`）⇒
+       *   后设的覆盖先设的；若同时装，测出来的永远是 `lastSource='probe'`（假解析器），
+       *   **业务表根本没被验证**（本轮实测踩到：`tableRules=0 · lastSource='probe'`）。
+       */
+      std::string hostV, ipV;
+      jstr(argsJson.c_str(), argsJson.size(), "dnsHost", &hostV);
+      jstr(argsJson.c_str(), argsJson.size(), "dnsIp", &ipV);
+      const bool tableInject = !hostV.empty() && !ipV.empty();
+      if (!tableInject && argsJson.find("\"dnsForceIp\"") != std::string::npos) {
+        proteus::http::DnsProbe& dp = proteus::http::dnsProbe();
+        dp = proteus::http::DnsProbe{};    // 复位上一次读数
+        dp.installed = true;
+        dp.forcedIp = v;
+      }
+    }
 
     // ① 帧：优先用入参（ArkTS 编）；缺省由 C++ 用 SSOT 语义自编
     std::vector<uint8_t> frame;
@@ -97,6 +156,15 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         f.url = url;
         f.httpMethod = "GET";
         f.responseType = proteus::wire::RESPONSE_TEXT;
+        /**
+         * ★★★#1169：`dnsHost` + `dnsIp` ⇒ 往帧里塞 HTTPDNS 表（name-values，域名 → 逗号分隔 IP）。
+         * 用途：真机验证"宿主的表解析真的生效"（同 Android 探针的注入手法：
+         * 把目标域名解析到不可达 IP ⇒ 请求必失败）。
+         * ★ArkTS 编帧时不走这条（它自己编 frameHex）⇒ 本参数只对 C++ 自编路径有效。
+         */
+        if (!dnsHostIn.empty() && !dnsIpIn.empty()) {
+            f.httpDns = proteus::wire::NameValues{ { dnsHostIn, dnsIpIn } };
+        }
         frame = proteus::wire::encodeInvoke(f);
     }
     const std::string frameHex = toHex(frame);
@@ -170,6 +238,48 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         limitJson = lb;
     }
     body += limitJson;
+    /**
+     * ★★★#1169：DNS 探针读数（同样必须拼在**两条回执路径**上——见上面 limit 的教训）。
+     * `calls > 0` = 假解析器真被 RCP 调用过 ⇒ `RCP_DNS_RULE_DYNAMIC` 这条路接通。
+     */
+    std::string dnsJson;
+    {
+        const proteus::http::DnsProbe& dp = proteus::http::dnsProbe();
+        char db[640];
+        snprintf(db, sizeof(db),
+                 ",\"dns\":{\"installed\":%s,\"calls\":%d,\"host\":\"%s\",\"port\":%u,\"forcedIp\":\"%s\","
+                 "\"tableRules\":%d,\"tableHits\":%d,\"lastSource\":\"%s\"}",
+                 dp.installed ? "true" : "false", dp.calls,
+                 jsonEscape(dp.lastHost).c_str(), dp.lastPort, jsonEscape(dp.forcedIp).c_str(),
+                 dp.tableRules, dp.tableHits, jsonEscape(dp.lastSource).c_str());
+        dnsJson = db;
+    }
+    body += dnsJson;
+    /**
+     * ★★★#1186：**传输读数**（`transport`：proto/reused/dnsMs/... + `dnsSource`/`dnsTableHit`）。
+     *
+     * 【为什么必须在探针里也输出一份】回程帧里的 `transport` 只有业务（`useFetch` 的
+     *   `meta.transport`）看得到；而这个探针走的是**原生直调**（ArkTS 自编帧 → C++ 执行），
+     *   JS 侧拿不到 `meta` ⇒ 没有这份读数就**无法在鸿蒙真机验证 `dnsSource`**。
+     * ★同样必须拼在**两条回执路径**上（见 #1117 的 limit 教训：`body = head` 会整串覆盖）。
+     */
+    std::string transportJson;
+    {
+        const proteus::wire::NameValues& tp = proteus::http::lastTransport();
+        if (!tp.empty()) {
+            transportJson = ",\"transport\":{";
+            bool first = true;
+            for (const auto& kv : tp) {
+                if (!first) transportJson += ",";
+                first = false;
+                transportJson += "\"" + jsonEscape(kv.first) + "\":\"" + jsonEscape(kv.second) + "\"";
+            }
+            transportJson += "}";
+        }
+    }
+    body += transportJson;
+    // ★#1187 诊断回显（两条回执路径都要带）
+    body += probeDiagIn.empty() ? "" : (",\"probe_diag\":\"" + jsonEscape(probeDiagIn) + "\"");
     if (!err.empty()) {
         body += ",\"error\":\"" + jsonEscape(err) + "\"}";
     } else if (hexOut == "NO_OUTPUT" || hexOut.empty()) {
@@ -179,7 +289,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             proteus::wire::ResolveFrame rf = proteus::wire::decodeResolve(fromHex(hexOut));
             std::string preview;
             if (!rf.body.empty()) {
-                size_t n = rf.body.size() < 120 ? rf.body.size() : 120;
+                size_t n = rf.body.size() < 400 ? rf.body.size() : 400;
                 for (size_t i = 0; i < n; i++) {
                     // ★预览是"人可读摘要"⇒ 不可打印字符一律换成 '.'（二进制响应别把回执撑成乱码）。
                     //   （JSON 合法性由 jsonEscape 兜住；这里只管可读性。）
@@ -196,6 +306,9 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
                      rf.reason ? jsonEscape(*rf.reason).c_str() : "");
             body = head;
             body += limitJson;   // ★同上：head 覆盖后必须重新拼
+            body += dnsJson;     // ★#1169：DNS 读数同理（覆盖后必须重拼）
+            body += transportJson; // ★#1186：传输读数同理
+            if (!probeDiagIn.empty()) body += ",\"probe_diag\":\"" + jsonEscape(probeDiagIn) + "\""; // ★#1187
             body += ",\"preview\":\"" + jsonEscape(preview) + "\"}";
         } catch (const std::exception& e) {
             body += ",\"error\":\"" + jsonEscape(std::string("回程帧解码失败：") + e.what()) + "\"}";

@@ -116,6 +116,9 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     std::string dnsHostIn, dnsIpIn;
     jstr(argsJson.c_str(), argsJson.size(), "dnsHost", &dnsHostIn);
     jstr(argsJson.c_str(), argsJson.size(), "dnsIp", &dnsIpIn);
+    /** ★#1187 诊断：ArkTS 侧实际拿到的入参（savePath 没生效时用来归因是哪一环断的） */
+    std::string probeDiagIn;
+    jstr(argsJson.c_str(), argsJson.size(), "probeDiag", &probeDiagIn);
     /**
      * ★★★#1169：**DNS 探针参数**（只有给了才安装假解析器；缺省生产路径零影响）。
      * · `dnsForceIp`：强制把目标 host 解析到这个 IP（给空串 ⇒ 让解析失败）。
@@ -275,6 +278,8 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         }
     }
     body += transportJson;
+    // ★#1187 诊断回显（两条回执路径都要带）
+    body += probeDiagIn.empty() ? "" : (",\"probe_diag\":\"" + jsonEscape(probeDiagIn) + "\"");
     if (!err.empty()) {
         body += ",\"error\":\"" + jsonEscape(err) + "\"}";
     } else if (hexOut == "NO_OUTPUT" || hexOut.empty()) {
@@ -303,6 +308,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             body += limitJson;   // ★同上：head 覆盖后必须重新拼
             body += dnsJson;     // ★#1169：DNS 读数同理（覆盖后必须重拼）
             body += transportJson; // ★#1186：传输读数同理
+            if (!probeDiagIn.empty()) body += ",\"probe_diag\":\"" + jsonEscape(probeDiagIn) + "\""; // ★#1187
             body += ",\"preview\":\"" + jsonEscape(preview) + "\"}";
         } catch (const std::exception& e) {
             body += ",\"error\":\"" + jsonEscape(std::string("回程帧解码失败：") + e.what()) + "\"}";
