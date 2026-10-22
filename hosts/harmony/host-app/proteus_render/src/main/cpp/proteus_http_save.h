@@ -17,6 +17,9 @@
 #include <sys/stat.h>
 #include <unistd.h>   // ★#1192：getpid() 用于 .part 唯一名   // ★#1187：递归建父目录（mkdir）
 
+#include <atomic>   // ★#1192：唯一 .part 序号（跨 TU 不撞）
+#include <ctime>
+
 #include <cstdio>
 #include <string>
 
@@ -135,9 +138,20 @@ struct SaveSession {
      *   鸿蒙同步 napi 下同一时刻只有一个在跑，但"重试同一 savePath"这类**串行**场景已能命中。
      * ⇒ 名字里带 pid + 自增序号（同进程内也不会撞）。
      */
-    static unsigned long long sSeq;
-    char uniq[64];
-    std::snprintf(uniq, sizeof(uniq), ".part.%ld.%llu", static_cast<long>(::getpid()), ++sSeq);
+    /**
+     * ★★★#1192（第三轮自查，验证者提的第 1 点）：`static` 局部变量在**每个 TU 各一份**
+     *   （`proteus_http.h` 被多个 .cpp include）⇒ 同 pid 下两个 TU 的序号都从 1 开始 ⇒ 可能撞名。
+     *   鸿蒙同步 napi 下并发窗口极小，但"撞名"的后果是**互相删临时文件**（NB2b 那个后果）。
+     * ⇒ 用 `std::atomic` 全局唯一序号（函数内 static atomic 在同一 TU 内唯一；跨 TU 再叠
+     *   `clock_gettime` 纳秒兜底，两个 TU 在同一纳秒撞号概率可忽略）。
+     */
+    static std::atomic<unsigned long long> sSeq{0};
+    struct timespec ts{};
+    ::clock_gettime(CLOCK_MONOTONIC, &ts);
+    char uniq[96];
+    std::snprintf(uniq, sizeof(uniq), ".part.%ld.%llu.%ld",
+                  static_cast<long>(::getpid()), ++sSeq,
+                  static_cast<long>(ts.tv_nsec));
     partPath = absPath + uniq;
     fp = std::fopen(partPath.c_str(), "wb");
     if (fp == nullptr) {
