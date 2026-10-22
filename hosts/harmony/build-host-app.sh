@@ -217,7 +217,7 @@ fi
 #   certpath/profile/storeFile 绝对路径带着**上一次生成它的那台机器**的家目录（实测：/Users/kags）。
 #   换机/换用户后这些路径不存在 ⇒ hvigor 报 `Invalid storeFile value ... must be included in /Users/<other>/...`
 #   ⇒ 构建在 SignHap 阶段失败，而前面所有编译步骤都成功（很容易被误读成"代码有问题"）。
-#   【修法】若路径指向的家目录不是当前 $HOME、但**同名文件在当前 $HOME 下存在** ⇒ 就地重写为当前路径，
+#   【修法】若路径指向的家目录不是当前 ${HOME}、但**同名文件在当前 $HOME 下存在** ⇒ 就地重写为当前路径，
 #     并在构建后**还原**（该文件是本地状态，不留改动）。签名材料本身不动（同一个 p12/cer/p7b 文件名）。
 BPROFILE="$HERE/host-app/build-profile.json5"
 SIGN_RELOCATED=0

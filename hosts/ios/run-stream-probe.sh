@@ -19,9 +19,9 @@ CHUNKS="${PROTEUS_STREAM_PROBE_CHUNKS:-256}"
 SIZE="${PROTEUS_STREAM_PROBE_SIZE:-16384}"
 DELAY_MS="${PROTEUS_STREAM_PROBE_DELAY_MS:-3}"
 SLOW_MS="${PROTEUS_STREAM_PROBE_SLOW_MS:-5}"
-// ★★#1148：读数必须落成**独立**证据文件（原写 superapp.json = 任何一次 superapp 运行都会覆盖它
-//   ⇒ #1118 的 iOS 11/11 读数**根本没留下可复核产物**，commit 里只有一行文字声明）。
-//   对齐 Android 侧同名文件（hosts/android/results/stream-probe.json），两端同形态。
+# ★★#1148：读数必须落成**独立**证据文件（原写 superapp.json = 任何一次 superapp 运行都会覆盖它
+#   ⇒ #1118 的 iOS 11/11 读数**根本没留下可复核产物**，commit 里只有一行文字声明）。
+#   对齐 Android 侧同名文件（hosts/android/results/stream-probe.json），两端同形态。
 LOCAL_REPORT="$HERE/results/stream-probe.json"
 SERVER_LOG="$HERE/results/stream-probe-server-ios.log"
 WAIT_SH="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"

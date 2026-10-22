@@ -127,6 +127,8 @@ final class DeviceCapability {
         let b = UIScreen.main.bounds.size
         let landscape = b.width > b.height
         return [
+            // I2-ALLOW: 设备度量**报告**——UIScreen.bounds 单位已是 pt（与 CSS px 同义），此处只做类型收窄给 app 读；
+            //   内核下发的几何不走这条路径（见 ProteusHostView 的 layout 回调）
             "width": Int(b.width.rounded()),   // ★单位 = pt（与 Web CSS px 同义）
             "height": Int(b.height.rounded()),
             "dpr": Double(UIScreen.main.scale),

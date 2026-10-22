@@ -24,7 +24,7 @@ LOCAL_REPORT="$HERE/results/fetch-limit-probe.json"
 SERVER_LOG="$HERE/results/fetch-limit-probe-server.log"
 mkdir -p "$HERE/results"
 
-[ -f "$APK" ] || { echo "✗ 找不到 APK：$APK（先 build，或用 PROTEUS_APK= 指路径）"; exit 3; }
+[ -f "$APK" ] || { echo "✗ 找不到 APK：${APK}（先 build，或用 PROTEUS_APK= 指路径）"; exit 3; }
 "$ADB" get-state >/dev/null 2>&1 || { echo "✗ 设备未连接"; exit 3; }
 
 echo "==> ① 起本地服务（port ${PORT}）"

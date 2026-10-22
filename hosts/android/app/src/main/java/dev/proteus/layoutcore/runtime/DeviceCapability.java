@@ -169,6 +169,8 @@ public final class DeviceCapability {
         boolean landscape = activity.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
         JSONObject d = new JSONObject();
         // ★单位 = **dp（密度无关像素）**，与 Web 的 CSS px 同义（不是物理 px——那会让 3x 屏出 1080 宽）
+        // I2-ALLOW: 设备度量**报告**——`px ÷ density` 天然是小数（411.43 dp），此处不是内核下发的几何指令；
+        //   内核吸附过的坐标在别处，这里的值只作为 app 读到的屏幕尺寸
         d.put("width", Math.round(dm.widthPixels / dm.density));
         d.put("height", Math.round(dm.heightPixels / dm.density));
         d.put("dpr", (double) dm.density);
@@ -227,6 +229,7 @@ public final class DeviceCapability {
     }
 
     private void brightnessSet(JSONObject args) throws Exception {
+        // I2-ALLOW: 亮度**量化**——系统设置是 0..255 整数字节（Settings.System），0..1 的浮点必须落成字节；非几何
         final int raw = (int) Math.round(Math.max(0, Math.min(1, args.optDouble("value", 0.5))) * 255);
         if (!Settings.System.canWrite(activity)) {
             // ★不静默：写系统亮度是**特殊权限**（WRITE_SETTINGS）。不冒充"已生效"。

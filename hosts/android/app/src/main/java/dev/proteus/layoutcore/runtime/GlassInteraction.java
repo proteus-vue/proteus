@@ -382,6 +382,7 @@ final class GlassInteraction {
             // ★#1038：**子步积分**（不是"系数乘 dt"）——半隐式 Euler 对系数缩放不是线性等价的，
             //   实测直接乘 dt 会让尾段慢一倍（center95% 521ms vs 设计 275ms）。
             //   把 dt 折成 n 个 @120Hz 标准步（每步用原始系数）⇒ 墙钟时长与刷新率严格无关。
+            // I2-ALLOW: **物理积分子步数**（dt 折成 n 个 @120Hz 标准步，n 只允许 1..6 整数）——不是几何坐标
             final int sub = Math.max(1, Math.min(6, Math.round(dtScale)));
             for (int s = 0; s < sub; s++) {
                 leadV += (0f - leadP) * FLOW_LEAD_K - leadV * FLOW_LEAD_C;

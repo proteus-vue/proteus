@@ -84,7 +84,7 @@ fi
 # ★单行 node -e（多行会让末尾的 `)` 拼进输出 —— Android 侧实测踩过）
 PIN_A="$(curl -sk "https://127.0.0.1:${PORT_A}/__pin" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(String(JSON.parse(s).spki||''))}catch{}})" | tr -d '\r\n')"
 PIN_B="$(curl -sk "https://127.0.0.1:${PORT_B}/__pin" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(String(JSON.parse(s).spki||''))}catch{}})" | tr -d '\r\n')"
-[ -n "$PIN_A" ] && [ -n "$PIN_B" ] && [ "$PIN_A" != "$PIN_B" ] || { echo "✗ 指纹异常（A=$PIN_A B=$PIN_B）"; exit 3; }
+[ -n "$PIN_A" ] && [ -n "$PIN_B" ] && [ "$PIN_A" != "$PIN_B" ] || { echo "✗ 指纹异常（A=$PIN_A B=${PIN_B}）"; exit 3; }
 echo "    A pin = ${PIN_A}"
 echo "    B pin = ${PIN_B}"
 

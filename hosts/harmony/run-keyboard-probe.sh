@@ -39,7 +39,7 @@ HDC shell "aa force-stop $BUNDLE" >/dev/null 2>&1 || true
 HDC shell "hilog -r" >/dev/null 2>&1 || true
 HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
 if HDC shell "test -f $REPORT_DEV && echo STILL_EXISTS" 2>/dev/null | grep -q STILL_EXISTS; then
-  echo "✗ 旧报告删不掉（$REPORT_DEV）——等待信号会命中陈旧文件，拒绝继续"; exit 1
+  echo "✗ 旧报告删不掉（${REPORT_DEV}）——等待信号会命中陈旧文件，拒绝继续"; exit 1
 fi
 
 echo "==> ② 启动（scene=superapp-keyboard）"

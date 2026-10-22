@@ -90,7 +90,7 @@ RC2=$?
 if [ $RC2 -eq 0 ]; then
   echo "✅ iOS WebSocket 真机判据通过"
 else
-  echo "❌ iOS WebSocket 真机判据失败（run-selfdraw rc=$RC）"
+  echo "❌ iOS WebSocket 真机判据失败（run-selfdraw rc=${RC}）"
   echo "   报告：${LOCAL_REPORT} · 服务日志：${SERVER_LOG}"
 fi
 exit $RC2
