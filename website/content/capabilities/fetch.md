@@ -268,7 +268,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
 | Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · App 桥已就绪（平台中立）——鸿蒙宿主壳未接线 |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（invoke_bytes_bridge.h / proteus_http.h） · 真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★**`http.cancel` / `http.tlsStats` 未实现** ⇒ `abort()` 只 reject 本地、宿主传输不停 |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

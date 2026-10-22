@@ -86,6 +86,43 @@ export const CAPTURE_BRIDGE_TO_HOST = {
 }
 
 /**
+ * ★★★决策 #1162：**网络域**（C26 `useFetch`）的桥工厂与方法映射。
+ *
+ * 【为什么必须登记（用户实测："鸿蒙怎么一直都是未接线状态"）】
+ *   `request` 是 `createAppNativeCapabilities` 的返回成员，而该工厂**从未登记**在
+ *   `HARMONY_BRIDGE_SOURCES` 里 ⇒ `harmonyEndStatus` 连"鸿蒙认不认这个桥方法"都无从判定
+ *   ⇒ fetch 页永远 🟡「App 桥已就绪——鸿蒙宿主壳未接线」。
+ *   而事实上鸿蒙宿主**早就实现了**（`proteus_http.h` 的 `handle()`，经 `invoke_bytes_bridge.h`
+ *   的 `if (f.method == "http.request")` 分派，真机 `run-transport-probe.sh` 跑通过）。
+ *   ⇒ 这是「代码做了、文档不认」的形态，与被 #1067 修掉的那批同源。
+ *
+ * ★诚实边界（逐条写清，不做统一 ✅）：
+ *   · `request` → `http.request`：**已接线**（真机取证：h2/1.1 协商、3 请求/1 连接、体长/Content-Type）；
+ *   · `request` 之外的网络语义（取消/传输读数）走**独立方法**，鸿蒙当前**未实现**：
+ *     `http.cancel` / `http.cancelStats` / `http.tlsStats` 在鸿蒙源码里查无分派
+ *     ⇒ JS 侧 `abort` 在鸿蒙上**只 reject 本地**、宿主传输不停（`capability-invoke.ts:441` 已如实登记）。
+ *     ★这几条**不登记为 null 蒙混**：它们是真实缺口，已登记为独立任务（`T-harmony-http-cancel`）。
+ */
+export const NATIVE_BRIDGE_FACTORY = 'createAppNativeCapabilities'
+export const NATIVE_BRIDGE_TO_HOST = {
+  request: 'http.request',
+  // ★以下成员在鸿蒙宿主里**没有**对应分派（如实 null ⇒ 页面保持 🟡，不假装 ✅）：
+  //   navigateMiniProgram / getHostContext / loadExtension / getUpdateManager / createWorker /
+  //   getPreload / getIdle / getWindow / getNavigationGuard / getWebAssembly
+  //   —— 它们不属 fetch 能力页的 refs，登记 null 只为让"未登记 ⇒ 硬失败"的判据通过。
+  navigateMiniProgram: null,
+  getHostContext: null,
+  loadExtension: null,
+  getUpdateManager: null,
+  createWorker: null,
+  getPreload: null,
+  getIdle: null,
+  getWindow: null,
+  getNavigationGuard: null,
+  getWebAssembly: null,
+}
+
+/**
  * 参与鸿蒙分档的**全部**桥源（新增域必须登记——否则该域在文档上永远 🟡）。
  * ★map 的值类型显式写 `Record<string, string | null>`：`null` = 该桥方法不由宿主方法回答
  *   （纯 JS 或壳推通道）。不标注的话两个 map 的字面量形状不同，数组元素会被推成联合类型，
@@ -96,15 +133,33 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-capture.ts', factory: CAPTURE_BRIDGE_FACTORY, map: CAPTURE_BRIDGE_TO_HOST },
+  // ★#1162：网络域（request → http.request）
+  { file: 'packages/api/src/capability-app.ts', factory: NATIVE_BRIDGE_FACTORY, map: NATIVE_BRIDGE_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */
 export const HARMONY_HOST_SOURCES = [
   'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h',
   'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h',
+  // ★★★#1162：**字节桥是网络能力的真实分派点**——`http.request` 的分支在这里
+  //   （`if (f.method == "http.request") proteus::http::handle(f)`），
+  //   而实现体在 `proteus_http.h`。两份都登记：
+  //   · 分派形态 `f.method == "..."` 与 `method == "..."` 不同 ⇒ 抽取器已同时支持；
+  //   · `proteus_http.h` 里的追加证据是 `f.method = "http.request"`（探针构造帧），
+  //     不作为"已实现"的主要证据，登记它是为了让 grep 能定位实现。
+  'hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_bytes_bridge.h',
+  'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h',
 ]
 
-/** 从宿主 C++ 源码抽出**已实现的方法名字面量**。 */
+/**
+ * 从宿主 C++ 源码抽出**已实现的方法名字面量**。
+ *
+ * ★#1162 更正：此前以为字节桥的 `if (f.method == "http.request")` 需要额外正则——
+ *   **实测不需要**：`/method\s*==\s*"…"/` 对 `f.method == "…"` 同样命中（`.` 只是前一字符）。
+ *   fetch 页原先报 🟡 的真因是**两处清单没登记**（`createAppNativeCapabilities` 未进
+ *   `HARMONY_BRIDGE_SOURCES`、`invoke_bytes_bridge.h` 未进 `HARMONY_HOST_SOURCES`），
+ *   不是抽取器不认形态。⇒ 保留一个正则即可，不写冗余分支（写了会让"变异测试打不红"）。
+ */
 export function extractHarmonyHostMethods(src) {
   const out = new Set()
   for (const m of src.matchAll(/method\s*==\s*"([^"]+)"/g)) out.add(m[1])
@@ -223,11 +278,31 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
   const r = loadHarmonyBridgeKeys(root)
   if (r.misses.length) throw new Error('[harmony-host-keys] ' + r.misses.join('；'))
   if (refs.length && refs.every((k) => r.keys.has(k))) {
+    // ★★★#1162：说明要指出**真实的分派文件**，不能笼统写"宿主已接线"——
+    //   网络能力的分派在 `invoke_bytes_bridge.h`（`f.method == "http.request"`），
+    //   不在 scre/device 那两个文件里。按 refs 的实际宿主方法反查源文件。
+    const hosts = refs.map((k) => HARMONY_BRIDGE_SOURCES.find((x) => k in x.map)?.map[k]).filter(Boolean)
+    const files = new Set()
+    for (const h of hosts) {
+      for (const rel of HARMONY_HOST_SOURCES) {
+        const src = fs.readFileSync(path.join(root, rel), 'utf8')
+        if (src.includes(`"${h}"`)) files.add(path.basename(rel))
+      }
+    }
+    const where = files.size ? [...files].join(' / ') : 'host'
+    // ★★★#1162：网络域的 ✅ 必须带**真机证据**与**真实缺口**，否则"✅"会盖住两件事：
+    //   ① 真机验过什么（`hosts/harmony/results/transport-probe.json`：3 请求全 200、连接复用 3/1、
+    //      传输读数 dns/connect/ttfb 有值）——只用静态分派证明不了"网络真的通"；
+    //   ② 鸿蒙**没有实现** `http.cancel` / `http.cancelStats` / `http.tlsStats`（源码查无分派）
+    //      ⇒ `abort()` 只 reject 本地、宿主传输不停（`capability-invoke.ts:441` 已如实登记）。
+    //   ★这一段不是"多余文案"：它是防止 ✅ 被读成"和三端完全一致"的唯一手段。
+    const isNet = hosts.includes('http.request')
+    const netNote = en
+      ? 'device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); **no `http.cancel`/`http.tlsStats`** → `abort()` only rejects locally'
+      : '真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★**`http.cancel` / `http.tlsStats` 未实现** ⇒ `abort()` 只 reject 本地、宿主传输不停'
     return {
       status: '✅',
-      note: en
-        ? 'Harmony host wired (proteus_device.h / host_app_runtime_impl.h)'
-        : '鸿蒙宿主已接线（proteus_device.h / host_app_runtime_impl.h）',
+      note: en ? `Harmony host wired (${where})${isNet ? ' · ' + netNote : ''}` : `鸿蒙宿主已接线（${where}）${isNet ? ' · ' + netNote : ''}`,
     }
   }
   if (refs.length && refs.every((k) => appBridgeKeys.has(k))) {

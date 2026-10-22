@@ -163,3 +163,51 @@ describe('④ 键盘推送通道（读壳源码，不看桥方法）', () => {
     expect(md).toMatch(/壳推送已接线|键盘高度随渲染注入/)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★★★#1162：**网络域（C26 useFetch）在鸿蒙的分档**——用户实测："鸿蒙怎么一直都是未接线状态"
+//   根因：`request` 的桥工厂 `createAppNativeCapabilities` 从未登记进 `HARMONY_BRIDGE_SOURCES`，
+//   而 `http.request` 的分派在 `invoke_bytes_bridge.h`（`f.method == "http.request"`），
+//   该文件也不在 `HARMONY_HOST_SOURCES` ⇒ 两端都查不到 ⇒ 永远 🟡（而代码早就实现了）。
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★★#1162 鸿蒙网络域（useFetch）接线判定', () => {
+  it('★★★`request` → `http.request` 映射已登记，且鸿蒙宿主真的有该分派', async () => {
+    const { loadHarmonyBridgeKeys: load } = (await import('../website/scripts/lib/harmony-host-keys.mjs')) as unknown as {
+      loadHarmonyBridgeKeys: (root: string) => { keys: Set<string>, misses?: string[] }
+    }
+    const r = load(ROOT)
+    expect(r.keys.has('request'), '★鸿蒙应认得 `request` 桥方法（否则 fetch 页永远 🟡）').toBe(true)
+  })
+
+  it('★★抽取器要能认字节桥的 `f.method == "..."` 形态（带接收者前缀）', async () => {
+    // ★#1162 更正：同一正则本就命中 `f.method == "x"`（`.` 只是前一字符）——
+    //   这里固定**形态支持**这件事本身（防将来有人把正则收紧成 `^\s*method`）。
+    //   ★fetch 页原先 🟡 的真因是"清单没登记"，不是抽取器不认形态。
+    const { extractHarmonyHostMethods: ex } = (await import('../website/scripts/lib/harmony-host-keys.mjs')) as unknown as {
+      extractHarmonyHostMethods: (src: string) => Set<string>
+    }
+    expect([...ex('if (f.method == "http.request") {')]).toEqual(['http.request'])
+    expect([...ex('if (method == "device.info") {')]).toEqual(['device.info'])
+    expect([...ex('if (method == std::string("device.battery")) {')]).toEqual(['device.battery'])
+  })
+
+  it('★★★fetch 页鸿蒙必须是 ✅，且说明含**真机证据**与**真实缺口**', () => {
+    const md = fs.readFileSync(path.join(ROOT, 'website/content/capabilities/fetch.md'), 'utf8')
+    const row = /^\| 鸿蒙 \| ([^|]+) \| (.+) \|$/m.exec(md)
+    expect(row, '找不到 fetch 页的鸿蒙行').toBeTruthy()
+    expect(row![1].trim(), '★鸿蒙应为 ✅（http.request 已实现且真机验过）').toBe('✅')
+    // ★✅ 不能裸着写——必须点明分派文件、真机读数、以及**未实现**的取消通道
+    expect(row![2], '★说明必须点名真实分派文件').toMatch(/invoke_bytes_bridge\.h|proteus_http\.h/)
+    expect(row![2], '★说明必须带真机证据（transport-probe）').toMatch(/transport-probe|3\/3 200|3 请求\/1 连接/)
+    expect(row![2], '★说明必须如实指出 `http.cancel` 未实现（否则 ✅ 会被读成三端一致）').toMatch(/http\.cancel/)
+  })
+
+  it('★★鸿蒙**确实没有** http.cancel / tlsStats 分派（缺口是事实，不是文案）', () => {
+    const dir = path.join(ROOT, 'hosts/harmony/host-app/proteus_render/src/main/cpp')
+    const all = fs.readdirSync(dir).filter((f) => f.endsWith('.h') || f.endsWith('.cpp'))
+      .map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n')
+    // ★这条断言的方向是"**没有**"——若哪天实现了，这里会红 ⇒ 提醒同步更新文档与本节文案。
+    expect(all, '★鸿蒙已实现 http.cancel？请同步 fetch 页文案并翻转本断言').not.toMatch(/method\s*==\s*"http\.cancel"/)
+    expect(all, '★鸿蒙已实现 http.tlsStats？请同步 fetch 页文案并翻转本断言').not.toMatch(/method\s*==\s*"http\.tlsStats"/)
+  })
+})

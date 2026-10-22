@@ -2864,6 +2864,27 @@
         "T-gates-local-only-ledger"
       ],
       "note": "【done · 决策 #1162（2026-10-22）】承接 #1159 ⑦①「5 类 cat 仍只是标签」。★缺陷：cat=macos/sdk 写什么都行，机器判不出真伪 ⇒ 换马甲的自由文本豁免；local-env 的「CI 无该文件」也从没人核过。★改法：CAT_EVIDENCE（macos=xcrun|swiftc|xcodebuild|simctl|actool|…，sdk=ndk|javac|sdkmanager|aapt2|hvigor|ohpm|ANDROID_HOME|…）+ local-env 的 citedPaths 与 git ls-files 全集比对 + 新判据 CAT_UNPROVEN（error 级）。★两处先踩后改：① 证据面必须是「命令 + 全部入口脚本」（只取首个会把 ios-host 误判——esbuild 的 build.mjs 在前、xcrun swiftc 在 verify.mjs）；② 只收不会两义的强 token（metal 同时命中「Metal 着色器」与「材质」，收了=假绿）。★战果：label-only 5 类 → 2 类（policy/machine-noise），报告分成「△ 仅标签」与「✓ 有谓词」；当场抓出 1 处错标：check:js-engine 原标 sdk，实为纯零设备验证（本机 .tools/quickjs/qjs，脚本自述不需要 Android SDK）⇒ 改判 local-env。★判据 63→69（+6）；5 个变异全部独立命中（错标 · js-engine 回退 sdk · local-env 点名 package.json · 删掉命令第二个入口 · 理由不点名路径），基线 rc=0。★诚实边界：token 谓词只证「用到该工具链」不证「CI 没有它」；传递依赖未递归（失败方向为假红）；policy/machine-noise 仍是标签；trackedFiles 取不到时降级为提醒。★下一步：policy 14 条逐条评估接 CI（ios-exp-docs / ios-source-lists / android-bundle 已核实可接）；manual 桶 10 条收敛。"
+    },
+    {
+      "id": "T-harmony-http-cancel",
+      "title": "鸿蒙缺 http.cancel / http.cancelStats / http.tlsStats ⇒ useFetch 的 abort() 只 reject 本地、宿主传输不停（#1162 实测缺口）",
+      "type": "bugfix",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_bytes_bridge.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h",
+        "hosts/harmony/run-cancel-probe.sh",
+        "docs/proteus-network-plan/00-capability-matrix.md"
+      ],
+      "decision": null,
+      "verification": "bash hosts/harmony/run-cancel-probe.sh（目标：JS reject + 后续块停止 + 宿主 hits>0，与 Android/iOS 同判据）",
+      "branch": null,
+      "related": [
+        "T-android-okhttp-transport"
+      ],
+      "note": "【planned · #1162 实测发现】鸿蒙网络域已接线（`http.request` 经 `invoke_bytes_bridge.h` → `proteus_http.h`，真机 transport-probe 3/3 200、fetch-limit 两道闸全通），但**三个配套方法查无分派**：`http.cancel` / `http.cancelStats` / `http.tlsStats`。后果：JS 侧 `abort()` 只 reject 本地 promise，**宿主传输仍在跑**（`capability-invoke.ts:441` 已如实登记\"鸿蒙）\"）。这正是 #1121 当初立单要防的形态（\"用户以为取消了，其实后台还在下载\"）——Android/iOS 已修，鸿蒙未修。修法：① `proteus_http.h` 里维护 reqId → `HMS_Rcp_Request` 的在途表；② 在字节桥加 `http.cancel` 分支（`HMS_Rcp_CancelRequest`）；③ `http.tlsStats` 至少要能回 `{ challenges: 0, note: \"鸿蒙未做 pinning 回调\" }` 而不是 missing（否则 `host_stats` 恒 null，传输探针的归因链断）。④ 判据沿用 Android 的 `run-cancel-probe.sh` 三件（reject / chunks_stopped / host hits）。★注意鸿蒙是**一次性 VM**（#540）——原生 napi 同步返回，\"在飞请求\"的取消要在 C++ 侧持有句柄，不能依赖 JS 侧保留引用。"
     }
   ]
 }
