@@ -12450,3 +12450,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **下一步**：① `fetch: { httpDns }` 门面 + 线格式 tag（两端同一套语义：`(host) → IP[]`）
 ② 解析结果缓存与 TTL ③ 解析失败策略（显式报错 vs 回退系统 DNS——**默认不回退**，要回退由业务显式开）
 ④ 真机对照 DoH 路径（它是另一条可用的路，优先级低于 Dynamic）⑤ iOS 落点定案。
+
+1170. **★★★Studio PoC B2：Tauri 2 窗口里「原生 GL 画面 + 透明 WKWebView 叠加」**成立**——单帧 1.4ms（与原生窗口持平），代价是间隔 p99 +8ms · 决策**（2026-10-22 · 承接 #1168「这不是 Tauri」）:
+**① 为什么做**：B1 证明原生窗口里 1.4ms/帧，但 plan 的真实形态是**Tauri 窗口里 WKWebView 做 UI、原生 GL 垫底**——这是 plan 里唯一还没有数据支撑的假设。B1 的结论明确写了"挂载可行性不同源，不可外推"。
+**② 做法**：最小 Tauri 2 应用（`tauri 2.12.5`）——窗口内容 = 透明 WKWebView + HTML 叠加层（十字线/半透明面板/角标）；把原生 `NSOpenGLView`（复用 B1 管线）`addSubview:positioned:NSWindowBelow` 垫到 contentView 最底层；遍历子视图找 `*WebView*` 并 KVC `drawsBackground=NO`；Rust 后台线程按 30fps 绝对时基 `run_on_main_thread(poc_tick)`（**GL 上下文必须在主线程 makeCurrent**）。
+**③ 实测（三轮各 22s）**：`attach rc=0` · `webview found=1 transparent=1` · fps **30.34**（三轮一致）· 迟到 **0%** · 间隔 p99 **44.5 / 49.6 / 45.2ms** · compose p50 0.84–0.87 · present p50 0.52–0.57 · **合计 p50 1.36–1.44ms** · CPU **8.1–8.8%**。⇒ R1–R4 全过。
+**④ 与 B1 对账（代价在哪）**：单帧成本**持平**（1.4ms）；但间隔 p99 从 34.8–40.8 涨到 **44.5–49.6（+8ms）**，CPU +1pt。根因不是渲染，而是**多一层 WebView 合成后 vsync 对齐变松**。仍 ≤ 50ms 判据，但**余量从 13ms 缩到 4ms**——叠加越重这条线越要盯。
+**⑤ ★踩坑记录（六条，每条都被实测打脸过一次，已写入 README）**：a) `setup()` 里拿不到配置窗口（`get_webview_window` 返回 None），此时遍历 labels 直接在 tao 的 `did_finish_launching` 里 panic ⇒ `cannot unwind` ⇒ abort，**`catch_unwind` 也抓不到**；b) `setup` 里直接 `run_on_main_thread` 同样 abort（事件循环未起）；c) **后台线程碰窗口对象** ⇒ WKWebView 跨线程 ObjC 异常 ⇒ `Rust cannot catch foreign exceptions`；d) **`ns_window()` 给的是 `NSWindow`（TaoWindow）不是 NSView** ⇒ `-[TaoWindow bounds]: unrecognized selector`；e) ObjC 异常必须在 ObjC 侧 `@try/@catch` 兜住，穿进 Rust 就是无栈 abort（**这是本轮能定位根因的关键一步**——先兜住异常拿到 `NSException` 文本）；f) `generate_context!` 要求图标存在且是 **RGBA** PNG。
+**⑥ 诚实边界**：a) 只证明"能共存 + 成本"，**不评判 HTML 叠加层的交互/无障碍/命中测试**（那是 Studio 真正的工作量）；b) KVC 设透明是 PoC 手法，生产要走 Tauri 透明窗口配置或自绘 layer；c) 没有菜单栏/多窗口/面板拖拽；d) 本机有并发负载。
+**⑦ 产物**：`docs/proteus-studio-poc/03-tauri-embed/`（Cargo 工程 + `native/embed_view.m` + `dist/index.html` 叠加层 + `results/readout-tauri-run{1,2,3}.json`）。`target/` 已由本地 `.gitignore` 拦掉（本仓 `.gitignore` **没有**全局 `target/`，这正是它第 126 行注释里写过的坑）。
+**⑧ 下一步**：C（真机投屏流）；或转入 Studio 阶段 1 骨架（面板/编排层）——**性能侧的两个前提（离屏、窗口、Tauri 承载）现在都有数据了**。

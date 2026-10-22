@@ -1,0 +1,16 @@
+{
+  "mode": "tauri-window",
+  "video": "/tmp/proteus-poc/720p30.mp4",
+  "size": "1280x720",
+  "hwdec": "videotoolbox",
+  "webview_found": true,
+  "webview_transparent": true,
+  "frames_presented": 613,
+  "measured_fps": 30.34,
+  "interval_ms": {"p50": 33.24, "p95": 41.66, "p99": 49.60, "max": 63.54},
+  "compose_ms": {"p50": 0.866, "p95": 1.651, "p99": 2.574, "max": 4.269},
+  "present_ms": {"p50": 0.572, "p95": 8.358, "p99": 12.894, "max": 17.903},
+  "late_frames": 0,
+  "late_pct": 0.00,
+  "cpu": {"self_seconds": 1.72, "wall_seconds": 20.20, "single_core_pct": 8.5}
+}

@@ -2970,6 +2970,27 @@
         "T-studio-poc-a-fbo"
       ],
       "note": "【done · 决策 #1168（2026-10-22）】承接 #1169「只证明了离屏这一段」。★方法：compose / blit / present 三段分开记账——把 present（含 vsync）混进渲染是最常见的测量谎言。★实测（三轮 30s）：30.03 fps · 间隔 p99 34.8/40.8/37.9ms · 合计 p50 1.39/1.15/2.00ms（预算 33.3ms 的 4%）· 迟到 0/903 · CPU 7.0–8.2% ⇒ Q1–Q4 全过。★更正 A：A 的「渲染 3–9ms」是 glFinish 墙钟同步 + 并发负载；窗口路径不显式同步，compose 只有 0.8–1.6ms。已在 A 的 README 加更正段，阈值口径不改。★测量事实：compose 与 present 的分界会漂移（run1 present 0.40 vs run2 5.55），只有「合计」跨轮可比。★边界：不是 Tauri（原生 NSWindow+NSOpenGLView）；无 UI 叠加；本机并发负载；合成源。★下一步：B2（挂进 Tauri 2 的 WKWebView 窗口 + 叠 HTML UI，量挂载可行性）；C（真机投屏流）。"
+    },
+    {
+      "id": "T-studio-poc-b2-tauri",
+      "title": "Studio PoC B2：Tauri 2 窗口里原生 GL + 透明 WKWebView 叠加成立（单帧 1.4ms；间隔 p99 +8ms）",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/README.md",
+        "docs/proteus-studio-poc/03-tauri-embed",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1170,
+      "verification": "cd docs/proteus-studio-poc/03-tauri-embed && cargo build --release && POC_SECONDS=22 POC_JSON=results/readout.json ./target/release/proteus-studio-poc-tauri",
+      "branch": null,
+      "related": [
+        "T-studio-poc-b1-window",
+        "T-studio-poc-a-fbo"
+      ],
+      "note": "【done · 决策 #1170（2026-10-22）】承接 #1168「这不是 Tauri，挂载可行性不同源」。★做法：Tauri 2.12.5 最小应用；透明 WKWebView + HTML 叠加层；原生 NSOpenGLView 垫底（addSubview:positioned:NSWindowBelow）；KVC drawsBackground=NO；30fps 主线程调度。★实测（三轮 22s）：attach rc=0 · webview found=1 transparent=1 · 30.34 fps · 迟到 0% · 间隔 p99 44.5/49.6/45.2ms · 合计 p50 1.36–1.44ms · CPU 8.1–8.8% ⇒ R1–R4 全过。★与 B1 对账：单帧成本持平（1.4ms）；间隔 p99 +8ms（vsync 对齐变松）、CPU +1pt；余量从 13ms 缩到 4ms。★六条踩坑（已写 README）：setup 里窗口没建好/不能在 setup 里 run_on_main_thread/后台线程碰窗口会抛 ObjC 异常/ns_window() 给的是 NSWindow 不是 NSView/ObjC 异常必须 @try 兜住/图标必须 RGBA。★边界：不评判 HTML 叠加层交互与无障碍；KVC 透明是 PoC 手法；无菜单栏多窗口。★下一步：C（真机投屏流）或 Studio 阶段 1 骨架——性能侧三个前提（离屏/窗口/Tauri 承载）都已有数据。"
     }
   ]
 }

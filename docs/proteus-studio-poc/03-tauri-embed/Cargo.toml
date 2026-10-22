@@ -1,0 +1,12 @@
+[package]
+name = "proteus-studio-poc-tauri"
+version = "0.1.0"
+edition = "2021"
+description = "Studio PoC B2：Tauri 2 窗口里承载原生 GL 画面 + WKWebView 叠加（决策 #1169）"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
