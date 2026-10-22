@@ -210,22 +210,21 @@ PLATFORM_SRC="$(ls "$ROOT"/platform/ios/ProteusPlatform/*.swift 2>/dev/null | tr
 #   ⇒ 脚本仍打印成功路径，差点把旧二进制的读数当成新代码的证据）。
 #   ⇒ 判据 = **产物存在 + 本次编译 rc=0 + 日志里无 error:**（三者缺一即停）。
 COMPILE_LOG="$(mktemp)"
-# ★★★#1118：源码快照守卫（实现在 lib/src-snapshot.sh）
-snap_before "$HERE/ProteusHost"
-set +e
+# ★★★#1118 源码快照守卫 + ★★★2026-10-22 编译改用**源码快照**：实测两次并发会话在构建窗口里
+#   重写 keyboard-watch.swift（内容相同、mtime 变）⇒ swiftc 报 "modified during the build"。详见 lib/src-snapshot.sh
+BUILD_SNAP="$(mktemp -d)/ProteusHost"; cp -R "$HERE/ProteusHost" "$BUILD_SNAP"; HS="$BUILD_SNAP"; snap_before "$HERE/ProteusHost"
+COMPILE_RC=0
 xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -framework UIKit -framework CoreText -framework JavaScriptCore -framework AVFoundation -parse-as-library \
-  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HERE/ProteusHost/runtime/selfdraw-scene.swift" \
-  "$HERE/ProteusHost/runtime/host-runtime-bridge.swift" "$HERE/ProteusHost/runtime/interaction-feedback.swift" "$HERE/ProteusHost/runtime/superapp-runtime-host.swift" "$HERE/ProteusHost/runtime/proteus-host-controller.swift" "$HERE/ProteusHost/runtime/host-capabilities.swift" "$HERE/ProteusHost/runtime/device-capability.swift" "$HERE/ProteusHost/runtime/keyboard-watch.swift" "$HERE/ProteusHost/runtime/element-rect.swift" "$HERE/ProteusHost/runtime/capture-capability.swift" "$HERE/ProteusHost/runtime/websocket-capability.swift" "$HERE/ProteusHost/runtime/file-transfer-capability.swift" \
-  "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift" "$HERE/ProteusHost/runtime/host-tree-diff.swift" "$HERE/ProteusHost/runtime/host-abi.swift" "$HERE/ProteusHost/runtime/host-support.swift" "$HERE/ProteusHost/runtime/host-exports-protocol.swift" "$HERE/ProteusHost/runtime/selfdraw-glass.swift" \
-  "$HERE/ProteusHost/runtime/InvokeWire.swift" "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift" "$HERE/ProteusHost/runtime/http-capability.swift" "$HERE/ProteusHost/runtime/tls-pinning.swift" "$HERE/ProteusHost/runtime/HttpDnsProxy.swift" "$HERE/ProteusHost/runtime/http-capability-dns-session.swift" \
-  "$HERE/ProteusHost/runtime/host-lifecycle-events.swift" "$HERE/ProteusHost/runtime/screen-host.swift" "$HERE/ProteusHost/runtime/tab-chrome.swift" \
-  "$HERE/ProteusHost/runtime/screen-stream.swift" \
-  "$HERE/ProteusHost/runtime/glass-metal.swift" "$HERE/ProteusHost/runtime/generated-materials.swift" \
-  "$HERE/ProteusHost/dev/host-runtime-scene.swift" "$HERE/ProteusHost/dev/app-stack-scene.swift" "$HERE/ProteusHost/dev/showcase-scene.swift" "$HERE/ProteusHost/dev/glass-scene.swift" "$HERE/ProteusHost/shell/superapp-scene.swift" "$HERE/ProteusHost/shell/superapp-probes.swift" "$HERE/ProteusHost/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1
-COMPILE_RC=$?
-set -e
-snap_check "$HERE/ProteusHost" || exit 3
+  -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HS/runtime/selfdraw-scene.swift" \
+  "$HS/runtime/host-runtime-bridge.swift" "$HS/runtime/interaction-feedback.swift" "$HS/runtime/superapp-runtime-host.swift" "$HS/runtime/proteus-host-controller.swift" "$HS/runtime/host-capabilities.swift" "$HS/runtime/device-capability.swift" "$HS/runtime/keyboard-watch.swift" "$HS/runtime/element-rect.swift" "$HS/runtime/capture-capability.swift" "$HS/runtime/websocket-capability.swift" "$HS/runtime/file-transfer-capability.swift" \
+  "$HS/runtime/local-service-capability.swift" "$HS/runtime/js-task-sampler.swift" "$HS/runtime/host-tree-diff.swift" "$HS/runtime/host-abi.swift" "$HS/runtime/host-support.swift" "$HS/runtime/host-exports-protocol.swift" "$HS/runtime/selfdraw-glass.swift" \
+  "$HS/runtime/InvokeWire.swift" "$HS/runtime/invoke-bytes-bridge.swift" "$HS/runtime/http-capability.swift" "$HS/runtime/tls-pinning.swift" "$HS/runtime/HttpDnsProxy.swift" "$HS/runtime/http-capability-dns-session.swift" \
+  "$HS/runtime/host-lifecycle-events.swift" "$HS/runtime/screen-host.swift" "$HS/runtime/tab-chrome.swift" \
+  "$HS/runtime/screen-stream.swift" \
+  "$HS/runtime/glass-metal.swift" "$HS/runtime/generated-materials.swift" \
+  "$HS/dev/host-runtime-scene.swift" "$HS/dev/app-stack-scene.swift" "$HS/dev/showcase-scene.swift" "$HS/dev/glass-scene.swift" "$HS/shell/superapp-scene.swift" "$HS/shell/superapp-probes.swift" "$HS/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1 || COMPILE_RC=$?
+snap_check "$HERE/ProteusHost" "$HS" || true; rm -rf "$(dirname "$HS")"
 grep -E "error:" "$COMPILE_LOG" | head -5 || true
 if [ "$COMPILE_RC" != "0" ] || [ ! -f "$APP/ProteusSelfDraw" ]; then
   echo "✗ Swift 编译失败（rc=${COMPILE_RC}, 产物存在=$([ -f "$APP/ProteusSelfDraw" ] && echo yes || echo no)）"

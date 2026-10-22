@@ -44,25 +44,39 @@ snap_before() {
   export _PROTEUS_SRC_SNAP _PROTEUS_SRC_MTIMES
 }
 
+# snap_check <工作树> [<编译快照>]
+#   · 传了快照：编译输入是快照 ⇒ 工作树怎么变都**不影响本次产物**，只是"新改动下次才生效"；
+#   · 没传快照（历史用法）：内容变了意味着"产物可能半新半旧"，返回 1 让调用方决定是否阻断。
 snap_check() {
-  local after; after="$(_snap_hash "$1")"
+  local wt="$1" snap="${2:-}"
+  local after; after="$(_snap_hash "$wt")"
   if [ "$after" != "$_PROTEUS_SRC_SNAP" ]; then
-    echo "✗ 构建期间源码被改动（有人在编译进行中改文件）"
-    echo "  ★这会让编译器报 'input file was modified during the build'，且产物可能是半新半旧的"
-    echo "  ★纪律：破坏性验证 / 改源文件 **不能与真机构建并发**（本仓已踩过两次）"
-    echo "  请重跑本脚本。"
+    if [ -n "$snap" ]; then
+      echo "⚠ 构建期间**工作树**源码被改动（编译用的是快照 ⇒ 本次产物对应 snap_before 那刻，不受影响）"
+      diff -rq -x '.DS_Store' "$wt" "$snap" 2>/dev/null | sed 's/^/    /'
+      echo "  ★想让新改动生效：重跑本脚本（下次快照会包含它）。"
+    else
+      echo "✗ 构建期间源码被改动（有人在编译进行中改文件）"
+      echo "  ★这会让编译器报 'input file was modified during the build'，且产物可能是半新半旧的"
+      echo "  ★纪律：破坏性验证 / 改源文件 **不能与真机构建并发**（本仓已踩过两次）"
+      echo "  请重跑本脚本。"
+    fi
     return 1
   fi
   # ★内容一致但 mtime 变了：**不阻断**（编译输入相同 ⇒ 产物必然相同），但要明确归因，
   #   否则下次还是只能看到 swiftc 那句晦涩的 "input file was modified during the build"。
   local after_mtimes
-  after_mtimes="$(_snap_mtimes "$1")"
+  after_mtimes="$(_snap_mtimes "$wt")"
   if [ -n "$_PROTEUS_SRC_MTIMES" ] && [ "$after_mtimes" != "$_PROTEUS_SRC_MTIMES" ]; then
-    echo "⚠ 构建期间有源码被「碰过」但**内容没变**（并发会话 touch / 重写同内容）——产物仍然可信"
+    echo "⚠ 构建期间有源码被「碰过」但**内容没变**（并发会话 touch / 重写同内容）"
     diff <(printf '%s\n' "$_PROTEUS_SRC_MTIMES") <(printf '%s\n' "$after_mtimes") 2>/dev/null \
       | awk '/^[<>]/{sub(/^[<>] [0-9]+ /,""); print "    " $0}' | sort -u
-    echo "  ★若编译器恰好报了 'input file was modified during the build'，根因就是上面这些文件"
-    echo "    （swiftc 判 mtime/size，不判内容）⇒ 重跑即可，不用怀疑代码。"
+    if [ -n "$snap" ]; then
+      echo "  ★产物来自快照 ⇒ 本次不受影响（swiftc 不会再报 modified during the build）。"
+    else
+      echo "  ★若编译器恰好报了 'input file was modified during the build'，根因就是上面这些文件"
+      echo "    （swiftc 判 mtime/size，不判内容）⇒ 重跑即可，不用怀疑代码。"
+    fi
   fi
   return 0
 }
