@@ -222,9 +222,30 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 
 ★**"缺键 = 不可得"是硬约定**：宿主测不到的项**不出现**，绝不填 `0`/`false`——
 否则业务会把"没测到"读成"DNS 花了 0ms"（假数据比缺数据更糟）。
-★线格式 = 回程 TLV `Transport=22`（name-values；五端 43 向量逐字节等价）。
-★判据：`tests/fetch-transport-meta.test.ts`（12 条）+ `tests/fetch-pipeline.test.ts` 的
+★线格式 = 回程 TLV `Transport=22`（name-values；五端 45 向量逐字节等价）。
+★★★**#1183：HTTPDNS 的可观测面也走同一个 `Transport` 容器**（`dnsSource` / `dnsTableHit`）——
+DNS 来源本就是"这次连接怎么建立的"的一部分，复用容器 ⇒ **零新增 tag、零线格式改动**。
+★判据：`tests/fetch-transport-meta.test.ts`（12 条）+ `tests/fetch-dns-source.test.ts`（12 条，
+解析白名单 / 线格式白名单 / 三端实现三层）+ `tests/fetch-pipeline.test.ts` 的
 「五段链路」断言 + `check:cache-evidence` 的"业务侧真的拿到读数"（三端证据）。
+
+### 4.x HTTPDNS 的每请求可观测面（#1183）
+
+`useFetch({ httpDns }).meta.transport` 现在包含：
+
+| 键 | 含义 | 缺省（不写）的条件 |
+|---|---|---|
+| `dnsSource` | `table`（命中业务表）/ `system`（回落）/ `literal`（URL 是 IP）/ `resolver`（进程级解析器） | **没发生解析**（连接复用 / URL 是 IP） |
+| `dnsTableHit` | `true` = 本次真的命中了表（与 `dnsSource==='table'` 同义） | 同上 |
+
+★**为什么必须有这两项**：`http.dnsStats` 是**进程级**记账，业务在单次请求里看不到；
+而 `httpDns` 的失败形态全是静默的（表没生效 ⇒ 请求照常成功、走系统 DNS）⇒
+"以为防住了劫持，实际没有"（#1171 同纪律）。
+★**真机双向证据**：Android `hit_transport={proto:h2, reused:false, dnsSource:table, dnsTableHit:true}`
++ 基线 `dnsSource` 不出现；iOS `hit_dns_source=table` + 未命中那次 `dnsSource=system`。
+★**三端实现的同一个坑**：不能拿**进程级** `lastDnsSource` 冒充 per-call（并发会被别的请求覆盖）
+⇒ Android 用 `CallMetrics.dnsSource`（线程绑定）、iOS 用 proxy 的 `host → 来源` 映射、
+鸿蒙用 `callDnsSource()` + RAII 守卫。
 
 ★**P1 的共同前提**：三端要有**同一套可观测字段**（`transport`：`{ protocol, dnsMs, connectMs, tlsMs, reused }`），
 否则判据只能各端各写、无法比对——这与本仓"三端同判据"纪律冲突。

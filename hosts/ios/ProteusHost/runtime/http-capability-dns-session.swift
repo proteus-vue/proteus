@@ -38,6 +38,17 @@ extension HttpCapability {
 
     private static let sessionLock = NSLock()
     private static var sessionByTable: [String: URLSession] = [:]
+    /**
+     * ★★★#1183：session → 该 session 对应的 DNS 表（transport 读数要按 **本 session 的表**
+     *   查 `dnsSource`——同一个 App 里不同表各走各的代理，按全局查会串）。
+     */
+    private static var tableBySessionKey: [ObjectIdentifier: [String: [String]]] = [:]
+
+    /// 该 session 对应的 DNS 表（默认 session ⇒ `nil`，即"本次请求没有 httpDns 表"）
+    static func table(for session: URLSession) -> [String: [String]]? {
+        sessionLock.lock(); defer { sessionLock.unlock() }
+        return tableBySessionKey[ObjectIdentifier(session)]
+    }
 
     static func makeSession(_ configure: (URLSessionConfiguration) -> Void) -> URLSession {
         let c = URLSessionConfiguration.default
@@ -71,6 +82,7 @@ extension HttpCapability {
         }
         sessionLock.lock()
         sessionByTable[key] = s
+        tableBySessionKey[ObjectIdentifier(s)] = normalized
         sessionLock.unlock()
         NSLog("[proteus] HTTPDNS_SESSION_READY hosts=%d port=%d", normalized.count, Int(proxy.port))
         return s

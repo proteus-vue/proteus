@@ -347,7 +347,18 @@ export interface ResolveFrame {
 }
 
 /** ★#1158：传输层读数的键（短名，跨端统一；值一律为字符串，便于 TLV name-values 承载） */
-export const TRANSPORT_KEYS = ['proto', 'reused', 'dnsMs', 'connectMs', 'tlsMs', 'ttfbMs'] as const
+export const TRANSPORT_KEYS = [
+  'proto',
+  'reused',
+  'dnsMs',
+  'connectMs',
+  'tlsMs',
+  'ttfbMs',
+  // ★★★#1183：HTTPDNS 可观测面（**复用 Transport 容器**，不新开 tag：
+  //   DNS 来源本就是"这次连接怎么建立的"的一部分，且省掉五端线格式与 golden 向量改动）
+  'dnsSource',
+  'dnsTableHit',
+] as const
 export type TransportKey = (typeof TRANSPORT_KEYS)[number]
 
 /**

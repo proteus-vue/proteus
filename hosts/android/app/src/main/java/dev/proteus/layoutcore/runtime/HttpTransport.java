@@ -138,6 +138,13 @@ public final class HttpTransport {
     private static final ThreadLocal<Map<String, String>> CALL_DNS = new ThreadLocal<>();
 
     /**
+     * ★★★#1183：**本次 call 的读数对象**（与 {@link #CALL_DNS} 同一线程绑定）。
+     * <p>DNS 查询发生在 `execute()` 的**调用线程**上（见 {@link #CALL_DNS} 的取证），
+     * `ForwardingDns.lookup` 借此把解析来源写进**本次**请求的读数，而不是进程级的"最后一次"。
+     */
+    private static final ThreadLocal<CallMetrics> CALL_METRICS = new ThreadLocal<>();
+
+    /**
      * 安装/清除 HTTPDNS 解析器（进程级）。
      *
      * <p>★清除后**新建**的 client 才用系统 DNS——已缓存的 client 不可变（OkHttp 的 client 是 immutable）。
@@ -165,11 +172,23 @@ public final class HttpTransport {
      * ★必须在 `execute()` **之前**调用、在 `finally` 里 `clearCallDns()`（防线程复用串味）。
      */
     static void bindCallDns(Map<String, String> table) {
-        if (table == null || table.isEmpty()) CALL_DNS.remove();
-        else CALL_DNS.set(table);
+        bindCallDns(table, null);
     }
 
-    static void clearCallDns() { CALL_DNS.remove(); }
+    /**
+     * ★★★#1183：绑定 per-call 表 + per-call 读数（`m` 可为 null ⇒ 只绑表）。
+     */
+    static void bindCallDns(Map<String, String> table, CallMetrics m) {
+        if (table == null || table.isEmpty()) CALL_DNS.remove();
+        else CALL_DNS.set(table);
+        if (m == null) CALL_METRICS.remove();
+        else CALL_METRICS.set(m);
+    }
+
+    static void clearCallDns() {
+        CALL_DNS.remove();
+        CALL_METRICS.remove();
+    }
 
     /* ══════════════════ ★★★per-call 配置 ══════════════════ */
 
@@ -246,7 +265,10 @@ public final class HttpTransport {
      * （已实测：`caller-thread == lookup-thread`）。`finally` 里 clear 防线程复用串味。
      */
     public static Response execute(Call call, Map<String, String> dnsTable) throws java.io.IOException {
-        bindCallDns(dnsTable);
+        final String reqId = tagOf(call);
+        // ★★★#1183：把本次 call 的读数绑上，让 ForwardingDns 能写 per-call 的 dnsSource
+        final CallMetrics m = (reqId == null || reqId.isEmpty()) ? null : METRICS.get(reqId);
+        bindCallDns(dnsTable, m);
         try {
             return call.execute();
         } finally {
@@ -334,6 +356,7 @@ public final class HttpTransport {
                     if (!out.isEmpty()) {
                         dnsTableHits++;
                         lastDnsSource = "table";
+                        noteCallDnsSource("table");
                         return out;
                     }
                     // ★表里有这个域名但全不可解析 ⇒ **抛错**（不回退系统 DNS）：
@@ -344,17 +367,28 @@ public final class HttpTransport {
             final HttpDns impl = httpDns;
             if (impl != null) {
                 lastDnsSource = "resolver";
+                noteCallDnsSource("resolver");
                 final List<InetAddress> out = impl.lookup(hostname);
                 if (out == null || out.isEmpty()) throw new UnknownHostException("HTTPDNS 无结果：" + hostname);
                 return out;
             }
             lastDnsSource = "system";
+            noteCallDnsSource("system");
             return Dns.SYSTEM.lookup(hostname);
         }
     }
 
-    private static Request buildRequest(CallConfig cfg) {
-        Request.Builder b = new Request.Builder().url(cfg.url).tag(String.class, cfg.tag == null ? "" : cfg.tag);
+    /**
+     * ★★★#1183：把**本次 call** 的解析来源写进读数（`ForwardingDns` 在解析当时调用）。
+     * <p>★只写 `table` / `resolver` / `system` 三者；URL 本身是 IP 时 OkHttp **不会**调 lookup
+     * ⇒ 这里不会被调用 ⇒ `dnsSource` 保持 null（"没有发生解析"，与"走了 system"是两件事）。
+     */
+    private static void noteCallDnsSource(String source) {
+        final CallMetrics m = CALL_METRICS.get();
+        if (m != null) m.dnsSource = source;
+    }
+
+    private static Request buildRequest(CallConfig cfg) {        Request.Builder b = new Request.Builder().url(cfg.url).tag(String.class, cfg.tag == null ? "" : cfg.tag);
         for (Map.Entry<String, String> e : cfg.headers.entrySet()) {
             if (e.getKey() == null || e.getValue() == null) continue;
             b.header(e.getKey(), e.getValue());
@@ -406,6 +440,15 @@ public final class HttpTransport {
         volatile boolean connected = false;
         volatile String proto = null;
         volatile Throwable failure = null;
+        /**
+         * ★★★#1183：**本次 call** 的域名解析走了哪一级（`table` / `resolver` / `system`）。
+         *
+         * <p>★为什么不能直接用进程级的 {@link #lastDnsSource}：那是**全局**最后一次，
+         * 并发时会被别的请求覆盖 ⇒ 业务读到的可能是**别人**的解析来源（假读数）。
+         * 这里由 {@link ForwardingDns} 在解析当时直接写进本 call 的读数对象。
+         * <p>缺省 null = 本次没有发生 DNS 查询（连接复用了池里的连接，或 URL 本身就是 IP）。
+         */
+        volatile String dnsSource = null;
     }
 
     /** 最近若干次调用的读数（按 tag 保留；判据在 request 完成后立刻取）。 */
@@ -452,6 +495,12 @@ public final class HttpTransport {
         putMs(out, "connectMs", m.connectStart, m.connectEnd);
         putMs(out, "tlsMs", m.secureStart, m.secureEnd);   // 明文/复用 ⇒ 两端有一端为 -1 ⇒ 不写
         putMs(out, "ttfbMs", m.reqHeadersEnd, m.respHeadersStart);
+        // ★★★#1183：本次 call 的域名解析来源（`table` = 命中了业务给的 httpDns 表）
+        //   ★缺 = 本次没发生解析（连接复用 / URL 本身是 IP）⇒ **不写**，绝不填 "system" 冒充
+        if (m.dnsSource != null && !m.dnsSource.isEmpty()) {
+            out.put("dnsSource", m.dnsSource);
+            out.put("dnsTableHit", "table".equals(m.dnsSource) ? "1" : "0");
+        }
         return out.isEmpty() ? null : out;
     }
 

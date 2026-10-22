@@ -18,6 +18,13 @@ public final class HttpDnsProbe {
     public static final String REPORT = "httpdns-probe.json";
     private static java.util.function.BiConsumer<String, String> reportSinkFn = null;
     public static void setReportSink(java.util.function.BiConsumer<String, String> sink) { reportSinkFn = sink; }
+    /**
+     * ★★★#1183：脚本经 **广播** 传入的真实可达 IP。
+     * <p>★为什么要静态字段：探针实际由 `am broadcast` 触发，而广播**不更新 Activity 的 Intent**
+     *   ⇒ 在探针里 `getIntent().getStringExtra(...)` 恒为 null（真机实测踩过）。
+     */
+    private static volatile String pendingReachableIp = "";
+    public static void noteReachableIp(String ip) { pendingReachableIp = ip == null ? "" : ip.trim(); }
     static void reportSink(String content) {
         if (reportSinkFn != null) { reportSinkFn.accept(REPORT, content); return; }
         android.util.Log.w("proteus", "httpdns-probe 结果无落盘出口：" + content);
@@ -75,10 +82,37 @@ public final class HttpDnsProbe {
             out.put("boot_ok", boot.ok);
             QuickJsEngine.nativeRunPendingJobs();
 
+            /**
+             * ★★★#1183：**该 host 的真实可达 IP**，用于"命中表且成功"那一轮。
+             * <p>★为什么优先取 intent 传入的 `reachableIp`：本方法跑在**主线程**上，
+             *   `InetAddress.getAllByName` 会抛 `NetworkOnMainThreadException`——
+             *   而它被 `catch (Throwable)` 吞掉 ⇒ 静默得到空串（真机实测踩过：
+             *   `reachable_ip:""` 但设备 `ping example.com` 明明能解析）。
+             *   遂改为：**探针脚本侧解析后经 intent 传入**；本机兜底仅在非主线程时才用。
+             */
+            String reachableIp = "";
+            {
+                android.content.Intent it2 = activity.getIntent();
+                if (it2 != null) {
+                    String ri = it2.getStringExtra("reachableIp");
+                    if (ri != null && !ri.isEmpty()) reachableIp = ri.trim();
+                }
+                // ★广播路径：`am broadcast` 不会更新 Activity 的 Intent ⇒ 优先用静态字段
+                if (reachableIp.isEmpty() && !pendingReachableIp.isEmpty()) reachableIp = pendingReachableIp;
+            }
+            if (reachableIp.isEmpty() && android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+                try {
+                    for (java.net.InetAddress a : java.net.InetAddress.getAllByName(host)) {
+                        if (a instanceof java.net.Inet4Address) { reachableIp = a.getHostAddress(); break; }
+                    }
+                } catch (Throwable ignored) { /* 解析不到 ⇒ 跳过该轮（如实跳过，不假装验过） */ }
+            }
+            out.put("reachable_ip", reachableIp);
             QuickJsEngine.EvalResult kick = QuickJsEngine.eval(
                     "typeof __proteusHostAppHttpDnsProbe==='function'"
                     + "?__proteusHostAppHttpDnsProbe(" + org.json.JSONObject.quote(base)
-                    + "," + org.json.JSONObject.quote(host) + "):'no-hook'");
+                    + "," + org.json.JSONObject.quote(host)
+                    + "," + org.json.JSONObject.quote(reachableIp) + "):'no-hook'");
             out.put("probe_kick", kick.ok ? kick.value : ("ERR:" + kick.error));
             if (!kick.ok || !String.valueOf(kick.value).contains("started")) {
                 out.put("ok", false);

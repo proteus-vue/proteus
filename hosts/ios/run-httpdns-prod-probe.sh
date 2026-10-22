@@ -38,9 +38,21 @@ mkdir -p "$OUT_DIR"
 # ★报告先删（防 pull 失败读上轮——本仓反复踩过"报告永远是旧的"）
 rm -f "$OUT_DIR/superapp.json" "$OUT_JSON"
 
+# ★★★#1183：命中表且成功那一轮需要**真实可达 IP**（脚本侧解析——JS 引擎无 DNS API）
+HIT_HOST="$(printf '%s' "$HIT_URL" | sed -E 's#^https?://([^/:]+).*#\1#')"
+REACHABLE_IP="$(dig +short "$HIT_HOST" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1 || true)"
+if [ -z "$REACHABLE_IP" ]; then
+  REACHABLE_IP="$(nslookup "$HIT_HOST" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9]+\.' | head -1 || true)"
+fi
+if [ -n "$REACHABLE_IP" ]; then
+  echo "    reachableIp=${REACHABLE_IP}（用于命中表且成功那一轮）"
+else
+  echo "    ⚠ 本机解析不出 ${HIT_HOST} ⇒ hit 轮将被跳过（如实跳过，不假装验过）"
+fi
+
 echo "==> 真机跑生产面探针（注入 $UNREACHABLE 应失败 / 基线应成功 / 表未命中应回落）"
 bash "$HERE/run-selfdraw.sh" --superapp \
-  "--httpdns-prod-probe=${HIT_URL},${MISS_URL},${UNREACHABLE}" 2>&1 | tail -12
+  "--httpdns-prod-probe=${HIT_URL},${MISS_URL},${UNREACHABLE},${REACHABLE_IP}" 2>&1 | tail -12
 
 [ -f "$OUT_DIR/superapp.json" ] || { echo "✗ 报告未取回（$OUT_DIR/superapp.json）"; exit 4; }
 
@@ -105,6 +117,32 @@ if (probe.miss) {
 add(Number(hostStats.tableHits ?? -1) >= 0 || Number(stats.tableHits ?? -1) >= 0,
   '宿主 http.dnsStats 可读（探针或 extraReadings 至少一处有值）')
 
+// ★★★#1183：**业务可见的**每请求解析来源（`meta.transport.dnsSource`）
+//   ★这是本轮交付的核心：`http.dnsStats` 是进程级，业务在单次请求里看不到。
+//   ★注入侧**预期不可得**：注入不可达 IP ⇒ 连接失败 ⇒ `didFinishCollecting` 可能不产生 metrics
+//     ⇒ `transport` 为 null。此时**必须是空**（不能填 system/table 冒充）——
+//     这与「缺键=不可得」同一纪律，故断言"有值则必须是 table，无值必须为空"。
+const injectSrc = String(probe.inject_dns_source ?? '')
+add(injectSrc === '' || injectSrc === 'table',
+  `★注入侧 dnsSource 只能是 table 或不可得（实得 ${JSON.stringify(injectSrc)}）`)
+if (probe.miss) {
+  add(String(probe.miss_dns_source) === 'system',
+    `★未命中侧 \`meta.transport.dnsSource\` 必须为 system（回落可见；实得 ${JSON.stringify(probe.miss_dns_source)}）`)
+}
+// ★最强的一条：基线（不注入、真实证书、成功）不该报 table ——
+//   "没发生解析 / 走了系统"与"命中了表"必须能分辨开
+const baseSrc = (probe.baseline_transport && probe.baseline_transport.dnsSource) || ''
+add(baseSrc === '' || baseSrc === 'system' || baseSrc === 'literal',
+  `★基线（无 httpDns 表）不该报 table（实得 ${JSON.stringify(baseSrc)}）`)
+// ★★★#1183：**命中表且成功**那一轮 —— 这是"业务能看到 dnsSource=table"的直接证据
+if (probe.hit_transport || probe.hit_error) {
+  add(probe.hit_ok === true, `★命中表的那次请求应成功（实得 ${JSON.stringify(probe.hit_ok)}）`)
+  add(probe.hit_dns_source === 'table',
+    `★命中表那次 meta.transport.dnsSource 应为 table（实得 ${JSON.stringify(probe.hit_dns_source)}）`)
+  add(probe.hit_transport && probe.hit_transport.dnsTableHit === true,
+    '★dnsTableHit === true（与 dnsSource 自洽）')
+}
+
 let bad = 0
 for (const [ok, msg] of chk) { console.log(`  ${ok ? '✅' : '✗'} ${msg}`); if (!ok) bad++ }
 
@@ -116,6 +154,10 @@ const summary = {
   baseline: probe.baseline || null,
   miss: probe.miss || null,
   dnsStats: merged,
+  inject_dns_source: probe.inject_dns_source ?? null,
+  miss_dns_source: probe.miss_dns_source ?? null,
+  baseline_transport: probe.baseline_transport ?? null,
+  miss_transport: probe.miss_transport ?? null,
   failedChecks: chk.filter(([ok]) => !ok).map(([, m]) => m),
 }
 fs.writeFileSync(path.join(dir, 'httpdns-prod-device.json'), JSON.stringify(summary, null, 2))

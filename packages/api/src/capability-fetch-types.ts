@@ -286,6 +286,21 @@ export interface TransportMeta {
   tlsMs?: number
   /** 首字节耗时（ms；从发起请求到收到响应首字节） */
   ttfbMs?: number
+  /**
+   * ★★★#1183：**本次请求的域名解析走了哪一级**（HTTPDNS 可观测面）。
+   *
+   * - `'table'`：命中业务给的 `httpDns` 表（**这是"表真的生效"的唯一直接证据**）；
+   * - `'system'`：表未命中 ⇒ 回落系统 DNS（**回落是显式的，不是静默**）；
+   * - `'literal'`：URL 本身就是 IP ⇒ 根本没有解析；
+   * - `'resolver'`：命中进程级解析器（Android 的 `setHttpDns`）。
+   *
+   * ★**为什么必须有这个字段**：`httpDns` 生效与否，从外部只有"请求成败"一个间接信号；
+   *   而"注入不可达 IP ⇒ 失败"与"网络本来就不通"看起来一样（#1169 首跑踩到）。
+   * ★缺 = 该端不上报（不写 `'system'` 冒充"确定走了系统"——那是假数据）。
+   */
+  dnsSource?: 'table' | 'system' | 'literal' | 'resolver'
+  /** ★★★#1183：本次请求是否命中了 `httpDns` 表（与 `dnsSource === 'table'` 同义，但更直白） */
+  dnsTableHit?: boolean
 }
 
 /** ★#1122：`useFetch` 成功结果（`data` 解构保持兼容；`status`/`headers` 为新增）。 */
@@ -346,5 +361,15 @@ export function parseTransportReadout(raw: Record<string, string> | undefined): 
   if (tls !== undefined) out.tlsMs = tls
   const ttfb = num('ttfbMs')
   if (ttfb !== undefined) out.ttfbMs = ttfb
+  /**
+   * ★★★#1183：DNS 来源（HTTPDNS 可观测面）。
+   * ★**白名单校验**：只认四个已知值——宿主写错/写新值时**丢弃**而不是当字符串透传，
+   *   否则业务会拿到拼错的枚举值（`'Tabel'`）却以为有效。
+   */
+  const src = raw['dnsSource']
+  if (src === 'table' || src === 'system' || src === 'literal' || src === 'resolver') out.dnsSource = src
+  const hit = raw['dnsTableHit']
+  if (hit === '1') out.dnsTableHit = true
+  else if (hit === '0') out.dnsTableHit = false
   return Object.keys(out).length > 0 ? out : undefined
 }

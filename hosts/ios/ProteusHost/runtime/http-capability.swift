@@ -797,6 +797,22 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
         span(tm.connectStartDate, tm.connectEndDate, "connectMs")
         span(tm.secureConnectionStartDate, tm.secureConnectionEndDate, "tlsMs")
         span(tm.requestStartDate, tm.responseStartDate, "ttfbMs")
+        /**
+         * ★★★#1183：**本次请求的域名解析走了哪一级**（HTTPDNS 可观测面）。
+         *
+         * 【为什么只在"本次新建了连接"时写】连接**复用**时根本没有解析
+         *   ⇒ 写 `dnsSource` 会把上一次的值冒充成本次（假读数）。
+         *   本仓纪律：「不可得」与「测到 0」是两件事 ⇒ 复用 / URL 本身是 IP 时**不写这个键**。
+         * 【host 来源】`task.originalRequest?.url` 是**原始 URL**（重定向后仍是最初那个），
+         *   与代理侧记的 host 一致。
+         */
+        if !tm.isReusedConnection,
+           let host = task.originalRequest?.url?.host?.lowercased(),
+           let dnsTable = HttpCapability.table(for: session),
+           let src = HttpDnsProxies.source(forHost: host, table: dnsTable) {
+            nv.append(("dnsSource", src))
+            nv.append(("dnsTableHit", src == "table" ? "1" : "0"))
+        }
         lock.lock()
         if var st = states[task.taskIdentifier] {
             st.transport = nv

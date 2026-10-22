@@ -187,6 +187,24 @@ inline const proteus::wire::NameValues*& httpDnsTable() {
 }
 
 /**
+ * ★★★#1183：**本次请求**的域名解析来源（`table` / `miss`）。
+ *
+ * 【为什么不能复用 `dnsProbe().lastSource`】那是**进程级**最后一次——并发/连续请求时
+ *   会被别的请求覆盖（与 Android 的 `lastDnsSource` 同一个坑）。
+ * ★空串 = 本次没有发生解析（URL 本身是 IP、或连接复用）⇒ 上层**不写**该字段
+ *   （"没解析" ≠ "走了系统 DNS"，本仓纪律：不拿缺省值冒充已知）。
+ */
+inline std::string& callDnsSource() {
+  static std::string s;
+  return s;
+}
+
+/** ★#1183：请求开始时清空（由 `handle()` 的 RAII 守卫一并负责） */
+struct CallDnsSourceGuard {
+  ~CallDnsSourceGuard() { callDnsSource().clear(); }
+};
+
+/**
  * ★★★#1169：**RAII 守卫**——`handle()` 有十余个 return 出口，逐个加清理太脆
  * （漏一个就是"表指针悬垂 ⇒ 下一个请求读到已析构对象"）。
  * ⇒ 用析构函数清空：无论从哪个出口返回、还是抛异常，都会执行。
@@ -239,7 +257,8 @@ inline Rcp_IpAddress* tableDnsLookup(const char* host, uint16_t port) {
   p.lastHost = host != nullptr ? host : "";
   p.lastPort = port;
   const proteus::wire::NameValues* table = httpDnsTable();
-  if (table == nullptr) { p.lastSource = "miss"; return nullptr; }
+  // ★#1183：per-request 来源（miss 也要记——"回落系统"本身是可观测事实）
+  if (table == nullptr) { callDnsSource() = "miss"; p.lastSource = "miss"; return nullptr; }
   std::string want = host != nullptr ? host : "";
   for (auto& ch : want) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
   std::string ipsCsv;
@@ -248,7 +267,7 @@ inline Rcp_IpAddress* tableDnsLookup(const char* host, uint16_t port) {
     for (auto& ch : k) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
     if (k == want) { ipsCsv = kv.second; break; }
   }
-  if (ipsCsv.empty()) { p.lastSource = "miss"; return nullptr; }
+  if (ipsCsv.empty()) { callDnsSource() = "miss"; p.lastSource = "miss"; return nullptr; }
   // 静态池：每次调用重置（一次 handle 内只有一个域名在被解析）
   static std::vector<Rcp_IpAddress> pool;
   pool.clear();
@@ -268,10 +287,11 @@ inline Rcp_IpAddress* tableDnsLookup(const char* host, uint16_t port) {
     if (comma == std::string::npos) break;
     start = comma + 1;
   }
-  if (pool.empty()) { p.lastSource = "miss"; return nullptr; }
+  if (pool.empty()) { callDnsSource() = "miss"; p.lastSource = "miss"; return nullptr; }
   for (size_t i = 0; i + 1 < pool.size(); i++) pool[i].next = &pool[i + 1];
   p.tableHits++;
   p.lastSource = "table";
+  callDnsSource() = "table";
   return &pool[0];
 }
 
@@ -608,6 +628,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    */
   Rcp_DnsRule dnsRule{};
   HttpDnsTableGuard dnsGuard;   // ★#1169：任何出口都清空表指针（防悬垂）
+  CallDnsSourceGuard srcGuard;  // ★#1183：任何出口都清空 per-request 解析来源（防跨请求串味）
   if (f.httpDns.has && !f.httpDns.v.empty()) {   // ★`Opt<T>` 用 `.has` / `.v`（不是指针）
     // 表放到栈上（lifecycle = 本次 handle），回调通过全局指针读取
     httpDnsTable() = &f.httpDns.v;
@@ -804,6 +825,12 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
        */
       if (ti->tlsHandshakeTime > 0.0) putMs("tlsMs", ti->tlsHandshakeTime - ti->connectTime);
       putMs("ttfbMs", ti->startTransferTime);
+      // ★★★#1183：本次请求的域名解析来源（`table` = 命中业务给的表）
+      //   ★空 = 本次没发生解析（URL 是 IP / 连接复用）⇒ **不写**，绝不填 "miss" 冒充
+      if (!callDnsSource().empty()) {
+        tp.emplace_back("dnsSource", callDnsSource());
+        tp.emplace_back("dnsTableHit", callDnsSource() == "table" ? "1" : "0");
+      }
       if (!tp.empty()) out.transport = std::move(tp);
     }
     // 响应体原样回字节（不解析）

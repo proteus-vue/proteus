@@ -64,6 +64,17 @@ final class HttpDnsProxy {
     private var _lastSource = ""
     private var _lastHost = ""
     private var _connectErrors = 0
+    /**
+     * ★★★#1183：**host → 最近一次解析来源**（供 `FetchMeta.transport.dnsSource` 用）。
+     *
+     * 【为什么按 host 而不是按请求】URLSession **不暴露**"这次请求触发了哪次 CONNECT"——
+     *   代理侧只能看到 TCP 连接，看不到它属于哪个 `URLSessionTask`。而 transport 读数在
+     *   请求完成后按 **URL 的 host** 取即可对上。
+     * ★诚实边界：连接**复用**时根本不会走到代理（没有 CONNECT、没有 lookup）⇒ 该 host 的
+     *   `dnsSource` 可能还是上一次的值。⇒ 上层只在**本次真的新建了连接**时才写这个字段
+     *   （`reused == false`），复用时不写（"没发生解析"≠"走了系统 DNS"）。
+     */
+    private var _sourceByHost: [String: String] = [:]
 
     init?(table: [String: [String]]) {
         self.table = table
@@ -108,6 +119,13 @@ final class HttpDnsProxy {
         }
         _lastSource = source.rawValue
         _lastHost = host
+        _sourceByHost[host] = source.rawValue
+    }
+
+    /// ★#1183：该 host 最近一次的解析来源（`nil` = 这个表对应的代理从没解析过它）
+    func source(forHost host: String) -> String? {
+        countersLock.lock(); defer { countersLock.unlock() }
+        return _sourceByHost[host.lowercased()]
     }
 
     private func noteConnectError() {
@@ -451,6 +469,16 @@ enum HttpDnsProxies {
         guard let p = HttpDnsProxy(table: normalized) else { return nil }
         proxies[k] = p
         return p
+    }
+
+    /// ★#1183：查某个 host 由**该表对应的代理**解析时走的哪一级。
+    ///   `nil` = 该表下这个 host 从没被解析过（⇒ 上层不写 `dnsSource`，不填默认值）。
+    static func source(forHost host: String, table: [String: [String]]) -> String? {
+        let k = key(for: table)
+        lock.lock()
+        let p = proxies[k]
+        lock.unlock()
+        return p?.source(forHost: host)
     }
 
     /// 聚合记账（`http.dnsStats` 回执）。★跨表累加，`lastSource/lastHost` 取最近一次有记录的。

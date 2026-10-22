@@ -17,12 +17,32 @@
     "status": 200
   },
   "dnsStats": {
-    "lookups": 2,
-    "tableHits": 1,
+    "lookups": 3,
+    "tableHits": 2,
     "misses": 1,
     "lastSource": "system",
     "lastHost": "httpbin.org",
-    "proxies": 1
+    "proxies": 2
+  },
+  "inject_dns_source": "",
+  "miss_dns_source": "system",
+  "baseline_transport": {
+    "proto": "h3",
+    "reused": false,
+    "dnsMs": 17,
+    "connectMs": 387,
+    "tlsMs": 386,
+    "ttfbMs": 389
+  },
+  "miss_transport": {
+    "proto": "h2",
+    "reused": false,
+    "dnsMs": 0,
+    "connectMs": 908,
+    "tlsMs": 615,
+    "ttfbMs": 325.6,
+    "dnsSource": "system",
+    "dnsTableHit": false
   },
   "failedChecks": []
 }

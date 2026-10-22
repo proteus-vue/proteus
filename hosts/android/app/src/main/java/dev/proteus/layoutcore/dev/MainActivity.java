@@ -101,7 +101,7 @@ public class MainActivity extends Activity {
                     }, "proteus-test-crash").start();
                     return;
                 }
-                String p = i.getStringExtra("path"); WebSocketProbe.noteUrl(i.getStringExtra("wsUrl")); // ★#1093 广播 extra 在**这个** Intent 上
+                String p = i.getStringExtra("path"); WebSocketProbe.noteUrl(i.getStringExtra("wsUrl")); HttpDnsProbe.noteReachableIp(i.getStringExtra("reachableIp")); // ★#1093 广播 extra 在**这个** Intent 上 · ★#1183 同上
                 // ★★长卷收尾**不进 runAll**（2026-10-01 真机实证的致命细节）：
                 //   `runAll()` 会 `clearSceneViews()`（把长卷清掉）+ 重跑全套重活测试 ⇒
                 //   长卷的"帧循环/滚动记账"全部作废（报告只剩静态壳）。

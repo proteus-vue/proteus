@@ -48,10 +48,22 @@ if "$ADB" shell "test -f ${REPORT}" >/dev/null 2>&1; then
 fi
 
 echo "==> ② 触发 httpdns-probe（host=${HOST}）"
-"$ADB" shell "am start -n $PKG/.MainActivity --es path httpdns-probe --es host '$HOST'" >/dev/null 2>&1
+# ★★★#1183：`reachableIp` 由**本机**解析后传入 —— 探针跑在主线程，
+#   `InetAddress.getAllByName` 会抛 NetworkOnMainThreadException（被 catch 吞成空串，
+#   真机实测踩过：`reachable_ip:""` 而设备 `ping` 明明能解析）。
+REACHABLE_IP="$(dig +short "$HOST" A 2>/dev/null | grep -E '^[0-9]+\.' | head -1 || true)"
+if [ -z "$REACHABLE_IP" ]; then
+  REACHABLE_IP="$(nslookup "$HOST" 2>/dev/null | awk '/^Address: /{print $2}' | grep -E '^[0-9]+\.' | head -1 || true)"
+fi
+if [ -n "$REACHABLE_IP" ]; then
+  echo "    reachableIp=${REACHABLE_IP}（用于"命中表且成功"那一轮）"
+else
+  echo "    ⚠ 本机解析不出 ${HOST} ⇒ hit 轮将被跳过（如实跳过，不假装验过）"
+fi
+"$ADB" shell "am start -n $PKG/.MainActivity --es path httpdns-probe --es host '$HOST' --es reachableIp '$REACHABLE_IP'" >/dev/null 2>&1
 bash "$WAIT" --cmd "\"$ADB\" logcat -d -s 'proteus:I' | grep -q run-receiver-ready" --timeout 40 --interval 1 --max-interval 3 \
   || echo "  ⚠ 未见 run-receiver-ready（40s）"
-"$ADB" shell "am broadcast -a dev.proteus.RUN --es path httpdns-probe -p $PKG" >/dev/null 2>&1
+"$ADB" shell "am broadcast -a dev.proteus.RUN --es path httpdns-probe --es reachableIp '$REACHABLE_IP' -p $PKG" >/dev/null 2>&1
 
 if ! bash "$WAIT" --cmd "\"$ADB\" shell \"test -f ${REPORT}\" >/dev/null 2>&1" --timeout 180 --interval 2 --max-interval 4; then
   echo "✗ 报告未生成——看 logcat"
@@ -70,6 +82,12 @@ const checks = [
   ['★★基线成功（同域名不传 httpDns ⇒ 网络本身通）', p.baseline_ok === true],
   ['★★注入不可达 IP 后请求**失败**（表真的被采用）', p.inject_ok === false],
   ['注入失败不是 unsupported（该端确实实现了 HTTPDNS）', String(p.inject_code || '') !== 'fetch.unsupported'],
+  // ★★★#1183：**业务可见**的每请求解析来源（`meta.transport.dnsSource`）
+  //   ★这是"httpDNS 到底生效没有"从**间接推断**（请求成败）变成**每请求直接证据**的落点。
+  ['★命中表的那次请求：meta.transport.dnsSource === table', p.hit_dns_source === 'table'],
+  ['★dnsTableHit === true（与 dnsSource 自洽）', p.hit_transport && p.hit_transport.dnsTableHit === true],
+  ['★那次确实是新建连接（reused=false ⇒ 真的查了 DNS）', p.hit_transport && p.hit_transport.reused === false],
+  ['★基线（无表）不该报 table（不伪造来源）', p.baseline_dns_source !== 'table'],
   ['整体 ok', p.ok === true],
 ]
 let bad = 0

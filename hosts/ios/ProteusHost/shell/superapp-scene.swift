@@ -473,11 +473,13 @@ final class SuperappScene: NSObject {
                 let rounds = parts.count >= 3 ? (Int(parts[2]) ?? 3) : 3
                 extra = "\(SuperappScene.jsonQuote(pub)),\(rounds)"
             case "--httpdns-prod-probe=":
-                // ★★★#1180：参数形态 `--httpdns-prod-probe=<hitUrl>[,<missUrl>[,<unreachableIp>]]`
+                // ★★★#1180：参数形态 `--httpdns-prod-probe=<hitUrl>[,<missUrl>[,<unreachableIp>[,<reachableIp>]]]`
                 //   `hitUrl` = parts[0]（runner 已取首参作 base）；其余按序。
+                //   ★#1183：第 4 参 = 真实可达 IP（脚本侧 dig 得到）—— 用于"命中表且成功"那一轮。
                 let miss = parts.count >= 2 ? parts[1] : ""
                 let unreach = parts.count >= 3 ? parts[2] : "203.0.113.1"
-                extra = "\(SuperappScene.jsonQuote(miss)),\(SuperappScene.jsonQuote(unreach))"
+                let reach = parts.count >= 4 ? parts[3] : ""
+                extra = "\(SuperappScene.jsonQuote(miss)),\(SuperappScene.jsonQuote(unreach)),\(SuperappScene.jsonQuote(reach))"
             default:
                 extra = ""
             }

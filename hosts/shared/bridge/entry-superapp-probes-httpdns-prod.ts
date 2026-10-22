@@ -23,6 +23,8 @@ export function appHttpDnsProdProbe(
   hitUrl: string,
   missUrl = '',
   unreachableIp = '203.0.113.1',
+  /** ★★★#1183：该 host 的真实可达 IP（探针脚本侧解析后传入；空 = 跳过 hit 轮） */
+  reachableIp = '',
 ): string {
   const g = globalThis as Record<string, unknown>
   const out: Record<string, unknown> = { hitUrl, missUrl, unreachableIp }
@@ -39,6 +41,8 @@ export function appHttpDnsProdProbe(
     status?: number
     data?: unknown
     error?: { code?: string; message?: string }
+    /** ★★★#1183：观测元数据（`meta.transport.dnsSource` 就在这里——业务可见的那个面） */
+    meta?: { transport?: Record<string, unknown> }
   }
   type Hooks = { useFetch: <T>(u: string, c?: unknown) => Promise<Res> }
 
@@ -66,30 +70,57 @@ export function appHttpDnsProdProbe(
     let injectStatus = -1
     let injectCode = ''
     let injectMsg = ''
+    /** ★★★#1183：本次请求的传输读数（`meta.transport`，业务真正能看到的那个面） */
+    let injectTransport: Record<string, unknown> | null = null
     try {
       const r = await mk().useFetch(hitUrl, { ...base, httpDns: { [host]: unreachableIp } })
       injectOk = r?.ok === true
       injectStatus = Number(r?.status ?? -1)
       injectCode = String(r?.error?.code ?? '')
       injectMsg = String(r?.error?.message ?? '').slice(0, 120)
+      injectTransport = (r?.meta?.transport as Record<string, unknown>) ?? null
     } catch (e) {
       injectOk = false
       injectMsg = String((e as Error)?.message ?? e).slice(0, 120)
     }
     out['inject'] = { ok: injectOk, status: injectStatus, code: injectCode, message: injectMsg }
-    progress('inject:done', { ok: injectOk })
+    out['inject_transport'] = injectTransport
+    progress('inject:done', { ok: injectOk, dnsSource: injectTransport?.['dnsSource'] ?? null })
+
+    // ── ①b ★★★#1183：**命中表且成功**的一轮（真实可达 IP 填表）──
+    //   ★顺序：inject 之后、baseline 之前。理由与 Android 探针同（`reused:true` ⇒ 没解析
+    //     ⇒ `dnsSource` 为空）；真机实测过"放 baseline 之后"与"放最前"两种错位。
+    if (reachableIp) {
+      try {
+        const r = await mk().useFetch(`${hitUrl}?proteus-dns-hit=1`, {
+          ...base,
+          httpDns: { [host]: reachableIp },
+        })
+        const tp = (r?.meta?.transport as Record<string, unknown> | undefined) ?? null
+        out['hit_ok'] = r?.ok === true
+        out['hit_status'] = Number(r?.status ?? -1)
+        out['hit_transport'] = tp
+        out['hit_dns_source'] = tp ? String(tp['dnsSource'] ?? '') : ''
+      } catch (e) {
+        out['hit_error'] = String((e as Error)?.message ?? e).slice(0, 120)
+      }
+      progress('hit:done', { ok: out['hit_ok'] === true, src: out['hit_dns_source'] })
+    }
 
     // ── ② 基线（不注入）：必须成功 ──
     let baseOk: boolean | undefined
     let baseStatus = -1
+    let baseTransport: Record<string, unknown> | null = null
     try {
       const r = await mk().useFetch(hitUrl, { ...base, _noCache: Math.random() })
       baseOk = r?.ok === true
       baseStatus = Number(r?.status ?? -1)
+      baseTransport = (r?.meta?.transport as Record<string, unknown>) ?? null
     } catch {
       baseOk = false
     }
     out['baseline'] = { ok: baseOk, status: baseStatus }
+    out['baseline_transport'] = baseTransport
     progress('baseline:done', { ok: baseOk })
 
     // ── ③ 表未命中 ⇒ 回落系统解析（必须**可见**，不静默）──
@@ -98,6 +129,7 @@ export function appHttpDnsProdProbe(
       out['missHost'] = missHost
       let missOk: boolean | undefined
       let missStatus = -1
+      let missTransport: Record<string, unknown> | null = null
       try {
         const r = await mk().useFetch(missUrl, {
           ...base,
@@ -106,11 +138,14 @@ export function appHttpDnsProdProbe(
         })
         missOk = r?.ok === true
         missStatus = Number(r?.status ?? -1)
+        // ★★★#1183：这条的 `dnsSource` 必须是 `system`（回落**可见**才是可观测）
+        missTransport = (r?.meta?.transport as Record<string, unknown>) ?? null
       } catch {
         missOk = false
       }
       out['miss'] = { ok: missOk, status: missStatus }
-      progress('miss:done', { ok: missOk })
+      out['miss_transport'] = missTransport
+      progress('miss:done', { ok: missOk, dnsSource: missTransport?.['dnsSource'] ?? null })
     }
 
     // ── ④ 读宿主记账（"表被采用"的直接证据）──
@@ -128,6 +163,11 @@ export function appHttpDnsProdProbe(
     out['baseline_ok'] = out['baseline'] && (out['baseline'] as { ok?: boolean }).ok === true
     out['table_hit_seen'] = Number(stats['tableHits'] ?? 0) > 0
     out['last_source'] = String(stats['lastSource'] ?? '')
+    // ★★★#1183：**业务可见的**每请求解析来源（`meta.transport.dnsSource`）——
+    //   这是本轮交付的核心：`http.dnsStats` 是进程级记账，业务在单次请求里看不到。
+    //   ★注意"注入侧"那次可能是失败（不可达 IP）⇒ 失败分支也可能带 meta，取到即可。
+    out['inject_dns_source'] = (injectTransport?.['dnsSource'] as string) ?? ''
+    out['miss_dns_source'] = ((out['miss_transport'] as Record<string, unknown> | null)?.['dnsSource'] as string) ?? ''
     out['ok'] =
       out['inject_failed'] === true &&
       out['baseline_ok'] === true &&
@@ -155,19 +195,19 @@ export function appHttpDnsProdProbe(
  *   不必再动主文件（**减少将来的 1000 行冲突面**，不是为了过门禁而搬）。
  */
 export function installHttpDnsProbes(
-  appHttpDnsProbe: (b: string, h: string) => string,
+  appHttpDnsProbe: (b: string, h: string, ip?: string) => string,
   appHttpDnsBProbe: (u: string, p?: string, r?: number) => string,
 ): void {
   const g = globalThis as unknown as {
-    __proteusHostAppHttpDnsProbe?: (b: string, h: string) => string
+    __proteusHostAppHttpDnsProbe?: (b: string, h: string, ip?: string) => string
     __proteusHostAppHttpDnsBProbe?: (u: string, p?: string, r?: number) => string
-    __proteusHostAppHttpDnsProdProbe?: (h: string, m?: string, ip?: string) => string
+    __proteusHostAppHttpDnsProdProbe?: (h: string, m?: string, ip?: string, rip?: string) => string
   }
   // #1169：端到端探针（结果填 __proteusHostHttpDnsProbeResult）
   g.__proteusHostAppHttpDnsProbe = appHttpDnsProbe
   // #1179：B 路线**传输通路**探针（结果填 __proteusHostHttpDnsBProbeResult）
   g.__proteusHostAppHttpDnsBProbe = appHttpDnsBProbe
   // #1180：**生产面**探针（结果填 __proteusHostHttpDnsProdProbeResult）
-  g.__proteusHostAppHttpDnsProdProbe = (h: string, m?: string, ip?: string) =>
-    appHttpDnsProdProbe(h, m, ip)
+  g.__proteusHostAppHttpDnsProdProbe = (h: string, m?: string, ip?: string, rip?: string) =>
+    appHttpDnsProdProbe(h, m, ip, rip)
 }

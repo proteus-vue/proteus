@@ -6,14 +6,21 @@
 //      ⇒ 请求必须**失败**（网络层）。若成功，说明表没被采用（宿主忽略了它）。
 //   ② **是"表"起的作用，不是网络恰好不通**：对照组用**同样的域名、不传 httpDns**
 //      ⇒ 必须**成功**。两者一起才排除"网络本来就不通"的解释。
-//   ③ **不静默忽略**：iOS 无自定义 DNS 钩子 ⇒ 传了 `httpDns` 必须拿到
-//      `fetch.unsupported`（**不是**"成功了但走了系统 DNS"）。
+//   ③ ~~**不静默忽略**：iOS 无自定义 DNS 钩子 ⇒ 传了 `httpDns` 必须拿到
+//      `fetch.unsupported`~~ ⇒ ★#1182 起 **iOS 已支持**（B 路线），该条作废。
+//   ③' ★★★#1183：**业务可见**——成功请求的 `meta.transport.dnsSource` 必须是 `table`
+//      （`http.dnsStats` 是进程级，业务在单次请求里看不到；这一层补的就是"每请求可见"）。
 //
 // 【为什么要真机】单测只能验"帧编码里有这个 tag"；"宿主真的按表解析"只能在设备上验。
 //
 // 【诚实边界】本探针用"不可达 IP ⇒ 失败"作为因果证据（与 #1169 的鸿蒙探针同一手法）。
 //   ★它证明"表生效"，**不**证明"HTTPDNS 服务商给的 IP 是优质的"（那是业务侧的事）。
-export function appHttpDnsProbe(base: string, host: string): string {
+/**
+ * @param reachableIp ★★★#1183：该 host 的**真实可达 IP**（由探针脚本侧解析后传入）。
+ *   用于"命中表且成功"那一轮 —— 只有成功请求才有 transport 读数，才验得了 `dnsSource='table'`。
+ *   空 = 跳过该轮（诚实边界：不假装验过）。
+ */
+export function appHttpDnsProbe(base: string, host: string, reachableIp = ''): string {
   const g = globalThis as Record<string, unknown>
   const out: Record<string, unknown> = { base, host, host_platform: String(g['__PROTEUS_HOST_ID__'] ?? '') }
   g['__proteusHostHttpDnsProbeResult'] = ''
@@ -78,6 +85,31 @@ export function appHttpDnsProbe(base: string, host: string): string {
     out['inject_unreachable_ip'] = UNREACHABLE
     progress('inject:done', { ok: injectOk, code: injectCode })
 
+    // ── ①b ★★★#1183：**命中表且成功**的一轮（真实可达 IP 填表）──
+    //   ★为什么放在 inject **之后**、baseline **之前**：
+    //     · 放基线之后 ⇒ 基线已把该 host 的连接放进池 ⇒ 这一轮 `reused:true`、
+    //       **根本不查 DNS** ⇒ `dnsSource` 为空（真机实测就是这样，判断据一度误红）。
+    //     · 放 inject 之前 ⇒ inject 用**不可达 IP**，连接建不起来；但实测发现池里
+    //       会留下该 host:port 的失败态/复用路径 ⇒ 注入侧反而"成功"了（更糟）。
+    //     · 放在两者之间最干净：inject 的失败连接不进池（从没建立成功）⇒ 本轮必然新建连接并解析。
+    if (reachableIp) {
+      try {
+        const r = await hooks.useFetch(`${url}?proteus-dns-hit=1`, {
+          responseType: 'text',
+          timeout: 20000,
+          httpDns: { [host]: [reachableIp] },
+        })
+        const tp = (r?.meta?.transport as Record<string, unknown> | undefined) ?? null
+        out['hit_ok'] = r?.ok === true
+        out['hit_status'] = Number(r?.status ?? 0)
+        out['hit_transport'] = tp
+        out['hit_dns_source'] = tp ? String(tp['dnsSource'] ?? '') : ''
+      } catch (e) {
+        out['hit_error'] = String((e as Error)?.message ?? e)
+      }
+      progress('hit:done', { ok: out['hit_ok'] === true, src: out['hit_dns_source'] })
+    }
+
     // ── ② 基线：**注入之后**再跑（不传 httpDns）⇒ 应成功（证明域名本身可达）──
     //   ★此时连接池里可能有注入侧的失败记录，但那条连接从未建立成功 ⇒ 基线仍会新建连接并解析。
     let baselineOk = false
@@ -86,6 +118,11 @@ export function appHttpDnsProbe(base: string, host: string): string {
       const r = await hooks.useFetch(url, { responseType: 'text', timeout: 20000 })
       baselineOk = r?.ok === true
       baselineStatus = Number(r?.status ?? 0)
+      // ★★★#1183：业务可见的**每请求**解析来源（`meta.transport.dnsSource`）。
+      //   ★基线不传 httpDns ⇒ 预期是 `system`（或键不存在 = 连接复用没解析）——**绝不该是 table**。
+      const tp = (r?.meta?.transport as Record<string, unknown> | undefined) ?? null
+      out['baseline_transport'] = tp
+      out['baseline_dns_source'] = tp ? String(tp['dnsSource'] ?? '') : ''
     } catch (e) {
       out['baseline_error'] = String((e as Error)?.message ?? e)
     }
