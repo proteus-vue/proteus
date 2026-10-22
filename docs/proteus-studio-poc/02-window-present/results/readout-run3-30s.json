@@ -1,0 +1,16 @@
+{
+  "mode": "window",
+  "file": "/tmp/proteus-poc/720p30.mp4",
+  "size": "1280x720",
+  "hwdec": "videotoolbox",
+  "seconds": 30.0,
+  "frames_presented": 901,
+  "measured_fps": 30.03,
+  "interval_ms": {"p50": 33.39, "p95": 37.06, "p99": 37.87, "max": 38.96},
+  "compose_ms": {"p50": 1.576, "p95": 5.069, "p99": 5.899, "max": 6.562},
+  "present_ms": {"p50": 0.427, "p95": 0.879, "p99": 1.637, "max": 5.069},
+  "frame_budget_ms": 33.33,
+  "late_frames": 0,
+  "late_pct": 0.00,
+  "cpu": {"self_seconds": 2.47, "wall_seconds": 30.00, "single_core_pct": 8.2}
+}

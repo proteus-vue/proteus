@@ -12393,3 +12393,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 对 Studio 的意义**：`device.native` 的技术前提**基本成立**（30fps 零丢帧、CPU 5%），但只证明了**离屏这一段**；真机上屏（swap/合成进 Tauri 窗口）、检查器叠加的预算余量、真实设备投屏流（低延迟 H.264，码率/关键帧分布不同）都未测。P2 的 3–9ms 波动还说明：**留给叠加层的预算很薄** ⇒ 流水线化是必需品，不是优化项。
 **⑧ 产物**：`docs/proteus-studio-poc/`（README 环境与判据 · `01-offscreen-fbo/fbo_harness.c` 采样器 · `run.sh` 一键复跑 + `--baseline` · `results/*.json` 全部读数入库，含三轮 30s 与诊断轮）。二进制不入库（`run.sh` 每次现编）。
 **⑨ 未做 / 下一步**：B（把同一条管线嵌进 Tauri 2 窗口，量 swap 与合成）；v2（GPU timer query + 流水线 + 静机复测，重注册 P2）；C（真机投屏流）。
+
+1168. **★★★Studio PoC B1：同一条管线进**真实窗口**——合成+上屏合计 p50 1.4ms（预算的 4%）、0 迟到、CPU 7–8%；并**打回 PoC A 的 P2 高估** · 决策**（2026-10-22 · 承接 #1167「只证明了离屏这一段」）:
+**① 为什么做**：A 证明了「解码 → 自有 FBO」，但**全程无窗口** ⇒ swap 与 vsync 等待一点没量到。Studio 的 `device.native` 最终要被用户看见。这一段不测，等于"能画但不知道能不能上屏"。
+**② 方法（三段分开记账）**：`解码帧 →① compose(上传+BT.601 画进画布 FBO) →② blit(画布→窗口 backbuffer) →③ present(flushBuffer，swapInterval=1，含 vsync)`。★把 ③ 混进"渲染耗时"是最常见的测量谎言（工具报"渲染 16ms"，往往 15ms 在等 vsync）——所以 present **单独记账**。
+**③ 实测（M1 / macOS 26.5 / GL Apple M1 Metal 4.1 / 合成源 720p30，三轮 30s）**：fps **30.03**（三轮一致）· 间隔 p99 **34.8 / 40.8 / 37.9ms** · **compose+present 合计 p50 1.39 / 1.15 / 2.00ms**（中位 **1.39**，= 33.3ms 预算的 **4%**）· 迟到 **0/903 帧** · CPU **7.0–8.2%**。⇒ 判据 Q1–Q4 全过。给检查器/叠加/交互留出 **~32ms**。
+**④ ★★更正 A 的结论（纪律：推翻旧结论要先改旧结论）**：A 报「渲染段 p95 3–9ms、判不了」。本轮在有真实 vsync 的窗口里测到 compose 只有 **0.8–1.6ms**。差别就在 A 用 `glFinish`——**墙钟同步等待**，被并发负载抢占的时间全算进"渲染"。⇒ 修正为：**渲染工作量本身约 1ms；A 的 3–9ms 是同步等待 + 机器负载**。已在 `01-offscreen-fbo/README.md` 加「★更正」段，**阈值与口径不改，只更正解读**。
+**⑤ ★另一个测量事实（防止后人误读分段数字）**：**compose 与 present 的分界会漂移**——run1 `present 0.40ms`、run2 `present 5.55ms`，因为 vsync 等待落在哪一段取决于"这帧是否早于 vsync 就绪"。⇒ **只有"合计"跨轮可比**，分段数字不能直接比。
+**⑥ 诚实边界**：a) **这不是 Tauri**——原生 `NSWindow + NSOpenGLView`；Tauri 2 的窗口内容是 WKWebView，把这层 NSView 挂进它的 `contentView` 是**独立风险（B2 未做）**：性能面同源、**挂载可行性不同源**，不可外推；b) **无 UI 叠加**：只测"画布贴满窗口"，没测检查器/参考线/录制叠加；c) 本机有并发负载（p95 2.2–7.3 波动来源）；d) 合成源，真实投屏流未测（C）。
+**⑦ 产物**：`docs/proteus-studio-poc/02-window-present/`（`window_harness.m` 采样器 + `results/readout-run{1,2,3}-30s.json` 入库）。
+**⑧ 下一步**：B2（Tauri 2 承载：把 NSView 挂进 WKWebView 窗口 + 叠加一层 HTML UI，量"原生画面 + Web UI 叠加"是否可行）；C（真机投屏流）。
