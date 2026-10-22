@@ -52,13 +52,18 @@ function runProbe(body: string): string {
 //   ★不能再用 access("<name>.part")：临时名现在唯一（.proteus-tmp-<pid>-<seq>）
 //     ⇒ 固定名探测永远不存在 ⇒ 残包断言恒为 0（第三轮验证者变异实测：去掉
 //     abortUnfinished 的 remove，判据仍 5/5 绿而磁盘真留了 16 个残包）。
+// ★#1195：**任何临时痕迹都算**（.proteus-tmp-* 或 *.part*）——只认一个前缀时，
+//   换个命名形态的残包就数不到（实测：旧命名的 x.bin.part.* 让判据瞎眼）。
+static bool isTempArtifact(const char* n) {
+  if (std::strncmp(n, ".proteus-tmp-", 13) == 0) return true;
+  return std::strstr(n, ".part") != nullptr;
+}
 static int countTempFiles(const char* dir) {
   DIR* d = opendir(dir);
   if (!d) return 0;
   int n = 0;
   struct dirent* e;
-  while ((e = readdir(d)) != nullptr)
-    if (e->d_name[0] == '.' && std::strncmp(e->d_name, ".proteus-tmp-", 13) == 0) n++;
+  while ((e = readdir(d)) != nullptr) if (isTempArtifact(e->d_name)) n++;
   closedir(d);
   return n;
 }
@@ -69,7 +74,7 @@ static void cleanTempFiles(const char* dir) {
   if (!d) return;
   struct dirent* e;
   while ((e = readdir(d)) != nullptr) {
-    if (e->d_name[0] == '.' && std::strncmp(e->d_name, ".proteus-tmp-", 13) == 0) {
+    if (isTempArtifact(e->d_name)) {
       std::string p = std::string(dir) + "/" + e->d_name;
       std::remove(p.c_str());
     }
@@ -221,6 +226,19 @@ int main() {
     expect(out, '★长文件名（244）被临时名挤掉了 —— 临时名不能拼在 basename 后面').toContain('BASENAME_LEN 244')
     expect(Number(/OPEN (\d)/.exec(out)?.[1]), '★244 字符 basename 打不开（R1 回归）').toBe(1)
     expect(Number(/FINISH (\d)/.exec(out)?.[1]), '★244 字符 basename 收尾失败（R1 回归）').toBe(1)
+  })
+
+  it('★★★#1195 临时名：短（不占 basename 预算）且带随机度（不与业务文件名撞）', () => {
+    /**
+     * ★R1 的修法把临时名移到"同目录短名"，但**只有 pid+seq 两个变量** ⇒ 业务若真存
+     *   `.proteus-tmp-1-1` 这样的文件，会被 `open("wb")` 截断（后果是数据丢失）。
+     * ⇒ 要求：① 不拼在业务 basename 之后（否则又变回 R1）；② 名字里必须有纳秒/随机成分。
+     */
+    const s = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_save.h')
+    expect(s, '★临时名又拼回业务名后面了（R1 回归）').not.toMatch(/partPath\s*=\s*absPath\s*\+/)
+    expect(s, '★临时名只有 pid+seq（可能与业务文件名撞）').toMatch(/\.proteus-tmp-[^"\\]*[\s\S]{0,160}tv_nsec/)
+    // 与目标同目录（rename 不跨文件系统）
+    expect(s, '★临时名不在目标同目录（rename 可能 EXDEV）').toMatch(/partPath\s*=\s*dir\s*\+/)
   })
 
   it('★★★#1194（R1）真机：244 字符 basename 落盘成功且设备侧 size 一致', () => {

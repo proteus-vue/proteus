@@ -17,7 +17,8 @@
 #include <sys/stat.h>
 #include <unistd.h>   // ★#1192：getpid() 用于 .part 唯一名   // ★#1187：递归建父目录（mkdir）
 
-#include <atomic>   // ★#1192：唯一 .part 序号（跨 TU 不撞）
+#include <atomic>
+#include <ctime>   // ★#1195：临时名加纳秒（防与业务文件名撞）   // ★#1192：唯一 .part 序号（跨 TU 不撞）
 #include <ctime>
 
 #include <cstdio>
@@ -156,9 +157,16 @@ struct SaveSession {
     static std::atomic<unsigned long long> sSeq{0};
     const size_t slash = absPath.rfind('/');
     const std::string dir = (slash == std::string::npos) ? std::string(".") : absPath.substr(0, slash);
-    char uniq[64];
-    std::snprintf(uniq, sizeof(uniq), "/.proteus-tmp-%ld-%llu",
-                  static_cast<long>(::getpid()), ++sSeq);
+    /**
+     * ★#1195（第四轮自查）：临时名要短（不占 basename 预算）**但不能与业务文件名撞**。
+     *   `.proteus-tmp-<pid>-<seq>` 只有 2 个变量 ⇒ 业务若真存同名文件会被 `open("wb")` 截断
+     *   （概率极低但后果是数据丢失）。⇒ 加纳秒字段（仍只有 ~30 字符，与业务名长度无关）。
+     */
+    struct timespec ts{};
+    ::clock_gettime(CLOCK_MONOTONIC, &ts);
+    char uniq[80];
+    std::snprintf(uniq, sizeof(uniq), "/.proteus-tmp-%ld-%llu-%ld",
+                  static_cast<long>(::getpid()), ++sSeq, static_cast<long>(ts.tv_nsec));
     partPath = dir + uniq;
     fp = std::fopen(partPath.c_str(), "wb");
     if (fp == nullptr) {
