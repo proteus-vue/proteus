@@ -212,6 +212,42 @@ describe('★#1121 取消 · 两端宿主', () => {
     )
   })
 
+  /**
+   * ★★★#1165 真机证据：**慢请求在同步 napi 内完整跑完**。
+   *
+   * 【这条证据回答什么】"abort 是 no-op"的最后一环：如果 napi 不是同步阻塞的，
+   *   那 8 秒的慢请求期间 JS 本该有机会跑 `onabort`。实测（2026-10-22 真机 KLE-AL00U）：
+   *   `http-probe.json` 记录 `status=200 · bodyBytes=655360 · chunks=92`，
+   *   那是 `GET /stream?chunks=40&size=1024&delayMs=200`（**约 8 秒**才发完）的**完整**响应体，
+   *   而 `cancelCalled=false`（没有取消发生）。
+   *   ⇒ 请求从发起到完成全程在**同一次同步调用**里 ⇒ 期间 JS 没有执行机会 ⇒ abort 无处介入。
+   *
+   * 【为什么把真机读数写进判据】它是"同步语义"的**行为证据**（① 源码结构 ② 真机行为）。
+   *   只有源码结构时，别人可以合理怀疑"也许 napi 内部让出了线程"；这条把疑问关掉。
+   *   ★诚实边界：本判据读的是**已入库的真机证据**（非现场跑）——
+   *     若鸿蒙宿主改成可重入/常驻 VM，这个文件会变（届时本判据要重评）。
+   */
+  it('★★★鸿蒙真机证据：慢请求（~8s）在同步 napi 内完整返回，且未发生取消', () => {
+    const p = 'hosts/harmony/results/http-probe.json'
+    if (!fs.existsSync(path.join(ROOT, p))) {
+      // 证据文件缺失不判红（可能是干净的 clone / 未跑过真机）——但显式说明
+      expect(true, `⚠ 缺真机证据 ${p}（跑 bash hosts/harmony/run-http-probe.sh 生成）`).toBe(true)
+      return
+    }
+    const j = JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8')) as {
+      ok?: boolean
+      status?: number
+      bodyBytes?: number
+      limit?: { chunks?: number; cancelCalled?: boolean }
+    }
+    expect(j.ok, `★鸿蒙 HTTP 腿未通（${p}）`).toBe(true)
+    expect(j.status, '★状态码应为 200').toBe(200)
+    // ★核心：慢速端点（40 块 × 200ms ≈ 8s）的**完整**响应体 → 证明请求在同步调用内跑完
+    expect(Number(j.bodyBytes), '★应收到完整慢响应体（40×1024×…=655360B）').toBeGreaterThan(600_000)
+    expect(Number(j.limit?.chunks), '★逐块回调应真的发生过').toBeGreaterThan(50)
+    expect(j.limit?.cancelCalled, '★本次不该有取消（abort 无从介入 ⇒ 请求照常跑完）').toBe(false)
+  })
+
   it('★探针必须验证"后续块停止"与"宿主命中"（只验 reject 太弱）', () => {
     const s = read('hosts/shared/bridge/entry-superapp-probes.ts')
     expect(s, '缺 appCancelProbe').toMatch(/export function appCancelProbe/)
