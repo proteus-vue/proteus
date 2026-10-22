@@ -3176,6 +3176,32 @@
         "T-studio-shell-stage1"
       ],
       "note": "【done · 决策 #1183（2026-10-22）】承接 #1181，出门前置第一步。★为什么：247 行单文件 HTML 里 20 个字段散在 5 区域，状态同步靠人记，已出过\"漏改一处显示假值\"的事故。★栈：壳=Vue 3 + Vite；@proteus-vue/plugin-vite 也是 Vite 插件 ⇒ \"自家框架\"与\"Vue\"是同一栈两层，不是二选一。★★红线：壳不依赖 Proteus（自举死锁——调试器不能依赖被调试对象的运行时）。三层：L1 壳纯 Vue / L2 被调试视图走原生 GL / L3 自举试点先用非关键子面板。像素层绝不走虚拟 DOM。★实现：本目录非 workspace 成员 ⇒ build-ui.sh 借仓库根 vite/vue/plugin-vue，不装第二套依赖；bridge.ts 是 IPC 唯一入口（缺桥明确抛错）；useStats 统一\"负值→—\"。★输出目录 web-dist（不是 dist——根 .gitignore:5 的 dist/ 规则已坑过一次）；verify-panel 改起本地 http（ES module 在 file:// 下被 CORS 挡）。★证据：9 条判据一行没改就全过（组件 id 与原版一致）；产物 70.43KB JS / 28.86 gzip；真机 canvas rect 仍 80,68 996x748。★边界：只迁右栏与布局；未接 vue-tsc；无组件测试；Proteus 自举试点未开始。"
+    },
+    {
+      "id": "T-studio-package-app",
+      "title": "Studio 出可双击的 .app（70MB 自包含）：dylib 闭包打包 + PATH 补充 + 默认接真机",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "docs/proteus-studio-poc/05-studio-shell/package-app.sh",
+        "docs/proteus-studio-poc/05-studio-shell/bundle-dylibs.py",
+        "docs/proteus-studio-poc/05-studio-shell/icons/make-icon.py",
+        "docs/proteus-studio-poc/05-studio-shell/icons/icon.icns",
+        "docs/proteus-studio-poc/05-studio-shell/tauri.conf.json",
+        "docs/proteus-studio-poc/05-studio-shell/src/main.rs",
+        "docs/proteus-studio-poc/05-studio-shell/.gitignore",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1184,
+      "verification": "docs/proteus-studio-poc/05-studio-shell/package-app.sh && env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/sbin:/sbin \"<app>/Contents/MacOS/proteus-studio-shell\"（应打印 PATH 补充 + 默认接真机 + 硬解=1）",
+      "branch": null,
+      "related": [
+        "T-studio-ui-vue",
+        "T-studio-inspector-real"
+      ],
+      "note": "【done · 决策 #1184（2026-10-22）】出门清单 G2。★陷阱1：二进制硬链接 Homebrew ffmpeg ⇒ bundle-dylibs.py 收 65 个 dylib/59MB 进 Frameworks，改 182 处引用为 @rpath，加 LC_RPATH，逐个重签。★陷阱2：双击启动 PATH 只有 /usr/bin:/bin:… ⇒ adb 找不到 ⇒ ensure_tool_path 补 /opt/homebrew/bin、/usr/local/bin。★陷阱3：双击带不了环境变量 ⇒ default_live_source 探测 adb devices，有设备默认接真机，无设备明确打印。★打包器自己也错了两次：① 只收绝对路径依赖，漏了 libwebp 里以 @rpath/libsharpyuv 写的库 ⇒ 启动 Library not loaded；② 收尾判据把 @rpath（目标状态）当失败 ⇒ 永远报错。改成「无绝对 Homebrew 路径 + 每条 @rpath 都在包内」。★干净环境实测：PATH 补充 → 默认接真机 → 参数集 108 字节 → 硬解=1；otool 外部引用 0 条；@rpath 4 条全在包内；plutil 通过；adhoc 签名；产物 70MB。★测量纪律：屏幕静止时 screenrecord 3 秒只出 2 帧；每 0.3s 新起 adb 会话造滑动会抢占流（aus 275→6）。性能读数必须在持续运动下取。★边界：ad-hoc 非公证（别人机器仍被 Gatekeeper 拦）；仍依赖 adb；只测 arm64。"
     }
   ]
 }

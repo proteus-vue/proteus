@@ -12666,3 +12666,17 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 实测**：`./build-ui.sh` ⇒ 70.43KB JS（gzip 28.86）/ 3.97KB CSS；真机跑 `POC_LIVE=…` 结果 `canvas rect = 80.0,68.0 996.0x748.0`（与手写版逐字一致）、`fps 54.9 / lat 11.3ms / aus 846`。
 **⑧ 诚实边界**：a) 只迁移**右栏与布局**，左栏图标仍占位；b) **没接 `vue-tsc`**（Vite 只 transpile，类型错误只能靠 IDE）；c) 没做组件测试（`vitest` + `@vue/test-utils` 未接），只有端到端渲染判据；d) 70KB 里约 60KB 是 Vue 运行时，未做按需优化（桌面本地加载，不必要）；e) **Proteus 自举试点尚未开始**（L3）。
 **⑨ 产物**：`ui/`（index.html + 9 个源文件）· `vite.config.mjs` · `build-ui.sh` · `tauri.conf.json`（`frontendDist: web-dist`）· `verify-panel.mjs`（改 http 服务）· `.gitignore`（web-dist/ + .vite/ + 原因注释）· 删除 `web/index.html`。
+
+1184. **★★★Studio 出了第一个可双击的 .app（70MB 自包含）：打包暴露的三个"假可用"陷阱全部实测打脸后才修 · 决策**（2026-10-22 · 承接 #1183 · 出门清单 G2）:
+**① 为什么先做 G2 而不是 G1（迁包 + 门禁）**：G2 便宜且立刻可验证——`bundle.active=true` 就能产出可分发物；G1 会牵动 `check:pkg`/分层/构建链。先用最小代价把"能不能给别人装"这个问题变成已答，再谈工程化。
+**② ★三个陷阱（每一个都会让"可双击"变成假话，且都能在上机时立刻暴露）**：
+**a) 二进制硬链接 Homebrew ffmpeg**：`otool -L` 显示 `/opt/homebrew/opt/ffmpeg/lib/libav{format,codec,util}.dylib` ⇒ **只有装了 Homebrew ffmpeg 且路径相同的机器能跑**。修法：`bundle-dylibs.py` 递归收集依赖闭包（**65 个 dylib / 59MB**）进 `Contents/Frameworks`，`install_name_tool` 改写 **182 处**引用为 `@rpath/…`、逐个设 `-id`、给可执行文件加 `LC_RPATH=@executable_path/../Frameworks`，改过的 dylib 逐个 ad-hoc 重签。
+**b) 双击启动拿不到 shell 的 PATH**：LaunchServices 只给 `/usr/bin:/bin:/usr/sbin:/sbin`，而 `adb` 在 `/opt/homebrew/bin` ⇒ 面板能开、**一台设备也连不上**。修法：`ensure_tool_path()` 启动时补 `/opt/homebrew/bin`、`/usr/local/bin`（与"GUI 不继承 shell 环境"是同一类坑）。
+**c) 双击启动带不了环境变量** ⇒ 没有输入源、画布永远空白，用户以为坏了。修法：`default_live_source()` 用 `adb devices` 探测，有设备就默认接真机，**没有就明确打印"未检测到设备"**（而不是静默空白）。
+**③ ★★第四节：第一版打包器的收尾判据也是错的，两处都被 reality 打回**：
+**a) 只收绝对路径依赖**：Homebrew 有些库是以 `@rpath/libsharpyuv.0.dylib` 形式写在别人依赖里的（`libwebp` 就是），漏收 ⇒ 启动直接 `dyld: Library not loaded: @rpath/libsharpyuv.0.dylib`。修法：建 `basename → 路径` 索引（`/opt/homebrew/lib` + 各 `opt/*/lib`），`@rpath/`、`@loader_path/` 一律反查。
+**b) 判据把"目标状态"当成"失败"**：第一版收尾检查 `is_external(dep)` 仍命中 `@rpath/...`，于是**永远报错**。改成两条真正的判据：① 可执行文件里不能有**绝对** Homebrew 路径；② 每条 `@rpath/x` 必须在 `Frameworks/x` 真的存在。
+**④ 实测（干净环境 `env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin`，等价于双击）**：`PATH 补充：/opt/homebrew/bin:/usr/local/bin` → `未指定输入，默认接真机` → `参数集 108 字节 · 硬解=1 · open rc=0`；`otool -L` 外部引用 **0 条**、`@rpath` 依赖 4 条全在包内、`plutil -lint` 通过、`codesign -dv` = adhoc。产物 `build-app/Proteus Studio.app` **70MB**。
+**⑤ ★顺带修正一条测量纪律**：验证过程中 fps 从 50 掉到 0.8，我先怀疑是打包引入的回归，实测后是**设备屏幕静止**——`screenrecord` 在静止画面上几乎不出帧（直录 3 秒只有 **2 帧**）。⇒ **性能读数必须在"屏幕持续运动"下取**；而且用"每 0.3s 新起一个 adb 会话"制造滑动会**抢占流**（aus 从 275 掉到 6）——应改成设备侧单会话循环，或干脆不并发。这条要写进 PoC 的复跑说明，否则下一个人会拿静止画面的 fps 下结论。
+**⑥ 诚实边界**：a) **ad-hoc 签名不是公证**，拷到别人机器仍被 Gatekeeper 拦（右键→打开可绕过）；要真"双击就开"需 Developer ID + 公证，本轮没有；b) 仍依赖 `adb`（调试工具依赖 platform-tools 合理，但"装上就能用"要求对方有 adb）；c) 只测 Apple Silicon（dylib 为 arm64），Intel 需重编；d) 打包是**手写组装 .app**（本目录无 tauri-cli）；`tauri.conf.json` 的 `bundle` 段已配好，装了 CLI 后 `cargo tauri build` 同样可用；e) 没有 dmg/更新通道。
+**⑦ 产物**：`package-app.sh`（组装 + 自检）· `bundle-dylibs.py`（闭包打包，含两条收尾判据）· `icons/make-icon.py`（按尺寸重画，不是放大位图）+ `icon.icns` · `tauri.conf.json`（`bundle.active=true`）· `src/main.rs`（`ensure_tool_path` / `default_live_source`）· `.gitignore`（`build-app/`、`icons/AppIcon.iconset/`）。

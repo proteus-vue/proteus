@@ -122,6 +122,52 @@ popen 拉流（进程退出自动重连）→ Annex-B 拆 NAL → **按 `first_m
 2. 本轮中途猜"硬解 p99 更差是 GPU→CPU 回拷造成的"——量出来 `hw_transfer_ms.p50 = 0.05ms`
    （Apple Silicon 统一内存），**假设不成立**；首批看到的 p99 差异是机器负载噪声，不是机制。
 
+## 打包成可双击的 .app（决策 #1184）
+
+```bash
+./build-ui.sh        # 前端 → web-dist/
+./package-app.sh     # → build-app/Proteus Studio.app（70MB，自包含）
+./package-app.sh --open
+```
+
+### 三件必须做的事（少一件"能双击"就是假的）
+
+| # | 问题 | 做法 |
+|---|---|---|
+| 1 | 二进制硬链接 `/opt/homebrew/opt/ffmpeg/lib/libav*.dylib` ⇒ 只有装了 Homebrew ffmpeg 的机器能跑 | `bundle-dylibs.py` 递归收集 **65 个 dylib（59MB）** 打进了 `Contents/Frameworks`，`install_name_tool` 改 182 处引用为 `@rpath/…`，加 `LC_RPATH=@executable_path/../Frameworks` |
+| 2 | 双击启动时 LaunchServices 只给 `/usr/bin:/bin:/usr/sbin:/sbin`，**`adb` 找不到** | `ensure_tool_path()` 把 `/opt/homebrew/bin`、`/usr/local/bin` 补进 PATH（面板能开但连不上设备 = 假可用） |
+| 3 | 双击启动带不了环境变量 ⇒ 没输入源，画布永远空白 | `default_live_source()` 检测 `adb devices`，有设备就默认接真机，没有就明确打印"未检测到设备"而不是静默空白 |
+
+### 自检判据（`bundle-dylibs.py` 收尾那两条，缺一不可）
+
+1. 可执行文件里**不能有绝对** Homebrew 路径（否则换台机器就找不到）；
+2. 每条 `@rpath/x` 都必须在 `Frameworks/x` 真的存在（否则启动即 `Library not loaded`）。
+
+★第 2 条是被打脸换来的：第一版只收集**绝对路径**依赖，漏了以 `@rpath/libsharpyuv.0.dylib` 形式写在
+`libwebp` 依赖里的库，打出来的包启动直接 `dyld: Library not loaded`。
+
+### 实测（干净环境 = `env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin`，模拟双击）
+
+```
+[studio] PATH 补充：/opt/homebrew/bin:/usr/local/bin
+[studio] 未指定输入，默认接真机
+实时：参数集 108 字节（等 1550ms）· 硬解=1 · open rc=0
+```
+
+`otool -L` 外部引用 **0 条**；`@rpath` 依赖 4 条全部在包内；`plutil -lint` 通过；ad-hoc 签名。
+
+### 诚实边界
+
+1. **ad-hoc 签名（`-`）不是公证**：拷到别人机器上仍会被 Gatekeeper 拦（右键 → 打开可绕过）。
+   要做"双击就开"必须 Apple Developer ID + 公证，本轮没有；
+2. **仍然依赖 adb**：设备调试工具依赖 platform-tools 是合理的，但"装上就能用"要求对方有 adb；
+3. **只测了 Apple Silicon**（dylib 是 arm64）；Intel 机器需要重编；
+4. 打包脚本是**手写组装** `.app`（不是 `cargo tauri build`）——因为本目录没装 tauri-cli。
+   `tauri.conf.json` 的 `bundle` 段已配好（`active: true`, `targets: ["app","dmg"]`），
+   装了 CLI 后 `cargo tauri build` 也能直接用；
+5. **单次运行读数波动大**：设备画面静止时 `screenrecord` 几乎不出帧（实测 3 秒只有 2 帧），
+   所以性能数字必须在"屏幕持续运动"下测，别拿静止画面下的 fps 当结论。
+
 ## UI 技术栈：Vue 3 + Vite（决策 #1183）
 
 原来是一个 247 行的**单文件手写 HTML**。占位原型这样写没问题，产品不行——20 个字段散在 5 个区域，

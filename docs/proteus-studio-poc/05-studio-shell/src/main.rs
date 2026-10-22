@@ -129,7 +129,53 @@ fn device_label() -> Option<String> {
         .clone()
 }
 
+/// 双击启动时 LaunchServices 只给 `/usr/bin:/bin:/usr/sbin:/sbin`，
+/// 而 `adb` 通常在 `/opt/homebrew/bin` 或 `/usr/local/bin` ⇒ 显式补进 PATH。
+/// ★不补的话"双击就能用"是假的：面板能开，但一台设备都连不上（同一类坑：GUI 不继承 shell 环境）。
+fn ensure_tool_path() {
+    const EXTRA: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
+    let cur = std::env::var("PATH").unwrap_or_default();
+    let missing: Vec<&str> = EXTRA.iter().copied().filter(|p| !cur.split(':').any(|x| x == *p)).collect();
+    if missing.is_empty() {
+        return;
+    }
+    let mut merged = missing.join(":");
+    if !cur.is_empty() {
+        merged.push(':');
+        merged.push_str(&cur);
+    }
+    std::env::set_var("PATH", &merged);
+    eprintln!("[studio] PATH 补充：{}", missing.join(":"));
+}
+
+/// 没有显式指定输入时**默认接真机**——双击启动不可能带环境变量，
+/// 否则用户看到的是一个永远空白的画布，还以为坏了。
+fn default_live_source() {
+    if std::env::var("POC_LIVE").is_ok() || std::env::var("POC_VIDEO").is_ok() {
+        return;
+    }
+    let connected = std::process::Command::new("adb")
+        .arg("devices")
+        .output()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .skip(1)
+                .any(|l| l.trim_end().ends_with("device"))
+        })
+        .unwrap_or(false);
+    if connected {
+        let cmd = "adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -";
+        std::env::set_var("POC_LIVE", cmd);
+        eprintln!("[studio] 未指定输入，默认接真机");
+    } else {
+        eprintln!("[studio] 未检测到已连接设备（adb devices 为空），画布会保持空白");
+    }
+}
+
 fn main() {
+    ensure_tool_path();
+    default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![set_canvas_rect, stats, dump_frame])

@@ -2,5 +2,9 @@ target/
 # 构建产物（源码是 ui/，产物 web-dist/ 不入库）
 web-dist/
 .vite/
+# 打包产物（.app 有 70MB，且可随时由 package-app.sh 重建）
+build-app/
+# 图标中间件（icns 保留入库，iconset 由 make-icon.py 现生成）
+icons/AppIcon.iconset/
 # ★别把源码目录命名成 dist/：仓库根 .gitignore:5 有 `dist/` 规则，会把源码一起忽略
 #   （本仓已被这条规则坑过一次：手写 HTML 从没进过库）

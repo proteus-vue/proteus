@@ -24,6 +24,17 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.png"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Proteus Studio",
+    "longDescription": "Proteus 跨端调试器（PoC）"
   }
 }
