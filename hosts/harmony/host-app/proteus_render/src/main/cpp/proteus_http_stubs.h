@@ -37,17 +37,29 @@ inline bool httpStubDispatch(const std::string& method, std::string* out) {
     return true;
   }
   if (method == "http.cancelStats") {
+    /**
+     * ★★★#1191（独立验证 B6）：**限制必须放进 `data`**。
+     *   桥的结算处是 `p.resolve(parsed?.data ?? parsed)` ⇒ 有 `data` 时 `reason`/`note`
+     *   **整段被丢掉**。原来把限制写在顶层 ⇒ 业务只拿到 `{calls:0,hits:0,misses:0}`，
+     *   无法区分"没发生取消"与"本端取消不可用"（后者正是事实）。
+     *   ⇒ 限制字段一律塞进 `data`。
+     */
     *out =
-        "{\"ok\":true,\"data\":{\"calls\":0,\"hits\":0,\"misses\":0},"
-        "\"reason\":\"harmony-sync-napi\",\"note\":\"鸿蒙无在途请求表（同步模型）⇒ 取消统计恒 0\"}";
+        "{\"ok\":true,\"data\":{\"calls\":0,\"hits\":0,\"misses\":0,"
+        "\"supported\":false,\"reason\":\"harmony-sync-napi\","
+        "\"note\":\"鸿蒙无在途请求表（同步模型）⇒ 取消统计恒 0，abort() 是 no-op；要限时请用 timeout\"}}";
     return true;
   }
   if (method == "http.tlsStats") {
+    /**
+     * ★B6：同上（限制塞进 `data`）。安全语义尤其不能丢：
+     *   业务看到 `challenges:0` 会以为"没配 pin"，实际是"本端 pin 根本不生效"。
+     */
     *out =
         "{\"ok\":true,\"data\":{\"challenges\":0,\"withPins\":0,\"accepted\":0,\"rejected\":0,"
-        "\"defaultHandled\":0},"
-        "\"note\":\"鸿蒙未接 SPKI pinning 回调（RCP 只提供 CA 配置，不做 fingerprint 校验）"
-        "⇒ 本端 pin 不生效，请勿据此判断安全策略已成立\"}";
+        "\"defaultHandled\":0,\"pinning\":\"unsupported\","
+        "\"note\":\"鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）"
+        "⇒ 本端 pin 不生效，请勿据此判断安全策略已成立\"}}";
     return true;
   }
   return false;

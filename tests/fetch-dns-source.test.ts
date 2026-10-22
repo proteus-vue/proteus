@@ -37,6 +37,16 @@ describe('★★★#1183 dnsSource：解析层（白名单 + 不伪造）', () =
     }
   })
 
+  it('★★★#1191（B7）内部值 `miss` 不在白名单 ⇒ 必须由宿主映射成 `system`', () => {
+    // ★这条是独立验证抓出的真缺陷的回归防线：鸿蒙内部用 `miss` 表示"表未命中"，
+    //   而白名单只认 table|system|literal|resolver ⇒ 直接发 miss 会被静默丢弃。
+    //   现在宿主侧映射成 system，这里锁住"两端行为"：
+    //   ① `miss` 本身仍不被接受（白名单不变）
+    expect(parseTransportReadout({ dnsSource: 'miss' })?.dnsSource, '★白名单不该接受 miss').toBeUndefined()
+    //   ② `system` 能被解析出来（宿主映射后的值）
+    expect(parseTransportReadout({ dnsSource: 'system' })?.dnsSource, '★system 必须可解析').toBe('system')
+  })
+
   it('★`dnsTableHit` 只认 "1"/"0"（其它值一律丢弃，不把非空串当 true）', () => {
     expect(parseTransportReadout({ dnsTableHit: '1' })?.dnsTableHit).toBe(true)
     expect(parseTransportReadout({ dnsTableHit: '0' })?.dnsTableHit).toBe(false)
@@ -115,7 +125,8 @@ describe('★★★#1183 dnsSource：三端实现（宿主必须真的写、且�
     const s = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h')
     expect(s, '★鸿蒙缺 per-request 来源槽').toMatch(/inline std::string& callDnsSource\(\)/)
     expect(s, '★鸿蒙缺 RAII 清理（来源会跨请求残留）').toMatch(/struct CallDnsSourceGuard/)
-    expect(s, '★鸿蒙 transport 没输出 dnsSource').toMatch(/tp\.emplace_back\("dnsSource"/)
+    const tpHdr = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_transport.h')
+    expect(tpHdr, '★鸿蒙 transport 没输出 dnsSource').toMatch(/emplace_back\("dnsSource"/)
     // 命中与未命中都要记
     expect(s, '★鸿蒙命中时没记来源').toMatch(/callDnsSource\(\) = "table"/)
     expect(s, '★鸿蒙未命中时没记来源（回落不可见）').toMatch(/callDnsSource\(\) = "miss"/)
@@ -138,7 +149,7 @@ describe('★★★#1183 dnsSource：三端实现（宿主必须真的写、且�
     const h = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h')
     expect(h, '★缺 lastTransport() 副本').toMatch(/inline proteus::wire::NameValues& lastTransport\(\)/)
     expect(h, '★lastTransport 在 move 之后赋值（拿到的是空表）').toMatch(
-      /lastTransport\(\) = tp;\s*\n\s*out\.transport = std::move\(tp\)/,
+      /lastTransport\(\) = tp;.*\n.*out\.transport = std::move\(tp\)/,
     )
   })
 
@@ -163,7 +174,11 @@ describe('★★★#1183 dnsSource：三端实现（宿主必须真的写、且�
     const android = read('hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpTransport.java')
     // iOS / 鸿蒙：都必须是"有值才写"
     expect(ios, '★iOS 无条件写 dnsSource').toMatch(/let src = HttpDnsProxies\.source\(forHost:[\s\S]{0,120}?nv\.append/)
-    expect(harmony, '★鸿蒙无条件写 dnsSource').toMatch(/if \(!callDnsSource\(\)\.empty\(\)\)/)
+    const harmonyTp = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_transport.h')
+    expect(harmonyTp, '★鸿蒙无条件写 dnsSource').toMatch(/if \(internalSource\.empty\(\)\) return/)
+    // ★★★#1191（独立验证 B7）：内部值 `miss` 必须映射成公开契约的 `system`，
+    //   否则 `parseTransportReadout` 的白名单会把它**静默丢弃**（业务只剩 dnsTableHit）。
+    expect(harmonyTp, '★内部 miss 未映射成 system（会被消费端白名单丢弃）').toMatch(/if \(internalSource == "miss"\) internalSource = "system"/)
     // Android：dnsSource 缺省是 null，readout 里已在上面判过
     expect(android, '★Android readout 缺省填了值').not.toMatch(/out\.put\("dnsSource", "system"\)/)
   })

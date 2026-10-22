@@ -45,6 +45,7 @@
 
 #include "invoke_wire.h"
 #include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
+#include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -136,6 +137,18 @@ struct LastLimitDiag {
   bool cancelCalled = false;    // 是否调用了 CancelRequest
   unsigned int cancelRc = 0;    // CancelRequest 的返回码（0 = 成功受理）
   size_t kept = 0;              // 越线前保留在内存里的字节数（≤ MAX_BODY_BYTES）
+  /**
+   * ★★★#1191（独立验证 J4/J5 修复）：落盘模式的实际读数。
+   *
+   * 【为什么必须有】原判据拿 `kept==0` 当"逐块直写"的证据，但那是**恒真式**：
+   *   落盘模式下 `recvGate` 直接走 `save->write` 且 `gate.limit=0` ⇒ `gate.body` 永不增长
+   *   ⇒ `kept` 必然是 0。把 `write()` 改成 no-op 也还是 0。**证明不了任何事**。
+   * ⇒ 补三个可核对的量：`saveMode`（走了落盘分支）、`saveWritten`（真的写进文件多少）、
+   *   `saveLimit`（实际生效的上限——落盘是 1 GiB，不是 32 MiB）。
+   */
+  bool saveMode = false;
+  unsigned long long saveWritten = 0;
+  unsigned long long saveLimit = 0;
 };
 inline LastLimitDiag& lastLimitDiag() {
   static LastLimitDiag d;
@@ -462,6 +475,12 @@ inline std::string reasonOf(uint32_t errCode) {
  */
 inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   stats().calls++;
+  /**
+   * ★★★#1191（独立验证 J8）：**每个请求开始时清空上次的 transport 副本**。
+   *   原实现从不清 ⇒ 本次是"复用连接/早退（没走到 timeInfo）"时，`lastTransport()` 仍留着
+   *   **上一个请求**的读数 ⇒ 探针会把旧值当新值（真机上靠 `aa force-stop` 冷启动掩盖了）。
+   */
+  lastTransport().clear();
   if (!f.url || f.url.v.empty()) {
     stats().failures++;
     return proteus::wire::ResolveFrame::err(f.reqId, "http.request 需要 url（meta 里没带）");
@@ -804,6 +823,10 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     d.cancelCalled = gate.cancelCalled;
     d.cancelRc = gate.cancelRc;
     d.kept = gate.body.size();
+    // ★#1191（J4/J5）：落盘模式的可核对读数（kept==0 是恒真式，不能当证据）
+    d.saveMode = (gate.save != nullptr);
+    d.saveWritten = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->written) : 0ULL;
+    d.saveLimit = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->limit) : 0ULL;
   }
 
   proteus::wire::ResolveFrame out;
@@ -812,7 +835,20 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     //   若按 errCode 分支就会把"超限"误报成"网络取消"。
     stats().failures++;
     stats().tooLarge++;
-    out = proteus::wire::ResolveFrame::err(f.reqId, tooLargeReason(gate.seen));
+    /**
+     * ★★★#1191（独立验证 B2）：**落盘模式的上限是 1 GiB，不是 32 MiB**。
+     *   原实现所有越线都回 `tooLargeReason(gate.seen)`（"超过 32 MiB"）⇒ 下 1.1 GiB 文件会得到
+     *   自相矛盾的错误。⇒ 落盘模式改由 `SaveSession::finish` 给它的真实原因（含实际上限）。
+     *   ★顺带解决 B1：`finish` 会走 `abortUnfinished` 删临时文件。
+     */
+    std::string tooLargeMsg = tooLargeReason(gate.seen);
+    if (gate.save != nullptr) {
+      bool saveOk = false;
+      std::string saveErr;
+      gate.save->finish(&saveOk, &saveErr);
+      if (!saveErr.empty()) tooLargeMsg = saveErr;
+    }
+    out = proteus::wire::ResolveFrame::err(f.reqId, tooLargeMsg);
     if (resp != nullptr && resp->destroyResponse != nullptr) resp->destroyResponse(resp);
     resp = nullptr;
   } else if (errCode != 0 || resp == nullptr) {
@@ -856,46 +892,11 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
      *   （连接复用另有证据：`hosts/harmony/results/transport-probe.json` 的服务端记账。）
      */
     if (resp->timeInfo != nullptr) {
-      const Rcp_TimeInfo* ti = resp->timeInfo;
       proteus::wire::NameValues tp;
-      /**
-       * ★★★#1158：**单位是微秒，不是 SDK 头注释写的毫秒**（真机交叉验证得出的结论）。
-       *
-       * 【证据（不是推断）】真机首跑直接把 `timeInfo` 的值当毫秒写出去，得到
-       *   `ttfbMs = 26785`、`connectMs = 12542`；而同轮的**探针墙钟**是 `39ms` / `16ms` / `9ms`
-       *   ⇒ 若真是毫秒，TTFB 比整轮耗时还长 26 倍（不可能）。
-       *   按 **µs** 换算后：`26785/1000 = 26.8ms`（占墙钟 39ms 的 69%）、
-       *   `7340/1000 = 7.3ms`（对 16ms）、`6670/1000 = 6.7ms`（对 9ms）——**三次都自洽**。
-       * ⇒ `Rcp_TimeInfo` 各字段实际为**微秒**；SDK 头注释（"The time in milliseconds"）与实现不符。
-       * ★这类"文档说 A、实际是 B"只能靠**跟独立读数对账**发现——单看返回值永远看不出来。
-       */
-      constexpr double US_PER_MS = 1000.0;
-      auto putMs = [&tp](const char* k, double vUs) {
-        const double v = vUs / US_PER_MS;
-        if (!(vUs > 0.0) || vUs != vUs) return;   // 0 / NaN / 负数 ⇒ 不写（0 = 该阶段没发生）
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%.1f", v);
-        tp.emplace_back(k, buf);
-      };
-      putMs("dnsMs", ti->nameLookUpTime);
-      putMs("connectMs", ti->connectTime - ti->nameLookUpTime);
-      /**
-       * ★`tlsMs`：`tlsHandshakeTime <= 0` ⇒ **不写**。
-       * 【为什么】明文 HTTP 上 `tlsHandshakeTime` 恒 0 ⇒ `0 - connectTime` 会算出负数（被 putMs 挡掉），
-       *   但**复用连接**时两者都是 0 ⇒ 减出来是 0，会被写成 `tlsMs: "0.0"`。
-       *   而"没有握手"与"握手耗时 0ms"是两件事——后者会让业务以为"TLS 很快"，实际是**没走 TLS**。
-       */
-      if (ti->tlsHandshakeTime > 0.0) putMs("tlsMs", ti->tlsHandshakeTime - ti->connectTime);
-      putMs("ttfbMs", ti->startTransferTime);
-      // ★★★#1183：本次请求的域名解析来源（`table` = 命中业务给的表）
-      //   ★空 = 本次没发生解析（URL 是 IP / 连接复用）⇒ **不写**，绝不填 "miss" 冒充
-      if (!callDnsSource().empty()) {
-        tp.emplace_back("dnsSource", callDnsSource());
-        tp.emplace_back("dnsTableHit", callDnsSource() == "table" ? "1" : "0");
-      }
+      proteus::http::appendTimeReadouts(&tp, resp->timeInfo);   // ★#1191：区间换算（实现见 proteus_http_transport.h）
+      proteus::http::appendDnsSource(&tp, proteus::http::callDnsSource());   // ★#1191：miss→system 映射
       if (!tp.empty()) {
-        // ★#1186：留一份给取证探针（必须在 move **之前**——move 后 tp 已空）
-        lastTransport() = tp;
+        lastTransport() = tp;   // ★#1186：留一份给取证探针（必须在 move 之前）
         out.transport = std::move(tp);
       }
     }

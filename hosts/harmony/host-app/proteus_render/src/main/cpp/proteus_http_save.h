@@ -75,17 +75,43 @@ inline std::string resolveSandboxPath(const std::string& rel) {
 
 /**
  * 一个落盘会话：打开文件、逐块写、收尾给 `{path,size}` 摘要。
- * ★所有失败都必须**可见**（写盘失败 / 超限 ⇒ 删掉半截文件 + 回错误），
- *   否则业务会读到"成功但文件不存在"。
+ *
+ * ★★★#1191（独立验证 B1/B3 抓出的两个真缺陷，修复见下）：
+ *   · **B1 早退泄漏**：原实现只有 `finish()` 会 `fclose`+`remove`，而 `handle()` 有 4 个出口
+ *     （受理失败 / 超时 / 越线 / 网络错误）都不调它 ⇒ 实测连续 64 次失败 **fd +64**、
+ *     磁盘留半截包。修法 = **析构函数兜底**（`~SaveSession`）：未 `completed` 就关句柄 + 删临时文件。
+ *   · **B1 二次伤害**：原实现直接 `fopen(absPath,"wb")` ⇒ **请求还没发出就把用户已存在的同名
+ *     文件截成 0 字节**（Android 是响应成功后才建、iOS 是首块才建）。修法 = **写 `.part` 临时文件，
+ *     成功后 `rename`**（同时获得原子性：业务永远看不到半个文件）。
+ *   · **B3 flush 失败被吞**：原实现 `fclose` 返回值丢弃 ⇒ 磁盘满时仍回"成功摘要"。
+ *     修法 = `fflush` + `ferror` + 检查 `fclose` 返回码。
  */
 struct SaveSession {
   FILE* fp = nullptr;
-  std::string absPath;
+  std::string absPath;    // 最终路径（rename 目标）
+  std::string partPath;   // 临时写路径（absPath + ".part"）
   std::string relPath;
   size_t written = 0;
   bool writeFailed = false;
   bool exceeded = false;
   size_t limit = MAX_SAVE_BYTES_H;
+  /** ★B1：收尾已完成（成功 rename）。未完成 ⇒ 析构会清掉临时文件。 */
+  bool completed = false;
+
+  /** ★B1：任何出口（含早退/异常展开）都保证不留残包、不泄漏 fd。 */
+  ~SaveSession() { abortUnfinished(); }
+
+  /** 关句柄 + 删临时文件（幂等）。 */
+  void abortUnfinished() {
+    if (fp != nullptr) {
+      std::fclose(fp);
+      fp = nullptr;
+    }
+    if (!completed && !partPath.empty()) {
+      std::remove(partPath.c_str());
+      partPath.clear();
+    }
+  }
 
   /** 打开落盘文件。返回 false ⇒ 路径非法或打不开（`err` 里给可读原因）。 */
   bool open(const std::string& rel, std::string* err) {
@@ -99,9 +125,12 @@ struct SaveSession {
     //   在真机上直接失败（实测 `fetch.failed: 无法创建落盘文件`）。
     //   Android/iOS 的 `savePath` 支持子目录 ⇒ 本端必须对齐：递归建父目录。
     mkdirParents(absPath);
-    fp = std::fopen(absPath.c_str(), "wb");
+    // ★B1：写临时文件（`.part`），成功才 rename——否则会先把用户已有文件截断。
+    partPath = absPath + ".part";
+    fp = std::fopen(partPath.c_str(), "wb");
     if (fp == nullptr) {
       if (err) *err = "fetch.failed: 无法创建落盘文件：" + rel;
+      partPath.clear();
       return false;
     }
     return true;
@@ -136,27 +165,43 @@ struct SaveSession {
   }
 
   /**
-   * 收尾：关文件 + 判定。
-   * @param ok 传出：是否成功（失败时半截文件已被删除）
+   * 收尾：flush + 关文件 + 判定 + （成功时）rename `.part` → 目标。
+   * @param ok 传出：是否成功（失败时临时文件已删、目标文件保持原样）
    * @return `{path,size}` 摘要（成功时）；失败时为空
    */
   std::string finish(bool* ok, std::string* err) {
+    // ★B3：`fwrite` 成功只代表进了 stdio 缓冲 ⇒ 磁盘满在 flush 时才暴露，必须显式检查。
     if (fp != nullptr) {
-      std::fclose(fp);
+      const bool flushOk = (std::fflush(fp) == 0);
+      const bool errFlag = (std::ferror(fp) != 0);
+      const int closeRc = std::fclose(fp);
       fp = nullptr;
+      if (!flushOk || errFlag || closeRc != 0) writeFailed = true;
     }
     if (writeFailed) {
-      if (!absPath.empty()) std::remove(absPath.c_str());
+      abortUnfinished();
       if (ok) *ok = false;
       if (err) *err = "fetch.failed: 落盘写文件失败：" + relPath;
       return "";
     }
     if (exceeded) {
-      if (!absPath.empty()) std::remove(absPath.c_str());
+      abortUnfinished();
       if (ok) *ok = false;
       if (err) *err = "fetch.tooLarge: 落盘超过上限（" + std::to_string(written) + " B）";
       return "";
     }
+    // ★B1：成功才把 `.part` 换成目标名（业务永远看不到半个文件）
+    if (!partPath.empty()) {
+      std::remove(absPath.c_str());   // rename 不覆盖（POSIX 会覆盖，但显式更稳）
+      if (std::rename(partPath.c_str(), absPath.c_str()) != 0) {
+        abortUnfinished();
+        if (ok) *ok = false;
+        if (err) *err = "fetch.failed: 落盘收尾失败（rename）：" + relPath;
+        return "";
+      }
+      partPath.clear();
+    }
+    completed = true;
     if (ok) *ok = true;
     char buf[64];
     std::snprintf(buf, sizeof(buf), "\"size\":%llu", static_cast<unsigned long long>(written));

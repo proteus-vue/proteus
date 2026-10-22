@@ -122,12 +122,19 @@ if save_path:
     else:
         lim = d.get("limit") or {}
         print(f"✅ 落盘回执：{prev}")
-        if (lim.get("seen") or 0) <= 0:
-            print("✗ limit.seen=0（没收到数据）"); ok = False
-        if (lim.get("kept") or 0) != 0:
-            print(f"✗ limit.kept={lim.get('kept')}（落盘模式不应在内存保留响应体）"); ok = False
+        # ★★★#1190（独立验证 J4 修复）：`kept==0` 是**恒真式**（落盘分支不填 gate.body）
+        #   ⇒ 换成可核对的三个量：saveMode / saveWritten / cap。
+        if lim.get("saveMode") is not True:
+            print("✗ limit.saveMode!=true（没走落盘分支）"); ok = False
+        if (lim.get("saveWritten") or 0) <= 0:
+            print("✗ limit.saveWritten=0（一个字节都没写进文件）"); ok = False
+        if (lim.get("saveWritten") or 0) != (lim.get("seen") or 0):
+            print(f"✗ saveWritten({lim.get('saveWritten')}) != seen({lim.get('seen')})（写盘量与收到量不符）"); ok = False
+        # ★J5：落盘上限必须是 1 GiB，不是 32 MiB
+        if (lim.get("cap") or 0) < 1024 * 1024 * 1024:
+            print(f"✗ limit.cap={lim.get('cap')}（落盘应为 1 GiB；32 MiB = 硬编码错）"); ok = False
         else:
-            print(f"   逐块接收 {lim.get('seen')}B · 内存保留 {lim.get('kept')}B（落盘模式应为 0）")
+            print(f"   saveMode=1 · saveWritten={lim.get('saveWritten')}B · cap={lim.get('cap')}B（1GiB）")
     sys.exit(0 if ok else 1)
 if stream_on:
     reason = str(d.get("reason") or "")
@@ -186,4 +193,22 @@ else:
 sys.exit(0 if ok else 1)
 PY
 RC=$?
+# ★★★#1190（独立验证 J6 修复）：**设备侧 stat 校验**——不能只信探针自报的摘要。
+#   原判据全程只读 `preview.size`，写入 0 字节但摘要报 219 也能全绿。
+#   ⇒ 传了 savePath 时，用 hdc 在**设备上**核对文件真实存在且大小等于摘要。
+if [ "$RC" = "0" ] && [ -n "$SAVE_PATH" ]; then
+  SIZE_REPORTED="$(python3 -c "
+import json,sys,re
+d=json.load(open('$RESULTS/http-probe.json'))
+m=re.search(r'\"size\":(\d+)', d.get('preview') or '')
+print(m.group(1) if m else '')" 2>/dev/null)"
+  SIZE_ON_DEVICE="$(HDC shell "stat -c %s '$FILES_DEV/$SAVE_PATH'" 2>/dev/null | tr -d ' \r\n')"
+  if [ -z "$SIZE_ON_DEVICE" ]; then
+    echo "  ✗ 设备上找不到落盘文件：$FILES_DEV/$SAVE_PATH"; RC=1
+  elif [ "$SIZE_ON_DEVICE" != "$SIZE_REPORTED" ]; then
+    echo "  ✗ 设备文件大小($SIZE_ON_DEVICE) != 回执 size($SIZE_REPORTED)——摘要不可信"; RC=1
+  else
+    echo "  ✓ 设备侧核对：$SAVE_PATH 真实存在且大小 = $SIZE_ON_DEVICE B（与回执一致）"
+  fi
+fi
 [ "$RC" = "0" ] && echo "  ✓ 鸿蒙 T-app-fetch 真机判据通过" || { echo "  ✗ 判据失败"; exit "$RC"; }

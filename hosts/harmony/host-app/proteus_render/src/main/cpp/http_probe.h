@@ -227,14 +227,24 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
     std::string limitJson;
     {
         const proteus::http::LastLimitDiag& d = proteus::http::lastLimitDiag();
-        char lb[320];
+        /**
+         * ★★★#1191（独立验证 J5 修复）：`cap` 必须是**实际生效的上限**。
+         *   原实现硬编码 `MAX_BODY_BYTES`（32 MiB）⇒ 落盘（1 GiB）时回执照样写 32 MiB，
+         *   会让人以为"落盘也在 32 MiB 就被拒"。
+         * ★同时补 `saveMode` / `saveWritten` / `saveLimit`（J4：`kept==0` 是恒真式，不能当证据）。
+         */
+        const unsigned long long cap = d.saveMode
+                                           ? d.saveLimit
+                                           : static_cast<unsigned long long>(proteus::http::MAX_BODY_BYTES);
+        char lb[480];
         snprintf(lb, sizeof(lb),
                  ",\"limit\":{\"gateInstalled\":%s,\"chunks\":%d,\"seen\":%llu,\"exceeded\":%s,"
-                 "\"cancelCalled\":%s,\"cancelRc\":%u,\"kept\":%zu,\"cap\":%zu}",
+                 "\"cancelCalled\":%s,\"cancelRc\":%u,\"kept\":%zu,\"cap\":%llu,"
+                 "\"saveMode\":%s,\"saveWritten\":%llu,\"saveLimit\":%llu}",
                  d.gateInstalled ? "true" : "false", d.chunks,
                  static_cast<unsigned long long>(d.seen), d.exceeded ? "true" : "false",
-                 d.cancelCalled ? "true" : "false", d.cancelRc, d.kept,
-                 proteus::http::MAX_BODY_BYTES);
+                 d.cancelCalled ? "true" : "false", d.cancelRc, d.kept, cap,
+                 d.saveMode ? "true" : "false", d.saveWritten, d.saveLimit);
         limitJson = lb;
     }
     body += limitJson;

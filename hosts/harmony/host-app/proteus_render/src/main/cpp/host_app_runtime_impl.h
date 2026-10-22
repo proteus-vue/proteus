@@ -519,7 +519,7 @@ static napi_value HostAppBoot(napi_env env, napi_callback_info info) {
     std::string bundle, filesDir;
     jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
     jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
-    (void)filesDir;   // filesDir 未用（一次性 VM，不持久）
+    if (!filesDir.empty()) proteus::http::setHttpSandboxRoot(filesDir);   // ★#1191-B5：沙箱根自动注入（CLI 生成的宿主也覆盖）
 
     std::string err, boot = "null", state = "null";
     // ★★形态 = 一次性 VM（create → eval → boot → 泵 → 读 → destroy）。
@@ -599,7 +599,7 @@ static napi_value HostAppDrive(napi_env env, napi_callback_info info) {
     jstr(argsJson.c_str(), argsJson.size(), "bundle", &bundle);
     jstr(argsJson.c_str(), argsJson.size(), "filesDir", &filesDir);
     tabsJson = extractValueAfterKey(argsJson, "tabs", '[', ']');   // ["index","messages","mine"]
-    (void)filesDir;   // filesDir 未用（一次性 VM，不持久）
+    if (!filesDir.empty()) proteus::http::setHttpSandboxRoot(filesDir);   // ★#1191-B5（同上）
 
     std::string err, boot = "null", readValue = "null";
     int rounds = 0;

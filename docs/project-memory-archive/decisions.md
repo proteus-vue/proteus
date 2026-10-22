@@ -12763,3 +12763,31 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 判据**：`tests/harmony-http-gaps.test.ts` 从 8 条增到 **10 条**（新增真机证据 2 条：落盘摘要 + `kept=0`、stream 拒绝根因）。**破坏性验证**：把证据的 `kept` 改成 219 ⇒ 判据红（"内存里保留了 219B"）；恢复 ⇒ 10/10 绿。三份判据合计 **42 条全绿**。
 **⑦ 产物**：`proteus_http_save.h`（`mkdirParents`）· `HttpProbe.ets`（`probe_diag`）· `http_probe.h`（诊断回显，两处）· `EntryAbility.ets`（`%2F` 解码 + `WANT_PARAMS` 日志）· `run-http-probe.sh`（`%2F` 编码 + 三态判据）· 两份真机证据。
 **⑧ 诚实边界**：a) 落盘的**大文件**未实测（219B 只证明通路与内存语义，1 GiB 上限未压测）；b) 路径穿越/绝对路径的**拒绝**只有静态判据，未真机跑（但那三条是纯函数判断，风险低）；c) `stream` 仍不支持（模型限制，已单列 `T-harmony-http-stream`）；d) `abort()` 仍是 no-op；e) SPKI pinning 仍未接。
+
+1191. **★★★独立验证（关 4）抓出 7 条阻断 + 9 条假判据，全部修复 · 决策**（2026-10-22 · 承接 #1189「自测全绿」）:
+**★编号勘误**：本条原拟 #1190，但该号已被并行会话（Studio G3 屏幕流）在工作区占用 ⇒ 让号改为 **#1191**。
+**① 触发**：用户问「现在符合我们最新标准了吗？」。核对 AGENTS.md 的 7 关生命周期后发现 **#1186–#1189 全部没做关 4 独立验证**（自测不算）。补做后结论 **FAIL**。
+**② 三个真 bug（我上一轮引入的）**：
+  · **B1 早退泄漏**：`SaveSession` 无析构，`finish()` 是唯一 `fclose`/`remove` 处，而 `handle()` 有 4 个出口（受理失败/超时/越线/网络错误）不调它。独立验证实测：**连续 64 次失败 ⇒ fd +64、磁盘留 8192B 残包**；更糟的是 `fopen("wb")` 在**请求发出前**就打开 ⇒ **用户已有的同名文件被截成 0 字节**（Android 是响应成功后才建、iOS 是首块才建）。
+  · **B5 CLI 模板未接线**：我的"四方接线"只接了内部 `Superapp.ets`；`packages/cli/templates-host/harmony/.../MainPage.ets` 有 `filesDir` 却从不注入 ⇒ **框架用户一用 savePath 就报"路径非法"**（实际是根为空）。
+  · **B7 三端契约不一致**：鸿蒙内部写 `dnsSource="miss"`，但 `parseTransportReadout` 白名单只认 `table|system|literal|resolver` ⇒ **直接被丢**（实测只剩 `dnsTableHit:false`）；Android 同场景写 `system` 能被读出。
+**③ 四条其它阻断**：B2 落盘超限报"超过 32 MiB"（实际 1 GiB）· B3 `fclose` 返回值被丢（磁盘满仍报成功）· B4 「内存与文件大小无关」未取证却已写进能力页（RCP 的 `Rcp_Response.body` 可能整包驻留）· B6 `tlsStats`/`cancelStats` 的 `note`/`reason` 被桥的 `p.resolve(parsed?.data ?? parsed)` **整段丢掉**（业务看到全 0，无法区分"没配 pin"与"本端 pin 根本没接"）。
+**④ ★9 条假判据（比 bug 更值钱）**：J1/J2 的 `stream` 与 stub 断言**首个命中全在注释**里 —— 独立验证把 `stream` 分支的**函数体清空**、把 stub 返回值文案删光，**断言仍然全绿**。J4 的 `kept==0` 是**恒真式**（落盘分支不填 `gate.body`）。J5 `cap` 硬编码 32 MiB。J6 只信探针自报摘要、设备侧不核对。J8 `lastTransport()` 从不清空（上一请求的读数是"粘"的）。J9 `split("\\n")` 切成字面量 ⇒ `assignLines` 恒 0。J10 把 `miss` 当正确行为固化。
+**⑤ 修复（全部真机复验）**：
+  · **B1** = `SaveSession` 加 **RAII 析构**（未 `completed` 就关句柄+删临时文件）+ **写 `.part` 成功后 `rename`**（同时消灭"截断已有文件"，并让业务永远看不到半个文件）。
+  · **B3** = `fflush` + `ferror` + 检查 `fclose` 返回码。
+  · **B2** = 落盘超限走 `SaveSession::finish` 的真实原因（1 GiB）。
+  · **B5** = 在 `hostAppBoot`/`hostAppRender` 里用入参 `filesDir` **自动注入**沙箱根（两套壳都走这两个入口，不必再让每个壳记得调）。
+  · **B6** = 限制字段塞进 `data`（`pinning:"unsupported"` / `supported:false`）——实测业务**真能看到了**。
+  · **B7** = 内部 `miss` → 公开 `system`（抽出 `proteus_http_transport.h` 时一并做）。
+  · **J8** = `handle()` 入口 `lastTransport().clear()`。
+**⑥ ★新增"可执行判据"（治假绿的根本手段）**：`tests/harmony-save-session-raii.test.ts` —— **真编译真跑 C++**（include 仓库的 `proteus_http_save.h`，clang++ 编译成独立探针）：
+  · 16 次早退 ⇒ **fd 增量 ≤ 2**、无 `.part` 残留、不生成目标文件；
+  · `open()` 后早退 ⇒ **用户已有 11B 文件内容仍是 `ORIGINAL-11`**（不被截断）；
+  · 成功路径 ⇒ `rename` 生效、磁盘大小 == 摘要 size、无 `.part`；
+  · 路径防护 ⇒ `..` / 绝对路径 / 空串被拒、合法子目录放行。
+  **破坏性验证**：删掉析构函数 ⇒ 判据精确报 `fd 泄漏了 16 个`（独立验证原报 64 次 +64）。
+**⑦ 真机复验（新增可核对读数 + 设备侧 stat）**：`limit={cap:1073741824, saveMode:true, saveWritten:219, saveLimit:1073741824, seen:219}` ⇒ `saveWritten == seen` 且 `cap` 是 1 GiB（不再 32 MiB）；脚本用 `hdc shell stat -c %s` **在设备上核对**文件真实大小与摘要一致。★路径穿越 `../../etc/passwd` 首次得到**真机证据**（`fetch.failed: savePath 非法` + `saveMode:false` ⇒ 拒绝发生在任何网络操作之前）。
+**⑧ 判据**：`harmony-http-gaps` 13 条 · `harmony-save-session-raii` 5 条 · `fetch-dns-source` 15 条 · 合计定向 **87 条全绿**。J1/J2 用独立验证者同样的变异手法验证：清空 stream 分支体 ⇒ 红；删光 stub 文案 ⇒ 红。
+**⑨ 结构性纪律**：`proteus_http.h` 加到 1018 行越线 ⇒ 抽出 `proteus_http_transport.h`（区间换算 + DNS 来源映射）回到 972 行；`host_app_runtime_impl.h` 两处注入压成单行内联回到 1129（基线 1130）。★没有加 ALLOW 豁免。
+**⑩ 诚实边界**：a) **B4 未解决**——"内存与文件大小无关"仍缺取证（需 64 MiB 级落盘 + `VmHWM` 对照），文案应降级为"只避免第二份拷贝，不保证内存有界"；b) 落盘 >219B 的大文件未压测；c) `stream`/`abort`/SPKI pinning 三处仍是模型/平台限制（已单列 blocked 任务）；d) 能力页 `savePath` 行的"内存与文件大小无关"待随 B4 一起改。
