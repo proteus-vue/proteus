@@ -276,6 +276,42 @@ export const LOCAL_ONLY_RUNS = {
   none: '完全不跑（只允许 cat=measure）',
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * cat 的**结构谓词**（2026-10-22 · 决策 #1161）
+ *
+ * 【为什么需要】#1159 之后 10 类 cat 里有 5 类**只是标签**：`cat='macos'` 与
+ *   `cat='sdk'` 写什么都行，判不出真伪 ⇒ 等于换了个马甲的"自由文本豁免"。
+ *   而这两类的声明是**可验证的事实命题**：「这条门禁需要 X 工具链」——
+ *   那就必须能在**命令与它调用的脚本**里找到 X 的使用痕迹。
+ *
+ * 【证据面】命令原文 + 它调用的**全部**入口脚本。
+ *   ★只看第一个入口是错的：`check:ios-host` = `node build.mjs && node verify.mjs`，
+ *     `build.mjs` 是 esbuild（纯 JS，零 Xcode），`verify.mjs` 才 `xcrun swiftc`——
+ *     只取首个入口会把这条件误判成"无 macOS 依赖"（我第一版就踩了）。
+ *
+ * 【只收强 token】`metal` 这类两义词不收（"Metal 着色器" vs "材质"）：
+ *   收了会造出**假绿**（标签说什么都"有证据"），比判不出更糟。
+ * ══════════════════════════════════════════════════════════════════════════ */
+export const CAT_EVIDENCE = {
+  macos: /\b(?:xcrun|swiftc|swift-frontend|xcodebuild|simctl|xcode-select|actool|ibtool)\b|\/Applications\/Xcode/,
+  sdk: /\b(?:ndk|javac|sdkmanager|aapt2|d8|bundletool|hvigor\w*|ohpm|deveco|arktsc|es2abc)\b|ANDROID_HOME|ANDROID_SDK_ROOT|ANDROID_NDK|JAVA_HOME/i,
+}
+
+/** 仍**只有标签、没有谓词**的 cat（报告里点名，别让人以为都验证过） */
+export const CAT_LABEL_ONLY = ['policy', 'machine-noise']
+
+/** 有结构谓词的 cat（`local-env` 的谓词是"被点名的文件不得入库"，与 CAT_EVIDENCE 的工具链证据不同型） */
+export const CAT_PREDICATED = [...Object.keys(CAT_EVIDENCE), 'local-env']
+
+/** 从理由文本里取"被点名的本机路径"（`local-env` 用：声明"CI 无该文件"就必须说清是哪个文件） */
+export function citedPaths(text) {
+  const out = new Set()
+  const re = /(?:^|[\s（(、，,：:；;])((?:\.?[\w.-]+\/)+[\w.*-]+|[\w.-]+\.(?:json|env|properties|toml|ya?ml))/g
+  let m
+  while ((m = re.exec(String(text ?? '')))) out.add(m[1])
+  return [...out]
+}
+
 /** 理由文本下限：敷衍豁免（"本地跑"/"ok"）在这里被拦（去空白后 ≥ 16 字） */
 const WHY_MIN_CHARS = 16
 
@@ -287,6 +323,11 @@ const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 function entryFileOf(cmd) {
   const m = String(cmd ?? '').match(/[\w./-]+\.(?:mjs|mts|ts|js|py|sh)(?![\w])/)
   return m ? m[0] : null
+}
+
+/** 命令里**所有**入口脚本（`a.mjs && b.mjs` 两个都要看——证据可能在后一个里） */
+function entryFilesOf(cmd) {
+  return [...new Set(String(cmd ?? '').match(/[\w./-]+\.(?:mjs|mts|ts|js|py|sh)(?![\w])/g) ?? [])]
 }
 
 /** 该段里是否出现完整路径 token（左右必须是分隔符，防 `x.mjs.bak` / `ax.mjs` 冒充） */
@@ -346,10 +387,11 @@ function verifyRunsScript(verifyCmd, key) {
  * @param {string} a.verifyCmd `scripts.verify` 原文
  * @param {string} a.runText 全部 workflow run 命令拼文
  * @param {number} a.max 台账条目上限（棘轮：只减不增）
+ * @param {Set<string>|null} a.trackedFiles 仓库已跟踪文件集（`local-env` 用它证伪"CI 无该文件"；缺省退化为提醒）
  * @param {{ exists: (p:string)=>boolean, read: (p:string)=>string }} a.io 文件访问（实现方负责把路径限制在仓库内）
- * @returns {{ findings: {level:'error'|'note', code:string, name:string, msg:string}[], stats: { total:number, byCat:Record<string,number>, byRun:Record<string,number>, unverifiable:string[], labelOnlyCats:string[] } }}
+ * @returns {{ findings: {level:'error'|'note', code:string, name:string, msg:string}[], stats: { total:number, byCat:Record<string,number>, byRun:Record<string,number>, unverifiable:string[], labelOnlyCats:string[], predicatedCats:string[] } }}
  */
-export function auditLocalOnly({ localOnly = {}, meta = {}, scripts = {}, coveredNames = new Set(), verifyCmd = '', runText = '', max = Infinity, io }) {
+export function auditLocalOnly({ localOnly = {}, meta = {}, scripts = {}, coveredNames = new Set(), verifyCmd = '', runText = '', max = Infinity, trackedFiles = null, io }) {
   const findings = []
   const err = (code, name, msg) => findings.push({ level: 'error', code, name, msg })
   const note = (code, name, msg) => findings.push({ level: 'note', code, name, msg })
@@ -466,6 +508,35 @@ export function auditLocalOnly({ localOnly = {}, meta = {}, scripts = {}, covere
         err('CAT_STRUCTURE', n, `cat=covered 声称已被「${m.also}」覆盖，但 CI 的 run 命令里没有这个参数`)
       }
     }
+    // ⑨c ★cat 的证据判据（决策 #1161）：`macos` / `sdk` / `local-env` 的声明是**可证伪的事实命题**
+    //   「这条门禁需要 X」⇒ 命令与它调用的脚本里必须真的用到 X；否则标签只是换马甲的自由文本。
+    const pred = CAT_EVIDENCE[m.cat]
+    if (pred) {
+      const files = entryFilesOf(cmd)
+      const hay = [String(cmd ?? ''), ...files.map((f) => readSafe(f))].join('\n')
+      if (!pred.test(hay)) {
+        err(
+          'CAT_UNPROVEN',
+          n,
+          `cat=${m.cat}（${LOCAL_ONLY_CATS[m.cat]}）但命令与它调用的脚本（${files.join(' ') || '无'}）里找不到任何该类工具链证据` +
+            `——要么错标（换个 cat），要么理由已过时（脚本早不依赖了）`,
+        )
+      }
+    }
+    if (m.cat === 'local-env') {
+      // 「CI 无该文件」必须点名文件，且该文件**不能是入库文件**（入库 ⇒ CI checkout 就有）
+      const cited = citedPaths(why)
+      if (!cited.length) {
+        err('CAT_UNPROVEN', n, 'cat=local-env 但理由里没点名任何本机文件/目录——"依赖本机配置"必须写清是哪个，否则无法复核')
+      } else if (trackedFiles) {
+        const tracked = cited.filter((p) => trackedFiles.has(p.replace(/^\.\//, '')))
+        if (tracked.length) {
+          err('CAT_UNPROVEN', n, `cat=local-env 但 ${tracked.join(' / ')} 是**入库**文件——CI checkout 就有，"CI 无该文件"不成立`)
+        }
+      } else {
+        note('CAT_UNPROVEN', n, `cat=local-env 的本机路径未能机器核对（未提供 trackedFiles）：${cited.join(' / ')}`)
+      }
+    }
     // ⑨b measure 的判据（唯一能机判的"非门禁"）：脚本不得有失败退出路径
     if (m.cat === 'measure' && cmd) {
       const body = readSafe(entryFileOf(cmd))
@@ -491,10 +562,16 @@ export function auditLocalOnly({ localOnly = {}, meta = {}, scripts = {}, covere
   }
 
   // ★诚实边界：这些 cat 目前**只有标签、没有谓词**（判不出真伪）——报告里点名，别让人以为都验证过
-  const LABEL_ONLY = ['macos', 'sdk', 'policy', 'machine-noise', 'local-env']
   const usedCats = new Set(Object.keys(byCat))
   return {
     findings,
-    stats: { total: names.length, byCat, byRun, unverifiable, labelOnlyCats: LABEL_ONLY.filter((c) => usedCats.has(c)) },
+    stats: {
+      total: names.length,
+      byCat,
+      byRun,
+      unverifiable,
+      labelOnlyCats: CAT_LABEL_ONLY.filter((c) => usedCats.has(c)),
+      predicatedCats: CAT_PREDICATED.filter((c) => usedCats.has(c)),
+    },
   }
 }

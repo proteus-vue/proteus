@@ -422,13 +422,13 @@ describe('LOCAL_ONLY 台账审计（auditLocalOnly）', () => {
         }),
       ),
     ).toContain('RUN_UNPROVEN')
-    // 脚本里真调用了它 ⇒ 通过
+    // 脚本里真调用了它 ⇒ 通过（★脚本正文同时带 NDK 痕迹：cat=sdk 的证据判据要求"真的用到 SDK"）
     expect(
       codes(
         audit({
           meta: { 'check:x': { cat: 'sdk', run: 'build-script', at: 'scripts/build.sh' } },
           scripts: { 'check:x': 'node scripts/x.mjs', verify: '' },
-          io: { exists: () => true, read: () => 'pnpm run check:x\n' },
+          io: { exists: () => true, read: () => '#!/bin/sh\n"$NDK"/ndk-build\npnpm run check:x\n' },
         }),
       ),
     ).toEqual([])
@@ -617,5 +617,93 @@ describe('解析器细节（独立验证 2026-10-22 打回）', () => {
 
   it('★带引号的行内命令也要剥行尾注释', () => {
     expect(extractRunCommands('      - run: "pnpm run check:x" # 说明')).toEqual(['pnpm run check:x'])
+  })
+})
+
+describe('cat 结构谓词（决策 #1161：把"标签"变成"可证伪的命题"）', () => {
+  const WHY = '需要 macOS 工具链编译验证器（CI 为 ubuntu-latest，无 Xcode）'
+  const mk = (over: Record<string, unknown> = {}) =>
+    auditLocalOnly({
+      localOnly: { 'check:x': WHY },
+      meta: { 'check:x': { cat: 'macos', run: 'manual' } },
+      scripts: { 'check:x': 'node scripts/x.mjs', verify: '' },
+      coveredNames: new Set<string>(),
+      verifyCmd: '',
+      runText: '',
+      max: 58,
+      io: { exists: (p: string) => p === 'scripts/x.mjs', read: (p: string) => (p === 'scripts/x.mjs' ? 'console.log(1)\n' : '') },
+      ...over,
+    } as never)
+  const codes = (r: { findings: { code: string; level: string }[] }) =>
+    r.findings.filter((f) => f.level === 'error').map((f) => f.code)
+
+  it('① 声明 macos 却找不到任何 Xcode 工具链痕迹 ⇒ CAT_UNPROVEN（错标或理由过时）', () => {
+    expect(codes(mk())).toContain('CAT_UNPROVEN')
+  })
+
+  it('② ★证据在**第二个**入口脚本里也算数（只扫首个入口会误判——`ios-host` 就是 build.mjs + verify.mjs）', () => {
+    const r = mk({
+      scripts: { 'check:x': 'node scripts/a.mjs && node scripts/b.mjs', verify: '' },
+      io: {
+        exists: () => true,
+        read: (p: string) => (p === 'scripts/b.mjs' ? "execFileSync('xcrun', ['swiftc'])\n" : 'console.log(1)\n'),
+      },
+    })
+    expect(codes(r)).not.toContain('CAT_UNPROVEN')
+    // 反证：去掉第二个入口 ⇒ 证据消失
+    const r2 = mk({
+      scripts: { 'check:x': 'node scripts/a.mjs', verify: '' },
+      io: { exists: () => true, read: () => 'console.log(1)\n' },
+    })
+    expect(codes(r2)).toContain('CAT_UNPROVEN')
+  })
+
+  it('③ sdk 同类：命令里出现 ndk/javac 才算"需要 SDK"', () => {
+    const sdkWhy = '需要 Android NDK 交叉编译（CI 无 NDK）'
+    expect(
+      codes(
+        mk({
+          localOnly: { 'check:x': sdkWhy },
+          meta: { 'check:x': { cat: 'sdk', run: 'manual' } },
+          io: { exists: () => true, read: () => '#!/bin/sh\n"$NDK"/ndk-build\n' },
+        }),
+      ),
+    ).not.toContain('CAT_UNPROVEN')
+    expect(
+      codes(mk({ localOnly: { 'check:x': sdkWhy }, meta: { 'check:x': { cat: 'sdk', run: 'manual' } } })),
+    ).toContain('CAT_UNPROVEN')
+  })
+
+  it('④ local-env 点名**入库**文件 ⇒ CAT_UNPROVEN（"CI 无该文件"不成立）', () => {
+    const r = mk({
+      localOnly: { 'check:x': '依赖本机 package.json 里的私有配置；CI 无该文件' },
+      meta: { 'check:x': { cat: 'local-env', run: 'manual' } },
+      trackedFiles: new Set(['package.json']),
+    })
+    expect(codes(r)).toContain('CAT_UNPROVEN')
+  })
+
+  it('⑤ local-env 点名 gitignored 路径 + 不点名任何路径（两条边界都要红/绿分明）', () => {
+    const ok = mk({
+      localOnly: { 'check:x': '依赖本机 .tools/quickjs 引擎；CI 无该目录' },
+      meta: { 'check:x': { cat: 'local-env', run: 'manual' } },
+      trackedFiles: new Set(['package.json']),
+    })
+    expect(codes(ok)).not.toContain('CAT_UNPROVEN')
+    const noPath = mk({
+      localOnly: { 'check:x': '依赖本机某个配置文件；CI 没有它所以只能本地跑' },
+      meta: { 'check:x': { cat: 'local-env', run: 'manual' } },
+      trackedFiles: new Set(['package.json']),
+    })
+    expect(codes(noPath)).toContain('CAT_UNPROVEN')
+  })
+
+  it('⑥ 统计口径：macos 已不再是"仅标签"；policy / machine-noise 仍如实标注为仅标签', () => {
+    const r = mk({ io: { exists: () => true, read: () => "execFileSync('xcrun', ['swiftc'])\n" } })
+    expect(r.stats.predicatedCats).toEqual(['macos'])
+    expect(r.stats.labelOnlyCats, 'macos 有谓词了，不该再出现在"仅标签"里').toEqual([])
+    const p = mk({ meta: { 'check:x': { cat: 'policy', run: 'manual' } } })
+    expect(p.stats.labelOnlyCats).toEqual(['policy'])
+    expect(p.stats.predicatedCats).toEqual([])
   })
 })

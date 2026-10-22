@@ -2843,6 +2843,27 @@
         "T-doc-type-source-coverage"
       ],
       "note": "【planned】#1161 实测发现的**既有红**（非本单引入）：`check:en-drift` 报 84 个页面结构不一致，根因是中文能力页渲染 `## 属性` / `## 方法` 两个 h2 段，而英文 overlay 没有对应段（只有句柄方法子段）。#1161 已给英文补了页级 `## Referenced types`（使新增内容不加剧缺口），但整体结构对齐是独立大单。修法：把中文的「属性/方法/类型引用」三段结构镜像进英文 overlay（标签用英文），逐页核对；同时决定类型 JSDoc 的英文翻译归属（当前英文页类型 doc 仍是中文）。"
+    },
+    {
+      "id": "T-gates-cat-predicates",
+      "title": "check:gates-sync 的 cat 从「标签」变成「可证伪的命题」：macos/sdk 要工具链证据、local-env 要「入库文件反证」",
+      "type": "governance",
+      "status": "done",
+      "owner": "session:wb-local-only",
+      "scope": [
+        "scripts/lib/gates-sync.mjs",
+        "scripts/check-gates-sync.mjs",
+        "tests/gates-sync.test.ts",
+        "docs/ai-tasks.json",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 1162,
+      "verification": "npx vitest run tests/gates-sync.test.ts && node scripts/check-gates-sync.mjs && node scripts/check-ai-tasks.mjs --check && node scripts/check-decision-numbers.mjs && node scripts/check-file-size.mjs",
+      "branch": null,
+      "related": [
+        "T-gates-local-only-ledger"
+      ],
+      "note": "【done · 决策 #1162（2026-10-22）】承接 #1159 ⑦①「5 类 cat 仍只是标签」。★缺陷：cat=macos/sdk 写什么都行，机器判不出真伪 ⇒ 换马甲的自由文本豁免；local-env 的「CI 无该文件」也从没人核过。★改法：CAT_EVIDENCE（macos=xcrun|swiftc|xcodebuild|simctl|actool|…，sdk=ndk|javac|sdkmanager|aapt2|hvigor|ohpm|ANDROID_HOME|…）+ local-env 的 citedPaths 与 git ls-files 全集比对 + 新判据 CAT_UNPROVEN（error 级）。★两处先踩后改：① 证据面必须是「命令 + 全部入口脚本」（只取首个会把 ios-host 误判——esbuild 的 build.mjs 在前、xcrun swiftc 在 verify.mjs）；② 只收不会两义的强 token（metal 同时命中「Metal 着色器」与「材质」，收了=假绿）。★战果：label-only 5 类 → 2 类（policy/machine-noise），报告分成「△ 仅标签」与「✓ 有谓词」；当场抓出 1 处错标：check:js-engine 原标 sdk，实为纯零设备验证（本机 .tools/quickjs/qjs，脚本自述不需要 Android SDK）⇒ 改判 local-env。★判据 63→69（+6）；5 个变异全部独立命中（错标 · js-engine 回退 sdk · local-env 点名 package.json · 删掉命令第二个入口 · 理由不点名路径），基线 rc=0。★诚实边界：token 谓词只证「用到该工具链」不证「CI 没有它」；传递依赖未递归（失败方向为假红）；policy/machine-noise 仍是标签；trackedFiles 取不到时降级为提醒。★下一步：policy 14 条逐条评估接 CI（ios-exp-docs / ios-source-lists / android-bundle 已核实可接）；manual 桶 10 条收敛。"
     }
   ]
 }

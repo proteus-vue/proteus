@@ -12213,3 +12213,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 
 **下一步**：① 英文能力页结构对齐（消 84 条 en-drift 既有红）② 类型 doc 的英文翻译
 ③ 把"新源文件必须登记进生成器"做成**变更时**提示（现在靠生成器跑一遍发现，属事后）。
+
+1162. **★★★`cat` 从「标签」变成「可证伪的命题」：`macos`/`sdk` 要有工具链证据、`local-env` 要有「入库文件反证」；当场抓出 1 处错标 · 决策**（2026-10-22 · 承接 #1159 ⑦①「5 类 cat 仍只是标签」· 纯判据改造）:
+**① 缺陷（承 #1159 的诚实边界，这轮把它消灭一半）**：#1159 之后 10 类 `cat` 里 5 类**只是标签**——`cat='macos'` 与 `cat='sdk'` 写什么都行，机器判不出真伪 ⇒ 等于把"自由文本豁免"换了个马甲。而这两类的声明**是可验证的事实命题**：「这条门禁需要 X 工具链」——那就必须能在命令与它调用的脚本里找到 X 的使用痕迹。`local-env` 同理：「依赖本机配置（CI 无该文件）」是可证伪的，只要看看被点名的文件**是不是入库文件**（入库 ⇒ CI checkout 就有）。
+**② 改法（只做能证伪的）**：`CAT_EVIDENCE = { macos: xcrun|swiftc|swift-frontend|xcodebuild|simctl|xcode-select|actool|ibtool|/Applications/Xcode, sdk: ndk|javac|sdkmanager|aapt2|d8|bundletool|hvigor|ohpm|deveco|arktsc|es2abc|ANDROID_HOME|ANDROID_SDK_ROOT|ANDROID_NDK|JAVA_HOME }`；`local-env` 用 `citedPaths(why)` 抽出被点名的路径，再与 `git ls-files` 全集比对。新判据 `CAT_UNPROVEN`（**error** 级，不是提醒）：证据缺失即红，并写清"要么错标（换 cat），要么理由已过时"。
+**③ ★两处实现细节（都是先踩后改）**：a) **证据面必须是「命令 + 全部入口脚本」**——只取第一个入口会误判：`check:ios-host` = `node hosts/ios/bridge/build.mjs && node hosts/ios/verify.mjs`，前者是 esbuild（纯 JS、零 Xcode），`xcrun swiftc` 在后一个里；b) **只收不会两义的强 token**——`metal` 会同时命中"Metal 着色器"与"材质"两义，收了就等于标签说什么都有证据（**假绿比判不出更糟**）。
+**④ 落地战果**：label-only 从 **5 类降到 2 类**（`policy` / `machine-noise`），报告里显式分成「△ 仅标签」与「✓ 有谓词」两行；新判据**当场抓出 1 处错标**并改对：`check:js-engine` 原标 `sdk`，但它是**纯零设备**验证（用本机 `.tools/quickjs/qjs` 跑 bundle，脚本自己写着"不需要 Android SDK/真机"），零 SDK 证据 ⇒ 改判 `local-env`（依据是 `.tools/` 被 gitignore）。
+**⑤ 判据与破坏性验证**：`tests/gates-sync.test.ts` **63 → 69**（+6：macos 无证据红 / 证据在第二个入口算数+反证 / sdk 同类 / local-env 点名入库文件红 / 点名 gitignored 绿+不点名红 / 统计口径）；**5 个变异全部独立命中**（sdk→macos 错标 · `js-engine` 回退成 sdk · local-env 点名 `package.json` · 删掉命令第二个入口 · local-env 理由不点名路径），基线 rc=0。
+**⑥ 顺手修掉的既有夹具缺陷**：一条既有用例的 `toEqual([])` 夹具把 `cat:'sdk'` 的脚本正文写成 `pnpm run check:x`（零 SDK 痕迹）——按新判据它本身就该红，夹具补成 `"$NDK"/ndk-build` + 调用，保持它"验证 build-script 取证"的原意。
+**⑦ 诚实边界（逐条具名）**：1) token 谓词只证"**用到**该工具链"，不证"**CI 没有**它"（例如 CI 其实装了 JDK，只是没接线）——那属于"该不该接 CI"的决策，不是 cat 能判的；2) **传递依赖未递归**（脚本 A 调脚本 B、B 里用 xcrun ⇒ A 会被判无证据）——失败方向为**假红**，且改依赖形态时正好该复核标签，接受；3) `policy` 与 `machine-noise` **仍是标签**（前者是决策、后者是跨机比较），不假装判得出；4) `trackedFiles` 取不到（非 git 环境）时该判据降级为提醒，不假装验证过。
+**⑧ 未做 / 下一步**：① `policy` 14 条逐条评估接 CI（`ios-exp-docs` / `ios-source-lists` / `android-bundle` 三条已核实"本可接 CI"，只差决策）；② `manual` 桶（10 条）逐条收敛到 `verify` 或写明触发脚本用 `build-script` 取证；③ 若要覆盖传递依赖，需建"脚本调用图"（目前 `refsOf` 只做一层）。

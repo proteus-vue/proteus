@@ -30,6 +30,7 @@
 //     本脚本只负责 IO + 报告。CI 侧「关键步骤存在性」也改判 **run 命令**（注释不算）。
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { auditLocalOnly, extractRunCommands, isCovered, refsOf } from './lib/gates-sync.mjs'
 
@@ -310,7 +311,10 @@ const LOCAL_ONLY_META = {
   'check:ios-invoke-bytes': { cat: 'macos', run: 'manual' },
   // ── sdk（Android SDK/NDK/JDK · DevEco OHOS SDK）──────────────────────
   'check:js-engine-build': { cat: 'sdk', run: 'verify' },
-  'check:js-engine': { cat: 'sdk', run: 'verify' },
+  // ★2026-10-22（#1161 的 cat 谓词当场抓出的错标）：原来标 `sdk`——但脚本是**纯零设备**验证，
+  //   用本机 `.tools/quickjs/qjs` 跑 bundle，脚本自己写着"不需要 Android SDK"；`sdk` 证据为 0。
+  //   它依赖的其实是 gitignored 的 `.tools/`（CI 无该目录）⇒ 正确类别是 `local-env`。
+  'check:js-engine': { cat: 'local-env', run: 'verify' },
   'check:16kb-align': { cat: 'sdk', run: 'verify' },
   'check:android-bundle': { cat: 'policy', run: 'verify' },
   'check:android-host-compile': { cat: 'sdk', run: 'verify' },
@@ -428,10 +432,21 @@ for (const { pat, why } of CI_MUST_HAVE) {
   if (!RUN_TEXT.includes(pat)) failures.push(`CI 缺关键步骤 ${pat}（${why}）——被误删或未接线（注释里提到不算）`)
 }
 
-/* ---------- ④ LOCAL_ONLY 台账审计（决策 #1159） ---------- */
+/* ---------- ④ LOCAL_ONLY 台账审计（决策 #1159 / #1161） ---------- */
 // 原形态是「写一句理由就永久不进 CI」的自由文本豁免：58/159 条，其中若干**既不在 CI 也不在
 // verify**（= 默认流程里谁也不跑它，但报表读起来像"本地有跑"）。此处的判据全部是**能证伪**的：
-// 台账齐备 / 枚举合法 / 理由非敷衍 / 声明↔事实互斥 / 通道自证 / 结构自洽 / 棘轮。
+// 台账齐备 / 枚举合法 / 理由非敷衍 / 声明↔事实互斥 / 通道自证 / 结构自洽 / cat 证据 / 棘轮。
+//
+// ★`trackedFiles`：`cat='local-env'` 的理由是「依赖本机 gitignored 配置（CI 无该文件）」——
+//   可证伪点在于**被点名的路径不能是入库文件**（入库 ⇒ CI checkout 就有）。用 `git ls-files` 取全集；
+//   拿不到（非 git 环境/没装 git）就退化成提醒，不假装验证过。
+let trackedFiles = null
+try {
+  const out = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  trackedFiles = new Set(out.split('\0').filter(Boolean))
+} catch {
+  trackedFiles = null
+}
 const ledger = auditLocalOnly({
   localOnly: LOCAL_ONLY,
   meta: LOCAL_ONLY_META,
@@ -440,6 +455,7 @@ const ledger = auditLocalOnly({
   verifyCmd,
   runText: RUN_TEXT,
   max: LOCAL_ONLY_MAX,
+  trackedFiles,
   // ★路径必须落在仓库内且是**文件**：`at:'../../../etc/hosts'` 不该能当证据，
   //   `at:'scripts'`（目录）不该让 readFileSync 抛 EISDIR 把整条门禁打成栈错误（独立验证指出）。
   io: {
@@ -490,8 +506,10 @@ const fmt = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
 console.log(`  ✅ LOCAL_ONLY 台账：${stats.total} 条（上限 ${LOCAL_ONLY_MAX}）`)
 console.log(`     为何跑不了：${fmt(stats.byCat)}`)
 console.log(`     由谁执行：${fmt(stats.byRun)}`)
-// ★诚实边界：这几类是"标签"，不是判据——列出来，别让人误以为都验证过
-console.log(`     △ cat 仅标签（无结构谓词，判不出真伪）：${stats.labelOnlyCats.join(' ')}`)
+// ★诚实边界：只有 `policy` / `machine-noise` 仍是"标签"（前者是决策、后者是跨机比较，都不可机判）——
+//   列出来，别让人误以为都验证过。`macos` / `sdk` / `local-env` 已升级为结构谓词（决策 #1161）。
+console.log(`     △ cat 仅标签（无结构谓词，判不出真伪）：${stats.labelOnlyCats.join(' ') || '（无）'}`)
+console.log(`     ✓ cat 有谓词（工具链证据 / 入库文件反证）：${stats.predicatedCats.join(' ')}`)
 console.log(
   `     △ 不可机判（人工/真机/收尾，${stats.unverifiable.length} 条）：` +
     `${stats.unverifiable.slice(0, 6).join(' ')}${stats.unverifiable.length > 6 ? ' …' : ''}`,
