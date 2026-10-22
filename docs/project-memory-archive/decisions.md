@@ -12852,3 +12852,18 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑧ 判据与真机**：`harmony-http-gaps` 16 条 · `harmony-save-session-raii` 5 条 · 五份判据合计 **60 条全绿**；门禁 7 项全绿；**真机终验**：`saveWritten=219 == seen=219`、`cap=1GiB`、**设备侧 stat 核对 219B 一致**、路径穿越 `--expect-reject` 可重放通过。
 **⑨ 产物**：`proteus_http_save.h`（rename 原子覆盖 + `.part` 唯一名 + finish 未 open 拒绝）· `host_app_runtime_impl.h`（HostAppRender 注入，单行内联保持 1130 基线）· `proteus_http.h`（内存表述降级 + lastTransport clear 判据锚点）· `run-http-probe.sh`（`--expect-reject` + stat 门跳过）· `tests/harmony-http-gaps.test.ts`（+3 条，改 1 条）· `tests/harmony-save-session-raii.test.ts`（FD_VALID 自证 + closeRc 进条件）。
 **⑩ 诚实边界**：a) **B4 仍未取证**（RCP 是否整包驻留 → 需 64 MiB 级 + `VmHWM`）；b) 落盘 >219B 大文件未压测；c) 第二轮验证者还提出"`saveWritten` 快照在 `finish()` 之前、若走 resp->body 回填会漏计"——当前 minSdk 17 ≥ 13 不可达，但语义不严谨；d) `stream`/`abort`/SPKI pinning 三处仍是模型/平台限制。
+
+1193. **★★★B4 收口：落盘内存**实测**与文件大小无关（64MiB 只涨 3.41MiB）+ 抓到自己一次装置误判 · 决策**（2026-10-22 · 承接 #1191/#1192 一直标着的「B4 未取证」）:
+**① 问题（悬了三轮）**：#1187 起代码注释与能力页都写「落盘内存与文件大小无关」，而 #1191/#1192 两轮独立验证都指出：`SaveSession` 逐块直写只消除**本层** `gate.body` 累积；RCP 的 `Rcp_Response.body` 是否整包驻留**没有任何数据**（`HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 只"替换回调"，无关闭整包驻留的开关）。前两轮我只降级了文案，**结论本身是空的**。
+**② 取证装置**：在 `LastLimitDiag` 加 `vmHwmBeforeKb` / `vmHwmAfterKb`（读 `/proc/self/status` 的 `VmHWM` = 进程峰值 RSS），`handle()` 入口记 before、记账处记 after；探针回执输出。★`0` = 读不到（无 `/proc`），**不是"内存 0"**。
+**③ 真机两组对照（同一台设备，冷启各一次）**：
+  · **1 MiB**：`seen=saveWritten=1048576`、`chunks=116`、VmHWM **+2.76 MiB**
+  · **64 MiB**：`seen=saveWritten=67108864`、`chunks=4260`、VmHWM **只 +3.41 MiB**
+  ⇒ 文件大 **64 倍**，内存增量几乎不变（只剩固定开销）⇒ **RCP 没有整包驻留**，本端"内存与文件大小无关"**成立**。
+  证据 `hosts/harmony/results/http-probe-save-{1m,64m}.json`。
+**④ ★我自己踩的一次装置误判（差点又报假缺陷）**：第一轮用了服务端的 `/download?size=N`，请求 32 MiB 只收到 **8 MiB** 却 `ok:true` —— 我一度判成"RCP 静默截断"。查**服务端日志**才发现 `transfer-echo-server.mjs` 的 `/download` 有 `Math.min(size, 8*1024*1024)` 上限 ⇒ **是装置截断，不是框架缺陷**。改用 `/huge`（上限 256 MiB）后 64 MiB 全收全写。★教训与服务端 `/__stats` 判复用那条同族：**读数可疑时先查装置，再下结论**。
+**⑤ 判据（新增 1 条，破坏性验证通过）**：`tests/harmony-http-gaps.test.ts` 的「落盘内存不随文件大小增长」——4 条前置 + 2 条核心：① 两组 `seen` 必须真的收全（防"截断了所以内存小"的假绿）；② 64 MiB 的 `chunks > 100`（防"不是逐块"）；③ `VmHWM` 必须可读（`0` 会让判据退化成恒真）；④ **64 MiB 增量 < 16 MiB**；⑤ 增量不得超过 1 MiB 组的 4 倍（防"随文件线性增长"）。**变异验证**：把 64 MiB 那次的 `vmHwmAfterKb` 改成 `before+64MiB`（模拟整包驻留）⇒ 判据精确报「让进程峰值涨了 64.0MiB（疑似 RCP 整包驻留）」。
+**⑥ 文案升级**：`capability-fetch-types.ts` 的 `savePath` 说明从「鸿蒙端未取证」改为**已取证**，附两组真机读数；能力页已重新生成（`check:content` 幂等 OK）。
+**⑦ 结构性**：VmHWM 装置让 `proteus_http.h` 涨到 1009 行（越 1000）⇒ 压缩注释与 `readVmHwmKb` 回 **996 行**。★没有加 ALLOW 豁免。
+**⑧ 判据状态**：五份定向判据 **61 条全绿**；门禁 `check:file-size` / `check:content` / `check:harmony-host-compile` 全绿。
+**⑨ 诚实边界**：a) 只测到 **64 MiB**，**不外推到 1 GiB**（上限未压测）；b) VmHWM 是**进程级**峰值，含 JS VM 等全部开销，差值只代表"这次请求把峰值顶了多少"（够用，但不是精确归因到某个分配）；c) 仍无排障面板 UI；d) `stream`/`abort`/SPKI pinning 三处仍是模型/平台限制。

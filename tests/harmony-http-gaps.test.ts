@@ -179,6 +179,46 @@ describe('★★★#1187 鸿蒙**真机**证据（落盘 / stream 拒绝）', ()
     expect(lim.saveLimit, '★saveLimit 不是 1 GiB').toBe(1024 * 1024 * 1024)
   })
 
+  it('★★★#1193（B4）落盘内存**不随文件大小增长**（64MiB 实测 VmHWM 只涨 3.4MiB）', () => {
+    /**
+     * ★这条收口 #1191/#1192 一直标着的"B4 未取证"：
+     *   `SaveSession` 逐块直写只消除**本层** body 累积；RCP 的 `Rcp_Response.body` 是否整包驻留
+     *   此前**没有任何数据**（只降级了文案）。⇒ 现在用 `/proc/self/status` 的 `VmHWM`
+     *   在真机上做两组对照（1 MiB vs 64 MiB）。
+     *
+     * 判定逻辑：若 RCP 整包驻留，64 MiB 那次 VmHWM 至少涨 ~64 MiB；
+     *   实测只涨 3.41 MiB（≈ 固定开销）⇒ **内存与文件大小无关在本端成立**。
+     * ★注意：这证明的是"本端（鸿蒙 + RCP）在 64 MiB 量级不整包驻留"，
+     *   不外推到 1 GiB（未压测）。
+     */
+    const small = JSON.parse(read('hosts/harmony/results/http-probe-save-1m.json')).limit
+    const big = JSON.parse(read('hosts/harmony/results/http-probe-save-64m.json')).limit
+
+    // 两组都必须真的收全（防"截断了所以内存小"的假绿）
+    expect(small.seen, '★1MiB 组没收到全部字节').toBe(1024 * 1024)
+    expect(big.seen, '★64MiB 组没收到全部字节（截断会让内存看起来很小）').toBe(64 * 1024 * 1024)
+    expect(big.saveWritten, '★64MiB 组没全写进文件').toBe(64 * 1024 * 1024)
+    // 逐块：64MiB 必须远多于 1 块
+    expect(big.chunks, `★chunks=${big.chunks}（太少 ⇒ 不是逐块）`).toBeGreaterThan(100)
+
+    const smallDelta = (small.vmHwmAfterKb ?? 0) - (small.vmHwmBeforeKb ?? 0)
+    const bigDelta = (big.vmHwmAfterKb ?? 0) - (big.vmHwmBeforeKb ?? 0)
+    // VmHWM 必须可读（0 = 不可得，不能当"内存 0"）
+    expect(small.vmHwmBeforeKb, '★VmHWM 读不到（判据会退化成恒真）').toBeGreaterThan(0)
+    expect(big.vmHwmBeforeKb, '★VmHWM 读不到').toBeGreaterThan(0)
+
+    // ★核心判据：文件大 64 倍，内存增量不得超过 16 MiB（远小于文件大小）
+    expect(
+      bigDelta,
+      `★64MiB 落盘让进程峰值涨了 ${(bigDelta / 1024).toFixed(1)}MiB（疑似 RCP 整包驻留）`,
+    ).toBeLessThan(16 * 1024)
+    // 并与小文件对照：增量不应随文件线性增长（64 倍文件、增量不到 4 倍）
+    expect(
+      bigDelta,
+      `★内存增量随文件增长（1MiB:+${(smallDelta / 1024).toFixed(1)}MiB vs 64MiB:+${(bigDelta / 1024).toFixed(1)}MiB）`,
+    ).toBeLessThan(Math.max(smallDelta * 4, 8 * 1024))
+  })
+
   it('★★★#1191 路径穿越：真机被拒（安全判据不再只有静态）', () => {
     const p = 'hosts/harmony/results/http-probe-save-traversal.json'
     expect(fs.existsSync(path.join(ROOT, p)), `★缺路径穿越真机证据 ${p}`).toBe(true)

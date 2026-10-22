@@ -240,11 +240,13 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         snprintf(lb, sizeof(lb),
                  ",\"limit\":{\"gateInstalled\":%s,\"chunks\":%d,\"seen\":%llu,\"exceeded\":%s,"
                  "\"cancelCalled\":%s,\"cancelRc\":%u,\"kept\":%zu,\"cap\":%llu,"
-                 "\"saveMode\":%s,\"saveWritten\":%llu,\"saveLimit\":%llu}",
+                 "\"saveMode\":%s,\"saveWritten\":%llu,\"saveLimit\":%llu,"
+                 "\"vmHwmBeforeKb\":%llu,\"vmHwmAfterKb\":%llu}",
                  d.gateInstalled ? "true" : "false", d.chunks,
                  static_cast<unsigned long long>(d.seen), d.exceeded ? "true" : "false",
                  d.cancelCalled ? "true" : "false", d.cancelRc, d.kept, cap,
-                 d.saveMode ? "true" : "false", d.saveWritten, d.saveLimit);
+                 d.saveMode ? "true" : "false", d.saveWritten, d.saveLimit,
+                 d.vmHwmBeforeKb, d.vmHwmAfterKb);
         limitJson = lb;
     }
     body += limitJson;

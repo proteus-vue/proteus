@@ -149,7 +149,23 @@ struct LastLimitDiag {
   bool saveMode = false;
   unsigned long long saveWritten = 0;
   unsigned long long saveLimit = 0;
+  // ★#1193（B4 取证）：进程峰值 RSS（VmHWM，kB）。前后差值判"落盘内存是否与文件大小无关"。
+  //   ★0 = 读不到（无 /proc），**不是"内存 0"**。实测 64MiB 文件只涨 3.41MiB（见决策 #1193）。
+  unsigned long long vmHwmBeforeKb = 0;
+  unsigned long long vmHwmAfterKb = 0;
 };
+
+/** 读 `/proc/self/status` 的 `VmHWM`（峰值 RSS，kB）；读不到 ⇒ 0（不可得） */
+inline unsigned long long readVmHwmKb() {
+  FILE* f = std::fopen("/proc/self/status", "r");
+  if (f == nullptr) return 0;
+  char line[128];
+  unsigned long long kb = 0;
+  while (std::fgets(line, sizeof(line), f) != nullptr)
+    if (std::strncmp(line, "VmHWM:", 6) == 0) { std::sscanf(line + 6, "%llu", &kb); break; }
+  std::fclose(f);
+  return kb;
+}
 inline LastLimitDiag& lastLimitDiag() {
   static LastLimitDiag d;
   return d;
@@ -482,6 +498,8 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    *   **上一个请求**的读数 ⇒ 探针会把旧值当新值（真机上靠 `aa force-stop` 冷启动掩盖了）。
    */
   lastTransport().clear();
+  // ★#1193（B4）：记录请求前的进程峰值 RSS（落盘内存是否与文件大小无关，靠前后差值判）
+  const unsigned long long vmHwmBefore = readVmHwmKb();
   if (!f.url || f.url.v.empty()) {
     stats().failures++;
     return proteus::wire::ResolveFrame::err(f.reqId, "http.request 需要 url（meta 里没带）");
@@ -830,6 +848,9 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     d.saveMode = (gate.save != nullptr);
     d.saveWritten = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->written) : 0ULL;
     d.saveLimit = (gate.save != nullptr) ? static_cast<unsigned long long>(gate.save->limit) : 0ULL;
+    // ★#1193（B4）：请求后的峰值 RSS（差值就是"这次落盘把内存顶了多少"）
+    d.vmHwmBeforeKb = vmHwmBefore;
+    d.vmHwmAfterKb = readVmHwmKb();
   }
 
   proteus::wire::ResolveFrame out;

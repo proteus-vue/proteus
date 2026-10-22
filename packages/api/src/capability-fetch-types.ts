@@ -63,13 +63,14 @@ export interface FetchConfig {
   /**
    * ★#1122 落盘路径（仅 App）：宿主**直接写沙箱文件**，`data` 回路径。
    *
-   * ★★★#1191 更正（独立验证 B4）：原文写「内存与文件大小无关」——**对鸿蒙不成立，且未取证**。
-   *   · Android / iOS：逐块写文件，已验证；
-   *   · **鸿蒙**：我们这层确实逐块直写（`SaveSession`），但 RCP 的 `Rcp_Response.body`
-   *     仍可能把整包驻留（`HMS_Rcp_SetRequestOnBinaryDataRecvCallback` 只"替换回调"，
-   *     没有关闭整包驻留的开关）⇒ **内存上限未取证**。
-   *   ⇒ 准确说法：**"避免框架层的第二份拷贝；是否与文件大小无关取决于宿主栈，鸿蒙端未取证"**。
-   *     大文件落盘前请按目标端实测（本仓待补 `VmHWM` 对照）。
+   * ★★★#1193 **已真机取证（B4 收口）**：鸿蒙端落盘的内存**确实与文件大小无关**。
+   *   真机两组对照（`/proc/self/status` 的 `VmHWM` 峰值 RSS）：
+   *     · 1 MiB 文件 → 进程峰值 +2.76 MiB（chunks=116）
+   *     · **64 MiB 文件 → 峰值只 +3.41 MiB**（chunks=4260，`seen == saveWritten == 67108864`）
+   *   ⇒ 文件大 64 倍而内存增量几乎不变（只剩固定开销）⇒ RCP **没有**整包驻留。
+   *   证据 `hosts/harmony/results/http-probe-save-{1m,64m}.json`，判据
+   *   `tests/harmony-http-gaps.test.ts` 的「落盘内存不随文件大小增长」。
+   * ★诚实边界：只测到 **64 MiB**，不外推到 1 GiB（上限未压测）。
    */
   savePath?: string
   /**
