@@ -12706,11 +12706,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **④ ★#1117 的教训必须照做**：`http_probe.h` 成功分支有 `body = head`（整串覆盖），因此 `transportJson` 必须**在两条回执路径都拼**（初始 body 一次 + 覆盖后重拼一次）。判据直接数出现次数（`>= 2`），变异测试：删掉成功分支那处 ⇒ 判据红（"只拼了 1 处"）。
 **⑤ 真机读数（HarmonyOS，设备 69F9K26126005311）**：
   · **无表（baseline）**：`transport={dnsMs:1.3, connectMs:1267.3, tlsMs:809.6, ttfbMs:2498.1}`，**`dnsSource` 不出现** —— 正确语义：没装 DNS 规则时 RCP 走系统 DNS，我们的回调根本不被调用 ⇒ **无法得知来源**；此时写 `system` 就是伪造（#1185 的「缺键=不可得」纪律）。
-  · **装表（可达 IP）**：`transport={dnsMs:0.1, connectMs:369.3, tlsMs:319.7, ttfbMs:1086.8, dnsSource:table, dnsTableHit:"1"}` + `dns.tableRules=1 / tableHits=1 / lastSource=table` + `status=200` + 响应自报 `http=http/2`。证据 `hosts/harmony/results/http-probe-dns-table.json`。
+  · **装表（可达 IP）**：`transport={dnsMs:0.1, connectMs:369.3, tlsMs:319.7, ttfbMs:1086.8, dnsSource:table, dnsTableHit:"1"}` + `dns.tableRules=1 / tableHits=1 / lastSource=table` + `status=200` + 响应自报 `http=http/2`。证据 `hosts/harmony/results/http-probe-dns-transport.json`（★原写 `-dns-table.json` 是错的：那是 #1169 的**超时失败**读数，不含 transport）。
 **⑥ 探针判据升级**（`run-http-probe.sh`）：装了表 ⇒ 断言 `dnsSource=='table'` 且 `dnsTableHit=='1'`；**没装表 ⇒ 断言 `dnsSource` 必须不出现**（防止伪造来源）。两条方向都判，避免"只验一边"。
 **⑦ 静态判据**：`tests/fetch-dns-source.test.ts` 新增 2 条（**14/14**）：① 探针必须输出 `transport` + 读 `lastTransport()` + **两处都拼**（`>= 2`）+ 副本必须在 move 之前；② 鸿蒙**真机证据**入库校验（`status=200` / `tableRules>0` / `tableHits>0` / `dnsSource=='table'` / `dnsTableHit=='1'`）。**破坏性验证**：删掉成功分支的 `body += transportJson` ⇒ 红（"只拼了 1 处"）。
 **⑧ 装置侧记录**：鸿蒙设备**锁屏时 `aa start` 报 10106102**（"screen is locked during the application launch"）⇒ 必须先手动解锁（`power-shell wakeup` 只亮屏、解不了锁）。这不是探针缺陷，但会让"跑不动"看起来像"实现坏了"——记下来。
-**⑨ 产物**：`hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h`（`lastTransport()` + move 前 copy）· `.../http_probe.h`（transportJson 两处拼接）· `hosts/harmony/run-http-probe.sh`（双向断言）· `hosts/harmony/results/http-probe-dns-table.json`（真机证据）· `tests/fetch-dns-source.test.ts` +2 · 矩阵 §4.x。
+**⑨ 产物**：`hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h`（`lastTransport()` + move 前 copy）· `.../http_probe.h`（transportJson 两处拼接）· `hosts/harmony/run-http-probe.sh`（双向断言）· `hosts/harmony/results/http-probe-dns-transport.json`（真机证据；`-dns-table.json` 是 #1169 的超时读数，勿混）· `tests/fetch-dns-source.test.ts` +2 · 矩阵 §4.x。
 **⑩ 诚实边界**：a) 无表时 `dnsSource` **不可得**（回调不被调用，宿主无法知道系统 DNS 走了哪条路）——这是语义正确而非缺陷；b) 本轮仍**没有**排障面板 UI（数据可读、UI 归 Studio）；c) 鸿蒙探针仍是"一次性 VM + 原生直调"，不覆盖 `useFetch` 的业务封装（那条由 Android/iOS 的 JS 探针 + 单测覆盖）。
 
 1187. **★★★Studio 正式出门：从 `docs/proteus-studio-poc/05-studio-shell` 迁入 `packages/studio`，面板判据升为门禁 `check:studio-panel` 并接 CI/verify；`native/` 升为产品代码（PoC B2 反向引用）**（2026-10-22 · 用户指令「如果 PoC 已经验证完成就正式出门开始做」）:
@@ -12791,3 +12791,41 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑧ 判据**：`harmony-http-gaps` 13 条 · `harmony-save-session-raii` 5 条 · `fetch-dns-source` 15 条 · 合计定向 **87 条全绿**。J1/J2 用独立验证者同样的变异手法验证：清空 stream 分支体 ⇒ 红；删光 stub 文案 ⇒ 红。
 **⑨ 结构性纪律**：`proteus_http.h` 加到 1018 行越线 ⇒ 抽出 `proteus_http_transport.h`（区间换算 + DNS 来源映射）回到 972 行；`host_app_runtime_impl.h` 两处注入压成单行内联回到 1129（基线 1130）。★没有加 ALLOW 豁免。
 **⑩ 诚实边界**：a) **B4 未解决**——"内存与文件大小无关"仍缺取证（需 64 MiB 级落盘 + `VmHWM` 对照），文案应降级为"只避免第二份拷贝，不保证内存有界"；b) 落盘 >219B 的大文件未压测；c) `stream`/`abort`/SPKI pinning 三处仍是模型/平台限制（已单列 blocked 任务）；d) 能力页 `savePath` 行的"内存与文件大小无关"待随 B4 一起改。
+
+1190. **★★★Studio G3：iOS 真机画面 → Mac（App 内 ReplayKit + VideoToolbox 硬编 + TCP 裸 Annex-B）；Studio 侧零改动（`nc -l`）· 真机联调待用户跑**（2026-10-22 · 承接 #1187 的「G3 iOS 通道」缺口）:
+**★编号说明**：本条占用 **#1190**（`#1188/#1189/#1191` 均已被并发会话占用，1190 是空档）；条目物理位置在 #1191 之后，属"补号"而非乱序。
+**① 承接的缺口**：#1187 出门时明确写了「G3（iOS ReplayKit 通道）一行没动」，Studio 只有 Android 一条腿（`adb exec-out screenrecord`）。
+**② ★选型（先取证再定，不是拍脑袋）**：iOS 录屏两种形态的本质差别是**能不能录别人的 App**：
+  · **App 内 ReplayKit**（`RPScreenRecorder.startCapture`）—— 只录本 App 窗口，**零 entitlement、零额外 target**；
+  · **Broadcast Upload Extension** —— 录整机，但要多一个 target + 用户**每次从控制中心手动启动** + 独立签名档。
+  ⇒ Studio 要看的**就是 Proteus 宿主自己**（我们编译出的页面跑在 ProteusHost 里）⇒ 前者足够。
+  且 `hosts/ios/ProteusHost/dev/showcase-scene.swift` 已在用 ReplayKit，捕获侧有现成经验（它写 mp4，我们要逐帧 NAL）。
+**③ 编码链路（为什么不能复用 AVAssetWriter）**：AVAssetWriter 是**写文件**的（数据要等收尾才完整，做不了实时）⇒ 必须自己 `VTCompressionSession`：
+  首帧到达时读**真实像素格式**再建 session（ReplayKit 给 420v 还是 BGRA 不能猜）→ H.264 High / 8Mbps / RealTime / 无 B 帧 →
+  输出的 **AVCC**（4 字节长度前缀）逐 NAL 转 **Annex-B**（`00 00 00 01`），并在**每个 IDR 前重发 SPS/PPS**（断线重连后解码器能自举）。
+**④ ★Studio 侧几乎零改动（这是选 TCP 裸流的唯一理由）**：`native/live_stream.h` 只认「管道里的 Annex-B」，不关心来源 ⇒
+  Mac 端 `/usr/bin/nc -l <port>` 就是完整的接收端。`default_live_source()` 改成三分支：显式 `POC_LIVE` > Android(adb) > iOS(`nc -l`)；
+  `PROTEUS_IOS_STREAM=0` 可关（否则没有 Android 设备时会一直挂着 nc）、`PROTEUS_IOS_STREAM_PORT` 可改端口。
+  ★用 `nc` 而不是自己写监听器：它系统自带、`.app` 里也在；断线由 native 侧"子进程退出自动重连"兜底（与 adb 那条腿同款）。
+**⑤ 产物**：`hosts/ios/ProteusHost/runtime/screen-stream.swift`（332 行，捕获+编码+Annex-B+TCP）·
+  `hosts/ios/lib/screen-stream.sh`（常驻启动，从 `run-selfdraw.sh` 抽出）· `hosts/ios/run-selfdraw.sh`（`--stream=<host:port>`）·
+  `hosts/ios/run-screen-stream.sh`（一条命令：起接收器→装 App→收 N 秒→ffprobe 判合法）·
+  `packages/studio/scripts/recv-h264.py`（107 行接收器：统计/超时/多连接；`--stdout` 可直接当 `POC_LIVE`）·
+  `packages/studio/src/main.rs`（`default_live_source` 三分支）· 两份 iOS 源码清单（`check-selfdraw-compile.sh` + `run-selfdraw.sh`，`check:ios-source-lists` 38 文件 ✅）。
+**⑥ ★★计数：`run-selfdraw.sh` 被 `check:file-size` 当场判红（1024 ≥ 1000）** —— 它原本就贴着上限（999 行），我加两行就跨线。
+  ⇒ 按职责把"常驻启动"整块抽到 `lib/screen-stream.sh`，并把该文件里两段重复注释压成一行，最终 **999 行**通过。
+  ★同族教训：**贴着阈值的文件，下一次任何改动都会红**——真正的修法是拆，不是抠行数（这次只拆了新增职责，旧结构还没动）。
+**⑦ 判据（已验/未验必须分开说）**：
+  ✅ Swift 类型检查（`check:ios-selfdraw-compile`）——过程中抓到 1 个真错误：`VTCompressionSessionCreate` 的 Swift label 是
+    **`imageBufferAttributes`** 而不是 C 头的 `sourceImageBufferAttributes`（编译期就红，不用上机）；
+  ✅ `cargo build --release`（Studio 含新分支）；
+  ✅ 接收端自测：用 `ffmpeg -f lavfi testsrc` 推 `tcp://127.0.0.1:9001` ⇒ 收到 119027 字节 / **120 帧 / 640×360 / ffprobe 认 h264**；
+  ✅ `nc -l` 等价路径同测通过（92975 字节，同一判据）；
+  ❌ **真机链路本身未验证**：`codesign` 要写 **login 钥匙串**，AI 执行沙箱实测拦死
+    （`[sandbox] login.keychain-db (file-write)`，加 `dangerouslyDisableSandbox` 同样被拦）⇒ 只能在用户交互式终端跑
+    `bash hosts/ios/run-screen-stream.sh`，并在手机上点「允许录制屏幕」。
+**⑧ 诚实边界**：a) **真机未跑**（上面已说）；b) App 进后台捕获即停（App 内 ReplayKit 的固有语义，不是缺陷）；
+  c) 依赖 iPhone 与 Mac 在同一局域网（USB 需 `iproxy 9001 9001`，字节流一样，未验证）；d) **横屏方向未处理**（buffer 是物理屏幕尺寸，
+  竖屏 1170×2532；Studio 画布按宽高比显示，横屏会侧躺）；e) 码率固定 8Mbps（未做自适应）；f) 帧到达时刻的 PTS 用的是
+  `CMSampleBufferGetPresentationTimeStamp`（设备时钟域），与 `live_stream.h` 的"首字节到达时刻"不同源 —— 混用会让延迟读数失真，
+  **接 Studio 统计前必须重打 CLOCK_MONOTONIC**（当前只是在 Mac 侧按到达顺序用，不取 PTS 值）。

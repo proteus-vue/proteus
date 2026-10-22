@@ -245,7 +245,9 @@ DNS 来源本就是"这次连接怎么建立的"的一部分，复用容器 ⇒ 
   · Android `hit_transport={proto:h2, reused:false, dnsSource:table, dnsTableHit:true}` + 基线 `dnsSource` 不出现；
   · iOS `hit_dns_source=table` + 未命中那次 `dnsSource=system`；
   · ★★★**鸿蒙（#1186）** `transport={dnsMs:0.1, connectMs:369.3, tlsMs:319.7, ttfbMs:1086.8, dnsSource:table, dnsTableHit:"1"}`
-    + `dns.tableHits=1` + `status=200` + `http=http/2`（`hosts/harmony/results/http-probe-dns-table.json`）。
+    + `dns.tableHits=1` + `status=200` + `http=http/2`（`hosts/harmony/results/http-probe-dns-transport.json`）。
+    ★注意：`http-probe-dns-table.json` 是 **#1169 的"注入不可达 IP ⇒ 超时失败"**读数（`ok:false`、无 transport），
+    不能用来证明上面的数字——这是独立验证抓出的"引用的证据不含所引数字"。
     ★鸿蒙这条**必须在探针里补一份 `transport`**：它的探针走**原生直调**（ArkTS 自编帧 → C++ 执行），
     JS 侧拿不到 `meta.transport` ⇒ 没有探针回执里的那份读数就根本验不了（`lastTransport()` 副本）。
 ★**三端实现的同一个坑**：不能拿**进程级** `lastDnsSource` 冒充 per-call（并发会被别的请求覆盖）
