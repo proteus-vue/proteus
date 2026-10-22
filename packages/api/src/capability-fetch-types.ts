@@ -221,13 +221,13 @@ export interface FetchMeta {
    * ★★★#1158：**宿主侧传输层读数**（本次请求的最后一轮）。
    *
    * 【它解决什么】"网络慢"长期只有 `totalMs` 一个数 ⇒ 分不清**排队 / DNS / 建连 / TLS / 首字节**。
-   *   本字段由宿主实测提供（iOS `URLSessionTaskMetrics` · Android 状态行+TTFB · 鸿蒙 `Rcp_TimeInfo`）。
+   *   本字段由宿主实测提供（iOS `URLSessionTaskMetrics` · Android `OkHttp EventListener`（#1160 换栈后） · 鸿蒙 `Rcp_TimeInfo`）。
    *
    * 【★逐端可得性 —— 缺的键**不出现**，不是 0/false】
    *   | 端 | proto | reused | dnsMs | connectMs | tlsMs | ttfbMs |
    *   |---|---|---|---|---|---|---|
    *   | iOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-   *   | Android | ✅ | — | — | — | — | ✅ |
+   *   | Android | ✅ | ✅ | ✅ | ✅ | ✅ | ✅（#1160 换 OkHttp 后全字段；`ttfbMs` 为纯首字节） |
    *   | 鸿蒙 | — | — | ✅ | ✅ | ✅ | ✅ |
    *   | Web | ✅ | — | — | — | — | — |
    *   | MP | （整项不出现：`wx.request` 不暴露任何传输读数） |

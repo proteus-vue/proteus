@@ -170,7 +170,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 | 端 | `proto` | `reused` | `dnsMs` | `connectMs` | `tlsMs` | `ttfbMs` | 采集来源 |
 |---|---|---|---|---|---|---|---|
 | iOS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `URLSessionTaskMetrics` |
-| Android | ✅ | — | — | — | — | ✅ | 状态行（`getHeaderFields()` 的 null 键）+ 自量 TTFB |
+| Android | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **`OkHttp EventListener`**（#1160 换栈后全字段；`ttfbMs` = `requestHeadersEnd→responseHeadersStart`，**纯首字节**；`reused` = 本次是否新建连接） |
 | 鸿蒙 | — | — | ✅ | ✅ | ✅ | ✅ | `Rcp_TimeInfo`（★实际单位是**微秒**，与墙钟对账后修正） |
 | Web | ✅ | — | — | — | — | — | `PerformanceResourceTiming.nextHopProtocol`（只此一项：其余受 TAO 限制会全 0，填了就是假数据） |
 | MP | （整项不出现：`wx.request` 不暴露任何传输读数） | | | | | | — |
@@ -258,10 +258,10 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
    ~~P1 连接池~~ ⇒ ✅ **#1155 取证：两端本来就在工作**（各 3 请求 / 1 连接；并修掉 #1154 引入的复用回归）；
    ~~P1 连接池（鸿蒙）~~ ⇒ ✅ **#1156：原本零复用（3/3），修为 3/1**（进程级 session + 异步 `Rcp_Fetch`）；
    ~~P1 HTTP/2（iOS 侧）~~ ⇒ ✅ **平台默认已具备**（真机 h2 已协商）；
-   **P1 剩余两项**：① **HTTP/2（Android 与鸿蒙）**——Android 需引 OkHttp `Protocol.HTTP_2`；
-   鸿蒙需先给 RCP 接自定义 CA/pinning（否则 h2 的 TLS+ALPN 无从验证），独立大单，先评估 APK 体积；
-   ② **HTTPDNS 全端缺**（Android 需 OkHttp `Dns`；iOS 需自建解析或 `Network.framework`）。
-   ★两者都属"换/扩传输栈"，应**合并为一个独立立项**评估（同一笔栈改动的两个收益）。
+   ~~P1 HTTP/2（Android 侧）~~ ⇒ ✅ **#1160 换 OkHttp 3.14.9**（真机 `{"h2":3}` + 3 请求/1 TCP 未退化）；
+   **P1 剩余两项**：① **HTTP/2（鸿蒙）**——RCP 需先接自定义 CA/pinning（否则 h2 的 TLS+ALPN 无从验证），
+   其 `http2_ok` 现为 `null`＝**未测**（不是 false）；
+   ② **HTTPDNS 业务化**（Android 的 `Dns` seam 已落 #1160，待业务 API + 线格式 tag；iOS 需自建解析或 `Network.framework`）。
 5. **鸿蒙传输层的两处状态变化要单独记（#1156）**：
    ① **session 现在跨请求复用** ⇒ RCP 的 cookie / 认证状态**可能随之跨请求保留**——该行为**尚未取证**，
    在取证前**不宣称**"鸿蒙端已具备会话共享"（与 Android `CookieManager` / iOS `HTTPCookieStorage` 对齐是目标，不是现状）；
