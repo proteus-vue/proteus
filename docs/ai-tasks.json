@@ -2798,6 +2798,51 @@
         "T-android-okhttp-transport"
       ],
       "note": "【planned】#1160 加探针时发现（非本单引入）：`scripts/sync-host-bridge.mjs` 只同步 `entry-superapp.ts` **单文件**到 `packages/cli/templates-host/shared/bridge/`，而该文件 `import` 了 `entry-superapp-probes{,-stale,-persist,-tls,-transport,-body}.ts` 等 **10 个模块**，这些**都不在随包目录**。⇒ 框架仓内构建（走真源目录）不受影响；但**纯 npm 安装 CLI、无框架 checkout** 的外部用户执行 `proteus build --target android --package` 时 esbuild 解析相对 import 会失败。修法：同步脚本改为同步**整个 bridge 目录**（排除 generated/dist），门禁对应改为逐文件比对；同时评估 `packages/cli/package.json` 的 `files` 是否已包含该目录（已含 `templates-host`）。"
+    },
+    {
+      "id": "T-doc-type-source-coverage",
+      "title": "#1161 官网类型说明\"门禁在却漏\"：生成器数据源漏登记 + 抽取器只认 interface；判据换成扫全仓导出（一次抓出 8 个真漏）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "zcode",
+      "scope": [
+        "website/scripts/lib/type-refs.mjs",
+        "website/scripts/lib/type-shapes.mjs",
+        "website/scripts/gen-content.mjs",
+        "website/content/capabilities/fetch.md",
+        "packages/api/src/capability-fetch-cache.ts",
+        "packages/component-ir/src/primitives.ts",
+        "tests/doc-type-refs.test.ts",
+        "scripts/file-size-baseline.json",
+        "docs/ai-tasks.json",
+        "docs/project-memory-archive/decisions.md"
+      ],
+      "decision": 1161,
+      "verification": "cd website && npx tsx scripts/gen-content.mjs --check && cd .. && npx vitest run tests/doc-type-refs.test.ts && node scripts/check-docs-stats.mjs && node website/scripts/check-doc-links.mjs && node scripts/check-file-size.mjs",
+      "branch": null,
+      "related": [
+        "T-doc-generator-drift"
+      ],
+      "note": "【done · 决策 #1161（2026-10-22）】用户实测「官网 FetchCacheMode 还是没有单独说明，上次不是做了门禁了吗？」。★**根因两层，都不是门禁坏了**：① `capability-fetch-cache.ts` 没登记进 gen-content 的 API_SRC_FILES ⇒ 类型不进 ifaces；② #1124 的悬空引用判据首行是 `if (!ifaces[n]) continue` ⇒ **只检查已知类型**，集合外的静默跳过 ⇒ 门禁全绿而官网缺说明（与\"断言只覆盖已知集合\"同族）。★★★**判据换向**：新增 `findUnregisteredTypes`，从**源码侧枚举全仓导出**（刻意不用 API_SRC_FILES 当基准——那正是可能漏的清单）⇒ 一次抓出 **8 个真漏**：FetchCacheMode / CapError / DeviceInfo / AppLifecyclePhase / AppLifecycleHandle / ProgressCallback / BeaconAPI / WasmSource。★抽取器补三类形态：字符串字面量联合（渲染取值表，逐值说明取自源码 JSDoc = 单一事实源）/ class + 构造参数属性 / 对象字面量联合 + 函数别名。★顺带修真问题：`primitives.ts` C11 device 返回类型写成 `DeviceInfo`（内部结构）实为 `CapDeviceInfo`；构造参数行尾逗号让 CapError.message 显示成 `string,`；英文页缺页级类型引用段（补 `## Referenced types`）。★判据：`doc-type-refs` **21/21**；**破坏性验证 5 处全红**（撤销源登记/union 恒 null/撤销取值表/撤销 class 抽取/门禁不扫全仓）。★文件纪律：gen-content **2392 → 2297 行（净减 95）**，形态识别抽到 `lib/type-shapes.mjs`，file-size 基线同步降钉。★诚实边界：英文类型 doc 仍中文；`check:en-drift` 84 条结构缺口是**既有红**（改动前后同为 84，未加剧也未修完——根因是中文有 `## 属性/## 方法` 两段而英文无，属独立大单，已登记 T-en-cap-structure-align）。"
+    },
+    {
+      "id": "T-en-cap-structure-align",
+      "title": "英文能力页结构对齐：中文有 `## 属性`/`## 方法` 两段而英文没有 ⇒ check:en-drift 84 条既有红（#1161 实测改动前后同为 84）",
+      "type": "bugfix",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "website/scripts/gen-content.mjs",
+        "website/en/capabilities",
+        "website/scripts/check-en-drift.mjs"
+      ],
+      "decision": null,
+      "verification": "cd website && npx tsx scripts/gen-content.mjs --check && node scripts/check-en-drift.mjs（目标：缺口 84 → 0 或按页具名豁免）",
+      "branch": null,
+      "related": [
+        "T-doc-type-source-coverage"
+      ],
+      "note": "【planned】#1161 实测发现的**既有红**（非本单引入）：`check:en-drift` 报 84 个页面结构不一致，根因是中文能力页渲染 `## 属性` / `## 方法` 两个 h2 段，而英文 overlay 没有对应段（只有句柄方法子段）。#1161 已给英文补了页级 `## Referenced types`（使新增内容不加剧缺口），但整体结构对齐是独立大单。修法：把中文的「属性/方法/类型引用」三段结构镜像进英文 overlay（标签用英文），逐页核对；同时决定类型 JSDoc 的英文翻译归属（当前英文页类型 doc 仍是中文）。"
     }
   ]
 }

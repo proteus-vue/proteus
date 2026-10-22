@@ -12159,3 +12159,57 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   而**没有一轮**是我的自测或自建判据先发现的——这条记录本身是最有价值的产出：
   「自测通过」只覆盖"我想到的形态"，覆盖洞只能靠**独立视角**与**变异测试**暴露。
 **下一步**：① HTTPDNS 能力化（`Dns` 线格式 tag + `fetch: { httpDns }` 门面 + 三端宿主）② 鸿蒙 RCP 接自定义 CA ⇒ 才可能协商 h2 ③ 把 `transport` 接进性能预算门禁（首字节 P95 告警）④ API 24/25 的 Base64 兼容（或抬 minSdk）⑤ 随包副本补齐探针模块。
+
+1161. **★★★官网类型说明"门禁在却漏"——根因是生成器数据源漏登记 + 抽取器只认 interface；判据换成"扫全仓导出"一次抓出 8 个真漏 · 决策**（2026-10-22 · 承接 #1124 的悬空引用门禁）:
+
+**需求（用户原话）**：「官网文档的 FetchCacheMode 还是没有单独的说明，记得上次不是做了门禁了吗？为什么还是会出现这种问题」。
+
+**★根因（两层，都不是"门禁坏了"）**
+· ① **源文件没登记**：`FetchCacheMode` 定义在 `capability-fetch-cache.ts`，而该文件不在
+  `gen-content.mjs` 的 `API_SRC_FILES` 里 ⇒ 类型根本不进 `ifaces`。
+· ② **判据只覆盖已知集合**：#1124 的 `findUnexplainedTypes` 第一行是 `if (!ifaces[n]) continue` ——
+  它只检查"**已知**类型有没有说明段"。类型不在 `ifaces` 里时，检查**静默跳过**它。
+  ⇒ 门禁全绿，官网只有参数表里一个裸类型名。
+· ★这与本仓反复记的「断言只覆盖已知集合 ⇒ 集合外的形态永远不报」是同一族（#1152/#1156/#1159 都有记载）。
+
+**★★★判据换向（本轮核心产出）**
+新增 `findUnregisteredTypes(markdown, exported, ifaces)`：从**源码侧枚举全仓导出类型**
+（扫 `packages/api/src` 所有 `.ts`，**刻意不用 `API_SRC_FILES` 当基准**——那正是可能漏的那份清单），
+凡是"文档里引用了 + 源码确实 export + 生成器抽不到" ⇒ 判「数据源缺失」。
+★一次抓出 **8 个真实漏登记**：`FetchCacheMode` / `CapError` / `DeviceInfo` /
+`AppLifecyclePhase` / `AppLifecycleHandle` / `ProgressCallback` / `BeaconAPI` / `WasmSource`。
+（其中多个从没在官网上有过说明段——用户只发现了 `FetchCacheMode` 一个。）
+
+**★抽取器补三类形态（用户点名的两个都属"抽取器不认识"）**
+· **字符串字面量联合**（`export type X = 'default' | 'no-store' | …`）⇒ 渲染**取值表**；
+  逐值说明取自类型 JSDoc 的 `` · `value` = 说明 `` 约定 ⇒ **单一事实源 = 源码**，官网不手写。
+  ★`FetchCacheMode` 的逐值语义原本只写在 `FetchConfig.cache` 的属性 JSDoc 里，本轮搬回类型定义处。
+· **class**（`export class CapError`）+ **构造参数属性**（`public readonly code: string`）——
+  78 个能力页的返回值表都硬编码引用 `CapError`，而它此前既抽不到、也没进收集器。
+· **对象字面量联合**（`WasmSource = { bytes } | { path }`）/ **函数类型别名**（`ProgressCallback`）。
+
+**★顺带修的真问题（都是"文档在说谎"）**
+· `primitives.ts` 的 C11 device 返回类型名写成 `DeviceInfo`（`adapters.ts` 里 MP/Web 的**内部**结构），
+  而能力实际返回 `CapDeviceInfo` ⇒ 官网技术标识行引用了**永远不会有说明**的类型。
+· 抽取器把构造参数行尾逗号带进类型 ⇒ `CapError.message` 在官网显示成 `string,`。
+· 英文能力页此前**没有页级类型引用段**（只有句柄方法子段的 `#### Referenced types`）
+  ⇒ 补 `## Referenced types`，让中文新增的取值表/属性表在 en 侧对称。
+
+**★判据与破坏性验证**
+· `tests/doc-type-refs.test.ts` **21/21**（原 13 → +8：数据源覆盖 / union 行为 /
+  说明段内叙述性提及不算悬空 / 端到端 `fetch.md` 断言 / class 属性表）；
+· **破坏性验证 5 处全部打红**：撤销源登记 · `stringLiteralUnion` 恒 null ·
+  撤销取值表渲染 · 撤销 class 抽取 · 门禁不扫全仓（改用空集合当基准）。
+
+**★文件纪律**：`gen-content.mjs` **2392 → 2297 行（净减 95）**——
+形态识别整体抽到 `website/scripts/lib/type-shapes.mjs`（纯函数，无 IO/渲染），
+`check:file-size` 基线同步**降钉**（改到哪个文件就降哪个，不抬基线）。
+
+**诚实边界**
+· 英文页的类型 doc 仍是中文（翻译属另一条线；`check-en-drift` 只比结构不比译文）；
+· `check:en-drift` 现有 **84 条结构缺口是既有红**（实测改动前后同为 84，本单未加剧也未修完）——
+  根因是中文能力页有 `## 属性`/`## 方法` 两段而英文页没有，属独立大单（已在任务板登记）；
+· 新门禁的口径是"**导出了却抽不到**"，不判断"该不该出现在这一页"（后者仍由 #1124 的判据管）。
+
+**下一步**：① 英文能力页结构对齐（消 84 条 en-drift 既有红）② 类型 doc 的英文翻译
+③ 把"新源文件必须登记进生成器"做成**变更时**提示（现在靠生成器跑一遍发现，属事后）。
