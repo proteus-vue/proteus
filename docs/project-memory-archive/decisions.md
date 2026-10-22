@@ -12336,3 +12336,49 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **下一步**：① ~~（需人工解锁设备）跑真机 abort 探针做最终确认~~ ✅ 已完成（见上）② 评估"鸿蒙宿主改常驻/可重入 VM"
 的工程量——它同时解锁「取消 / 流式 / 传输读数回推」三件事，是 useFetch 鸿蒙侧的**根节点**
 ③ 在那之前，文档已明确 `timeout` 是鸿蒙唯一有效的限时手段。
+
+1166. **★★★鸿蒙 HTTP/2 本来就具备——推翻「需先接自定义 CA/pinning」这个错前提；顺带发现 RCP 内置 DoH · 决策**（2026-10-22 · 更正矩阵与 #1163/#1165 沿用的判断）:
+
+**真机取证**：鸿蒙请求 `https://www.cloudflare.com/cdn-cgi/trace`，响应体回显
+`http=http/2` · `tls=TLSv1.3` · `kex=X25519` · `uag=libcurl-agent/1.0`
+⇒ **鸿蒙端早已在用 HTTP/2 + TLS 1.3**，且不是我们配置的结果，是平台默认行为。
+
+**★原结论错在哪（两层误判叠加）**
+· ① 把「探针连不上**自签**服务端」当成了「平台不支持 h2」：
+  `run-transport-probe.sh` 用**自签证书**的本地 h2 服务端（为了核对 SPKI pin），
+  而鸿蒙宿主未接自定义 CA ⇒ 那个服务端连不上 ⇒ `http2_ok=null`（**装置限制，不是能力缺失**）。
+· ② 没验证 RCP 的底层：实测 `librcp_c.so` 是 **libcurl**（响应头 `uag=libcurl-agent/1.0` 可证），
+  libcurl 原生 ALPN + h2；而**公网证书是系统信任的**，根本不需要自定义 CA。
+· 佐证：`rcp.h` 的 `Rcp_TransferConfiguration` **没有 HTTP 版本选项**
+  （只有 `autoRedirect` / `timeout` / `assumesHTTP3Capable` / `pathPreference`）
+  ⇒ 协议版本完全交给 libcurl 的 ALPN 协商，我们**无需也无法**显式指定。
+
+**★影响**
+· P1「**HTTP/2（鸿蒙）**」可**销项**——原以为要先做一笔"接自定义 CA/pinning"的前置工程，实际不需要；
+· `run-transport-probe.sh` 的 `http2_ok` 会**继续**是 `null`（它连自签服务端，测不了这本就正常）
+  ⇒ 鸿蒙 h2 的判据**不能用那份证据**，必须走公网端点（本单加了 `http-probe-h2.json` + 判据）。
+
+**★★顺带发现的更大一件事：RCP 内置 DoH**
+`rcp.h` 里有 `Rcp_DnsOverHttps { url, skipCertificatesValidation }`，注释
+「DNS configuration on HTTPS. If set, the address resolved by the DOH dns server is preferred.」
+⇒ **鸿蒙的 HTTPDNS 落点是现成的**（配 `doh.url` 即可，不必自建解析器）。
+矩阵原写「鸿蒙需自建解析器或 `Network.framework`」对鸿蒙是错的。
+⇒ 登记 `T-harmony-httpdns-doh`（含：**必须实测才算具备**；`skipCertificatesValidation` 不得默认打开）。
+
+**★判据** `tests/harmony-http2-evidence.test.ts`（3 条）
+· 真机证据断言 `http=http/2` + `tls=TLSv1.3` + `uag=libcurl-agent`；
+· 矩阵不得把"需先接 CA/pinning"当**现行要求**；
+· 矩阵必须记录"RCP 无 HTTP 版本选项"这个机制解释。
+· **破坏性验证 4/4 全红**（http/2→http/1.1 · TLSv1.3→1.2 · 矩阵回退 · 注入旧结论行）。
+· ★★**判据自己的一次假绿被破坏性验证抓出**：首版用"该行 + 后 2 行"判否定词，
+  于是注入一行「需先接 CA/pinning（待办）」时，紧随的旧说明里有"是错的" ⇒ 仍全绿。
+  ⇒ 收紧为**只认同行**的否定标记。★这是本仓"断言口径要能真的打红"纪律的又一次实证。
+
+**诚实边界**
+· 公网端点只证明"对该服务端协商到 h2"（取决于对端是否支持 h2）——三端同一口径；
+· DoH 只做了**头文件取证**，未实测生效 ⇒ **不宣称**"鸿蒙 HTTPDNS 已具备"；
+· 本单未改任何宿主运行时代码（只改探针 preview 上限 120→400 以便读全 trace 字段）。
+
+**下一步**：① 实测 DoH（可达 DoH 服务端 + 真机对照）② HTTPDNS 线格式要能表达两端不同形态
+（Android 注入解析函数 / 鸿蒙注入 DoH URL）③ 把 `http2_ok` 从 transport-probe 的判据体系里
+对鸿蒙**移除**（改用公网证据），避免后人再次误读为"鸿蒙没 h2"。
