@@ -15,6 +15,10 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { hasBridge, listFiles, readText } from '../bridge'
+import { useWorkspaceState } from '../useWorkspaceState'
+
+/** ★G5：上次打开的文件存在工作区会话里（重启恢复）。 */
+const ws = useWorkspaceState()
 
 /** 列哪些子树（都是 Studio 自己的源码——显示它自己，一眼能核对"屏幕这段 == 仓库那段"） */
 const ROOTS = ['packages/studio/ui/src', 'packages/studio/src', 'packages/studio/native'] as const
@@ -32,6 +36,7 @@ const short = (p: string) => (p.startsWith(PREFIX) ? p.slice(PREFIX.length) : p)
 
 async function open(path: string) {
   cur.value = path
+  ws.codeFile = path
   loading.value = true
   err.value = ''
   try {
@@ -59,8 +64,12 @@ async function boot() {
     err.value = '文件列表为空（仓库根可达但没匹配到源码）'
     return
   }
-  // 默认打开 App.vue（自证：屏幕上这段就是 Studio 自己的布局代码）；找不到就取第一个
-  const pref = files.value.find((f) => f.endsWith('ui/src/App.vue')) ?? files.value[0]!
+  // 优先级：**上次打开的文件**（若还在列表里）> App.vue（自证）> 第一条
+  // ★上次那个文件可能已被删/改名 ⇒ 找不到就体面回退，而不是报错
+  const pref =
+    files.value.find((f) => f === ws.codeFile) ??
+    files.value.find((f) => f.endsWith('ui/src/App.vue')) ??
+    files.value[0]!
   await open(pref)
 }
 

@@ -191,6 +191,41 @@ fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// 工作区状态的落盘位置（G5）：`~/Library/Application Support/dev.proteus.studio/state.json`。
+///
+/// 【为什么不用 localStorage】WebView 的 localStorage 会随清缓存/换 identifier 丢，
+///   而且**用户看不见也改不了**；IDE 的会话状态属于"工程之外的用户偏好"，
+///   放标准位置（macOS 的 Application Support）才能备份、迁移、排障。
+fn state_path() -> Result<std::path::PathBuf, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME 不可用".to_string())?;
+    let dir = std::path::PathBuf::from(home).join("Library/Application Support/dev.proteus.studio");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("建状态目录失败：{e}"))?;
+    Ok(dir.join("state.json"))
+}
+
+/// 读工作区状态。**首次运行没有文件是正常情况** ⇒ 返回 `{}` 而不是报错。
+#[tauri::command]
+fn load_state() -> Result<String, String> {
+    let p = state_path()?;
+    match std::fs::read_to_string(&p) {
+        Ok(s) => Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("{}".to_string()),
+        Err(e) => Err(format!("读状态失败：{e}")),
+    }
+}
+
+/// 写工作区状态（原子替换：先写 `.tmp` 再 rename，避免半个 JSON 落盘）。
+#[tauri::command]
+fn save_state(json: String) -> Result<(), String> {
+    if json.len() > 64 * 1024 {
+        return Err(format!("状态过大：{} 字节（上限 64KB）", json.len()));
+    }
+    let p = state_path()?;
+    let tmp = p.with_extension("json.tmp");
+    std::fs::write(&tmp, json.as_bytes()).map_err(|e| format!("写临时状态失败：{e}"))?;
+    std::fs::rename(&tmp, &p).map_err(|e| format!("替换状态文件失败：{e}"))
+}
+
 /// 机型探测：一次 adb 查询，缓存住。
 /// ★探测不到就返回 None —— **不拿"Android"这种占位串冒充机型**（面板上"未知"比一个假型号有用）。
 fn device_label() -> Option<String> {
@@ -295,7 +330,15 @@ fn main() {
     default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_canvas_rect, stats, dump_frame, read_text, list_files])
+        .invoke_handler(tauri::generate_handler![
+            set_canvas_rect,
+            stats,
+            dump_frame,
+            read_text,
+            list_files,
+            load_state,
+            save_state
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let h = handle.clone();

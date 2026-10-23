@@ -138,6 +138,12 @@ await page.addInitScript((payload) => {
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
         if (cmd === 'list_files')
           return ['packages/studio/ui/src/App.vue', 'packages/studio/src/main.rs', 'packages/studio/native/embed_view.m']
+        // ★G5 会话状态：用 localStorage 模拟磁盘——这样 reload 后还能验「恢复上次视图」
+        if (cmd === 'load_state') return localStorage.getItem('__stub_state__') ?? '{}'
+        if (cmd === 'save_state') {
+          localStorage.setItem('__saved_state__', String(args?.json ?? ''))
+          return null
+        }
         throw new Error('未实现：' + cmd)
       },
     },
@@ -203,6 +209,22 @@ await page.waitForTimeout(250)
 const switchedPath = await page.evaluate(
   () => document.getElementById('codePath')?.textContent?.trim() ?? '',
 )
+
+// ── ⑫ G5 会话状态：切换后要落盘；reload 后要能**恢复上次的视图与文件** ──────────
+const savedState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
+// 模拟"上次关在代码视图、在看 main.rs" ⇒ reload 应直接进代码视图
+await page.evaluate(() =>
+  localStorage.setItem(
+    '__stub_state__',
+    JSON.stringify({ view: 'code', codeFile: 'packages/studio/src/main.rs' }),
+  ),
+)
+await page.reload()
+await page.waitForTimeout(900)
+const restored = await page.evaluate(() => ({
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+  files: document.querySelectorAll('#codeFiles button').length,
+}))
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
 await browser.close()
@@ -255,6 +277,16 @@ const checks = [
   [
     `⑪d 点第二个文件能切换（open 通路，不只是默认那个能看）${switchedPath.endsWith('main.rs') ? '' : `（当前 ${switchedPath}）`}`,
     switchedPath.endsWith('main.rs'),
+  ],
+  // ⑫ G5：切换要落盘（否则"记住上次"只是口头承诺）
+  [
+    `⑫ 切换视图/文件后写入会话状态${savedState.includes('"view":"code"') ? '' : `（实际 "${savedState}"）`}`,
+    savedState.includes('"view":"code"') && savedState.includes('main.rs'),
+  ],
+  // ⑫b reload 后恢复上次视图与文件（这条才是"重启即恢复"的真正判据）
+  [
+    `⑫b reload 后恢复上次的视图与文件${restored.path.endsWith('main.rs') ? '' : `（当前 ${restored.path || '空'}）`}`,
+    restored.files === 3 && restored.path.endsWith('main.rs'),
   ],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
 ]

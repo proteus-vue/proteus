@@ -1,0 +1,61 @@
+// packages/studio/ui/src/useWorkspaceState.ts
+// ★★★G5：**工作区会话状态**（记住视图与打开的文件；重启即恢复）
+//
+// 【为什么单独一个模块】状态要跨组件共享（左栏切换在 App.vue，打开文件在 CodePanel），
+//   各自读写同一个 JSON 会互相覆盖。这里一处持有、一处落盘。
+//
+// 【为什么落文件而不是 localStorage】localStorage 会随清缓存/换 identifier 丢，
+//   而且用户看不见也改不了；会话偏好属于"工程之外的用户状态"，放 macOS 标准的
+//   `~/Library/Application Support/dev.proteus.studio/state.json` 才能备份/迁移/排障。
+//
+// 【失败一律降级，不阻断】读不到（首次运行）、JSON 坏了、写失败 —— 全部静默回到默认值。
+//   会话状态不是功能，**不该因为它挂了导致 Studio 起不来**。
+
+import { reactive, watch } from 'vue'
+import { hasBridge, loadState, saveState } from './bridge'
+
+export type ViewName = 'device' | 'code'
+
+export interface WorkspaceState {
+  view: ViewName
+  /** 代码视图里上次打开的文件（相对仓库根）。空 = 用默认（App.vue）。 */
+  codeFile: string
+}
+
+const state = reactive<WorkspaceState>({ view: 'device', codeFile: '' })
+/** 读到磁盘状态之前不要回写（否则会用默认值覆盖用户上次的设置） */
+let hydrated = false
+
+export function useWorkspaceState(): WorkspaceState {
+  return state
+}
+
+/** 启动时调用一次：从磁盘恢复。无桥/首次运行/JSON 损坏都落到默认值。 */
+export async function hydrateWorkspace(): Promise<void> {
+  if (!hasBridge()) {
+    hydrated = true
+    return
+  }
+  try {
+    const raw = await loadState()
+    const o = JSON.parse(raw || '{}') as Partial<WorkspaceState>
+    if (o.view === 'code' || o.view === 'device') state.view = o.view
+    if (typeof o.codeFile === 'string') state.codeFile = o.codeFile
+  } catch {
+    /* 首次运行 / 文件损坏 ⇒ 用默认值，不打扰用户 */
+  }
+  hydrated = true
+}
+
+// 变更即落盘。切换视图/打开文件都是低频操作，不做防抖也够；
+// 真要做防抖得引入定时器，反而给"关窗口时丢最后一次写"留了窗口。
+watch(
+  state,
+  () => {
+    if (!hydrated || !hasBridge()) return
+    void saveState(JSON.stringify({ view: state.view, codeFile: state.codeFile })).catch(() => {
+      /* 写失败不影响使用 */
+    })
+  },
+  { deep: true },
+)

@@ -419,6 +419,24 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 - ⑪c 文件列表渲染出条目且默认打开 `App.vue`（自证）；
 - ⑪d **点第二个文件能切换**（`open` 通路，不只是默认那个能看）。
 
+## 会话状态（G5 · 决策 #1190 续）
+
+Studio 记住**上次的视图与打开的文件**，重启回到原处。
+
+| 件 | 实现 |
+|---|---|
+| 落盘位置 | `~/Library/Application Support/dev.proteus.studio/state.json` |
+| Rust | `load_state`（首运行无文件 ⇒ 返回 `{}`，不是报错）· `save_state`（先写 `.tmp` 再 `rename`，**原子替换**；≤64KB） |
+| 前端 | `useWorkspaceState.ts`：一处持有、变更即落盘。**读到磁盘前不回写**（否则默认值会覆盖用户上次设置） |
+| 降级 | 无桥 / 首运行 / JSON 损坏 / 写失败 —— 一律静默回默认值。**会话状态不是功能，不该因为它挂了导致 Studio 起不来** |
+
+**为什么不用 localStorage**：会随清缓存 / 换 identifier 丢，而且用户看不见、改不了。
+会话偏好属于"工程之外的用户状态"，放 macOS 标准位置才能备份、迁移、排障。
+
+**判据**（`check:studio-panel` 已到 **16 条**）：
+- ⑫ 切换视图/文件后**真的写入了**会话状态（否则"记住上次"只是口头承诺）；
+- ⑫b `reload` 后**恢复上次的视图与文件**（这条才是"重启即恢复"的真正判据，⑫ 只证明写了）。
+
 ## UI 生产验收标准（2026-10-23）
 
 出门后按大厂 IDE 的口径收敛，四件事落地（都写在 `ui/src/styles.css` 头部）：
@@ -448,7 +466,7 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 |---|---|---|---|
 | **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
 | **G4** | 编辑器容器 | **浏览 + 只读已成（#1190 续）**：左栏 ◈ 切换 · `list_files` 列真实文件（白名单 + ≤300 条）· 点谁读谁 · 行号展示 · **切走时把原生画布收成 0×0**（否则 GL 画面浮在代码上）；判据 ⑪/⑪b/⑪c/⑪d 守着。**还没做**：CodeMirror 6 编辑与写回、元素拾取、触摸回传 | CodeMirror 6（G-56.1 红线：绝不自研编辑器内核）+ 设备侧视图树 |
-| **G5** | 持久化 / 模块化 | `src/main.rs` 单文件 291 行 | 会话配置落盘、面板可插拔；先按命令分组拆 Rust，再谈模块化 |
+| **G5** | 持久化 / 模块化 | **会话状态已成（#1190 续）**：视图（设备/代码）与上次打开的文件落 `~/Library/Application Support/dev.proteus.studio/state.json`，重启即恢复；判据 ⑫/⑫b 守着。**还没做**：窗口尺寸记忆、面板可插拔、`main.rs` 按命令分组拆 | 先拆命令再谈模块化（现在 408 行仍在可读范围） |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
 | — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |
 | — | 组件测试 | 无 | 只有端到端 10 判据；加 `vitest` 需先有 package.json（与"不是 npm 包"冲突，要先决定） |

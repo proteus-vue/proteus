@@ -10,15 +10,17 @@ import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
+import { hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 
 const { stats, error, hasBridge } = useStats(500)
 const rect = ref('—')
 const canvasEl = ref<HTMLElement | null>(null)
 
-/** ★G4 第一块砖：左栏在「设备画布」与「代码」之间切换。
+/** ★G5：视图状态存在工作区会话里（重启恢复），不再是组件内的临时 ref。
  *  ★切到 code 时必须把**原生视图**收成 0×0 —— 它是叠在 HTML 之上的独立 NSView，
  *    只隐藏 HTML 里的 #canvas 是盖不住它的（会看到 GL 画面浮在代码面板上）。 */
-const view = ref<'device' | 'code'>('device')
+const ws = useWorkspaceState()
+const view = computed(() => ws.view)
 
 /** 画布矩形：HTML 定布局，原生跟随（#1173 的接线，这里只是搬到 Vue 里） */
 async function syncRect() {
@@ -33,8 +35,8 @@ async function syncRect() {
   }
 }
 
-async function switchView(v: 'device' | 'code') {
-  view.value = v
+async function switchView(v: ViewName) {
+  ws.view = v
   if (v === 'code') {
     rect.value = '—'
     try {
@@ -50,8 +52,13 @@ async function switchView(v: 'device' | 'code') {
 }
 
 let rectTimer: ReturnType<typeof setInterval> | undefined
-onMounted(() => {
-  void syncRect()
+onMounted(async () => {
+  // ★先恢复上次的视图，再量画布：顺序反了会先按设备视图同步一次 rect，
+  //   而恢复成 code 视图时那次同步是白做的（还会让原生画布闪一下）。
+  await hydrateWorkspace()
+  await nextTick()
+  if (view.value === 'device') await syncRect()
+  else await setCanvasRect({ x: 0, y: 0, w: 0, h: 0 }).catch(() => {})
   rectTimer = setInterval(syncRect, 1000)
   addEventListener('resize', syncRect)
 })
