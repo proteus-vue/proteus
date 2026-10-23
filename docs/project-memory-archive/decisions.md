@@ -12829,6 +12829,20 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   竖屏 1170×2532；Studio 画布按宽高比显示，横屏会侧躺）；e) 码率固定 8Mbps（未做自适应）；f) 帧到达时刻的 PTS 用的是
   `CMSampleBufferGetPresentationTimeStamp`（设备时钟域），与 `live_stream.h` 的"首字节到达时刻"不同源 —— 混用会让延迟读数失真，
   **接 Studio 统计前必须重打 CLOCK_MONOTONIC**（当前只是在 Mac 侧按到达顺序用，不取 PTS 值）。
+**⑨ ★真机闭环（2026-10-23 用户实测跑通，本条从「待跑」转「已验」）**：iPhone 12（`F02622D7…`）→ Mac
+  `192.168.1.128 → 192.168.1.124:9001`，10 秒收到 **1,209,837 字节 / 295 帧 / ffprobe 判 h264 / 888×1920**；
+  App 侧日志 `frames=264 encoded=264 bytes=1206675 kbps=9653.4 nals=1 size=888x1920`（**约 60fps / 9.6 Mbps**）。
+  **三个只在真机上才暴露的事实**：
+  a) **SIGPIPE 会把 App 打死**——Mac 侧接收器退出后，App 下一次 `send` 直接收 SIGPIPE
+     （日志 `App terminated due to signal 13`），用户看到的是"收完 10 秒 App 就没了"。修法：`setsockopt(SO_NOSIGPIPE)`，
+     让 send 只返 `-1(EPIPE)`，走既有的"关连接 + 下帧重连"。**这个坑在模拟器/假源上永远测不出来**。
+  b) **给的不是屏幕 native 分辨率**：ReplayKit 出的是 **888×1920**（与 1170×2532 等比，比例 0.4625 一致），
+     即系统级降采样 ⇒ 看画面够用，**但做不了像素级 1:1 比对**（那条得走 Broadcast Upload Extension）。
+  c) **`nals=1`**：VideoToolbox 默认一帧一 NAL ⇒ 我们那条"逐 NAL 加起始码"的循环在 iOS 上恒只跑一次，
+     真正的多 NAL 场景（Android screenrecord）才有覆盖。**别把 Android 的测试当成 iOS 的**。
+**⑩ 剩余（本条未覆盖）**：**Studio 画布上屏**还没接 iOS 真机流——只验了"字节到 Mac"。
+  `POC_LIVE="/usr/bin/nc -l 9001"` 用的是同一份 Annex-B，Android 那条腿已验、iOS 未验；
+  接之前要先把 ⑧f 的 PTS 时钟域问题改掉（否则延迟读数失真）。
 
 1192. **★★★独立验证第二轮又抓 3 条阻断 + 6 条假绿（含"我声称修好但实际没修"）· 决策**（2026-10-22 · 承接 #1191）:
 **① 第二轮结论**：第一次修复里有 5 项真做对了（B1 RAII 早退、B2 超限码、B3 flush 判定、B6 限制字段进 data、B7 miss→system、J1/J2 块级断言、J8、J9），但**B5 根本没修对**，且 `.part`+rename 引入了**新的数据丢失路径**。

@@ -33,9 +33,16 @@ let failed = false
 const fail = (m) => { console.error(`✗ ${m}`); failed = true }
 
 /** 从文本里抽 `ProteusHost/{runtime,dev,shell}/*.swift`（两处写法不同：数组元素 vs 命令行实参） */
+// ★★★2026-10-23：除 `ProteusHost/…` 外还要认 **`$HS/…`**。
+//   `run-selfdraw.sh` 的 swiftc 实参已改为从**源码快照**取（`$HS` = mktemp 出来的 ProteusHost 副本，
+//   见决策 #1190 与本脚本抓到的那次不一致）——编译不再直接读工作树，但清单里就只剩 `$HS/runtime/x.swift`，
+//   本正则若不认，就会报"两边清单不一致"（假红：其实是一份清单换了表达方式）。
+//   ⇒ 统一归一化成 `ProteusHost/...` 再比对（key 与 check 侧同形），**判据不变**：仍然只有一份真清单。
 function swiftSources(text) {
   const out = new Set()
-  for (const m of text.matchAll(/ProteusHost\/(?:runtime|dev|shell)\/[A-Za-z0-9_-]+\.swift/g)) out.add(m[0])
+  for (const m of text.matchAll(/(?:ProteusHost|\$HS)\/(?:runtime|dev|shell)\/[A-Za-z0-9_-]+\.swift/g)) {
+    out.add(m[0].replace(/^\$HS\//, 'ProteusHost/'))
+  }
   return out
 }
 

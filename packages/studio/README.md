@@ -376,16 +376,25 @@ bash hosts/ios/run-screen-stream.sh
 ```
 
 **已验 / 未验（别混）**：
-- ✅ Swift 类型检查（`check:ios-selfdraw-compile`）、Rust 编译、接收端（`ffprobe` 认 640×360/120 帧）、
+- ✅ Swift 类型检查（`check:ios-selfdraw-compile`）、Rust 编译、接收端（假源 `ffprobe` 认 640×360/120 帧）、
   `nc -l` 与接收器两条接收路径；
-- ❌ **真机链路本身**：`codesign` 要写 login 钥匙串，AI 执行沙箱实测被拦
-  （`[sandbox] login.keychain-db (file-write)`）⇒ 必须在你的交互式终端跑上面那条命令，并**在手机上点「允许」**。
+- ✅ **真机链路（2026-10-23 · iPhone 12 / `F02622D7…`）**：
+  `192.168.1.128 → 192.168.1.124:9001`，10 秒收 **1,209,837 字节 / 295 帧 / 合法 H.264 / 888×1920**；
+  App 侧日志 `frames=264 encoded=264 bytes=1206675 kbps=9653.4 nals=1 size=888x1920`（约 **60fps**、**9.6 Mbps**）。
+- ❌ **Studio 画布上屏**还没接真机流过（只验了"字节到 Mac"这一段；`POC_LIVE="nc -l 9001"` 那条路是同一份
+  Annex-B，Android 已验，iOS 未验）。
+- ⚠ **真实分辨率是 888×1920，不是屏幕 native 1170×2532**：ReplayKit 给的是等比缩放后的 buffer
+  （比例 0.4625 与屏幕一致）⇒ 看画面够用，但**不是像素级 1:1**。要做像素比对得另找通道（Broadcast Extension 才给 native）。
+
+**★一个已修的真问题（实测踩到）**：Mac 侧接收器退出后，App 下一次 `send` 会吃 **SIGPIPE**，
+整个 App 被打死（`App terminated due to signal 13`）——用户看到的是"收完 10 秒 App 就没了"。
+修法：`setsockopt(SO_NOSIGPIPE)`，让 send 只返 `-1(EPIPE)`，走"关连接 + 下帧重连"。
 
 ## 出门 ≠ 完成：还没做的（按顺序）
 
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
-| **G3** | iOS 通道 | **代码就绪（#1190）**：ReplayKit 捕获 + VideoToolbox 硬编 + TCP 裸 Annex-B；接收端与 Studio 默认输入源已接线并**用假源验证过**（`ffprobe` 认 H.264）；**真机联调待跑**（签名写钥匙串只能在交互式终端做） | 一条命令：`bash hosts/ios/run-screen-stream.sh`，手机弹窗点「允许」 |
+| **G3** | iOS 通道 | **真机已通（#1190 · 2026-10-23）**：888×1920 · ~60fps · 9.6 Mbps · 10 秒 295 帧合法 H.264。⚠ 剩"Studio 画布上屏"未验 | Studio：`PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell` |
 | **G4** | 编辑器容器 | **零行** | CodeMirror 6（G-56.1 红线：绝不自研编辑器内核）+ 元素拾取（需设备侧视图树 + 拾取通道）+ 触摸回传 |
 | **G5** | 持久化 / 模块化 | `src/main.rs` 单文件 291 行 | 会话配置落盘、面板可插拔；先按命令分组拆 Rust，再谈模块化 |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |

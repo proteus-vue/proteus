@@ -312,6 +312,12 @@ final class ScreenStream {
         guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 else { return false }
         let s = socket(AF_INET, SOCK_STREAM, 0)
         guard s >= 0 else { return false }
+        // ★★SO_NOSIGPIPE 必须设（2026-10-23 真机实测）：Mac 侧接收器退出后，App 下一次 `send` 会收到
+        //   **SIGPIPE** 直接把整个 App 打死（日志 `App terminated due to signal 13`）——
+        //   表现是"收完一次 10 秒，App 就没了"，用户下次还得重启。设了这个选项后 send 只返回 -1（EPIPE），
+        //   走我们自己的"关连接 + 下帧重连"路径。
+        var noSigPipe: Int32 = 1
+        setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
         // 发送超时 2s：Mac 侧没起来时不能把编码线程挂死
         var tv = timeval(tv_sec: 2, tv_usec: 0)
         setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
