@@ -109,6 +109,30 @@ export default class EntryAbility extends UIAbility {
     if (probePinOnly !== undefined) {
       AppStorage.setOrCreate('proteusProbeTlsPinOnly', String(probePinOnly) === '1' ? '1' : '');
     }
+    /**
+     * ★★★#1205：`upload` 探针入参（沙箱相对路径 / 字段名 / 文件名 / 一个普通表单字段）。
+     * ★路径含斜杠 ⇒ 同 #1187 传 `%2F` 解回。
+     */
+    const upPath = want?.parameters?.['uploadPath'];
+    if (typeof upPath === 'string' && upPath.length > 0) {
+      AppStorage.setOrCreate('proteusProbeUploadPath', upPath.split('%2F').join('/'));
+    }
+    const upField = want?.parameters?.['uploadField'];
+    if (typeof upField === 'string' && upField.length > 0) {
+      AppStorage.setOrCreate('proteusProbeUploadField', upField);
+    }
+    const upFilename = want?.parameters?.['uploadFilename'];
+    if (typeof upFilename === 'string' && upFilename.length > 0) {
+      AppStorage.setOrCreate('proteusProbeUploadFilename', upFilename);
+    }
+    const upF1k = want?.parameters?.['uploadField1Key'];
+    if (typeof upF1k === 'string' && upF1k.length > 0) {
+      AppStorage.setOrCreate('proteusProbeUploadField1Key', upF1k);
+    }
+    const upF1v = want?.parameters?.['uploadField1Value'];
+    if (typeof upF1v === 'string') {
+      AppStorage.setOrCreate('proteusProbeUploadField1Value', upF1v);
+    }
     // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
     //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
     //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。

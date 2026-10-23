@@ -39,6 +39,11 @@ DOH_SKIP_CERT=""  # ★#1202：1 = skipCertificatesValidation（自签 DoH 服�
 EXPECT_REJECT=""   # ★#1192：1 = 预期被拒（路径穿越/非法 savePath 的**可重放**判据）
 TLS_PINS=""        # ★#1203：base64 SPKI 指纹（鸿蒙应**如实拒绝**）
 TLS_PIN_ONLY=""    # ★#1203：1 = 只给 tlsPinOnly（同样应被拒）
+UPLOAD_PATH=""     # ★#1205：multipart 上传的沙箱相对路径
+UPLOAD_FIELD=""    # ★#1205：文件字段名（缺省 file）
+UPLOAD_FILENAME="" # ★#1205：远端文件名（缺省 = 路径 basename）
+UPLOAD_F1K=""      # ★#1205：一个普通表单字段（键）
+UPLOAD_F1V=""      # ★#1205：同上（值）
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
@@ -53,6 +58,10 @@ for arg in "$@"; do
     --doh-skip-cert) DOH_SKIP_CERT=1 ;;                  # ★#1202
     --tls-pins=*) TLS_PINS="${arg#--tls-pins=}" ;;       # ★#1203（应被如实拒绝）
     --tls-pin-only) TLS_PIN_ONLY=1 ;;                    # ★#1203
+    --upload-path=*) UPLOAD_PATH="${arg#--upload-path=}" ;;  # ★#1205
+    --upload-field=*) UPLOAD_FIELD="${arg#--upload-field=}" ;;
+    --upload-filename=*) UPLOAD_FILENAME="${arg#--upload-filename=}" ;;
+    --upload-form=*) UPLOAD_F1K="${arg#--upload-form=}"; UPLOAD_F1V="${UPLOAD_F1K#*=}"; UPLOAD_F1K="${UPLOAD_F1K%%=*}" ;;
     --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
        elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
@@ -102,6 +111,15 @@ fi
 #   的**测试值**（不含 `+` `/` `=`），只验证"拒绝生效"，不需要真指纹。
 [ -n "$TLS_PINS" ] && DNS_ARG="$DNS_ARG --ps tlsPins $TLS_PINS"
 [ "$TLS_PIN_ONLY" = "1" ] && DNS_ARG="$DNS_ARG --ps tlsPinOnly 1"
+# ★★★#1205：multipart 上传（路径斜杠同样被 aa 吃掉 ⇒ 传 %2F）
+if [ -n "$UPLOAD_PATH" ]; then
+  UP_ENC="$(printf '%s' "$UPLOAD_PATH" | sed 's|/|%2F|g')"
+  DNS_ARG="$DNS_ARG --ps uploadPath $UP_ENC"
+  [ -n "$UPLOAD_FIELD" ] && DNS_ARG="$DNS_ARG --ps uploadField $UPLOAD_FIELD"
+  [ -n "$UPLOAD_FILENAME" ] && DNS_ARG="$DNS_ARG --ps uploadFilename $UPLOAD_FILENAME"
+  [ -n "$UPLOAD_F1K" ] && DNS_ARG="$DNS_ARG --ps uploadField1Key $UPLOAD_F1K"
+  [ -n "$UPLOAD_F1V" ] && DNS_ARG="$DNS_ARG --ps uploadField1Value $UPLOAD_F1V"
+fi
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 
@@ -211,6 +229,53 @@ if pins_on:
 #   且 `dns.tableHits > 0` + `lastSource == "table"`（证"表真的被用于解析"，不是碰巧失败）。
 #   ★这与 #1171 的判据同口径：`tableHits` 才是"表被采用"的直接证据，失败本身只是必要条件。
 table_on = (diag.get("dnsHost") or "") != "" or bool(d.get("dns", {}).get("tableRules"))
+# ★★★#1205：**multipart 上传**组——只看"请求成功"说明不了任何事，
+#   真正的判据是**服务端收到了什么**（由 upload-probe-server 解析后回显）：
+#     · 有 boundary 且与 Content-Type 一致；
+#     · 普通表单字段名/值正确；
+#     · 文件字段 filename 正确；
+#     · **文件字节的 sha256 与源文件逐字节相等**（长度对但内容错照样是坏的）。
+upload_path = diag.get("uploadPath") or ""
+if upload_path:
+    if d.get("ok") is not True:
+        print(f"✗ upload 请求未成功：{d.get('reason') or d.get('error')}"); sys.exit(1)
+    # 服务端回显：优先用脚本注入（SRV_ECHO），否则自己从 UPLOAD_SRV 拉（本机回环）
+    raw = os.environ.get("SRV_ECHO") or ""
+    if not raw:
+        srv = os.environ.get("UPLOAD_SRV") or ""
+        if srv:
+            try:
+                import urllib.request
+                raw = urllib.request.urlopen(srv + "/stats", timeout=5).read().decode("utf-8")
+            except Exception as e:
+                print(f"✗ 取服务端回显失败（{srv}）：{e}"); sys.exit(1)
+    if not raw:
+        print("✗ 缺服务端回显（SRV_ECHO / UPLOAD_SRV）——上传判据不能只看客户端成功"); sys.exit(1)
+    try:
+        echo = json.loads(raw)
+    except Exception:
+        print(f"✗ 服务端回显不是 JSON：{raw[:120]}"); sys.exit(1)
+    st = echo.get("last") or {}
+    fileinfo = st.get("file") or {}
+    if not st.get("boundary"):
+        print("✗ 服务端没收到 boundary（multipart 头缺失）"); sys.exit(1)
+    if "boundary=" not in str(st.get("contentType") or ""):
+        print(f"✗ 服务端收到的 Content-Type 没有 boundary：{st.get('contentType')}"); sys.exit(1)
+    want_f1k = os.environ.get("WANT_F1K") or ""
+    want_f1v = os.environ.get("WANT_F1V") or ""
+    want_file_sha = os.environ.get("WANT_FILE_SHA") or ""
+    fields = {f.get("name"): f.get("value") for f in (st.get("fields") or [])}
+    if want_f1k and fields.get(want_f1k) != want_f1v:
+        print(f"✗ 表单字段不符：期望 {want_f1k}={want_f1v!r}，实得 {fields.get(want_f1k)!r}"); sys.exit(1)
+    if not fileinfo:
+        print("✗ 服务端没解析到文件字段（文件根本没上传）"); sys.exit(1)
+    if want_file_sha and fileinfo.get("sha256") != want_file_sha:
+        print(f"✗ 文件内容不符：期望 sha256={want_file_sha[:16]}…，实得 {str(fileinfo.get('sha256'))[:16]}…"); sys.exit(1)
+    print(f"✅ multipart 上传成立：boundary={st.get('boundary')[:40]} · "
+          f"字段 {len(st.get('fields') or [])} 个 · 文件 {fileinfo.get('filename')} "
+          f"{fileinfo.get('bytes')}B · sha256 一致")
+    sys.exit(0)
+
 if table_on:
     dn = d.get("dns") or {}
     if (dn.get("tableRules") or 0) <= 0:
@@ -276,6 +341,28 @@ RC=$?
 #   原判据全程只读 `preview.size`，写入 0 字节但摘要报 219 也能全绿。
 #   ⇒ 传了 savePath 时，用 hdc 在**设备上**核对文件真实存在且大小等于摘要。
 # ★#1192：expect-reject 模式没有落盘文件可核对 ⇒ 跳过 stat
+# ★★★#1205：**上传组的设备侧 sha256 对拍**——判据不能只断言"服务端有个 64 位 sha256 字段"，
+#   必须证明"服务端收到的字节 == 设备上那个源文件的字节"。这里用设备 OS 的 `sha256sum`
+#   （第三方测量，不是我们自报）算出基准，写进证据，离线判据再与**服务端回显**比对。
+if [ "$RC" = "0" ] && [ -n "$UPLOAD_PATH" ]; then
+  DEV_UPLOAD_SHA="$(HDC shell "sha256sum '$FILES_DEV/$UPLOAD_PATH' 2>/dev/null | cut -d' ' -f1" 2>/dev/null | tr -d ' \r\n')"
+  if [ -z "$DEV_UPLOAD_SHA" ]; then
+    echo "  ✗ 设备侧算不出源文件 sha256（$UPLOAD_PATH）——上传证据无法对拍"; RC=1
+  else
+    echo "  ✓ 设备侧源文件 sha256=${DEV_UPLOAD_SHA:0:16}…（第三方基准，供离线对拍）"
+    HDC_SHA="$DEV_UPLOAD_SHA" python3 - "$RESULTS/http-probe.json" <<'PY'
+import json, os, sys
+p = sys.argv[1]
+try:
+    d = json.load(open(p))
+except Exception:
+    sys.exit(0)
+d["deviceSourceSha256"] = os.environ.get("HDC_SHA") or ""
+d["deviceSourcePath"] = d.get("probe_diag") and json.loads(d.get("probe_diag")).get("uploadPath") or ""
+json.dump(d, open(p, "w"), ensure_ascii=False)
+PY
+  fi
+fi
 if [ "$RC" = "0" ] && [ -n "$SAVE_PATH" ] && [ -z "$EXPECT_REJECT" ]; then
   SIZE_REPORTED="$(python3 -c "
 import json,sys,re

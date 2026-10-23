@@ -50,11 +50,26 @@ describe('★★★#1203 鸿蒙不支持的能力必须如实拒绝（不许静�
     expect(codeOnly, '★不应把 pin 拒绝写成 tlsError（业务会去查证书，方向就错了）').not.toMatch(/fetch\.tlsError/)
   })
 
-  it('★upload 有消费点且如实拒绝（静默发空请求会让服务端写入空记录）', () => {
+  it('★upload 必须"要么被消费、要么被拒"（#1205 起已实现 ⇒ 消费点在建 multipart 的地方）', () => {
+    /**
+     * ★★★不变式（不是"必须拒绝"）：能力字段只有两种合法归宿——
+     *   ① 被宿主**真的消费**（#1205 起 upload 属于此类：建 multipart 并交给平台发送）；
+     *   ② 或在 guard 里**前置拒绝**（tlsPins 属于此类：平台无回调）。
+     * 两者皆无 = 静默失效（#1203 修的正是这个）。
+     * ⇒ 本判据断言"至少命中一条"，而不是钉死某一种实现形态（实现可以演进，不变式不行）。
+     */
     const g = read(GUARD)
-    expect(g, '★guard 没读 upload（会静默发出不带文件的请求）').toMatch(/f\.upload\.has/)
-    const up = g.slice(g.indexOf('f.upload.has'))
-    expect(up, '★upload 拒绝码应为 fetch.unsupported').toMatch(/fetch\.unsupported/)
+    const h = read(HTTP)
+    const UP = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_upload.h'
+    const u = read(UP)
+    const rejected = /f\.upload\.has/.test(g)
+    // ★上传头里参数名是 `up`（`const UploadSpec& up`），不是 `f`——断言要按**实际签名**写
+    const consumed = /f\.upload\.has/.test(h) && /buildMultipartUpload\(/.test(h) && /up\.path/.test(u)
+    expect(rejected || consumed, '★upload 既没被消费也没被拒 ⇒ 静默失效（服务端会收到没有文件的请求）').toBe(true)
+    // ★若声称"已实现"，则必须真的走 PATH 模式（由平台读文件，内存有界）
+    if (consumed) {
+      expect(u, '★声称实现却没走 RCP_FILE_VALUE_TYPE_PATH').toMatch(/RCP_FILE_VALUE_TYPE_PATH/)
+    }
   })
 
   it('★redirectManual 必须真的生效（不能硬编码 true）', () => {

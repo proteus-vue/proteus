@@ -3323,19 +3323,19 @@
       "id": "T-harmony-http-upload",
       "title": "鸿蒙 multipart 上传（upload）：当前如实拒绝（此前静默发空请求）——RCP 有 multipart 结构体，可独立实现",
       "type": "capability",
-      "status": "planned",
+      "status": "done",
       "owner": null,
       "scope": [
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_guard.h",
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h"
       ],
-      "decision": 1203,
-      "verification": "真机：multipart 上传小文件 ⇒ 服务端收到正确 boundary + 文件字节 + 字段；判据断言服务端侧收到的表单结构（不能只看请求成功）",
+      "decision": 1205,
+      "verification": "✅ #1206 真机：POST + RCP 生成 boundary + 表单字段 title=hello + 文件 up-src.txt 577B + **sha256 与设备 OS 的 sha256sum 逐字节一致**（服务端侧回显 `http-probe-upload-server.json`，不依赖设备自报）。判据 `tests/harmony-upload-multipart.test.ts` 5 条；破坏性：不设文件字段 ⇒ 判据指名\"文件根本没上传\"。",
       "branch": null,
       "related": [
         "T-android-okhttp-transport"
       ],
-      "note": "【planned · #1203 发现并临时堵上】invoke_wire.h 解析了 upload（UploadSpec: path/fieldName/filename/boundary/formData）， 但鸿蒙宿主**从不消费** ⇒ 只发 f.body（通常为空）⇒ 服务端收到一个**没有文件的请求**， 业务以为上传成功（可能写入空记录）。★#1203 已修为**如实拒绝**（fetch.unsupported + 未发出流量）， 风险面消除；真实现另立本单。★可行性：#1166 取证 RCP 有 Rcp_MultipartFormFieldValue / Rcp_FormFieldFileValue / Rcp_Form 结构体 ⇒ 平台支持，属\"工作量\"不是\"边界\"。实现要点：① 构表单树（ordered，编码顺序是契约） ② 沙箱读文件（复用 proteus_http_save.h 的路径校验）③ 分段回调上报进度。"
+      "note": "【done · #1206 已实现（此前 #1203 是如实拒绝）】\n 实现：`proteus_http_upload.h` 用 RCP 的 multipart API（`HMS_Rcp_CreateMultipartForm` /\n `SetMultipartFormValue`），文件字段走 **`RCP_FILE_VALUE_TYPE_PATH`** ⇒ 把沙箱绝对路径交给平台，\n 由 RCP **流式读文件**（内存与文件大小无关，不在我们这侧累积）。\n ★与 Android/iOS 的语义差异（如实登记）：\n  ① **boundary 由 RCP 生成**（不是 JS 传的）⇒ 宿主必须**剔除调用方的 `Content-Type`**，\n     否则头里一个 boundary、体里另一个 ⇒ 服务端必然解析失败（实测确认：不剔除时 Content-Type 里\n     是 JS 的 boundary，而服务端收不到任何字段/文件）。\n  ② 表单字段顺序由平台 Map 决定 ⇒ 不是逐字节等价（按 name 取值不受影响）。\n ★硬约束：`RCP_MAX_PATH_LEN=128` / `RCP_MAX_FILENAME_LEN=128` ⇒ 超长**显式报错**（不静默截断，\n   截断会读到别的文件）。沙箱路径校验复用 `resolveSandboxPath`（非空/非绝对/无 ..）。\n ★探针装置：`upload-probe-server.mjs`（单层 multipart 解析 + 回显结构 + sha256）+ `--upload-*` 入参；\n   判据**看服务端收到的内容**（字段/文件名/sha256），不看\"请求成功\"——实测踩到过\n   固定 GET 时发出无体请求但客户端仍收 200 的形态。\n ★诚实边界：只测 577 B 小文件；大文件的**内存有界**来自\"路径交给平台读\"的设计，\n   本轮**未用大文件实测内存**（savePath 的 64 MiB 实测不能外推到这里）。"
     },
     {
       "id": "T-studio-aspect-fit",

@@ -16,6 +16,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { hostHttpProbe } from 'proteus_render';
 import { InvokeFrame, encodeInvoke } from './InvokeWire';
+import { UploadSpec } from './InvokeWire';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'HttpProbe';
@@ -38,7 +39,13 @@ export function runHttpProbe(filesDir: string): void {
     f.method = 'http.request';
     f.reqId = 'probe-http-arkts-1';
     f.url = url;
-    f.httpMethod = 'GET';
+    /**
+     * ★★★#1205：**上传必须是 POST**（multipart 体只在有方法体语义时才会被发送）。
+     * ★之前固定 `GET` ⇒ 上传组会发出一个**没有体的 GET**（服务端 `bodyBytes:0`），
+     *   而客户端回执仍是 200 ⇒ 只看客户端会误判"上传成功"。这正是判据要看服务端回显的原因。
+     */
+    const httpMethodIn: string | undefined = AppStorage.get<string>('proteusProbeHttpMethod');
+    f.httpMethod = httpMethodIn !== undefined && httpMethodIn.length > 0 ? httpMethodIn : 'GET';
     f.responseType = 0;   // RESPONSE_TEXT
     /**
      * ★★★#1169：**HTTPDNS 表注入**（`dnsHost` + `dnsIp` 配对）。
@@ -70,10 +77,32 @@ export function runHttpProbe(filesDir: string): void {
     if (pinsIn !== undefined && pinsIn.length > 0) f.tlsPins = pinsIn;
     const pinOnlyIn: string | undefined = AppStorage.get<string>('proteusProbeTlsPinOnly');
     if (pinOnlyIn === '1') f.tlsPinOnly = true;
+    /**
+     * ★★★#1205：`upload`（multipart 流式上传）——与 JS 侧 `UploadSpec` 同构。
+     * ★`boundary` 必须给（JS 侧要写进 Content-Type；鸿蒙宿主会**剔除该头**由平台自生成，
+     *   但字段仍按契约传，便于与 Android/iOS 同一份帧）。
+     */
+    const uploadPathIn: string | undefined = AppStorage.get<string>('proteusProbeUploadPath');
+    const uploadFieldIn: string | undefined = AppStorage.get<string>('proteusProbeUploadField');
+    if (uploadPathIn !== undefined && uploadPathIn.length > 0) {
+      const u = new UploadSpec();
+      u.path = uploadPathIn;
+      u.fieldName = uploadFieldIn !== undefined && uploadFieldIn.length > 0 ? uploadFieldIn : 'file';
+      u.filename = AppStorage.get<string>('proteusProbeUploadFilename') ?? '';
+      u.boundary = '----ProteusHarmonyBoundaryProbe';
+      // ★#1205：上传默认用 POST（multipart 只有 POST/PUT 才有体语义）
+      if (httpMethodIn === undefined || httpMethodIn.length === 0) f.httpMethod = 'POST';
+      const fd = new Map<string, string>();
+      const f1k = AppStorage.get<string>('proteusProbeUploadField1Key');
+      const f1v = AppStorage.get<string>('proteusProbeUploadField1Value');
+      if (f1k !== undefined && f1k.length > 0) fd.set(f1k, f1v ?? '');
+      u.formData = fd;
+      f.upload = u;
+    }
     /** ★#1187 诊断：把"探针实际拿到的入参"回显进报告（否则 savePath 没生效时无从归因） */
     probeDiag = { 'savePath': savePathIn ?? '', 'stream': streamIn ?? '', 'filesDir': filesDir,
                   'targetUrl': url, 'tlsPins': (pinsIn ?? '').length > 0 ? 'set' : '',
-                  'tlsPinOnly': pinOnlyIn ?? '' };
+                  'tlsPinOnly': pinOnlyIn ?? '', 'uploadPath': uploadPathIn ?? '' };
     const bytes: Uint8Array = encodeInvoke(f);
     let hex: string = '';
     for (let i = 0; i < bytes.length; i++) {

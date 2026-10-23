@@ -87,6 +87,10 @@ struct RcpApi {
   // ★#1117：逐块接收 + 中止（API 13+/12+）。**可选符号**：旧设备缺 ⇒ 退化为事后拒绝。
   using SetOnBinaryRecvFn = uint32_t (*)(Rcp_Request*, Rcp_OnBinaryReceiveCallback);
   using CancelRequestFn = uint32_t (*)(Rcp_Session*, const Rcp_Request*);
+  // ★★★#1205：multipart 上传（API 12+）。**可选符号**：缺 ⇒ upload 如实回 unsupported。
+  using CreateMultipartFormFn = Rcp_MultipartForm* (*)(void);
+  using DestroyMultipartFormFn = void (*)(Rcp_MultipartForm*);
+  using SetMultipartFormValueFn = uint32_t (*)(Rcp_MultipartForm*, const char*, const Rcp_MultipartFormFieldValue*);
 
   CreateSessionFn createSession = nullptr;
   CreateRequestFn createRequest = nullptr;
@@ -101,6 +105,9 @@ struct RcpApi {
   CloseSessionFn closeSession = nullptr;
   SetOnBinaryRecvFn setOnBinaryRecv = nullptr;   // 可选（旧库缺）
   CancelRequestFn cancelRequest = nullptr;       // 可选（旧库缺）
+  CreateMultipartFormFn createMultipartForm = nullptr;        // 可选（#1205）
+  DestroyMultipartFormFn destroyMultipartForm = nullptr;      // 可选（#1205）
+  SetMultipartFormValueFn setMultipartFormValue = nullptr;    // 可选（#1205）
 
   /** 必需符号是否齐备（`symbolsOk` 的判据与 #1156 时**一字不差**）。 */
   bool ok() const {
@@ -129,6 +136,13 @@ inline RcpApi loadRcpApi(void* lib) {
   api.setOnBinaryRecv = reinterpret_cast<RcpApi::SetOnBinaryRecvFn>(
       dlsym(lib, "HMS_Rcp_SetRequestOnBinaryDataRecvCallback"));
   api.cancelRequest = reinterpret_cast<RcpApi::CancelRequestFn>(dlsym(lib, "HMS_Rcp_CancelRequest"));
+  // ★#1205：multipart（可选——缺则 upload 如实回 unsupported，不伪造成功）
+  api.createMultipartForm =
+      reinterpret_cast<RcpApi::CreateMultipartFormFn>(dlsym(lib, "HMS_Rcp_CreateMultipartForm"));
+  api.destroyMultipartForm =
+      reinterpret_cast<RcpApi::DestroyMultipartFormFn>(dlsym(lib, "HMS_Rcp_DestroyMultipartForm"));
+  api.setMultipartFormValue =
+      reinterpret_cast<RcpApi::SetMultipartFormValueFn>(dlsym(lib, "HMS_Rcp_SetMultipartFormValue"));
   return api;
 }
 

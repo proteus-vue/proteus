@@ -63,19 +63,15 @@ inline std::string unsupportedFeatureReason(const proteus::wire::InvokeFrame& f)
            "请改用系统信任链，或改用能校验 pin 的端（Android/iOS）";
   }
   /**
-   * ③ `upload`（multipart 流式上传）—— 鸿蒙**未实现**。
-   *   ★此前同样是**静默忽略**：帧里带了 `upload`，但宿主只发 `f.body`（通常为空）
-   *     ⇒ 服务端收到一个**没有文件的请求**，业务以为上传成功了（比报错更糟：
-   *     可能写入一条空记录）。
-   *   ★RCP 有 multipart 结构体（`Rcp_MultipartFormFieldValue` / `Rcp_FormFieldFileValue`），
-   *     但完整实现要构表单树 + 沙箱读文件 + 分段回调，属**独立工作量**
-   *     ⇒ 本单先如实拒绝，把"静默发空请求"这个坑堵上；实现另立单。
+   * ③ `upload`（multipart 流式上传）—— ★★★#1205 起**已实现**（见 `proteus_http_upload.h`）。
+   *
+   * ★历史：此前这里是"如实拒绝"分支（#1203），因为帧里带了 `upload` 但宿主只发 `f.body`
+   *   （通常为空）⇒ 服务端收到**没有文件的请求**、业务以为上传成功（可能写入空记录）。
+   *   现在已用 RCP 的 multipart API（`contentOrPathOrCb` 走 `RCP_FILE_VALUE_TYPE_PATH`，
+   *   由平台流式读文件）实现 ⇒ **本条不再拒绝**。
+   * ★若平台库缺 multipart 符号（旧设备）⇒ 由 `buildMultipartUpload` 回 `http.unsupported`
+   *   （仍在**发请求之前**失败，不会静默发空体）。
    */
-  if (f.upload.has && !f.upload.path.empty()) {
-    return "fetch.unsupported: 鸿蒙宿主暂不支持 multipart 上传（upload）。"
-           "为避免『静默发出不带文件的请求』（服务端可能写入空记录），本请求已被拒绝、未发出任何流量。"
-           "请改用整包 body 上传，或改用已支持的端（Android/iOS）";
-  }
   return std::string();
 }
 

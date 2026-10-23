@@ -51,6 +51,7 @@
 #include "proteus_http_guard.h"       // ★#1203：不支持能力的**前置拒绝**（stream / tlsPins）
 #include "proteus_http_rcpapi.h"      // ★#1204：RCP 符号表 + 进程级 session 槽（从 handle() 分出）
 #include "proteus_http_response.h"    // ★#1204：成功响应装配（从 handle() 分出）
+#include "proteus_http_upload.h"      // ★#1205：multipart 上传（路径交给平台流式读）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -531,6 +532,26 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   Rcp_Headers* headers = nullptr;
   Rcp_RequestContent content{};
   Rcp_Configuration cfg{};
+  /**
+   * ★★★#1205：multipart 上传构件。★**必须声明在这里（`handle()` 作用域）**——
+   *   RCP 可能在发送时才去读 form 里的 `char*`（路径/文件名）与 `Rcp_Buffer`，
+   *   放内层块会悬垂（#1204 的 session 配置崩溃就是同一类错误：**跨调用存活的对象不能是栈局部**）。
+   */
+  MultipartUpload uploadParts;
+  /**
+   * ★#1205：**RAII 销毁**——`handle()` 有十余个 return 出口，逐个补销毁太脆
+   *   （本仓在 `SaveSession` / `HttpDnsTableGuard` 上都是这个教训）。
+   *   ★析构顺序：本守卫在 `uploadParts` 之后声明 ⇒ **先析构**，此时 `uploadParts` 仍有效。
+   *   ★必须在 `pDestroyRequest(req)` 之前销毁 form？——不必：RCP 的 request 只持有指针，
+   *     `HMS_Rcp_DestroyRequest` 不负责销毁调用方创建的 form（form 由创建者销毁）。
+   */
+  struct UploadGuard {
+    const RcpApi* api;
+    MultipartUpload* m;
+    ~UploadGuard() { destroyMultipartUpload(*api, m); }
+  };
+  UploadGuard uploadGuard{&api, &uploadParts};
+  const bool isUpload = f.upload.has && !f.upload.path.empty();
   if (req == nullptr) {
     // ★#1156：**不要**关共享 session（那会让下一个请求重建 ⇒ 复用再次失效）
     stats().failures++;
@@ -539,6 +560,24 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   req->method = method.c_str();
 
   headers = api.createHeaders();
+  /**
+   * ★★★#1205：**先构造 multipart**（失败要**在发请求之前**如实报错，不能降级成发空体）。
+   * ★构造放在建 headers 之后、设头的循环之前，是为了让下面的"剔除 Content-Type"知道 isUpload。
+   */
+  if (isUpload) {
+    uploadParts = buildMultipartUpload(api, f.upload);
+    if (!uploadParts.ok) {
+      stats().failures++;
+      // ★清理：req 已建（headers 可能也建了）⇒ 按既有出口纪律销毁，不碰共享 session
+      if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+      api.destroyRequest(req);
+      return proteus::wire::ResolveFrame::err(f.reqId, uploadParts.err);
+    }
+    content.type = RCP_CONTENT_TYPE_MULTIPARTFORM;
+    content.data.multipartForm = uploadParts.form;
+    req->content = &content;
+    // upload 的体由平台按 form 生成 ⇒ 帧里的整包 body 不应再发（与 Android 清 cfg.body 同源）
+  }
   if (headers != nullptr) {
     if (f.headers) {
       // ★★★#1149：剔除**框架内部约定头** `X-Proteus-Bypass-Platform-Cache`
@@ -551,11 +590,23 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
         std::string lk = kv.first;
         for (auto& ch : lk) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
         if (lk == "x-proteus-bypass-platform-cache") continue;
+        /**
+         * ★★★#1205：**上传时必须剔除调用方的 `Content-Type`**。
+         *   鸿蒙用 RCP 的 multipart API ⇒ **boundary 由平台生成**，而 JS 传下来的头里
+         *   写的是 JS 自己生成的 boundary（Android/iOS 用它拼体，头体同源）。
+         *   若把头原样透传 ⇒ 头里一个 boundary、体里另一个 ⇒ **服务端必然解析失败**
+         *   （Android 侧踩过同族："两处 boundary 必须同源"）。
+         *   ⇒ 让平台自己写 `Content-Type: multipart/form-data; boundary=<它自己的>`。
+         *   ★这是与 Android/iOS 的**语义差异**（boundary 谁生成），已登记在
+         *     `proteus_http_upload.h` 文件头。
+         */
+        if (isUpload && lk == "content-type") continue;
         api.setHeaderValue(headers, kv.first.c_str(), kv.second.c_str());
       }
     }
     // ★contentType 只在调用方没显式给 Content-Type 时补（调用方语义优先，与 Android 同）
-    if (f.contentType) {
+    // ★上传时不补：由平台按 multipart 生成（见上一条）
+    if (f.contentType && !isUpload) {
       bool hasCt = false;
       if (f.headers) {
         for (const auto& kv : *f.headers) {
@@ -568,7 +619,13 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     }
     req->headers = headers;
   }
-  if (!f.body.empty()) {
+  /**
+   * ★★★#1205：**upload 时不再走整包 body 分支**——`content` 已被上面的 multipart 占用
+   *   （`Rcp_RequestContent.type` 是判别式联合，后写会覆盖前一个）。
+   *   ★这正是 Android 侧 `cfg.body = null` 的同源约束：上传的体由平台按 form 生成，
+   *     帧里的 `f.body`（通常为空）若再挂上去会覆盖 multipart ⇒ 文件根本没被发送。
+   */
+  if (!isUpload && !f.body.empty()) {
     content.type = RCP_CONTENT_TYPE_STRING;
     content.data.contentStr.buffer = reinterpret_cast<const char*>(f.body.data());
     content.data.contentStr.length = static_cast<uint32_t>(f.body.size());

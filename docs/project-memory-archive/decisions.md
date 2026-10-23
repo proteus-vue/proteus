@@ -13194,3 +13194,46 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ——原生 GL 视图是独立 NSView，CSS 的 `border-radius` **裁不到它**，加圆角会露出方角画面。
   - **未做**：设备像素级 1:1 的"100%"档位（CSS px ≠ 设备 px，Retina 下语义要说清才能做，否则是假 1:1）。
 
+
+1206. **★★★鸿蒙 multipart 上传（upload）从"如实拒绝"变真实现——boundary 归属是核心坑 · 决策**
+★**编号勘误**：本条原写 #1205，与并发会话 Studio 设备画面适配撞号 ⇒ 改为 **#1206**（外部文档按号引用，已提交的 #1205 不动）。（2026-10-23 · 收口 `T-harmony-http-upload`）:
+**① 为什么做**：`upload`（宿主自读沙箱文件、自拼 multipart、JS 不碰字节）在 Android/iOS 早已实现，
+  鸿蒙此前只到"如实拒绝"（#1203 把"静默发空请求"的坑堵上）。这是 useFetch 面上最后一块端差异。
+**② 做法**：RCP 的 multipart API（`HMS_Rcp_CreateMultipartForm` + `SetMultipartFormValue`），
+  文件字段走 **`RCP_FILE_VALUE_TYPE_PATH`** ⇒ 把沙箱绝对路径交给平台，由 RCP **流式读文件**
+  （内存与文件大小无关，不在我们这侧累积）。表单字段走 `RCP_FORM_VALUE_TYPE_STRING`。
+  ★为什么不用 `Rcp_GetDataCallback`（拉取式回调）：它无 `usrObject`（只能靠全局状态），
+    且返回 `0` 的语义文档没说清是"正常结束"还是"中止传输"——风险不可控。
+**③ ★★★核心坑：boundary 归属**。JS 侧的 `UploadSpec.boundary` 是**契约**（要写进 `Content-Type`；
+  Android/iOS 用它拼体，头与体同源）。而 RCP 的 multipart API **自己生成 boundary**，且头文件里
+  **没有**任何 boundary 配置项 ⇒ 两条路互斥。
+  ⇒ 修法：**剔除调用方传来的 `Content-Type`**，让平台自己写 `multipart/form-data; boundary=<它自己的>`。
+  ★实测确认：不剔除时头里是 JS 的 boundary、体里是 RCP 的 ⇒ **服务端收不到任何字段/文件**。
+  ★这是与 Android/iOS 的**语义差异**（boundary 谁生成），已登记在 `proteus_http_upload.h` 文件头与矩阵。
+  另一条差异：**表单字段顺序由平台 Map 决定** ⇒ 不是逐字节等价（按 name 取值不受影响）。
+**④ 硬约束（不能静默截断）**：`RCP_MAX_PATH_LEN` / `RCP_MAX_FILENAME_LEN` 都是 **128**。
+  沙箱绝对路径（深目录 + 长文件名）可能超 ⇒ **显式报错**。截断 = 读到别的文件或根本打不开，
+  比报错危险（本仓在 #1194 长文件名上已经踩过同族）。沙箱路径校验复用 `resolveSandboxPath`
+  （非空 / 非绝对 / 无 `..`，与 `savePath` 同一套三层防护）。
+**⑤ ★★★判据的关键教训："请求成功"绝对不能当上传判据**：
+  探针最初固定 `GET` ⇒ 发出一个**没有体的 GET**，而客户端回执仍是 **200**（`bodyBytes:0`）。
+  若只看客户端，就会误判"上传成功"——这正是上传类缺陷最危险的形态（**200 但没有文件**）。
+  ⇒ 建了 `upload-probe-server.mjs`（单层 multipart 解析 + 回显结构 + sha256），判据看**服务端收到了什么**：
+    boundary 同源 · 字段名/值 · filename · 字节数 · **文件 sha256**。
+  ★★更进一步：sha256 不能只断言"存在且 64 位"——那是**假绿**（本轮第一版正是这样，自己写的判据差点又假绿）。
+    改成**真对拍**：基准取自**设备 OS 的 `sha256sum`**（第三方测量，不是我们自报），写进设备侧证据的
+    `deviceSourceSha256`，离线判据与服务端回显比对。
+**⑥ 真机证据**：`POST` · `Content-Type: multipart/form-data; boundary=<RCP 生成>` · 字段 `title=hello` ·
+  文件 `up-src.txt` **577 B** · **sha256 与设备 `sha256sum` 逐字节一致**（`25ddf2c8…`）。
+  证据两份入库：`http-probe-upload.json`（设备回执）+ `http-probe-upload-server.json`（服务端回显）。
+**⑦ 破坏性验证**：不设文件字段（模拟"只发表单、文件没上传"）⇒ 判据当场指名
+  「服务端没解析到文件字段（文件根本没上传）」。★这条变异特意选"请求仍成功"的形态，
+  正是为了证明判据盯的不是 HTTP 状态码。
+**⑧ 判据**：`tests/harmony-upload-multipart.test.ts` 5 条（结构 / 设备回执自洽 / 拒绝分支已移除 /
+  走 PATH 模式 + 长度校验 + 沙箱校验 / Content-Type 剔除 + 不挂整包 body）。
+  ★同时把 `harmony-unsupported-features` 的 upload 用例从"必须被拒"改成**不变式**：
+  「要么被消费、要么被拒」——实现可以演进，不变式不能变（否则实现一改判据就假红，逼迫人去改判据而不是改实现）。
+**⑨ 诚实边界**：a) 只测 577 B 小文件；大文件的**内存有界**来自"路径交给平台读"的设计，
+  本轮**未用大文件实测内存**（`savePath` 的 64 MiB 实测是另一件事，不能外推）；
+  b) 服务端是本机够用的单层 multipart 解析器（不含 RFC 7578 全部分支，如嵌套 multipart/编码文件名）；
+  c) 表单字段顺序不保证与 JS 给的顺序一致（平台 Map 语义）。

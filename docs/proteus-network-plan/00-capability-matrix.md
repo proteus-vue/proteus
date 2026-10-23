@@ -194,7 +194,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 |---|---|---|---|
 | `tlsPins` / `tlsPinOnly` | **请求照常发出，不做任何指纹校验** | ★**安全策略假成立**：业务以为多了防 MITM 一道防线，实际裸奔 | **前置拒绝**（`fetch.unsupported` + "未发出任何流量"） |
 | `redirectManual` | 硬编码 `autoRedirect = true` | `useFetch({redirect:'manual'})` 在鸿蒙上**照常跟随**，业务以为拦住了 | **修复**（`autoRedirect = !manual`，RCP 有该字段） |
-| `upload` | 只发 `f.body`（通常为空） | 服务端收到**没有文件的请求**，业务以为上传成功（可能写入空记录） | **前置拒绝**（另立 `T-harmony-http-upload` 做真实现） |
+| `upload` | 只发 `f.body`（通常为空） | 服务端收到**没有文件的请求**，业务以为上传成功（可能写入空记录） | **前置拒绝**（#1203）⇒ ✅ **#1206 已实现** |
 
 **收口方式**：新增 `proteus_http_guard.h` 的 `unsupportedFeatureReason()`，在 `handle()` **发请求之前**统一拒绝
 （`stream` 也搬到这里，语义不变）。★"前置"是硬要求——pin 不能先发出一段未受保护的流量再拒。
@@ -208,6 +208,41 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 **破坏性验证（两条，都真跑）**：
 ① 把 pin 拒绝条件改成恒假 ⇒ 重建上真机 ⇒ 请求**真的成功发出**（复现原缺陷），判据转红；
 ② 删掉 `upload` 拒绝分支 ⇒ 「消费点清点」立刻指名 `upload` 静默失效。
+
+### ★★★鸿蒙 multipart 上传（#1206 · 2026-10-23 · 真机已实现）
+
+`upload`（宿主自读沙箱文件、自拼 multipart、JS 不碰字节）在 Android/iOS 早已实现，鸿蒙此前只到
+"如实拒绝"（#1203）。**#1206 已实现并真机验证**。
+
+**做法**：RCP 的 multipart API（`HMS_Rcp_CreateMultipartForm` + `SetMultipartFormValue`），
+文件字段走 **`RCP_FILE_VALUE_TYPE_PATH`** ⇒ 把沙箱绝对路径交给平台，由 RCP **流式读文件**
+（内存与文件大小无关，不在我们这侧累积）。表单字段走 `RCP_FORM_VALUE_TYPE_STRING`。
+
+**★★与 Android/iOS 的语义差异（如实登记，不粉饰）**：
+1. **boundary 由 RCP 生成**，不是 JS 传的那个 ⇒ 宿主必须**剔除调用方的 `Content-Type`**。
+   ★实测确认：不剔除时头里是 JS 的 boundary、体里是 RCP 的 ⇒ **服务端收不到任何字段/文件**。
+2. 表单字段顺序由平台 Map 决定 ⇒ **不是逐字节等价**（按 name 取值不受影响）。
+   ⇒ 判据因此只看**服务端解析出的结构**，不看字节序。
+
+**硬约束**：`RCP_MAX_PATH_LEN` / `RCP_MAX_FILENAME_LEN` 都是 **128** ⇒ 超长**显式报错**，
+绝不静默截断（截断 = 读到别的文件或根本打不开，比报错危险）。沙箱路径校验复用 `resolveSandboxPath`
+（非空 / 非绝对 / 无 `..`，与 `savePath` 同一套三层防护）。
+
+**真机证据（2026-10-23 · HUAWEI KLE-AL00U）**：`POST` · `Content-Type: multipart/form-data; boundary=<RCP 生成>` ·
+表单字段 `title=hello` · 文件 `up-src.txt` **577 B** · **sha256 与设备 OS 的 `sha256sum` 逐字节一致**
+（`25ddf2c8…`）。证据：`hosts/harmony/results/http-probe-upload.json`（设备回执）+
+`http-probe-upload-server.json`（**服务端回显**，第三方，不依赖设备自报）。
+
+★**为什么"请求成功"不能当判据**（本轮实测踩到）：探针最初固定 `GET` ⇒ 发出一个**没有体的 GET**，
+而客户端回执仍是 **200**。若只看客户端就会误判"上传成功"。⇒ 判据必须看**服务端收到了什么**：
+boundary 同源 + 字段名/值 + filename + **文件字节 sha256 对拍**。
+
+**判据**：`tests/harmony-upload-multipart.test.ts`（5 条）· `bash hosts/harmony/run-http-probe.sh --upload-path=…`
+（需先起 `upload-probe-server.mjs`）· **破坏性验证**：不设文件字段 ⇒ 判据指名"文件根本没上传"。
+
+**诚实边界**：① 只测 577 B 小文件；大文件的**内存有界**来自"路径交给平台读"的设计，
+本轮**未用大文件实测内存**（`savePath` 的 64 MiB 实测是另一件事，不能外推）；
+② 服务端是本机够用的单层 multipart 解析器（不含 RFC 7578 全部分支）。
 
 **诚实边界**：① `T-harmony-tls-pinning` 仍是 **blocked**——`Rcp_SecurityConfiguration` 只有 CA bundle +
 `remoteValidationType`(SYSTEM/SKIP) + 客户端证书，**没有"拿到对端证书后由我决定"的回调** ⇒ SPKI pinning
