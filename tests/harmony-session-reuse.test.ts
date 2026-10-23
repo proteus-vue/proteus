@@ -27,10 +27,14 @@ import path from 'node:path'
 
 const ROOT = path.resolve(__dirname, '..')
 const HTTP_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h'
+/** ★#1204：`SessionSlot` / `sessionSlot()` / `acquireSession()` 已搬到本头（从 handle() 分出） */
+const RCPAPI_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_rcpapi.h'
 const src = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 describe('★★★#1156 鸿蒙 RCP session 必须跨请求复用（真机抓出的零复用缺陷）', () => {
   const h = src(HTTP_H)
+  /** ★#1204：会话槽相关代码在新头里——判据要**两处联合**看（搬走不等于语义变了） */
+  const rc = src(RCPAPI_H)
 
   /** `handle()` 的函数体（从签名到文件末尾的 `#endif` 前的闭合）——够用且稳定 */
   function handleBody(): string {
@@ -61,21 +65,34 @@ describe('★★★#1156 鸿蒙 RCP session 必须跨请求复用（真机抓出
   const H_INCLUDE_HINT = `${HTTP_H} 形态变了？`
 
   it('① 存在**进程级** session 缓存容器（含互斥锁）', () => {
-    expect(h, '★没有 SessionSlot（session 仍是每请求局部变量 ⇒ 必然零复用）').toMatch(/struct\s+SessionSlot/)
-    expect(h, '★SessionSlot 缺 mutex（并发请求会竞争建/取）').toMatch(/std::mutex/)
-    expect(h, '★没有进程序仓 `sessionSlot()` 单例').toMatch(/inline\s+SessionSlot&\s+sessionSlot\(\)/)
+    // ★#1204：容器已搬到 proteus_http_rcpapi.h（纯搬迁，语义不变）
+    expect(rc, '★没有 SessionSlot（session 仍是每请求局部变量 ⇒ 必然零复用）').toMatch(/struct\s+SessionSlot/)
+    expect(rc, '★SessionSlot 缺 mutex（并发请求会竞争建/取）').toMatch(/std::mutex/)
+    expect(rc, '★没有进程序仓 `sessionSlot()` 单例').toMatch(/inline\s+SessionSlot&\s+sessionSlot\(\)/)
   })
 
-  it('★★② `handle()` 里 session 从**共享槽**取，不是每请求 `pCreateSession` 直建', () => {
+  it('★★② `handle()` 里 session 从**共享槽**取，不是每请求新建', () => {
+    /**
+     * ★★★#1204：session 的"取/建"已搬到 `proteus_http_rcpapi.h` 的 `acquireSession()`。
+     *   判据必须**两段联合**（与 stream 判据同源）：① `handle()` 调用 `acquireSession`；
+     *   ② `acquireSession` 内部"先查槽、槽空才建、建完写回"。任一段缺失都等于复用失效。
+     */
     const body = code(handleBody())
-    expect(body, '★handle() 里没有取共享槽（sessionSlot()）').toMatch(/sessionSlot\(\)/)
-    // ★允许 `pCreateSession` 存在，但必须在"槽为空"的分支里——否则又变成每请求新建
-    const createCount = (body.match(/pCreateSession\(/g) ?? []).length
-    expect(createCount, `★handle() 里 pCreateSession 出现 ${createCount} 次（应恰好 1 次，且在槽为空时）`).toBe(1)
-    // ★窗口要容下"槽为空 ⇒ 配连接池 ⇒ 建 session"这几步（#1156 加 `connectionConfiguration` 后变长）。
-    //   窗口定太窄会因"代码挪了几行"而假红——脆弱断言等于引入噪音。
-    expect(body, '★pCreateSession 不在 `session == nullptr` 的分支里（每请求都会新建）').toMatch(
-      /session\s*==\s*nullptr[\s\S]{0,1200}pCreateSession\(/,
+    expect(body, '★handle() 没调 acquireSession（session 获取通路断了）').toMatch(/acquireSession\(/)
+    // ★handle() 自己**不得**直建 session（否则绕过共享槽 ⇒ 每请求新建）
+    const createCountInHandle = (body.match(/createSession\(/g) ?? []).length
+    expect(createCountInHandle, `★handle() 里仍直接 createSession ${createCountInHandle} 次（应 0 次，交给 acquireSession）`).toBe(0)
+
+    const rcode = code(rc)
+    const acqAt = rcode.indexOf('acquireSession(')
+    expect(acqAt, '★acquireSession 未定义').toBeGreaterThan(0)
+    const acqBody = rcode.slice(acqAt)
+    expect(acqBody, '★acquireSession 里没有取共享槽（sessionSlot()）').toMatch(/sessionSlot\(\)/)
+    // ★允许 createSession 存在，但必须**恰好 1 次**且在"槽为空"之后
+    const createCount = (acqBody.match(/createSession\(/g) ?? []).length
+    expect(createCount, `★acquireSession 里 createSession 出现 ${createCount} 次（应恰好 1 次，且在槽为空时）`).toBe(1)
+    expect(acqBody, '★createSession 不在"槽为空"的分支里（每请求都会新建）').toMatch(
+      /session\s*!=\s*nullptr[\s\S]{0,200}return session[\s\S]{0,2000}createSession\(/,
     )
     /**
      * ★★★**必须真的写回共享槽**——只"查"不"写"等于缓存恒空 ⇒ 每请求照样新建。
@@ -84,7 +101,7 @@ describe('★★★#1156 鸿蒙 RCP session 必须跨请求复用（真机抓出
      *   注释掉之后**5 条全绿**（缓存永不命中，行为与修复前完全一致）。
      *   ⇒ 「查缓存」与「写缓存」必须各有一条断言（与 `tls-pinning-reuse` 的 get/put 配对同源）。
      */
-    expect(body, '★建完 session 没有写回共享槽（`slot.session = session`）⇒ 缓存恒空，每请求仍新建').toMatch(
+    expect(acqBody, '★建完 session 没有写回共享槽（`slot.session = session`）⇒ 缓存恒空，每请求仍新建').toMatch(
       /slot\.session\s*=\s*session/,
     )
   })
@@ -99,6 +116,35 @@ describe('★★★#1156 鸿蒙 RCP session 必须跨请求复用（真机抓出
     expect(h, '★sessionsCreated 从未自增（读数永远是 0 ⇒ 无法证明复用）').toMatch(/stats\(\)\.sessionsCreated\+\+/)
   })
 
+  /**
+   * ★★★#1204：**session 配置必须是进程寿命（static），不能是栈局部**。
+   *
+   * 【这条判据来自一次真机崩溃（不是推断）】重构后请求一发出就 `SIGSEGV(SEGV_MAPERR)`，栈是：
+   *   `handle() → RcpSessionBasedFetchHandle → RcpToCppRequest(const Rcp_SessionConfiguration*, …)`
+   *   `→ std::string(char const*) → strlen`。
+   * ⇒ **RCP 是在 fetch 时才读 session 配置里的 `char*` 字段**（CA 内容/文件路径等），
+   *   而不是在 `CreateSession` 时拷一份。原实现的 `Rcp_SessionConfiguration sc{}` 是
+   *   `handle()` **栈上的局部变量** ⇒ `CreateSession` 返回后可能已被覆盖 ⇒ 悬垂指针。
+   *   之前没崩只是栈布局恰好还留着旧值 —— **"以前没崩 ≠ 正确"**。
+   *
+   * 【为什么静态判据守得住】"配置变量是不是 static"是结构性形态，一眼可判；
+   *   而真机崩不崩取决于栈布局，**不能靠"跑一遍没崩"当验证**。
+   */
+  it('★★★⑥ session 配置必须是 static（栈局部 ⇒ RCP 在 fetch 时读到悬垂指针 ⇒ SIGSEGV）', () => {
+    const rcode6 = code(rc)
+    const acqDef = rcode6.indexOf('inline Rcp_Session* acquireSession')
+    expect(acqDef, '没找到 acquireSession 定义').toBeGreaterThan(0)
+    const seg = rcode6.slice(acqDef, acqDef + 3000)
+    // ★必须声明为 static（跨调用存活）
+    expect(seg, '★Rcp_SessionConfiguration 不是 static ⇒ 栈局部，CreateSession 返回后即悬垂').toMatch(
+      /static\s+Rcp_SessionConfiguration\s+\w+/,
+    )
+    // ★且**不得**回到栈局部形态（`Rcp_SessionConfiguration sc{};` 无 static 前缀）
+    expect(seg, '★仍有栈局部的 Rcp_SessionConfiguration 声明（悬垂复发）').not.toMatch(
+      /\n\s+Rcp_SessionConfiguration\s+\w+\s*\{\s*\}\s*;/,
+    )
+  })
+
   it('★⑤ 锁只护"取/建"，不覆盖整段请求（否则并发请求被串行化）', () => {
     const body = code(handleBody())
     /**
@@ -110,9 +156,15 @@ describe('★★★#1156 鸿蒙 RCP session 必须跨请求复用（真机抓出
      *   ★这与上文 ③ 同源：**判据要盯住它真正想守的东西**，否则会被无关代码形态带偏。
      * ⇒ 只看 session 那一段块（`sessionSlot()` 到该块结束附近）里是否用了函数级锁。
      */
-    const slotAt = body.indexOf('sessionSlot()')
-    expect(slotAt, '没找到 sessionSlot() 段').toBeGreaterThan(0)
-    const slotSeg = body.slice(Math.max(0, slotAt - 400), slotAt + 1200)
+    /**
+     * ★#1204：session 的"取/建+加锁"整体搬到 `proteus_http_rcpapi.h` 的 `acquireSession()`。
+     * ★定位必须用 `acquireSession` 的定义处（不是 `sessionSlot()` 的定义处——那是文件更早的
+     *   单例声明，附近本来就没有锁 ⇒ 会假红）。
+     */
+    const rcode5 = code(rc)
+    const acqDef = rcode5.indexOf('inline Rcp_Session* acquireSession')
+    expect(acqDef, '没找到 acquireSession 定义').toBeGreaterThan(0)
+    const slotSeg = rcode5.slice(acqDef, acqDef + 2200)
     expect(slotSeg, '★session 槽用了函数级 unique_lock（会持锁到请求结束 ⇒ 并发被串行化）').not.toMatch(
       /std::unique_lock<std::mutex>\s+\w+\(/,
     )

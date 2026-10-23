@@ -49,6 +49,8 @@
 #include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
 #include "proteus_http_doh.h"         // ★#1202：DoH 落点探针状态（取证专用，生产零影响）
 #include "proteus_http_guard.h"       // ★#1203：不支持能力的**前置拒绝**（stream / tlsPins）
+#include "proteus_http_rcpapi.h"      // ★#1204：RCP 符号表 + 进程级 session 槽（从 handle() 分出）
+#include "proteus_http_response.h"    // ★#1204：成功响应装配（从 handle() 分出）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -117,16 +119,10 @@ inline Stats& stats() {
  *
  * 【失效兜底】session 可能因网络切换/对端关闭而失效（`1007900993` = session closed/invalid）。
  *   ⇒ 遇该错误码**重建一次并重试**（有界，最多一次，不无限重试）。
+ *
+ * ★★★#1204：`SessionSlot` / `sessionSlot()` 已搬到 `proteus_http_rcpapi.h`
+ *   （与 `RcpApi` 符号表、`acquireSession()` 放在一起——都是"进程级 RCP 资源"）。
  */
-struct SessionSlot {
-  std::mutex mu;
-  void* session = nullptr;      // Rcp_Session*（用 void* 避免把 HMS 类型泄露到 struct 外）
-  bool createFnOk = false;
-};
-inline SessionSlot& sessionSlot() {
-  static SessionSlot s;
-  return s;
-}
 
 /** 响应体上限：与 Android `HttpCapability.MAX_BODY_BYTES` / iOS `HttpCapability.MAX_BODY_BYTES` **同值**。 */
 constexpr size_t MAX_BODY_BYTES = 32u * 1024u * 1024u;
@@ -499,105 +495,39 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
         f.reqId, "http.unsupported: librcp_c.so 不可加载（鸿蒙 HTTP 腿不可用）");
   }
 
-  using CreateSessionFn = Rcp_Session* (*)(const Rcp_SessionConfiguration*, uint32_t*);
-  using CreateRequestFn = Rcp_Request* (*)(const char*);
-  using DestroyRequestFn = void (*)(Rcp_Request*);
-  using CreateHeadersFn = Rcp_Headers* (*)();
-  // ★同 DestroyHeaderEntries：HMS 侧是**单指针**（`void HMS_Rcp_DestroyHeaders(Rcp_Headers *)`）。
-  using DestroyHeadersFn = void (*)(Rcp_Headers*);
-  using SetHeaderValueFn = uint32_t (*)(Rcp_Headers*, const char*, const char*);
-  using GetHeaderEntriesFn = Rcp_HeaderEntry* (*)(Rcp_Headers*);
-  // ★真机实测：HMS 侧是**单指针**（`void HMS_Rcp_DestroyHeaderEntries(Rcp_HeaderEntry *)`，
-  //   与 OHOS `OH_Http_DestroyHeaderEntries(…**)` 不同）——按双指针调会把栈地址当对象释放 ⇒ SIGSEGV。
-  using DestroyHeaderEntriesFn = void (*)(Rcp_HeaderEntry*);
-  using FetchSyncFn = Rcp_Response* (*)(Rcp_Session*, Rcp_Request*, uint32_t*);
   /**
-   * ★★★#1156：**异步** `HMS_Rcp_Fetch`——生产路径改用它。
-   * 【为什么（真机实测的决定性对照）】
-   *   同一台设备、同一 session、同一连接池配置（`maxCacheConnections=8`），只改取数 API：
-   *     · `HMS_Rcp_FetchSync` ⇒ **3 请求 / 3 TCP**（三个不同源端口，零复用）
-   *     · `HMS_Rcp_Fetch`     ⇒ **3 请求 / 1 TCP**（复用）
-   *   ⇒ 连接池只在**异步**路径生效；同步包装每次都新建底层 easy handle。
-   *   ★这是"同一能力两种 API，语义不同"的典型：不实测无法从文档看出。
+   * ★★★#1204：**符号解析搬到 `proteus_http_rcpapi.h`**（原先是约 50 行 `using` + `dlsym`
+   *   散落在 `handle()` 里，把请求流程淹没了）。逐条语义原样保留：
+   *   · 单指针 `DestroyHeaders` / `DestroyHeaderEntries`（双指针会 SIGSEGV，真机实测）；
+   *   · **异步 `Fetch` 优先、`FetchSync` 兜底**（#1156：只有异步路径才复用连接）；
+   *   · 逐块接收/取消是**可选符号**（旧库缺 ⇒ 退化为事后拒绝，#1117）。
    */
-  using FetchFn = uint32_t (*)(Rcp_Session*, Rcp_Request*, const Rcp_ResponseCallbackObject*);
-  using CloseSessionFn = uint32_t (*)(Rcp_Session**);
-
-  auto pCreateSession = reinterpret_cast<CreateSessionFn>(dlsym(lib, "HMS_Rcp_CreateSession"));
-  auto pCreateRequest = reinterpret_cast<CreateRequestFn>(dlsym(lib, "HMS_Rcp_CreateRequest"));
-  auto pDestroyRequest = reinterpret_cast<DestroyRequestFn>(dlsym(lib, "HMS_Rcp_DestroyRequest"));
-  auto pCreateHeaders = reinterpret_cast<CreateHeadersFn>(dlsym(lib, "HMS_Rcp_CreateHeaders"));
-  auto pDestroyHeaders = reinterpret_cast<DestroyHeadersFn>(dlsym(lib, "HMS_Rcp_DestroyHeaders"));
-  auto pSetHeaderValue = reinterpret_cast<SetHeaderValueFn>(dlsym(lib, "HMS_Rcp_SetHeaderValue"));
-  auto pGetHeaderEntries = reinterpret_cast<GetHeaderEntriesFn>(dlsym(lib, "HMS_Rcp_GetHeaderEntries"));
-  auto pDestroyHeaderEntries = reinterpret_cast<DestroyHeaderEntriesFn>(dlsym(lib, "HMS_Rcp_DestroyHeaderEntries"));
-  auto pFetchSync = reinterpret_cast<FetchSyncFn>(dlsym(lib, "HMS_Rcp_FetchSync"));
-  auto pFetchAsync = reinterpret_cast<FetchFn>(dlsym(lib, "HMS_Rcp_Fetch"));
-  auto pCloseSession = reinterpret_cast<CloseSessionFn>(dlsym(lib, "HMS_Rcp_CloseSession"));
-  // ★#1117：逐块接收 + 中止（API 13+/12+）。**可选符号**：旧设备缺 ⇒ 退化为事后拒绝（见文件头诚实边界）。
-  using SetOnBinaryRecvFn = uint32_t (*)(Rcp_Request*, Rcp_OnBinaryReceiveCallback);
-  using CancelRequestFn = uint32_t (*)(Rcp_Session*, const Rcp_Request*);
-  auto pSetOnBinaryRecv =
-      reinterpret_cast<SetOnBinaryRecvFn>(dlsym(lib, "HMS_Rcp_SetRequestOnBinaryDataRecvCallback"));
-  auto pCancelRequest = reinterpret_cast<CancelRequestFn>(dlsym(lib, "HMS_Rcp_CancelRequest"));
-
-  // ★#1156：异步 `Fetch` 是**首选**；`FetchSync` 仅在老版本库缺异步符号时兜底
-  //   （兜底路径会退化到"零复用"，如实记 `stats().syncFallback++`）。
-  const bool asyncOk = pFetchAsync != nullptr;
-  const bool symbolsOk = pCreateSession && pCreateRequest && pDestroyRequest && pCreateHeaders &&
-                         pDestroyHeaders && pSetHeaderValue && pGetHeaderEntries &&
-                         (asyncOk || pFetchSync != nullptr) && pCloseSession;
-  if (!symbolsOk) {
+  RcpApi api = loadRcpApi(lib);
+  if (!api.ok()) {
     stats().failures++;
     return proteus::wire::ResolveFrame::missingMethod(
         f.reqId, "http.unsupported: librcp_c.so 缺所需符号（版本过旧？）");
   }
+  const bool asyncOk = api.fetchAsync != nullptr;
 
-  // ① session（★★★#1156：**进程级复用**——见 `SessionSlot` 注释；此前每请求建/关 ⇒ 零连接复用）
+  // ① session（★★★#1156：**进程级复用**；#1204 把"取/建"搬到 `acquireSession`）
   //   ★锁只护"取/建"这一步：**不能**在整段请求期间持锁（那会把并发请求串行化，
   //     而 RCP 的 session 本身支持多请求并行）。
-  Rcp_Session* session = nullptr;
-  // ★`errCode` 必须在**外层**声明：后面的 `FetchSync` 也用它（本轮编译抓到的作用域错误——
+  // ★`errCode` 必须在**外层**声明：后面的取数也用它（本轮编译抓到的作用域错误——
   //   把它挪进 session 的块里 ⇒ 三处 `use of undeclared identifier`）。
   uint32_t errCode = 0;
-  {
-    SessionSlot& slot = sessionSlot();
-    std::lock_guard<std::mutex> slotLock(slot.mu);
-    session = static_cast<Rcp_Session*>(slot.session);
-    if (session == nullptr) {
-      Rcp_SessionConfiguration sc{};
-      sc.type = RCP_SESSION_TYPE_HTTP;
-      /**
-       * ★★★#1156：**连接池大小**——这是"不复用"的真正根因（真机取证才定位到）。
-       *
-       * 【证据链】修复 session 复用后，真机仍是 `requests=3 / connections=3`（三个不同源端口），
-       *   而 `sessionsCreated=1`（session 确实只建了一次）⇒ **session 复用不是充分条件**。
-       *   服务端日志显示客户端**没有**发 `Connection: close`（`conn=-`）⇒ 不是"客户端要求关"。
-       *   ⇒ 查 SDK 头文件：`Rcp_SessionConfiguration.connectionConfiguration` 里有
-       *     `maxCacheConnections`（**可缓存连接数 = 连接池容量**）。
-       *   ★而 `Rcp_SessionConfiguration sc{}` **零值初始化** ⇒ `maxCacheConnections = 0`
-       *     ⇒ **池容量为 0 ⇒ 每条请求用完即弃 ⇒ 永不复用**。
-       *   ⇒ 这是"缺省值即关闭"的经典陷阱：不配置 ≠ 用平台默认，而是**明确关闭**。
-       *
-       * 【取值】与 Android `HttpURLConnection` / iOS `URLSession` 的默认量级对齐（每 host 数个），
-       *   不追求激进：8/8/8 足够覆盖业务并发，又不会让 idle 连接长期占用。
-       */
-      sc.connectionConfiguration.maxConnectionsPerHost = 8;
-      sc.connectionConfiguration.maxTotalConnections = 8;
-      sc.connectionConfiguration.maxCacheConnections = 8;
-      session = pCreateSession(&sc, &errCode);
-      if (session == nullptr) {
-        stats().failures++;
-        return proteus::wire::ResolveFrame::err(f.reqId, "http.failed: 建 RCP session 失败（" + std::to_string(errCode) + "）");
-      }
-      // ★只在**首次**建时记账；复用不计数（读数 `sessionsCreated=1` 就证明"复用真的生效了"）
-      slot.session = session;
-      stats().sessionsCreated++;
-    }
+  bool sessionCreated = false;
+  Rcp_Session* session = acquireSession(api, &errCode, &sessionCreated);
+  if (session == nullptr) {
+    stats().failures++;
+    return proteus::wire::ResolveFrame::err(
+        f.reqId, "http.failed: 建 RCP session 失败（" + std::to_string(errCode) + "）");
   }
+  // ★只在**首次**建时记账；复用不计数（读数 `sessionsCreated=1` 就证明"复用真的生效了"）
+  if (sessionCreated) stats().sessionsCreated++;
 
   // ② request + headers + content + 超时配置
-  Rcp_Request* req = pCreateRequest(url.c_str());
+  Rcp_Request* req = api.createRequest(url.c_str());
   Rcp_Headers* headers = nullptr;
   Rcp_RequestContent content{};
   Rcp_Configuration cfg{};
@@ -608,12 +538,12 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   }
   req->method = method.c_str();
 
-  headers = pCreateHeaders();
+  headers = api.createHeaders();
   if (headers != nullptr) {
     if (f.headers) {
       // ★★★#1149：剔除**框架内部约定头** `X-Proteus-Bypass-Platform-Cache`
       //   （语义「请勿使用平台自带 HTTP 缓存」，由 JS 管线置位）。
-      //   · `pSetHeaderValue` 是 **C ABI 函数**（鸿蒙 RCP 预编译库）⇒ 这里直接逐条判定，不调 C++ 辅助函数，
+      //   · `api.setHeaderValue` 是 **C ABI 函数**（鸿蒙 RCP 预编译库）⇒ 这里直接逐条判定，不调 C++ 辅助函数，
       //     保证零新增符号依赖（本文件其余部分同样只依赖 `p*` 导出）。
       //   · 鸿蒙 RCP 同步往返本身不做条件缓存 ⇒ 本端只做剔除，不改传输行为（如实）。
       //   · 必须剔除：这是框架内部头，业务服务端不该看到（与 Android/iOS 同判据）。
@@ -621,7 +551,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
         std::string lk = kv.first;
         for (auto& ch : lk) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
         if (lk == "x-proteus-bypass-platform-cache") continue;
-        pSetHeaderValue(headers, kv.first.c_str(), kv.second.c_str());
+        api.setHeaderValue(headers, kv.first.c_str(), kv.second.c_str());
       }
     }
     // ★contentType 只在调用方没显式给 Content-Type 时补（调用方语义优先，与 Android 同）
@@ -634,7 +564,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
           if (k == "content-type") { hasCt = true; break; }
         }
       }
-      if (!hasCt) pSetHeaderValue(headers, "Content-Type", f.contentType.v.c_str());
+      if (!hasCt) api.setHeaderValue(headers, "Content-Type", f.contentType.v.c_str());
     }
     req->headers = headers;
   }
@@ -739,20 +669,20 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     gate.limit = 0;   // 落盘不受内存上限约束（磁盘配额由 SaveSession::limit 守）
   }
   bool gateInstalled = false;
-  if (pSetOnBinaryRecv != nullptr) {
+  if (api.setOnBinaryRecv != nullptr) {
     gate.session = session;
     gate.req = req;
-    gate.cancelFn = pCancelRequest;
+    gate.cancelFn = api.cancelRequest;
     Rcp_OnBinaryReceiveCallback ocb{};
     ocb.callback = &detail::recvGate;
     ocb.usrObject = &gate;
-    gateInstalled = (pSetOnBinaryRecv(req, ocb) == 0);
+    gateInstalled = (api.setOnBinaryRecv(req, ocb) == 0);
     if (!gateInstalled) {
       fprintf(stderr, "[proteus-http] 逐块接收回调注册失败 ⇒ 退化为事后拒绝\n");
     }
   }
 
-  // ④ 发请求（★★★#1156：**异步 Fetch + 有界等待真实完成信号**，理由见 pFetchAsync 注释）
+  // ④ 发请求（★★★#1156：**异步 Fetch + 有界等待真实完成信号**，理由见 `RcpApi::fetchAsync` 注释）
   Rcp_Response* resp = nullptr;
   if (asyncOk) {
     /**
@@ -787,13 +717,13 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     Rcp_ResponseCallbackObject robj{};
     robj.callback = cb;
     robj.usrCtx = &w;
-    const uint32_t fetchRc = pFetchAsync(session, req, &robj);
+    const uint32_t fetchRc = api.fetchAsync(session, req, &robj);
     if (fetchRc != 0) {
       // 受理失败：请求没发出去 ⇒ 直接按错误码返回（与同步路径的 reasonOf 口径一致）
       errCode = fetchRc;
       stats().failures++;
-      if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
-      pDestroyRequest(req);
+      if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+      api.destroyRequest(req);
       return proteus::wire::ResolveFrame::err(f.reqId, reasonOf(errCode));
     }
     /**
@@ -809,9 +739,9 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
         lk.unlock();
         stats().failures++;
         stats().fetchTimeouts++;
-        if (pCancelRequest != nullptr) pCancelRequest(session, req);
-        if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
-        pDestroyRequest(req);
+        if (api.cancelRequest != nullptr) api.cancelRequest(session, req);
+        if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+        api.destroyRequest(req);
         return proteus::wire::ResolveFrame::err(f.reqId, "http.timeout: 宿主未在预算内收到响应回调");
       }
       errCode = w.err;
@@ -820,7 +750,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   } else {
     // 老版本库兜底（会退化到零复用——如实记账，不静默）
     stats().syncFallback++;
-    resp = pFetchSync(session, req, &errCode);
+    resp = api.fetchSync(session, req, &errCode);
   }
 
   // ⑤ 记账（探针据此证明逐块 + 真中止）
@@ -868,71 +798,30 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   } else {
     out = proteus::wire::ResolveFrame::okOf(f.reqId);
     out.status = static_cast<uint32_t>(resp->statusCode);
-    stats().lastStatus = static_cast<int>(resp->statusCode);
-    // 响应头（同名多值用逗号连接——与 Android `collectHeaders` 同口径）
-    if (resp->headers != nullptr) {
-      Rcp_HeaderEntry* entries = pGetHeaderEntries(resp->headers);
-      proteus::wire::NameValues nv;
-      for (Rcp_HeaderEntry* e = entries; e != nullptr; e = e->next) {
-        if (e->key == nullptr) continue;
-        std::string val;
-        for (Rcp_HeaderValue* v = e->value; v != nullptr; v = v->next) {
-          if (v->value == nullptr) continue;
-          if (!val.empty()) val += ", ";
-          val += v->value;
-        }
-        nv.emplace_back(e->key, val);
-      }
-      if (pDestroyHeaderEntries != nullptr && entries != nullptr) pDestroyHeaderEntries(entries);
-      out.headers = std::move(nv);
+    // ★★★#1204：响应装配（响应头 / 传输读数 / 响应体三条路径）已搬到
+    //   `proteus_http_response.h`——`handle()` 曾 480 行占文件 51%（#1201 遗留）。
+    //   ★只搬了这一段：请求装配与 DNS 配置引用的 `content`/`dnsRule`/`doh`/`cfg`
+    //     都是**栈上对象且彼此取地址**，搬出函数即悬垂 ⇒ 故意留在原处。
+    ResponseStats rs;
+    int lastStatus = 0;
+    proteus::wire::NameValues transportForProbe;
+    const RespDisposition disp = assembleSuccessResponse(
+        api, f, resp, &out, gate, gateInstalled, MAX_BODY_BYTES, &tooLargeReason,
+        &lastStatus, proteus::http::callDnsSource(), &transportForProbe, &rs);
+    // ★#1186：留一份给取证探针（必须在装配函数把 tp move 出去**之后**用副本写，
+    //   所以装配函数用出参把副本交回来，而不是自己写 `lastTransport()`）。
+    if (!transportForProbe.empty()) proteus::http::lastTransport() = transportForProbe;
+    stats().lastStatus = lastStatus;
+    if (rs.saveFailed) {
+      stats().failures++;
+      if (rs.saveExceeded) stats().tooLarge++;
     }
-    // ★★★#1158：传输读数（`Rcp_TimeInfo` → 区间换算）。量纲与减法口径见
-    //   `proteus_http_transport.h` 的 `appendTimeReadouts` 注释（那里是唯一实现）。
-    if (resp->timeInfo != nullptr) {
-      proteus::wire::NameValues tp;
-      proteus::http::appendTimeReadouts(&tp, resp->timeInfo);   // ★#1191：区间换算（实现见 proteus_http_transport.h）
-      proteus::http::appendDnsSource(&tp, proteus::http::callDnsSource());   // ★#1191：miss→system 映射
-      if (!tp.empty()) {
-        lastTransport() = tp;   // ★#1186：留一份给取证探针（必须在 move 之前）
-        out.transport = std::move(tp);
-      }
+    if (rs.tooLargeFallback) {
+      stats().failures++;
+      stats().tooLarge++;
+      stats().tooLargeFallback++;
     }
-    // 响应体原样回字节（不解析）
-    // ★#1117：逐块闸生效时用它累计的 body（resp->body 可能是同一份数据的二次副本）；
-    //   闸未安装/未被调用时回落到 resp->body，并在此做**事后拒绝**（诚实边界：内存峰值不有界）。
-    // ★★★#1187：**落盘模式** ⇒ 关文件 + 回 `{path,size}` 摘要（不回字节，与 Android/iOS 同语义）。
-    if (gate.save != nullptr) {
-      // 先把"可能尚未写进文件"的 resp->body 补齐（闸未装时没有逐块回调）
-      if ((!gateInstalled || gate.chunks == 0) && resp->body.buffer != nullptr && resp->body.length > 0) {
-        gate.save->write(reinterpret_cast<const uint8_t*>(resp->body.buffer),
-                         static_cast<size_t>(resp->body.length));
-      }
-      bool saveOk = false;
-      std::string saveErr;
-      const std::string summary = gate.save->finish(&saveOk, &saveErr);
-      if (!saveOk) {
-        stats().failures++;
-        if (gate.save->exceeded) stats().tooLarge++;
-        out = proteus::wire::ResolveFrame::err(f.reqId, saveErr);
-      } else {
-        out.body.assign(summary.begin(), summary.end());
-      }
-    } else if (gateInstalled && gate.chunks > 0) {
-      out.body = std::move(gate.body);
-    } else if (resp->body.buffer != nullptr && resp->body.length > 0) {
-      const size_t respLen = static_cast<size_t>(resp->body.length);
-      if (respLen > MAX_BODY_BYTES) {
-        stats().failures++;
-        stats().tooLarge++;
-        stats().tooLargeFallback++;
-        out = proteus::wire::ResolveFrame::err(f.reqId, tooLargeReason(respLen));
-        if (resp->destroyResponse != nullptr) resp->destroyResponse(resp);
-        resp = nullptr;
-      } else {
-        const uint8_t* p = reinterpret_cast<const uint8_t*>(resp->body.buffer);
-        out.body.assign(p, p + respLen);
-      }
-    }
+    if (disp == RespDisposition::Consumed) resp = nullptr;
     if (out.ok) {
       stats().ok++;
       if (resp != nullptr && resp->destroyResponse != nullptr) resp->destroyResponse(resp);
@@ -941,8 +830,8 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
 
   // ④ 释放（★#1156：只释放**单次请求**的资源；session 留给后续请求复用——
   //   关掉它就等于把连接池一起丢掉，连接复用会立刻归零（真机实测 3 请求/3 TCP 就是这个原因））
-  if (headers != nullptr && pDestroyHeaders != nullptr) pDestroyHeaders(headers);
-  pDestroyRequest(req);
+  if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+  api.destroyRequest(req);
   /**
    * ★★★#1194（独立验证第三轮 R3 修复）：**读数必须在 finish() 之后取**。
    *   原实现把 `saveWritten` / `vmHwmAfterKb` 在 `finish()` **之前**快照；
@@ -950,7 +839,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
    *   发生在快照**之后** ⇒ 那批字节会**漏计** ⇒ `saveWritten == seen` 判据红成"实现坏了"，
    *   而真因只是读数取早了（本仓最怕的"装置让人误诊"）。
    *   ★验证者更正了我先前的判断：这不是"minSdk 17 下不可达"——注册回调失败
-   *   （`pSetOnBinaryRecv` 返回非 0）是**运行时降级路径**，代码本身就实现了它。
+   *   （逐块回调注册返回非 0）是**运行时降级路径**，代码本身就实现了它。
    */
   {
     LastLimitDiag& d = lastLimitDiag();

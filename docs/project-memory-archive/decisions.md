@@ -13116,3 +13116,47 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑩ 诚实边界**：a) "未发出流量"的可核对痕迹是 `limit.gateInstalled:false` + `seen:0`（逐块回调从未装上、
   零字节接收），**不是抓包证明**；b) pinning 是平台边界（无校验回调），不是欠账；
   c) `upload` 只是"堵上静默失效"，真实现未做；d) `handle()` 仍有约 480 行（#1201 遗留的拆段未完成）。
+
+1204. **★★★handle() 拆段（480→401 行）+ 搬迁逼出一个**真机崩溃**：session 配置是栈局部 ⇒ RCP 在 fetch 时读悬垂指针 ⇒ SIGSEGV · 决策**（2026-10-23 · 收掉 #1201 点名的最后一项结构性欠账）:
+**① 拆了什么（只拆**零风险**的两块，其余刻意不拆）**：
+  · `proteus_http_rcpapi.h`（新，182 行）：`RcpApi` 符号表（原先约 50 行 `using` + `dlsym` 散落在
+    `handle()` 里，把请求流程淹没了）+ `SessionSlot` / `sessionSlot()` / `acquireSession()`。
+  · `proteus_http_response.h`（新，155 行）：成功响应装配（响应头 / 传输读数 / 响应体三条路径）。
+  · 效果：`handle()` **480 → 401 行**，`proteus_http.h` **997 → 872 行**（离 1000 硬上限有余量了）。
+  ★**故意没拆的两块**：请求装配与 DNS 配置——它们引用的 `content`/`dnsRule`/`doh`/`cfg`
+    都是**栈上对象且彼此取地址**，一搬出函数就变成"返回栈变量的引用/指针"这类悬垂。
+    这与 #870 拆 `capability.ts` 同纪律：**能靠机械搬迁做的才做，动了生命周期的坚决不做**。
+**② 真机崩溃（本轮最值钱的发现，不是"重构出 bug"，而是"逼出了潜伏缺陷"）**：
+  拆完编译全绿、单测全绿，一上真机**第一次请求就 SIGSEGV(SEGV_MAPERR)**。栈是：
+    `handle() → RcpSessionBasedFetchHandle → RcpToCppRequest(const Rcp_SessionConfiguration*, …)`
+    `→ std::string(char const*) → strlen`
+  ⇒ **RCP 是在 fetch 时才去读 session 配置里的 `char*` 字段**（CA 内容/文件路径等），
+    而不是在 `CreateSession` 时拷一份。
+  ⇒ 原实现的 `Rcp_SessionConfiguration sc{}` 是 `handle()` **栈上的局部变量**：
+    `CreateSession` 返回后它就可能被覆盖 ⇒ **悬垂指针**。
+  ★**之前没崩，只是栈布局恰好还留着旧值**——我这轮拆段改了栈帧大小/顺序，当场把它逼爆。
+  ★★这是"**以前没崩 ≠ 正确**"的教科书案例：跨调用存活的对象（session 是进程级），
+    其**配置也必须在同一寿命层**。
+  **修法**：`sc` 改函数内 `static` + `static bool scInit` 一次性初始化（整段仍在 `slot.mu` 保护下，
+  且只在首次创建时写）⇒ 生命周期与 `sessionSlot()` 里的 session 一致。修完真机 200 正常。
+**③ 判据（守的是崩溃根因，不是"这次修好了"）**：`harmony-session-reuse` 新增第 ⑥ 条——
+  断言 `Rcp_SessionConfiguration` 必须 `static`，且**不得**出现栈局部形态。
+  ★为什么用静态判据：真机崩不崩取决于栈布局，**不能靠"跑一遍没崩"当验证**；
+    而"配置变量是不是 static"是结构性形态，一眼可判。
+  **破坏性验证**：把 `static` 去掉 ⇒ 判据当场红（`★Rcp_SessionConfiguration 不是 static ⇒ 栈局部`）。
+**④ 搬迁导致 4 条既有判据红——全部是"盯旧位置"而非行为退化**：`harmony-session-reuse` 的
+  ①②⑤ 与 `harmony-unsupported-features` 的调用点断言。逐条改为**两段联合**（与 #1203 的 stream 判据同源）：
+  · ① 容器在 `proteus_http_rcpapi.h`；
+  · ② `handle()` **不得**直接 `createSession`（必须走 `acquireSession`）+ `acquireSession` 内部
+    "先查槽、槽空才建、建完写回"；
+  · ⑤ 锁的定位必须用 `acquireSession` **定义处**（用 `sessionSlot()` 定义处会落在文件更早的单例声明附近，
+    那里本来没有锁 ⇒ 假红）；
+  · `unsupported-features` 的取数调用点从 `pFetchAsync` 改为 `api.fetchAsync`。
+  ★教训：**判据要盯语义，不要盯代码位置**——但搬迁时也不能靠"改判据让它绿"，
+    必须逐条确认"它守的语义还在"。本题的做法是：先真机证明行为对，再改判据的位置。
+**⑤ 真机回归（5 项全过）**：正常请求 200/577B + `transport` 四字段（dns/connect/tls/ttfb）·
+  `savePath` 落盘 `{path,size:577,durable:true}` + 设备侧 stat 一致 · HTTPDNS `tableRules=1/tableHits=1/lastSource=table` ·
+  pin 拒绝 `fetch.unsupported` + 未发出流量 · **连接复用 3 请求 / 1 TCP + `sessionsCreated=1`**（未退化）。
+**⑥ 诚实边界**：a) `handle()` 仍 401 行（进一步拆需要动"请求装配"那段的栈对象生命周期，
+  风险高于收益，**主动停手**）；b) 本轮只证连接复用未退化，cookie/认证状态是否随 session 跨请求保留
+  **仍未取证**（#1156 的边界不变）；c) 新增的三个头都在 `hosts/harmony/**`，prebuilt 副本已同步。

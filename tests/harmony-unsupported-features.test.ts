@@ -68,8 +68,8 @@ describe('★★★#1203 鸿蒙不支持的能力必须如实拒绝（不许静�
     const s = read(HTTP)
     const atGuard = s.indexOf('unsupportedFeatureReason(f)')
     expect(atGuard, '★handle() 里没有调用 unsupportedFeatureReason').toBeGreaterThan(0)
-    // 请求真正发出的位置：取 session/异步 fetch 调用点
-    const atFetch = s.indexOf('pFetchAsync')
+    // 请求真正发出的位置：取数调用点（★#1204 起是 `api.fetchAsync`，原为 `pFetchAsync`）
+    const atFetch = s.indexOf('api.fetchAsync')
     expect(atFetch, '★找不到取数调用点').toBeGreaterThan(0)
     // ★前者必须在后者之前（否则 pin 拒绝发生在已发出流量之后 = 白拒）
     expect(atGuard, '★guard 必须在取数调用之前（否则流量已发出）').toBeLessThan(atFetch)
