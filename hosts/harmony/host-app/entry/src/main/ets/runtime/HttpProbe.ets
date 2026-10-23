@@ -34,10 +34,58 @@ export function runHttpProbe(filesDir: string): void {
   let probeDiag: Record<string, string> = {};
   // ★ArkTS 自己编一帧（frameHex 入参）——C++ 侧解它 ⇒ 真机上的跨语言逐字节契约
   let frameHex: string = '';
+  /**
+   * ★★★#1210：**能力直通模式**——`proteusProbeCapMethod` 非空时，编一个
+   *   `method=<capMethod>` + `body=JSON(args)` 的 PINV 帧，走**通用能力分发**
+   *   （`invokeBytes` 的非 `http.request` 分支 ⇒ `screenInvokeDispatch`）。
+   * ★为什么需要它：`fs.*` / `log.*` / `cookie.*` 这类能力**不是 `http.request`**，
+   *   现有探针只会编 http 帧 ⇒ 没有这条通路，这些能力在鸿蒙端**无法真机取证**。
+   * ★诚实边界：这条通路验的是「帧 → 通用分发 → 宿主方法」，与业务 `useStorage`
+   *   走的是同一条能力通道（差别只在 JS 侧那层封装，已有单测覆盖）。
+   */
+  const capMethodIn: string | undefined = AppStorage.get<string>('proteusProbeCapMethod');
+  /**
+   * ★`capArgs` 以 **base64** 传入（`aa start --ps` 会吃掉 `{}`/`"`/`,` 等字符——#1187/#1202 实测）。
+   * ★这里用简单 base64 解码（ArkTS 有 `util.Base64Helper`，但为少一个依赖用纯算术实现）。
+   */
+  const capArgsB64: string | undefined = AppStorage.get<string>('proteusProbeCapArgsB64');
+  let capArgsDecoded: string = '';
+  if (capArgsB64 !== undefined && capArgsB64.length > 0) {
+    // ★自带 base64 解码（不依赖全局 `atob`——鸿蒙 ArkTS 不保证有；也不用 `util.Base64Helper` 少一个依赖）
+    // ★支持 **base64url**（`-` → `+`、`_` → `/`）且**无填充**——因为 `aa start --ps` 会吃掉 `=`
+    //   （实测：带 `==` 的 base64 让 `aa start` 直接启动失败）
+    const ABC: string = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let out: string = '';
+    let buf: number = 0;
+    let bits: number = 0;
+    for (let i = 0; i < capArgsB64.length; i++) {
+      let ch: string = capArgsB64.charAt(i);
+      if (ch === '=') break;
+      if (ch === '-') ch = '+';
+      else if (ch === '_') ch = '/';
+      const v: number = ABC.indexOf(ch);
+      if (v < 0) continue;
+      buf = (buf << 6) | v;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        out += String.fromCharCode((buf >> bits) & 0xff);
+      }
+    }
+    capArgsDecoded = out;
+  }
+  const isCapProbe: boolean = capMethodIn !== undefined && capMethodIn.length > 0;
   try {
     const f: InvokeFrame = new InvokeFrame();
-    f.method = 'http.request';
-    f.reqId = 'probe-http-arkts-1';
+    f.method = isCapProbe ? (capMethodIn as string) : 'http.request';
+    f.reqId = isCapProbe ? 'probe-cap-arkts-1' : 'probe-http-arkts-1';
+    if (isCapProbe) {
+      // ★通用分支：body = JSON args 字节
+      const argsText: string = capArgsDecoded.length > 0 ? capArgsDecoded : '{}';
+      const ab: Uint8Array = new Uint8Array(argsText.length);
+      for (let i = 0; i < argsText.length; i++) ab[i] = argsText.charCodeAt(i) & 0xff;
+      f.body = ab;
+    }
     f.url = url;
     /**
      * ★★★#1205：**上传必须是 POST**（multipart 体只在有方法体语义时才会被发送）。
@@ -45,8 +93,11 @@ export function runHttpProbe(filesDir: string): void {
      *   而客户端回执仍是 200 ⇒ 只看客户端会误判"上传成功"。这正是判据要看服务端回显的原因。
      */
     const httpMethodIn: string | undefined = AppStorage.get<string>('proteusProbeHttpMethod');
-    f.httpMethod = httpMethodIn !== undefined && httpMethodIn.length > 0 ? httpMethodIn : 'GET';
-    f.responseType = 0;   // RESPONSE_TEXT
+    // ★#1210：能力直通模式不设 http 专有字段（否则帧里混入 http 语义，宿主分派也会困惑）
+    if (!isCapProbe) {
+      f.httpMethod = httpMethodIn !== undefined && httpMethodIn.length > 0 ? httpMethodIn : 'GET';
+      f.responseType = 0;   // RESPONSE_TEXT
+    }
     /**
      * ★★★#1169：**HTTPDNS 表注入**（`dnsHost` + `dnsIp` 配对）。
      * ★必须在 **ArkTS 自编帧**这条路上加，否则 C++ 侧的 dnsHost 分支永远不执行
@@ -102,7 +153,8 @@ export function runHttpProbe(filesDir: string): void {
     /** ★#1187 诊断：把"探针实际拿到的入参"回显进报告（否则 savePath 没生效时无从归因） */
     probeDiag = { 'savePath': savePathIn ?? '', 'stream': streamIn ?? '', 'filesDir': filesDir,
                   'targetUrl': url, 'tlsPins': (pinsIn ?? '').length > 0 ? 'set' : '',
-                  'tlsPinOnly': pinOnlyIn ?? '', 'uploadPath': uploadPathIn ?? '' };
+                  'tlsPinOnly': pinOnlyIn ?? '', 'uploadPath': uploadPathIn ?? '',
+                  'capMethod': capMethodIn ?? '', 'capArgs': capArgsDecoded };
     const bytes: Uint8Array = encodeInvoke(f);
     let hex: string = '';
     for (let i = 0; i < bytes.length; i++) {

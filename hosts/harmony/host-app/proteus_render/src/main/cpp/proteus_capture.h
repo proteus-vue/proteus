@@ -16,6 +16,7 @@
 #pragma once
 #include <string>
 #include "proteus_host_helpers.h"
+#include "proteus_fs.h"   // ★#1210：fs.* 能力通道（由本头转出——`host_app_runtime_impl.h` 已贴 1000 行棘轮）
 
 namespace proteus {
 namespace capture {

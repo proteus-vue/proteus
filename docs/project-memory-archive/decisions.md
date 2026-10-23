@@ -13401,3 +13401,52 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑧ 落点**：`docs/proteus-app-capabilities-plan/12-app-capability-batches.md`（批次计划）·
   `scripts/capability-app-feasibility.mjs`（三分类工具）· `packages/api/src/capability-app-storage.ts`（实现）·
   任务板 `T-app-capability-batch1`（in_progress，剩余 log / getCookieJar / getFileSystem）。
+
+1212. **★★★鸿蒙 fs.* 能力通道落地 + 口径二修★**编号勘误**：本条原写 #1210，与并发会话 Studio 代码视图撞号 ⇒ 改为 **#1212**（已提交的 #1210 不动）。
+**（下接正文）** 「A 类判据只能是"方法已存在"」——按"宁缺毋滥、不能因为某端没做就绕过去" · 决策**（2026-10-23 · 用户中途纠正验收标准）:
+**① 用户的中途纠正（改变了做法）**：「我说的 useFetch 标准是每一个能力的实现都要严格按照大厂生产验收标准，
+  **不能因为某个没做就绕过去**，现在是**宁缺毋滥**——每一个能力的落地都必须是承载超级应用大厂生产验收标准」。
+  ⇒ 我原本准备"再铺 log / getCookieJar / getFileSystem 三项"，改为**先把自己刚交付的 `getStorage` 补成三端齐**：
+  它在鸿蒙端当时是 `unsupported`，而那是 #1209 里我自己写下的"诚实边界"——**诚实登记不等于可以不做**。
+**② 口径二修（同一个工具连错两次，第二次更根本）**：
+  · 第一版把"平台有 API"当零原生判据 ⇒ 把 `log`/`getCookieJar` 判成 A（实际宿主**没有** `log.*`/`cookie.*` 方法）。
+  · 第二版改为"所需宿主方法已存在"⇒ 又发现 `getFileSystem` 被我误留成 A：它要 `FSAdapter` 的 **13 个方法**，
+    而宿主 `fs.*` 只有 **3 个** ⇒ **覆盖 3/13 不叫零原生**。
+  · ⇒ 第三版：**必须"桥接口所需方法全部覆盖"才归 A**；部分覆盖一律按"仍需新增宿主方法"处理。
+  ★**A 类现在是 0**（`getStorage` 已完成）。**这就是"宁缺毋滥"的诚实结论**：剩下 53 项都要写原生代码。
+**③ 鸿蒙 `fs.*` 实现（`proteus_fs.h`，新）**：语义**逐条对齐** Android `FileTransferCapability`：
+  `fs.writeBytes {path,bytes}→{path,size}` · `fs.readBytes {path}→{bytes,size}` · `fs.remove {path}→{}`（**幂等**）。
+  · **沙箱复用 `resolveSandboxPath`**，不新开第二份根状态——两份沙箱根必然漂移，而这是**安全边界**。
+  · 两处**比 Android/iOS 更严**（如实登记差异，不粉饰为一致）：
+    ① 写入 `.part` + `fsync` + `rename` + `fsync(dir)`（Android 是裸覆盖，中断留半个文件）；
+    ② 写后 `fsync`（Android 只 `flush` 到页缓存）。★若要对齐，应改 Android 侧，不是把鸿蒙降级。
+  · 读上限 **64 MiB**，与 Android/iOS 同值。
+**④ 真机五组（HUAWEI KLE-AL00U）**：
+  G1 write 回执 `size=12` · **G2 read 逐字节等于 `[0,1,127,128,255,80,82,79,84,69,85,83]`**（含边界字节）·
+  G3 remove 两次都 `ok`（幂等）· G4 绝对路径与 `..` **都拒**，且**用 hdc 确认沙箱外 `proteus-escape.bin` 确实不存在**。
+  ★G2 的"逐字节"是关键：只看 `size` 会漏掉 UTF-8 编码错位与 `&0xFF` 截断。
+**⑤ `getStorage` 因此在鸿蒙真正可用**：写 `storage/proteus-kv.json` 后设备侧 `cat` 到 `{"a":1}`。
+  （此前 #1209 的诚实边界"鸿蒙无 `fs.*` ⇒ getStorage unsupported"**已消除**。）
+**⑥ ★★★顺带修掉两个真缺陷（都不是本单引入，但都会毁证据或毁可用性）**：
+  · **preview 把 UTF-8 中文换成 `.`**：`http_probe.h` 的预览把**所有** `>= 0x7f` 字节换成 `.`，
+    于是 `fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）` 变成 `fs: ... '..'` ⇒
+    业务与判据**读不出拒绝原因**（看着像空原因，比乱码更糟）。
+    修法：控制字符换 `.`；**合法 UTF-8 多字节序列原样保留**；孤立续字节（真二进制）才换 `.`。
+  · **base64 的 `=` 让 `aa start` 静默失败**：`--cap-args` 用 base64 传 JSON，而 `aa start --ps` 把 `=`
+    当 key=value 分隔符 ⇒ **启动直接失败**（#1187/#1202/#1154 同族，第四次踩同一类）。
+    修法：去 `=` 填充 + 转 base64url（ArkTS 侧解码器同步支持 `-`/`_` 与无填充）。
+**⑦ ★★判据的一个结构性教训（我的判据差点又假绿）**：
+  第一版只断言"文件里出现了 `resolveSandboxPath`"⇒ 变异（把 `writeBytes` 那处换成裸拼路径）后**全绿**，
+  而那意味着"**写可以逃逸、读不能**"的严重不对称。⇒ 改成**逐方法计数 ≥ 3**，变异当场红（只出现 2 次）。
+  ★同族：本单还踩了"断言命中注释"（`/fsSandboxRoot(/` 命中了注释里那句"为什么不新建它"）⇒ 去注释后再匹配。
+**⑧ 文件纪律（门禁当场拦了我一次）**：`host_app_runtime_impl.h` 已贴 1000 行棘轮（1130/1130）。
+  我加了 1 行 include 就被 `check:file-size` 判红 ⇒ 没有抬基线，改为**把 include 由 `proteus_capture.h` 转出**
+  + 分派在**同一行内**扩展 ⇒ 零增长。★门禁的价值正在于此：它逼我把"加一行"换成"换个位置"。
+**⑨ 诚实边界**：a) 只测 12 字节载荷；**没有**真造 > 64 MiB 文件验上限（只核语义与常量同值）；
+  b) "沙箱外无逃逸文件"是手工 `hdc` 核对（记录在此），离线判据只断言回执 `ok:false`；
+  c) 本项只补鸿蒙 `fs.*`，**`log` / `getCookieJar` / `getFileSystem` 仍未做**——它们要三端各写宿主方法；
+  d) 鸿蒙 `device.*` 等其他能力族仍缺 30 项（`check:host-invoke-contract` 如实列出）。
+**⑩ 落点**：`proteus_fs.h`（新）· `proteus_capture.h`（转出 include）· `host_app_runtime_impl.h`（分派）·
+  `HttpProbe.ets`（能力直通模式 `--cap-method/--cap-args`）· `EntryAbility.ets`（参数解析）·
+  `run-http-probe.sh`（base64url）· `tests/harmony-fs-capability.test.ts`（6 条）·
+  `hosts/harmony/results/fs-probe-*.json`（5 份真机证据）· 契约索引新增一行。

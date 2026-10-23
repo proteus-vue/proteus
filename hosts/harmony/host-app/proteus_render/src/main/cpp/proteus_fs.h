@@ -1,0 +1,263 @@
+// hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_fs.h
+// ★★★#1210：鸿蒙 **`fs.*` 能力通道**（`fs.writeBytes` / `fs.readBytes` / `fs.remove`）。
+//
+// 【为什么必须有】Android/iOS 早已实现（`FileTransferCapability` / `file-transfer-capability.swift`），
+//   鸿蒙一直是**缺这三个方法**。后果不是"少一个能力"，而是**下游一批能力整端不可用**：
+//   · `getStorage`（KV 存储）在鸿蒙**如实 unsupported**（#1209 的诚实边界）；
+//   · `useFileSystem` / fetch 缓存持久层 / upload 的沙箱读文件… 同理。
+//   ⇒ 按"宁缺毋滥、不能因为某端没做就绕过去"的标准，这是必须先补的**地基**。
+//
+// 【★★★契约逐条对齐 Android/iOS（不允许各写一套语义）】
+//   方法名与参数/返回形状取自 `hosts/android/.../FileTransferCapability.java`：
+//     · `fs.writeBytes`：`{ path, bytes: number[] }` → `{ path, size }`（**覆盖写**）
+//     · `fs.readBytes` ：`{ path }`              → `{ bytes: number[], size }`
+//     · `fs.remove`    ：`{ path }`              → `{}`（**幂等**：不存在也算成功）
+//   三端共同的沙箱纪律（deny-by-default）：
+//     · 只接受**沙箱相对路径**（`/` 开头一律拒绝）；`..` 段一律拒绝（不做"规范化后放行"）；
+//     · 目录不存在 ⇒ 自动创建（只创建沙箱内的）；
+//     · `readBytes` 单次上限 **64 MiB**（与 Android/iOS 同值；一次进 JS 内存）。
+//
+// 【★沙箱根复用 `httpSandboxRoot()`——不新开第二份状态】
+//   那份状态由 ArkTS 壳在 `Superapp.injectSandboxRoot()` 里注入（`setHttpSandboxRoot(filesDir)`）。
+//   ★为什么复用而不是新建 `fsSandboxRoot()`：**两份沙箱根必然会漂移**，而"写到哪个目录"是
+//     安全边界——一份状态 = 一个事实来源。命名沿用了 `http` 是历史包袱，语义就是"沙箱根"。
+//
+// 【★与 Android/iOS 的两处差异（如实登记，不粉饰为一致）】
+//   ① **写入持久性**：本实现 `fsync` 后才回成功（见下）；Android 是 `FileOutputStream.flush()`
+//      （只到内核页缓存），iOS 用 `Data.write(.atomic)`（原子但无显式 fsync）。
+//      ⇒ 鸿蒙这条**更严**；不是"更对"，是"各自如实"。
+//   ② **写入原子性**：本实现写 `.part` 再 `rename`（业务永远看不到半个文件）；Android 是裸覆盖。
+//      ⇒ 同样如实登记。若后续要对齐，应改 Android 侧（而不是把鸿蒙降级）。
+#ifndef PROTEUS_FS_H
+#define PROTEUS_FS_H
+
+#include <algorithm>   // std::search（JSON key 定位）
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <vector>
+
+#include "proteus_host_helpers.h"   // jstr / jnum / jsonEscape
+#include "proteus_http_save.h"      // ★复用 resolveSandboxPath / httpSandboxRoot（沙箱唯一事实来源）
+
+namespace proteus {
+namespace fs {
+
+/** 单次读出上限（与 Android/iOS **同值** 64 MiB） */
+constexpr long long MAX_READ_BYTES = 64LL * 1024LL * 1024LL;
+
+/**
+ * 从 JSON 里解析 `"key": [1, 2, 3]` → `std::vector<uint8_t>`。
+ *
+ * ★为什么自己写（不用现成 JSON 库）：本仓宿主侧刻意**零第三方 JSON 依赖**
+ *   （`proteus_host_helpers.h` 就是一组轻量 `jstr`/`jnum`）。这里只解析一种形态——扁平数字数组，
+ *   且只接受 0..255（越界即报错，不静默截断）。
+ *
+ * @return false ⇒ 数组不存在或格式非法（调用方如实报错）
+ */
+inline bool jbytes(const char* s, size_t segLen, const char* key, std::vector<uint8_t>* out) {
+  out->clear();
+  const std::string pat = std::string("\"") + key + "\"";
+  const char* p = s;
+  const char* end = s + segLen;
+  // 找 key（要求后跟冒号，避免命中值里的同名字符串）
+  while (p < end) {
+    const char* hit = std::search(p, end, pat.begin(), pat.end());
+    if (hit == end) return false;
+    const char* q = hit + pat.size();
+    while (q < end && (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r')) q++;
+    if (q < end && *q == ':') {
+      q++;
+      while (q < end && (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r')) q++;
+      if (q < end && *q == '[') {
+        q++;
+        while (q < end && *q != ']') {
+          while (q < end && (*q == ' ' || *q == ',' || *q == '\t' || *q == '\n' || *q == '\r')) q++;
+          if (q >= end || *q == ']') break;
+          char* e = nullptr;
+          const long v = std::strtol(q, &e, 10);
+          if (e == q) return false;                 // 非数字
+          if (v < 0 || v > 255) return false;        // ★越界即报错（不静默截断成 &0xFF）
+          out->push_back(static_cast<uint8_t>(v));
+          q = e;
+        }
+        return q < end;   // 找到闭合 `]`
+      }
+      return false;
+    }
+    p = hit + pat.size();
+  }
+  return false;
+}
+
+/** 递归建父目录（只建沙箱内的；失败如实返回 false） */
+inline bool mkdirsFor(const std::string& filePath) {
+  const size_t slash = filePath.find_last_of('/');
+  if (slash == std::string::npos || slash == 0) return true;
+  const std::string dir = filePath.substr(0, slash);
+  struct stat st{};
+  if (::stat(dir.c_str(), &st) == 0) return S_ISDIR(st.st_mode);
+  // 逐级建
+  std::string cur;
+  size_t at = 0;
+  while (at <= dir.size()) {
+    const size_t next = dir.find('/', at);
+    const size_t endAt = (next == std::string::npos) ? dir.size() : next;
+    cur = dir.substr(0, endAt);
+    if (!cur.empty()) {
+      if (::mkdir(cur.c_str(), 0755) != 0 && errno != EEXIST) return false;
+    }
+    if (next == std::string::npos) break;
+    at = next + 1;
+  }
+  struct stat st2{};
+  return ::stat(dir.c_str(), &st2) == 0 && S_ISDIR(st2.st_mode);
+}
+
+/** `fs.writeBytes`：**原子 + 持久**写入（`.part` → fsync → rename → fsync(dir)） */
+inline std::string writeBytes(const std::string& argsJson) {
+  std::string rel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "path", &rel) || rel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.writeBytes 需要 { path, bytes: number[] }\"}";
+  }
+  std::vector<uint8_t> bytes;
+  if (!jbytes(argsJson.c_str(), argsJson.size(), "bytes", &bytes)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.writeBytes 的 bytes 必须是 0..255 的数字数组\"}";
+  }
+  const std::string abs = proteus::http::resolveSandboxPath(rel);
+  if (abs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）：" +
+           jsonEscape(rel) + "\"}";
+  }
+  if (!mkdirsFor(abs)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.writeBytes 无法创建目录：" + jsonEscape(rel) + "\"}";
+  }
+  /**
+   * ★★★为什么不是裸覆盖（与 Android 的差异，见文件头）：
+   *   "写到一半被杀/掉电" 会留下**半个文件** —— 对 KV 存储这类"下次启动要解析"的场景，
+   *   半个 JSON = 启动即损坏。`.part` + `rename` 保证**业务要么看到旧内容、要么看到新内容**。
+   *   ★rename 在同一文件系统内是原子的（POSIX）。
+   */
+  const std::string part = abs + ".part";
+  FILE* fp = std::fopen(part.c_str(), "wb");
+  if (fp == nullptr) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.writeBytes 打不开临时文件：" + jsonEscape(rel) + "\"}";
+  }
+  bool ok = true;
+  if (!bytes.empty() && std::fwrite(bytes.data(), 1, bytes.size(), fp) != bytes.size()) ok = false;
+  if (ok && std::fflush(fp) != 0) ok = false;
+  // ★fsync 必须在 fclose **之前**（fclose 之后再取 fileno 已无效——#1200 同族教训）
+  if (ok && ::fsync(::fileno(fp)) != 0) ok = false;
+  if (std::fclose(fp) != 0) ok = false;
+  if (!ok) {
+    std::remove(part.c_str());
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.writeBytes 写入失败：" + jsonEscape(rel) + "\"}";
+  }
+  if (std::rename(part.c_str(), abs.c_str()) != 0) {
+    std::remove(part.c_str());
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.writeBytes rename 失败：" + jsonEscape(rel) + "\"}";
+  }
+  // ★rename 之后 fsync 目录，否则"新文件名"本身可能还在页缓存里（掉电后文件消失）
+  const size_t slash = abs.find_last_of('/');
+  if (slash != std::string::npos) {
+    const std::string dir = abs.substr(0, slash);
+    const int dfd = ::open(dir.c_str(), O_RDONLY);
+    if (dfd >= 0) {
+      ::fsync(dfd);
+      ::close(dfd);
+    }
+  }
+  char buf[256];
+  std::snprintf(buf, sizeof(buf), "{\"ok\":true,\"data\":{\"path\":\"%s\",\"size\":%zu}}",
+                jsonEscape(rel).c_str(), bytes.size());
+  return buf;
+}
+
+/** `fs.readBytes`：`{ path }` → `{ bytes: number[], size }` */
+inline std::string readBytes(const std::string& argsJson) {
+  std::string rel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "path", &rel) || rel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.readBytes 需要 { path }\"}";
+  }
+  const std::string abs = proteus::http::resolveSandboxPath(rel);
+  if (abs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）：" +
+           jsonEscape(rel) + "\"}";
+  }
+  struct stat st{};
+  if (::stat(abs.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.readBytes: 文件不存在 " + jsonEscape(rel) + "\"}";
+  }
+  if (static_cast<long long>(st.st_size) > MAX_READ_BYTES) {
+    char b[256];
+    std::snprintf(b, sizeof(b),
+                  "{\"ok\":false,\"missing\":false,\"reason\":\"fs.readBytes: 文件过大（%lldB > %lldB）"
+                  "——分块读取属后续批次\"}",
+                  static_cast<long long>(st.st_size), MAX_READ_BYTES);
+    return b;
+  }
+  FILE* fp = std::fopen(abs.c_str(), "rb");
+  if (fp == nullptr) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.readBytes 打不开：" + jsonEscape(rel) + "\"}";
+  }
+  std::vector<uint8_t> buf(static_cast<size_t>(st.st_size));
+  size_t got = 0;
+  if (!buf.empty()) got = std::fread(buf.data(), 1, buf.size(), fp);
+  std::fclose(fp);
+  if (got != buf.size()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.readBytes 读到的字节数不符（期望 " +
+           std::to_string(buf.size()) + "，实得 " + std::to_string(got) + "）\"}";
+  }
+  // 回执：`bytes` 数组 + `size`（与 Android/iOS 同形状）
+  std::string out = "{\"ok\":true,\"data\":{\"bytes\":[";
+  out.reserve(out.size() + buf.size() * 4 + 64);
+  for (size_t i = 0; i < buf.size(); i++) {
+    if (i != 0) out += ',';
+    out += std::to_string(static_cast<unsigned>(buf[i]));
+  }
+  out += "],\"size\":" + std::to_string(buf.size()) + "}}";
+  return out;
+}
+
+/** `fs.remove`：`{ path }` → `{}`（**幂等**：不存在也算成功，与 Android/iOS 同） */
+inline std::string remove(const std::string& argsJson) {
+  std::string rel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "path", &rel) || rel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.remove 需要 { path }\"}";
+  }
+  const std::string abs = proteus::http::resolveSandboxPath(rel);
+  if (abs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）：" +
+           jsonEscape(rel) + "\"}";
+  }
+  struct stat st{};
+  if (::stat(abs.c_str(), &st) != 0) return "{\"ok\":true,\"data\":{}}";   // ★幂等
+  if (!S_ISREG(st.st_mode)) {
+    // ★目录不在这里删（`fs.remove` 的契约是"文件"；目录删除属 useFileSystem 的 rmdir）
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.remove 只删文件（不是文件）：" + jsonEscape(rel) + "\"}";
+  }
+  if (std::remove(abs.c_str()) != 0) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.remove 删除失败：" + jsonEscape(rel) + "\"}";
+  }
+  return "{\"ok\":true,\"data\":{}}";
+}
+
+/** 方法分派：命中 `fs.*` 返回 true（结果写进 `out`） */
+inline bool dispatch(const std::string& method, const std::string& argsJson, std::string* out) {
+  if (method == "fs.writeBytes") { *out = writeBytes(argsJson); return true; }
+  if (method == "fs.readBytes") { *out = readBytes(argsJson); return true; }
+  if (method == "fs.remove") { *out = remove(argsJson); return true; }
+  if (method.rfind("fs.", 0) == 0) {
+    *out = "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 fs 方法：" + jsonEscape(method) + "\"}";
+    return true;
+  }
+  return false;
+}
+
+}  // namespace fs
+}  // namespace proteus
+
+#endif  // PROTEUS_FS_H

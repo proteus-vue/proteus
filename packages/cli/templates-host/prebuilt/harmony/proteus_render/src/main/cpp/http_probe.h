@@ -339,10 +339,38 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             if (!rf.body.empty()) {
                 size_t n = rf.body.size() < 400 ? rf.body.size() : 400;
                 for (size_t i = 0; i < n; i++) {
-                    // ★预览是"人可读摘要"⇒ 不可打印字符一律换成 '.'（二进制响应别把回执撑成乱码）。
-                    //   （JSON 合法性由 jsonEscape 兜住；这里只管可读性。）
+                    /**
+                     * ★★★#1210 修正：原实现把**所有** `>= 0x7f` 的字节换成 `.`，理由是"二进制响应别撑成乱码"。
+                     *   但那样会连**UTF-8 中文错误文案**一起毁掉——实测现象：
+                     *   `fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）` 在回执里变成 `fs: ... '..'`，
+                     *   业务/判据**读不出拒绝原因**（比乱码更糟：看着像空原因）。
+                     *   ⇒ 区分两种情形：
+                     *     · **控制字符**（< 0x20）⇒ 换成 `.`（二进制垃圾/换行，保持单行可读）；
+                     *     · **UTF-8 多字节序列**（合法续字节 0x80..0xBF 跟随首字节）⇒ **原样保留**；
+                     *     · **孤立的非 ASCII 字节**（非合法 UTF-8）⇒ 换成 `.`（真二进制）。
+                     */
                     const unsigned char uc = static_cast<unsigned char>(rf.body[i]);
-                    preview.push_back((uc < 0x20 || uc >= 0x7f) ? '.' : static_cast<char>(uc));
+                    if (uc < 0x20) {
+                        preview.push_back('.');
+                    } else if (uc < 0x7f) {
+                        preview.push_back(static_cast<char>(uc));
+                    } else if ((uc & 0xc0) == 0xc0 && i + 1 < n) {
+                        // UTF-8 首字节：按首字节推算续字节数，合法则整段保留
+                        const size_t need = (uc >= 0xf0) ? 3 : (uc >= 0xe0 ? 2 : 1);
+                        bool valid = true;
+                        for (size_t k = 1; k <= need && i + k < n; k++) {
+                            const unsigned char cc = static_cast<unsigned char>(rf.body[i + k]);
+                            if ((cc & 0xc0) != 0x80) { valid = false; break; }
+                        }
+                        if (valid && i + need < n) {
+                            for (size_t k = 0; k <= need; k++) preview.push_back(rf.body[i + k]);
+                            i += need;
+                        } else {
+                            preview.push_back('.');
+                        }
+                    } else {
+                        preview.push_back('.');   // 孤立续字节 ⇒ 真二进制
+                    }
                 }
             }
             /**

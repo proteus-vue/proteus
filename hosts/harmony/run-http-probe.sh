@@ -44,6 +44,8 @@ UPLOAD_FIELD=""    # ★#1205：文件字段名（缺省 file）
 UPLOAD_FILENAME="" # ★#1205：远端文件名（缺省 = 路径 basename）
 UPLOAD_F1K=""      # ★#1205：一个普通表单字段（键）
 UPLOAD_F1V=""      # ★#1205：同上（值）
+CAP_METHOD=""      # ★#1210：能力直通（如 fs.writeBytes / fs.readBytes / fs.remove）
+CAP_ARGS=""        # ★#1210：能力参数（JSON 文本）
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
@@ -62,6 +64,8 @@ for arg in "$@"; do
     --upload-field=*) UPLOAD_FIELD="${arg#--upload-field=}" ;;
     --upload-filename=*) UPLOAD_FILENAME="${arg#--upload-filename=}" ;;
     --upload-form=*) UPLOAD_F1K="${arg#--upload-form=}"; UPLOAD_F1V="${UPLOAD_F1K#*=}"; UPLOAD_F1K="${UPLOAD_F1K%%=*}" ;;
+    --cap-method=*) CAP_METHOD="${arg#--cap-method=}" ;;   # ★#1210
+    --cap-args=*) CAP_ARGS="${arg#--cap-args=}" ;;         # ★#1210
     --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
        elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
@@ -119,6 +123,16 @@ if [ -n "$UPLOAD_PATH" ]; then
   [ -n "$UPLOAD_FILENAME" ] && DNS_ARG="$DNS_ARG --ps uploadFilename $UPLOAD_FILENAME"
   [ -n "$UPLOAD_F1K" ] && DNS_ARG="$DNS_ARG --ps uploadField1Key $UPLOAD_F1K"
   [ -n "$UPLOAD_F1V" ] && DNS_ARG="$DNS_ARG --ps uploadField1Value $UPLOAD_F1V"
+fi
+# ★★★#1210：能力直通（fs.* / log.* / cookie.* 这类非 http.request 的能力）
+# ★args 里含 `{}` `"` `,` `/` 等字符 ⇒ 用 base64 传（`aa start --ps` 会吃掉符号，见 #1187/#1202 教训）
+if [ -n "$CAP_METHOD" ]; then
+  DNS_ARG="$DNS_ARG --ps capMethod $CAP_METHOD"
+  # ★★★#1210：**必须去掉 `=` 填充并把 `+`/`/` 换成 base64url**
+  #   —— `aa start --ps` 会把 `=` 当 key=value 分隔、`+` 当空格（#1187/#1202/#1154 都踩过），
+  #   实测现象：带 `==` 的 base64 会让 `aa start` 直接**启动失败**。
+  ARGS_B64="$(printf '%s' "${CAP_ARGS:-{\}}" | base64 | tr -d '\n' | tr '+/' '-_' | sed 's/=*$//')"
+  DNS_ARG="$DNS_ARG --ps capArgsB64 $ARGS_B64"
 fi
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
@@ -291,6 +305,23 @@ if table_on:
         print(f"✅ HTTPDNS 表生效：tableRules={dn.get('tableRules')} · tableHits={dn.get('tableHits')}"
               f" · lastSource=table · 请求如预期失败（不可达 IP）")
     sys.exit(0 if ok else 1)
+# ★★★#1210：**能力直通模式**的判据——`capMethod` 非空时，回执是能力方法的 JSON（不是 HTTP 响应），
+#   因此**不能**套用 HTTP 状态码/bodyBytes 断言（那也是我第一次跑时判红的原因）。
+#   这里只断言"回执是一个带 ok 字段的合法 JSON"，真正的业务断言由离线判据
+#   （`tests/harmony-fs-capability.test.ts`）对着入库证据做。
+if (diag.get("capMethod") or "") != "":
+    prev = str(d.get("preview") or "")
+    if not prev:
+        print(f"✗ 能力探针没有回执（error={d.get('error')}）"); sys.exit(1)
+    try:
+        cap = json.loads(prev)
+    except Exception:
+        print(f"✗ 能力回执不是 JSON：{prev[:120]}"); sys.exit(1)
+    if "ok" not in cap:
+        print(f"✗ 能力回执缺 ok 字段：{prev[:120]}"); sys.exit(1)
+    print(f"✅ 能力直通回执：{prev[:160]}")
+    sys.exit(0)
+
 if d.get("host") != "harmony":
     print(f"✗ host 应为 harmony，实得 {d.get('host')}"); ok = False
 if d.get("bridge") != "invokeBytes":

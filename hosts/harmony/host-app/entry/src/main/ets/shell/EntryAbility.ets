@@ -133,6 +133,15 @@ export default class EntryAbility extends UIAbility {
     if (typeof upF1v === 'string') {
       AppStorage.setOrCreate('proteusProbeUploadField1Value', upF1v);
     }
+    // ★★★#1210：能力直通（fs.* / log.* / cookie.* 这类非 http.request 能力）
+    const capMethod = want?.parameters?.['capMethod'];
+    if (typeof capMethod === 'string' && capMethod.length > 0) {
+      AppStorage.setOrCreate('proteusProbeCapMethod', capMethod);
+    }
+    const capArgsB64 = want?.parameters?.['capArgsB64'];
+    if (typeof capArgsB64 === 'string' && capArgsB64.length > 0) {
+      AppStorage.setOrCreate('proteusProbeCapArgsB64', capArgsB64);
+    }
     // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
     //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
     //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。

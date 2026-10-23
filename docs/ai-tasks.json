@@ -3431,7 +3431,7 @@
       "related": [
         "T-app-runtime-capabilities"
       ],
-      "note": "【in_progress · #1207】用户「是不是可以推下一批能力实现了？按照 useFetch 的标准」。\n★**取证结论（改变了排期形状）**：能成批做的**几乎没有**——新增 `scripts/capability-app-feasibility.mjs`\n 按\"底层平台栈是否已有\"三分类：**A 零原生 2 个 · B 需补原生 2 个 · C 平台子系统 50 个**。\n `useFetch` 能成批是因为底层栈三端本来就有（OkHttp/URLSession/RCP），成本在接线+线格式+判据；\n 而 50 个 C 类是\"三端各写一套平台集成（权限/UI/回调）\"⇒ 每项一个小项目，不是一批。\n★**已完成（批 1 第一项）getStorage**：新增 `capability-app-storage.ts`。\n 关键取证：宿主 `fs.readBytes/writeBytes/remove` 是**同步派发**，`invokeHost` 也同步，\n `CompatStorage.get/set` 要同步 ⇒ 三者吻合 ⇒ **零新原生代码**（Android/iOS）。\n 单文件整份 KV（宿主无 readdir + Android fs.remove 删不掉非空目录 ⇒ 每键一文件清不干净，#1151 同族教训）。\n ★**鸿蒙如实不可用**：宿主没有 `fs.*` ⇒ 工厂返回空对象 ⇒ 不提供 getStorage ⇒\n `useStorage` 抛 `storage.unsupported`。**绝不内存兜底冒充持久化**（破坏性验证守着）。\n ★抽取器契约拦截了一次：`app-bridge-keys.mjs` 要求登记的工厂有顶层 `return { 成员 }`，\n 我第一版返回裸 CompatStorage ⇒ 硬失败 ⇒ 改成返回 `{ getStorage }`（宁可改实现，不改解析器）。\n★**剩余（同批）**：`log`（A 三端都有通路）· `getCookieJar`（A）· `getFileSystem`（B，与 getStorage 同底层）。\n★**批 1.5（前置）**：鸿蒙 `fs.*`（宿主未实现；ArkTS 有 fileIo ⇒ 是\"没接线\"不是\"做不到\"）。"
+      "note": "【in_progress · #1207】用户「是不是可以推下一批能力实现了？按照 useFetch 的标准」。\n★**取证结论（改变了排期形状）**：能成批做的**几乎没有**——新增 `scripts/capability-app-feasibility.mjs`\n 按\"底层平台栈是否已有\"三分类：**A 零原生 2 个 · B 需补原生 2 个 · C 平台子系统 50 个**。\n `useFetch` 能成批是因为底层栈三端本来就有（OkHttp/URLSession/RCP），成本在接线+线格式+判据；\n 而 50 个 C 类是\"三端各写一套平台集成（权限/UI/回调）\"⇒ 每项一个小项目，不是一批。\n★**已完成（批 1 第一项）getStorage**：新增 `capability-app-storage.ts`。\n 关键取证：宿主 `fs.readBytes/writeBytes/remove` 是**同步派发**，`invokeHost` 也同步，\n `CompatStorage.get/set` 要同步 ⇒ 三者吻合 ⇒ **零新原生代码**（Android/iOS）。\n 单文件整份 KV（宿主无 readdir + Android fs.remove 删不掉非空目录 ⇒ 每键一文件清不干净，#1151 同族教训）。\n ★**鸿蒙如实不可用**：宿主没有 `fs.*` ⇒ 工厂返回空对象 ⇒ 不提供 getStorage ⇒\n `useStorage` 抛 `storage.unsupported`。**绝不内存兜底冒充持久化**（破坏性验证守着）。\n ★抽取器契约拦截了一次：`app-bridge-keys.mjs` 要求登记的工厂有顶层 `return { 成员 }`，\n 我第一版返回裸 CompatStorage ⇒ 硬失败 ⇒ 改成返回 `{ getStorage }`（宁可改实现，不改解析器）。\n★**剩余（同批）**：`log`（A 三端都有通路）· `getCookieJar`（A）· `getFileSystem`（B，与 getStorage 同底层）。\n★**批 1.5（前置）**：鸿蒙 `fs.*`（宿主未实现；ArkTS 有 fileIo ⇒ 是\"没接线\"不是\"做不到\"）。\n★#1212 更新：**口径二次修正**——A 类（零原生）的判据只能是「**所需宿主方法已存在**」，\n  不是\"平台有 API\"。据此 `log`/`getCookieJar` 从 A 降到 B（宿主无 `log.*`/`cookie.*` 方法，要三端各加一个），\n  而 `getFileSystem` 也不再是 A（它要 `FSAdapter` 的 **13 个方法**，宿主 `fs.*` 只有 3 个 ⇒ 覆盖不足）。\n  ⇒ **A 类现在是 0**（`getStorage` 已完成）。剩下都要写原生代码——**这就是\"宁缺毋滥\"的诚实结论**。"
     },
     {
       "id": "T-studio-file-tree",
@@ -3455,7 +3455,7 @@
         "T-studio-html-input",
         "T-studio-aspect-fit"
       ],
-      "note": "【done · 决策 #1210】用户反馈「IDE 主体进度慢」——承认：编辑器是主体却卡在装依赖，我连续三单做外围。本单推进可推进的主体：文件列表→目录树（buildTree + 扁平化行渲染，不用递归组件；目录在前文件在后；折叠存「折叠了谁」默认全展开；打开文件自动展开祖先）。判据 22→23：⑪c 双计数 data-dir/data-file、新增 ⑰ 折叠。★编辑器卡点已钉死：pnpm 写 node_modules 被环境拦（ERR_PNPM_CODEBUDDY_BROKER_DENY / downloaded 0 / .pnpm 里 0 字节）；已逐项排除 registry 200、storeDir 一致、pnpm 9.15.9 一致、lockfile v9、关沙箱同样失败 ⇒ 需用户自己终端 pnpm add -w @codemirror/*（6 个）。在此之前不自研编辑器内核（G-56.1）。"
+      "note": "【done · 决策 #1212】用户反馈「IDE 主体进度慢」——承认：编辑器是主体却卡在装依赖，我连续三单做外围。本单推进可推进的主体：文件列表→目录树（buildTree + 扁平化行渲染，不用递归组件；目录在前文件在后；折叠存「折叠了谁」默认全展开；打开文件自动展开祖先）。判据 22→23：⑪c 双计数 data-dir/data-file、新增 ⑰ 折叠。★编辑器卡点已钉死：pnpm 写 node_modules 被环境拦（ERR_PNPM_CODEBUDDY_BROKER_DENY / downloaded 0 / .pnpm 里 0 字节）；已逐项排除 registry 200、storeDir 一致、pnpm 9.15.9 一致、lockfile v9、关沙箱同样失败 ⇒ 需用户自己终端 pnpm add -w @codemirror/*（6 个）。在此之前不自研编辑器内核（G-56.1）。"
     },
     {
       "id": "T-studio-editor",
@@ -3484,6 +3484,29 @@
         "T-studio-html-input"
       ],
       "note": "【done · 决策 #1211】用户在自己终端装上 6 个 @codemirror/*（必须带 --store-dir /Volumes/data1/.pnpm-store/v3，否则 ERR_PNPM_UNEXPECTED_STORE）。★编辑器：行号/当前行/选区/括号匹配/Tab/⌘Z/⌘S，主题用 Studio token。★写回三硬约束（Rust）：mtime 冲突检测（**微秒**，毫秒会漏判）、原子替换（tmp+rename，否则半个源文件）、保留权限位。★脏缓冲：切走再切回不丢；刻意不用 confirm（WKWebView 未实现 runJavaScriptConfirmPanel 时静默返回 false）。★v-show 引入真 bug：子组件 onMounted 早于父组件 hydrate ⇒ 先 boot 读到空 codeFile 并覆盖用户选择；修 whenHydrated()。判据 23→26，选择器改按路径。★仍缺语法着色（@lezer/highlight 是传递依赖，pnpm 隔离下 import 不到）。★边界：真实窗口里的点击/保存未手动点过。"
+    },
+    {
+      "id": "T-harmony-fs-capability",
+      "title": "鸿蒙 fs.* 能力通道（writeBytes/readBytes/remove）——三端对齐的地基，getStorage 由此在鸿蒙可用",
+      "type": "capability",
+      "status": "done",
+      "owner": "zcode-harmony-session",
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_fs.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_capture.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/HttpProbe.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/shell/EntryAbility.ets",
+        "hosts/harmony/run-http-probe.sh",
+        "tests/harmony-fs-capability.test.ts"
+      ],
+      "decision": 1210,
+      "verification": "真机五组：write（回执 size==载荷）/ read（**逐字节**等于写入内容）/ remove（两次都成功=幂等）/ 绝对路径拒绝 / `..` 拒绝（且设备侧沙箱外确认无逃逸文件）。离线判据 `tests/harmony-fs-capability.test.ts` 6 条；破坏性验证：去掉 writeBytes 的沙箱校验 ⇒ 判据指名\"沙箱校验只出现 2 次\"。",
+      "branch": null,
+      "related": [
+        "T-app-capability-batch1"
+      ],
+      "note": "【done · #1212】用户明确标准：「每一个能力的实现都要严格按照大厂生产验收标准，不能因为某个没做就绕过去，宁缺毋滥」。\n ⇒ 停掉\"再铺三项\"的做法，先把 `getStorage`（#1209）的鸿蒙缺口补掉——它在鸿蒙当年是 unsupported，\n   那正是\"因为某端没做就绕过去\"。\n★实现：`proteus_fs.h`（新）。语义**逐条对齐** Android `FileTransferCapability`：\n writeBytes{path,bytes}→{path,size} · readBytes{path}→{bytes,size} · remove{path}→{}（幂等）。\n★沙箱：复用 `resolveSandboxPath`（**不新开第二份状态**——两份沙箱根必然漂移，而这是安全边界）。\n★比 Android/iOS 更严的两处（如实登记，不粉饰为一致）：\n ① 写入 `.part` + fsync + rename + fsync(dir)（Android 是裸覆盖，中断留半文件）；\n ② 写后 fsync（Android 只 flush 到页缓存）。★若要对齐，应改 Android 侧，不是把鸿蒙降级。\n★读上限 64 MiB，与 Android/iOS 同值。\n★★真机五组全过：write 回执 size=12 · **read 逐字节等于 `[0,1,127,128,255,80,82,79,84,69,85,83]`** ·\n remove 两次都 ok · 绝对路径拒 · `..` 拒；且**用 hdc 确认沙箱外 `proteus-escape.bin` 确实不存在**。\n★★★顺带修掉两个**真缺陷**（都不是本单引入，但都会毁证据/毁可用性）：\n ① `http_probe.h` 的 preview 把**所有非 ASCII** 换成 `.` ⇒ UTF-8 中文错误原因全丢\n    （`fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）` 变成 `fs: ... '..'`）⇒\n    业务/判据**读不出拒绝原因**；改为\"保留合法 UTF-8 多字节序列，只把控制字符/孤立字节换 `.`\"。\n ② `--cap-args` 的 base64 带 `==` 填充 ⇒ `aa start` 把 `=` 当 key=value 分隔 ⇒ **启动直接失败**\n    （#1187/#1202/#1154 同族）⇒ 改为去填充 + base64url。\n★`getStorage` 因此在鸿蒙**真正可用**：写 `storage/proteus-kv.json` 后设备侧读到 `{\"a\":1}`。\n★文件纪律：`host_app_runtime_impl.h` 已贴 1000 行棘轮（1130/1130）⇒\n 把 `fs.*` 的 include 由 `proteus_capture.h` 转出、分派改成**同一行内**扩展 ⇒ 零增长（门禁当场拦过我一次）。"
     }
   ]
 }
