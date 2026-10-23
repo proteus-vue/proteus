@@ -28,6 +28,33 @@ extern "C" {
     fn poc_send_ok() -> i64;
     fn poc_live_restarts() -> i32;
     fn poc_report(path: *const c_char);
+    /// B1：注册「画布被点击」回调（ObjC 侧在 mouseDown 里调用）
+    fn poc_set_click_cb(cb: extern "C" fn(f64, f64, f64, f64));
+}
+
+/// 全局 AppHandle（B1 的回调里要用它 emit 事件；回调是 C 函数，只能走静态）
+static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+/// 画布点击的载荷（B1）。★不引 `serde_json`：Cargo.toml 里只有 `serde`，
+/// 而 Tauri 的 emit 只要 `Serialize` 就够——为一行 `json!` 加依赖不值得。
+#[derive(Clone, Serialize)]
+struct CanvasClick {
+    /// 视图内坐标（左上原点，单位为点）
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+/// 画布点击回调：**从 ObjC 的 mouseDown 直接进来**（主线程），转成 Tauri 事件发给前端。
+///
+/// 坐标已经是「左上原点、视图内、单位为点」（ObjC 侧翻转过 y）——
+/// 前端按 `x/w` 的百分比定位即可，不需要知道 AppKit 的坐标系。
+extern "C" fn on_canvas_click(x: f64, y: f64, w: f64, h: f64) {
+    if let Some(app) = APP.get() {
+        use tauri::Emitter;
+        let _ = app.emit("canvas-click", CanvasClick { x, y, w, h });
+    }
 }
 
 /// 面板读数。字段名就是 HTML 侧读的名字 —— 少一层映射少一处漂移。
@@ -341,6 +368,9 @@ fn main() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            // ★B1：把 AppHandle 存进静态 + 注册画布点击回调（C 函数回调里只能这样拿到 handle）
+            let _ = APP.set(handle.clone());
+            unsafe { poc_set_click_cb(on_canvas_click) };
             let h = handle.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(300));

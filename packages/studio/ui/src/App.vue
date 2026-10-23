@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { setCanvasRect } from './bridge'
+import { onCanvasClick, setCanvasRect, type CanvasClick } from './bridge'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
@@ -52,6 +52,10 @@ async function switchView(v: ViewName) {
 }
 
 let rectTimer: ReturnType<typeof setInterval> | undefined
+/** ★B1：画布最近一次被点击的位置（原生 NSView → Rust emit → 这里）。null = 没点过。 */
+const pick = ref<CanvasClick | null>(null)
+let offPick: (() => void) | null = null
+
 onMounted(async () => {
   // ★先恢复上次的视图，再量画布：顺序反了会先按设备视图同步一次 rect，
   //   而恢复成 code 视图时那次同步是白做的（还会让原生画布闪一下）。
@@ -61,10 +65,22 @@ onMounted(async () => {
   else await setCanvasRect({ x: 0, y: 0, w: 0, h: 0 }).catch(() => {})
   rectTimer = setInterval(syncRect, 1000)
   addEventListener('resize', syncRect)
+  // 画布是原生 NSView，HTML 收不到它的点击 ⇒ 只能靠这条事件通路
+  offPick = onCanvasClick((p) => {
+    pick.value = p
+  })
 })
 onBeforeUnmount(() => {
   if (rectTimer) clearInterval(rectTimer)
   removeEventListener('resize', syncRect)
+  offPick?.()
+})
+
+/** 点击标记的百分比位置（相对画布区域，不用关心 inset 的像素值） */
+const pickStyle = computed(() => {
+  const p = pick.value
+  if (!p || p.w <= 0 || p.h <= 0) return null
+  return { left: `${(p.x / p.w) * 100}%`, top: `${(p.y / p.h) * 100}%` }
 })
 
 const running = computed(() => (stats.value?.frames ?? 0) > 0)
@@ -116,6 +132,10 @@ const hint = computed(() => {
         <div class="frame" />
         <div class="cross" />
         <div class="tag">device.native · 原生 GL 画布（下方）· HTML 叠加（本层）</div>
+        <!-- ★B1：原生点击的落点标记（事件通路的可见证据；元素信息要等设备侧视图树） -->
+        <div class="picks">
+          <div v-if="pickStyle" class="pick" :style="pickStyle" id="pickMark" />
+        </div>
         <!-- 空状态：生产 IDE 必须有——不然用户看到纯黑会以为坏了 -->
         <div v-if="!running" class="empty">
           <StudioIcon name="device" :size="28" />
@@ -141,6 +161,7 @@ const hint = computed(() => {
       <span><span class="k">lat</span> <span id="slat">{{ stats ? ms(stats.lat_p50) : '—' }}</span></span>
       <span><span class="k">late</span> <span id="slate">{{ stats?.late ?? 0 }}</span></span>
       <span><span class="k">cpu</span> <span id="scpu">{{ stats ? pct(stats.cpu_pct) : '—' }}</span></span>
+      <span><span class="k">pick</span> <span id="spick">{{ pick ? `${Math.round(pick.x)},${Math.round(pick.y)}` : '—' }}</span></span>
       <span style="flex:1" />
       <span id="shint">{{ hint }}</span>
     </div>

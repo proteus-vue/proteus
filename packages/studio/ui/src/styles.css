@@ -103,6 +103,16 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .empty p{margin:0;font-size:var(--fs-sm);font-weight:500;color:var(--fg-muted)}
 .empty span{font-size:var(--fs-xs);color:var(--fg-subtle)}
 
+/* B1：原生点击的落点标记（圆圈 + 十字）。它同时是「事件通路已通」的可见证据。 */
+.picks{position:absolute;inset:var(--sp5);pointer-events:none}
+.pick{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+      border:1.5px solid var(--accent);box-shadow:0 0 0 3px var(--accent-weak);
+      animation:pick-pop 160ms var(--ease)}
+.pick::before,.pick::after{content:"";position:absolute;background:var(--accent)}
+.pick::before{left:50%;top:-6px;bottom:-6px;width:1px;margin-left:-.5px}
+.pick::after{top:50%;left:-6px;right:-6px;height:1px;margin-top:-.5px}
+@keyframes pick-pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+
 /* 右栏 */
 .side{grid-area:side;background:var(--bg-surface);border-left:1px solid var(--border-subtle);
       overflow:auto;overscroll-behavior:contain}

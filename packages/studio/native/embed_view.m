@@ -86,10 +86,34 @@ static GLuint link_prog(const char *vs, const char *fs) {
   return p;
 }
 
+/* ─────────── 指针事件回调（B1：原生视图 → 前端）───────────
+ *
+ * 【为什么需要】画布是**叠在 HTML 之上的原生 NSView**，HTML 收不到它的点击 ——
+ *   之前它纯粹是块"玻璃"（只显示、不接受输入）。所有交互（点选元素、拖拽、缩放）
+ *   都要求这条通路先通。
+ *
+ * 【为什么用函数指针而不是直接调 Rust】这是 C/ObjC 与 Rust 的唯一接缝：Rust 侧注册一个
+ *   `extern "C"` 函数，这里保存并回调。反过来（ObjC 调 Rust 的 emit）需要完整的事件系统，
+ *   而 B1 只需要"点一下，把坐标送出去"。
+ *
+ * 【坐标系】AppKit 原点在**左下**，前端/HTML 习惯**左上** ⇒ 回调前 y 已经翻转，
+ *   送给前端的永远是「左上原点、单位为点」的视图内坐标。 */
+static void (*g_click_cb)(double, double, double, double) = NULL;
+void poc_set_click_cb(void (*cb)(double, double, double, double)) { g_click_cb = cb; }
+
 @interface PocGLView : NSOpenGLView
 @end
 @implementation PocGLView
 - (BOOL)isOpaque { return YES; }
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)mouseDown:(NSEvent *)event {
+  NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
+  NSRect b = self.bounds;
+  if (g_click_cb) {
+    // y 翻转：AppKit 左下原点 → 前端左上原点
+    g_click_cb(p.x, b.size.height - p.y, b.size.width, b.size.height);
+  }
+}
 @end
 
 /* ─────────── 状态 ─────────── */

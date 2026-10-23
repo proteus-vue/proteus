@@ -148,6 +148,14 @@ await page.addInitScript((payload) => {
       },
     },
   }
+  // ★B1 的事件通路：桩提供 event.listen，把 handler 挂到 window.__EMIT__，测试时手动触发
+  //   （画布是原生 NSView，Playwright 点不到它，只能从事件入口模拟）
+  window.__TAURI__.event = {
+    listen: async (name, cb) => {
+      window.__EMIT__ = (payload) => cb({ payload })
+      return () => {}
+    },
+  }
 }, stats)
 
 const errors = []
@@ -212,6 +220,21 @@ const switchedPath = await page.evaluate(
 
 // ── ⑫ G5 会话状态：切换后要落盘；reload 后要能**恢复上次的视图与文件** ──────────
 const savedState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
+
+// ── ⑬ B1 原生点击 → HTML：切回设备视图，从事件入口模拟一次点击 ──────────────
+//  ★为什么必须切回设备视图：画布只在 device 视图里渲染（code 视图下是 0×0）
+await page.click('.rail button:nth-child(1)')
+await page.waitForTimeout(350)
+await page.evaluate(() => window.__EMIT__?.({ x: 498, y: 374, w: 996, h: 748 }))
+await page.waitForTimeout(250)
+const pickSeen = await page.evaluate(() => {
+  const el = document.getElementById('pickMark')
+  const st = document.getElementById('spick')?.textContent?.trim() ?? ''
+  return { has: !!el, left: el?.style.left ?? '', top: el?.style.top ?? '', status: st }
+})
+// 留一张"点击落点"的快照（人眼可核：圆圈+十字在画面正中）
+await page.screenshot({ path: outPath.replace(/\.png$/, '-pick.png') })
+
 // 模拟"上次关在代码视图、在看 main.rs" ⇒ reload 应直接进代码视图
 await page.evaluate(() =>
   localStorage.setItem(
@@ -282,6 +305,14 @@ const checks = [
   [
     `⑫ 切换视图/文件后写入会话状态${savedState.includes('"view":"code"') ? '' : `（实际 "${savedState}"）`}`,
     savedState.includes('"view":"code"') && savedState.includes('main.rs'),
+  ],
+  // ⑬ B1：原生点击 → 标记 + 状态栏坐标（画布是 NSView，HTML 收不到点击，事件是唯一通路）
+  [
+    `⑬ 原生点击落点：标记位置 ${pickSeen.left},${pickSeen.top} · 状态栏 ${pickSeen.status}`,
+    pickSeen.has &&
+      Math.abs(parseFloat(pickSeen.left) - 50) < 0.5 &&
+      Math.abs(parseFloat(pickSeen.top) - 50) < 0.5 &&
+      pickSeen.status === '498,374',
   ],
   // ⑫b reload 后恢复上次视图与文件（这条才是"重启即恢复"的真正判据）
   [

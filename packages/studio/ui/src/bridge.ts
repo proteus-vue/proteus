@@ -60,3 +60,27 @@ export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]
 /** 工作区状态（G5）：落在 `~/Library/Application Support/dev.proteus.studio/state.json`。 */
 export const loadState = (): Promise<string> => invoke<string>('load_state')
 export const saveState = (json: string): Promise<void> => invoke<void>('save_state', { json })
+
+/** 画布在视图内的点击坐标（左上原点、单位为点；由 ObjC 的 mouseDown 翻转 y 后送来） */
+export interface CanvasClick {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * 订阅「画布被点击」（B1）。
+ * ★走 Tauri 的事件系统（`withGlobalTauri` 已开 ⇒ `__TAURI__.event.listen` 零依赖）；
+ *   这不是"可选增强"——画布是原生 NSView，**HTML 收不到它的点击**，
+ *   事件是唯一通路（`poc_set_click_cb` → Rust `emit` → 这里）。
+ * 返回取消订阅函数；无桥时返回 null（浏览器直开不该白屏）。
+ */
+export function onCanvasClick(cb: (p: CanvasClick) => void): (() => void) | null {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: Function } } }).__TAURI__?.event
+  if (!ev?.listen) return null
+  const pending = ev.listen('canvas-click', (e: { payload: CanvasClick }) => cb(e.payload))
+  return () => {
+    void Promise.resolve(pending).then((un: (() => void) | undefined) => un?.())
+  }
+}
