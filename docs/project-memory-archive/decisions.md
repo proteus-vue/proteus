@@ -13289,3 +13289,55 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   本轮**未用大文件实测内存**（`savePath` 的 64 MiB 实测是另一件事，不能外推）；
   b) 服务端是本机够用的单层 multipart 解析器（不含 RFC 7578 全部分支，如嵌套 multipart/编码文件名）；
   c) 表单字段顺序不保证与 JS 给的顺序一致（平台 Map 语义）。
+
+1209. **★★★App 能力「下一批」的取证结论：能成批做的几乎没有——55 个真缺口里只有 4 个是 useFetch 形态 · 决策**（2026-10-23 · 用户「是不是可以推下一批能力实现了？按照 useFetch 的标准」）:
+**① 先回答"能不能成批"，再谈做什么**：`useFetch` 之所以能做成一条完整主线（#1117→#1189→#1200→#1206），
+  是因为**底层平台栈三端本来就有**（Android OkHttp / iOS URLSession / 鸿蒙 RCP）——成本集中在
+  **接线 + 线格式 + 判据**，这三件事有共同形态，所以能一批一批推。
+  ⇒ 判据应该是："**这项的底层平台能力是不是已经有了？**"没有它就是另一个形状的工程。
+**② 新增 `scripts/capability-app-feasibility.mjs` 把 55 个真缺口按此三分类**（A/B/C）：
+  在**三端宿主源码**里探"平台 API 标识符"是否出现——
+  **A 零原生 2 个**（log / getCookieJar）· **B 需补原生 2 个**（getStorage / getFileSystem）·
+  **C 平台子系统 50 个**（定位/相机/蓝牙/支付/相册/扫码…三端各写一套平台集成，含权限+UI+回调）。
+  ⇒ **正确的排期不是"开一批 55 个"**：A+B 四项做完（解锁 5 个 hook），C 类按业务价值单项立项。
+**③ ★★★本工具第一版错了，而且错法很有教育意义**：
+  第一版探针用 `/map/`、`/live/`、`/push/`、`/translation/` 之类**泛词**，结果把
+  `createMap` / `joinLiveRoom` / `createLivePusher` / `getTranslation` **全判成"零原生可做"**——
+  因为那些词在渲染内核、注释、变量名里到处都有。
+  ★这与本仓反复记的教训**同源**：**正则命中注释/无关代码 ≠ 能力存在**（同族 #1191 J1/J2）。
+  **修法**：探针只认**平台 API 标识符**（`CookieManager` / `UIActivityViewController` / `logcat` / `fs.readBytes`）；
+  **没有可靠锚点的一律不设探针 ⇒ 归 C**（"未知"按"要写工程"对待）。
+  ★方向刻意不对称：**宁可把"其实能做"误归 C（需人工核），也不把"要大工程"误报成"一批能做"**——
+  因为后者会让排期承诺一个做不到的交付。
+**④ 批 1 第一项 `getStorage` 已落地（真机可验的形态，非仅声明）**：
+  · **关键取证（决定"零原生"成立）**：宿主 `fs.readBytes/writeBytes/remove` 是**同步派发**
+    （Android `HostCapabilities.invoke` / iOS `host-capabilities.swift` 直接 `return ok(try …)`），
+    而 `invokeHost()` 也是**同步**的（与 G-39 JNI trampoline 同契约），
+    且 `CompatStorage.get/set` 要求**同步**语义 ⇒ 三者吻合 ⇒ **可不写一行原生代码**。
+    ★这是与 C 类的本质区别，也是它能进"批 1"的唯一理由。
+  · **为什么单文件整份 KV**：宿主只开 `readBytes/writeBytes/remove`、**没有 `readdir`**，
+    而 Android 的 `fs.remove` 用 `File.delete()`（非空目录删不掉）⇒ "每键一文件 + 按索引清盘"
+    在索引缺失/损坏时**清不干净**（#1151 在 fetch 缓存持久层真机踩过：iOS 读到前一天残留而索引为空）。
+    ⇒ 一个文件存整份：清盘 = 删掉那个固定文件名、天然原子。★代价如实登记：写一键要重写整份（O(N)）。
+  · ★**鸿蒙如实不可用**：宿主没有 `fs.*` ⇒ 工厂返回**空对象** ⇒ 装配层**不提供** `getStorage`
+    ⇒ `useStorage` 抛 `storage.unsupported`。**绝不用内存兜底冒充持久化**（破坏性验证守着这条）。
+  · ★★**抽取器契约拦了我一次（这是好事）**：`app-bridge-keys.mjs` 要求登记的工厂有**顶层 `return { 成员 }`**
+    （"数据源契约"，本仓禁止第二份手写解析副本）。我第一版返回裸 `CompatStorage` ⇒ **硬失败**
+    ⇒ 改成返回 `{ getStorage }`。**宁可改实现，不改解析器**——后者会让这份契约失去约束力。
+**⑤ 机器读数（改动前后，可复现）**：`capability-app-gap` ⇒ App 桥 **46→47 方法**、
+  **真缺口 55→54**、**可接线 38→39**；官网 `gen:content` 自动把 storage 页的三端状态改成
+  **iOS/Android ✅ 已接线 · 鸿蒙 🟡**（机器替我如实标注，不用手工写"鸿蒙未接线"这种话）。
+  ★注意 `check:host-invoke-contract` 数字**没变**——因为 `getStorage` 走的是既有的 `fs.*`，
+  不是新增宿主方法。这是正确的：**"契约覆盖率"与"hook 接线面"是两个不同的问题**。
+**⑥ 判据与破坏性验证**：`tests/capability-app-storage.test.ts` 7 条
+  （同步语义 / 重启后可读回（证明真落盘）/ 鸿蒙如实不可用 / 三件套缺一不可 / clear 写空文档 /
+  损坏当空 / 异步面与 `limitSize=0` 不编假上限）。
+  **破坏性验证 2 条**：① 加内存兜底 ⇒ 判据指名"内存兜底冒充持久化"；
+  ② 把同步 `set` 改成返回 Promise ⇒ 判据指名"同步 API 契约被破坏"。
+**⑦ 诚实边界**：a) A/B/C 是"底层栈是否已有线索"，**不是"能直接做"**（权限/UI/回调仍可能要写）；
+  b) "桥方法存在" ≠ "宿主实现"——另有 38 个"可接线"hook 需要逐个核宿主，这是**与 A/B/C 平行的第二条线**；
+  c) 鸿蒙 `fs.*` 缺失意味着 `getStorage` 在鸿蒙**现在就是不可用**，补它需要单独立项（批 1.5）；
+  d) 单文件 KV 在并发多进程下会互相覆盖（App 单进程模型下不触发）。
+**⑧ 落点**：`docs/proteus-app-capabilities-plan/12-app-capability-batches.md`（批次计划）·
+  `scripts/capability-app-feasibility.mjs`（三分类工具）· `packages/api/src/capability-app-storage.ts`（实现）·
+  任务板 `T-app-capability-batch1`（in_progress，剩余 log / getCookieJar / getFileSystem）。

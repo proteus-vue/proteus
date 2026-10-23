@@ -26,6 +26,7 @@ import type { CapabilityResource, CapabilityResourceRegistry } from './capabilit
 import { CapError as ProteusCapError } from './capability-types'
 // ★装配用的两组能力（生命周期 / 平台能力）——见文件底部 createAppCapabilities
 import { createAppLifecycleCapabilities, createAppNativeCapabilities, getHostLifecycleBus } from './capability-app'
+import { createAppFileStorage } from './capability-app-storage'   // ★#1207 App 端 KV 存储
 // ★★★决策 #1081：App 端元素查询（`useElement` 选择器通路）——解析器由装配层注入
 import { createAppElementCapabilities } from './capability-app-element'
 // ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
@@ -250,10 +251,19 @@ export function createAppCapabilities<E extends Error = Error>(
   resOpts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
 ) {
   const appWs = createAppWebSocket(resOpts)   // ★#1093/#1096 共用一条 ws 腿
+  /**
+   * ★★★#1207：App 端 KV 存储。**一次创建、全进程复用**（内部持有整份文档缓存，
+   *   重复创建会导致两份缓存互相覆盖）。
+   * ★`undefined` ⇒ 宿主不支持 `fs.*`（鸿蒙现状）⇒ **不提供该桥方法**
+   *   ⇒ `useStorage` 抛 `storage.unsupported`（如实不可用）。
+   *   **绝不用内存兜底冒充持久化**——那会让业务以为存住了、重启即丢。
+   */
+  const appKv = createAppFileStorage()
   return {
     ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
     ...createAppNativeCapabilities(CapError),
     ...createAppDeviceCapabilities(CapError, resOpts),
+    ...appKv,   // ★#1207 KV 存储（宿主缺 fs.* 时是空对象 ⇒ 不提供 getStorage）
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
     ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
     connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）

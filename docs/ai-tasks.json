@@ -3411,6 +3411,27 @@
         "T-studio-live-stream"
       ],
       "note": "【done · 决策 #1208】★bug：写死 --size 1280x720，而 screenrecord --size 是「整屏塞进给定尺寸 + 补黑边」⇒ 1200x2608 竖屏有效画面只有 330x720（cropdetect 实测），74.2% 像素是黑边。★修：src/capture.rs 纯函数 pick_capture_size（等比/长边≤1920/最近偶数）、bitrate_for（每像素 8bit，夹 4-16Mbps）、parse_wm_size（Override 优先）；查不到尺寸不带 --size（绝不退回写死值）。★实测：884x1920 dump 有效面积 100.0%，真实像素 23.8万→169万(7.2×)，码率仅 8→13Mbps。★7 条单测；单测抓到真边界 3x5⇒4x6 偏 11% ⇒ 加短边≥64 下限判为未知。★边界：cargo test 不在 CI（CI 不编 Rust）；只证明这一台设备。"
+    },
+    {
+      "id": "T-app-capability-batch1",
+      "title": "App 能力批 1（A+B 四项接线）：getStorage · log · getCookieJar · getFileSystem —— 按 useFetch 标准",
+      "type": "capability",
+      "status": "in_progress",
+      "owner": "zcode-harmony-session",
+      "scope": [
+        "packages/api/src/capability-app-storage.ts",
+        "packages/api/src/capability-app-device.ts",
+        "website/scripts/lib/app-bridge-keys.mjs",
+        "tests/capability-app-storage.test.ts",
+        "docs/proteus-app-capabilities-plan/12-app-capability-batches.md"
+      ],
+      "decision": 1207,
+      "verification": "node scripts/capability-app-gap.mjs（真缺口应 55→54、可接线 38→39）+ npx vitest run tests/capability-app-storage.test.ts（7）+ 破坏性验证 2 条（内存兜底 / 异步化 set ⇒ 必红）+ 官网 gen-content --check",
+      "branch": null,
+      "related": [
+        "T-app-runtime-capabilities"
+      ],
+      "note": "【in_progress · #1207】用户「是不是可以推下一批能力实现了？按照 useFetch 的标准」。\n★**取证结论（改变了排期形状）**：能成批做的**几乎没有**——新增 `scripts/capability-app-feasibility.mjs`\n 按\"底层平台栈是否已有\"三分类：**A 零原生 2 个 · B 需补原生 2 个 · C 平台子系统 50 个**。\n `useFetch` 能成批是因为底层栈三端本来就有（OkHttp/URLSession/RCP），成本在接线+线格式+判据；\n 而 50 个 C 类是\"三端各写一套平台集成（权限/UI/回调）\"⇒ 每项一个小项目，不是一批。\n★**已完成（批 1 第一项）getStorage**：新增 `capability-app-storage.ts`。\n 关键取证：宿主 `fs.readBytes/writeBytes/remove` 是**同步派发**，`invokeHost` 也同步，\n `CompatStorage.get/set` 要同步 ⇒ 三者吻合 ⇒ **零新原生代码**（Android/iOS）。\n 单文件整份 KV（宿主无 readdir + Android fs.remove 删不掉非空目录 ⇒ 每键一文件清不干净，#1151 同族教训）。\n ★**鸿蒙如实不可用**：宿主没有 `fs.*` ⇒ 工厂返回空对象 ⇒ 不提供 getStorage ⇒\n `useStorage` 抛 `storage.unsupported`。**绝不内存兜底冒充持久化**（破坏性验证守着）。\n ★抽取器契约拦截了一次：`app-bridge-keys.mjs` 要求登记的工厂有顶层 `return { 成员 }`，\n 我第一版返回裸 CompatStorage ⇒ 硬失败 ⇒ 改成返回 `{ getStorage }`（宁可改实现，不改解析器）。\n★**剩余（同批）**：`log`（A 三端都有通路）· `getCookieJar`（A）· `getFileSystem`（B，与 getStorage 同底层）。\n★**批 1.5（前置）**：鸿蒙 `fs.*`（宿主未实现；ArkTS 有 fileIo ⇒ 是\"没接线\"不是\"做不到\"）。"
     }
   ]
 }

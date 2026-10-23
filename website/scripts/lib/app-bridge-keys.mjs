@@ -67,6 +67,12 @@ export const APP_BRIDGE_SOURCES = [
   //   ★不登记就会被判「桥未接线」——与 #1093 的 connectWebSocket 同一形态。
   { file: 'packages/api/src/capability-transfer.ts', functions: ['createAppTransfer'] },
   // ★★★决策 #1096：C28 socket-task 的桥成员在独立工厂（复用 ws 腿的形状适配）
+  // ★★★决策 #1207：App 端 KV 存储（`getStorage`）在独立工厂
+  //   （`capability-app-storage.ts::createAppFileStorage`，装配层用条件 spread 引入）。
+  //   ★不登记就会被判「桥未接线」——与 #1093 的 connectWebSocket、#1095 的 createAppTransfer 同一形态。
+  //   ★这里登记的是**文件与工厂**，不是"一定有 getStorage"：宿主缺 `fs.*` 时装配层
+  //     **不提供**该方法（鸿蒙现状）⇒ 运行时如实 `storage.unsupported`，不掺假。
+  { file: 'packages/api/src/capability-app-storage.ts', functions: ['createAppFileStorage'] },
 
 ]
 
