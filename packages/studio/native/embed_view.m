@@ -520,6 +520,30 @@ use_last:
     if (g_live) {
       static int once = 0;
       if (once++ < 2) fprintf(stderr, "live frame %dx%d fmt=%d linesize=%d/%d（我们按 %dx%d 上传）\n", frm->width, frm->height, frm->format, frm->linesize[0], frm->linesize[1], g_W, g_H);
+      /* ★★★2026-10-23（决策 #1190 续）：**按首帧尺寸自动重建纹理**。
+       *
+       * 【为什么需要】VT 硬解路径下 `avcodec_open2` 之后 `g_cc->width` 仍是 **0**（SPS 要等首帧才生效），
+       *   于是 235 行的「用 SPS 里的真实尺寸」根本没生效，g_W/g_H 停在 POC_LIVE_W 的默认 1280×720。
+       *   Android 的 screenrecord 恰好就是 1280×720 ⇒ 一直没暴露；**iOS ReplayKit 给 888×1920**
+       *   ⇒ 按 1280×720 分配纹理 + 上传 ⇒ 画面错位（实测：不改就是花屏/裁切）。
+       *
+       * 【为什么不改成"先解一帧再 init GL"】live 流是异步队列，init 时刻未必有帧 ⇒ 要么阻塞启动、
+       *   要么在首帧就地重建。就地重建只多一次 glTexImage2D×3，且**只在尺寸不符时执行**
+       *   ⇒ Android 那条路（1280×720 一致）零影响，不改变已验证行为。 */
+      if (frm->width > 0 && frm->height > 0 && (frm->width != g_W || frm->height != g_H)) {
+        int old_w = g_W, old_h = g_H;
+        g_W = frm->width;
+        g_H = frm->height;
+        glBindTexture(GL_TEXTURE_2D, g_canvas);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, g_W, g_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glBindTexture(GL_TEXTURE_2D, g_ty);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, g_W, g_H, 0, GL_RED, GL_UNSIGNED_BYTE, NULL);
+        glBindTexture(GL_TEXTURE_2D, g_tuv);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, g_W / 2, g_H / 2, 0, GL_RG, GL_UNSIGNED_BYTE, NULL);
+        if (g_sws) { sws_freeContext(g_sws); g_sws = NULL; }
+        if (g_nv12) av_frame_unref(g_nv12);
+        fprintf(stderr, "实时：首帧尺寸 %dx%d ≠ 预设 %dx%d ⇒ 重建纹理\n", g_W, g_H, old_w, old_h);
+      }
     }
     AVFrame *src = frm;
     if (frm->format == AV_PIX_FMT_VIDEOTOOLBOX) {

@@ -382,20 +382,27 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 - ✅ **真机链路（2026-10-23 · iPhone 12 / `F02622D7…`）**：
   `192.168.1.128 → 192.168.1.124:9001`，10 秒收 **1,209,837 字节 / 295 帧 / 合法 H.264 / 888×1920**；
   App 侧日志 `frames=264 encoded=264 bytes=1206675 kbps=9653.4 nals=1 size=888x1920`（约 **60fps**、**9.6 Mbps**）。
-- ❌ **Studio 画布上屏**还没接真机流过（只验了"字节到 Mac"这一段；`POC_LIVE="nc -l 9001"` 那条路是同一份
-  Annex-B，Android 已验，iOS 未验）。
-- ⚠ **真实分辨率是 888×1920，不是屏幕 native 1170×2532**：ReplayKit 给的是等比缩放后的 buffer
-  （比例 0.4625 与屏幕一致）⇒ 看画面够用，但**不是像素级 1:1**。要做像素比对得另找通道（Broadcast Extension 才给 native）。
+- ✅ **Studio 画布上屏（2026-10-23）**：用 888×1920 的 H.264 灌 `tcp://…:9001`，
+  Studio 以 `POC_LIVE="/usr/bin/nc -l 9001"` 接收 → 解码 → 上屏 → `POC_DUMP` 读回画布，
+  得到 **888×1920 完整画面**（`results/studio-ios-frame.png`，86 帧上屏、`dump rc=0`）。
+  ★这一环是靠**假源**验的（不需要真机）：iOS 与 Android 到 live_stream 都是同一形态的 Annex-B。
 
-**★一个已修的真问题（实测踩到）**：Mac 侧接收器退出后，App 下一次 `send` 会吃 **SIGPIPE**，
-整个 App 被打死（`App terminated due to signal 13`）——用户看到的是"收完 10 秒 App 就没了"。
-修法：`setsockopt(SO_NOSIGPIPE)`，让 send 只返 `-1(EPIPE)`，走"关连接 + 下帧重连"。
+**★两个已修的真问题（都只有真机/真流才暴露）**：
+1. **SIGPIPE 打死 App**：Mac 侧接收器退出后，App 下一次 `send` 吃 SIGPIPE（`App terminated due to signal 13`）。
+   修：`setsockopt(SO_NOSIGPIPE)` ⇒ send 只返 `-1(EPIPE)`，走"关连接 + 下帧重连"。
+2. **尺寸预设不生效**：VT 硬解下 `avcodec_open2` 后 `g_cc->width` 仍是 0（SPS 要等首帧），
+   于是 `g_W/g_H` 停在默认 **1280×720**；Android 恰好也是 720p 所以一直没暴露，
+   **iOS 的 888×1920 会被按 720p 分配纹理** ⇒ 画面错位。
+   修：**首帧尺寸不符就就地重建三张纹理**（`embed_view.m`，只在尺寸不等时执行 ⇒ Android 路径零影响）。
+
+⚠ **分辨率边界**：ReplayKit 给的是 **888×1920**（与屏幕 native 1170×2532 等比，比例 0.4625 一致）
+⇒ 看画面够用，**但做不了像素级 1:1 比对**（那要 Broadcast Upload Extension 才给 native）。
 
 ## 出门 ≠ 完成：还没做的（按顺序）
 
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
-| **G3** | iOS 通道 | **真机已通（#1190 · 2026-10-23）**：888×1920 · ~60fps · 9.6 Mbps · 10 秒 295 帧合法 H.264。⚠ 剩"Studio 画布上屏"未验 | Studio：`PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell` |
+| **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
 | **G4** | 编辑器容器 | **零行** | CodeMirror 6（G-56.1 红线：绝不自研编辑器内核）+ 元素拾取（需设备侧视图树 + 拾取通道）+ 触摸回传 |
 | **G5** | 持久化 / 模块化 | `src/main.rs` 单文件 291 行 | 会话配置落盘、面板可插拔；先按命令分组拆 Rust，再谈模块化 |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
