@@ -334,6 +334,16 @@ fn default_live_source() {
                     "[studio]   录屏 {w}x{h}（设备 {dw}x{dh} · 等比 · 长边≤1920）· {} Mbps",
                     br / 1_000_000
                 );
+                // ★把预分配尺寸也告诉原生侧（它按 POC_LIVE_W/H 先建纹理）。
+                //   不设的话它按默认 1280x720 建，首帧到达再重建一次 —— 一次无谓的
+                //   纹理重分配 + 一行"首帧尺寸 ≠ 预设"的告警，看起来像出了问题。
+                //   尊重用户显式设置：只在这两个变量为空时才写。
+                if std::env::var("POC_LIVE_W").is_err() {
+                    std::env::set_var("POC_LIVE_W", w.to_string());
+                }
+                if std::env::var("POC_LIVE_H").is_err() {
+                    std::env::set_var("POC_LIVE_H", h.to_string());
+                }
                 format!(
                     "adb exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
                 )
