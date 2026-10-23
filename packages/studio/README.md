@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | `cargo build --release`；双击版 `./package-app.sh` → `build-app/Proteus Studio.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **22 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **23 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -432,24 +432,58 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 
 ## 代码视图（G4 · 决策 #1190 续）
 
-左栏第二个按钮 ◈ 把中间区域从**原生画布**切到**代码面板**。这一版刻意只做**只读**：
+左栏第二个按钮 ◈ 把中间区域从**原生画布**切到**代码面板**。
 
 | 件 | 实现 | 为什么不一步到位 |
 |---|---|---|
-| 文件列表 | Rust 命令 `list_files`（仓库内 · 扩展名白名单 · 跳过 `node_modules/target/dist/…` · ≤300 条） | 前端没有文件系统访问权；这是只读有界查询，边界与 `read_text` 共用一套 |
+| 目录树 | 前端把 `list_files` 的扁平路径拼成树（`buildTree` → 扁平化成可见行 + 缩进渲染） | 递归组件要多一个文件、多一层 props/emit，而这里只需要"行 + 缩进"；扁平化后行数 == 可见节点数 |
+| 折叠 | 目录可折叠，**存"折叠了谁"**进会话状态（`ws.codeCollapsed`） | 默认全展开 ⇒ 新增目录自动可见；存"展开了谁"会让新目录默认隐藏 |
 | 读文件 | Rust 命令 `read_text`（`canonicalize` + 仓库根前缀比对 ⇒ 拒绝 `../`；≤512KB；只读） | 引 `@tauri-apps/plugin-fs` 会把前端依赖树和 capabilities 配置一起拉进来，而"只读仓库文本"20 行就够 |
-| 展示 | 左侧文件列表（208px）+ 右侧 `<pre>` + 行号（等宽、可选中、深色） | CodeMirror 6 是独立一单（新依赖 + binding），不跟"文件通路"混 |
+| 展示 | 右侧 `<pre>` + 行号（等宽、可选中、深色） | 编辑器见下面的"卡点"——**依赖装不进来** |
 | 切换 | `view` 状态；**切到 code 时 `set_canvas_rect(0,0,0,0)`** | ★GL 视图是独立 NSView，只隐藏 HTML 里的 `#canvas` **盖不住它** ⇒ 判据 ⑪b 专门盯这条 |
 
 **★诚实边界**：仓库根取自编译期 `CARGO_MANIFEST_DIR` ⇒ **只在开发机直接跑二进制时有效**；
 打包成 `.app` 后那个路径不存在，面板会显示「仓库根不可达（打包形态？）」——是如实报错，不是空白。
 真要让 `.app` 读工程源码，需要"让用户选工程目录"（G4 的后续）。
 
-**判据**（`check:studio-panel` 已扩到 **14 条**）：
+### ★卡点：编辑器依赖装不进来（环境拦截，不是配置错）
+
+要让 `<pre>` 变成真编辑器（CodeMirror 6），得先装 6 个包。本机**装不进去**：
+
+```
+ERR_PNPM_CODEBUDDY_BROKER_DENY  ENOENT: no such file or directory, symlink
+  '../../../@codemirror+language@6.13.1/node_modules/@codemirror/language' -> …
+Progress: resolved 696, reused 0, downloaded 0, added 0
+node_modules/.pnpm/@codemirror+state@6.7.6  →  0B（只有空目录）
+```
+
+排除了这些可能，**才**能说是环境拦的：
+
+| 检查 | 结果 |
+|---|---|
+| registry 可达 | `https://registry.npmjs.org/@codemirror%2Fstate` → **200**（2.2s）|
+| store 路径一致 | `node_modules/.modules.yaml` 里 `storeDir: /Volumes/data1/.pnpm-store/v3`，我用的也是它 |
+| pnpm 版本一致 | `packageManager: pnpm@9.15.9` = corepack 拿到的 9.15.9 |
+| 锁文件版本 | v9.0，与 pnpm 9 匹配 |
+| 关掉沙箱重试 | 同样失败（`downloaded 0` ⇒ 包从未落进 store）|
+
+⇒ 需要在**你自己的终端**跑一次：
+
+```bash
+cd /Volumes/data1/work/office/debug/proteus
+pnpm add -w @codemirror/state @codemirror/view @codemirror/commands \
+              @codemirror/language @codemirror/lang-vue @codemirror/lang-rust
+```
+
+装完我把 `CodePanel` 的 `<pre>` 换成 `EditorView`（主题用现有 token 写，不引 `theme-one-dark`），
+接线不用动。**在此之前不自己造编辑器内核**（G-56.1 红线）——宁可清楚地"少一块"。
+
+**判据**（`check:studio-panel` 已扩到 **23 条**）：
 - ⑪ `read_text` 被调用 + 面板渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
-- ⑪c 文件列表渲染出条目且默认打开 `App.vue`（自证）；
-- ⑪d **点第二个文件能切换**（`open` 通路，不只是默认那个能看）。
+- ⑪c 目录树渲染出 **6 个目录 + 3 个文件**且默认打开 `App.vue`（自证）；
+- ⑪d **点第二个文件能切换**（`open` 通路，不只是默认那个能看）；
+- ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态。
 
 ## 输入通路（G4）· 含一次自我纠正
 
@@ -584,7 +618,7 @@ Studio 记住**上次的视图与打开的文件**，重启回到原处。
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
 | **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
-| **G4** | 编辑器容器 | **浏览 + 只读 + 真实输入已成**：左栏 ◈ 切换 · `list_files` 列真实文件 · 点谁读谁 · 行号展示 · **真实 pointer 点击 → 设备像素落点**（判据 ⑬，修掉了 B1 那条走不通的原生通路）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还没做**：CodeMirror 6 编辑与写回、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | CodeMirror 6（G-56.1 红线：绝不自研）+ 设备侧视图树 |
+| **G4** | 编辑器容器 | **浏览 + 只读 + 真实输入 + 目录树已成**：左栏 ◈ 切换 · `list_files` 列真实文件 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号展示 · **真实 pointer 点击 → 设备像素落点**（判据 ⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**卡点**：编辑器要 CodeMirror 6，本机 pnpm 写 node_modules 被环境拦截 ⇒ 需要在你终端跑一次 `pnpm add`（命令见「卡点」）。**还没做**：写回、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | CodeMirror 6（G-56.1 红线：绝不自研）+ 设备侧视图树 |
 | **G5** | 持久化 / 模块化 | **会话状态已成（#1190 续）**：视图（设备/代码）与上次打开的文件落 `~/Library/Application Support/dev.proteus.studio/state.json`，重启即恢复；判据 ⑫/⑫b 守着。**还没做**：窗口尺寸记忆、面板可插拔、`main.rs` 按命令分组拆 | 先拆命令再谈模块化（现在 408 行仍在可读范围） |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
 | — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |

@@ -3432,6 +3432,30 @@
         "T-app-runtime-capabilities"
       ],
       "note": "【in_progress · #1207】用户「是不是可以推下一批能力实现了？按照 useFetch 的标准」。\n★**取证结论（改变了排期形状）**：能成批做的**几乎没有**——新增 `scripts/capability-app-feasibility.mjs`\n 按\"底层平台栈是否已有\"三分类：**A 零原生 2 个 · B 需补原生 2 个 · C 平台子系统 50 个**。\n `useFetch` 能成批是因为底层栈三端本来就有（OkHttp/URLSession/RCP），成本在接线+线格式+判据；\n 而 50 个 C 类是\"三端各写一套平台集成（权限/UI/回调）\"⇒ 每项一个小项目，不是一批。\n★**已完成（批 1 第一项）getStorage**：新增 `capability-app-storage.ts`。\n 关键取证：宿主 `fs.readBytes/writeBytes/remove` 是**同步派发**，`invokeHost` 也同步，\n `CompatStorage.get/set` 要同步 ⇒ 三者吻合 ⇒ **零新原生代码**（Android/iOS）。\n 单文件整份 KV（宿主无 readdir + Android fs.remove 删不掉非空目录 ⇒ 每键一文件清不干净，#1151 同族教训）。\n ★**鸿蒙如实不可用**：宿主没有 `fs.*` ⇒ 工厂返回空对象 ⇒ 不提供 getStorage ⇒\n `useStorage` 抛 `storage.unsupported`。**绝不内存兜底冒充持久化**（破坏性验证守着）。\n ★抽取器契约拦截了一次：`app-bridge-keys.mjs` 要求登记的工厂有顶层 `return { 成员 }`，\n 我第一版返回裸 CompatStorage ⇒ 硬失败 ⇒ 改成返回 `{ getStorage }`（宁可改实现，不改解析器）。\n★**剩余（同批）**：`log`（A 三端都有通路）· `getCookieJar`（A）· `getFileSystem`（B，与 getStorage 同底层）。\n★**批 1.5（前置）**：鸿蒙 `fs.*`（宿主未实现；ArkTS 有 fileIo ⇒ 是\"没接线\"不是\"做不到\"）。"
+    },
+    {
+      "id": "T-studio-file-tree",
+      "title": "Studio 代码视图：文件列表 → 目录树（可折叠 + 持久化）；钉死编辑器装依赖卡点",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "packages/studio/ui/src/panels/CodePanel.vue",
+        "packages/studio/ui/src/useWorkspaceState.ts",
+        "packages/studio/ui/src/icons/StudioIcon.vue",
+        "scripts/check-studio-panel.mjs",
+        "packages/studio/README.md",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1210,
+      "branch": null,
+      "verification": "pnpm run check:studio-panel（23/23，⑪c 6 目录+3 文件 / ⑰ 折叠 3→2 且入会话状态）&& node scripts/check-file-size.mjs",
+      "related": [
+        "T-studio-html-input",
+        "T-studio-aspect-fit"
+      ],
+      "note": "【done · 决策 #1210】用户反馈「IDE 主体进度慢」——承认：编辑器是主体却卡在装依赖，我连续三单做外围。本单推进可推进的主体：文件列表→目录树（buildTree + 扁平化行渲染，不用递归组件；目录在前文件在后；折叠存「折叠了谁」默认全展开；打开文件自动展开祖先）。判据 22→23：⑪c 双计数 data-dir/data-file、新增 ⑰ 折叠。★编辑器卡点已钉死：pnpm 写 node_modules 被环境拦（ERR_PNPM_CODEBUDDY_BROKER_DENY / downloaded 0 / .pnpm 里 0 字节）；已逐项排除 registry 200、storeDir 一致、pnpm 9.15.9 一致、lockfile v9、关沙箱同样失败 ⇒ 需用户自己终端 pnpm add -w @codemirror/*（6 个）。在此之前不自研编辑器内核（G-56.1）。"
     }
   ]
 }

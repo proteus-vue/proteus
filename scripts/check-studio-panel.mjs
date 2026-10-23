@@ -198,19 +198,30 @@ const codeView = await page.evaluate(() => {
   return {
     src,
     err,
-    fileCount: document.querySelectorAll('#codeFiles button').length,
+    // ★目录树：文件与目录分别计数（`data-file` / `data-dir`），否则"按钮数"混着两种行的语义
+    fileCount: document.querySelectorAll('#codeFiles button[data-file]').length,
+    dirCount: document.querySelectorAll('#codeFiles button[data-dir]').length,
     curPath: document.getElementById('codePath')?.textContent?.trim() ?? '',
     called: all.some((c) => c.cmd === 'read_text'),
     listed: all.some((c) => c.cmd === 'list_files'),
     zeroed: !!last && last.args?.w === 0 && last.args?.h === 0,
   }
 })
-// ⑪c：点第二个文件，路径与内容都要跟着换（验证 open 通路，不是只有默认那个能看）
-await page.click('#codeFiles button:nth-child(2)')
+// ⑪c：点第二个**文件**，路径与内容都要跟着换（验证 open 通路，不是只有默认那个能看）
+//   ★选择器必须带 `[data-file]`：树里目录也是 button，`nth-child(2)` 会点到目录上。
+await page.locator('#codeFiles button[data-file]').nth(1).click()
 await page.waitForTimeout(250)
 const switchedPath = await page.evaluate(
   () => document.getElementById('codePath')?.textContent?.trim() ?? '',
 )
+
+// ⑰ 目录可折叠：收起一个**与当前文件无关**的目录 ⇒ 里面的文件从可见行里消失，且折叠进会话状态
+await page.locator('#codeFiles button[data-dir="packages/studio/native"]').click()
+await page.waitForTimeout(200)
+const collapsed = await page.evaluate(() => ({
+  fileCount: document.querySelectorAll('#codeFiles button[data-file]').length,
+  stillHasDir: !!document.querySelector('#codeFiles button[data-dir="packages/studio/native"]'),
+}))
 
 // ── ⑫ G5 会话状态：切换后要落盘；reload 后要能**恢复上次的视图与文件** ──────────
 const savedState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
@@ -326,7 +337,7 @@ await page.reload()
 await page.waitForTimeout(900)
 const restored = await page.evaluate(() => ({
   path: document.getElementById('codePath')?.textContent?.trim() ?? '',
-  files: document.querySelectorAll('#codeFiles button').length,
+  files: document.querySelectorAll('#codeFiles button[data-file]').length,
 }))
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
@@ -383,12 +394,22 @@ const checks = [
     codeView.zeroed,
   ],
   [
-    `⑪c 文件列表渲染 ${codeView.fileCount} 条并默认打开 App.vue`,
-    codeView.listed && codeView.fileCount === 3 && codeView.curPath.endsWith('ui/src/App.vue'),
+    `⑪c 目录树渲染 ${codeView.dirCount} 个目录 + ${codeView.fileCount} 个文件，默认打开 App.vue`,
+    codeView.listed &&
+      codeView.fileCount === 3 &&
+      codeView.dirCount === 6 &&
+      codeView.curPath.endsWith('ui/src/App.vue'),
   ],
   [
     `⑪d 点第二个文件能切换（open 通路，不只是默认那个能看）${switchedPath.endsWith('main.rs') ? '' : `（当前 ${switchedPath}）`}`,
     switchedPath.endsWith('main.rs'),
+  ],
+  // ⑰ 目录可折叠：收起后里面的文件从可见行里消失（目录行本身还在，才能再展开）
+  [
+    `⑰ 目录可折叠：收起 native 后可见文件 ${codeView.fileCount}→${collapsed.fileCount}，目录行仍在，且折叠进会话状态`,
+    collapsed.fileCount === codeView.fileCount - 1 &&
+      collapsed.stillHasDir &&
+      savedState.includes('"codeCollapsed":["packages/studio/native"]'),
   ],
   // ⑫ G5：切换要落盘（否则"记住上次"只是口头承诺）
   [

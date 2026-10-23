@@ -22,12 +22,14 @@ export interface WorkspaceState {
   codeFile: string
   /** 设备预览缩放（相对「适应窗口」= 1）。★画面比例始终由设备决定，缩放只改大小、不改形状。 */
   zoom: number
+  /** 代码树里被**折叠**的目录（默认全展开 ⇒ 存"折叠"比存"展开"短，且新增目录自动是展开的）。 */
+  codeCollapsed: string[]
 }
 
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 4
 
-const state = reactive<WorkspaceState>({ view: 'device', codeFile: '', zoom: 1 })
+const state = reactive<WorkspaceState>({ view: 'device', codeFile: '', zoom: 1, codeCollapsed: [] })
 /** 读到磁盘状态之前不要回写（否则会用默认值覆盖用户上次的设置） */
 let hydrated = false
 
@@ -55,6 +57,10 @@ export async function hydrateWorkspace(): Promise<void> {
     // ★缩放要**夹紧**：手改坏的 state.json（zoom:0 / 1e9）会让画布消失或撑爆，
     //   而"画布不见了"是最难自查的症状 ⇒ 宁可回落到 1，也不信磁盘上的任意数值。
     if (typeof o.zoom === 'number' && Number.isFinite(o.zoom)) state.zoom = clampZoom(o.zoom)
+    // 折叠状态：只收字符串数组（磁盘上的东西一律当**不可信输入**处理）
+    if (Array.isArray(o.codeCollapsed)) {
+      state.codeCollapsed = o.codeCollapsed.filter((d): d is string => typeof d === 'string')
+    }
   } catch {
     /* 首次运行 / 文件损坏 ⇒ 用默认值，不打扰用户 */
   }
@@ -67,7 +73,14 @@ watch(
   state,
   () => {
     if (!hydrated || !hasBridge()) return
-    void saveState(JSON.stringify({ view: state.view, codeFile: state.codeFile, zoom: state.zoom })).catch(() => {
+    void saveState(
+      JSON.stringify({
+        view: state.view,
+        codeFile: state.codeFile,
+        zoom: state.zoom,
+        codeCollapsed: state.codeCollapsed,
+      }),
+    ).catch(() => {
       /* 写失败不影响使用 */
     })
   },

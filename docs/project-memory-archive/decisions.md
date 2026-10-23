@@ -13244,6 +13244,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **顺带**：`src/capture.rs` 是 G5「模块化」的第一刀——先切**无副作用、可单测**的部分出来，
     而不是为了行数把命令分发硬拆。
 
+1210. **Studio 代码视图：文件列表 → **目录树**（可折叠 + 折叠状态持久化）；并查明编辑器卡点的真实原因**（2026-10-23）
+  - **用户反馈**：「IDE 主体进度非常慢」。核实后同意：编辑器（CodeMirror 6）是主体，而它一直卡在装依赖；
+    我却连续三单在做外围（等比适配 / 输入通路 / 抓屏尺寸）。**这一单先推进可推进的主体部分，并把卡点钉死。**
+  - **目录树**：`list_files` 仍返回扁平路径，前端 `buildTree` 拼树后**扁平化成可见行 + 缩进**渲染
+    （不用递归组件：这里只需要"行 + 缩进"，递归要多一个文件、多一层 props/emit）。
+    目录在前/文件在后、同级按名字；折叠**存"折叠了谁"**（`ws.codeCollapsed`）而不是"展开了谁"
+    —— 默认全展开 ⇒ 新增目录自动可见。打开文件时自动展开它的祖先目录（否则文件被折叠在看不见的地方）。
+  - **图标组合**：第一版把 `rotate(90deg)` 套在**文件夹图标**上（本想转折叠箭头）⇒ 文件夹歪了。
+    正确组合是「12px 折叠箭头占位 + 类型图标」：文件行也要占箭头位，同级名字才左对齐。
+  - **★编辑器卡点的真实原因（排除了所有配置问题才敢这么说）**：本机 pnpm 写 `node_modules` 时被环境拦截
+    `ERR_PNPM_CODEBUDDY_BROKER_DENY  ENOENT … symlink`，且 `downloaded 0`、`.pnpm/@codemirror+state@6.7.6` 是 **0 字节**。
+    逐项排除：registry **200**（2.2s）· `storeDir` 与 `.modules.yaml` 一致（`/Volumes/data1/.pnpm-store/v3`）·
+    pnpm 版本一致（`packageManager: pnpm@9.15.9` = corepack 9.15.9）· lockfile v9 匹配 ·
+    **关掉沙箱重试同样失败** ⇒ 不是配置，是本机文件系统操作被拦。
+    ⇒ 需用户在**自己终端**跑一次 `pnpm add -w @codemirror/{state,view,commands,language,lang-vue,lang-rust}`。
+    ★**在此之前不自己造编辑器内核**（G-56.1 红线）：宁可清楚地少一块，也不要一个自研的假编辑器。
+    ★试过并否掉的替代路：仓库内没有任何可复用的编辑器/高亮依赖（codemirror/monaco/prism/shiki/highlight 全无）；
+    vendoring（把 tarball 解到仓库里）能绕过 pnpm，但会把 ~20 个第三方包塞进框架仓库，且 CI 干净克隆会缺依赖 ⇒ 否掉。
+  - **判据 22 → 23**：⑪c 改为「6 个目录 + 3 个文件」双计数（用 `data-dir`/`data-file` 区分，
+    否则"按钮数"混着两种语义）；新增 ⑰ 目录可折叠（收起后可见文件 3→2、目录行仍在、折叠进会话状态）。
+    ★踩到的坑：原 ⑪c/⑪d 用 `#codeFiles button:nth-child(2)` —— 树里目录也是 button，
+    `nth-child(2)` 会点到目录上 ⇒ 改成 `button[data-file]` 定位。
+
+
 
 
 
