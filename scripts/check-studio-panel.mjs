@@ -134,7 +134,18 @@ await page.addInitScript((payload) => {
         calls.push({ cmd, args })
         if (cmd === 'stats') return payload
         if (cmd === 'set_canvas_rect') return null
-        if (cmd === 'read_text') return 'const stubLine = 1\nconst second = 2\nexport { stubLine, second }\n'
+        // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
+        if (cmd === 'read_text')
+          return {
+            text: 'const stubLine = 1\nconst second = 2\nexport { stubLine, second }\n',
+            mtime_us: 1700000000000000,
+          }
+        if (cmd === 'write_text') {
+          // 模拟"磁盘上已被别人改过"：让前端把冲突如实显示出来（不谎称已保存）
+          if (window.__FAIL_WRITE__) throw new Error('文件已被外部修改（磁盘 2 ≠ 打开时 1，可能是并发会话）⇒ 已拒绝覆盖')
+          window.__LAST_WRITE__ = args
+          return 1700000000000001
+        }
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
         if (cmd === 'list_files')
           return ['packages/studio/ui/src/App.vue', 'packages/studio/src/main.rs', 'packages/studio/native/embed_view.m']
@@ -190,7 +201,8 @@ const seen = await page.evaluate(() => {
 await page.click('.rail button:nth-child(2)')
 await page.waitForTimeout(400)
 const codeView = await page.evaluate(() => {
-  const src = document.querySelector('.src')?.textContent ?? ''
+  // ★CodeMirror 把正文渲染在 .cm-content 里（不再是 <pre class="src">）
+  const src = document.querySelector('.cm-content')?.textContent ?? ''
   const err = document.getElementById('codeErr')?.textContent ?? ''
   const all = window.__STUB_CALLS__ || []
   const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
@@ -208,8 +220,8 @@ const codeView = await page.evaluate(() => {
   }
 })
 // ⑪c：点第二个**文件**，路径与内容都要跟着换（验证 open 通路，不是只有默认那个能看）
-//   ★选择器必须带 `[data-file]`：树里目录也是 button，`nth-child(2)` 会点到目录上。
-await page.locator('#codeFiles button[data-file]').nth(1).click()
+//   ★按路径选而不是 nth-child：树里目录也是 button，序号会随折叠/排序变化（踩过两次）。
+await page.locator('#codeFiles button[data-file="packages/studio/src/main.rs"]').click()
 await page.waitForTimeout(250)
 const switchedPath = await page.evaluate(
   () => document.getElementById('codePath')?.textContent?.trim() ?? '',
@@ -221,6 +233,48 @@ await page.waitForTimeout(200)
 const collapsed = await page.evaluate(() => ({
   fileCount: document.querySelectorAll('#codeFiles button[data-file]').length,
   stillHasDir: !!document.querySelector('#codeFiles button[data-dir="packages/studio/native"]'),
+}))
+
+// ── ⑱ 编辑 + ⌘S 写回（IDE 主体的核心闭环：能改、能存、存的东西对不对）──────────
+//  ★真实键盘输入 + 真实快捷键：走的是用户真会走的路径（不是调 API 造一个假 transaction）
+await page.locator('.cm-content').click()
+await page.keyboard.type('// edited by gate')
+await page.waitForTimeout(150)
+const dirtyShown = await page.evaluate(() => !!document.getElementById('codeDirty'))
+await page.keyboard.press('Meta+s')
+await page.waitForTimeout(400)
+const saved = await page.evaluate(() => ({
+  wrote: window.__LAST_WRITE__ ?? null,
+  dirtyGone: !document.getElementById('codeDirty'),
+  notice: document.getElementById('codeNotice')?.textContent?.trim() ?? '',
+}))
+
+// ── ⑱b 保存失败必须**说出来**（静默失败比不保存更糟：用户以为已落盘）──────────
+await page.evaluate(() => {
+  window.__FAIL_WRITE__ = true
+})
+await page.keyboard.type('X')
+await page.keyboard.press('Meta+s')
+await page.waitForTimeout(400)
+const failedSave = await page.evaluate(() => ({
+  notice: document.getElementById('codeNotice')?.textContent?.trim() ?? '',
+  stillDirty: !!document.getElementById('codeDirty'),
+}))
+
+// ── ⑱c 切走再切回来，未保存的编辑**不能丢**（IDE 的脏缓冲语义）────────────────
+//  ★这条替代了原本的 `confirm('放弃修改？')` 方案：Tauri 的 WKWebView 若没实现
+//    runJavaScriptConfirmPanel，confirm 会静默返回 false ⇒ 表现成"点另一个文件没反应"。
+//  ★按**路径**选而不是 nth：⑰ 折叠了 native，文件序号已经变了（踩过一次）。
+await page.locator('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]').click()
+await page.waitForTimeout(300)
+await page
+  .locator('#codeFiles button[data-file="packages/studio/src/main.rs"]')
+  .click()
+await page.waitForTimeout(300)
+const roundTrip = await page.evaluate(() => ({
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+  text: document.querySelector('.cm-content')?.textContent ?? '',
+  dirty: !!document.getElementById('codeDirty'),
 }))
 
 // ── ⑫ G5 会话状态：切换后要落盘；reload 后要能**恢复上次的视图与文件** ──────────
@@ -410,6 +464,28 @@ const checks = [
     collapsed.fileCount === codeView.fileCount - 1 &&
       collapsed.stillHasDir &&
       savedState.includes('"codeCollapsed":["packages/studio/native"]'),
+  ],
+  // ⑱ 编辑 + ⌘S：真的把**改后的全文**写回去了，且 mtime 是打开时那个（冲突检测的输入）
+  [
+    `⑱ 编辑 + ⌘S 写回：${saved.wrote ? `${String(saved.wrote.text ?? '').length} 字节` : '未写'} · mtime 回传 ${saved.wrote?.expect} · 脏标记清除=${saved.dirtyGone}`,
+    dirtyShown &&
+      !!saved.wrote &&
+      String(saved.wrote.text).includes('// edited by gate') &&
+      String(saved.wrote.text).includes('stubLine') &&
+      saved.wrote.expect === 1700000000000000 &&
+      saved.dirtyGone,
+  ],
+  // ⑱b 保存被拒（mtime 冲突）⇒ 错误必须显示、且**不能**清掉脏标记
+  [
+    `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
+    failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
+  ],
+  // ⑱c 脏缓冲：切到别的文件再切回来，改过的内容还在（否则"切一下丢编辑"是最气人的）
+  [
+    `⑱c 切走再切回不丢编辑：${roundTrip.path.split('/').pop() || '空'} · 仍有未保存标记=${roundTrip.dirty}`,
+    roundTrip.path.endsWith('main.rs') &&
+      roundTrip.text.includes('// edited by gate') &&
+      roundTrip.dirty,
   ],
   // ⑫ G5：切换要落盘（否则"记住上次"只是口头承诺）
   [

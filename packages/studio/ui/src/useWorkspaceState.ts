@@ -32,6 +32,18 @@ const ZOOM_MAX = 4
 const state = reactive<WorkspaceState>({ view: 'device', codeFile: '', zoom: 1, codeCollapsed: [] })
 /** 读到磁盘状态之前不要回写（否则会用默认值覆盖用户上次的设置） */
 let hydrated = false
+/** ★"恢复完成"的信号：子组件的 onMounted 会**早于**父组件的，直接读 state 会拿到默认值。
+ *  实测踩到：CodePanel 改成 `v-show` 后一直在挂载态，它在 hydrate 之前就 boot，
+ *  读到 codeFile='' ⇒ 打开默认 App.vue 并把 ws.codeFile 改写掉 ⇒ 重启后再也恢复不了上次的文件。 */
+let markHydrated: () => void = () => {}
+const hydratedOnce = new Promise<void>((r) => {
+  markHydrated = r
+})
+
+/** 等"从磁盘恢复完毕"（已恢复则立即返回）。子组件的 onMounted 里必须先 await 它。 */
+export function whenHydrated(): Promise<void> {
+  return hydrated ? Promise.resolve() : hydratedOnce
+}
 
 export function useWorkspaceState(): WorkspaceState {
   return state
@@ -47,6 +59,7 @@ export function clampZoom(z: number): number {
 export async function hydrateWorkspace(): Promise<void> {
   if (!hasBridge()) {
     hydrated = true
+    markHydrated()
     return
   }
   try {
@@ -65,6 +78,7 @@ export async function hydrateWorkspace(): Promise<void> {
     /* 首次运行 / 文件损坏 ⇒ 用默认值，不打扰用户 */
   }
   hydrated = true
+  markHydrated()
 }
 
 // 变更即落盘。切换视图/打开文件都是低频操作，不做防抖也够；

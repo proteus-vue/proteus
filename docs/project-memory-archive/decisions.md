@@ -13267,6 +13267,42 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ★踩到的坑：原 ⑪c/⑪d 用 `#codeFiles button:nth-child(2)` —— 树里目录也是 button，
     `nth-child(2)` 会点到目录上 ⇒ 改成 `button[data-file]` 定位。
 
+1211. **Studio 代码视图：`<pre>` → **CodeMirror 6 编辑器**（可编辑 + ⌘S 写回 + 脏缓冲 + mtime 冲突检测）**（2026-10-23）
+  - 前置：用户在自己终端装上了 6 个 `@codemirror/*`（我这边 pnpm 被环境拦截，见 #1210）。
+    **必须带 `--store-dir /Volumes/data1/.pnpm-store/v3`**，否则 `ERR_PNPM_UNEXPECTED_STORE`
+    （本仓 node_modules 用该 store，而全局配置指向 `~/.pnpm-global/v3`，那个几乎是空的）。
+    包装在**仓库根**（本目录刻意无 `package.json`，见 #1187）。
+  - **编辑器**：行号 / 当前行 / 选区 / 括号匹配 / Tab 缩进 / ⌘Z / ⌘S；主题用 Studio 语义 token 写
+    （不引 `theme-one-dark`，避免两套色板打架）。
+  - **写回的三个硬约束（全在 Rust 侧，前端只是调用方）**：
+    a) **mtime 冲突检测**：`read_text` 返回 `{text, mtime_us}`，`write_text` 回传 `expect`；
+       磁盘上不一致 ⇒ **拒绝覆盖**。本仓常驻多个 AI 会话同时改文件，没这条就是"保存一次静默吃掉别人改动"。
+       ★用**微秒**不用毫秒：两次保存可能落在同一毫秒里，那时检测会漏判（单测里连续两次写正是这个形状）。
+    b) **原子替换**：临时文件 + `rename`（直接 write 中途失败会留下半个**源文件**）；
+    c) 保留权限位（`rename` 会换成新文件的 mode，可执行脚本丢 `+x`）。
+  - **★脏缓冲（多文件未保存）**：切走再切回，编辑还在。刻意**不用** `confirm('放弃修改？')`——
+    Tauri 的 WKWebView 若没实现 `runJavaScriptConfirmPanel`，`confirm` 会**静默返回 false**
+    ⇒ 表现成"点另一个文件没反应"且完全无声。缓冲只在内存（刷新即丢）；`base`/`mtime` 记的是
+    **开始编辑时**那一版，保存仍按它检测冲突——否则切一次文件就把"别人改过"的线索刷新掉了。
+  - **★`v-show` 引发的真 bug（判据 ⑫b 抓到）**：为了让切到设备视图不销毁 EditorView（会丢未保存编辑），
+    CodePanel 从 `v-if` 改成 `v-show` ⇒ 它变成**常挂载**，而**子组件的 `onMounted` 早于父组件**，
+    于是它在 App 的 `hydrateWorkspace()` 之前就 boot，读到 `codeFile=''` ⇒ 打开默认 App.vue 并把
+    用户上次的选择**覆盖**掉 ⇒ 重启再也恢复不了。修法：`useWorkspaceState` 暴露 `whenHydrated()`，
+    子组件必须先 await 它。**这类"只在第二次启动才显形"的 bug，只有 V4 判据（重启即恢复）能抓。**
+  - **判据 23 → 26**：⑱ 编辑 + ⌘S（真键盘输入 + 真快捷键 → 断言写回**全文**与回传 mtime）；
+    ⑱b 保存被拒时如实报错且**仍标记未保存**（静默失败的保存比不保存更糟）；
+    ⑱c 切走再切回不丢编辑。
+    ★选择器再次踩坑：⑰ 折叠了 native 之后文件序号变了 ⇒ 全部改成**按路径**选（`button[data-file="…"]`）。
+  - **Rust 侧 +1 条单测**（共 8 条）：`write_text` 的冲突检测 / 被拒不落盘 / 无 `.tmp` 残留 / `..` 越界。
+  - **仍未做**：**语法着色**——要 `@lezer/highlight` 的 `tags`，它是 `@codemirror/language` 的**传递依赖**，
+    pnpm 隔离布局下应用代码 import 不到（`node_modules/@lezer` 不存在，实测 `ERR_MODULE_NOT_FOUND`）。
+    装一个包即可（`pnpm add -w --store-dir … @lezer/highlight`）。
+    ★不自己写分词器（编辑器内核）；也不 hack 库内部 `.specs`（升级时会静默烂掉）。
+  - **★诚实边界**：写回的 IPC 参数名（`path`/`text`/`expect`）都是单词、无 camelCase 转换风险，
+    但**真实窗口里的点击/保存我一律没手动点过**（TCC 拦截图、也无法自动化点击原生窗口）——
+    门禁验的是"前端接线 + Rust 逻辑"，两者之间的最后一跳要用户点一次才算真通。
+
+
 
 
 

@@ -3456,6 +3456,34 @@
         "T-studio-aspect-fit"
       ],
       "note": "【done · 决策 #1210】用户反馈「IDE 主体进度慢」——承认：编辑器是主体却卡在装依赖，我连续三单做外围。本单推进可推进的主体：文件列表→目录树（buildTree + 扁平化行渲染，不用递归组件；目录在前文件在后；折叠存「折叠了谁」默认全展开；打开文件自动展开祖先）。判据 22→23：⑪c 双计数 data-dir/data-file、新增 ⑰ 折叠。★编辑器卡点已钉死：pnpm 写 node_modules 被环境拦（ERR_PNPM_CODEBUDDY_BROKER_DENY / downloaded 0 / .pnpm 里 0 字节）；已逐项排除 registry 200、storeDir 一致、pnpm 9.15.9 一致、lockfile v9、关沙箱同样失败 ⇒ 需用户自己终端 pnpm add -w @codemirror/*（6 个）。在此之前不自研编辑器内核（G-56.1）。"
+    },
+    {
+      "id": "T-studio-editor",
+      "title": "Studio 编辑器：<pre> → CodeMirror 6（可编辑 + ⌘S 写回 + 脏缓冲 + mtime 冲突检测）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "packages/studio/src/main.rs",
+        "packages/studio/ui/src/panels/CodePanel.vue",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/useWorkspaceState.ts",
+        "packages/studio/ui/src/App.vue",
+        "scripts/check-studio-panel.mjs",
+        "package.json",
+        "pnpm-lock.yaml",
+        "packages/studio/README.md",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1211,
+      "branch": null,
+      "verification": "pnpm run check:studio-panel（26/26，⑱ 编辑+⌘S 写回 / ⑱b 被拒如实报错 / ⑱c 脏缓冲 / ⑫b 重启恢复）&& cd packages/studio && cargo test --release（8/8，含 write_text 冲突检测）&& cargo build --release",
+      "related": [
+        "T-studio-file-tree",
+        "T-studio-html-input"
+      ],
+      "note": "【done · 决策 #1211】用户在自己终端装上 6 个 @codemirror/*（必须带 --store-dir /Volumes/data1/.pnpm-store/v3，否则 ERR_PNPM_UNEXPECTED_STORE）。★编辑器：行号/当前行/选区/括号匹配/Tab/⌘Z/⌘S，主题用 Studio token。★写回三硬约束（Rust）：mtime 冲突检测（**微秒**，毫秒会漏判）、原子替换（tmp+rename，否则半个源文件）、保留权限位。★脏缓冲：切走再切回不丢；刻意不用 confirm（WKWebView 未实现 runJavaScriptConfirmPanel 时静默返回 false）。★v-show 引入真 bug：子组件 onMounted 早于父组件 hydrate ⇒ 先 boot 读到空 codeFile 并覆盖用户选择；修 whenHydrated()。判据 23→26，选择器改按路径。★仍缺语法着色（@lezer/highlight 是传递依赖，pnpm 隔离下 import 不到）。★边界：真实窗口里的点击/保存未手动点过。"
     }
   ]
 }

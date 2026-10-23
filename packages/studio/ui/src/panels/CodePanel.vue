@@ -1,46 +1,80 @@
 <script setup lang="ts">
-// packages/studio/panels/CodePanel.vue —— 代码视图：**目录树** + 文件内容
+// packages/studio/ui/src/panels/CodePanel.vue —— 代码视图：目录树 + **CodeMirror 6 编辑器**
 //
-// 【这一版改了什么（2026-10-23）】左侧从"300 条平铺列表"改成**真正的目录树**：
-//   · 目录可折叠，折叠状态进会话状态（重启恢复 —— VS Code 同行为）；
-//   · 默认**全展开**，因此存的是"折叠了谁"而不是"展开了谁"（新增目录自动可见）；
-//   · 目录与文件分开排序（目录在前、再按名字），这是 IDE 的通用语汇，不是随机顺序。
+// 【这一版换掉了什么】右侧的只读 `<pre>` → 真正的 CodeMirror 6 编辑器：
+//   行号 / 当前行 / 选区 / 括号匹配 / Tab 缩进 / ⌘Z / **⌘S 写回**。
+//   编辑器内核用现成的（G-56.1 红线：绝不自研），这里只做**接线与主题**。
 //
-// 【★编辑器（CodeMirror 6）为什么还没上】本目录不是 pnpm workspace 成员，装库要动**根**依赖；
-//   而本机的 pnpm 在写 node_modules 时被环境拦截（`ERR_PNPM_CODEBROKER_BROKER_DENY`：
-//   `symlink ... ENOENT`，`downloaded 0`），关掉沙箱也一样 ⇒ 依赖根本装不进来。
-//   需要用户在自己终端跑一次：
-//     pnpm add -w @codemirror/state @codemirror/view @codemirror/commands \
-//                @codemirror/language @codemirror/lang-vue @codemirror/lang-rust
-//   ★在此之前**不自己造编辑器内核**（G-56.1 红线）。所以这里仍是只读 `<pre>`：
-//     宁可清楚地"少一块"，也不要一个自研的假编辑器。
+// 【写回的三个硬约束（都在 Rust 侧，前端只是调用方）】
+//   ① **mtime 冲突检测**：打开时记 mtime，保存时回传；磁盘上的值变了 ⇒ 拒绝覆盖。
+//      本仓常驻多个 AI 会话同时改文件，没有这条，Studio 保存一次就会静默吃掉别人的改动；
+//   ② **原子替换**：临时文件 + rename（直接 write 中途失败会留下半个源文件）；
+//   ③ 保留权限位（rename 会换成新文件的 mode）。
+//
+// 【★语法着色还没上，原因是硬的】着色要 `@lezer/highlight` 的 `tags`，
+//   而它只是 `@codemirror/language` 的**传递依赖**——pnpm 的隔离布局下应用代码 import 不到
+//   （`node_modules/@lezer` 不存在，实测 `ERR_MODULE_NOT_FOUND`）。装一个包即可：
+//     pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 @lezer/highlight
+//   ★不自己写分词器（那是编辑器内核）；也不去 hack 库的内部 `.specs` 字段。
 
-import { computed, onMounted, ref } from 'vue'
-import { hasBridge, listFiles, readText } from '../bridge'
-import { useWorkspaceState } from '../useWorkspaceState'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { EditorState } from '@codemirror/state'
+import {
+  EditorView,
+  drawSelection,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  keymap,
+  lineNumbers,
+} from '@codemirror/view'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { bracketMatching, indentOnInput } from '@codemirror/language'
+import { vue } from '@codemirror/lang-vue'
+import { rust } from '@codemirror/lang-rust'
+import { hasBridge, listFiles, readText, writeText } from '../bridge'
+import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import StudioIcon from '../icons/StudioIcon.vue'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
 const ws = useWorkspaceState()
-
 /** 列哪些子树（都是 Studio 自己的源码——显示它自己，一眼能核对"屏幕这段 == 仓库那段"） */
 const ROOTS = ['packages/studio/ui/src', 'packages/studio/src', 'packages/studio/native'] as const
-/** 树里展示的短路径前缀（去掉它更好读，`title` 里保留完整路径） */
 const PREFIX = 'packages/studio/'
 
 const files = ref<string[]>([])
 const cur = ref('')
-const text = ref('')
 const err = ref('')
+const notice = ref('')
 const loading = ref(false)
+const saving = ref(false)
+const dirty = ref(false)
+const lineCount = ref(0)
+const host = ref<HTMLElement | null>(null)
 
-const lines = computed(() => (text.value ? text.value.replace(/\n$/, '').split('\n') : []))
+/** 打开时读到的 mtime（保存时回传做冲突检测）；0 = 未知 ⇒ Rust 侧不做阻断 */
+let mtime = 0
+/** 磁盘上的那份内容（判断"脏"的基准） */
+let savedText = ''
+let view: EditorView | null = null
+
+/** 未保存缓冲：切走再切回来不丢编辑。
+ *  ★为什么不用 `confirm()` 问"放弃修改？"：Tauri 的 WKWebView 需要宿主实现
+ *    `runJavaScriptConfirmPanel`，没实现时 `confirm` 会**静默返回 false**——
+ *    表现是"点了另一个文件没反应"，而且完全无声。IDE 的常规做法就是留住脏缓冲（多标签同款）。
+ *  ★缓冲只在内存：刷新/重启即丢（磁盘上没有任何"临时副本"，不给仓库留垃圾）。
+ *  ★`base`/`mtime` 记的是**用户开始编辑时**磁盘上的那份，保存时仍按它做冲突检测——
+ *    否则切一次文件就会把"别人改过"这条线索刷新掉。 */
+interface DirtyBuffer {
+  text: string
+  base: string
+  mtime: number
+}
+const buffers = new Map<string, DirtyBuffer>()
+
 const short = (p: string) => (p.startsWith(PREFIX) ? p.slice(PREFIX.length) : p)
 
-/* ─── 目录树 ────────────────────────────────────────────────────────────────
- * 用**扁平化**渲染（一次 v-for + 缩进），而不是递归组件：
- *   · 递归组件要多一个文件、多一层 props/emit，而这里只需要"行 + 缩进"；
- *   · 扁平化后行数 == 可见节点数，300 条也只是一次普通列表渲染。 */
+/* ─── 目录树（扁平化渲染：一次 v-for + 缩进，比递归组件少一层抽象）───────────── */
 interface TreeNode {
   name: string
   path: string
@@ -74,15 +108,8 @@ function buildTree(paths: string[]): TreeNode[] {
 }
 
 const tree = computed(() => buildTree(files.value))
-
-interface Row {
-  node: TreeNode
-  depth: number
-}
-
-/** 可见行：折叠的目录不展开它的子树 */
-const rows = computed<Row[]>(() => {
-  const out: Row[] = []
+const rows = computed<{ node: TreeNode; depth: number }[]>(() => {
+  const out: { node: TreeNode; depth: number }[] = []
   const walk = (ns: TreeNode[], depth: number) => {
     for (const n of ns) {
       out.push({ node: n, depth })
@@ -103,33 +130,156 @@ function toggle(dir: string) {
 function revealPath(path: string) {
   const parts = path.split('/')
   for (let i = 1; i < parts.length; i++) {
-    const dir = parts.slice(0, i).join('/')
-    const j = ws.codeCollapsed.indexOf(dir)
+    const j = ws.codeCollapsed.indexOf(parts.slice(0, i).join('/'))
     if (j >= 0) ws.codeCollapsed.splice(j, 1)
   }
 }
 
+/* ─── 编辑器 ────────────────────────────────────────────────────────────── */
+const langFor = (path: string) => {
+  if (path.endsWith('.vue')) return vue()
+  if (path.endsWith('.rs')) return rust()
+  return [] // 其他类型先按纯文本（着色依赖还没装，见文件头）
+}
+
+/** 主题：全部用 Studio 的语义 token，不引 theme-one-dark（避免两套色板打架） */
+const theme = EditorView.theme(
+  {
+    '&': { height: '100%', fontSize: 'var(--fs-sm)', backgroundColor: 'var(--bg-canvas)', color: 'var(--fg)' },
+    '&.cm-focused': { outline: 'none' },
+    '.cm-scroller': {
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      lineHeight: '1.6',
+      overflow: 'auto',
+    },
+    '.cm-content': { padding: 'var(--sp2) 0' },
+    '.cm-line': { padding: '0 var(--sp4)' },
+    '.cm-gutters': {
+      backgroundColor: 'var(--bg-surface)',
+      color: 'var(--fg-subtle)',
+      border: 'none',
+      borderRight: '1px solid var(--border-subtle)',
+    },
+    '.cm-lineNumbers .cm-gutterElement': { padding: '0 var(--sp2) 0 var(--sp3)', minWidth: '40px' },
+    '.cm-activeLine': { backgroundColor: 'rgba(255, 255, 255, 0.028)' },
+    '.cm-activeLineGutter': { backgroundColor: 'var(--bg-elevated)', color: 'var(--fg-muted)' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
+    '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
+      backgroundColor: 'rgba(76, 141, 255, 0.26)',
+    },
+    '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': {
+      backgroundColor: 'rgba(76, 141, 255, 0.20)',
+      outline: '1px solid var(--accent)',
+    },
+  },
+  { dark: true },
+)
+
+function makeState(doc: string, path: string) {
+  return EditorState.create({
+    doc,
+    extensions: [
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      highlightActiveLine(),
+      drawSelection(),
+      highlightSpecialChars(),
+      history(),
+      bracketMatching(),
+      indentOnInput(),
+      langFor(path),
+      theme,
+      // ⌘S 放最前：它能 preventDefault 掉浏览器/宿主的保存行为
+      keymap.of([
+        {
+          key: 'Mod-s',
+          preventDefault: true,
+          run: () => {
+            void save()
+            return true
+          },
+        },
+        ...defaultKeymap,
+        ...historyKeymap,
+        indentWithTab,
+      ]),
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) {
+          const now = u.state.doc.toString()
+          dirty.value = now !== savedText
+          lineCount.value = u.state.doc.lines
+        }
+      }),
+    ],
+  })
+}
+
+function mountEditor() {
+  if (!host.value) return
+  view = new EditorView({ state: makeState('', ''), parent: host.value })
+}
+
 async function open(path: string) {
+  // ① 离开当前文件前，把未保存的内容收进缓冲（不弹窗、不丢）
+  if (dirty.value && cur.value && view) {
+    buffers.set(cur.value, { text: view.state.doc.toString(), base: savedText, mtime })
+  }
   cur.value = path
   ws.codeFile = path
   revealPath(path)
   loading.value = true
   err.value = ''
+  notice.value = ''
   try {
-    text.value = await readText(path)
+    // ② 总是读一次磁盘：既要 baseline，也要"现在磁盘是什么样"这条事实
+    const f = await readText(path)
+    // ③ 有脏缓冲就恢复它（连带**当时**的 mtime，冲突检测才不会被切文件刷新掉）
+    const buf = buffers.get(path)
+    const doc = buf ? buf.text : f.text
+    savedText = buf ? buf.base : f.text
+    mtime = buf ? buf.mtime : f.mtime_us
+    dirty.value = !!buf
+    lineCount.value = doc ? doc.replace(/\n$/, '').split('\n').length : 0
+    await nextTick()
+    view?.setState(makeState(doc, path))
   } catch (e) {
-    text.value = ''
     err.value = String((e as Error)?.message ?? e)
+    savedText = ''
+    dirty.value = false
   } finally {
     loading.value = false
   }
 }
 
+async function save() {
+  if (!view || !cur.value || saving.value) return
+  const body = view.state.doc.toString()
+  if (body === savedText) return
+  saving.value = true
+  notice.value = ''
+  try {
+    mtime = await writeText(cur.value, body, mtime)
+    savedText = body
+    dirty.value = false
+    buffers.delete(cur.value)
+    notice.value = `已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+  } catch (e) {
+    // ★失败必须显示出来：静默失败的保存比不保存更糟（用户以为已落盘）
+    notice.value = String((e as Error)?.message ?? e)
+  } finally {
+    saving.value = false
+  }
+}
+
 async function boot() {
+  mountEditor()
   if (!hasBridge()) {
     err.value = '无 Tauri 桥（浏览器直开时属正常）'
     return
   }
+  // ★必须等"从磁盘恢复完毕"：本组件的 onMounted 早于父组件 App 的 hydrate，
+  //   直接读 ws.codeFile 会拿到 ''（然后打开默认文件并把用户上次的选择覆盖掉）。
+  await whenHydrated()
   try {
     files.value = await listFiles([...ROOTS])
   } catch (e) {
@@ -150,15 +300,27 @@ async function boot() {
 }
 
 onMounted(boot)
+onBeforeUnmount(() => {
+  view?.destroy()
+  view = null
+})
 </script>
 
 <template>
   <div class="codepane">
     <div class="bar">
       <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
-      <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lines.length} 行` }}</span>
+      <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
+      <!-- 未保存：可点的 chip（⌘S 之外的第二条路径） -->
+      <button v-if="dirty" class="dirty" id="codeDirty" title="保存（⌘S）" @click="save">
+        <span class="bullet" />未保存
+      </button>
+      <span v-else-if="saving" class="meta">保存中…</span>
+      <span class="notice" id="codeNotice" :class="{ bad: !!notice && !notice.startsWith('已保存') }">
+        {{ notice }}
+      </span>
       <span style="flex: 1" />
-      <span class="note" id="codeNote">只读 · 编辑器待装依赖（见面板注释 / README）</span>
+      <span class="note" id="codeNote">⌘S 保存 · 语法着色待装 @lezer/highlight</span>
     </div>
     <div class="split">
       <nav class="files" id="codeFiles">
@@ -186,12 +348,8 @@ onMounted(boot)
       </nav>
       <div class="pane">
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
-        <div v-else class="body">
-          <div class="gutter">
-            <div v-for="(_, i) in lines" :key="i">{{ i + 1 }}</div>
-          </div>
-          <pre class="src">{{ text }}</pre>
-        </div>
+        <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
+        <div v-show="!err" class="host" id="codeHost" ref="host" />
       </div>
     </div>
   </div>
@@ -217,7 +375,7 @@ onMounted(boot)
   color: var(--fg-subtle);
 }
 .path {
-  max-width: 40%;
+  max-width: 34%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -229,6 +387,43 @@ onMounted(boot)
 }
 .note {
   color: var(--fg-subtle);
+}
+/* 未保存：chip 形态（可点保存），比一个纯圆点更明确 */
+.dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp1);
+  height: 20px;
+  padding: 0 var(--sp2);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-pill);
+  background: var(--warn-weak);
+  color: var(--warn);
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.dirty:hover {
+  background: var(--warn);
+  color: var(--bg-canvas);
+}
+.bullet {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.notice {
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-subtle);
+  user-select: text;
+}
+/* 保存失败/冲突：红色，且**必须**能看清全文（这里用 title + 不截断宽度） */
+.notice.bad {
+  color: var(--bad);
+  max-width: 60%;
 }
 .split {
   flex: 1;
@@ -303,7 +498,14 @@ onMounted(boot)
 .pane {
   flex: 1;
   min-width: 0;
-  overflow: auto;
+  display: flex;
+}
+/* 编辑器宿主：撑满剩余空间；滚动交给 .cm-scroller */
+.host {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  user-select: text;
 }
 .err {
   margin: var(--sp4);
@@ -314,27 +516,6 @@ onMounted(boot)
   color: var(--bad);
   font-size: var(--fs-sm);
   white-space: pre-wrap;
-  user-select: text;
-}
-.body {
-  display: flex;
-  font: var(--fs-sm) / 1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.gutter {
-  padding: var(--sp2) var(--sp2) var(--sp2) var(--sp3);
-  text-align: right;
-  color: var(--fg-subtle);
-  opacity: 0.65;
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-}
-.src {
-  margin: 0;
-  padding: var(--sp2) var(--sp4);
-  color: var(--fg);
-  white-space: pre;
   user-select: text;
 }
 </style>

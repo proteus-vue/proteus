@@ -98,6 +98,8 @@ fn parse_dims(s: &str) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
+    // 测试名用中文（读起来是断言本身），不必迁就 snake_case 检查
+    #![allow(non_snake_case)]
     use super::*;
 
     #[test]

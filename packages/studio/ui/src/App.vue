@@ -348,7 +348,11 @@ const hud = computed(() => {
           </button>
         </div>
       </template>
-      <CodePanel v-else />
+      <!-- ★`v-show` 而不是 `v-if`：切到设备视图时**不能卸载**代码面板——
+           卸载会销毁 EditorView，未保存的编辑就静默丢了。
+           代价：代码面板在设备视图下也保持挂载（display:none），CM 自己的 ResizeObserver
+           会在重新可见时重新测量，不需要额外通知。 -->
+      <CodePanel v-show="view === 'code'" />
     </div>
 
     <div class="side">

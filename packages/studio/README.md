@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | `cargo build --release`；双击版 `./package-app.sh` → `build-app/Proteus Studio.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **23 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **26 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -446,44 +446,60 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 打包成 `.app` 后那个路径不存在，面板会显示「仓库根不可达（打包形态？）」——是如实报错，不是空白。
 真要让 `.app` 读工程源码，需要"让用户选工程目录"（G4 的后续）。
 
-### ★卡点：编辑器依赖装不进来（环境拦截，不是配置错）
+### 编辑器：CodeMirror 6（已接入）+ 写回的三个硬约束
 
-要让 `<pre>` 变成真编辑器（CodeMirror 6），得先装 6 个包。本机**装不进去**：
+右侧不再是只读 `<pre>`，而是真正的 `EditorView`（内核用现成的，G-56.1 红线：不自研）：
+行号 / 当前行 / 选区 / 括号匹配 / Tab 缩进 / ⌘Z / **⌘S 写回**。
 
-```
-ERR_PNPM_CODEBUDDY_BROKER_DENY  ENOENT: no such file or directory, symlink
-  '../../../@codemirror+language@6.13.1/node_modules/@codemirror/language' -> …
-Progress: resolved 696, reused 0, downloaded 0, added 0
-node_modules/.pnpm/@codemirror+state@6.7.6  →  0B（只有空目录）
-```
-
-排除了这些可能，**才**能说是环境拦的：
-
-| 检查 | 结果 |
-|---|---|
-| registry 可达 | `https://registry.npmjs.org/@codemirror%2Fstate` → **200**（2.2s）|
-| store 路径一致 | `node_modules/.modules.yaml` 里 `storeDir: /Volumes/data1/.pnpm-store/v3`，我用的也是它 |
-| pnpm 版本一致 | `packageManager: pnpm@9.15.9` = corepack 拿到的 9.15.9 |
-| 锁文件版本 | v9.0，与 pnpm 9 匹配 |
-| 关掉沙箱重试 | 同样失败（`downloaded 0` ⇒ 包从未落进 store）|
-
-⇒ 需要在**你自己的终端**跑一次：
+**依赖装在哪**：6 个 `@codemirror/*` 装在**仓库根**（本目录刻意无 `package.json`，见 #1187）。
+装的时候必须带 store：
 
 ```bash
-cd /Volumes/data1/work/office/debug/proteus
-pnpm add -w @codemirror/state @codemirror/view @codemirror/commands \
-              @codemirror/language @codemirror/lang-vue @codemirror/lang-rust
+pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
+  @codemirror/{state,view,commands,language,lang-vue,lang-rust}
 ```
 
-装完我把 `CodePanel` 的 `<pre>` 换成 `EditorView`（主题用现有 token 写，不引 `theme-one-dark`），
-接线不用动。**在此之前不自己造编辑器内核**（G-56.1 红线）——宁可清楚地"少一块"。
+★不带 `--store-dir` 会报 `ERR_PNPM_UNEXPECTED_STORE`：本仓 `node_modules` 是用
+`/Volumes/data1/.pnpm-store/v3` 装的，而全局配置指向 `~/.pnpm-global/v3`（几乎空的）。
+**不要**按报错建议跑 `pnpm install`——那会用空 store 重下/重链 55 个 workspace 包。
 
-**判据**（`check:studio-panel` 已扩到 **23 条**）：
-- ⑪ `read_text` 被调用 + 面板渲染出内容 + 无错误；
+**写回的三个硬约束（全部在 Rust 侧，前端只是调用方）**：
+
+| # | 约束 | 为什么 |
+|---|---|---|
+| ① | **mtime 冲突检测**：打开时记 mtime，保存时回传；磁盘上变了 ⇒ **拒绝覆盖** | 本仓常驻多个 AI 会话同时改文件（今天已发生多次）。没有这条，保存一次就静默吃掉别人的改动 |
+| ② | **原子替换**：临时文件 + `rename` | 直接 `write` 中途失败会留下**半个源文件**，比没写更糟 |
+| ③ | 保留权限位 | `rename` 会换成新文件的 mode，可执行脚本会丢 `+x` |
+
+**脏缓冲（多文件未保存）**：切到别的文件再切回来，未保存的编辑还在。
+★刻意**不用** `confirm('放弃修改？')`：Tauri 的 WKWebView 若没实现 `runJavaScriptConfirmPanel`，
+`confirm` 会**静默返回 false** ⇒ 表现成"点另一个文件没反应"，而且完全无声。
+缓冲只在内存（刷新即丢，不给仓库留临时副本）；`base`/`mtime` 记的是**开始编辑时**那一版，
+保存时仍按它做冲突检测——否则切一次文件就把"别人改过"这条线索刷新掉了。
+
+**★语法着色还没上（差一个包）**：着色要 `@lezer/highlight` 的 `tags`，而它只是
+`@codemirror/language` 的**传递依赖**——pnpm 隔离布局下应用代码 import 不到
+（`node_modules/@lezer` 不存在，实测 `ERR_MODULE_NOT_FOUND`）。装一个包即可：
+
+```bash
+pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 @lezer/highlight
+```
+
+★不自己写分词器（那是编辑器内核）；也不去 hack 库内部的 `.specs` 字段（会在升级时静默烂掉）。
+
+**判据**（`check:studio-panel` 已扩到 **26 条**）：
+- ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 3 个文件**且默认打开 `App.vue`（自证）；
-- ⑪d **点第二个文件能切换**（`open` 通路，不只是默认那个能看）；
-- ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态。
+- ⑪d **点第二个文件能切换**（按**路径**选，不按序号——折叠会改变序号，踩过两次）；
+- ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
+- ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
+- ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；
+- ⑱c **切走再切回不丢编辑**（脏缓冲）。
+
+**Rust 侧另有 8 条单测**（`cd packages/studio && cargo test --release`）：
+抓屏参数 7 条 + `write_text` 的冲突检测/被拒不落盘/无临时残留/路径越界 1 条。
+★**`cargo test` 不在 CI 里**（CI 不编译 Rust）⇒ 要自己跑。
 
 ## 输入通路（G4）· 含一次自我纠正
 
@@ -618,7 +634,7 @@ Studio 记住**上次的视图与打开的文件**，重启回到原处。
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
 | **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
-| **G4** | 编辑器容器 | **浏览 + 只读 + 真实输入 + 目录树已成**：左栏 ◈ 切换 · `list_files` 列真实文件 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号展示 · **真实 pointer 点击 → 设备像素落点**（判据 ⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**卡点**：编辑器要 CodeMirror 6，本机 pnpm 写 node_modules 被环境拦截 ⇒ 需要在你终端跑一次 `pnpm add`（命令见「卡点」）。**还没做**：写回、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | CodeMirror 6（G-56.1 红线：绝不自研）+ 设备侧视图树 |
+| **G4** | 编辑器容器 | **编辑器已成（CodeMirror 6 · 可编辑 + ⌘S 写回 + 脏缓冲 + 冲突检测）**：左栏 ◈ 切换 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号/当前行/选区/括号匹配/Tab 缩进 · **真实 pointer 点击 → 设备像素落点**（⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还差**：语法着色（缺 `@lezer/highlight` 一个包，见「编辑器」）、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | 设备侧视图树 |
 | **G5** | 持久化 / 模块化 | **会话状态已成（#1190 续）**：视图（设备/代码）与上次打开的文件落 `~/Library/Application Support/dev.proteus.studio/state.json`，重启即恢复；判据 ⑫/⑫b 守着。**还没做**：窗口尺寸记忆、面板可插拔、`main.rs` 按命令分组拆 | 先拆命令再谈模块化（现在 408 行仍在可读范围） |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
 | — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |

@@ -113,7 +113,7 @@ fn dump_frame(path: String) {
 /// 【边界（都是硬约束，不是建议）】
 ///   · **必须在仓库根之下**：`canonicalize` 后前缀比对，`../` 穿越一律拒绝；
 ///   · **≤512KB**：再大就不是"看一段代码"，该走别的方式；
-///   · **只读**：这一版不写（编辑是 G4 的后续，按 G-56.1 用 CodeMirror 6，不自研内核）。
+///   · **写回走 `write_text`**：带 mtime 冲突检测 + 原子替换（见该函数的注释）。
 ///
 /// 【★诚实边界】仓库根取自编译期 `CARGO_MANIFEST_DIR`：
 ///   开发机直接跑二进制 ⇒ 有效；**打包成 .app 后该路径不存在** ⇒ 明确报错（不静默返回空串）。
@@ -128,18 +128,90 @@ fn repo_root() -> Result<std::path::PathBuf, String> {
         .map_err(|e| format!("仓库根不可达（打包形态？）：{e}"))
 }
 
-#[tauri::command]
-fn read_text(path: String) -> Result<String, String> {
+/// 解析"仓库内的一个路径"（`read_text` / `write_text` 共用）。
+/// ★`canonicalize` 后再做前缀比对：只比字符串挡不住 `a/../../etc/passwd` 这类。
+fn resolve_in_repo(path: &str) -> Result<std::path::PathBuf, String> {
     let root = repo_root()?;
-    let p = root.join(&path).canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
+    let p = root.join(path).canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
     if !p.starts_with(&root) {
         return Err(format!("路径越界：{path}"));
     }
+    Ok(p)
+}
+
+/// 文件的 mtime（**微秒**，Unix epoch）。取不到就 0 —— 上层据此判断"无法做冲突检测"。
+/// ★用微秒而不是毫秒：两次保存可能落在同一毫秒里，那时"冲突检测"会漏判
+///   （单测里连续两次写就是这个形状）。微秒下几乎不可能撞上。
+fn mtime_us(p: &std::path::Path) -> u64 {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_micros() as u64)
+        .unwrap_or(0)
+}
+
+/// 读到的一段文本 + 它的 mtime。
+/// ★为什么要带 mtime：保存时回传，用来判断"打开之后文件有没有被别人改过"。
+///   本仓常驻多个 AI 会话同时改文件（今天已发生多次），没有这个检查，
+///   Studio 里保存一次就会**静默覆盖**别人的改动。
+#[derive(Serialize)]
+struct FileText {
+    text: String,
+    /// 文件 mtime（微秒，Unix epoch）
+    mtime_us: u64,
+}
+
+#[tauri::command]
+fn read_text(path: String) -> Result<FileText, String> {
+    let p = resolve_in_repo(&path)?;
     let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
     if len > 512 * 1024 {
         return Err(format!("文件过大：{len} 字节（上限 512KB）"));
     }
-    std::fs::read_to_string(&p).map_err(|e| format!("读失败 {path}：{e}"))
+    let text = std::fs::read_to_string(&p).map_err(|e| format!("读失败 {path}：{e}"))?;
+    Ok(FileText { text, mtime_us: mtime_us(&p) })
+}
+
+/// 写回一个仓库内的文本文件。返回新的 mtime（前端据此更新"上次已知版本"）。
+///
+/// 【为什么不是简单的 fs::write】
+///   1. **冲突检测**：`expect` 是打开时读到的 mtime。若磁盘上的 mtime 已经变了，
+///      说明这段文本在打开之后被改过（并发会话 / 编辑器 / git 操作）⇒ 拒绝覆盖。
+///      这是"最后写入者赢"之外唯一安全的做法：宁可让用户重读一次，也不静默吃掉别人的改动。
+///   2. **原子替换**：先写同目录的临时文件再 `rename`。直接 `fs::write` 若中途失败/崩溃，
+///      会留下半个文件——而这是个**源码**仓库，半个文件比没写更糟。
+///   3. **保留权限位**：`rename` 会换成新文件的 mode（默认 0644），可执行脚本会因此丢 `+x`。
+#[tauri::command]
+fn write_text(path: String, text: String, expect: u64) -> Result<u64, String> {
+    if text.len() > 512 * 1024 {
+        return Err(format!("内容过大：{} 字节（上限 512KB）", text.len()));
+    }
+    let p = resolve_in_repo(&path)?;
+    let meta = std::fs::metadata(&p).map_err(|e| format!("文件已不存在：{path}（{e}）"))?;
+    let now = mtime_us(&p);
+    // expect == 0 表示"前端拿不到 mtime"（老版本/异常），此时不阻断，但也不假装检测过
+    if expect != 0 && now != expect {
+        return Err(format!(
+            "文件已被外部修改（磁盘 {now} ≠ 打开时 {expect}，可能是并发会话）⇒ 已拒绝覆盖。请重新打开该文件。"
+        ));
+    }
+
+    let dir = p.parent().ok_or_else(|| format!("无法定位目录：{path}"))?;
+    let tmp = dir.join(format!(
+        ".{}.tmp{}-{}",
+        p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "f".into()),
+        std::process::id(),
+        now
+    ));
+    std::fs::write(&tmp, text.as_bytes()).map_err(|e| format!("写临时文件失败：{e}"))?;
+    // 保留原 mode（可执行位/只读位）；失败不影响正确性，只是回到默认权限
+    let _ = std::fs::set_permissions(&tmp, meta.permissions());
+    if let Err(e) = std::fs::rename(&tmp, &p) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("替换 {path} 失败：{e}"));
+    }
+    Ok(mtime_us(&p))
 }
 
 /// 列仓库内若干子树下的源码文件（G4：代码视图的**文件列表**）。
@@ -382,6 +454,7 @@ fn main() {
             stats,
             dump_frame,
             read_text,
+            write_text,
             list_files,
             load_state,
             save_state
@@ -495,4 +568,56 @@ fn start_ticks(handle: tauri::AppHandle) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 写回通路的三条硬约束：冲突检测 / 被拒不落盘 / 原子替换不留残留。
+    /// ★放 `packages/studio/target/`（gitignore）下写临时文件，测完删掉——不给仓库留垃圾。
+    #[test]
+    fn write_text_带冲突检测且原子替换() {
+        let rel = "packages/studio/target/write-test.txt";
+        let abs = repo_root().unwrap().join(rel);
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(&abs, "v1\n").unwrap();
+
+        let t1 = read_text(rel.to_string()).unwrap();
+        assert_eq!(t1.text, "v1\n");
+        assert!(t1.mtime_us > 0, "mtime 取不到 ⇒ 冲突检测形同虚设");
+
+        // ① 用最新 mtime 保存：应当成功，且 mtime 变化
+        let t2 = write_text(rel.to_string(), "v2\n".into(), t1.mtime_us).unwrap();
+        assert_eq!(std::fs::read_to_string(&abs).unwrap(), "v2\n");
+        assert_ne!(t2, t1.mtime_us, "写入后 mtime 必须变，否则无从判断'被改过'");
+
+        // ② 拿**旧** mtime 再写 ⇒ 必须拒绝（模拟打开后被并发会话改过）
+        let err = write_text(rel.to_string(), "v3\n".into(), t1.mtime_us).unwrap_err();
+        assert!(err.contains("拒绝覆盖"), "错误要说清在拒绝什么：{err}");
+        assert_eq!(
+            std::fs::read_to_string(&abs).unwrap(),
+            "v2\n",
+            "被拒的写不能落盘（这条比返回 Err 更重要）"
+        );
+
+        // ③ 用新 mtime ⇒ 通过
+        write_text(rel.to_string(), "v3\n".into(), t2).unwrap();
+        assert_eq!(std::fs::read_to_string(&abs).unwrap(), "v3\n");
+
+        // ④ 不留临时文件（原子替换的残留物最容易漏掉，而它会污染文件树）
+        let leftovers: Vec<String> = std::fs::read_dir(abs.parent().unwrap())
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.contains(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "残留临时文件：{leftovers:?}");
+
+        // ⑤ 越界路径必须拒绝（`..` 穿越）
+        assert!(read_text("../../etc/passwd".to_string()).is_err());
+        assert!(write_text("../../etc/passwd".to_string(), "x".into(), 0).is_err());
+
+        let _ = std::fs::remove_file(&abs);
+    }
 }

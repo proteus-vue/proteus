@@ -51,8 +51,21 @@ export const getStats = (): Promise<Stats> => invoke<Stats>('stats')
 export const setCanvasRect = (r: { x: number; y: number; w: number; h: number }): Promise<void> =>
   invoke<void>('set_canvas_rect', r)
 
-/** 读仓库内一个文本文件（G4 第一块砖）。边界由 Rust 侧把关：仓库内 + ≤512KB + 只读。 */
-export const readText = (path: string): Promise<string> => invoke<string>('read_text', { path })
+/** 读到的一段文本 + 它的 mtime（保存时回传，用于"打开后被改过"的冲突检测）。 */
+export interface FileText {
+  text: string
+  /** mtime（**微秒**，Unix epoch）。用微秒而不是毫秒：连续两次保存可能落在同一毫秒里，
+   *  那时"打开后被改过"会漏判。 */
+  mtime_us: number
+}
+
+/** 读仓库内一个文本文件。边界由 Rust 侧把关：仓库内 + ≤512KB。 */
+export const readText = (path: string): Promise<FileText> => invoke<FileText>('read_text', { path })
+
+/** 写回。`expect` = 打开时读到的 mtime；返回新的 mtime。
+ *  ★Rust 侧会比对 mtime：不一致就**拒绝覆盖**（本仓常驻多个 AI 会话同时改文件）。 */
+export const writeText = (path: string, text: string, expect: number): Promise<number> =>
+  invoke<number>('write_text', { path, text, expect })
 
 /** 列仓库内若干子树下的源码文件（G4 文件列表）。边界同上，另有扩展名白名单与 300 条上限。 */
 export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]>('list_files', { roots })
