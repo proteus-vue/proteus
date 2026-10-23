@@ -61,9 +61,19 @@ export function runHttpProbe(filesDir: string): void {
     if (savePathIn !== undefined && savePathIn.length > 0) f.savePath = savePathIn;
     const streamIn: string | undefined = AppStorage.get<string>('proteusProbeStream');
     if (streamIn === '1') f.stream = true;
+    /**
+     * ★★★#1203：`tlsPins`（应被**如实拒绝**——RCP 无指纹校验回调）。
+     * ★探针必须能驱动它，否则"配了 pin 但静默不校验"这个**安全缺陷**在鸿蒙端无法真机验证。
+     * ★`tlsPinOnly` 用 `1` 驱动（单独出现也应被拒：它表达了"信任判定由 pin 决定"的意图）。
+     */
+    const pinsIn: string | undefined = AppStorage.get<string>('proteusProbeTlsPins');
+    if (pinsIn !== undefined && pinsIn.length > 0) f.tlsPins = pinsIn;
+    const pinOnlyIn: string | undefined = AppStorage.get<string>('proteusProbeTlsPinOnly');
+    if (pinOnlyIn === '1') f.tlsPinOnly = true;
     /** ★#1187 诊断：把"探针实际拿到的入参"回显进报告（否则 savePath 没生效时无从归因） */
     probeDiag = { 'savePath': savePathIn ?? '', 'stream': streamIn ?? '', 'filesDir': filesDir,
-                  'targetUrl': url };
+                  'targetUrl': url, 'tlsPins': (pinsIn ?? '').length > 0 ? 'set' : '',
+                  'tlsPinOnly': pinOnlyIn ?? '' };
     const bytes: Uint8Array = encodeInvoke(f);
     let hex: string = '';
     for (let i = 0; i < bytes.length; i++) {

@@ -36,6 +36,8 @@ function stubBlock(method: string): string {
 const HTTP = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h'
 const SAVE = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_save.h'
 const STUBS = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_stubs.h'
+/** ★#1203：「本端不支持的能力」前置拒绝实现（stream / tlsPins / upload 都在这里） */
+const GUARD_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_guard.h'
 
 describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 ⇒ 必须做）', () => {
   it('★落盘走 SaveSession（逐块直写文件，不累积 body）', () => {
@@ -139,16 +141,26 @@ describe('★★★#1187 鸿蒙 stream：模型限制 ⇒ 必须如实拒绝（�
    *   ⇒ 现在先取出 `f.stream` 那个 if 块，再断言块内**真的 return 了**带 unsupported 的 err。
    */
   it('★`stream: true` 必须显式报 unsupported（此前是静默忽略）', () => {
-    const s = read(HTTP)
-    const at = s.indexOf('if (f.stream && *f.stream)')
+    /**
+     * ★★★#1203：`stream` 的拒绝已从 `proteus_http.h` 移到 `proteus_http_guard.h`
+     *   （与 `tlsPins` / `upload` 一起收口成「本端不支持的能力」前置拒绝）。
+     *   ⇒ 判据必须**两段联合**，任何一段缺失都说明这条能力又变成静默失效：
+     *     ① guard 里有拒绝分支且**真的 return 了** unsupported 字面量；
+     *     ② `handle()` **确实调用了** guard（否则 guard 写了也没人用——这正是本单修的那类缺陷）。
+     */
+    const guard = read(GUARD_H)
+    const at = guard.indexOf('if (f.stream && *f.stream)')
     expect(at, '★找不到 stream 分支（被删了？）').toBeGreaterThan(0)
-    // 取该分支的块（到下一个 `\n  }\n` 为止），只在块内断言——避免注释/别处命中
-    const block = s.slice(at, s.indexOf('\n  }\n', at) + 4)
-    expect(block, '★stream 分支没有 return（= 静默忽略，请求照常成功）').toMatch(/return\s+proteus::wire::ResolveFrame::err/)
+    const block = guard.slice(at, guard.indexOf('\n  }', at) + 4)
+    expect(block, '★stream 分支没有 return（= 静默忽略，请求照常成功）').toMatch(/return\s+"/)
     // 拒绝信息必须是**返回值里的字面量**（不是注释里的）
     expect(block, '★拒绝信息不是 fetch.unsupported 字面量').toContain('fetch.unsupported')
     expect(block, '★拒绝信息没点明根因（一次性 VM + 同步 napi）').toMatch(/一次性 VM[\s\S]{0,80}同步 napi/)
     expect(block, '★拒绝信息没给替代方案（savePath）').toContain('savePath')
+    // ② 调用点必须在 handle() 里（guard 写了不调用 = 静默失效原样保留）
+    const h = read(HTTP)
+    expect(h, '★handle() 没调用 unsupportedFeatureReason（guard 成了死代码）')
+      .toContain('unsupportedFeatureReason(f)')
   })
 })
 

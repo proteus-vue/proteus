@@ -3250,7 +3250,7 @@
       "related": [
         "T-harmony-http-cancel"
       ],
-      "note": "【blocked · 决策 #1188】此前 `stream: true` 是**静默忽略**（帧里解出来了但 `proteus_http.h` 从没用过）⇒ `onChunk` 永不触发而请求照常成功 = **假数据**。本轮改为**如实拒绝**：`fetch.unsupported` + 点明根因（一次性 VM + 同步 napi ⇒ 逐块回推没有接收方）+ 给替代（`savePath` 宿主逐块落盘 / 默认整包）。★要真支持 stream：需让 napi 异步化且请求期间 VM 存活（可回推）——与 #540「跨 napi 复用 VM ⇒ HandleScope 溢出/SIGSEGV」直接冲突，必须先重新验证那条结论。★RCP 本身**提供** `Rcp_OnDataReceiveCallback`（逐块）与 `Rcp_EventsHandler` ⇒ 底层能力在，缺的是\"回推通道\"。★【Handoff】做到哪：已改为如实拒绝（编译通过 + 判据 8/8）。已改：`proteus_http.h` 的 stream 分支。未做：真支持流式（需改 VM 模型）。下一步：若要推进，先重验 #540 的\"跨 napi 复用 VM ⇒ SIGSEGV\"是否仍成立（那是当前结论的唯一支柱）。坑：RCP 的 `Rcp_OnDataReceiveCallback` 逐块回调**是有的**，缺的是回推通道。判据状态：静态 10/10 绿 + **真机已验证**（`http-probe-stream-reject.json`：`fetch.unsupported` + 点明根因 + 给 savePath 替代）。★【#1196/#1197 收尾】四轮独立验证后：stream 的「如实拒绝」与 tlsStats 的「pinning 未接」两条口径**已过第四轮 PASS**（判据 82 条，含 stream 的块级断言、tlsStats 的 data.supported 校验）；三端 savePath 的持久性缺口已单列 `T-fetch-save-durability`。"
+      "note": "【blocked · 决策 #1188】此前 `stream: true` 是**静默忽略**（帧里解出来了但 `proteus_http.h` 从没用过）⇒ `onChunk` 永不触发而请求照常成功 = **假数据**。本轮改为**如实拒绝**：`fetch.unsupported` + 点明根因（一次性 VM + 同步 napi ⇒ 逐块回推没有接收方）+ 给替代（`savePath` 宿主逐块落盘 / 默认整包）。★要真支持 stream：需让 napi 异步化且请求期间 VM 存活（可回推）——与 #540「跨 napi 复用 VM ⇒ HandleScope 溢出/SIGSEGV」直接冲突，必须先重新验证那条结论。★RCP 本身**提供** `Rcp_OnDataReceiveCallback`（逐块）与 `Rcp_EventsHandler` ⇒ 底层能力在，缺的是\"回推通道\"。★【Handoff】做到哪：已改为如实拒绝（编译通过 + 判据 8/8）。已改：`proteus_http.h` 的 stream 分支。未做：真支持流式（需改 VM 模型）。下一步：若要推进，先重验 #540 的\"跨 napi 复用 VM ⇒ SIGSEGV\"是否仍成立（那是当前结论的唯一支柱）。坑：RCP 的 `Rcp_OnDataReceiveCallback` 逐块回调**是有的**，缺的是回推通道。判据状态：静态 10/10 绿 + **真机已验证**（`http-probe-stream-reject.json`：`fetch.unsupported` + 点明根因 + 给 savePath 替代）。★【#1196/#1197 收尾】四轮独立验证后：stream 的「如实拒绝」与 tlsStats 的「pinning 未接」两条口径**已过第四轮 PASS**（判据 82 条，含 stream 的块级断言、tlsStats 的 data.supported 校验）；三端 savePath 的持久性缺口已单列 `T-fetch-save-durability`。\n ★#1203 结构调整：stream 的拒绝分支已从 proteus_http.h 移到 proteus_http_guard.h 的\n unsupportedFeatureReason()，与 tlsPins / upload 收口成同一处「本端不支持的能力」前置拒绝。\n 语义与文案不变（仍是 fetch.unsupported + 点明\"一次性 VM + 同步 napi\" + 建议 savePath）。\n 判据 tests/harmony-http-gaps.test.ts 已改为**两段联合**（guard 里有拒绝 + handle 里真的调用），\n 防\"guard 写了但没人调用\"这种新形态的静默失效。"
     },
     {
       "id": "T-harmony-tls-pinning",
@@ -3263,12 +3263,12 @@
         "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_stubs.h"
       ],
       "decision": 1188,
-      "verification": "`npx vitest run tests/harmony-http-gaps.test.ts`（tlsStats 必须说清 pinning 不生效）；实现后需真机判据对齐 `hosts/android/run-tls-probe.sh` / `hosts/ios/run-tls-probe.sh`",
+      "verification": "✅ #1203 真机验证\"配了 pin ⇒ 请求被拒且未发出流量\"（证据 + 6 条判据 + 破坏性验证）。★剩余为平台边界（无校验回调），非实现欠账。",
       "branch": null,
       "related": [
         "T-harmony-http-cancel"
       ],
-      "note": "【blocked · 决策 #1188】取证：`rcp.h` 的 `Rcp_SecurityConfiguration` 只有 `remoteValidationType`（SYSTEM / SKIP / CERTIFICATE_AUTHORITY）+ `Rcp_CertificateAuthority`（PEM 内容/文件/目录）——**没有**\"收到证书后让我们校验 fingerprint\"的回调。Android 有 `X509TrustManager`、iOS 有 `URLAuthenticationChallenge`，鸿蒙**两者都没有**。★当前状态：`http.tlsStats` 已接线并**如实上报**全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立」。★这是安全语义：假成立比没有更危险。★可能的出路（需先验证，不能直接宣称）：① 用 `CERTIFICATE_AUTHORITY` + 自带 CA 做\"只信任指定 CA\"（弱于 SPKI pin，但可接受）；② 换成自建 TLS 层（大工程）；③ 等 RCP 提供校验回调。★【Handoff】做到哪：已如实上报（tlsStats 全 0 + note）。已改：`proteus_http_stubs.h`。未做：真正的 pin 校验。下一步：先验证\"用 CERTIFICATE_AUTHORITY 自带 CA\"能否达到可接受的安全强度（比 SPKI pin 弱但可能够用），再决定是否值得自建 TLS 层。坑：`Rcp_SecurityConfiguration` 只有 SYSTEM/SKIP/CA 三档，没有校验回调。判据状态：静态 8/8 绿；真机未验。★【#1196/#1197 收尾】四轮独立验证后：stream 的「如实拒绝」与 tlsStats 的「pinning 未接」两条口径**已过第四轮 PASS**（判据 82 条，含 stream 的块级断言、tlsStats 的 data.supported 校验）；三端 savePath 的持久性缺口已单列 `T-fetch-save-durability`。"
+      "note": "【blocked · 决策 #1188】取证：`rcp.h` 的 `Rcp_SecurityConfiguration` 只有 `remoteValidationType`（SYSTEM / SKIP / CERTIFICATE_AUTHORITY）+ `Rcp_CertificateAuthority`（PEM 内容/文件/目录）——**没有**\"收到证书后让我们校验 fingerprint\"的回调。Android 有 `X509TrustManager`、iOS 有 `URLAuthenticationChallenge`，鸿蒙**两者都没有**。★当前状态：`http.tlsStats` 已接线并**如实上报**全 0 + note「鸿蒙未接 SPKI pinning（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立」。★这是安全语义：假成立比没有更危险。★可能的出路（需先验证，不能直接宣称）：① 用 `CERTIFICATE_AUTHORITY` + 自带 CA 做\"只信任指定 CA\"（弱于 SPKI pin，但可接受）；② 换成自建 TLS 层（大工程）；③ 等 RCP 提供校验回调。★【Handoff】做到哪：已如实上报（tlsStats 全 0 + note）。已改：`proteus_http_stubs.h`。未做：真正的 pin 校验。下一步：先验证\"用 CERTIFICATE_AUTHORITY 自带 CA\"能否达到可接受的安全强度（比 SPKI pin 弱但可能够用），再决定是否值得自建 TLS 层。坑：`Rcp_SecurityConfiguration` 只有 SYSTEM/SKIP/CA 三档，没有校验回调。判据状态：静态 8/8 绿；真机未验。★【#1196/#1197 收尾】四轮独立验证后：stream 的「如实拒绝」与 tlsStats 的「pinning 未接」两条口径**已过第四轮 PASS**（判据 82 条，含 stream 的块级断言、tlsStats 的 data.supported 校验）；三端 savePath 的持久性缺口已单列 `T-fetch-save-durability`。\n ★★★#1203（2026-10-23）补上了真正的拒绝：此前只在 http.tlsStats 的回执里写了\n \"pinning unsupported\"，但**请求本身照常发出**（invoke_wire.h 解析了 tlsPins/tlsPinOnly，宿主从不消费）\n ⇒ 业务配了 pin、以为多了防 MITM 一道防线，实际**裸奔**。这是\"安全策略假成立\"，比没有能力危险。\n 现改为：proteus_http_guard.h 的 unsupportedFeatureReason() 在**发请求之前**拒绝\n （fetch.unsupported + 明确\"未发出任何流量\"）；tlsPinOnly 单独出现同样拒绝。\n 真机证据 hosts/harmony/results/http-probe-tls-pins-reject.json（ok:false · limit.gateInstalled:false · seen:0）。\n 判据 tests/harmony-unsupported-features.test.ts（6 条，含\"消费点清点\"防其他字段复发）。\n 破坏性验证：把拒绝条件改成恒假 ⇒ 请求真的成功发出（复现原缺陷）、判据当场红。\n ★平台边界仍然成立：rcp.h 的 Rcp_SecurityConfiguration 只有 CA bundle + remoteValidationType(SYSTEM/SKIP)\n + 客户端证书，**没有\"拿到对端证书后由我决定\"的回调** ⇒ SPKI pinning 在本端**无法实现**（不是待办）。\n ⇒ 状态维持 blocked（平台能力缺失），但**风险面已消除**（不再静默放行）。"
     },
     {
       "id": "T-studio-ios-stream",
@@ -3318,6 +3318,24 @@
         "T-harmony-tls-pinning"
       ],
       "note": "【done · 决策 #1200 + #1201】三端加 fsync（数据 + 目录项）+ 回执暴露 `durable`。★真机验证：Android `durable=true`（8 MiB / 1026 块，`hosts/android/results/save-probe.json`）；鸿蒙 `durable=true`（`hosts/harmony/results/http-probe-save-durable.json`，设备侧 stat 一致 + `verified:true`）。★#1201 补的真实缺陷：鸿蒙 `finish()` 有**两个**返回摘要的分支（幂等 / 主成功路径），只有幂等分支带 durable ⇒ 真机唯一会走的主路径漏了字段，而静态判据 `toContain('\\\\\"durable\\\\\"')` 被幂等分支喂绿（又一个\"只断言出现过、不断言真的用了\"）。⇒ 判据改成**真编译真跑**（`tests/harmony-save-session-raii.test.ts` 的「成功路径」用例只认主路径实际输出的 JSON），变异必红；另加真机证据条（`tests/fetch-save-durability.test.ts`）。★诚实边界（不是\"已全部解决\"）：a) **iOS `durable:\"partial\"` 是诚实的未证明**——`FileHandle.fd` 非公开 API，`synchronizeFile()` 是否等价 fsync 未取证，故**不谎报 true**；b) **掉电对照本身没做**（要真断电/强杀复现\"存在但空\"，属破坏性实验）；c) 三端都只保证\"数据 + 目录项已提交给存储\"，**不保证存储设备自身写缓存**（`F_FULLFSYNC` 只有 macOS）；d) 鸿蒙只测 243 B（大文件内存行为见 #1193 的 64 MiB 实测，两件事不同）。"
+    },
+    {
+      "id": "T-harmony-http-upload",
+      "title": "鸿蒙 multipart 上传（upload）：当前如实拒绝（此前静默发空请求）——RCP 有 multipart 结构体，可独立实现",
+      "type": "capability",
+      "status": "planned",
+      "owner": null,
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_guard.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h"
+      ],
+      "decision": 1203,
+      "verification": "真机：multipart 上传小文件 ⇒ 服务端收到正确 boundary + 文件字节 + 字段；判据断言服务端侧收到的表单结构（不能只看请求成功）",
+      "branch": null,
+      "related": [
+        "T-android-okhttp-transport"
+      ],
+      "note": "【planned · #1203 发现并临时堵上】invoke_wire.h 解析了 upload（UploadSpec: path/fieldName/filename/boundary/formData）， 但鸿蒙宿主**从不消费** ⇒ 只发 f.body（通常为空）⇒ 服务端收到一个**没有文件的请求**， 业务以为上传成功（可能写入空记录）。★#1203 已修为**如实拒绝**（fetch.unsupported + 未发出流量）， 风险面消除；真实现另立本单。★可行性：#1166 取证 RCP 有 Rcp_MultipartFormFieldValue / Rcp_FormFieldFileValue / Rcp_Form 结构体 ⇒ 平台支持，属\"工作量\"不是\"边界\"。实现要点：① 构表单树（ordered，编码顺序是契约） ② 沙箱读文件（复用 proteus_http_save.h 的路径校验）③ 分段回调上报进度。"
     }
   ]
 }

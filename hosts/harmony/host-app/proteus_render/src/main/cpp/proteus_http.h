@@ -48,6 +48,7 @@
 #include "proteus_http_diag.h"   // ★#1194：VmHWM 读取（读数记账）
 #include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
 #include "proteus_http_doh.h"         // ★#1202：DoH 落点探针状态（取证专用，生产零影响）
+#include "proteus_http_guard.h"       // ★#1203：不支持能力的**前置拒绝**（stream / tlsPins）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -467,22 +468,20 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     return proteus::wire::ResolveFrame::err(f.reqId, "http.request 需要 url（meta 里没带）");
   }
   /**
-   * ★★★#1187：**`stream: true` 如实拒绝**（此前是**静默忽略**——帧里解出来了但没人用）。
+   * ★★★#1187 / #1203：**「本端结构上不支持的能力」一律前置拒绝**（实现见 `proteus_http_guard.h`）。
    *
-   * 【为什么不能"接上就算"】流式的本质是**边收边回推 JS**（`onChunk`）。而鸿蒙宿主是
-   *   一次性 VM + 同步 napi：请求期间 JS 线程被占、napi 返回时 VM 已销毁 ⇒ **回推没有接收方**。
-   *   ⇒ 在现有模型下无法实现真正的流式（这是 #540 实测的架构约束，不是漏写方法）。
-   * 【为什么必须显式拒绝而不是降级成整包】静默降级会让 `onChunk` **永远不触发**而请求
-   *   照常成功 ⇒ 业务以为在流式收数据、实际一次都没回调（**假数据比缺数据更糟**）。
-   * ⇒ 需要逐块消费的场景请用 `savePath`（宿主逐块落盘；★内存是否与文件大小无关**未取证**）
-   *   或 `timeout` + 整包。
+   * 【为什么必须显式拒绝而不是静默忽略】"帧里解出来了但宿主不用"是本仓最坏的缺陷形态：
+   *   业务以为某能力生效了，实际一次都没执行。鸿蒙两条都踩过——
+   *   `stream` 曾静默忽略（#1187 修）· `tlsPins` 曾静默忽略（#1203 修，且**安全面**更严重：
+   *   业务配了 pin 以为多了防 MITM 一道防线，而请求不带任何校验照常发出）。
+   * 【为什么放在这里】必须在**发请求之前**拒绝——尤其 pin：不能先发出一段未受保护的流量再说。
    */
-  if (f.stream && *f.stream) {
-    stats().failures++;
-    return proteus::wire::ResolveFrame::err(
-        f.reqId,
-        "fetch.unsupported: 鸿蒙宿主暂不支持 stream（一次性 VM + 同步 napi ⇒ 无法逐块回推）。"
-        "请改用 savePath（宿主逐块落盘）或默认整包");
+  {
+    const std::string unsupported = unsupportedFeatureReason(f);
+    if (!unsupported.empty()) {
+      stats().failures++;
+      return proteus::wire::ResolveFrame::err(f.reqId, unsupported);
+    }
   }
   const std::string url = appendParams(*f.url, f.params ? *f.params : proteus::wire::NameValues{});
   const std::string method = f.httpMethod ? *f.httpMethod : "GET";
@@ -645,7 +644,16 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     content.data.contentStr.length = static_cast<uint32_t>(f.body.size());
     req->content = &content;
   }
-  cfg.transferConfiguration.autoRedirect = true;
+  /**
+   * ★★★#1203：**`redirectManual` 必须生效**（此前硬编码 `true` ⇒ `useFetch({redirect:'manual'})`
+   *   在鸿蒙上会**照常跟随重定向**，业务以为拦住了、实际没拦）。
+   *   `Rcp_TransferConfiguration.autoRedirect` 就是开关 ⇒ 直接照帧里的意图设。
+   *   ★与 Android `followRedirects(!manual)` / iOS `willPerformHTTPRedirection` 同语义：
+   *     manual ⇒ **不跟随**，把 3xx 原样回给框架（后续的 `error` 判定、跨域剥离凭据、
+   *     RFC 方法改写全在 TS 层 `capability-fetch-redirect.ts`，跨端同一份）。
+   *   ★缺省（帧里没有该 tag）= 跟随，与平台默认一致。
+   */
+  cfg.transferConfiguration.autoRedirect = !(f.redirectManual && *f.redirectManual);
   cfg.transferConfiguration.timeout.connectMs = timeoutMs;
   cfg.transferConfiguration.timeout.transferMs = timeoutMs;
   /**
@@ -878,22 +886,8 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
       if (pDestroyHeaderEntries != nullptr && entries != nullptr) pDestroyHeaderEntries(entries);
       out.headers = std::move(nv);
     }
-    /**
-     * ★★★#1158：传输层读数（`Rcp_TimeInfo`）。
-     *
-     * 【鸿蒙能测什么】`timeInfo` 提供 `nameLookUpTime` / `connectTime` / `tlsHandshakeTime` /
-     *   `startTransferTime`（各自是从请求开始算的**累计毫秒**，不是区间）⇒ 必须**转成区间**：
-     *     dnsMs     = nameLookUpTime
-     *     connectMs = connectTime − nameLookUpTime      （TCP 建连本身）
-     *     tlsMs     = tlsHandshakeTime − connectTime    （握手本身）
-     *     ttfbMs    = startTransferTime
-     *   ★不做这个减法就直接回传 ⇒ `connectMs` 里含 DNS、`tlsMs` 里含 DNS+TCP——
-     *     与 iOS 的区间语义**不一致**，三端读数就没法横向比（本仓"三端同判据"的前提）。
-     *   ★差值为负/异常 ⇒ **该键不写**（不写 0，不写负）。
-     *
-     * 【鸿蒙测不到什么】`proto` / `reused`：RCP 不暴露协议版本与连接复用标记 ⇒ 键不出现。
-     *   （连接复用另有证据：`hosts/harmony/results/transport-probe.json` 的服务端记账。）
-     */
+    // ★★★#1158：传输读数（`Rcp_TimeInfo` → 区间换算）。量纲与减法口径见
+    //   `proteus_http_transport.h` 的 `appendTimeReadouts` 注释（那里是唯一实现）。
     if (resp->timeInfo != nullptr) {
       proteus::wire::NameValues tp;
       proteus::http::appendTimeReadouts(&tp, resp->timeInfo);   // ★#1191：区间换算（实现见 proteus_http_transport.h）

@@ -37,6 +37,8 @@ STREAM=""     # ★#1187：1 = 传 stream:true（应被如实拒绝）
 DOH_URL=""    # ★#1202：DoH 服务端 URL（探针专用；空 = 不启用 DoH）
 DOH_SKIP_CERT=""  # ★#1202：1 = skipCertificatesValidation（自签 DoH 服务端用）
 EXPECT_REJECT=""   # ★#1192：1 = 预期被拒（路径穿越/非法 savePath 的**可重放**判据）
+TLS_PINS=""        # ★#1203：base64 SPKI 指纹（鸿蒙应**如实拒绝**）
+TLS_PIN_ONLY=""    # ★#1203：1 = 只给 tlsPinOnly（同样应被拒）
 for arg in "$@"; do
   case "$arg" in
     --url=*) URL="${arg#--url=}" ;;
@@ -49,6 +51,8 @@ for arg in "$@"; do
     --expect-reject) EXPECT_REJECT=1 ;;                  # ★#1192
     --doh-url=*) DOH_URL="${arg#--doh-url=}" ;;          # ★#1202
     --doh-skip-cert) DOH_SKIP_CERT=1 ;;                  # ★#1202
+    --tls-pins=*) TLS_PINS="${arg#--tls-pins=}" ;;       # ★#1203（应被如实拒绝）
+    --tls-pin-only) TLS_PIN_ONLY=1 ;;                    # ★#1203
     --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
        elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
@@ -93,6 +97,11 @@ if [ -n "$DOH_URL" ]; then
   DNS_ARG="$DNS_ARG --ps dohUrl $DOH_ENC"
   [ "$DOH_SKIP_CERT" = "1" ] && DNS_ARG="$DNS_ARG --ps dohSkipCert 1"
 fi
+# ★★★#1203：tlsPins（应被**如实拒绝**）。★pin 是 base64 串，`+`/`=` 会被 `aa start` 吃掉
+#   （#1154 在 adb 上踩过同款：`+`→空格、`=` 被当 key=value 分隔）⇒ 这里用 base64url 风格
+#   的**测试值**（不含 `+` `/` `=`），只验证"拒绝生效"，不需要真指纹。
+[ -n "$TLS_PINS" ] && DNS_ARG="$DNS_ARG --ps tlsPins $TLS_PINS"
+[ "$TLS_PIN_ONLY" = "1" ] && DNS_ARG="$DNS_ARG --ps tlsPinOnly 1"
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 
@@ -178,6 +187,44 @@ if stream_on:
         print(f"✗ stream 拒绝信息没点明根因：{reason[:120]}"); ok = False
     else:
         print(f"✅ stream 如实拒绝：{reason[:110]}")
+    sys.exit(0 if ok else 1)
+# ★★★#1203：`tlsPins` / `tlsPinOnly` 在鸿蒙应被**如实拒绝**——静默放行 = 安全策略假成立。
+#   ★这是本仓最坏的形态之一：业务以为配了 pin 就多了防 MITM 一道防线，实际请求不带任何校验照常发出。
+#   ★必须断言三件事：① 请求没成功（未发出）② 错误码是 fetch.unsupported（不是 tlsError，
+#     否则业务会去查"pin 配错了/证书不对"，方向就错了）③ 文案点明根因（RCP 无指纹校验回调）。
+pins_on = (diag.get("tlsPins") or "") != "" or (diag.get("tlsPinOnly") or "") == "1"
+if pins_on:
+    reason = str(d.get("reason") or "")
+    if d.get("ok") is not False:
+        print("✗ 配了 tlsPins 但请求成功了 ⇒ pin 被静默忽略（安全策略假成立）"); ok = False
+    elif "fetch.unsupported" not in reason:
+        print(f"✗ pin 拒绝码应为 fetch.unsupported（避免业务误判成证书问题）：{reason[:120]}"); ok = False
+    elif "pinning" not in reason:
+        print(f"✗ 拒绝信息没点明是 pinning：{reason[:140]}"); ok = False
+    elif "未发出任何流量" not in reason:
+        print(f"✗ 拒绝信息没说清『未发出流量』（业务无法确认未被降级发出）：{reason[:140]}"); ok = False
+    else:
+        print(f"✅ tlsPins 如实拒绝（未发出流量）：{reason[:130]}")
+    sys.exit(0 if ok else 1)
+# ★★★#1203：HTTPDNS **表注入**组的预期形态（此前没有分支 ⇒ 跑这条必须人工判"失败是不是对的"）。
+#   语义：表内域名按表解析 ⇒ 注入不可达 IP（TEST-NET-3）时请求**必须失败**，
+#   且 `dns.tableHits > 0` + `lastSource == "table"`（证"表真的被用于解析"，不是碰巧失败）。
+#   ★这与 #1171 的判据同口径：`tableHits` 才是"表被采用"的直接证据，失败本身只是必要条件。
+table_on = (diag.get("dnsHost") or "") != "" or bool(d.get("dns", {}).get("tableRules"))
+if table_on:
+    dn = d.get("dns") or {}
+    if (dn.get("tableRules") or 0) <= 0:
+        print("✗ 传了 dnsHost/dnsIp 但宿主没装上表（tableRules=0）"); ok = False
+    elif (dn.get("tableHits") or 0) <= 0:
+        print(f"✗ 表没被命中（tableHits=0 · lastSource={dn.get('lastSource')!r}）"); ok = False
+    elif dn.get("lastSource") != "table":
+        print(f"✗ lastSource 应为 table，实得 {dn.get('lastSource')!r}"); ok = False
+    elif d.get("ok") is not False:
+        # 注入的是不可达 IP；若仍成功 ⇒ 解析结果没被采用（表是摆设）
+        print("✗ 表把域名解析到不可达 IP 但请求成功了 ⇒ 表未被采用"); ok = False
+    else:
+        print(f"✅ HTTPDNS 表生效：tableRules={dn.get('tableRules')} · tableHits={dn.get('tableHits')}"
+              f" · lastSource=table · 请求如预期失败（不可达 IP）")
     sys.exit(0 if ok else 1)
 if d.get("host") != "harmony":
     print(f"✗ host 应为 harmony，实得 {d.get('host')}"); ok = False

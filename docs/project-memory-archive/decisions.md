@@ -13059,3 +13059,60 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   d) `skipCertificatesValidation` **生产必须 false**（那是关证书校验，安全风险）。
 **⑨ 落点**：矩阵 `00-capability-matrix.md` 第 24 行 + §3 新增「DoH 落点实测」专项 · 契约索引新增一行（改这个面要跑什么）·
   任务板 `T-harmony-httpdns-doh` 补 #1202 段（状态仍 planned：业务化未做）· prebuilt 副本已同步（`check:harmony-runtime-prebuilt` 绿）。
+
+1203. **★★★鸿蒙三个字段"解析了但宿主不用" ⇒ 静默失效（其中 tlsPins 是**安全面**）——逐字段审计抓出来的 · 决策**（2026-10-23 · 承接 #1202 之后"继续收尾鸿蒙 useFetch"）:
+**① 怎么发现的（方法比结论可复用）**：不是碰巧——把 `InvokeFrame` 的每个字段与宿主消费点**逐一对表**
+  （`grep -c "f\.<字段>"`），立刻暴露三个计数为 0 的字段。★这是本仓"假绿总账"里那类
+  「源码里有某字符串 ≠ 执行路径上真的有」的**结构性版本**：`invoke_wire.h` 是五端共享的线格式，
+  它**会解析**所有 tag；而每个宿主只实现自己那部分 ⇒ **线格式的完整度会掩盖宿主的缺口**。
+**② 三个字段的实际危害（按严重度）**：
+  · **`tlsPins` / `tlsPinOnly`（最严重，安全面）**：请求**照常发出、不做任何指纹校验**。
+    业务配了 pin、以为多了防 MITM 一道防线，实际**裸奔**。★而 `http.tlsStats` 的回执里
+    早就写着 `pinning:"unsupported"` —— 也就是说"我们从没谎称支持"，但**也没拦**：
+    「回执里如实说明」不能替代「在入口拒绝」。这是本条最重要的一课。
+  · **`redirectManual`**：`cfg.transferConfiguration.autoRedirect` **硬编码 `= true`**
+    ⇒ `useFetch({redirect:"manual"})` 在鸿蒙上**照常跟随**，业务以为拦住了。
+    ★矩阵 §2.3 的端差异表里**根本没有鸿蒙这一行** —— 缺一行，缺陷就没人看。
+  · **`upload`**：只发 `f.body`（通常为空）⇒ 服务端收到**没有文件的请求**，
+    业务以为上传成功（**可能写入空记录** —— 比报错更糟）。
+**③ 修法（分两类，不能一刀切）**：
+  · **可修的修**：`redirectManual` → `autoRedirect = !(f.redirectManual && *f.redirectManual)`
+    （RCP 本来就有这个字段，属"没接"不是"做不到"）。
+  · **做不到的如实拒绝**：`tlsPins` / `upload` ⇒ 新增 `proteus_http_guard.h` 的
+    `unsupportedFeatureReason()`，在 `handle()` **发请求之前**统一拒绝（`fetch.unsupported`）。
+    ★**"前置"是硬要求**：pin 不能先发出一段未受保护的流量再拒。
+    ★错误码用 `fetch.unsupported` 而非 `fetch.tlsError`：后者会让业务去查"证书/pin 配错"，方向就错了。
+  · `stream` 的拒绝同时搬进 guard（语义文案不变）⇒ 三类"本端做不到"收口到**一处**，
+    以后新增能力只有两个选择：接上，或在 guard 里拒。
+**④ 平台边界（如实，不是欠账）**：`rcp.h` 的 `Rcp_SecurityConfiguration` 只有
+  `remoteValidationType`(SYSTEM/SKIP) + `certificateAuthority`(PEM 内容/文件/目录) + 客户端证书，
+  **没有"拿到对端证书后由我决定接受与否"的回调**（Android 有 `X509TrustManager`、iOS 有 URLSession challenge）
+  ⇒ SPKI pinning 在鸿蒙**无法实现**。★`skipCertificatesValidation` 是**更松**的开关，与 pinning 语义相反，
+  不能拿来凑数。⇒ `T-harmony-tls-pinning` 维持 **blocked**，但**风险面已消除**。
+  ★`upload` 相反：RCP **有** multipart 结构体（`Rcp_MultipartFormFieldValue` / `Rcp_FormFieldFileValue` / `Rcp_Form`）
+  ⇒ 属"工作量"不是"边界" ⇒ 立 `T-harmony-http-upload`（planned）做真实现。
+**⑤ 判据（防复发，这是本条的长期价值）**：`tests/harmony-unsupported-features.test.ts` 6 条，
+  其中最关键的是**「消费点清点」**——遍历 `InvokeFrame` 的能力字段，断言每个要么被宿主消费、
+  要么在 guard 里被拒。**新增字段忘了接 ⇒ 当场红**（直接对着本缺陷的根因，不是对着某个具体 bug）。
+  另有静态条：`autoRedirect` 不得再出现硬编码 `true`；guard 必须在 `pkiFetch` 调用点**之前**。
+  配套把 `tests/harmony-http-gaps.test.ts` 的 stream 判据改成**两段联合**
+  （guard 里有拒绝 **且** `handle()` 真的调用）——防"guard 写了但没人调用"这种新形态的静默失效。
+**⑥ 破坏性验证（两条，都真跑）**：
+  · 把 pin 拒绝条件改成恒假 ⇒ 重建上真机 ⇒ **请求真的成功发出**（复现原缺陷）、判据转红；
+  · 删掉 `upload` 拒绝分支 ⇒ 「消费点清点」立刻指名 `upload` 静默失效。
+  ⇒ 说明判据盯的是"接线是否承重"，不是字符串存在。
+**⑦ 本轮还顺手抓到一个装置缺陷（会毁证据）**：`http_probe.h` 的回执用 `char head[320]` + `snprintf`
+  拼 error reason ⇒ 拒绝文案一长（`tlsPins` 那条约 190 字节）就**截断在字符串中间 ⇒ 整个回执是非法 JSON**
+  ⇒ 判据连"为什么被拒"都读不到。改成 `std::string` 拼接。
+  ★教训：**定长缓冲区 + 会增长的字段 = 迟早截断**；回执要被机器解析，不能靠"当前文案够短"维持正确性。
+  同族：`#1191` 的 `body = head` 整串覆盖、`#1201` 的"主路径漏 durable"。
+**⑧ 回归（都真机跑过）**：正常请求 200 · `savePath` 落盘 `{path,size,durable:true}` + 设备侧 stat 一致 ·
+  HTTPDNS 表 `tableRules=1 · tableHits=1 · lastSource=table` · DoH 六组全过。
+  ★顺手给 `run-http-probe.sh` 补了 HTTPDNS 表注入组的判据分支（此前跑这条必须人工判"失败是不是对的"）。
+**⑨ 文件纪律**：`proteus_http.h` 加完 #1202/#1203 到 **997 行**（硬上限 1000）⇒
+  把 `#1158` 传输读数那段长注释（15 行纯说明）搬到唯一实现 `proteus_http_transport.h`（那里早有同口径说明）
+  ⇒ 983 行，**知识没丢**。★曾试图把响应装配抽成 `proteus_http_resp.h` 的模板函数，
+  但发现会改动 `std::move` 语义（大 buffer 多一次拷贝）⇒ **主动删掉**，不为了拆而改变运行期行为。
+**⑩ 诚实边界**：a) "未发出流量"的可核对痕迹是 `limit.gateInstalled:false` + `seen:0`（逐块回调从未装上、
+  零字节接收），**不是抓包证明**；b) pinning 是平台边界（无校验回调），不是欠账；
+  c) `upload` 只是"堵上静默失效"，真实现未做；d) `handle()` 仍有约 480 行（#1201 遗留的拆段未完成）。

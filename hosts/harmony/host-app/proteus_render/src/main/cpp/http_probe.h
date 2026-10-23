@@ -345,14 +345,22 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
                     preview.push_back((uc < 0x20 || uc >= 0x7f) ? '.' : static_cast<char>(uc));
                 }
             }
-            char head[320];
-            snprintf(head, sizeof(head),
-                     "{\"ok\":%s,\"host\":\"harmony\",\"bridge\":\"invokeBytes\",\"frameSource\":\"%s\",\"reqId\":\"%s\","
-                     "\"status\":%u,\"bodyBytes\":%zu,\"reason\":\"%s\"",
-                     rf.ok ? "true" : "false", frameHexIn.empty() ? "cpp" : "arkts", jsonEscape(rf.reqId).c_str(),
-                     rf.status ? *rf.status : 0u, rf.body.size(),
-                     rf.reason ? jsonEscape(*rf.reason).c_str() : "");
-            body = head;
+            /**
+             * ★★★#1203：**改用 `std::string` 拼接，不用定长 `char head[320]`**。
+             *   原实现用 `snprintf` 往 320 字节里塞错误原因——而拒绝文案会随能力说明增长
+             *   （`tlsPins` 那条约 190 字节，加上 host/bridge/reqId 就溢出了）⇒ **截断在字符串中间
+             *   ⇒ 整个回执是非法 JSON** ⇒ 判据连"为什么被拒"都读不到（装置先把证据毁了）。
+             *   ★这是本仓记过的形态：**定长缓冲区 + 会增长的字段 = 迟早截断**；
+             *   回执是要被机器解析的，不能靠"当前文案够短"维持正确性。
+             */
+            body = "{\"ok\":";
+            body += rf.ok ? "true" : "false";
+            body += ",\"host\":\"harmony\",\"bridge\":\"invokeBytes\",\"frameSource\":\"";
+            body += frameHexIn.empty() ? "cpp" : "arkts";
+            body += "\",\"reqId\":\"" + jsonEscape(rf.reqId) + "\"";
+            body += ",\"status\":" + std::to_string(rf.status ? *rf.status : 0u);
+            body += ",\"bodyBytes\":" + std::to_string(rf.body.size());
+            body += ",\"reason\":\"" + (rf.reason ? jsonEscape(*rf.reason) : std::string()) + "\"";
             body += limitJson;   // ★同上：head 覆盖后必须重新拼
             body += dnsJson;     // ★#1169：DNS 读数同理（覆盖后必须重拼）
             body += transportJson; // ★#1186：传输读数同理

@@ -97,6 +97,18 @@ export default class EntryAbility extends UIAbility {
     if (probeStream !== undefined) {
       AppStorage.setOrCreate('proteusProbeStream', String(probeStream) === '1' ? '1' : '');
     }
+    /**
+     * ★★★#1203：`tlsPins`（应被如实拒绝——RCP 无指纹校验回调）。
+     * ★只用来**验证拒绝生效**，不是要支持 pinning。不给 ⇒ 不设键（生产行为零影响）。
+     */
+    const probePins = want?.parameters?.['tlsPins'];
+    if (typeof probePins === 'string' && probePins.length > 0) {
+      AppStorage.setOrCreate('proteusProbeTlsPins', probePins);
+    }
+    const probePinOnly = want?.parameters?.['tlsPinOnly'];
+    if (probePinOnly !== undefined) {
+      AppStorage.setOrCreate('proteusProbeTlsPinOnly', String(probePinOnly) === '1' ? '1' : '');
+    }
     // ★★★#1156：传输层取证（`--ps transportUrl http://…` + `--ps rounds 3`）——
     //   ★单列参数名而**不复用** `url`：同一台机器上两个场景的 URL 语义不同
     //   （httpProbe 打公网、transport 打本地 h2 服务的明文端口），复用会互相覆盖。

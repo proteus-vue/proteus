@@ -101,6 +101,7 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 | Android | `followRedirects(!manual)`（OkHttp，per-call 经 `newBuilder()` 派生；四条请求路径统一 `HttpTransport.CallConfig.redirectManual`） | ✅ |
 | iOS | `URLSessionTaskDelegate.willPerformHTTPRedirection` ⇒ manual 时 `completionHandler(nil)` | ✅ |
 | Web | 原生 `fetch(url, { redirect: 'manual' })`（比 JS 逐跳重发省一次往返） | ✅ |
+| **鸿蒙** | `Rcp_TransferConfiguration.autoRedirect`（★**#1203 才接上**——此前硬编码 `= true`，`manual` 在鸿蒙上**无效**：业务以为拦住了、实际照常跟随） | ✅ **#1203** |
 | **MP** | `wx.request` **隐式跟随且不可关** | **❌ `fetch.unsupported`**（如实） |
 
 **RFC 语义（基准 = 标准真值，不是各端看着办）**：
@@ -183,6 +184,37 @@ HTTPDNS / HTTP/2 / 连接池 / 证书锁定（pinning）/ 弱网调优 的落点
 ★~~诚实边界：本单只做了头文件取证，未实测 DoH 生效~~ ⇒ ✅ **已真机实测（#1202，六组对照）**，
 见下方「DoH 落点实测」专项。
 
+### ★★★鸿蒙不支持的能力必须**如实拒绝**（#1203 · 2026-10-23）
+
+**根因（一类缺陷，不是一个 bug）**：`invoke_wire.h` 是五端共享的线格式，它**会解析**所有 tag；
+但每个宿主只实现自己那部分。**"解析了但宿主不消费" ⇒ 静默失效**——业务以为能力生效，实际没执行。
+本仓对 `stream`/`savePath` 早已处理过（#1187），但**仍有三个字段漏网**（#1203 逐字段审计发现）：
+
+| 字段 | 此前行为 | 危害 | #1203 处理 |
+|---|---|---|---|
+| `tlsPins` / `tlsPinOnly` | **请求照常发出，不做任何指纹校验** | ★**安全策略假成立**：业务以为多了防 MITM 一道防线，实际裸奔 | **前置拒绝**（`fetch.unsupported` + "未发出任何流量"） |
+| `redirectManual` | 硬编码 `autoRedirect = true` | `useFetch({redirect:'manual'})` 在鸿蒙上**照常跟随**，业务以为拦住了 | **修复**（`autoRedirect = !manual`，RCP 有该字段） |
+| `upload` | 只发 `f.body`（通常为空） | 服务端收到**没有文件的请求**，业务以为上传成功（可能写入空记录） | **前置拒绝**（另立 `T-harmony-http-upload` 做真实现） |
+
+**收口方式**：新增 `proteus_http_guard.h` 的 `unsupportedFeatureReason()`，在 `handle()` **发请求之前**统一拒绝
+（`stream` 也搬到这里，语义不变）。★"前置"是硬要求——pin 不能先发出一段未受保护的流量再拒。
+
+**判据（防复发）**：`tests/harmony-unsupported-features.test.ts` 6 条，其中最关键的一条是
+**「消费点清点」**——遍历 `InvokeFrame` 的每个能力字段，断言它要么被宿主消费、要么在 guard 里被拒；
+新增字段忘了接 ⇒ 当场红（这条直接对着本缺陷的根因）。
+配套 `tests/harmony-http-gaps.test.ts` 的 stream 判据改为**两段联合**（guard 里有拒绝 **且** `handle()` 真的调用），
+防"guard 写了但没人调用"这种新形态。
+
+**破坏性验证（两条，都真跑）**：
+① 把 pin 拒绝条件改成恒假 ⇒ 重建上真机 ⇒ 请求**真的成功发出**（复现原缺陷），判据转红；
+② 删掉 `upload` 拒绝分支 ⇒ 「消费点清点」立刻指名 `upload` 静默失效。
+
+**诚实边界**：① `T-harmony-tls-pinning` 仍是 **blocked**——`Rcp_SecurityConfiguration` 只有 CA bundle +
+`remoteValidationType`(SYSTEM/SKIP) + 客户端证书，**没有"拿到对端证书后由我决定"的回调** ⇒ SPKI pinning
+在本端**无法实现**（平台边界，不是欠账）；本条只消除"静默放行"的风险面。
+② "未发出流量"的可核对痕迹是 `limit.gateInstalled:false` + `seen:0`（逐块回调从未装上、零字节接收），
+**不是抓包证明**（抓包需另一套装置）。
+
 ### ★★★DoH 落点实测（#1202 · 2026-10-23 · 真机 HUAWEI KLE-AL00U）
 
 **结论：`Rcp_DnsOverHttps` 是权威语义（authoritative），不是"先试再回落"。**
@@ -230,7 +262,7 @@ DoH 是"给一个解析服务端 URL"——两者不是同一个能力（见 `02
 
 | 能力 | 做法 | 判据 |
 |---|---|---|
-| **TLS 证书 pinning** | ✅ **#1154**：`tlsPins`（**SPKI** 指纹，换行/逗号/数组都接受）+ `tlsPinOnly`（`true`=替代系统信任；缺省=**叠加**）。宿主：Android `TlsPinning`（`X509TrustManager` 代理默认信任 + 逐证书 `SHA-256(getPublicKey().getEncoded())`）· iOS `TlsPinningIos`（challenge 回调 + `SecKeyCopyExternalRepresentation` **补 SPKI 头**再哈希）。线格式 `Pins=12` / `PinOnly=13`（五端 40 向量逐字节等价） | 真机双端各 **11/10 条**：pin 命中⇒成功 / 未命中⇒**`fetch.tlsError`** / **叠加模式真的叠加**（pin 对但不开 pinOnly ⇒ 自签被系统信任拒） / 无 pin⇒自签被拒 / 宿主记账确有 challenge。`bash hosts/{android,ios}/run-tls-probe.sh` |
+| **TLS 证书 pinning** | ✅ **#1154**：`tlsPins`（**SPKI** 指纹，换行/逗号/数组都接受）+ `tlsPinOnly`（`true`=替代系统信任；缺省=**叠加**）。宿主：Android `TlsPinning`（`X509TrustManager` 代理默认信任 + 逐证书 `SHA-256(getPublicKey().getEncoded())`）· iOS `TlsPinningIos`（challenge 回调 + `SecKeyCopyExternalRepresentation` **补 SPKI 头**再哈希）· ★**鸿蒙 #1203**：**前置如实拒绝**（RCP 无校验回调 ⇒ 不可实现；此前是静默放行 = 安全策略假成立）。线格式 `Pins=12` / `PinOnly=13`（五端 40 向量逐字节等价） | 真机双端各 **11/10 条**：pin 命中⇒成功 / 未命中⇒**`fetch.tlsError`** / **叠加模式真的叠加**（pin 对但不开 pinOnly ⇒ 自签被系统信任拒） / 无 pin⇒自签被拒 / 宿主记账确有 challenge。`bash hosts/{android,ios}/run-tls-probe.sh`；★鸿蒙 `bash hosts/harmony/run-http-probe.sh --tls-pins=…` ⇒ 必须 `fetch.unsupported` + 未发出流量 |
 | **连接复用（连接池）** | ✅ **本来就具备**（#1155 取证，无需换栈）：Android `HttpURLConnection` 的 keep-alive 池 · iOS `URLSessionConfiguration.default` 的进程级单例会话。★但 **#1154 的 pinning 首版把它弄坏了**（每次请求新建 `SSLContext` ⇒ 连接池按 `SSLSocketFactory` 分桶 ⇒ 复用归零），#1155 修为**进程内缓存 factory** | 真机双端各 **3 请求 / 1 TCP 连接**（服务端按**对端 socket**记账）；静态判据 `tests/tls-pinning-reuse.test.ts`（缓存入口唯一 + 命中即返回）+ 计量判据 `tests/transport-probe-accounting.test.ts`（h2 的多个流算 1 条连接、控制端点不计样本） |
 | **连接复用（鸿蒙）** | ✅ **#1156 修出来的**（原本零复用）：根因两层——① `handle()` 每请求建/关 `Rcp_Session`；② **同步 `HMS_Rcp_FetchSync` 不池化**（同一 session、同一连接池配置下，只改取数 API 即从 3/3 变 3/1）。修法：**进程级 session**（`SessionSlot` + mutex）+ 生产路径改用**异步** `HMS_Rcp_Fetch` + **有界等待**（回调为完成信号，超时则 cancel 并回 `http.timeout`）。原生 napi 仍是同步返回（一次性 VM 约束未变） | 真机 **3 请求 / 1 TCP**（`hosts/harmony/results/transport-probe.json`，`check:cache-evidence` 第三端）；静态判据 `tests/harmony-session-reuse.test.ts`（session 缓存 get/put 配对 + 无 per-request close + 锁不覆盖整段请求）；四方注册判据 `tests/harmony-napi-registry.test.ts` |
 
