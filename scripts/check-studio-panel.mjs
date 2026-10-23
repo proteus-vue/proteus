@@ -123,6 +123,8 @@ const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
 
 // 桩：只替换"值怎么送到页面"，其余与真机一致（含 set_canvas_rect 的调用）
+// ★`read_text` 也在这里桩掉：代码视图（G4 第一块砖）启动时会读文件，不桩就会抛"未实现"
+//   ⇒ 被判据 ⑧（无 JS 错误）判红。桩内容故意含 `const`，供判据 ⑪ 断言"面板真的渲染了内容"。
 await page.addInitScript((payload) => {
   const calls = []
   window.__STUB_CALLS__ = calls
@@ -132,6 +134,7 @@ await page.addInitScript((payload) => {
         calls.push({ cmd, args })
         if (cmd === 'stats') return payload
         if (cmd === 'set_canvas_rect') return null
+        if (cmd === 'read_text') return 'const stubLine = 1\nconst second = 2\nexport { stubLine, second }\n'
         throw new Error('未实现：' + cmd)
       },
     },
@@ -167,9 +170,31 @@ const seen = await page.evaluate(() => {
     rawMd: document.body.innerText.includes('**'),
   }
 })
+// ── ⑪ 代码视图（G4 第一块砖）：点左栏第二个按钮（◈ 代码）────────────────
+// 验两件事：
+//   · **文件通路真的通了**：`read_text` 被调用、面板渲染出桩内容
+//   · **原生画布被收成 0×0** —— 这条最容易漏：GL 视图是独立 NSView，只隐藏 HTML 里的
+//     #canvas 是盖不住它的（切到代码视图后会看到画面浮在代码上）。★判据必须盯"传了 w=0"，
+//     而不是盯"HTML 里没有 #canvas 了"。
+await page.click('.rail button:nth-child(2)')
+await page.waitForTimeout(400)
+const codeView = await page.evaluate(() => {
+  const src = document.querySelector('.src')?.textContent ?? ''
+  const err = document.getElementById('codeErr')?.textContent ?? ''
+  const all = window.__STUB_CALLS__ || []
+  const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
+  const last = rects[rects.length - 1]
+  return {
+    src,
+    err,
+    called: all.some((c) => c.cmd === 'read_text'),
+    zeroed: !!last && last.args?.w === 0 && last.args?.h === 0,
+  }
+})
+// 留一张代码视图快照（人眼可核）
+await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
 await browser.close()
 server.close()
-
 // ⑩ fixture 与原始采集输出必须数值一致（防"改 fixture 让判据变绿"这类静默漂移）
 const rawPath = path.join(STUDIO, 'results', 'panel-source.json')
 let fixtureInSync = true
@@ -202,6 +227,9 @@ const checks = [
   ['⑧ 页面无 JS 错误', errors.length === 0],
   // 曾把 Markdown 粗体写进 HTML，页面上直接露出 "**"；这条挡住复发
   ['⑨ 正文无裸 "**"（Markdown 泄漏）', !seen.rawMd],
+  // ⑪ 代码视图（G4 第一块砖）：读到文件 + 渲染出内容 + 原生画布收成 0×0
+  ['⑪ 代码视图：read_text 被调用且渲染出内容', codeView.called && codeView.src.includes('stubLine') && !codeView.err],
+  [`⑪b 切到代码视图时原生画布被收成 0×0（否则 GL 画面会浮在代码上）${codeView.zeroed ? '' : '（未收到 w=0/h=0）'}`, codeView.zeroed],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
 ]
 let bad = 0

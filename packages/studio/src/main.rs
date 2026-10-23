@@ -101,6 +101,37 @@ fn dump_frame(path: String) {
     eprintln!("[studio] dump rc={rc}");
 }
 
+/// 读仓库内一个文本文件（G4 第一块砖：代码视图的**文件通路**）。
+///
+/// 【为什么不用 Tauri 的 fs 插件】本目录刻意没有 `package.json`（决策 #1187），
+///   引 `@tauri-apps/plugin-fs` 会连带把前端依赖树和 capabilities 配置一起拉进来；
+///   而"只读仓库里的文本"这一件事，Rust 侧 20 行就够，且能**自己把关边界**。
+///
+/// 【边界（都是硬约束，不是建议）】
+///   · **必须在仓库根之下**：`canonicalize` 后前缀比对，`../` 穿越一律拒绝；
+///   · **≤512KB**：再大就不是"看一段代码"，该走别的方式；
+///   · **只读**：这一版不写（编辑是 G4 的后续，按 G-56.1 用 CodeMirror 6，不自研内核）。
+///
+/// 【★诚实边界】仓库根取自编译期 `CARGO_MANIFEST_DIR`：
+///   开发机直接跑二进制 ⇒ 有效；**打包成 .app 后该路径不存在** ⇒ 明确报错（不静默返回空串）。
+///   打包形态要读源码是另一个问题（应读设备侧或让用户选工程目录），不在这一版。
+#[tauri::command]
+fn read_text(path: String) -> Result<String, String> {
+    let root = std::env::var("PROTEUS_REPO_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    let root = root.canonicalize().map_err(|e| format!("仓库根不可达（打包形态？）：{e}"))?;
+    let p = root.join(&path).canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
+    if !p.starts_with(&root) {
+        return Err(format!("路径越界：{path}"));
+    }
+    let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+    if len > 512 * 1024 {
+        return Err(format!("文件过大：{len} 字节（上限 512KB）"));
+    }
+    std::fs::read_to_string(&p).map_err(|e| format!("读失败 {path}：{e}"))
+}
+
 /// 机型探测：一次 adb 查询，缓存住。
 /// ★探测不到就返回 None —— **不拿"Android"这种占位串冒充机型**（面板上"未知"比一个假型号有用）。
 fn device_label() -> Option<String> {
@@ -205,7 +236,7 @@ fn main() {
     default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_canvas_rect, stats, dump_frame])
+        .invoke_handler(tauri::generate_handler![set_canvas_rect, stats, dump_frame, read_text])
         .setup(|app| {
             let handle = app.handle().clone();
             let h = handle.clone();

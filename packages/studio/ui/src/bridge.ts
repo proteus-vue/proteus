@@ -50,3 +50,6 @@ export const getStats = (): Promise<Stats> => invoke<Stats>('stats')
 
 export const setCanvasRect = (r: { x: number; y: number; w: number; h: number }): Promise<void> =>
   invoke<void>('set_canvas_rect', r)
+
+/** 读仓库内一个文本文件（G4 第一块砖）。边界由 Rust 侧把关：仓库内 + ≤512KB + 只读。 */
+export const readText = (path: string): Promise<string> => invoke<string>('read_text', { path })
