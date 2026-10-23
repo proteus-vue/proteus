@@ -1,4 +1,4 @@
-// docs/proteus-studio-poc/05-studio-shell/ui/src/useStats.ts
+// packages/studio/ui/src/useStats.ts
 // 读数轮询 + 格式化（决策 #1183）
 //
 // 【为什么轮询而不是推送】面板 2Hz 足够（人眼看不出 500ms 的差别），

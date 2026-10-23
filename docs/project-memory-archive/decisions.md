@@ -13194,6 +13194,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ——原生 GL 视图是独立 NSView，CSS 的 `border-radius` **裁不到它**，加圆角会露出方角画面。
   - **未做**：设备像素级 1:1 的"100%"档位（CSS px ≠ 设备 px，Retina 下语义要说清才能做，否则是假 1:1）。
 
+1207. **自我纠正：B1 的「原生点击通路」是死路 → 输入改由 HTML 提供（+ 拖拽平移）**（2026-10-23）
+  - **错误的前提**：B1 写的是「画布是**叠在 HTML 之上**的原生 NSView ⇒ HTML 收不到它的点击」，
+    据此做了 `ObjC mouseDown → y 翻转 → Rust extern "C" → app.emit("canvas-click") → 前端 listen`。
+  - **事实**：`embed_view.m` 的挂载是 `[g_parent addSubview:g_view positioned:NSWindowBelow relativeTo:nil]`
+    —— **在所有兄弟视图的最下面**，而 WKWebView 铺满 contentView。AppKit `hitTest:` 从最上层开始找
+    ⇒ **真实点击永远被 webview 吃掉，`mouseDown:` 一次都不触发**。
+  - **★最该记住的一条**：判据 ⑬ 当时从 `window.__EMIT__`（JS 事件入口）注入，**一直是绿的**。
+    ⇒ **判据通过 ≠ 功能可用**：判据必须走「用户真实走的入口」，否则它只是在证明一段没人调用的代码能跑。
+    （自查方法：问"这个判据注入的物品，在真实运行时由谁产生？"——答不上来就是假绿。）
+  - **改为**：`#canvas` 是真实 DOM 元素、有真实几何 ⇒ pointer 事件直接在前端处理。
+    坐标折算成**设备像素**（`(clientX-left)/width × stats.width`）——同一台设备换缩放时 CSS 值会变、
+    设备值不会，而设备检查器要回答的正是"这是设备上第几个像素"。
+  - **删干净**（不是注释掉）：`poc_set_click_cb` / `g_click_cb` / `mouseDown:` / `acceptsFirstResponder` /
+    `on_canvas_click` / `CanvasClick` / `onCanvasClick` / `APP: OnceLock` / 测试桩里的 `__TAURI__.event`。
+    `embed_view.m` 留一段说明「这里**不该**处理输入」+ 为什么（附：若将来把 GL 提到 webview 之上，
+    必须同时重做 HTML 叠加层——那是一次架构变更，不是加个回调）。
+  - **顺带补上拖拽平移**（上一单列的边界）：`transform: translate`，上限 = 屏幕比舞台大出的那一半，
+    `rAF` 合并成每帧一次 IPC；`⌘0` 回适应时平移归零。**pan 不持久化**（一次性手势 ≠ 工作区偏好），
+    缩放持久化（"看多大"是偏好）。
+  - **判据 20 → 22**：⑬ 重写为**真实鼠标**点 `#canvas` 中心（Playwright mouse 走浏览器命中测试）⇒
+    标记 50%,50% + 设备像素 ≈(640,360)（容差 ±3：clientX 取整而屏幕矩形常在半像素上）；
+    ⑯ 真实手势 down→多步 move→up 拖 100px ⇒ 平移量、屏幕位置、原生矩形三者一致；
+    ⑯b 回「适应」后平移归零。
+    ★⑯ 只往左拖是刻意的：125% 下屏幕高 726 < 舞台 796 ⇒ 纵向被正确夹紧到 0，用纵向断言会红，
+    但那不是 bug（屏幕比舞台小就不该能拖）。
+    ★⑯b 第一版自己写错基线（拿"125% 时的 x"当"适应后的 x"）⇒ 已改成与 `box1.x` 比。
+
+
 
 1206. **★★★鸿蒙 multipart 上传（upload）从"如实拒绝"变真实现——boundary 归属是核心坑 · 决策**
 ★**编号勘误**：本条原写 #1205，与并发会话 Studio 设备画面适配撞号 ⇒ 改为 **#1206**（外部文档按号引用，已提交的 #1205 不动）。（2026-10-23 · 收口 `T-harmony-http-upload`）:

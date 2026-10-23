@@ -91,8 +91,10 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .stage{position:absolute;inset:var(--sp5);display:flex;align-items:center;justify-content:center}
 /* ★`flex:0 0 auto` 不能省：flex item 默认 `flex-shrink:1`，放大时**宽度**会被压回舞台宽、
    而高度不会 ⇒ 画面被横向压扁（判据 ⑮ 实测误差 20%）。缩放必须两轴同步生效。 */
-.screen{position:relative;flex:0 0 auto;background:transparent;
+.screen{position:relative;flex:0 0 auto;background:transparent;cursor:grab;
         box-shadow:0 0 0 1px var(--border-strong),0 24px 64px -24px rgba(0,0,0,.85)}
+/* 拖拽中：手型闭合（IDE/图像查看器的通用语汇，表示"正在移动画布"） */
+.screen:active{cursor:grabbing}
 /* ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 */
 #canvas{position:absolute;inset:0;background:transparent}
 

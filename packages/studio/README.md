@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | `cargo build --release`；双击版 `./package-app.sh` → `build-app/Proteus Studio.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **20 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **22 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -419,28 +419,50 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 - ⑪c 文件列表渲染出条目且默认打开 `App.vue`（自证）；
 - ⑪d **点第二个文件能切换**（`open` 通路，不只是默认那个能看）。
 
-## 原生点击通路（G4 · B1）
+## 输入通路（G4）· 含一次自我纠正
 
-画布是**叠在 HTML 之上的原生 NSView** ⇒ HTML 收不到它的点击。之前它是块纯玻璃（只显示、不接受输入）。
-所有交互（点选元素、拖拽、缩放）都要求这条通路先通，所以先做它：
+### 先记错误：B1 的「原生点击通路」是死路
 
+B1 的前提写的是「画布是**叠在 HTML 之上**的原生 NSView ⇒ HTML 收不到它的点击」，于是做了
+`ObjC mouseDown → y 翻转 → Rust extern "C" 回调 → app.emit("canvas-click") → 前端 listen`。
+
+**这个前提是错的。** `embed_view.m` 里挂载是：
+
+```objc
+[g_parent addSubview:g_view positioned:NSWindowBelow relativeTo:nil];
 ```
-ObjC mouseDown  →  y 翻转成左上原点  →  Rust extern "C" 回调  →  app.emit("canvas-click")  →  前端 listen
-```
 
-| 环节 | 实现 | 备注 |
-|---|---|---|
-| ObjC | `PocGLView` 重写 `mouseDown:` + `acceptsFirstResponder` | `poc_set_click_cb` 注册函数指针（C/ObjC 与 Rust 的唯一接缝） |
-| 坐标 | **AppKit 左下原点 → 前端左上原点**，回调前翻转 | 前端只按 `x/w` 百分比定位，不需要知道 AppKit 坐标系 |
-| Rust | `static APP: OnceLock<AppHandle>` + `on_canvas_click` | 回调是 C 函数，拿 handle 只能走静态；payload 用 `Serialize` struct（**不引 serde_json**） |
-| 前端 | `onCanvasClick()` → 画布上打**圆圈+十字**标记 + 状态栏显示坐标 | 标记同时是"通路已通"的可见证据 |
+`NSWindowBelow` = **在所有兄弟视图的最下面**，而 WKWebView 铺满整个 `contentView`。
+AppKit 的 `hitTest:` 从最上层子视图开始找 ⇒ **真实点击永远被 webview 吃掉，`mouseDown:` 一次都不触发**。
 
-**判据 ⑬**：从事件入口模拟一次 `(498, 374, 996, 748)` ⇒ 断言标记落在 **50%,50%**、状态栏显示 `498,374`。
-（画布是原生视图，Playwright 点不到它，只能从事件入口验——但**验的是前端那半段真接线**。）
+**为什么判据一直是绿的**：判据 ⑬ 当时用 `window.__EMIT__` 从 JS 事件入口注入 —— 它验的确实是
+前端那半段接线，但**验的对象在真实运行时不存在**。这是"测了一条死路"的典型：
+**判据通过 ≠ 功能可用**，除非判据走的是用户真实走的入口。
 
-**★B2 做不了（如实说）**：点中处显示**元素信息**（标签/盒模型/计算样式）需要**设备侧视图树 + 拾取通道**，
+### 现在的做法：输入就是 HTML
+
+`#canvas` 是真实 DOM 元素、有真实几何，pointer 事件直接在前端处理：
+
+| 手势 | 行为 |
+|---|---|
+| 点击 | 折算成**设备像素**坐标（`(clientX - rect.left) / rect.width × stats.width`）→ 打圆圈+十字标记 + 状态栏 |
+| 拖拽 | 平移画布（`transform: translate`），上限 = 屏幕比舞台大出的那一半；用 `rAF` 合并成每帧一次 IPC |
+
+**为什么用设备像素而不是 CSS px**：同一台设备在 100% / 200% 缩放下 CSS 值会变，设备值不会 ——
+设备检查器要回答的是「我点的这个点在设备上是第几个像素」。
+
+**已删掉的东西**（不是注释掉，是删）：`poc_set_click_cb` / `g_click_cb` / `mouseDown:` /
+`acceptsFirstResponder` / `on_canvas_click` / `CanvasClick` / `onCanvasClick` / `APP: OnceLock`。
+留下死代码只会让人以为它还在生效。`embed_view.m` 里改成一段说明「这里**不该**处理输入」+ 为什么。
+
+**判据 ⑬（重写）**：用 Playwright 的**真实鼠标**点 `#canvas` 中心 ⇒ 断言标记落在 50%,50%、
+状态栏给出 ≈ `640,360`（容差 ±3 设备像素，因为 clientX 被取整而屏幕矩形常在半像素上）。
+**判据 ⑯/⑯b**：真实手势 down→多步 move→up 拖 100px ⇒ 平移量、屏幕位置、原生矩形三者一致；
+点「适应」后平移归零。
+
+**★B2 还做不了（如实说）**：点中处显示**元素信息**（标签/盒模型/计算样式）需要**设备侧视图树 + 拾取通道**，
 这两样目前都不存在（G-54 的 `locateAssertion` 仍是 0 行，面板里已明写"无数据源"）。
-B1 交付的是**地基**：通路通了，数据一到就能接。
+现在交付的是**地基**：真实输入通了、坐标已经是设备像素，视图树一到就能接。
 
 ## 会话状态（G5 · 决策 #1190 续）
 
@@ -486,18 +508,21 @@ Studio 记住**上次的视图与打开的文件**，重启回到原处。
 快捷键 `⌘0` 适应 / `⌘=` 放大 / `⌘-` 缩小（只在设备视图生效——代码视图里的 `⌘-` 该留给编辑器字号）。
 **比例永远由设备决定，缩放只改大小**。
 
-**判据 17 → 20 条**：
+**判据 17 → 22 条**：
 - ⑭ 屏幕矩形比例 == 设备比例（误差 <0.5%）**且原生视图收到的矩形与之一致**——
   只比值不够：HTML 算对了但没把新矩形发给原生，画面上仍是拉伸的旧尺寸；
 - ⑭b 窗口变窄后**仍等比**且确实变小（抓"把比例写死"的典型症状）；
-- ⑮ 缩放后**尺寸变大但比例不变**，且标签与落盘状态同步。
+- ⑮ 缩放后**尺寸变大但比例不变**，且标签与落盘状态同步；
+- ⑯ 真实手势拖拽 ⇒ 平移量、屏幕位置、原生矩形三者一致（只改前端不改原生 = 画面撕裂）；
+- ⑯b 回到「适应」后平移**归零**（否则缩小后画面会孤零零站在角落外）。
 
 > ★⑮ 第一次跑就红了，抓到真 bug：`.stage` 是 flex 容器，而 **flex item 默认 `flex-shrink:1`**
 > ⇒ 放大时宽度被压回舞台宽、高度不受压 ⇒ 画面横向压扁（实测误差 20%）。修法 `flex:0 0 auto`。
 > **这条判据存在的意义就是它**——肉眼看 125% 的画面"好像没问题"，量一下才知道比例错了。
 
-**已知边界**：缩放锚点在中心，**没有拖拽平移**（放大后只能看中间区域）；
-屏幕本体保持**直角**（原生 GL 视图是独立 NSView，CSS 的 `border-radius` 裁不到它，圆角会露出方角画面）。
+**已知边界**：屏幕本体保持**直角**（原生 GL 视图是独立 NSView，CSS 的 `border-radius` 裁不到它，
+圆角会露出方角画面）；缩放锚点在中心（不是鼠标位置）；**没有"真 1:1 的 100% 档"**
+（CSS px ≠ 设备 px，Retina 下语义要说清才是真的 1:1）。
 
 ## UI 生产验收标准（2026-10-23）
 
@@ -527,7 +552,7 @@ Studio 记住**上次的视图与打开的文件**，重启回到原处。
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
 | **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
-| **G4** | 编辑器容器 | **浏览 + 只读 + B1 事件通路已成（#1190 续）**：左栏 ◈ 切换 · `list_files` 列真实文件 · 点谁读谁 · 行号展示 · **原生点击 → 坐标回传 → 落点标记**（判据 ⑬）· 切走时把原生画布收成 0×0。**还没做**：CodeMirror 6 编辑与写回、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | CodeMirror 6（G-56.1 红线：绝不自研）+ 设备侧视图树 |
+| **G4** | 编辑器容器 | **浏览 + 只读 + 真实输入已成**：左栏 ◈ 切换 · `list_files` 列真实文件 · 点谁读谁 · 行号展示 · **真实 pointer 点击 → 设备像素落点**（判据 ⑬，修掉了 B1 那条走不通的原生通路）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还没做**：CodeMirror 6 编辑与写回、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | CodeMirror 6（G-56.1 红线：绝不自研）+ 设备侧视图树 |
 | **G5** | 持久化 / 模块化 | **会话状态已成（#1190 续）**：视图（设备/代码）与上次打开的文件落 `~/Library/Application Support/dev.proteus.studio/state.json`，重启即恢复；判据 ⑫/⑫b 守着。**还没做**：窗口尺寸记忆、面板可插拔、`main.rs` 按命令分组拆 | 先拆命令再谈模块化（现在 408 行仍在可读范围） |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
 | — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |

@@ -1,4 +1,4 @@
-// docs/proteus-studio-poc/05-studio-shell/ui/src/bridge.ts
+// packages/studio/ui/src/bridge.ts
 // Tauri IPC 的**唯一入口**（决策 #1183）
 //
 // 【为什么要包一层】面板里有 20 个字段要靠 `stats` 拉，散落调用会：
@@ -61,26 +61,8 @@ export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]
 export const loadState = (): Promise<string> => invoke<string>('load_state')
 export const saveState = (json: string): Promise<void> => invoke<void>('save_state', { json })
 
-/** 画布在视图内的点击坐标（左上原点、单位为点；由 ObjC 的 mouseDown 翻转 y 后送来） */
-export interface CanvasClick {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-/**
- * 订阅「画布被点击」（B1）。
- * ★走 Tauri 的事件系统（`withGlobalTauri` 已开 ⇒ `__TAURI__.event.listen` 零依赖）；
- *   这不是"可选增强"——画布是原生 NSView，**HTML 收不到它的点击**，
- *   事件是唯一通路（`poc_set_click_cb` → Rust `emit` → 这里）。
- * 返回取消订阅函数；无桥时返回 null（浏览器直开不该白屏）。
- */
-export function onCanvasClick(cb: (p: CanvasClick) => void): (() => void) | null {
-  const ev = (globalThis as { __TAURI__?: { event?: { listen?: Function } } }).__TAURI__?.event
-  if (!ev?.listen) return null
-  const pending = ev.listen('canvas-click', (e: { payload: CanvasClick }) => cb(e.payload))
-  return () => {
-    void Promise.resolve(pending).then((un: (() => void) | undefined) => un?.())
-  }
-}
+// ── 指针输入不走 IPC（★这是对 B1 的修正，别再加回来）────────────────────────
+// B1 曾在原生侧注册 mouseDown 回调、经 Tauri `emit('canvas-click')` 送到前端。
+// 但 GL 视图是 `addSubview ... positioned:NSWindowBelow` 挂的，**在所有兄弟视图最下面**，
+// 而 WKWebView 铺满 contentView ⇒ 真实点击全被 webview 吃掉，那个回调一次都不会触发。
+// 正确做法：`#canvas` 是真实 DOM 元素，pointer 事件直接在前端处理（零坐标翻转、零 C 接缝）。

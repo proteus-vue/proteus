@@ -3362,6 +3362,33 @@
         "T-studio-ios-stream"
       ],
       "note": "【done · 决策 #1205（2026-10-23）】用户要求「按大厂 IDE 生产验收标准」。★修的真 bug：原生视图是 main 减 20px 的一整块，而 blit 用全屏三角形铺满视口 ⇒ 画面被拉成视口比例（Android 1280x720 纵向拉伸 37%；iPhone 888x1920 横向 2.7 倍）。★为什么长期没发现：poc_dump 读的是 FBO 不是屏幕，dump 永远正确 ⇒ 「dump 对」只证明「解码+合成」对，不证明「上屏」对。★修法两层：HTML 让 .screen 只占设备矩形（原生跟着走 ⇒ 1:1 无黑边）+ 原生 uFit contain 兜底（宁可黑边不变形；uFit<0 直接 exit(2)，否则除零 ⇒ 全黑且不报错）。★缩放 ws.zoom 0.25~4 存 state.json（读盘夹紧），⌘0/⌘=/⌘- 仅在设备视图生效。★判据 17→20；⑮ 首跑即红抓到 .stage 是 flex ⇒ flex-shrink 把宽度压回舞台宽导致压扁 20%，修 .screen{flex:0 0 auto}。★边界：无拖拽平移、屏幕直角（原生 NSView 不受 CSS border-radius 裁剪）、未做真 1:1 的 100% 档。"
+    },
+    {
+      "id": "T-studio-html-input",
+      "title": "Studio：纠正 B1 的死路——输入改由 HTML pointer 提供（真实点击判据）+ 拖拽平移",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "packages/studio/native/embed_view.m",
+        "packages/studio/src/main.rs",
+        "packages/studio/ui/src/App.vue",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/styles.css",
+        "packages/studio/ui/src/useStats.ts",
+        "scripts/check-studio-panel.mjs",
+        "packages/studio/README.md",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1207,
+      "branch": null,
+      "verification": "pnpm run check:studio-panel（22/22，⑬ 真实鼠标点 #canvas 中心 / ⑯ 真实手势拖拽 / ⑯b 回适应归零）&& cargo build --release && node scripts/check-file-size.mjs",
+      "related": [
+        "T-studio-aspect-fit",
+        "T-studio-out-of-poc"
+      ],
+      "note": "【done · 决策 #1207（2026-10-23）】★纠正 B1：GL 视图是 addSubview positioned:NSWindowBelow（最下面），webview 铺满 contentView ⇒ 真实点击全被 webview 吃掉，mouseDown 一次不触发 —— 而判据 ⑬ 一直绿（用 window.__EMIT__ 从 JS 入口注入）。教训：判据必须走用户真实入口，否则只是在证明一段没人调用的代码能跑；自查问句「这个判据注入的物品在真实运行时由谁产生？」。★改为 HTML pointer：坐标折算设备像素（换缩放 CSS 值会变、设备值不会）。★删干净：poc_set_click_cb/g_click_cb/mouseDown/acceptsFirstResponder/on_canvas_click/CanvasClick/onCanvasClick/APP OnceLock + 测试桩 __TAURI__.event。★新增拖拽平移（transform:translate + rAF 合并 IPC + 上限=屏幕超出舞台的一半），pan 不持久化、zoom 持久化。★判据 20→22；⑯ 只往左拖是刻意的（125% 下纵向被正确夹紧为 0）；⑯b 第一版基线写错已改。"
     }
   ]
 }

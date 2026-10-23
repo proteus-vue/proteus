@@ -148,14 +148,8 @@ await page.addInitScript((payload) => {
       },
     },
   }
-  // ★B1 的事件通路：桩提供 event.listen，把 handler 挂到 window.__EMIT__，测试时手动触发
-  //   （画布是原生 NSView，Playwright 点不到它，只能从事件入口模拟）
-  window.__TAURI__.event = {
-    listen: async (name, cb) => {
-      window.__EMIT__ = (payload) => cb({ payload })
-      return () => {}
-    },
-  }
+  // ★这里刻意**不再**桩 `__TAURI__.event.listen`：指针输入已经不在 Tauri 事件里走了
+  //   （B1 那条原生 mouseDown 通路是死路，见 README「输入通路」）。留个桩只会让人以为它还在用。
 }, stats)
 
 const errors = []
@@ -221,11 +215,20 @@ const switchedPath = await page.evaluate(
 // ── ⑫ G5 会话状态：切换后要落盘；reload 后要能**恢复上次的视图与文件** ──────────
 const savedState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
 
-// ── ⑬ B1 原生点击 → HTML：切回设备视图，从事件入口模拟一次点击 ──────────────
-//  ★为什么必须切回设备视图：画布只在 device 视图里渲染（code 视图下是 0×0）
+// ── ⑬ 真实指针点击 → 落点标记（★修正 B1：原来的判据测的是一条死路）──────────────
+// 【原来的判据错在哪】B1 认为"画布是叠在 HTML 之上的原生 NSView，HTML 收不到点击"，
+//   于是从 `window.__EMIT__` 注入 `canvas-click` 事件 —— 判据绿了，但真实点击根本没这条通路：
+//   GL 视图是 `addSubview ... positioned:NSWindowBelow` 挂的（**在所有兄弟视图最下面**），
+//   而 WKWebView 铺满 contentView ⇒ 真实点击全被 webview 吃掉，`mouseDown:` 一次都不触发。
+// 【现在测什么】直接在 `#canvas` 上做**真实指针点击**（Playwright 的 mouse 事件走浏览器命中测试），
+//   断言标记落在画面正中、状态栏给出**设备像素**坐标。这才是用户真点下去会发生的事。
 await page.click('.rail button:nth-child(1)')
-await page.waitForTimeout(350)
-await page.evaluate(() => window.__EMIT__?.({ x: 498, y: 374, w: 996, h: 748 }))
+await page.waitForTimeout(400)
+const canvasBox = await page.evaluate(() => {
+  const r = document.getElementById('canvas')?.getBoundingClientRect()
+  return r ? { x: r.x, y: r.y, w: r.width, h: r.height } : null
+})
+await page.mouse.click(canvasBox.x + canvasBox.w / 2, canvasBox.y + canvasBox.h / 2)
 await page.waitForTimeout(250)
 const pickSeen = await page.evaluate(() => {
   const el = document.getElementById('pickMark')
@@ -247,6 +250,7 @@ const measure = () =>
     const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
     const last = rects[rects.length - 1]
     return {
+      x: r?.x ?? 0,
       w: r?.width ?? 0,
       h: r?.height ?? 0,
       ipcW: Number(last?.args?.w ?? 0),
@@ -270,8 +274,46 @@ const box3 = await measure()
 const zoomState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
 const zoomLabel = await page.evaluate(() => document.getElementById('zoomLabel')?.textContent?.trim() ?? '')
 await page.screenshot({ path: outPath.replace(/\.png$/, '-zoom.png') })
-await page.click('.zoom button[aria-label="适应窗口"]')
+
+// ── ⑯ 拖拽平移（放大后必须能看别处，否则 4× 只能看中间那一点）──────────────────
+//  真实 mouse 事件序列（down → 多步 move → up），走浏览器命中测试 ⇒ 验的是真手势。
+//  ★只往左拖：1280x720 在 125% 下高 726 < 舞台 796 ⇒ **纵向本来就被夹紧到 0**，
+//    用纵向断言会红，而那不是 bug（正是"屏幕比舞台小就不该能拖"的正确行为）。
+const panBefore = await page.evaluate(() => {
+  const r = document.querySelector('.screen').getBoundingClientRect()
+  return { x: r.x, y: r.y }
+})
+const cb = await page.evaluate(() => {
+  const r = document.getElementById('canvas').getBoundingClientRect()
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+})
+await page.mouse.move(cb.x, cb.y)
+await page.mouse.down()
+await page.mouse.move(cb.x - 40, cb.y, { steps: 3 })
+await page.mouse.move(cb.x - 100, cb.y, { steps: 3 })
+await page.mouse.up()
 await page.waitForTimeout(300)
+const panSeen = await page.evaluate(() => {
+  const r = document.querySelector('.screen').getBoundingClientRect()
+  const all = window.__STUB_CALLS__ || []
+  const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
+  const last = rects[rects.length - 1]
+  return {
+    x: r.x,
+    y: r.y,
+    status: document.getElementById('span')?.textContent?.trim() ?? '',
+    ipcX: Number(last?.args?.x ?? 0),
+  }
+})
+await page.screenshot({ path: outPath.replace(/\.png$/, '-pan.png') })
+
+// ⑯b：回到「适应」后平移必须归零 —— 否则缩小后画面会孤零零站在角落外
+await page.click('.zoom button[aria-label="适应窗口"]')
+await page.waitForTimeout(400)
+const panReset = await page.evaluate(() => ({
+  status: document.getElementById('span')?.textContent?.trim() ?? '',
+  x: document.querySelector('.screen').getBoundingClientRect().x,
+}))
 
 // 模拟"上次关在代码视图、在看 main.rs" ⇒ reload 应直接进代码视图
 await page.evaluate(() =>
@@ -311,6 +353,15 @@ if (!fs.existsSync(rawPath)) {
   }
 }
 
+/** 解析状态栏里的 "x,y"（设备像素） */
+const parseXY = (s) => {
+  const m = /^(-?\d+),(-?\d+)$/.exec(String(s).trim())
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null
+}
+const pickXY = parseXY(pickSeen.status)
+const panXY = parseXY(panSeen.status)
+const panResetXY = parseXY(panReset.status)
+
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
   ['② 画布矩形也被同步（HTML 驱动原生）', seen.calls.some((c) => c === 'set_canvas_rect')],
@@ -344,13 +395,17 @@ const checks = [
     `⑫ 切换视图/文件后写入会话状态${savedState.includes('"view":"code"') ? '' : `（实际 "${savedState}"）`}`,
     savedState.includes('"view":"code"') && savedState.includes('main.rs'),
   ],
-  // ⑬ B1：原生点击 → 标记 + 状态栏坐标（画布是 NSView，HTML 收不到点击，事件是唯一通路）
+  // ⑬ 真实指针点击 → 标记 + 设备像素坐标
+  //   ★容差 ±3 设备像素：Playwright 把 clientX/Y 取整到整数像素，而屏幕矩形常在半像素上，
+  //     所以"点正中"折算回设备像素不一定是精确的一半。断言"接近中心"才是对的判据。
   [
-    `⑬ 原生点击落点：标记位置 ${pickSeen.left},${pickSeen.top} · 状态栏 ${pickSeen.status}`,
+    `⑬ 真实点击落点：标记 ${pickSeen.left},${pickSeen.top} · 设备像素 ${pickSeen.status}（期望 ≈ ${stats.width / 2},${stats.height / 2}）`,
     pickSeen.has &&
-      Math.abs(parseFloat(pickSeen.left) - 50) < 0.5 &&
-      Math.abs(parseFloat(pickSeen.top) - 50) < 0.5 &&
-      pickSeen.status === '498,374',
+      Math.abs(parseFloat(pickSeen.left) - 50) < 0.6 &&
+      Math.abs(parseFloat(pickSeen.top) - 50) < 0.6 &&
+      !!pickXY &&
+      Math.abs(pickXY.x - stats.width / 2) <= 3 &&
+      Math.abs(pickXY.y - stats.height / 2) <= 3,
   ],
   // ⑫b reload 后恢复上次视图与文件（这条才是"重启即恢复"的真正判据）
   [
@@ -373,6 +428,24 @@ const checks = [
       box3.w > box1.w * 1.15 &&
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
+  ],
+  // ⑯ 拖拽平移：真实鼠标手势（down → 多步 move → up），平移量、原生矩形都要跟着走
+  //   ★只往左拖：125% 下屏幕高 726 < 舞台 796 ⇒ 纵向被正确夹紧到 0，
+  //     拿纵向做断言会红，但那是正确行为（屏幕比舞台小就不该能拖动）。
+  [
+    `⑯ 拖拽平移：状态 ${panSeen.status} · 屏幕 x ${panBefore.x.toFixed(0)}→${panSeen.x.toFixed(0)}（原生收到 ${panSeen.ipcX.toFixed(0)}）`,
+    !!panXY &&
+      Math.abs(panXY.x + 100) <= 3 &&
+      panXY.y === 0 &&
+      Math.abs(panSeen.x - (panBefore.x - 100)) <= 3 &&
+      Math.abs(panSeen.ipcX - panSeen.x) < 1.5,
+  ],
+  [
+    `⑯b 回到「适应」后平移归零：${panReset.status} · 屏幕 x 回到 ${panReset.x.toFixed(0)}（适应位置 ${box1.x.toFixed(0)}）`,
+    !!panResetXY &&
+      panResetXY.x === 0 &&
+      panResetXY.y === 0 &&
+      Math.abs(panReset.x - box1.x) < 1.5,
   ],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
 ]

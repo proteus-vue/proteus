@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onCanvasClick, setCanvasRect, type CanvasClick } from './bridge'
+import { setCanvasRect } from './bridge'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
@@ -42,21 +42,54 @@ const devAspect = computed(() => {
   const s = stats.value
   return s && s.width > 0 && s.height > 0 ? s.width / s.height : 0
 })
-const screenStyle = computed(() => {
+
+/* ─── 拖拽平移（配合缩放）──────────────────────────────────────────────────
+ * 【为什么在前端做】B1 曾在原生侧接 mouseDown，但 GL 视图是
+ *   `addSubview ... NSWindowBelow` 挂的（在所有兄弟视图最下面），而 webview 铺满 contentView
+ *   ⇒ 真实点击全被 webview 吃掉，那个回调**一次都不会触发**。
+ *   `#canvas` 是真实 DOM 元素、有真实几何，pointer 事件直接在这里处理最简单也最可靠。
+ * 【为什么不持久化 pan】平移是"看哪里"的一次性手势，不是工作区偏好；
+ *   重启后仍旧居中才是符合预期的（缩放会持久化，因为它代表"看多大"）。
+ */
+const pan = ref({ x: 0, y: 0 })
+
+/** 屏幕实际尺寸（px）：contain 适配 × 缩放。`0` = 还没量到舞台 */
+const screenSize = computed(() => {
   const { w, h } = stageBox.value
-  if (!w || !h) return { width: '100%', height: '100%' }
+  if (!w || !h) return { w: 0, h: 0 }
   const ar = devAspect.value
-  if (!ar) return { width: `${w}px`, height: `${h}px` }
+  if (!ar) return { w, h }
+  const fitW = Math.min(w, h * ar) * ws.zoom
+  return { w: fitW, h: fitW / ar }
+})
+/** 平移上限：屏幕比舞台大才允许移动，且最多把边缘拖到舞台边缘（图像查看器的常规手感） */
+function panLimit() {
+  const st = stageBox.value
+  const s = screenSize.value
+  return { x: Math.max(0, (s.w - st.w) / 2), y: Math.max(0, (s.h - st.h) / 2) }
+}
+function clampPan(p: { x: number; y: number }) {
+  const l = panLimit()
+  return { x: Math.max(-l.x, Math.min(l.x, p.x)), y: Math.max(-l.y, Math.min(l.y, p.y)) }
+}
+
+const screenStyle = computed(() => {
+  const { w, h } = screenSize.value
   // contain：两轴同一缩放 ⇒ 等比。**只 round 算式不 round 结果**（保留两位小数），
   // 否则 w/h 各自取整会把比例拧出最多 1px 的误差，等比判据就变得可疑。
-  const fitW = Math.min(w, h * ar) * ws.zoom
-  return { width: `${fitW.toFixed(2)}px`, height: `${(fitW / ar).toFixed(2)}px` }
+  const size = w
+    ? { width: `${w.toFixed(2)}px`, height: `${h.toFixed(2)}px` }
+    : { width: '100%', height: '100%' }
+  // 平移用 transform：不改布局 ⇒ `.screen` 仍是 flex 居中的那个元素，
+  // 而 getBoundingClientRect **含 transform** ⇒ 原生矩形自动跟随。
+  return { ...size, transform: `translate(${pan.value.x}px, ${pan.value.y}px)` }
 })
 const zoomLabel = computed(() =>
   Math.abs(ws.zoom - 1) < 0.001 ? '适应' : `${Math.round(ws.zoom * 100)}%`,
 )
 function setZoom(z: number) {
   ws.zoom = clampZoom(z)
+  pan.value = clampPan(pan.value)
   void syncRect()
 }
 
@@ -122,9 +155,64 @@ let rectTimer: ReturnType<typeof setInterval> | undefined
 watch(devAspect, () => {
   void syncRect()
 })
-/** ★B1：画布最近一次被点击的位置（原生 NSView → Rust emit → 这里）。null = 没点过。 */
-const pick = ref<CanvasClick | null>(null)
-let offPick: (() => void) | null = null
+/** 平移是高频事件（pointermove 可达 120Hz）：用 rAF 合并成每帧一次 IPC。
+ *  不合并的话每个 pointermove 都发一次 set_canvas_rect，原生侧跟着改视图 frame —— 白烧 CPU。 */
+let rafId = 0
+function scheduleSync() {
+  if (rafId) return
+  rafId = requestAnimationFrame(() => {
+    rafId = 0
+    void syncRect()
+  })
+}
+watch(pan, scheduleSync)
+
+/** 指针输入（点选落点 + 拖拽平移）。坐标一律折算成**设备像素** ——
+ *  这是设备检查器真正关心的量（"我点的这个点在设备上是第几个像素"），
+ *  而不是 CSS px（同一台设备在 100% / 200% 缩放下 CSS 值会变，设备值不会）。 */
+const pick = ref<{ x: number; y: number } | null>(null)
+let drag: { id: number; x0: number; y0: number; px: number; py: number } | null = null
+
+function toDevice(e: PointerEvent): { x: number; y: number } | null {
+  const el = canvasEl.value
+  const d = stats.value
+  if (!el || !d || d.width <= 0 || d.height <= 0) return null
+  const r = el.getBoundingClientRect()
+  if (r.width <= 0 || r.height <= 0) return null
+  return {
+    x: Math.round(((e.clientX - r.left) / r.width) * d.width),
+    y: Math.round(((e.clientY - r.top) / r.height) * d.height),
+  }
+}
+
+function onPointerDown(e: PointerEvent) {
+  const p = toDevice(e)
+  if (p) pick.value = p
+  drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, px: pan.value.x, py: pan.value.y }
+  try {
+    e.currentTarget instanceof HTMLElement && e.currentTarget.setPointerCapture(e.pointerId)
+  } catch {
+    /* 合成事件（测试）没有真实 pointerId，捕获失败不影响逻辑 */
+  }
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!drag || drag.id !== e.pointerId) return
+  pan.value = clampPan({
+    x: drag.px + (e.clientX - drag.x0),
+    y: drag.py + (e.clientY - drag.y0),
+  })
+}
+
+function onPointerUp(e: PointerEvent) {
+  if (!drag || drag.id !== e.pointerId) return
+  drag = null
+  try {
+    e.currentTarget instanceof HTMLElement && e.currentTarget.releasePointerCapture(e.pointerId)
+  } catch {
+    /* 同上 */
+  }
+}
 
 onMounted(async () => {
   // ★先恢复上次的视图，再量画布：顺序反了会先按设备视图同步一次 rect，
@@ -136,23 +224,20 @@ onMounted(async () => {
   rectTimer = setInterval(syncRect, 1000)
   addEventListener('resize', syncRect)
   addEventListener('keydown', onKey)
-  // 画布是原生 NSView，HTML 收不到它的点击 ⇒ 只能靠这条事件通路
-  offPick = onCanvasClick((p) => {
-    pick.value = p
-  })
 })
 onBeforeUnmount(() => {
   if (rectTimer) clearInterval(rectTimer)
+  if (rafId) cancelAnimationFrame(rafId)
   removeEventListener('resize', syncRect)
   removeEventListener('keydown', onKey)
-  offPick?.()
 })
 
-/** 点击标记的百分比位置（相对设备屏幕，不用关心舞台的像素值） */
+/** 点击标记的百分比位置（相对设备屏幕，不用关心舞台的像素值与平移） */
 const pickStyle = computed(() => {
   const p = pick.value
-  if (!p || p.w <= 0 || p.h <= 0) return null
-  return { left: `${(p.x / p.w) * 100}%`, top: `${(p.y / p.h) * 100}%` }
+  const d = stats.value
+  if (!p || !d || d.width <= 0 || d.height <= 0) return null
+  return { left: `${(p.x / d.width) * 100}%`, top: `${(p.y / d.height) * 100}%` }
 })
 
 const running = computed(() => (stats.value?.frames ?? 0) > 0)
@@ -209,9 +294,18 @@ const hud = computed(() => {
         <!-- 舞台：只负责居中与留白；设备屏幕（#canvas）是它的等比子元素 -->
         <div class="stage" ref="stageEl">
           <div class="screen" :style="screenStyle">
-            <!-- ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 -->
-            <div id="canvas" ref="canvasEl" />
-            <!-- ★B1：原生点击的落点标记（事件通路的可见证据；元素信息要等设备侧视图树） -->
+            <!-- ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面。
+                 ★指针事件在这里收（不是原生侧）：GL 视图挂在 webview **下面**，
+                   真实点击永远先到 webview ⇒ 前端才是唯一有效的输入源。 -->
+            <div
+              id="canvas"
+              ref="canvasEl"
+              @pointerdown="onPointerDown"
+              @pointermove="onPointerMove"
+              @pointerup="onPointerUp"
+              @pointercancel="onPointerUp"
+            />
+            <!-- 点击落点标记（输入通路已通的可见证据；元素信息要等设备侧视图树） -->
             <div class="picks">
               <div v-if="pickStyle" class="pick" :style="pickStyle" id="pickMark" />
             </div>
@@ -272,7 +366,8 @@ const hud = computed(() => {
       <span><span class="k">late</span> <span id="slate">{{ stats?.late ?? 0 }}</span></span>
       <span><span class="k">cpu</span> <span id="scpu">{{ stats ? pct(stats.cpu_pct) : '—' }}</span></span>
       <span><span class="k">zoom</span> <span id="szoom">{{ zoomLabel }}</span></span>
-      <span><span class="k">pick</span> <span id="spick">{{ pick ? `${Math.round(pick.x)},${Math.round(pick.y)}` : '—' }}</span></span>
+      <span><span class="k">pan</span> <span id="span">{{ Math.round(pan.x) }},{{ Math.round(pan.y) }}</span></span>
+      <span title="设备像素坐标"><span class="k">pick</span> <span id="spick">{{ pick ? `${pick.x},${pick.y}` : '—' }}</span></span>
       <span style="flex:1" />
       <span id="shint">{{ hint }}</span>
     </div>

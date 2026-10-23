@@ -97,34 +97,28 @@ static GLuint link_prog(const char *vs, const char *fs) {
   return p;
 }
 
-/* ─────────── 指针事件回调（B1：原生视图 → 前端）───────────
+/* ─────────── 指针输入：**这里不处理**（修正 B1 的错误前提）───────────
  *
- * 【为什么需要】画布是**叠在 HTML 之上的原生 NSView**，HTML 收不到它的点击 ——
- *   之前它纯粹是块"玻璃"（只显示、不接受输入）。所有交互（点选元素、拖拽、缩放）
- *   都要求这条通路先通。
+ * 【曾经的误解】B1 以为"画布是叠在 HTML 之上的原生 NSView，HTML 收不到它的点击"，
+ *   于是在这里重写 `mouseDown:` + 注册 C 回调，把坐标经 Rust emit 给前端。
  *
- * 【为什么用函数指针而不是直接调 Rust】这是 C/ObjC 与 Rust 的唯一接缝：Rust 侧注册一个
- *   `extern "C"` 函数，这里保存并回调。反过来（ObjC 调 Rust 的 emit）需要完整的事件系统，
- *   而 B1 只需要"点一下，把坐标送出去"。
+ * 【事实（见 poc_attach_impl 的 addSubview）】GL 视图是用
+ *   `addSubview:positioned:NSWindowBelow relativeTo:nil` 挂的 —— 它在**所有兄弟视图的最下面**，
+ *   而 WKWebView 铺满整个 contentView。AppKit 的 `hitTest:` 从最上层子视图开始找，
+ *   所以**真实点击永远被 webview 吃掉，`mouseDown:` 一次都不会触发**。
+ *   ⇒ 那条通路是死路，判据却一直绿（因为判据是从 JS 事件入口注入的）。
  *
- * 【坐标系】AppKit 原点在**左下**，前端/HTML 习惯**左上** ⇒ 回调前 y 已经翻转，
- *   送给前端的永远是「左上原点、单位为点」的视图内坐标。 */
-static void (*g_click_cb)(double, double, double, double) = NULL;
-void poc_set_click_cb(void (*cb)(double, double, double, double)) { g_click_cb = cb; }
+ * 【正确的做法】输入源就是 HTML：`#canvas`（透明 div）本身有真实几何、也真实收到 pointer 事件，
+ *   Studio 侧坐标换算、点击落点、拖拽平移全部在前端完成（零 C 接缝、零坐标翻转）。
+ *   ⇒ 这里刻意**不实现任何输入处理**：不是"还没做"，是"不该在这里做"。
+ *   ★若将来真要让原生视图接收输入（例如把 GL 提到 webview 之上做纯画布模式），
+ *     必须同时重做 HTML 叠加层（marker/HUD/工具条会被 GL 挡住）——那是一次架构变更，不是加个回调。
+ */
 
 @interface PocGLView : NSOpenGLView
 @end
 @implementation PocGLView
 - (BOOL)isOpaque { return YES; }
-- (BOOL)acceptsFirstResponder { return YES; }
-- (void)mouseDown:(NSEvent *)event {
-  NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
-  NSRect b = self.bounds;
-  if (g_click_cb) {
-    // y 翻转：AppKit 左下原点 → 前端左上原点
-    g_click_cb(p.x, b.size.height - p.y, b.size.width, b.size.height);
-  }
-}
 @end
 
 /* ─────────── 状态 ─────────── */
