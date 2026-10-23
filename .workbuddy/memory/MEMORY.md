@@ -45,6 +45,14 @@
 ## 环境要点
 - 工作区：`/Volumes/data1/work/office/debug/proteus`，分支 main，远端 origin
   (github.com:proteus-vue/proteus.git)。
+- **pnpm store 有两个，别搞混**（2026-10-23 实测）：
+  - 本仓 `node_modules` 是用 **`/Volumes/data1/.pnpm-store/v3`** 装的（见 `node_modules/.modules.yaml` 的 `storeDir`）；
+  - 但 pnpm 全局配置的 `store-dir` 是 **`/Volumes/data1/Users/kags/.pnpm-global/v3`**（几乎空的，只有几个本地 tarball 条目 + 一个 `v10` 子目录）
+    ⇒ 直接 `pnpm add` 会报 `ERR_PNPM_UNEXPECTED_STORE`。
+  - **解法**：本仓命令一律带 `--store-dir /Volumes/data1/.pnpm-store/v3`。
+    不要按报错建议去 `pnpm install`（那会用几乎空的 store 重下/重链 55 个 workspace 包）。
+  - AI 侧（本 agent 沙箱）：即使带对 store，pnpm 在 `node_modules` 里建软链仍被拦
+    （`ERR_PNPM_CODEBUDDY_BROKER_DENY` / `downloaded 0`）⇒ **装依赖必须用户在自己终端跑**。
 - 玻璃 shader 真源：`packages/shader-codegen-rust/src/materials/glass.wgsl`（改它=改全端，
   需重跑 `npm run gen:shaders` 同步四端生成物）。CPU oracle：
   `packages/shader-codegen-rust/src/reference.rs`，两处必须同步改。
