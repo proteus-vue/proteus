@@ -21,6 +21,11 @@ const ICONS: Record<string, string> = {
     '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none"/>',
   terminal: '<path d="m4.5 17 5.5-5-5.5-5"/><path d="M12.5 19h7"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5V9h-4.5"/>',
+  // 缩放三件套（放大镜一族：镜圈 + 手柄 + 内部的 +/−；fit 用四角括线）
+  zoomIn:
+    '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4 4"/><path d="M7.75 10.5h5.5M10.5 7.75v5.5"/>',
+  zoomOut: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4 4"/><path d="M7.75 10.5h5.5"/>',
+  fit: '<path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/>',
 }
 
 const props = withDefaults(defineProps<{ name: string; size?: number }>(), { size: 16 })

@@ -14,6 +14,7 @@
 #import <OpenGL/gl3.h>
 #import <OpenGL/OpenGL.h>
 
+#include <math.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/hwcontext.h>
@@ -63,8 +64,18 @@ static const char *FS_YUV =
     "  y = (y - 16.0/255.0) * 1.164383;\n"
     "  o = vec4(y + 1.596027*uv.y, y - 0.391762*uv.x - 0.812968*uv.y, y + 2.017232*uv.x, 1.0); }\n";
 static const char *FS_BLIT =
-    "#version 150\nin vec2 vUV;\nout vec4 o;\nuniform sampler2D texCanvas;\n"
-    "void main(){ o = texture(texCanvas, vUV); }\n";
+    "#version 150\nin vec2 vUV;\nout vec4 o;\nuniform sampler2D texCanvas; uniform vec2 uFit;\n"
+    // ★★等比适配（contain）：uFit = 画面占视口的比例（两轴都 ≤1），画面外填底背景色。
+    //   之前是 `o = texture(texCanvas, vUV)` —— 把纹理**铺满整个视口**，
+    //   视口宽高比 ≠ 画面宽高比时画面被**拉伸**：Android 的 1280x720 塞进约 1.25 的方形区
+    //   会纵向拉伸约 40%，888x1920 的 iPhone 塞进同一区域会横向拉伸约 2.7 倍。
+    //   ★这个 bug 从 B2 就在，一直没被发现的原因是 `poc_dump` 读的是 **FBO（g_canvas 纹理）**，
+    //     不是屏幕 —— dump 出来的像素永远是正确的，只有人眼看窗口才看得出变形。
+    //   现在 HTML 侧把原生视图**收成设备宽高比**，正常情况 uFit≈1（无黑边，像素 1:1）；
+    //   万一两边漂移（窗口刚 resize、首帧尺寸未到），这里兜底：**宁可留黑边，也不变形**。
+    "void main(){ vec2 t = (vUV - 0.5) / uFit + 0.5;\n"
+    "  if (t.x < 0.0 || t.x > 1.0 || t.y < 0.0 || t.y > 1.0) { o = vec4(0.043, 0.047, 0.059, 1.0); return; }\n"
+    "  o = texture(texCanvas, t); }\n";
 
 static GLuint compile_sh(GLenum t, const char *src) {
   GLuint s = glCreateShader(t);
@@ -121,6 +132,7 @@ static NSView *g_parent = nil;
 static PocGLView *g_view = nil;
 static NSOpenGLContext *g_ctx = nil;
 static GLuint g_fbo = 0, g_canvas = 0, g_vao = 0, g_ty = 0, g_tuv = 0, g_progComp = 0, g_progBlit = 0;
+static GLint g_uFit = -1;
 
 static AVFormatContext *g_fmt = NULL;
 static AVCodecContext *g_cc = NULL;
@@ -332,6 +344,10 @@ gl_init:
     glUniform1i(glGetUniformLocation(g_progComp, "texUV"), 1);
     glUseProgram(g_progBlit);
     glUniform1i(glGetUniformLocation(g_progBlit, "texCanvas"), 2);
+    g_uFit = glGetUniformLocation(g_progBlit, "uFit");
+    // ★-1 = 编译器把 uniform 优化掉了（源里没用/拼错）。此时 uFit 恒为 0 ⇒ 着色器里除零
+    //   ⇒ 整个画面变成背景色（全黑），而且**不会报错**。宁可启动即失败，也不要"看起来能跑但全黑"。
+    if (g_uFit < 0) { fprintf(stderr, "blit: 找不到 uFit uniform（着色器与查表不一致）\n"); exit(2); }
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     g_pkt = av_packet_alloc();
@@ -611,6 +627,30 @@ use_last:
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, (GLsizei)bs.width, (GLsizei)bs.height);
     glUseProgram(g_progBlit);
+    // ★等比适配（contain）：把画面装进视口，两轴取同一缩放 ⇒ 只可能留黑边，绝不变形。
+    //   正常路径下 HTML 已把视图收成设备比例（uFit≈1，无黑边、像素 1:1）；
+    //   这里兜的是"两边漂移"的时刻（窗口刚 resize / 首帧尺寸未到 / 未知输入源占满）。
+    float va = (bs.width > 1 && bs.height > 1) ? (float)(bs.width / bs.height) : 1.0f;
+    float ta = (g_W > 0 && g_H > 0) ? (float)g_W / (float)g_H : va;
+    float fx = 1.0f, fy = 1.0f;
+    if (ta > va) fy = va / ta;   // 画面更宽 ⇒ 上下留边
+    else fx = ta / va;           // 画面更高 ⇒ 左右留边
+    glUniform2f(g_uFit, fx, fy);
+    // ★只在**状态迁移**时打印（不是每帧、也不是"只打前 N 次"）：
+    //   迁移点很稀疏（窗口 resize / 首帧尺寸到达 / HTML 首次同步视图），所以不会刷屏；
+    //   而"只打前 N 次"会在启动阶段就把额度用光，恰好看不到"兜底 → 恢复 1:1"这个关键转折。
+    {
+      static int last_state = -1;   /* -1 未知 · 0 等比匹配 · 1 走兜底（有黑边） */
+      int st = (fabsf(fx - 1.0f) > 0.004f || fabsf(fy - 1.0f) > 0.004f) ? 1 : 0;
+      if (st != last_state) {
+        if (st)
+          fprintf(stderr, "blit 等比兜底：视口 %.3f 与画面 %.3f 不一致 ⇒ 占视口 %.0f%%x%.0f%%（有黑边，不变形）\n",
+                  va, ta, fx * 100.0, fy * 100.0);
+        else
+          fprintf(stderr, "blit 等比：视口 %.3f == 画面 %.3f ⇒ 无黑边，像素 1:1\n", va, ta);
+        last_state = st;
+      }
+    }
     glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, g_canvas);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     double b1 = now_ms();

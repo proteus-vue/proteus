@@ -20,14 +20,25 @@ export interface WorkspaceState {
   view: ViewName
   /** 代码视图里上次打开的文件（相对仓库根）。空 = 用默认（App.vue）。 */
   codeFile: string
+  /** 设备预览缩放（相对「适应窗口」= 1）。★画面比例始终由设备决定，缩放只改大小、不改形状。 */
+  zoom: number
 }
 
-const state = reactive<WorkspaceState>({ view: 'device', codeFile: '' })
+const ZOOM_MIN = 0.25
+const ZOOM_MAX = 4
+
+const state = reactive<WorkspaceState>({ view: 'device', codeFile: '', zoom: 1 })
 /** 读到磁盘状态之前不要回写（否则会用默认值覆盖用户上次的设置） */
 let hydrated = false
 
 export function useWorkspaceState(): WorkspaceState {
   return state
+}
+
+/** 缩放夹紧（0.25×～4×）。放这里而不是组件里：读盘恢复与按钮点击必须用**同一条**边界。 */
+export function clampZoom(z: number): number {
+  if (!Number.isFinite(z)) return 1
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100))
 }
 
 /** 启动时调用一次：从磁盘恢复。无桥/首次运行/JSON 损坏都落到默认值。 */
@@ -41,6 +52,9 @@ export async function hydrateWorkspace(): Promise<void> {
     const o = JSON.parse(raw || '{}') as Partial<WorkspaceState>
     if (o.view === 'code' || o.view === 'device') state.view = o.view
     if (typeof o.codeFile === 'string') state.codeFile = o.codeFile
+    // ★缩放要**夹紧**：手改坏的 state.json（zoom:0 / 1e9）会让画布消失或撑爆，
+    //   而"画布不见了"是最难自查的症状 ⇒ 宁可回落到 1，也不信磁盘上的任意数值。
+    if (typeof o.zoom === 'number' && Number.isFinite(o.zoom)) state.zoom = clampZoom(o.zoom)
   } catch {
     /* 首次运行 / 文件损坏 ⇒ 用默认值，不打扰用户 */
   }
@@ -53,7 +67,7 @@ watch(
   state,
   () => {
     if (!hydrated || !hasBridge()) return
-    void saveState(JSON.stringify({ view: state.view, codeFile: state.codeFile })).catch(() => {
+    void saveState(JSON.stringify({ view: state.view, codeFile: state.codeFile, zoom: state.zoom })).catch(() => {
       /* 写失败不影响使用 */
     })
   },

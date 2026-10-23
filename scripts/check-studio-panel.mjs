@@ -235,6 +235,44 @@ const pickSeen = await page.evaluate(() => {
 // 留一张"点击落点"的快照（人眼可核：圆圈+十字在画面正中）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-pick.png') })
 
+// ── ⑭ 等比适配（2026-10-23）──────────────────────────────────────────────
+// 【为什么单独立一条】原生视图此前是「main 区减内边距」的一整块，而 blit 把纹理**铺满视口**
+//   ⇒ 画面被拉伸成视口的宽高比。这是**画面失真**不是观感问题，而且 `poc_dump` 读的是 FBO
+//   不是屏幕，dump 永远正确 ⇒ 只有人眼能发现。判据必须盯"HTML 算出来的屏幕矩形比例 == 设备比例"。
+const ar = stats.width / stats.height
+const measure = () =>
+  page.evaluate(() => {
+    const r = document.querySelector('.screen')?.getBoundingClientRect()
+    const all = window.__STUB_CALLS__ || []
+    const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
+    const last = rects[rects.length - 1]
+    return {
+      w: r?.width ?? 0,
+      h: r?.height ?? 0,
+      ipcW: Number(last?.args?.w ?? 0),
+      ipcH: Number(last?.args?.h ?? 0),
+    }
+  })
+const box1 = await measure()
+const ratioErr = (b) => (b.h > 0 ? Math.abs(b.w / b.h - ar) / ar : 1)
+
+// ⑭b：窗口变窄后仍等比 —— 抓"只在初始尺寸下算对了"（把比例写死在 CSS 里的典型症状）
+await page.setViewportSize({ width: 1100, height: 900 })
+await page.waitForTimeout(500)
+const box2 = await measure()
+await page.setViewportSize({ width: 1440, height: 900 })
+await page.waitForTimeout(400)
+
+// ⑮：缩放只改大小、不改形状（比例若跟着变，说明缩放实现是分别乘 w/h 的）
+await page.click('.zoom button[aria-label="放大"]')
+await page.waitForTimeout(400)
+const box3 = await measure()
+const zoomState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
+const zoomLabel = await page.evaluate(() => document.getElementById('zoomLabel')?.textContent?.trim() ?? '')
+await page.screenshot({ path: outPath.replace(/\.png$/, '-zoom.png') })
+await page.click('.zoom button[aria-label="适应窗口"]')
+await page.waitForTimeout(300)
+
 // 模拟"上次关在代码视图、在看 main.rs" ⇒ reload 应直接进代码视图
 await page.evaluate(() =>
   localStorage.setItem(
@@ -318,6 +356,23 @@ const checks = [
   [
     `⑫b reload 后恢复上次的视图与文件${restored.path.endsWith('main.rs') ? '' : `（当前 ${restored.path || '空'}）`}`,
     restored.files === 3 && restored.path.endsWith('main.rs'),
+  ],
+  // ⑭ 等比适配：屏幕矩形比例必须等于设备比例，且**原生视图收到的矩形与之一致**
+  //    （只比值不够：HTML 对了但没把新矩形发给原生，画面上仍是拉伸的旧尺寸）
+  [
+    `⑭ 画面等比适配：屏幕 ${box1.w.toFixed(1)}×${box1.h.toFixed(1)} vs 设备 ${stats.width}×${stats.height}（比例误差 ${(ratioErr(box1) * 100).toFixed(2)}%）`,
+    ratioErr(box1) < 0.005 && Math.abs(box1.ipcW - box1.w) < 1.5 && Math.abs(box1.ipcH - box1.h) < 1.5,
+  ],
+  [
+    `⑭b 窗口变窄后仍等比（${box2.w.toFixed(1)}×${box2.h.toFixed(1)}，误差 ${(ratioErr(box2) * 100).toFixed(2)}%）且确实变小了`,
+    ratioErr(box2) < 0.005 && box2.w < box1.w * 0.85,
+  ],
+  [
+    `⑮ 缩放只改大小不改形状：${box3.w.toFixed(0)}×${box3.h.toFixed(0)}（误差 ${(ratioErr(box3) * 100).toFixed(2)}%）· 标签 ${zoomLabel}`,
+    ratioErr(box3) < 0.005 &&
+      box3.w > box1.w * 1.15 &&
+      zoomLabel === '125%' &&
+      zoomState.includes('"zoom":1.25'),
   ],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
 ]
