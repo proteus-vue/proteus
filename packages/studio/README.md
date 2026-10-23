@@ -371,8 +371,9 @@ Studio 要看的**就是 Proteus 宿主自己**（编译出的页面跑在 Prote
 ```bash
 # 一条命令：起接收器 → 装 App → 收 10s → ffprobe 判合法
 bash hosts/ios/run-screen-stream.sh
-# 之后直接开 Studio（它会自己 nc -l 9001）
-./target/release/proteus-studio-shell
+# 之后开 Studio 接画布。★`PROTEUS_IOS_STREAM_PORT` 是**显式意图**，
+#   优先于 adb 探测——本机同时连着 Android 时不会被静默劫持到 Android 画面
+PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 ```
 
 **已验 / 未验（别混）**：

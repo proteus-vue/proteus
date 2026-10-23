@@ -162,6 +162,16 @@ fn default_live_source() {
     if std::env::var("POC_LIVE").is_ok() || std::env::var("POC_VIDEO").is_ok() {
         return;
     }
+    // ★★显式点名 iOS 端口 ⇒ **优先于 adb 探测**（2026-10-23 实测踩到）：
+    //   本机同时连着 Android 和 iPhone 时，若先查 adb，用户按 README 跑
+    //   `PROTEUS_IOS_STREAM_PORT=9001 …` 会**静默拿到 Android 画面**（没有任何报错，只有一行 eprintln）
+    //   ⇒ 显式意图必须压过自动探测。
+    if let Ok(port) = std::env::var("PROTEUS_IOS_STREAM_PORT") {
+        std::env::set_var("POC_LIVE", format!("/usr/bin/nc -l {port}"));
+        eprintln!("[studio] PROTEUS_IOS_STREAM_PORT={port} ⇒ 等 iOS 推流（/usr/bin/nc -l {port}）");
+        eprintln!("[studio]   iPhone 侧：bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:{port}");
+        return;
+    }
     let connected = std::process::Command::new("adb")
         .arg("devices")
         .output()
@@ -176,6 +186,7 @@ fn default_live_source() {
         let cmd = "adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -";
         std::env::set_var("POC_LIVE", cmd);
         eprintln!("[studio] 未指定输入，默认接真机（Android / adb screenrecord）");
+        eprintln!("[studio]   想看 iPhone：PROTEUS_IOS_STREAM_PORT=9001 再启动本程序（显式指定优先于本探测）");
         return;
     }
     if std::env::var("PROTEUS_IOS_STREAM").ok().as_deref() == Some("0") {
