@@ -12,6 +12,9 @@ use std::ffi::{c_char, c_int, c_void, CString};
 use std::time::{Duration, Instant};
 use tauri::Manager;
 
+/// 抓屏参数的计算（纯函数 + 单测；与 Tauri/窗口无关）
+mod capture;
+
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
     fn poc_tick() -> c_int;
@@ -273,6 +276,17 @@ fn ensure_tool_path() {
     eprintln!("[studio] PATH 补充：{}", missing.join(":"));
 }
 
+/// 问设备当前显示尺寸（`adb shell wm size`）。
+/// 失败（无设备 / adb 不在 / 输出格式变了）一律返回 `None` —— 调用方据此**不带 `--size`**，
+/// 而不是退回一个写死值：写死值会让竖屏被塞进 16:9 而补出 74% 的黑边。
+fn adb_screen_size() -> Option<(u32, u32)> {
+    let out = std::process::Command::new("adb")
+        .args(["shell", "wm", "size"])
+        .output()
+        .ok()?;
+    capture::parse_wm_size(&String::from_utf8_lossy(&out.stdout))
+}
+
 /// 没有显式指定输入时**默认接真机**——双击启动不可能带环境变量，
 /// 否则用户看到的是一个永远空白的画布，还以为坏了。
 ///
@@ -308,7 +322,30 @@ fn default_live_source() {
         })
         .unwrap_or(false);
     if connected {
-        let cmd = "adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -";
+        // ★★抓屏尺寸必须**按设备比例**（2026-10-23 实测）：`screenrecord --size` 是把整屏塞进给定尺寸，
+        //   不足处**补黑边**。写死 1280x720 时，1200x2608 的竖屏只剩 330x720 有效画面
+        //   —— `cropdetect` 实测 **74.2% 的像素是黑边**，带宽/解码/FBO 全在搬运和放大一块黑。
+        //   现在按 `wm size` 等比取（长边 ≤1920），实测 `crop=882:1920:0:0`（黑边消失）。
+        let dev = adb_screen_size();
+        let cmd = match dev.and_then(|(w, h)| capture::pick_capture_size(w, h).map(|s| (w, h, s))) {
+            Some((dw, dh, (w, h))) => {
+                let br = capture::bitrate_for(w, h);
+                eprintln!(
+                    "[studio]   录屏 {w}x{h}（设备 {dw}x{dh} · 等比 · 长边≤1920）· {} Mbps",
+                    br / 1_000_000
+                );
+                format!(
+                    "adb exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
+                )
+            }
+            // ★查不到尺寸时**不带 `--size`**（用设备原生分辨率），而不是退回某个写死的值
+            //   —— 写死值正是这次要修的 bug；宁可多花点带宽，也不要一小块画面加一圈黑边。
+            None => {
+                eprintln!("[studio]   查不到设备尺寸（wm size 失败）⇒ 用设备原生分辨率录屏");
+                "adb exec-out screenrecord --output-format=h264 --bit-rate 12000000 --time-limit 180 -"
+                    .to_string()
+            }
+        };
         std::env::set_var("POC_LIVE", cmd);
         eprintln!("[studio] 未指定输入，默认接真机（Android / adb screenrecord）");
         eprintln!("[studio]   想看 iPhone：PROTEUS_IOS_STREAM_PORT=9001 再启动本程序（显式指定优先于本探测）");

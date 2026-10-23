@@ -77,6 +77,8 @@ ffmpeg -y -i /tmp/poc/canvas.ppm /tmp/poc/canvas.png
 ```bash
 cd packages/studio
 cargo build --release
+# 纯函数单测（抓屏尺寸 / 码率 / wm size 解析）。★不在 CI 里（CI 不编译 Rust）⇒ 要自己跑
+cargo test --release
 POC_VIDEO=/tmp/poc/device-720p.mp4 \
 DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
 ```
@@ -87,7 +89,10 @@ DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-s
 把画布输入从"录制流"换成**实时管道**：
 
 ```bash
-# 硬解（默认）
+# 什么都不用带：自动探测 Android 设备、按设备比例取抓屏尺寸（见「抓屏尺寸按设备比例」）
+DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
+
+# 想手工指定（例如已经是原生分辨率的设备）
 POC_LIVE='adb exec-out screenrecord --output-format=h264 --size 1280x720 --bit-rate 8000000 --time-limit 180 -' \
 DYLD_LIBRARY_PATH=/opt/homebrew/opt/ffmpeg/lib ./target/release/proteus-studio-shell
 
@@ -343,12 +348,39 @@ pnpm run check:studio-panel     # ⇒ results/inspector-panel.png（10 判据）
 1. **实时链路仍未覆盖的**：只测了 Android 一台（1200×2608 / 120Hz）；iOS ReplayKit 未接；
    走 `adb` 管道**不是**网络投屏（无 RTP 重组 / 丢包 / 抖动），真实无线链路未测；
    端到端延迟（设备出帧 → 画布上屏）**还没量**——PTS 已经打好了，接统计即可；
-2. **只证明了"画布 + 布局 + 叠加 + 读数"这一层**：没有真实交互（不能点、不能选、不能改）；
-   `screenrecord --size 1280x720` 会把竖屏**加黑边**塞进 16:9（实测有效像素只有约 330×720），
-   带宽与 FBO 面积浪费约 74% —— 产品上应按设备宽高比取分辨率；
+2. **只证明了"画布 + 布局 + 叠加 + 读数"这一层**：这一版之前**没有真实交互**（不能点、不能选、不能改）；
+   ~~`screenrecord --size 1280x720` 会把竖屏加黑边~~ → **已修**，见下面「抓屏尺寸按设备比例」；
 3. **没有编辑器/终端**——那是阶段 1 的另外两块，且编辑器按 G-56.1 只用现成的（CodeMirror 6）；
 4. `stats` 的 fps 是原生侧按 240 帧滑动窗口算的（不是前端差分），但仍不是逐帧时序；
 5. 状态栏读数取自**原生侧累计值**，页面刷新不清零。
+
+## 抓屏尺寸按设备比例（2026-10-23）
+
+原先写死 `--size 1280x720`。Android 的 `screenrecord --size` 是**把整屏塞进给定尺寸，不足处补黑边**：
+
+| | 抓屏尺寸 | 实测有效区域 | 黑边浪费 | 码率 |
+|---|---|---|---|---|
+| 之前 | `1280×720` | `330×720`（`cropdetect`）| **74.2%** | 8 Mbps（大部分花在搬黑边）|
+| 现在 | `884×1920` | `884×1920`（逐列/逐行扫 luma）| **0%** | 13 Mbps（按像素数）|
+
+真实像素从 **23.8 万 → 169 万（7.2×）**，码率只涨 1.7× —— 因为旧的那 8 Mbps 里有 74% 在传黑边。
+
+**做法**：`src/capture.rs`（纯函数 + `cargo test`）：
+
+- `pick_capture_size(dev_w, dev_h)`：等比缩放，**长边 ≤1920**，两轴取**最近偶数**
+  （H.264 的 4:2:0 是 2×2 下采样，奇数宽高会被裁一行/一列）；
+- `bitrate_for(w, h)`：**每像素 8 bit/帧**，夹在 4–16 Mbps。720p ≈ 7.4 Mbps
+  （与旧的固定 8 Mbps 同量级 ⇒ 不改变已验证的观感）；
+- `parse_wm_size()`：解析 `adb shell wm size`，`Override size` **优先**于 `Physical size`
+  （前者才是当前真正在显示的尺寸）；
+- **查不到尺寸时不带 `--size`**（用设备原生分辨率）——**绝不退回写死值**，写死值正是这次的 bug。
+
+**7 条单测**（`cd packages/studio && cargo test --release`）：等比 / 不放大 / 横竖屏 / 偶数 / 未知 / 码率 / wm 解析。
+★单测抓到过一个真边界：`3x5` 取偶成 `4x6`，比例偏 **11%** ⇒ 加了短边 ≥64 的下限，
+  把这种"垃圾输入"判为**未知**（走安全兜底），而不是硬算出一个偏的尺寸。
+
+**★诚实边界**：`cargo test` **不在 CI 里**（CI 不编译 Rust，见「复跑」）⇒ 单测靠自己跑；
+真机验证只能证明"这台 1200×2608 的机器"，不同设备的 `wm size`/编码器支持仍需逐台确认。
 
 ## iOS 通道（G3 · 决策 #1190）
 

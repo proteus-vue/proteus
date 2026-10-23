@@ -3389,6 +3389,28 @@
         "T-studio-out-of-poc"
       ],
       "note": "【done · 决策 #1207（2026-10-23）】★纠正 B1：GL 视图是 addSubview positioned:NSWindowBelow（最下面），webview 铺满 contentView ⇒ 真实点击全被 webview 吃掉，mouseDown 一次不触发 —— 而判据 ⑬ 一直绿（用 window.__EMIT__ 从 JS 入口注入）。教训：判据必须走用户真实入口，否则只是在证明一段没人调用的代码能跑；自查问句「这个判据注入的物品在真实运行时由谁产生？」。★改为 HTML pointer：坐标折算设备像素（换缩放 CSS 值会变、设备值不会）。★删干净：poc_set_click_cb/g_click_cb/mouseDown/acceptsFirstResponder/on_canvas_click/CanvasClick/onCanvasClick/APP OnceLock + 测试桩 __TAURI__.event。★新增拖拽平移（transform:translate + rAF 合并 IPC + 上限=屏幕超出舞台的一半），pan 不持久化、zoom 持久化。★判据 20→22；⑯ 只往左拖是刻意的（125% 下纵向被正确夹紧为 0）；⑯b 第一版基线写错已改。"
+    },
+    {
+      "id": "T-studio-capture-size",
+      "title": "Studio：Android 抓屏尺寸按设备比例（去掉 74% 黑边）+ capture 纯函数单测",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:wb-studio-poc",
+      "scope": [
+        "packages/studio/src/capture.rs",
+        "packages/studio/src/main.rs",
+        "packages/studio/README.md",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1208,
+      "branch": null,
+      "verification": "cd packages/studio && cargo test --release（7/7）&& cargo build --release && 真机默认路径：日志「录屏 884x1920（设备 1200x2608）」+ dump 884x1920 逐列扫 luma 有效面积 100.0%（旧 1280x720 的 cropdetect 为 crop=330:720 ⇒ 74.2% 黑边）",
+      "related": [
+        "T-studio-aspect-fit",
+        "T-studio-live-stream"
+      ],
+      "note": "【done · 决策 #1208】★bug：写死 --size 1280x720，而 screenrecord --size 是「整屏塞进给定尺寸 + 补黑边」⇒ 1200x2608 竖屏有效画面只有 330x720（cropdetect 实测），74.2% 像素是黑边。★修：src/capture.rs 纯函数 pick_capture_size（等比/长边≤1920/最近偶数）、bitrate_for（每像素 8bit，夹 4-16Mbps）、parse_wm_size（Override 优先）；查不到尺寸不带 --size（绝不退回写死值）。★实测：884x1920 dump 有效面积 100.0%，真实像素 23.8万→169万(7.2×)，码率仅 8→13Mbps。★7 条单测；单测抓到真边界 3x5⇒4x6 偏 11% ⇒ 加短边≥64 下限判为未知。★边界：cargo test 不在 CI（CI 不编 Rust）；只证明这一台设备。"
     }
   ]
 }
