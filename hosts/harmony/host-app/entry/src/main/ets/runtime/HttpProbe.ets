@@ -62,7 +62,8 @@ export function runHttpProbe(filesDir: string): void {
     const streamIn: string | undefined = AppStorage.get<string>('proteusProbeStream');
     if (streamIn === '1') f.stream = true;
     /** ★#1187 诊断：把"探针实际拿到的入参"回显进报告（否则 savePath 没生效时无从归因） */
-    probeDiag = { 'savePath': savePathIn ?? '', 'stream': streamIn ?? '', 'filesDir': filesDir };
+    probeDiag = { 'savePath': savePathIn ?? '', 'stream': streamIn ?? '', 'filesDir': filesDir,
+                  'targetUrl': url };
     const bytes: Uint8Array = encodeInvoke(f);
     let hex: string = '';
     for (let i = 0; i < bytes.length; i++) {
@@ -82,6 +83,9 @@ export function runHttpProbe(filesDir: string): void {
       'dnsForceIp': AppStorage.get<string>('proteusProbeDnsIp'),
       'dnsHost': AppStorage.get<string>('proteusProbeDnsHost'),
       'dnsIp': AppStorage.get<string>('proteusProbeDnsIp'),
+      // ★★★#1202：DoH 落点探针（进程级状态，非帧字段 ⇒ 线格式零改动）
+      'dohUrl': AppStorage.get<string>('proteusProbeDohUrl') ?? '',
+      'dohSkipCert': AppStorage.get<string>('proteusProbeDohSkipCert') ?? '',
       'probeDiag': JSON.stringify(probeDiag),
     } as Record<string, Object>));
   } catch (e) {

@@ -13014,3 +13014,48 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   掉电对照本身仍未做（需真断电，属破坏性实验），作为长期项保留。
 **⑨ 诚实边界**：a) iOS `durable:"partial"` 仍**未证明**等价 fsync（`FileHandle.fd` 非公开 API）；b) 掉电对照未做；
   c) 三端都只保证"数据 + 目录项交给存储"，不保证存储设备自身写缓存；d) 鸿蒙这条只测 243 B（大文件的内存行为见 #1193 的 64 MiB 实测，两件事不同）。
+
+1202. **★★★鸿蒙 DoH 落点真机取证：`Rcp_DnsOverHttps` 是**权威语义**（不是"先试再回落"）——六组对照把"preferred"这句话钉死 · 决策**（2026-10-23 · 承接 #1166 只做头文件取证、#1171 的"DoH 仍未实测"）:
+**① 要回答的是一个**语义**问题，不是"能不能用"**：`rcp.h` 注释写「If set, the address resolved by the DOH dns server is **preferred**」——
+  `preferred` 有两种可能语义，头文件分辨不出来：**强/权威**（DoH 给答案就用；无答案或连不上 ⇒ **失败**，不回落系统 DNS）
+  vs **弱/先试**（DoH 不可用 ⇒ **静默回落**系统 DNS）。两者对业务后果完全不同：
+  弱语义意味着"配了 DoH 也可能悄悄没生效"，排障时读数会说谎。
+**② 六组对照（每组排除一种"同形解释"，缺一组判据就恒真或恒假）**：
+  真机 HUAWEI KLE-AL00U · `bash hosts/harmony/run-doh-probe.sh`：
+  | 组 | DoH | 目标 | 实测 | 排除什么 |
+  |---|---|---|---|---|
+  | T0 | 无 | `proteus-doh-probe.invalid`（RFC 2606 保留 TLD，系统 DNS **必然**解不出） | **失败** `network.unreachable` (RCP 1007900006) | 证明 T1 的成功只能归因于 DoH |
+  | T1 | 有（回 127.0.0.1） | 同一 `.invalid` 域名 | **成功 200** + 目标服务端内容 `PROTEUS_RPORT_OK` | 证明 DoH 的答案**真的被采用** |
+  | T2a | 无 | `example.com` | **成功 200** | 基线：网络与宿主本身没问题 |
+  | T2b | 有（回 203.0.113.1 = TEST-NET-3 不可达） | `example.com` | **失败**（超时） | 证明 DoH **覆盖了系统 DNS**（否则系统 DNS 会给可用 IP ⇒ 成功） |
+  | T3 | 有（回 NXDOMAIN） | `example.com` | **失败**（`无法解析`） | 证明**无答案不静默回落**（弱语义会成功） |
+  | T4 | 有但服务端**不可达**（撤掉 rport） | `example.com` | **失败** + 服务端侧**零查询** | 证明**连不上也不回落** |
+**③ 结论：权威语义。** 头文件那句 `preferred` 容易读成"先试再回落"，实测**不是**：
+  配了就按它解析（T1/T2b）· 无答案不回落（T3）· 连不上也不回落（T4）。
+  ⇒ **生产启用 DoH 会让 DNS 变成单点**：DoH 服务端挂了或回归 NXDOMAIN，整条链路就不可用，**不会**被系统 DNS 兜住。
+  上线前必须自备兜底（多 DoH 端点轮换、失败策略、健康探测）——不能指望平台静默回落。
+**④ 第三方证据（不依赖设备自报）**：本地 DoH 服务端 `/stats` 独立记录查询计数 + qname + qtype：
+  T1 `proteus-doh-probe.invalid` ×2（A + AAAA）· T2b/T3 `example.com` 各 ×2 · **T4 零上升**（设备确实没连上）。
+  ★只看设备回执的 `doh.installed` 不够——那只证明"配置被挂上"，不证明"解析真的走了 DoH"。
+**⑤ 实现：探针专用进程级状态，**线格式零改动、生产零影响**。** 新增 `proteus_http_doh.h` 的 `dohProbe()`
+  （与 #1169 的 `dnsProbe()` 同款手法）；`proteus_http.h` 的 `dnsConfiguration` 加第三分支
+  （表 → 假解析器 → **DoH**，三者互斥，后设覆盖先设）；`http_probe.h` 收 `dohUrl`/`dohSkipCert` 并**每轮显式复位**
+  （防进程内上一轮配置串到这一轮 ⇒ 假绿/假红）；ArkTS 侧 `EntryAbility.ets` 解析 `--ps dohUrl`（斜杠仍会被 `aa start` 吃掉 ⇒ 传 `%2F` 再解回）。
+  ★**为什么不进业务 API / 线格式 tag**：`useFetch({ httpDns })` 的语义是"域名→IP 表"（同 Android `Dns` / iOS 本地代理），
+  而 DoH 是"给一个解析服务端 URL"——两者不是同一个能力（`02-ios-httpdns-industry-survey.md` 结论 5 已明确不混）；
+  为取证往线格式加 tag 会触发**五端同步义务**，而本单只回答"这条路通不通"。
+**⑥ 判据 + 破坏性验证**：`tests/harmony-doh-landing.test.ts`（5 条，读已入库证据 + 断言矩阵不再写"DoH 未实测"）·
+  `bash hosts/harmony/run-doh-probe.sh`（六组 + 服务端侧统计，可重放）。
+  **破坏性验证**：把 `proteus_http.h` 的 DoH 分支改成 `else if (false && …)` ⇒ 重建重跑：
+  T1 四项全红（`ok=false`/`status=0`/`installed=false`/服务端零查询），**而 T2a 基线仍绿** ⇒ 判据盯着 DoH 接线、不是恒真。
+  另做了一次证据篡改自检（把 summary 里 T1 的 `ok` 改成 false ⇒ 判据当场 1 条红）。
+**⑦ 本轮踩到并修好的三个装置缺陷（比结论更可复用）**：
+  a) **`--only` 读到上一轮的陈旧证据**（本轮实测：`--only=T1` 却显示 T1 成功，其实是上一轮文件）⇒ 跑前清旧证据 + 记录"本轮跑过哪些组"，未跑的组**明确跳过**不参与判定（`SKIP` 哨兵）；
+  b) **设备锁屏时 `aa start` 报 `10106102`**，六组**全部**失败在启动阶段，看起来像"DoH 全失效"（浪费一轮）⇒ 跑前 `power-shell wakeup` + 启动失败**显式报因并退出**，而不是让每组各失败一次；
+  c) **`run-http-probe.sh` 在启动阶段失败时不会取回报告** ⇒ 本地留着上一轮文件被当本轮证据 ⇒ 每组跑前 `rm -f` 本地报告 + **内容级核对**（报告里的 `targetUrl` 必须与本组 URL 一致，防串组）。
+  ★三者同源：**"文件存在" ≠ "这一轮产生的"**——判据必须能证明"这份证据属于本次运行"。
+**⑧ 诚实边界**：a) 服务端用**自签证书** + `skipCertificatesValidation=true` ⇒ 只证明"配置路径接通"，**不**证明真实 CA 校验下同样成立；
+  b) 只证 `Rcp_DnsOverHttps` 一个字段，RCP 的 DoH **缓存/TTL 策略未取证**；c) 不宣称"鸿蒙 DoH 已完成"——业务门面/多端点/失败策略都未做（本单只钉住"落点可用 + 语义"）；
+  d) `skipCertificatesValidation` **生产必须 false**（那是关证书校验，安全风险）。
+**⑨ 落点**：矩阵 `00-capability-matrix.md` 第 24 行 + §3 新增「DoH 落点实测」专项 · 契约索引新增一行（改这个面要跑什么）·
+  任务板 `T-harmony-httpdns-doh` 补 #1202 段（状态仍 planned：业务化未做）· prebuilt 副本已同步（`check:harmony-runtime-prebuilt` 绿）。

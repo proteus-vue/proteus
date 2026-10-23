@@ -47,6 +47,7 @@
 #include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
 #include "proteus_http_diag.h"   // ★#1194：VmHWM 读取（读数记账）
 #include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
+#include "proteus_http_doh.h"         // ★#1202：DoH 落点探针状态（取证专用，生产零影响）
 
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
@@ -676,6 +677,11 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   Rcp_DnsRule dnsRule{};
   HttpDnsTableGuard dnsGuard;   // ★#1169：任何出口都清空表指针（防悬垂）
   CallDnsSourceGuard srcGuard;  // ★#1183：任何出口都清空 per-request 解析来源（防跨请求串味）
+  /**
+   * ★★★#1202：DoH 读数必须按**本次请求**重算——`installed` 的语义是"这一请求真的挂上了
+   *   `dnsConfiguration.dnsOverHttps`"。若沿用上一次的 true，回执会拿旧值冒充新值。
+   */
+  dohProbe().installed = false;
   if (f.httpDns.has && !f.httpDns.v.empty()) {   // ★`Opt<T>` 用 `.has` / `.v`（不是指针）
     // 表放到栈上（lifecycle = 本次 handle），回调通过全局指针读取
     httpDnsTable() = &f.httpDns.v;
@@ -688,6 +694,20 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     dnsRule.type = RCP_DNS_RULE_DYNAMIC;
     dnsRule.data.dynamicDnsRule = &detail::probeDnsLookup;
     cfg.dnsConfiguration.dnsRules = &dnsRule;
+  } else if (dohProbe().enabled && !dohProbe().url.empty()) {
+    /**
+     * ★★★#1202：**DoH 落点探针**（与上面两支互斥——同属 `dnsConfiguration`，后设覆盖先设）。
+     * `Rcp_DnsOverHttps` 是**结构体值**（不是指针）⇒ 直接赋进 cfg 即可；
+     * `url` 指向 `dohProbe().url` 的**进程级静态** `c_str()`，生命周期覆盖整个请求
+     * （不能指向 napi 栈上的临时串——那正是本仓记过的悬垂形态）。
+     * ★头文件原文 "the address resolved by the DOH dns server is **preferred**"：
+     *   是否"无答案即静默回落系统 DNS"必须实测，见 `hosts/harmony/run-doh-probe.sh` 的 T3。
+     */
+    Rcp_DnsOverHttps doh{};
+    doh.url = dohProbe().url.c_str();
+    doh.skipCertificatesValidation = dohProbe().skipCertificatesValidation;
+    cfg.dnsConfiguration.dnsOverHttps = doh;
+    dohProbe().installed = true;
   }
   req->configuration = &cfg;
 

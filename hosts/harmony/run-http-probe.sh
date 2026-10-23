@@ -34,6 +34,8 @@ DNS_IP=""
 DNS_HOST=""
 SAVE_PATH=""   # ★#1187：savePath（沙箱相对路径）
 STREAM=""     # ★#1187：1 = 传 stream:true（应被如实拒绝）
+DOH_URL=""    # ★#1202：DoH 服务端 URL（探针专用；空 = 不启用 DoH）
+DOH_SKIP_CERT=""  # ★#1202：1 = skipCertificatesValidation（自签 DoH 服务端用）
 EXPECT_REJECT=""   # ★#1192：1 = 预期被拒（路径穿越/非法 savePath 的**可重放**判据）
 for arg in "$@"; do
   case "$arg" in
@@ -45,6 +47,8 @@ for arg in "$@"; do
     --save-path=*) SAVE_PATH="${arg#--save-path=}" ;;   # ★#1187
     --stream) STREAM=1 ;;                              # ★#1187
     --expect-reject) EXPECT_REJECT=1 ;;                  # ★#1192
+    --doh-url=*) DOH_URL="${arg#--doh-url=}" ;;          # ★#1202
+    --doh-skip-cert) DOH_SKIP_CERT=1 ;;                  # ★#1202
     --dns-host) shift_next_host=1 ;;
     *) if [ "${shift_next:-0}" = "1" ]; then URL="$arg"; shift_next=0;
        elif [ "${shift_next_dns:-0}" = "1" ]; then DNS_IP="$arg"; shift_next_dns=0;
@@ -83,6 +87,12 @@ DNS_ARG=""
 SAVE_PATH_ENC="$(printf '%s' "$SAVE_PATH" | sed 's|/|%2F|g')"
 [ -n "$SAVE_PATH" ] && DNS_ARG="$DNS_ARG --ps savePath $SAVE_PATH_ENC"
 [ "$STREAM" = "1" ] && DNS_ARG="$DNS_ARG --ps stream 1"
+# ★★★#1202：DoH 落点探针（斜杠同 #1187 会被 aa 吃掉 ⇒ 传 %2F，ArkTS 侧解回）
+if [ -n "$DOH_URL" ]; then
+  DOH_ENC="$(printf '%s' "$DOH_URL" | sed 's|/|%2F|g')"
+  DNS_ARG="$DNS_ARG --ps dohUrl $DOH_ENC"
+  [ "$DOH_SKIP_CERT" = "1" ] && DNS_ARG="$DNS_ARG --ps dohSkipCert 1"
+fi
 HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url $URL $DNS_ARG" 2>&1 \
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 

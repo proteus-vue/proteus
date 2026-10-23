@@ -70,6 +70,19 @@ export default class EntryAbility extends UIAbility {
     if (typeof probeDnsHost === 'string' && probeDnsHost.length > 0) {
       AppStorage.setOrCreate('proteusProbeDnsHost', probeDnsHost);
     }
+    /**
+     * ★★★#1202：DoH 落点探针（`--ps dohUrl https://127.0.0.1:18443/dns-query`）。
+     * ★斜杠同样会被 `aa start --ps` 吃掉（#1187 实测）⇒ 脚本侧传 `%2F`，这里解回 `/`。
+     * ★不给 ⇒ 不设置该键 ⇒ 探针不启用 DoH（生产路径零影响）。
+     */
+    const probeDohUrl = want?.parameters?.['dohUrl'];
+    if (typeof probeDohUrl === 'string' && probeDohUrl.length > 0) {
+      AppStorage.setOrCreate('proteusProbeDohUrl', probeDohUrl.split('%2F').join('/'));
+    }
+    const probeDohSkip = want?.parameters?.['dohSkipCert'];
+    if (probeDohSkip !== undefined) {
+      AppStorage.setOrCreate('proteusProbeDohSkipCert', String(probeDohSkip) === '1' ? '1' : '');
+    }
     // ★★★#1187：`savePath`（宿主逐块落盘）与 `stream`（应被如实拒绝）——两个语义各需真机验证
     // ★#1187 诊断：把 want.parameters 的**全部键**打出来（判断是 key 名变了还是值丢了）
     try { hilog.info(DOMAIN, TAG, 'WANT_PARAMS %{public}s', JSON.stringify(want?.parameters ?? {})); } catch (e) { }

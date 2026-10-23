@@ -144,6 +144,27 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         dp.forcedIp = v;
       }
     }
+    /**
+     * ★★★#1202：**DoH 落点探针**（`dohUrl` / `dohSkipCert`）。
+     *
+     * 【为什么是进程级状态而不是帧字段】DoH 尚不是业务 API（`httpDns` 的业务语义是
+     *   "域名→IP 表"，DoH 是"给一个解析服务端 URL"，见 `02-ios-httpdns-industry-survey.md` 结论 5）；
+     *   为取证往线格式加 tag 会触发五端同步义务。探针通道 ⇒ **线格式零改动**、生产零影响。
+     * ★每轮探针都**显式复位**：不给 `dohUrl` ⇒ `enabled=false` ⇒ `handle()` 完全不碰
+     *   `cfg.dnsConfiguration.dnsOverHttps`（防进程内上一轮配置串到这一轮 ⇒ 假绿/假红）。
+     */
+    {
+      std::string dohUrlIn, dohSkipIn;
+      jstr(argsJson.c_str(), argsJson.size(), "dohUrl", &dohUrlIn);
+      jstr(argsJson.c_str(), argsJson.size(), "dohSkipCert", &dohSkipIn);
+      proteus::http::DohProbe& dh = proteus::http::dohProbe();
+      dh = proteus::http::DohProbe{};
+      if (!dohUrlIn.empty()) {
+        dh.enabled = true;
+        dh.url = dohUrlIn;
+        dh.skipCertificatesValidation = (dohSkipIn == "1" || dohSkipIn == "true");
+      }
+    }
 
     // ① 帧：优先用入参（ArkTS 编）；缺省由 C++ 用 SSOT 语义自编
     std::vector<uint8_t> frame;
@@ -290,6 +311,21 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
         }
     }
     body += transportJson;
+    /**
+     * ★★★#1202：**DoH 读数**（必须拼在**两条回执路径**上——见 #1117 的 limit 教训）。
+     * `installed=true` 只证明"配置被挂上"，**不**证明"解析真的走了 DoH"；
+     * 后者靠本地 DoH 服务端的 `/stats` 查询计数（第三方证据，不依赖设备自报）。
+     */
+    std::string dohJson;
+    {
+        const proteus::http::DohProbe& dh = proteus::http::dohProbe();
+        char hb[560];
+        snprintf(hb, sizeof(hb), ",\"doh\":{\"enabled\":%s,\"installed\":%s,\"url\":\"%s\",\"skipCert\":%s}",
+                 dh.enabled ? "true" : "false", dh.installed ? "true" : "false",
+                 jsonEscape(dh.url).c_str(), dh.skipCertificatesValidation ? "true" : "false");
+        dohJson = hb;
+    }
+    body += dohJson;
     // ★#1187 诊断回显（两条回执路径都要带）
     body += probeDiagIn.empty() ? "" : (",\"probe_diag\":\"" + jsonEscape(probeDiagIn) + "\"");
     if (!err.empty()) {
@@ -320,6 +356,7 @@ static napi_value HostHttpProbe(napi_env env, napi_callback_info info) {
             body += limitJson;   // ★同上：head 覆盖后必须重新拼
             body += dnsJson;     // ★#1169：DNS 读数同理（覆盖后必须重拼）
             body += transportJson; // ★#1186：传输读数同理
+            body += dohJson;       // ★#1202：DoH 读数同理（head 覆盖后必须重拼）
             if (!probeDiagIn.empty()) body += ",\"probe_diag\":\"" + jsonEscape(probeDiagIn) + "\""; // ★#1187
             body += ",\"preview\":\"" + jsonEscape(preview) + "\"}";
         } catch (const std::exception& e) {

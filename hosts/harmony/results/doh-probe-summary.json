@@ -1,0 +1,118 @@
+{
+  "issue": "DoH 落点（Rcp_DnsOverHttps）真机取证",
+  "serverStats": {
+    "mode": "a",
+    "ip": "127.0.0.1",
+    "queries": 6,
+    "qnames": [
+      "proteus-doh-probe.invalid",
+      "proteus-doh-probe.invalid",
+      "example.com",
+      "example.com",
+      "example.com",
+      "example.com"
+    ],
+    "qtypes": [
+      1,
+      28,
+      1,
+      28,
+      1,
+      28
+    ]
+  },
+  "groups": {
+    "t0-no-doh-invalid": {
+      "ok": false,
+      "status": 0,
+      "bodyBytes": 0,
+      "reason": "network.unreachable: 无法解析主机/连接服务器（RCP 1007900006）",
+      "doh": {
+        "enabled": false,
+        "installed": false,
+        "url": "",
+        "skipCert": false
+      },
+      "transport": {},
+      "preview": ""
+    },
+    "t1-doh-resolves": {
+      "ok": true,
+      "status": 200,
+      "bodyBytes": 16,
+      "reason": "",
+      "doh": {
+        "enabled": true,
+        "installed": true,
+        "url": "https://127.0.0.1:18443/dns-query",
+        "skipCert": true
+      },
+      "transport": {
+        "dnsMs": "30.1",
+        "connectMs": "0.3",
+        "ttfbMs": "41.5"
+      },
+      "preview": "PROTEUS_RPORT_OK"
+    },
+    "t2a-baseline": {
+      "ok": true,
+      "status": 200,
+      "bodyBytes": 577,
+      "reason": "",
+      "doh": {
+        "enabled": false,
+        "installed": false,
+        "url": "",
+        "skipCert": false
+      },
+      "transport": {
+        "dnsMs": "32.0",
+        "connectMs": "314.1",
+        "ttfbMs": "9769.2"
+      },
+      "preview": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=dev"
+    },
+    "t2b-doh-overrides": {
+      "ok": false,
+      "status": 0,
+      "bodyBytes": 0,
+      "reason": "timeout: 请求超时（RCP 1007900028）",
+      "doh": {
+        "enabled": true,
+        "installed": true,
+        "url": "https://127.0.0.1:18443/dns-query",
+        "skipCert": true
+      },
+      "transport": {},
+      "preview": ""
+    },
+    "t3-doh-nxdomain": {
+      "ok": false,
+      "status": 0,
+      "bodyBytes": 0,
+      "reason": "network.unreachable: 无法解析主机/连接服务器（RCP 1007900006）",
+      "doh": {
+        "enabled": true,
+        "installed": true,
+        "url": "https://127.0.0.1:18443/dns-query",
+        "skipCert": true
+      },
+      "transport": {},
+      "preview": ""
+    },
+    "t4-doh-unreachable": {
+      "ok": false,
+      "status": 0,
+      "bodyBytes": 0,
+      "reason": "network.unreachable: 无法解析主机/连接服务器（RCP 1007900006）",
+      "doh": {
+        "enabled": true,
+        "installed": true,
+        "url": "https://127.0.0.1:18443/dns-query",
+        "skipCert": true
+      },
+      "transport": {},
+      "preview": ""
+    }
+  }
+}
