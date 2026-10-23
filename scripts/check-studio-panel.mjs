@@ -135,6 +135,9 @@ await page.addInitScript((payload) => {
         if (cmd === 'stats') return payload
         if (cmd === 'set_canvas_rect') return null
         if (cmd === 'read_text') return 'const stubLine = 1\nconst second = 2\nexport { stubLine, second }\n'
+        // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
+        if (cmd === 'list_files')
+          return ['packages/studio/ui/src/App.vue', 'packages/studio/src/main.rs', 'packages/studio/native/embed_view.m']
         throw new Error('未实现：' + cmd)
       },
     },
@@ -187,10 +190,19 @@ const codeView = await page.evaluate(() => {
   return {
     src,
     err,
+    fileCount: document.querySelectorAll('#codeFiles button').length,
+    curPath: document.getElementById('codePath')?.textContent?.trim() ?? '',
     called: all.some((c) => c.cmd === 'read_text'),
+    listed: all.some((c) => c.cmd === 'list_files'),
     zeroed: !!last && last.args?.w === 0 && last.args?.h === 0,
   }
 })
+// ⑪c：点第二个文件，路径与内容都要跟着换（验证 open 通路，不是只有默认那个能看）
+await page.click('#codeFiles button:nth-child(2)')
+await page.waitForTimeout(250)
+const switchedPath = await page.evaluate(
+  () => document.getElementById('codePath')?.textContent?.trim() ?? '',
+)
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
 await browser.close()
@@ -227,9 +239,23 @@ const checks = [
   ['⑧ 页面无 JS 错误', errors.length === 0],
   // 曾把 Markdown 粗体写进 HTML，页面上直接露出 "**"；这条挡住复发
   ['⑨ 正文无裸 "**"（Markdown 泄漏）', !seen.rawMd],
-  // ⑪ 代码视图（G4 第一块砖）：读到文件 + 渲染出内容 + 原生画布收成 0×0
-  ['⑪ 代码视图：read_text 被调用且渲染出内容', codeView.called && codeView.src.includes('stubLine') && !codeView.err],
-  [`⑪b 切到代码视图时原生画布被收成 0×0（否则 GL 画面会浮在代码上）${codeView.zeroed ? '' : '（未收到 w=0/h=0）'}`, codeView.zeroed],
+  // ⑪ 代码视图（G4）：读到文件 + 渲染出内容 + 原生画布收成 0×0
+  [
+    '⑪ 代码视图：read_text 被调用且渲染出内容',
+    codeView.called && codeView.src.includes('stubLine') && !codeView.err,
+  ],
+  [
+    `⑪b 切到代码视图时原生画布被收成 0×0（否则 GL 画面会浮在代码上）${codeView.zeroed ? '' : '（未收到 w=0/h=0）'}`,
+    codeView.zeroed,
+  ],
+  [
+    `⑪c 文件列表渲染 ${codeView.fileCount} 条并默认打开 App.vue`,
+    codeView.listed && codeView.fileCount === 3 && codeView.curPath.endsWith('ui/src/App.vue'),
+  ],
+  [
+    `⑪d 点第二个文件能切换（open 通路，不只是默认那个能看）${switchedPath.endsWith('main.rs') ? '' : `（当前 ${switchedPath}）`}`,
+    switchedPath.endsWith('main.rs'),
+  ],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
 ]
 let bad = 0

@@ -115,12 +115,19 @@ fn dump_frame(path: String) {
 /// 【★诚实边界】仓库根取自编译期 `CARGO_MANIFEST_DIR`：
 ///   开发机直接跑二进制 ⇒ 有效；**打包成 .app 后该路径不存在** ⇒ 明确报错（不静默返回空串）。
 ///   打包形态要读源码是另一个问题（应读设备侧或让用户选工程目录），不在这一版。
-#[tauri::command]
-fn read_text(path: String) -> Result<String, String> {
+/// 仓库根（`read_text` / `list_files` 共用）。
+/// ★打包成 .app 后编译期路径不存在 ⇒ 明确报错（不静默返回空）。
+fn repo_root() -> Result<std::path::PathBuf, String> {
     let root = std::env::var("PROTEUS_REPO_ROOT")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
-    let root = root.canonicalize().map_err(|e| format!("仓库根不可达（打包形态？）：{e}"))?;
+    root.canonicalize()
+        .map_err(|e| format!("仓库根不可达（打包形态？）：{e}"))
+}
+
+#[tauri::command]
+fn read_text(path: String) -> Result<String, String> {
+    let root = repo_root()?;
     let p = root.join(&path).canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
     if !p.starts_with(&root) {
         return Err(format!("路径越界：{path}"));
@@ -130,6 +137,58 @@ fn read_text(path: String) -> Result<String, String> {
         return Err(format!("文件过大：{len} 字节（上限 512KB）"));
     }
     std::fs::read_to_string(&p).map_err(|e| format!("读失败 {path}：{e}"))
+}
+
+/// 列仓库内若干子树下的源码文件（G4：代码视图的**文件列表**）。
+///
+/// 【为什么不用前端 glob】前端没有文件系统访问权（本目录也没配 capabilities），
+///   而这只是个**只读、有界**的查询 ⇒ 在 Rust 侧做，边界与 `read_text` 共用同一套规则。
+///
+/// 【边界（硬约束）】只在仓库根之下 · 只认白名单扩展名 · 跳过 node_modules/target/构建产物
+///   （否则一次几千条）· 上限 **300** 条（到上限就返回，如实截断而非静默少给）。
+#[tauri::command]
+fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
+    const EXT: [&str; 10] = ["ts", "tsx", "vue", "rs", "m", "h", "py", "md", "json", "css"];
+    const SKIP: [&str; 8] = ["node_modules", "target", "dist", "build-app", "web-dist", "gen", ".git", ".vite"];
+    const MAX: usize = 300;
+
+    let repo = repo_root()?;
+    let mut out: Vec<String> = Vec::new();
+    let mut stack: Vec<std::path::PathBuf> = roots.iter().map(|r| repo.join(r)).collect();
+    while let Some(dir) = stack.pop() {
+        let rd = match std::fs::read_dir(&dir) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            if SKIP.contains(&name.as_ref()) {
+                continue;
+            }
+            if p.is_dir() {
+                stack.push(p);
+                continue;
+            }
+            let ok = p
+                .extension()
+                .map(|x| EXT.contains(&x.to_string_lossy().as_ref()))
+                .unwrap_or(false);
+            if !ok {
+                continue;
+            }
+            if let Ok(rel) = p.strip_prefix(&repo) {
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+                if out.len() >= MAX {
+                    out.sort();
+                    return Ok(out);
+                }
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
 }
 
 /// 机型探测：一次 adb 查询，缓存住。
@@ -236,7 +295,7 @@ fn main() {
     default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_canvas_rect, stats, dump_frame, read_text])
+        .invoke_handler(tauri::generate_handler![set_canvas_rect, stats, dump_frame, read_text, list_files])
         .setup(|app| {
             let handle = app.handle().clone();
             let h = handle.clone();

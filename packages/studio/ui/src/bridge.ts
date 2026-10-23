@@ -53,3 +53,6 @@ export const setCanvasRect = (r: { x: number; y: number; w: number; h: number })
 
 /** 读仓库内一个文本文件（G4 第一块砖）。边界由 Rust 侧把关：仓库内 + ≤512KB + 只读。 */
 export const readText = (path: string): Promise<string> => invoke<string>('read_text', { path })
+
+/** 列仓库内若干子树下的源码文件（G4 文件列表）。边界同上，另有扩展名白名单与 300 条上限。 */
+export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]>('list_files', { roots })
