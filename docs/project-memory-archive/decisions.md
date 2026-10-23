@@ -12826,9 +12826,13 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     `bash hosts/ios/run-screen-stream.sh`，并在手机上点「允许录制屏幕」。
 **⑧ 诚实边界**：a) **真机未跑**（上面已说）；b) App 进后台捕获即停（App 内 ReplayKit 的固有语义，不是缺陷）；
   c) 依赖 iPhone 与 Mac 在同一局域网（USB 需 `iproxy 9001 9001`，字节流一样，未验证）；d) **横屏方向未处理**（buffer 是物理屏幕尺寸，
-  竖屏 1170×2532；Studio 画布按宽高比显示，横屏会侧躺）；e) 码率固定 8Mbps（未做自适应）；f) 帧到达时刻的 PTS 用的是
-  `CMSampleBufferGetPresentationTimeStamp`（设备时钟域），与 `live_stream.h` 的"首字节到达时刻"不同源 —— 混用会让延迟读数失真，
-  **接 Studio 统计前必须重打 CLOCK_MONOTONIC**（当前只是在 Mac 侧按到达顺序用，不取 PTS 值）。
+  竖屏 1170×2532；Studio 画布按宽高比显示，横屏会侧躺）；e) 码率固定 8Mbps（未做自适应）；  f) 帧到达时刻的 PTS 用的是
+  `CMSampleBufferGetPresentationTimeStamp`（设备时钟域），与 `live_stream.h` 的"首字节到达时刻"不同源。
+  **★2026-10-23 复核后修正**：这两套时钟**当前根本不接触**——Swift 侧的 pts 只喂给
+  `VTCompressionSessionEncodeFrame`（编码器内部用），**不进字节流**（裸 Annex-B 没有时间戳容器）；
+  `live_stream.h` 第 54 行是自己 `clock_gettime(CLOCK_MONOTONIC)` 打到达时刻。
+  ⇒ **当前不会有延迟读数失真**（原文写的"必须重打"是对未来可能性的提醒，不是现存缺陷）。
+  真要改的时机是：哪天把设备 PTS 塞进流里（做端到端延迟测量），那时必须统一到同一时钟域并显式换算。
 **⑨ ★真机闭环（2026-10-23 用户实测跑通，本条从「待跑」转「已验」）**：iPhone 12（`F02622D7…`）→ Mac
   `192.168.1.128 → 192.168.1.124:9001`，10 秒收到 **1,209,837 字节 / 295 帧 / ffprobe 判 h264 / 888×1920**；
   App 侧日志 `frames=264 encoded=264 bytes=1206675 kbps=9653.4 nals=1 size=888x1920`（**约 60fps / 9.6 Mbps**）。
@@ -12840,9 +12844,16 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
      即系统级降采样 ⇒ 看画面够用，**但做不了像素级 1:1 比对**（那条得走 Broadcast Upload Extension）。
   c) **`nals=1`**：VideoToolbox 默认一帧一 NAL ⇒ 我们那条"逐 NAL 加起始码"的循环在 iOS 上恒只跑一次，
      真正的多 NAL 场景（Android screenrecord）才有覆盖。**别把 Android 的测试当成 iOS 的**。
-**⑩ 剩余（本条未覆盖）**：**Studio 画布上屏**还没接 iOS 真机流——只验了"字节到 Mac"。
-  `POC_LIVE="/usr/bin/nc -l 9001"` 用的是同一份 Annex-B，Android 那条腿已验、iOS 未验；
-  接之前要先把 ⑧f 的 PTS 时钟域问题改掉（否则延迟读数失真）。
+**⑩ Studio 画布上屏（2026-10-23 补齐，本条已闭环）**：用**假源**验完，不需要真机——
+  888×1920 的 H.264 灌 `tcp://127.0.0.1:9001`，Studio 以 `POC_LIVE="/usr/bin/nc -l 9001"` 接收，
+  `POC_DUMP` 读回画布 = **888×1920 完整画面**（`results/studio-ios-frame.png`，86 帧上屏、`dump rc=0`）。
+  ★**这一环又抓到一个只在真流上才暴露的问题**：VT 硬解下 `avcodec_open2` 之后 `g_cc->width` **仍是 0**
+  （SPS 要等首帧才生效）⇒ `embed_view.m:235` 那句「用 SPS 真实尺寸」根本没生效，`g_W/g_H` 停在
+  `POC_LIVE_W` 的默认 **1280×720**。Android 的 `screenrecord` 恰好就是 720p ⇒ 长期潜伏；
+  iOS 的 888×1920 会被按 720p 分配纹理 ⇒ **花屏/错位**。
+  修：**首帧尺寸不等就就地重建 3 张纹理**（canvas/Y/UV）+ 重置 sws + 释放旧 NV12；
+  只在尺寸不等时执行 ⇒ Android 路径零影响。
+  ★同族教训：**"预设值"与"实际值"不一致时不该硬撑**——宁可首帧重建一次，也别让下游按错尺寸跑。
 
 1192. **★★★独立验证第二轮又抓 3 条阻断 + 6 条假绿（含"我声称修好但实际没修"）· 决策**（2026-10-22 · 承接 #1191）:
 **① 第二轮结论**：第一次修复里有 5 项真做对了（B1 RAII 早退、B2 超限码、B3 flush 判定、B6 限制字段进 data、B7 miss→system、J1/J2 块级断言、J8、J9），但**B5 根本没修对**，且 `.part`+rename 引入了**新的数据丢失路径**。
