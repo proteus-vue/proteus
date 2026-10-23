@@ -8,7 +8,8 @@ const props = defineProps<{ s: Stats | null }>()
 const device = computed(() => props.s?.device ?? null)
 const stream = computed(() => {
   const s = props.s
-  if (!s) return '—'
+  // ★无尺寸时显示 "—" 而不是 "0×0"：面板统一原则是「没数据就明说，不摆一个像真值的 0」
+  if (!s || s.width <= 0) return '—'
   const mbps = s.mbps < 0 ? '—' : `${s.mbps.toFixed(1)} Mbps`
   return `H.264 · ${s.width}×${s.height} · ${mbps}`
 })
@@ -35,9 +36,5 @@ const iv = computed(() =>
   </PanelShell>
 </template>
 
-<style scoped>
-.kv{display:grid;grid-template-columns:86px 1fr;gap:5px 10px;font-size:12px}
-.kv b{font-weight:500;color:var(--dim)}
-.kv span{color:var(--fg);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
-code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
-</style>
+<!-- 样式全部提到全局 styles.css（.kv / code）：
+     .kv 此前在 Device/Pipeline/Runtime 三处一字不差抄了三遍，改一次要改三处 ⇒ 统一为单一实现。 -->

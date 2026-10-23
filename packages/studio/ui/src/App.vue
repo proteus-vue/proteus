@@ -9,6 +9,7 @@ import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
+import StudioIcon from './icons/StudioIcon.vue'
 
 const { stats, error, hasBridge } = useStats(500)
 const rect = ref('—')
@@ -79,10 +80,27 @@ const hint = computed(() => {
     </div>
 
     <div class="rail">
-      <button :class="{ on: view === 'device' }" title="设备" @click="switchView('device')">▣</button>
-      <button :class="{ on: view === 'code' }" title="代码（只读）" @click="switchView('code')">◈</button>
-      <button title="断言（未实现）">✓</button>
-      <button title="录制（未实现）">●</button>
+      <button
+        :class="{ on: view === 'device' }"
+        :aria-pressed="view === 'device'"
+        aria-label="设备画布"
+        title="设备画布"
+        @click="switchView('device')"
+      >
+        <StudioIcon name="device" :size="18" />
+      </button>
+      <button
+        :class="{ on: view === 'code' }"
+        :aria-pressed="view === 'code'"
+        aria-label="代码（只读）"
+        title="代码（只读）"
+        @click="switchView('code')"
+      >
+        <StudioIcon name="code" :size="18" />
+      </button>
+      <div class="sep" />
+      <button aria-label="断言（未实现）" title="断言（未实现）" disabled><StudioIcon name="assert" :size="18" /></button>
+      <button aria-label="录制（未实现）" title="录制（未实现）" disabled><StudioIcon name="record" :size="18" /></button>
     </div>
 
     <div class="main">
@@ -91,6 +109,13 @@ const hint = computed(() => {
         <div class="frame" />
         <div class="cross" />
         <div class="tag">device.native · 原生 GL 画布（下方）· HTML 叠加（本层）</div>
+        <!-- 空状态：生产 IDE 必须有——不然用户看到纯黑会以为坏了 -->
+        <div v-if="!running" class="empty">
+          <StudioIcon name="device" :size="28" />
+          <p>等待首帧</p>
+          <span v-if="!hasBridge">无 Tauri 桥（浏览器直开时属正常）</span>
+          <span v-else>没有输入源：接 Android（adb）或 iPhone（--stream）</span>
+        </div>
       </template>
       <CodePanel v-else />
     </div>

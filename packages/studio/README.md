@@ -416,6 +416,29 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 - ⑪ `read_text` 被调用 + 面板渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）。
 
+## UI 生产验收标准（2026-10-23）
+
+出门后按大厂 IDE 的口径收敛，四件事落地（都写在 `ui/src/styles.css` 头部）：
+
+| # | 标准 | 落地 |
+|---|---|---|
+| ① | **语义化 token** | 背景三级 `--bg-canvas/surface/elevated/overlay`、文字三级 `--fg/-muted/-subtle`、边框三级；组件里**不再出现十六进制色值**。旧名 `--panel/--panel2/--line/--dim` 保留为别名，存量组件零改动。 |
+| ② | **4px 网格** | 间距只用 `--sp1..--sp8`；尺寸 22/36/40/48/320 全部落在网格上。 |
+| ③ | **交互态齐备** | `hover` / `active` / `focus-visible`（2px accent 环）/ `disabled`；过渡 140ms `cubic-bezier(.4,0,.2,1)`。缺 focus-visible 的 IDE 键盘没法用。 |
+| ④ | **尺寸对齐行业基线** | 活动栏 **48**（VS Code 同值）· 顶栏 40 · 右栏 320 · 状态栏 24 · 画布内边距 20。 |
+
+**图标**：`ui/src/icons/StudioIcon.vue` —— **内联 SVG**，`24×24` 网格 · 1.5 线宽 · `currentColor` · 半像素对齐。
+★**为什么不自带 npm 图标库**（lucide/tabler）：本目录刻意没有 `package.json`（#1187），装库要改**根** lockfile
+并触发全仓 relink——实测两次都失败（`ERR_PNPM_UNEXPECTED_STORE`；换 `--store-dir` 后 relink 超时被杀）。
+而 IDE 需要的图标是**封闭的少量集合**（VS Code 的 Codicon、JetBrains 的图标集也都是自带资源）⇒
+自带一份规范线框图标零依赖、完全可控。**新增图标必须遵守同一网格与线宽。**
+
+**空状态**：没有输入源时画布中央给「等待首帧 / 没有输入源：接 Android（adb）或 iPhone（--stream）」——
+生产 IDE 不允许"一片黑让人以为坏了"。同理面板里**没数据就显示 `—`**，不摆 `0×0` 这种像真值的假值。
+
+**去重**：`.kv`（键值行）此前在 Device/Pipeline/Runtime **三处一字不差抄了三遍** ⇒ 提到全局，
+三处面板各自的 `<style scoped>` 删除。生产标准里"同一视觉只有一处实现"是硬要求。
+
 ## 出门 ≠ 完成：还没做的（按顺序）
 
 | # | 缺口 | 现状 | 前置 |

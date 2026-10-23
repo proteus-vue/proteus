@@ -26,8 +26,4 @@ const emptyRatio = computed(() => {
   </PanelShell>
 </template>
 
-<style scoped>
-.kv{display:grid;grid-template-columns:86px 1fr;gap:5px 10px;font-size:12px}
-.kv b{font-weight:500;color:var(--dim)}
-.kv span{color:var(--fg);font-variant-numeric:tabular-nums}
-</style>
+<!-- 样式见全局 styles.css 的 .kv（三处面板共用，不再各写一份） -->

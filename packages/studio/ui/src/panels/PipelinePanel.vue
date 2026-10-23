@@ -29,11 +29,4 @@ const stages = computed(() => [
   </PanelShell>
 </template>
 
-<style scoped>
-.kv{display:grid;grid-template-columns:86px 1fr;gap:5px 10px;font-size:12px}
-.kv b{font-weight:500;color:var(--dim)}
-.kv span{color:var(--fg);font-variant-numeric:tabular-nums}
-/* 缩进体现"合计 = 四段之和"，避免读成四个并列指标 */
-.sub{padding-left:14px;color:#c3c9d4}
-.sub:before{content:"└ ";color:#5c626e}
-</style>
+<!-- 样式见全局 styles.css 的 .kv / .sub（三处面板共用，不再各写一份） -->

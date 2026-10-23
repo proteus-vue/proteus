@@ -1,49 +1,130 @@
-/* docs/proteus-studio-poc/05-studio-shell/ui/src/styles.css
-   全局样式（决策 #1183）。三栏布局是**全局 grid**，不适合塞进组件 scoped 样式。 */
+/* packages/studio/ui/src/styles.css
+   全局样式与设计 token（决策 #1183 起；2026-10-23 按**生产验收标准**重做）。
+
+   【这一版按大厂 IDE 的口径收敛，四件事】
+     ① **语义化 token**：背景三级（canvas / surface / elevated / overlay）、文字三级（fg / muted / subtle）、
+        边框三级；组件里不再散落十六进制色值。旧名（--panel/--panel2/--line/--dim）保留为**别名**，
+        存量组件零改动，新代码一律用语义名。
+     ② **4px 网格**：间距与尺寸只用 4 的倍数（--sp1..--sp8），避免 13px/17px 这类"看着差不多"的值。
+     ③ **交互态齐备**：hover / active / focus-visible / disabled —— 缺 focus-visible 的 IDE 键盘没法用。
+     ④ **尺寸对齐行业基线**：活动栏 48（VS Code 同值）· 顶栏 40 · 右栏 320 · 状态栏 24 · 画布内边距 20。
+
+   【为什么三栏骨架用全局 grid 而不是组件 scoped】它是**整页骨架**，塞进组件会让"改一栏要跨文件"。
+   真正单一职责的东西就该在一处。 */
+
 :root{
-  --bg:#17181c; --panel:#1f2126; --panel2:#24262c; --line:#2e3138;
-  --fg:#e6e8ee; --dim:#9aa1ad; --accent:#4c8dff; --ok:#39c07a; --warn:#e2b341; --bad:#e5534b;
+  /* ── 背景：从底到浮 ── */
+  --bg-canvas:#0b0c0f;
+  --bg-surface:#14161a;
+  --bg-elevated:#1b1e24;
+  --bg-overlay:#22262e;
+  /* ── 文字 ── */
+  --fg:#e6e8ee;
+  --fg-muted:#9aa1ad;
+  --fg-subtle:#6d7480;
+  /* ── 边框 ── */
+  --border-subtle:#22252b;
+  --border:#2e3138;
+  --border-strong:#3a3f49;
+  /* ── 语义色 ── */
+  --accent:#4c8dff;
+  --accent-weak:rgba(76,141,255,.14);
+  --ok:#39c07a; --warn:#e2b341; --bad:#e5534b;
+  --ok-weak:rgba(57,192,122,.14);
+  --warn-weak:rgba(226,179,65,.14);
+  --bad-weak:rgba(229,83,75,.14);
+  /* ── 间距（4px 网格）── */
+  --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:20px; --sp6:24px; --sp8:32px;
+  /* ── 圆角 ── */
+  --r-sm:4px; --r-md:6px; --r-lg:10px; --r-pill:999px;
+  /* ── 字号 ── */
+  --fs-2xs:10px; --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-lg:14px;
+  /* ── 动效（IDE 要"快而克制"，>200ms 会显得迟钝）── */
+  --dur:140ms; --ease:cubic-bezier(.4,0,.2,1);
 }
+
 html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
-  font:13px/1.45 -apple-system,"PingFang SC",system-ui,sans-serif;color:var(--fg);
+  font:var(--fs-md)/1.45 -apple-system,"PingFang SC",system-ui,sans-serif;color:var(--fg);
   user-select:none;-webkit-user-select:none}
 
 /* 顶部条 + 三栏 + 状态栏 */
 .app{display:grid;height:100vh;
-     grid-template-columns:56px minmax(0,1fr) 340px;
-     grid-template-rows:44px minmax(0,1fr) 28px;
+     grid-template-columns:48px minmax(0,1fr) 320px;
+     grid-template-rows:40px minmax(0,1fr) 24px;
      grid-template-areas:"top top top" "rail main side" "status status status";}
 
-.top{grid-area:top;display:flex;align-items:center;gap:12px;padding:0 14px;
-     background:var(--panel);border-bottom:1px solid var(--line)}
-.brand{font-weight:600;letter-spacing:.2px}
+.top{grid-area:top;display:flex;align-items:center;gap:var(--sp3);padding:0 var(--sp4);
+     background:var(--bg-surface);border-bottom:1px solid var(--border-subtle)}
+.brand{font-weight:600;letter-spacing:.2px;font-size:var(--fs-md)}
 .brand span{color:var(--accent)}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
-      background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:12px;
-      white-space:nowrap}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
-.dot.off{background:#6b7280}
+.chip{display:inline-flex;align-items:center;gap:var(--sp1);height:22px;padding:0 9px;
+      border-radius:var(--r-pill);background:var(--bg-elevated);border:1px solid var(--border);
+      color:var(--fg-muted);font-size:var(--fs-xs);white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok);
+     box-shadow:0 0 0 3px var(--ok-weak)}
+.dot.off{background:var(--fg-subtle);box-shadow:0 0 0 3px rgba(109,116,128,.14)}
 
-.rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0;
-      background:var(--panel);border-right:1px solid var(--line)}
-.rail button{width:38px;height:38px;border-radius:9px;border:1px solid transparent;background:transparent;
-      color:var(--dim);font-size:16px;cursor:pointer}
-.rail button.on{background:var(--panel2);border-color:var(--line);color:var(--fg)}
+/* 活动栏（左）——48px 与 VS Code 同基线；图标按钮 36px 落在 4px 网格上 */
+.rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:var(--sp1);
+      padding:var(--sp2) 0;background:var(--bg-surface);border-right:1px solid var(--border-subtle)}
+.rail button{position:relative;width:36px;height:36px;display:grid;place-items:center;
+      border-radius:var(--r-md);border:1px solid transparent;background:transparent;
+      color:var(--fg-muted);cursor:pointer;
+      transition:background var(--dur) var(--ease),color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.rail button:hover{background:var(--bg-overlay);color:var(--fg)}
+.rail button:active{background:var(--bg-elevated)}
+.rail button.on{background:var(--bg-elevated);border-color:var(--border);color:var(--fg)}
+/* 选中态左侧强调条（IDE 通用语汇：不靠"变亮"这一个维度） */
+.rail button.on::before{content:"";position:absolute;left:-7px;top:50%;transform:translateY(-50%);
+      width:2px;height:18px;border-radius:0 2px 2px 0;background:var(--accent)}
+.rail button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.rail button[disabled]{opacity:.4;cursor:not-allowed}
+.rail .sep{width:24px;height:1px;background:var(--border-subtle);margin:var(--sp1) 0}
 
-.main{grid-area:main;position:relative;background:#0e0f12;overflow:hidden}
+.main{grid-area:main;position:relative;background:var(--bg-canvas);overflow:hidden}
 /* ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 */
-#canvas{position:absolute;left:24px;top:24px;right:24px;bottom:24px;background:transparent}
-.frame{position:absolute;left:24px;top:24px;right:24px;bottom:24px;border:1px solid #3a3f49;
-       border-radius:6px;pointer-events:none}
-.cross{position:absolute;inset:24px;pointer-events:none;opacity:.55}
-.cross:before,.cross:after{content:"";position:absolute;background:rgba(76,141,255,.8)}
+#canvas{position:absolute;left:var(--sp5);top:var(--sp5);right:var(--sp5);bottom:var(--sp5);
+        background:transparent}
+.frame{position:absolute;left:var(--sp5);top:var(--sp5);right:var(--sp5);bottom:var(--sp5);
+       border:1px solid var(--border-strong);border-radius:var(--r-md);pointer-events:none}
+.cross{position:absolute;inset:var(--sp5);pointer-events:none;opacity:.5}
+.cross:before,.cross:after{content:"";position:absolute;background:var(--accent);opacity:.75}
 .cross:before{left:50%;top:0;bottom:0;width:1px}
 .cross:after{top:50%;left:0;right:0;height:1px}
-.tag{position:absolute;left:32px;top:32px;padding:4px 8px;border-radius:6px;
-     background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.14);font-size:11px;color:#cfd5e1}
+.tag{position:absolute;left:var(--sp6);top:var(--sp6);height:22px;display:inline-flex;align-items:center;
+     padding:0 var(--sp2);border-radius:var(--r-sm);
+     background:rgba(11,12,15,.72);border:1px solid var(--border);
+     font-size:var(--fs-xs);color:var(--fg-muted);backdrop-filter:blur(6px)}
 
-.side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);overflow:auto}
-.status{grid-area:status;display:flex;align-items:center;gap:16px;padding:0 14px;
-        background:var(--panel2);border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);
-        font-variant-numeric:tabular-nums}
-.status .k{color:#727a88}
+/* 空状态（生产 IDE 必备）：没有输入源时给出**可行动**的提示，而不是一片黑 */
+.empty{position:absolute;inset:var(--sp5);display:flex;flex-direction:column;align-items:center;
+       justify-content:center;gap:var(--sp2);color:var(--fg-subtle);pointer-events:none}
+.empty svg{opacity:.5}
+.empty p{margin:0;font-size:var(--fs-sm);font-weight:500;color:var(--fg-muted)}
+.empty span{font-size:var(--fs-xs);color:var(--fg-subtle)}
+
+/* 右栏 */
+.side{grid-area:side;background:var(--bg-surface);border-left:1px solid var(--border-subtle);
+      overflow:auto;overscroll-behavior:contain}
+.side::-webkit-scrollbar{width:10px}
+.side::-webkit-scrollbar-thumb{background:var(--border);border-radius:var(--r-pill);
+      border:3px solid var(--bg-surface)}
+.side::-webkit-scrollbar-thumb:hover{background:var(--border-strong)}
+
+/* 状态栏 */
+.status{grid-area:status;display:flex;align-items:center;gap:var(--sp4);padding:0 var(--sp3);
+        background:var(--bg-elevated);border-top:1px solid var(--border-subtle);
+        font-size:var(--fs-2xs);color:var(--fg-muted);font-variant-numeric:tabular-nums;
+        letter-spacing:.2px}
+.status .k{color:var(--fg-subtle);margin-right:var(--sp1);text-transform:uppercase;font-size:9px}
+
+/* ── 右栏通用语法（★2026-10-23 提到全局：此前 .kv 在 Device/Pipeline/Runtime 三处**一字不差抄了三遍**）
+   生产标准里"同一视觉只有一处实现"是硬要求——否则改一次间距要改三处、且必然有一天漏一处。 */
+.kv{display:grid;grid-template-columns:86px 1fr;gap:5px var(--sp2);font-size:var(--fs-sm)}
+.kv b{font-weight:500;color:var(--fg-muted)}
+.kv span{color:var(--fg);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+/* 层级缩进：表达"合计 = 四段之和"，避免读成并列指标 */
+.sub{padding-left:var(--sp3);color:var(--fg)}
+.sub::before{content:"└ ";color:var(--fg-subtle)}
+code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-sm);
+     padding:0 4px;font-size:var(--fs-xs);color:var(--fg-muted)}

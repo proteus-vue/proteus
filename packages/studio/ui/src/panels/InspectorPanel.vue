@@ -27,9 +27,8 @@ import PanelShell from './PanelShell.vue'
 </template>
 
 <style scoped>
-.todo{font-size:12px;color:var(--dim);line-height:1.7}
-.todo b{color:#e6e8ee;font-weight:600}
-.todo ul{margin:4px 0 0;padding-left:16px}
+.todo{font-size:var(--fs-sm);color:var(--fg-muted);line-height:1.7}
+.todo b{color:var(--fg);font-weight:600}
+.todo ul{margin:var(--sp1) 0 0;padding-left:var(--sp4)}
 .todo li{margin:2px 0}
-code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px;color:#c3c9d4}
 </style>

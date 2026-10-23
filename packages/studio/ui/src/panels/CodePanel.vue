@@ -84,22 +84,22 @@ onMounted(load)
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-canvas);
 }
 .bar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
   font-size: 12px;
-  color: var(--dim);
+  color: var(--fg-muted);
 }
 .bar select {
-  background: var(--panel2);
+  background: var(--bg-elevated);
   color: var(--fg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 3px 6px;
   font: inherit;
@@ -108,7 +108,7 @@ onMounted(load)
   font-variant-numeric: tabular-nums;
 }
 .note {
-  color: var(--dim);
+  color: var(--fg-muted);
   opacity: 0.8;
 }
 .err {
@@ -117,7 +117,7 @@ onMounted(load)
   border: 1px solid var(--bad);
   border-radius: 8px;
   color: var(--bad);
-  background: rgba(229, 83, 75, 0.08);
+  background: var(--bad-weak);
   font-size: 12px;
   white-space: pre-wrap;
   user-select: text;
@@ -127,15 +127,15 @@ onMounted(load)
   min-height: 0;
   display: flex;
   overflow: auto;
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: var(--fs-sm)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .gutter {
   padding: 8px 8px 8px 12px;
   text-align: right;
-  color: var(--dim);
+  color: var(--fg-muted);
   opacity: 0.6;
-  border-right: 1px solid var(--line);
-  background: var(--panel);
+  border-right: 1px solid var(--border);
+  background: var(--bg-surface);
   font-variant-numeric: tabular-nums;
   user-select: none;
 }

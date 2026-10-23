@@ -13,7 +13,10 @@ defineProps<{ title: string; note?: string }>()
 </template>
 
 <style scoped>
-.sec{border-bottom:1px solid var(--line);padding:12px 14px}
-h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.4px}
-.note{font-size:11.5px;color:#6f7783;margin-top:6px;line-height:1.6}
+/* 面板外壳（生产口径）：小号弱色标题 + 统一内边距 + 细分隔线。
+   标题不抢内容注意力——IDE 里面板标题是"定位标签"，不是内容。 */
+.sec{padding:var(--sp3) var(--sp4);border-bottom:1px solid var(--border-subtle)}
+h3{margin:0 0 var(--sp2);font-size:var(--fs-xs);font-weight:600;color:var(--fg-muted);
+   letter-spacing:.04em}
+.note{margin-top:var(--sp2);font-size:var(--fs-xs);color:var(--fg-subtle);line-height:1.6}
 </style>
