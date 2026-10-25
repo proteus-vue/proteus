@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Proteus Studio 图标 · 字母方向（P 字标）精修版（决策 #1226）
+     与 `../icon.svg`（立方体 + 选中框）是**两条并行方向**，此处为候选 2 的成品。
+     元素抽取：三面三色 → 容器；等距 30° → 光的方向（左上淡紫 / 右下绿）。
+     字形 P：竖笔方角（平顶平底）+ 正圆碗（顶端与竖笔齐平）+ 视觉居中 -32px。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Proteus Studio">
+  <title>Proteus Studio</title>
+  <defs>
+    <linearGradient id="base" x1="0.06" y1="0" x2="0.94" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/><stop offset="0.52" stop-color="#5b66f2"/><stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <radialGradient id="lilac" cx="0.08" cy="0" r="0.62">
+      <stop offset="0" stop-color="#e3d7ff" stop-opacity="0.42"/><stop offset="1" stop-color="#e3d7ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="green" cx="0.95" cy="0.97" r="0.70">
+      <stop offset="0" stop-color="#16a34a" stop-opacity="0.9"/><stop offset="0.5" stop-color="#16a34a" stop-opacity="0.20"/><stop offset="1" stop-color="#16a34a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/><stop offset="0.36" stop-color="#ffffff" stop-opacity="0.09"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.03"/>
+    </linearGradient>
+    <filter id="soft" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0a0f33" flood-opacity="0.22"/>
+    </filter>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#base)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#lilac)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#green)"/>
+  </g>
+  <rect x="101" y="101" width="822" height="822" rx="185" fill="none" stroke="url(#rim)" stroke-width="2"/>
+  <g transform="translate(512,512) scale(1.12) translate(-512,-512) translate(-32,2)">
+    <path d="M408 284 H 566 A 114 114 0 0 1 680 398 A 114 114 0 0 1 566 512 H 408" fill="none" stroke="#ffffff" stroke-width="104" stroke-linecap="butt"/>
+    <rect x="356" y="232" width="104" height="556" fill="#ffffff"/>
+  </g>
+</svg>
