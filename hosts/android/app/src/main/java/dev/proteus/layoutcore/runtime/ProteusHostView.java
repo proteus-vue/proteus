@@ -5127,7 +5127,7 @@ public class ProteusHostView extends ViewGroup {
         int save = canvas.save();
         // ★★★text 内间距批（2026-10-09）：多行原点内缩 padding（内容盒左上）
         canvas.translate(c.x + c.padL, c.y + c.padT + (extra > 0.5f ? extra * 0.5f : 0f));
-        layout.draw(canvas);
+        dev.proteus.layoutcore.runtime.MultilineTextPainter.drawLines(canvas, layout, c.text, textPaint);   // ★多行：逐行 drawText（layout.draw 在显示列表下不产字形）
         canvas.restoreToCount(save);
     }
 

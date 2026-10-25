@@ -13589,7 +13589,7 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     门禁只保证"留了位、能拖、配置对"，最后一眼要人看；`trafficLightPosition` 的 y 若与系统字号
     有偏差，改一个数字即可（13 是按 40px 栏高 + 14px 灯高算的）。
 
-1220. **★★★CSS 批 B F3 收尾三项（`text-indent` / `word-spacing` / `overflow-wrap`）——三端宿主真机视觉全过；并首次把「验收口径」用在**别名与继承**这类语义陷阱上**（2026-10-25 · 承接 #1062 批 B 5/8 · 用户「继续」）:
+1223. **★★★【★编号勘误：本条原写 #1220，与并发 Studio 会话的 #1220（标题栏二修）撞号 ⇒ 按 check:decision-numbers 提示改为 #1223——不改动他人已入库的号】** CSS 批 B F3 收尾三项（`text-indent` / `word-spacing` / `overflow-wrap`）——三端宿主真机视觉全过；并首次把「验收口径」用在**别名与继承**这类语义陷阱上**（2026-10-25 · 承接 #1062 批 B 5/8 · 用户「继续」）:
   **① 先钉 Web 真值（真 Chromium，不凭记忆）**：`overflow-wrap: normal` = 长不可断词**整体溢出**（100px 盒 + 28 个 a ⇒ scrollWidth 211、1 行）；
   `break-word` / `anywhere` = 按盒宽折断（同例 3 行）。★`word-wrap` 是 `overflow-wrap` 的**旧别名**——真 Chromium 里 `word-wrap:break-word` 的 computed `overflow-wrap` 也是 `break-word`。
   `text-indent` 只缩**首行**且可继承；`word-spacing` **可为负**（紧排是合法 CSS）且可继承。
@@ -13663,3 +13663,57 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     （Tauri event）在 Playwright 里不存在 ⇒ 只能人眼点一次；快捷键字符串是否合法只有真的建菜单时
     才会暴露（启动一次即是验证）。
   - **下一步**：第一刀余下三件（搜索 rg · Diff · Git 只读）；菜单里的"查找 ⌘F"等搜索落地后一起加。
+
+1222. **Studio 搜索（rg 子进程 + 字节→字符列换算），判据 ㉖「跳到那一格」· 决策**（2026-10-25 · 基础编辑能力第一刀第二件 · 承接 #1217 多标签）:
+  - **为什么用 rg 而不是自己遍历**：仓库 3000+ 文件、几十 MB；自写遍历慢，还要把"忽略哪些目录"
+    重新踩一遍（node_modules/target/dist/build-app/web-dist）。`rg` 是这件事的事实标准
+    （VS Code 搜索框底层也是 ripgrep）。我们只做三件事：**调它、限边界、转坐标**。
+  - **边界（硬约束）**：只在仓库根之下（`current_dir`，不传绝对路径）；`--fixed-strings`
+    （用户在搜索框里打 `a.b*` 想找的就是这串字符，不是正则；要正则以后加开关，
+    **不能默默把特殊字符当元字符**）；单文件 `--max-count 50`、总量 300（超了 kill 子进程）。
+  - **★`async` + `spawn_blocking`**：rg 是阻塞子进程；写成同步 command 会占住 IPC 线程
+    （macOS 上就是主线程）⇒ 搜索时界面顿、输入法顿。"能跑"和"不卡"是两件事。
+  - **★★坐标换算（唯一会错的地方）**：rg 的 `submatches[].start` 是**字节**偏移，
+    CodeMirror 用 **UTF-16 code unit**。中文 1 字 = 3 字节 / 1 code unit ⇒ 两步换算：
+    `search.rs` 字节→**字符列**（单测钉住：`中文abc` 里 `abc` 字节 6 = 字符 3），
+    前端 `Array.from(line)` 字符→code unit。少一步就"看起来差不多但偏几格"。
+  - **交互**：左栏顶部常驻搜索框（⌘F 聚焦，菜单项 `edit.find` 接上）；有查询时**结果列表替换
+    目录树**（VS Code 同款：同一时刻只有一个列表，不叠浮层、不用管和原生设备画布抢 z 序）；
+    200ms 防抖 + **请求序号**（先发的慢请求后回来不许盖掉新结果）；点一条 = 打开 + 落光标。
+  - **判据 38→39（㉖）**：填 `stub` → 2 条命中（与桩一致）+ 目录树让位；点第一条 →
+    `data-caret === "4:9"`（RUST 桩里 `stubLine` 的起始格）+ 当前行文本对得上；清除 → 树回来。
+    `data-caret` 的值从 CM 的**实际 selection 反算**，不是我们自己记的"意图"。
+    **破坏性验证两条都翻红**：① 只用行首（忽略列）⇒ `4:1`；② 结果不顶掉目录树 ⇒ 让位=false。
+  - **诚实边界**：㉖ 跑在桩数据上（rg 解析与列换算由 Rust 单测覆盖）；**替换（replace）没做**——
+    搜索只读，写回归 diff/重构那一刀；单字符查询直接报错（不是静默空结果）。
+  - **下一步**：Diff（`@codemirror/merge`）→ Git 只读。
+
+1224. **★★★Android 自绘「多行文本整条空白」根因找到并修复：`StaticLayout.draw(canvas)` 在显示列表 + 硬件 canvas 下不产生字形（2026-10-25 · 由 #1223 的真机视觉验收照出 · 既有缺陷，非本轮引入）:
+  **① 现象与误判纠正**：CSS 验收 font 页 I 区的**多行**文本（长中文 / 长 URL）在 Android 上整条不上屏，
+  而同一卡片内的单行文本全部正常。我最初记为「多行文本在 flex column 卡片下空白」，并按此排除了三种页面写法
+  （直接子节点 / `width:100%` 包裹 / 显式 px 包裹）—— 三种都空白。**这个定性是错的**：真因与 flex / 卡片无关。
+  **② 逐层取证（每条都排除了一个假设）**：
+  ① `Cmd` 参数正确（`multiLine=true`、盒 1044×132、`fontSize=42`、`textColor=ff1a1c22`、`clip=false`）；
+  ② `StaticLayout` **排出了正确的 2 行**（`getLineCount=2`、`getLineWidth(0)=1036`、`getHeight=122`）；
+  ③ `textPaint` 颜色与 alpha 正常（`ff1a1c22` / 255 / size 42）；
+  ④ 裁剪是全屏（`clip=0,0,1200,2608`、`canvas=1200×2608`）；
+  ⑤ 在 `drawTextMultiline` 里加**调试色块** ⇒ 色块出现在正确位置且宽度等于窄容器（94px）⇒ 几何与调用链都对。
+  ⇒ 剩下的唯一差异就是「`layout.draw(canvas)` 这一步画不出字」。**决定性实验**：把同一处换成
+  「逐行 `getLineStart/getLineEnd` + `canvas.drawText`」⇒ 真机**文字立刻可见**。
+  **③ 根因**：`StaticLayout.draw()` 在本仓的**显示列表（Picture）录制 + 硬件加速 canvas** 路径下不产生字形。
+  ★本仓既有注释里其实记过同族现象（`setShadowLayer` 录进 Picture 会丢）——当时只对 textShadow 打了补丁
+  （有阴影就放弃显示列表），**没人意识到 `StaticLayout.draw` 本身也是受害者**。同源纪律：**"某 API 在 Picture 里失效"
+  要按 API 面清查，不能只补被抓到的那一个**。
+  **④ 修法**：新增 `MultilineTextPainter.drawLines()`（新文件 47 行，合规）——
+  **断行/对齐/行高/行内截断全部仍取自 StaticLayout**（它只负责排版），本类只把"画"换成 `canvas.drawText` ⇒ 语义零变化。
+  ★与既有单行快路径（`drawText`）同一手法；`ProteusHostView` 只留一行调用 ⇒ 顺带把该文件压回 1000 行棘轮基线内。
+  **⑤ 影响面（为什么值得单独一条决策）**：所有走 `multiLine` 的文本（长正文 / 描述 / URL / 折行标题）
+  在本仓 Android 端**此前都是空白的**；单行文本走 `drawText` 快路径不受影响。这解释了"只有长文本中招"的形态，
+  也说明它是**用户可见**的严重缺陷（任何真实页面的正文都可能中招）。
+  **⑥ 破坏性验证（必须做，否则等于没修）**：改回 `layout.draw(canvas)` ⇒ 真机**复现空白**；
+  逐字节还原 ⇒ 再次正常。三态证据齐（修复前空白 / 修复后正常 / 变异后复现空白）。
+  **⑦ 顺带**：这三态截图同时补上了 #1223 里 Android 端 `overflow-wrap` 的视觉证据缺口 —— 紫色 `break-word`
+  现在正确折 2 行（与 iOS 的 3 行、鸿蒙的 2 行同一语义，行数差异来自容器宽度）。
+  **⑧ 诚实边界**：a) 本修复只覆盖 **Android 自绘**路径（iOS/鸿蒙各自用 CoreText / OH_Drawing 直接绘制，实测正常，无需改）；
+  b) 未做全屏逐像素回归（只验了 font 页 I 区 + 目视其余区块未回退）；c) `rebuildPicture` 里"有 textShadow 就放弃显示列表"
+  的既有补丁**保留原样**（现在可能已非必需——因为 `StaticLayout.draw` 这一项不再依赖显示列表，但撤回它属于独立验证，不在本单）。
