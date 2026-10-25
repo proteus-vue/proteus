@@ -736,3 +736,29 @@ void poc_report(const char *path) {
     if (path) { FILE *f = fopen(path, "w"); if (f) { fputs(json, f); fclose(f); } }
   }
 }
+
+// ── Dock 图标以**当前 bundle 的 icon.icns** 为准（决策 #1230）─────────────────────
+// 【为什么需要】Tauri 在 `RunEvent::Ready` 时会把 `tauri.conf.json` 里那张 PNG **嵌进二进制**，
+//   并调用 `NSApplication.setApplicationIconImage` 覆盖应用图标。两个通道（正式/预览）**共用同一个
+//   二进制** ⇒ 不覆盖的话，预览版的 Dock 图标会变成正式版那张（实测：先绿几秒后变紫）。
+//   这里改成读**正在运行的这个 .app** 自己的 `Contents/Resources/icon.icns`——
+//   每个通道的包里放的是各自的 icns，于是 Dock 与 Finder 永远一致。
+// 【为什么不直接删掉 tauri.conf 的 bundle.icon】那张图标同时被 Linux/Windows 用作窗口图标，
+//   删了是把问题换个地方藏；显式覆盖更清楚，也不影响将来的跨平台打包。
+void poc_use_bundle_icon(void) {
+  @autoreleasepool {
+    NSBundle *b = [NSBundle mainBundle];
+    NSString *p = [b pathForResource:@"icon" ofType:@"icns"];
+    if (p == nil) {
+      fprintf(stderr, "[studio] 包内没有 icon.icns，Dock 图标保持 Tauri 嵌入的那张\n");
+      return;
+    }
+    NSImage *img = [[NSImage alloc] initWithContentsOfFile:p];
+    if (img == nil) {
+      fprintf(stderr, "[studio] icon.icns 读不出来：%s\n", p.UTF8String);
+      return;
+    }
+    [NSApplication sharedApplication].applicationIconImage = img;
+    fprintf(stderr, "[studio] Dock 图标已切到包内 icon.icns\n");
+  }
+}

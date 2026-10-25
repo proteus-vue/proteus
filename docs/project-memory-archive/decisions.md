@@ -13875,3 +13875,21 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **附带修掉一个真 bug**：`package-app.sh` 里 `$APP（可执行…）` 这种**变量后紧跟中文全角括号**会被 bash
     当成变量名的一部分 ⇒ `APP?: unbound variable`（`set -u` 下整段构建失败）。改成 `${APP}（`；
     `$CARGO_MIN（` 同样一处潜伏 bug 一起修。
+
+1230. **Dock 图标以「包内 icon.icns」为准 —— Tauri 会用嵌进二进制的 PNG 覆盖应用图标 · 修复**（2026-10-25 · 用户截图：两个 Dock 图标都是紫 P）:
+  - **症状**：两个通道同时跑时，Dock 里**两格都是正式版的紫 P**；而 Finder/`NSWorkspace.iconForFile`
+    看到的却是对的（预览=绿）。⇒ 说明问题只在"**运行中进程**的应用图标"，不在包本身。
+  - **根因（读源码确认）**：`tauri-runtime-wry/src/app.rs` 在 `RunEvent::Ready` 里用
+    `tauri.conf.json` 的 `bundle.icon`（**编译期嵌进二进制**的那张 PNG）调
+    `NSApplication.setApplicationIconImage`。两个通道**共用同一个二进制** ⇒ 谁启动都是那张紫 P。
+    这也解释了"先绿几秒后变紫"：进程刚起来时 Dock 先用包图标，Ready 之后被二进制里那张覆盖。
+  - **修复**：`native/embed_view.m` 加 `poc_use_bundle_icon()` —— 读**当前 bundle** 的
+    `Contents/Resources/icon.icns` 并 `setApplicationIconImage`；Rust 侧在
+    `Builder::build(ctx).run(|_app, event| ...)` 的 `RunEvent::Ready` 回调里调用。
+    ★**必须放在这个回调里，不能放 `setup()`**：Tauri 的覆盖发生在 setup 之后（同一个 Ready 事件里），
+    放 setup 会被它盖掉。`App::run` 的回调在整条 Ready 链的最后。
+  - **取证（这次连"看到的"也自证）**：`NSWorkspace.runningApplications` → `NSRunningApplication.icon`
+    把**运行中进程**的图标导出成 PNG：release=紫 P、preview=绿 P。这一条比 `iconForFile`（读 bundle）
+    更贴近 Dock，因为它拿的是进程自己的图标。
+  - **为什么不直接删 `bundle.icon`**：那张图同时给 Linux/Windows 当窗口图标，删掉只是把问题挪个地方；
+    显式覆盖语义更清楚，也不影响将来跨平台。

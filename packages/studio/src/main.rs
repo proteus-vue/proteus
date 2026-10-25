@@ -35,6 +35,8 @@ extern "C" {
     fn poc_send_ok() -> i64;
     fn poc_live_restarts() -> i32;
     fn poc_report(path: *const c_char);
+    /// 把应用图标切到**当前 bundle 的 icon.icns**（决策 #1230，实现见 native/embed_view.m）
+    fn poc_use_bundle_icon();
 }
 
 /// 面板读数。字段名就是 HTML 侧读的名字 —— 少一层映射少一处漂移。
@@ -497,8 +499,19 @@ fn main() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("Studio 启动失败");
+        .build(tauri::generate_context!())
+        .expect("Studio 启动失败")
+        // ★Dock 图标以**包内 icon.icns** 为准（决策 #1230）。
+        //   为什么放在这里而不是 `setup()`：Tauri 在 Ready 事件里会先用**嵌进二进制的那张 PNG**
+        //   调 `setApplicationIconImage`（dev 构建实测），而两个通道共用同一个二进制 ⇒ 不覆盖回来，
+        //   预览版的 Dock 图标就是正式版那张（症状：先绿几秒后变紫）。
+        //   这个 `run` 回调在 Ready 处理链的**最后**，所以这里设置的一定是最终值。
+        .run(|_app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(event, tauri::RunEvent::Ready) {
+                unsafe { poc_use_bundle_icon() };
+            }
+        });
 }
 
 /// 主线程轮询等窗口就绪后挂载原生画布（原因见 PoC B2 的踩坑记录 1–3）
