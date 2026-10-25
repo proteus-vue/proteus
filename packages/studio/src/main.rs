@@ -128,6 +128,88 @@ async fn search_text(query: String) -> Result<search::Outcome, String> {
 /// 把文本写进系统剪贴板（右键菜单「复制相对路径」用）。
 /// ★为什么不走浏览器的 `navigator.clipboard`：WKWebView 里它要**用户手势 + 焦点**同时满足，
 ///   菜单项点击后焦点常在菜单节点上 ⇒ 会静默失败。NSPasteboard 没有这些前提。
+/* ── Git **只读**（决策 #1246）───────────────────────────────────────────────
+ * 只跑三条**纯查询**命令：`status --porcelain=v2 --branch`、`rev-parse --abbrev-ref`、`show HEAD:path`。
+ * ★不提供任何写操作（stage/commit/checkout/push）——那是另一个层级的责任，
+ *   而且本仓纪律是"push 必须人工批准"，工具在这里就不该有那个能力。
+ * ★git 不在 PATH / 不是仓库 / 命令非零退出，一律降级为 `is_repo:false`，不抛错（读代码不受影响）。
+ */
+#[derive(serde::Serialize)]
+struct GitFile {
+    path: String,
+    /// 'M' 修改 / 'A' 新增 / 'D' 删除 / 'R' 重命名 / '?' 未跟踪 / 'U' 冲突
+    status: String,
+}
+
+#[derive(serde::Serialize)]
+struct GitStatus {
+    is_repo: bool,
+    branch: String,
+    ahead: i32,
+    behind: i32,
+    files: Vec<GitFile>,
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    let root = repo_root().ok()?;
+    let out = std::process::Command::new("git").args(args).current_dir(root).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+#[tauri::command]
+fn git_status() -> GitStatus {
+    let empty = GitStatus { is_repo: false, branch: String::new(), ahead: 0, behind: 0, files: vec![] };
+    let Some(text) = git(&["status", "--porcelain=v2", "--branch"]) else {
+        return empty;
+    };
+    let mut st = GitStatus { is_repo: true, branch: String::new(), ahead: 0, behind: 0, files: vec![] };
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("# branch.head ") {
+            st.branch = rest.trim().to_string();
+        } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
+            for part in rest.split_whitespace() {
+                if let Some(v) = part.strip_prefix('+') {
+                    st.ahead = v.parse().unwrap_or(0);
+                } else if let Some(v) = part.strip_prefix('-') {
+                    st.behind = v.parse().unwrap_or(0);
+                }
+            }
+        } else if let Some(path) = line.strip_prefix("? ") {
+            st.files.push(GitFile { path: path.to_string(), status: "?".into() });
+        } else if line.starts_with("1 ") || line.starts_with("2 ") || line.starts_with("u ") {
+            // "1 XY sub mH mI mW hH hI path" —— 前两列是 XY，最后一段是路径
+            // ★用 `rsplitn(2,' ')` 取**最后一段**当路径：porcelain v2 的字段数并不固定
+            //   （重命名行会多两段），按段落索引会错位。含空格的路径被 git 加了引号，这里如实保留。
+            let path = line.rsplitn(2, ' ').next().unwrap_or("").to_string();
+            let xy = line.split(' ').nth(1).unwrap_or("..");
+            let x = xy.chars().next().unwrap_or('.');
+            let y = xy.chars().nth(1).unwrap_or('.');
+            let code = if x == '.' { y } else { x };
+            let status = match code {
+                'A' => "A",
+                'D' => "D",
+                'R' | 'C' => "R",
+                'U' => "U",
+                'M' | 'T' => "M",
+                _ => "M",
+            };
+            if !path.is_empty() {
+                st.files.push(GitFile { path, status: status.into() });
+            }
+        }
+    }
+    st
+}
+
+/// 取某个文件在 HEAD 里的内容（用于"与 HEAD 比较"）；未跟踪/不存在 ⇒ None。
+#[tauri::command]
+fn git_head(path: String) -> Option<String> {
+    git(&["show", &format!("HEAD:{path}")])
+}
+
 #[tauri::command]
 fn copy_text(text: String) {
     let c = CString::new(text).unwrap_or_default();
@@ -523,6 +605,8 @@ fn main() {
             load_state,
             save_state,
             copy_text,
+            git_status,
+            git_head,
             set_dirty_count,
             close_now,
             search_text

@@ -542,5 +542,43 @@ await page.waitForTimeout(150)
   await page.keyboard.press('Meta+z')
   await page.waitForTimeout(220)
 
-  return { diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
+  // ── ⑱h Git 只读（决策 #1246）：分支/改动数、改动清单可点、Diff 可切到 HEAD ──────
+  const gitBar = await page.evaluate(() => {
+    const bar = document.getElementById('gitBar')
+    if (!bar) return null
+    return {
+      branch: (document.getElementById('gitBranch')?.textContent ?? '').trim(),
+      count: (document.getElementById('gitCount')?.textContent ?? '').trim(),
+    }
+  })
+  await page.click('#gitCount')
+  await page.waitForTimeout(250)
+  const gitList = await page.evaluate(() => ({
+    items: [...document.querySelectorAll('#gitList .gitem')].map((b) => b.getAttribute('data-git')),
+    sts: [...document.querySelectorAll('#gitList .gst')].map((b) => b.getAttribute('data-st')),
+  }))
+  await page.click('#gitList .gitem[data-git="packages/studio/src/main.rs"]')
+  await page.waitForTimeout(400)
+  const gitOpened = await page.evaluate(() => (document.getElementById('codePath')?.textContent ?? '').trim())
+  // 回到 App.vue，验证 Diff 能切到 HEAD
+  await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
+  await page.waitForTimeout(350)
+  await page.click('#diffToggle')
+  await page.waitForTimeout(250)
+  await page.click('#diffView [data-src="head"]')
+  await page.waitForTimeout(350)
+  const headDiff = await page.evaluate(() => {
+    const v = document.getElementById('diffView')
+    if (!v) return null
+    return {
+      dels: [...v.querySelectorAll('.row.del .txt')].map((n) => n.textContent ?? '').slice(0, 3),
+      headOn: document.querySelector('#diffView [data-src="head"]')?.classList.contains('on') ?? false,
+    }
+  })
+  await page.click('#diffView [data-src="disk"]')
+  await page.waitForTimeout(200)
+  await page.click('#diffToggle')
+  await page.waitForTimeout(200)
+
+  return { gitBar, gitList, gitOpened, headDiff, diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

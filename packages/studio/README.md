@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **52 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **53 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -833,7 +833,19 @@ node packages/studio/icons/make-icon.mjs   # 两个通道各出 icns + 1024 png
 ★边界（如实）：**只做行级**，没有词级/字符级高亮，也没有三栏合并。
 `DiffResult.rows` 接口留好——将来引库只换实现。下一步：**Git 只读**（数据源从"基线"扩到"HEAD"）。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **52 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
+## Git 只读（2026-10-25 · 决策 #1246）
+
+文件树上方一条 24px 的 **Git 带**：`⎇ 分支 · ↑a ↓b · N 处改动`，点开是改动清单
+（M 黄 / A 绿 / D 红 / ? 灰），点文件直接打开。
+
+**只读是刻意的**：只跑 `git status --porcelain=v2 --branch` 与 `git show HEAD:<path>`，
+**不提供** stage/commit/checkout/push（本仓纪律是 push 必须人工批准，工具这层就不该有那能力）。
+不是仓库 / 没装 git / 命令失败 ⇒ 整条带子不显示，读代码不受影响。
+
+**Diff 头部的 `磁盘 / HEAD` 切换**：切到 HEAD 就把 `git show HEAD:path` 当 original，
+看"我相对上次提交改了什么"。未跟踪的文件会标注"HEAD 里没有这个文件"。
+
+### 编辑器判据（`check:studio-panel` 已扩到 **53 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；

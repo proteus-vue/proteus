@@ -70,6 +70,25 @@ export const writeText = (path: string, text: string, expect: number): Promise<n
 /** 列仓库内若干子树下的源码文件（G4 文件列表）。边界同上，另有扩展名白名单与 300 条上限。 */
 export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]>('list_files', { roots })
 
+/** Git **只读**（决策 #1246）：分支 / 领先落后 / 改动文件。非仓库时 `isRepo=false`，不抛错。 */
+export interface GitFileStatus {
+  path: string
+  /** M 修改 / A 新增 / D 删除 / R 重命名 / ? 未跟踪 / U 冲突 */
+  status: string
+}
+export interface GitStatusInfo {
+  isRepo: boolean
+  branch: string
+  ahead: number
+  behind: number
+  files: GitFileStatus[]
+}
+
+export const gitStatus = (): Promise<GitStatusInfo> => invoke<GitStatusInfo>('git_status')
+
+/** 某个文件在 HEAD 里的内容；未跟踪/不存在 ⇒ null。 */
+export const gitHead = (path: string): Promise<string | null> => invoke<string | null>('git_head', { path })
+
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 

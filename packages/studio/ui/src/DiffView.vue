@@ -6,7 +6,16 @@
 import { computed } from 'vue'
 import { diffLines } from './diff'
 
-const props = defineProps<{ original: string; modified: string; path: string }>()
+const props = defineProps<{
+  original: string
+  modified: string
+  path: string
+  /** 基准来源：磁盘基线 / git HEAD（只读） */
+  source: 'disk' | 'head'
+  /** HEAD 里没有这个文件（未跟踪/新增） */
+  missing: boolean
+}>()
+const emit = defineEmits<{ switch: [src: 'disk' | 'head'] }>()
 
 const result = computed(() => diffLines(props.original, props.modified))
 const clean = computed(() => result.value.added === 0 && result.value.removed === 0)
@@ -14,13 +23,20 @@ const clean = computed(() => result.value.added === 0 && result.value.removed ==
 
 <template>
   <div class="diff" id="diffView" :data-added="result.added" :data-removed="result.removed">
-    <div v-if="clean" class="empty">没有未保存的改动</div>
+    <div class="head">
+        <!-- 基准来源：磁盘基线 / HEAD（决策 #1246）。只读，不提供暂存/提交 -->
+        <span class="seg">
+          <button class="sbtn" :class="{ on: source === 'disk' }" data-src="disk" @click="emit('switch', 'disk')">磁盘</button>
+          <button class="sbtn" :class="{ on: source === 'head' }" data-src="head" @click="emit('switch', 'head')">HEAD</button>
+        </span>
+        <span v-if="missing" class="warn">HEAD 里没有这个文件</span>
+      <span class="stat"><b class="add">+{{ result.added }}</b> <b class="del">−{{ result.removed }}</b></span>
+      <span v-if="result.truncated" class="warn">文件太大，已退化为整块替换</span>
+    </div>
+    <!-- ★来源切换必须**常驻**：切到 HEAD 时"本地没改动"不等于"和 HEAD 一样"，
+         恰恰是没改动的时候最需要看 HEAD 差了什么（这是第一版把它塞进 v-else 里的 bug）。 -->
+    <div v-if="clean" class="empty">{{ source === 'head' ? '与 HEAD 相同' : '没有未保存的改动' }}</div>
     <template v-else>
-      <div class="head">
-        <span class="path">磁盘 ↔ 当前缓冲</span>
-        <span class="stat"><b class="add">+{{ result.added }}</b> <b class="del">−{{ result.removed }}</b></span>
-        <span v-if="result.truncated" class="warn">文件太大，已退化为整块替换</span>
-      </div>
       <div class="rows">
         <div v-for="(r, i) in result.rows" :key="i" class="row" :class="r.kind">
           <span class="ln">{{ r.a ?? '' }}</span>
@@ -60,6 +76,28 @@ const clean = computed(() => result.value.added === 0 && result.value.removed ==
   background: var(--bg-surface);
   font: 11.5px/1 -apple-system, 'PingFang SC', sans-serif;
   color: var(--fg-subtle);
+}
+.head .seg {
+  display: inline-flex;
+  gap: 2px;
+}
+.head .sbtn {
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-subtle);
+  font: inherit;
+  cursor: pointer;
+}
+.head .sbtn:hover {
+  color: var(--fg);
+}
+.head .sbtn.on {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border);
+  color: var(--fg);
 }
 .head .path {
   overflow: hidden;

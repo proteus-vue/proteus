@@ -47,7 +47,19 @@ import { tags } from '@lezer/highlight'
 import { Compartment } from '@codemirror/state'
 import { langExtension, langLabel } from '../langs'
 import { editorLang, effectiveLangId, langOverrides, trackEditorFile } from '../editorLang'
-import { copyText, hasBridge, invoke, listFiles, onCloseBlocked, readText, writeText, type SearchHit } from '../bridge'
+import {
+  copyText,
+  gitHead,
+  gitStatus,
+  hasBridge,
+  invoke,
+  listFiles,
+  onCloseBlocked,
+  readText,
+  writeText,
+  type GitStatusInfo,
+  type SearchHit,
+} from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
@@ -369,7 +381,10 @@ async function open(path: string) {
     // ★这条分支也必须登记：文件已在内存时走这里，漏了状态栏就会停在上一个文件的类型上（实测踩到）
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
-    if (showDiff.value) refreshDiff()
+    if (showDiff.value) {
+      if (diffSource.value === 'head') void switchDiffSource('head')
+      else refreshDiff()
+    }
     dirty.value = cached.doc.toString() !== rec0.base
     setTabDirty(path, dirty.value)
     lineCount.value = cached.doc.lines
@@ -595,21 +610,52 @@ async function save() {
   saving.value = true
   const ok = await savePath(cur.value)
   saving.value = false
-  if (ok) pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
+  if (ok) {
+    pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
+    void refreshGit()
+  }
+}
+
+/* ── Git 只读（决策 #1246）：分支 + 改动清单。**不做任何写操作** ─────────────── */
+const git = ref<GitStatusInfo | null>(null)
+const gitOpen = ref(false)
+
+async function refreshGit() {
+  if (!hasBridge()) return
+  try {
+    git.value = await gitStatus()
+  } catch {
+    git.value = null
+  }
 }
 
 /* ── Diff 视图（决策 #1245）：比"磁盘基线 vs 当前缓冲" ───────────────────── */
 const showDiff = ref(false)
 const diffBase = ref('')
 const diffNow = ref('')
+const diffSource = ref<'disk' | 'head'>('disk')
+const headText = ref<string | null>(null)
 
 function refreshDiff() {
   const p = cur.value
   if (!p) return
   const rec = recs.get(p)
   if (!rec) return
-  diffBase.value = rec.base
+  diffBase.value = diffSource.value === 'head' ? (headText.value ?? '') : rec.base
   diffNow.value = view ? view.state.doc.toString() : ''
+}
+
+/** 切换 Diff 的来源：磁盘基线 / git HEAD（只读；未跟踪的文件没有 HEAD 版本） */
+async function switchDiffSource(src: 'disk' | 'head') {
+  diffSource.value = src
+  if (src === 'head' && cur.value) {
+    try {
+      headText.value = await gitHead(cur.value)
+    } catch {
+      headText.value = null
+    }
+  }
+  refreshDiff()
 }
 
 function toggleDiff() {
@@ -752,6 +798,8 @@ const offCloseBlocked = onCloseBlocked((n) => {
 })
 
 onMounted(boot)
+// 首帧后拉一次 git 状态（只读；非仓库会自己降级）
+void refreshGit()
 onBeforeUnmount(() => {
   offCloseBlocked()
   view?.destroy()
@@ -768,6 +816,29 @@ onBeforeUnmount(() => {
       <div class="side">
         <!-- 搜索框常驻顶部；一旦有查询，结果列表**替换**目录树（VS Code 同款：同一时刻一个列表） -->
         <SearchBox ref="searchBox" @jump="jumpTo" @active="searchActive = $event" />
+        <!-- Git 只读条（决策 #1246）：分支 + 改动数；点开是改动清单，点文件直接打开 -->
+        <div v-if="git?.isRepo" class="gitbar" id="gitBar">
+          <button class="gbranch" @click="gitOpen = !gitOpen" :title="`分支：${git.branch}（只读）`">
+            <span class="bmark">⎇</span><span class="bname" id="gitBranch">{{ git.branch }}</span>
+            <span v-if="git.ahead || git.behind" class="ab">↑{{ git.ahead }} ↓{{ git.behind }}</span>
+          </button>
+          <button class="gcount" id="gitCount" :class="{ clean: !git.files.length }" @click="gitOpen = !gitOpen">
+            {{ git.files.length ? `${git.files.length} 处改动` : '干净' }}
+          </button>
+        </div>
+        <div v-if="git?.isRepo && gitOpen && git.files.length" class="gitlist" id="gitList">
+          <button
+            v-for="f in git.files"
+            :key="f.path"
+            class="gitem"
+            :data-git="f.path"
+            :title="f.path"
+            @click="open(f.path)"
+          >
+            <span class="gst" :data-st="f.status">{{ f.status }}</span>
+            <span class="gpath">{{ f.path.split('/').pop() }}</span>
+          </button>
+        </div>
         <nav v-if="!searchActive" class="files" id="codeFiles">
         <button
           v-for="r in rows"
@@ -831,7 +902,15 @@ onBeforeUnmount(() => {
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
         <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
         <div v-show="!err && !showDiff" class="host" id="codeHost" ref="host" @contextmenu.prevent="onEditorMenu" />
-        <DiffView v-if="showDiff" :original="diffBase" :modified="diffNow" :path="cur" />
+        <DiffView
+          v-if="showDiff"
+          :original="diffBase"
+          :modified="diffNow"
+          :path="cur"
+          :source="diffSource"
+          :missing="diffSource === 'head' && headText === null"
+          @switch="switchDiffSource"
+        />
       </div>
     </div>
   </div>
@@ -952,6 +1031,31 @@ onBeforeUnmount(() => {
 .files button.dir {
   color: var(--fg);
 }
+/* Git 只读条：一条 22px 的细带，放在文件树上方。不抢注意力，但一眼能看到分支与改动数 */
+.gitbar{display:flex;align-items:center;gap:6px;height:24px;padding:0 var(--sp2);
+  border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);font:11px/1 -apple-system,'PingFang SC',sans-serif}
+.gitbar button{border:0;background:transparent;color:var(--fg-muted);cursor:pointer;font:inherit;
+  padding:2px 4px;border-radius:var(--r-sm)}
+.gitbar button:hover{background:var(--bg-overlay);color:var(--fg)}
+.gbranch{display:flex;align-items:center;gap:4px;min-width:0}
+.bmark{opacity:.6}
+.bname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
+.ab{color:var(--fg-subtle)}
+.gcount{margin-left:auto;flex:none}
+.gcount.clean{color:var(--fg-subtle)}
+.gitlist{max-height:180px;overflow:auto;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface)}
+.gitem{display:flex;align-items:center;gap:6px;width:100%;height:22px;padding:0 var(--sp2);border:0;
+  background:transparent;color:var(--fg-muted);font:11.5px/22px -apple-system,'PingFang SC',sans-serif;
+  text-align:left;cursor:pointer}
+.gitem:hover{background:var(--bg-overlay);color:var(--fg)}
+.gst{flex:none;width:12px;text-align:center;font-weight:600}
+.gst[data-st="M"]{color:var(--syn-number)}
+.gst[data-st="A"]{color:var(--syn-string)}
+.gst[data-st="D"]{color:var(--bad)}
+.gst[data-st="?"]{color:var(--fg-subtle)}
+.gst[data-st="R"]{color:var(--syn-type)}
+.gst[data-st="U"]{color:var(--warn)}
+.gpath{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Diff 开关：低存在感的文字按钮，开了才亮（和"未保存"chip 区分开，别抢注意力） */
 .dtoggle{flex:none;height:18px;padding:0 6px;border:1px solid transparent;border-radius:var(--r-sm);
   background:transparent;color:var(--fg-subtle);font:11px/16px -apple-system,'PingFang SC',sans-serif;

@@ -532,7 +532,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
+const { gitBar, gitList, gitOpened, headDiff, diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -727,6 +727,19 @@ const checks = [
   [
     `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
     failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
+  ],
+  // ⑱h Git 只读：分支/改动数 + 改动清单可点开 + Diff 可切 HEAD
+  [
+    `⑱h Git：分支=${gitBar?.branch ?? '—'} · ${gitBar?.count ?? '—'} · 清单 ${gitList.items.length} 项(${gitList.sts.join('')}) · 点开→${gitOpened.split('/').pop() || '—'} · HEAD diff 命中标记=${(headDiff?.dels ?? []).some((x) => x.includes('HEAD-VERSION-MARKER'))}`,
+    !!gitBar &&
+      gitBar.branch === 'main' &&
+      gitBar.count.includes('2') &&
+      gitList.items.length === 2 &&
+      gitList.sts.every((x) => x === 'M') &&
+      gitOpened.endsWith('main.rs') &&
+      !!headDiff &&
+      headDiff.headOn &&
+      headDiff.dels.some((x) => x.includes('HEAD-VERSION-MARKER')),
   ],
   // ⑱g Diff 视图：改一行 → 有增有删；开关来回切时编辑器与 Diff 互斥
   [

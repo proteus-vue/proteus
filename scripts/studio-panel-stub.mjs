@@ -70,6 +70,19 @@ export function stubTauri(payload) {
             ],
           }
         }
+        // Git 只读（决策 #1246）
+        if (cmd === 'git_status')
+          return {
+            isRepo: true,
+            branch: 'main',
+            ahead: 1,
+            behind: 0,
+            files: [
+              { path: 'packages/studio/ui/src/App.vue', status: 'M' },
+              { path: 'packages/studio/src/main.rs', status: 'M' },
+            ],
+          }
+        if (cmd === 'git_head') return '// HEAD-VERSION-MARKER\nconst baseline = 1\n'
         // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭
         if (cmd === 'set_dirty_count') return null
         if (cmd === 'close_now') return null
