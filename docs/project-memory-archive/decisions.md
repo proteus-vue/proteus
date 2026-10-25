@@ -13921,3 +13921,102 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
       都必须包含四项能力 —— 证明"命令被允许"这一半；两者不一致 = 改了能力没重编。
   - **诚实边界**：㉔b 里的 `__TAURI_INTERNALS__.invoke` 是桩，它证明不了"JS→Rust 真的被接受"；
     那半边只有 ㉔c（ACL）+ 人手拖一次能证。
+
+1232. **代码视图的目录树（可折叠 + 状态持久化）· 落地**（2026-10-25 · Studio 会话）
+  - 见 `packages/studio` 与 `scripts/studio-panel-probes.mjs` 的 ㉘/㉙/㉚ 判据。
+
+1233. **文件类型 → 图标 + 类型色**（2026-10-25 · Studio 会话）
+  - `packages/studio/ui/src/fileIcons.ts`。
+
+1234. **全局自适应右键菜单状态 + 剪贴板「复制相对路径」**（2026-10-25 · Studio 会话）
+  - `packages/studio/ui/src/contextmenu.ts` / `scripts/studio-panel-stub.mjs`。
+
+1235. **Studio 面板门禁的采集段拆出**（2026-10-25 · Studio 会话）
+  - `scripts/studio-panel-probes.mjs`。
+
+1236. **App 能力按 useFetch 的完整标准收口：三项补到 S3 + App 侧空壳检查 + Hook 层 E2E（并修掉 web 兜底打穿的真缺陷）**（2026-10-25 · 用户「好的，还是严格按照useFetch的那套标准落地其他能力」）:
+
+【起因（用户上一问）】「App能力现在完成的都是按照useFetch的那套标准落地的吗？」
+  ⇒ 审计结论：**不是**。已落地的 `getStorage`/`log`/`getFileSystem` 只做到了"桥方法存在 + 有单测"，
+  与 useFetch 的标准差三处：① 规模档（§1.0 S0–S3）未纳入能力页判定（S1 实现照样标 ✅）
+  ② App 侧无桥空壳检查（#1090 当时就写下的欠账）③ Hook 层从无端到端判据（只测到桥层）。
+  ⇒ 本轮逐条补齐；**不是改标注，是把实现补到真达标**。
+
+【① 三项补到 S3（§1.0 高频/大数据族要求 S3）——每项四项必答都可触发】
+  · **`log`**（#1240）：上限 8 KiB/条（截断计数，或 `onOverflow:'throw'` 走 `log.tooLarge` 显式报错）·
+    有界队列 1024 + **丢最旧** + `dropped` 计数 · 单次 flush 上限 64（削峰）· 账本登记 `log-queue` ·
+    四读数 `{written,dropped,truncated,queued}`。判据 **10 条**，破坏性验证 **4/4**。
+  · **`storage`**（#1241）：键 1 KiB / 值 1 MiB / **文档 8 MiB** / 键数 4096，超限回
+    `storage.tooLarge`/`tooManyKeys`；`coalesce` 写合并（同微任务多次 set 只落盘一次，计 `coalesced`）；
+    账本 `storage-doc` 的 release **回滚到已落盘快照**（不把未落盘的修改当已持久化）。
+    ★★**修掉一个真实的数据消失隐患**：原先无总额上限，而宿主 `fs.readBytes` 有 64 MiB 上限——
+      文档一旦越线，`load()` 读失败返回 `{}` ⇒ **所有键静默消失**。现在 8 MiB 闸在**写之前**判住。
+    ★另：`limitSize` 由 0 改为报该 8 MiB（旧断言"不编假上限"的理由是"App 无平台配额"，
+      但本层**真有**一个强制上限 ⇒ 报 0 反而误导）。判据 **15 条**，破坏性验证 **6/6**。
+  · **`file-system`**（#1236）：新建**在飞配额池** `capability-app-fs-governor.ts`。
+    ★★这是**真问题不是凑指标**：unzip 的单次闸是 4096 条目 / 128 MiB 单条 / 512 MiB 总量，
+      ⇒ 单次安全，但 **10 个页面同时解压 = 5 GiB 峰值 ⇒ 必然 OOM**。
+      「每个方法都有上限」≠「整体有上限」——§1.0 第 ④ 问的正是"同时 N 个实例会怎样"。
+    池：字节配额 64 MiB + 操作数 16 + 等待队列 32（满 ⇒ `file-system.busy`，不无界堆积）+
+      异步面排队唤醒（FIFO、跳过装不下的避免队头阻塞）+ **同步面当场拒绝**（排队=死锁）+
+      账本 `fs-op`/`fs-governor`（releaseAll 同时作废在飞与排队，避免悬挂 Promise）。
+    已接入 `readFile`/`writeFile`/`unzip`/`readFileSync`/`writeFileSync`/`appendFileSync`。
+    判据 **7 条**，破坏性验证 **7/7**。
+
+【② 体检工具本身的结构性缺陷（判错方向两边都危险，各抓一例）】
+  · **假红**：上限正则用 `\bMAX_`，而真实常量叫 `LOG_MAX_MESSAGE_BYTES`（`MAX` 前是 `_`，无词边界）
+    ⇒ 明明写了上限却判"无上限"。改 `(?:^|[^A-Za-z0-9])MAX_`。
+  · **假绿**：背压第二条 `/(丢弃|drop)[^\n]{0,40}(计数|count|统计)/i` 命中的是 iOS
+    `dropFirst(docs.count`（Swift 标准库调用）⇒ **`fetch` 的「背压 ✅」当时靠这条假证据撑着**。
+    改为**成对判定**：有界（`*_QUEUE_DEPTH` / `MAX_WAITERS` / `MAX_PENDING_*`）+ 计数
+    （`dropped*` / `rejected*` / `backpressure*` / `coalesced*` / `waited`）。
+  · ★修正后全表除目标三项外**零档位变化**（fetch 仍是 S2 但这次靠真证据：
+    `STREAM_QUEUE_DEPTH=8` + `backpressureWaits++`）——这证明是**超集修正**，不是换了个漏法。
+  · 判据锁：`tests/capability-scale-audit.test.ts` +4 条（含"必须是成对"的结构断言）。
+
+【③ App 侧空壳检查（#1090 欠账）】
+  新建 `website/scripts/lib/app-bridge-reality.mjs`：App 桥**不直接调平台 API**（JS 里没有
+  navigator/wx），它调 `invokeHost(...)` ⇒ 判据的"平台入口"必须换成 `invokeHost` 派发。
+  · ★**两版都误判 `getPreload`（假红）**：第一版只认 `invokeHost(`；第二版只认 `call(` 却漏了
+    源码里写的是 **`call<void>(…)`**（带泛型实参）。⇒ 最终改为**按文件**放行间接派发
+    （只有该文件里真有 `invokeHost` 时，`call(` 才算入口）——既避免假红，又不把"本地函数调用"
+    当宿主派发（那是假绿）。
+  · 结果：49 个成员 **0 个空壳**；已接进 `cap-end-status.mjs`（status=✅ 时复查，命中即降 ⚠️）。
+  · 判据：`tests/app-bridge-reality.test.ts` **9 条**（含负向对照：纯空壳必须被抓到，
+    否则"0 个空壳"可能只是判据失效）。
+
+【④ Hook 层端到端 —— 本轮最关键的发现（真 bug）】
+  `tests/capability-app-hook-e2e.test.ts` 9 条：从真实 `createCapabilityBridge` 到 Hook handle 再到宿主桩。
+  ★抓到的真缺陷：**App 宿主上三项能力的 web 兜底会接管**。
+    装配顺序是 `webBridge → webBridgeExt → appCaps`，App 能力只**覆盖同名键**；
+    当 App 能力不可用（工厂返回 `{}`）时，web 实现留在原位：
+      · `getStorage`    → `memoryStorage()`（⚠️ 或 localStorage；App 的 QuickJS/JSC 里都没有）
+      · `getFileSystem` → `memoryFileSystem()`（纯内存假文件系统）
+      · `log`           → `console`（**不进** logcat / os_log / hilog）
+    ⇒ 业务调 `useStorage().set()` **成功返回**、重启后数据全没，而能力页写着"鸿蒙如实不可用"。
+    ★这与 #1207/#1226 在**桥工厂**里守住的"绝不用内存兜底冒充持久化"直接冲突——
+      那两处只挡住了工厂层，**装配层的兜底把它打穿了**（只在桥工厂写测试发现不了）。
+    修法：新建 `capability-app-fallback.ts::mergeWebWithApp` —— App 宿主上这三键在 App **未提供**时删除
+      （App 提供了真实现则保留）。★只删这三个：其余域（媒体/位置/支付）**故意**走 web 降级，
+      那些是"能力弱一点"，而持久化/文件/日志的兜底是**语义谎言**。
+    ★破坏性验证 3/3（含"无条件删除 ⇒ 正向用例应红"）。
+  ★`capability.ts` 因此净增 2 行已超 1012 基线 ⇒ 按职责把规则拆到新文件 + 合并同模块两条 import
+    做到**净零**（守 1000 行上限，没有为省行去删历史注释）。
+
+【⑤ 决策号撞车勘误】#1232–#1235 已被 Studio 会话占用（fileIcons #1233 / contextmenu #1234 /
+  probes #1235 / 代码视图边界 #1232）⇒ 本轮三个子号重排为 **#1239/#1240/#1241**；
+  #1236（file-system 池）/ #1237（App 空壳检查）/ #1238（Hook E2E + 兜底修复）未被占用，保持。
+
+【诚实边界（不粉饰）】
+  ① 配额池的字节数是**调用方声明**的预估（readFile 用 stat 的 size、unzip 用 zip 本体 ×2、
+     writeFile 用实际字节）——方向正确（保证并发总和有界），不是精确计量。
+  ② 池**不抢占**：已获配额的操作不会被挤掉（文件写入中途放弃 = 留半截文件，比等更糟）。
+  ③ 静态体检 ≠ 规模合格证：本轮的 S3 是**结构证据 + 单元判据**，真机压测（大文件/多页面并发）
+     仍未做——`capability-scale-audit.mjs` 的能力边界注释里写明。
+  ④ App 空壳判据是纯文本扫描：`invokeHost` 若被别名调用会漏判成 ⚠️（方向安全，不会假绿）。
+  ⑤ 本轮**未做真机验证**：三项的改动集中在共享 JS 层（三端同一份），已由 71 条单测覆盖；
+     真机只在需要证明"宿主真的写了"时才必要（`log` 的 logcat 对拍已在 #1225 做过）。
+
+【门禁】check:file-size ✅ · check:content ✅ · check:script-compile ✅ · check:host-invoke-contract ✅
+  ★`check:ai-tasks` 红是**先于本轮就存在**的（`git stash` 后复现）：Studio 的 `T-studio-package-app`
+  scope 指向已删的 `packages/studio/icons/make-icon.py` —— 不代 Studio 会话改它的条目。

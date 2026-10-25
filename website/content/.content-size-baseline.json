@@ -726,7 +726,7 @@
     "bodyLines": 15
   },
   "website/content/capabilities/file-system.md": {
-    "tableRows": 195,
+    "tableRows": 198,
     "headings": 38,
     "codeBlocks": 56,
     "bodyLines": 70
@@ -1710,7 +1710,7 @@
     "bodyLines": 15
   },
   "website/en/capabilities/file-system.md": {
-    "tableRows": 208,
+    "tableRows": 211,
     "headings": 41,
     "codeBlocks": 56,
     "bodyLines": 46

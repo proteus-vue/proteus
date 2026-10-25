@@ -134,4 +134,45 @@ describe('★#1113 规模承载体检 · 工具契约', () => {
     // 用户原话要留在规范里（这是这条硬指标的出处，不是二手转述）
     expect(plan).toContain('承载大厂超级应用规模')
   })
+
+describe('★★★#1236 判据修正后不得再犯了（两处结构性缺陷的回归锁）', () => {
+  it('★上限：带前缀的常量名必须被识别（`LOG_MAX_*` / `FS_MAX_*`——旧正则 \bMAX_ 漏判）', () => {
+    const { json } = runAudit(['--json', '--cap=log'])
+    const r = (json as Array<{ cap: string; upperBound: boolean }>)[0]
+    expect(r.upperBound, '★LOG_MAX_MESSAGE_BYTES 未被认成上限 ⇒ 前缀盲区又回来了').toBe(true)
+  })
+
+  it('★上限修正必须是**超集**：fetch/storage/file-system 的上限仍被识别', () => {
+    const { json } = runAudit(['--json', '--cap=fetch,storage,file-system'])
+    for (const r of json as Array<{ cap: string; upperBound: boolean }>) {
+      expect(r.upperBound, `${r.cap} 的上限丢了 ⇒ 修正不是超集（换了个漏法）`).toBe(true)
+    }
+  })
+
+  it('★背压判据必须是"成对"（有界 + 计数）——单一关键词会被无关文本骗', () => {
+    const s = read(AUDIT)
+    const fn = /function hasBackpressure\(text\) \{([\s\S]{0,300}?)\n\}/.exec(s)
+    expect(fn, 'hasBackpressure 必须存在（背压不能用单条正则）').toBeTruthy()
+    const body = fn![1] as string
+    expect(body, '缺"有界"一侧').toMatch(/BP_BOUND\.test\(text\)/)
+    expect(body, '缺"计数"一侧').toMatch(/BP_COUNTER\.test\(text\)/)
+    expect(body, '必须是**与**（成对）').toMatch(/&&/)
+    // ★这一条是 #1236 的真实假绿：iOS 的 `dropFirst(docs.count` 曾把 fetch 的背压判成成立。
+    //   ★断言**代码结构**而不是文本——注释里记录了这个 bug 的说明，文本匹配会命中注释，
+    //     那正是本仓反复踩的"判据读错文本层"（不能在新判据里再犯一次）。
+    //   · SIGNALS.backpressure 必须已停用（置 null），否则旧的单关键词路径还在
+    expect(s, 'SIGNALS.backpressure 必须已停用（改走 hasBackpressure 成对判定）').toMatch(/backpressure:\s*null/)
+    //   · audit() 必须真的调用 hasBackpressure（不是留着函数不用——"符号存在"不等于"被调用"）
+    expect(s, 'audit() 未调用 hasBackpressure ⇒ 成对判据没接进读取路径').toMatch(/backpressure:\s*hasBackpressure\(text\)/)
+  })
+
+  it('★★★三项（log/storage/file-system）按 §1.0 到 S3（高频族要求 S3）', () => {
+    const { json } = runAudit(['--json', '--cap=log,storage,file-system'])
+    const rows = json as Array<{ cap: string; tier: string; needsS3: boolean }>
+    for (const r of rows) {
+      expect(r.needsS3, `${r.cap} 应归入高频族（要求 S3）`).toBe(true)
+      expect(r.tier, `${r.cap} 的规模档回落了 —— 四项必答有缺口（见 docs/Proteus_原生能力接入方案.md §1.0）`).toBe('S3')
+    }
+  })
+})
 })

@@ -103,6 +103,20 @@ export const CAPTURE_BRIDGE_TO_HOST = {
  *     ⇒ JS 侧 `abort` 在鸿蒙上**只 reject 本地**、宿主传输不停（`capability-invoke.ts:441` 已如实登记）。
  *     ★这几条**不登记为 null 蒙混**：它们是真实缺口，已登记为独立任务（`T-harmony-http-cancel`）。
  */
+/** ★#1239：KV 存储（#1209）的桥成员 → 鸿蒙宿主方法（经 `proteus_fs.h` 的 `dispatch`）*/
+export const APP_KV_FACTORY = 'createAppFileStorage'
+export const APP_KV_TO_HOST = { getStorage: 'fs.readBytes' }   // KV 落盘用 fs.readBytes/writeBytes/remove
+
+/** ★#1239：日志（#1225）的桥成员 → 鸿蒙宿主方法 */
+export const APP_LOG_FACTORY = 'createAppLog'
+export const APP_LOG_TO_HOST = { log: 'log' }
+
+/** ★#1239：文件系统（#1226~#1232）的桥成员 → 鸿蒙宿主方法 */
+export const APP_FS_FACTORY = 'createAppFileSystem'
+export const APP_FS_TO_HOST = {
+  getFileSystem: 'fs.exists',   // 基础面以 fs.exists 为代表（read/write/remove 同一分派）
+}
+
 export const NATIVE_BRIDGE_FACTORY = 'createAppNativeCapabilities'
 export const NATIVE_BRIDGE_TO_HOST = {
   request: 'http.request',
@@ -135,12 +149,19 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-capture.ts', factory: CAPTURE_BRIDGE_FACTORY, map: CAPTURE_BRIDGE_TO_HOST },
   // ★#1163：网络域（request → http.request）
   { file: 'packages/api/src/capability-app.ts', factory: NATIVE_BRIDGE_FACTORY, map: NATIVE_BRIDGE_TO_HOST },
+  // ★#1239：批 1 新落地的三个域（KV 存储 / 日志 / 文件系统）——不登记则永远 🟡
+  { file: 'packages/api/src/capability-app-storage.ts', factory: APP_KV_FACTORY, map: APP_KV_TO_HOST },
+  { file: 'packages/api/src/capability-app-log.ts', factory: APP_LOG_FACTORY, map: APP_LOG_TO_HOST },
+  { file: 'packages/api/src/capability-app-filesystem.ts', factory: APP_FS_FACTORY, map: APP_FS_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */
 export const HARMONY_HOST_SOURCES = [
   'hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h',
   'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h',
+  // ★#1239：日志（`log` 分派在 impl 里一行，实现在 proteus_log.h）· fs.*（proteus_fs.h 的 dispatch）
+  'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_log.h',
+  'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_fs.h',
   // ★★★#1163：**字节桥是网络能力的真实分派点**——`http.request` 的分支在这里
   //   （`if (f.method == "http.request") proteus::http::handle(f)`），
   //   而实现体在 `proteus_http.h`。两份都登记：

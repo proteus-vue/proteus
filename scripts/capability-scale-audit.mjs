@@ -47,8 +47,26 @@ const CAP_SOURCES = {
   fetch: { ts: ['capability-invoke.ts', 'request-engineering.ts'], hosts: ['HttpCapability.java', 'http-capability.swift'] },
   'screen-capture': { ts: ['capability-app-capture.ts'], hosts: ['CaptureCapability.java', 'capture-capability.swift'] },
   worker: { ts: [], hosts: [] },
-  storage: { ts: ['capability-bridges.ts'], hosts: [] },
-  log: { ts: ['capability-bridges.ts'], hosts: [] },
+  // ★#1239 修正：原登记指向 Web/MP 桥 ⇒ App 侧实现永远探不到（永远 S1）
+  storage: {
+    ts: ['capability-app-storage.ts', 'capability-app-filesystem.ts'],
+    hosts: ['FileTransferCapability.java', 'file-transfer-capability.swift', 'proteus_fs.h'],
+  },
+  // ★#1239：file-system（App 共享层 capability-app-filesystem.ts + ZIP 解析 + 三端 fs.*）
+  'file-system': {
+    ts: [
+      'capability-app-filesystem.ts',
+      'capability-app-unzip.ts',
+      'capability-app-fs-encoding.ts',
+      // ★#1236 在飞配额池（背压/回收/并发三项的落点——不登记就会漏判成"无背压"）
+      'capability-app-fs-governor.ts',
+    ],
+    hosts: ['FileTransferCapability.java', 'file-transfer-capability.swift', 'proteus_fs.h'],
+  },
+  log: {
+    ts: ['capability-app-log.ts'],
+    hosts: ['LogCapability.java', 'log-capability.swift', 'proteus_log.h'],
+  },
 }
 
 /** 各组证据的正则（结构痕迹，不判语义）
@@ -73,8 +91,11 @@ const SIGNALS = {
   //   ★#1115 第五处修正：**值也必须是有限合理数**。实测把上限改成 `Long.MAX_VALUE`
   //     （事实上无界）时判据仍判"有上限"（名字里还有 MAX_BODY_BYTES）⇒ 破坏性验证没变红。
   //     ⇒ 单独用函数判（见 `hasFiniteSizeBound`），显式排除"无界"写法。
+  //   ★#1240 第六处修正：**带前缀的常量名**（`LOG_MAX_MESSAGE_BYTES` / `FS_MAX_CHUNK_BYTES`）此前一律漏判——
+  //     原正则用 `\bMAX_`，而 `LOG_MAX_` 里 MAX 前是 `_`（word 字符）⇒ **无词边界** ⇒ 明明写了上限也判"无上限"。
+  //     这是判据的结构性盲区（不是实现缺失），改为「前面不是字母数字」的 MAX（覆盖 行首/空白/(/下划线 三种前缀形态）。
   upperBound: [
-    /\bMAX_[A-Z_]*(SIZE|BYTES|LEN|LENGTH|BODY|RESPONSE|CONTENT)[A-Z_]*\s*=\s*[\d_]+\s*(?:\*\s*[\d_]+\s*)+;?/i,
+    /(?:^|[^A-Za-z0-9])MAX_[A-Z_]*(SIZE|BYTES|LEN|LENGTH|BODY|RESPONSE|CONTENT)[A-Z_]*\s*=\s*[\d_]+\s*(?:\*\s*[\d_]+\s*)+;?/i,
     /\b(maxSize|maxBytes|maxBody|maxResponse|sizeLimit|byteLimit)\s*[:=]\s*[\d_]+\s*(?:\*\s*[\d_]+\s*)*/i,
     /\bMAX\s*=\s*[\d_]+\s*\*\s*[\d_]+\s*\*\s*[\d_]+/, // 形如 64*1024*1024
   ],
@@ -95,11 +116,38 @@ const SIGNALS = {
     /for\s*\([^)]*\)\s*\{[\s\S]{0,200}?(read|write)\([^)]*chunk/i,
     /\b(readChunk|writeChunk|chunkSize|CHUNK_SIZE|chunked[A-Za-z]*)\b/,
   ],
-  // 「背压」= 队列**且有上界/丢弃策略**；单个 queue 或 buffer 不算
-  backpressure: [/(maxQueue|queueLimit|MAX_QUEUE|QUEUE_CAP|dropCount|dropped\w*)\s*[=:]/i, /(丢弃|drop)[^\n]{0,40}(计数|count|统计)/i],
+  // 「背压」= **有界队列 + 丢弃/阻塞计数**两件齐备；单个 queue/buffer 不算。
+  //   ★★★#1236 第七处修正（两个方向都错，实测取证）：
+  //     · **假绿**：旧第二条 `/(丢弃|drop)[^\n]{0,40}(计数|count|统计)/i` 命中的是
+  //       iOS `dropFirst(docs.count`（Swift 标准库调用，与丢弃计数毫无关系）
+  //       ⇒ fetch 的「背压 ✅」当时是**靠这条假证据**撑住的。
+  //     · **假红**：旧第一条只认 `MAX_QUEUE|dropCount` 这类名字，
+  //       而真实实现用的是 `STREAM_QUEUE_DEPTH`（fetch）/ `LOG_MAX_QUEUE`（log）/
+  //       `FS_MAX_WAITERS`（file-system）/ `STORAGE_MAX_PENDING_WRITES`（storage）
+  //       ⇒ 四个真有背压的能力被判"无背压"。
+  //   ⇒ 判据改为**成对**：有界（队列深度/等待表/待落盘上限）+ 计数（丢弃/拒绝/阻塞/合并）。
+  //     成对是对本仓 #1113 教训（单关键词会命中注释与无关标识符）的直接执行——
+  //     必须"两件事同时存在"才算，而不是"出现了背压这个词"。
+  backpressure: null,
   resourceLedger: [/registry\.register\(|resources\.register\(|\.register\(\{[\s\S]{0,120}?type:/],
   // 「并发上界」= 表项/挂起数上限常量或淘汰逻辑（这是 COUNT_WORD 的归属）
-  tableBound: [/\b(MAX_CONN|MAX_ITEMS|MAX_ENTRIES|PENDING_[A-Z_]*MAX|MAX_[A-Z_]*CALLS|maxConnections|maxEntries|pendingMax|evict|LRU)/i],
+  //   ★#1240 同款前缀盲区：`LOG_PENDING_MAX` / `FS_MAX_INFLIGHT_TASKS` 里的 MAX 前也是 `_`。
+  tableBound: [/(?:^|[^A-Za-z0-9])(MAX_CONN|MAX_ITEMS|MAX_ENTRIES|MAX_INFLIGHT|PENDING_[A-Z_]*MAX|MAX_[A-Z_]*CALLS|maxConnections|maxEntries|pendingMax|evict|LRU)/i],
+}
+
+/** ② 背压的"有界"一侧：队列/等待表/待落盘 的容量上界 */
+const BP_BOUND = /(MAX_QUEUE|QUEUE_CAP|QUEUE_LIMIT|QUEUE_DEPTH|maxQueue|queueLimit|MAX_WAITERS|MAX_PENDING_[A-Z_]+|MAX_PENDING_WRITES)/i
+/** ② 背压的"计数"一侧：丢弃 / 拒绝 / 阻塞 / 写合并 的可观测量 */
+const BP_COUNTER = /(dropped[A-Za-z_]*|dropCount|rejected[A-Za-z_]*|backpressure[A-Za-z_]*|coalesced[A-Za-z_]*|waited\b|waiters\b)/i
+
+/**
+ * ② 背压判定（**成对**：有界 + 计数）。
+ * ★为什么必须成对：只有上界没有计数 ⇒ 业务不知道丢了多少（不可观测）；
+ *   只有计数没有上界 ⇒ 队列仍可无界增长（"计数的无界"仍是 OOM）。
+ *   见 SIGNALS.backpressure 处的取证注释（假绿 + 假红各一例）。
+ */
+function hasBackpressure(text) {
+  return BP_BOUND.test(text) && BP_COUNTER.test(text)
 }
 
 /** 该上限常量是否表达"尺寸"而非"条数"（用于给 `upperBound` 复核） */
@@ -151,7 +199,7 @@ function findByName(dir, name, acc = []) {
   return null
 }
 
-function audit(cap) {
+export function audit(cap) {
   const cfg = CAP_SOURCES[cap]
   if (!cfg) return { cap, error: '未登记源文件（在 CAP_SOURCES 补一行）' }
   const { text, found } = readAll([...cfg.ts, ...cfg.hosts])
@@ -164,7 +212,7 @@ function audit(cap) {
     upperBound: has(SIGNALS.upperBound),
     explicitError: has(SIGNALS.explicitError),
     streaming: has(SIGNALS.streaming),
-    backpressure: has(SIGNALS.backpressure),
+    backpressure: hasBackpressure(text),
     resourceLedger: has(SIGNALS.resourceLedger),
     tableBound: has(SIGNALS.tableBound),
   }
@@ -174,15 +222,20 @@ function audit(cap) {
     ? (r.backpressure && r.resourceLedger && r.tableBound ? 'S3' : 'S2')
     : 'S1'
   // 高频/大数据能力要求 S3
-  r.needsS3 = ['websocket', 'socket-task', 'upload', 'download', 'sensor', 'fetch', 'log'].includes(cap)
+  // ★§1.0 明列的高频/大数据族（网络/文件/媒体/socket/日志/埋点）要求 S3
+  r.needsS3 = ['websocket', 'socket-task', 'upload', 'download', 'sensor', 'fetch', 'log', 'file-system', 'storage'].includes(cap)
   return r
 }
 
+// ★仅作 CLI 时执行（被官网生成链 import 时不打印、不 exit）
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
 const CAPS = ONLY ?? Object.keys(CAP_SOURCES)
-const results = CAPS.map(audit)
 
-if (JSON_OUT) { console.log(JSON.stringify(results, null, 2)); process.exit(0) }
+const results = isMain ? CAPS.map(audit) : []
 
+if (isMain && JSON_OUT) { console.log(JSON.stringify(results, null, 2)); process.exit(0) }
+
+if (isMain) {
 console.log('[capability-scale-audit] 能力规模承载体检（静态结构证据，非压测）')
 console.log('  判据：S2 = 上限 + 显式报错；S3 = S2 + 背压 + 回收 + 并发上界')
 console.log('')
@@ -201,3 +254,4 @@ console.log('')
 console.log('  ★能力边界：本工具是**静态体检**——读源码结构证据，不能证明真实规模下不崩。')
 console.log('    真实规模需要真机压测（大文件 / 百连接 / 长时跑）；本体检只回答"有没有为规模做设计的痕迹"。')
 console.log('  ★不判红：规模档是排期输入，不是 CI 红绿。')
+}

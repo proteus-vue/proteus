@@ -262,7 +262,7 @@ export function createAppCapabilities<E extends Error = Error>(
    */
   const appKv = createAppFileStorage()
   const appLog = createAppLog()
-  const appFs = createAppFileSystem()
+  const appFs = createAppFileSystem(resOpts)   // ★#1236 透传账本 ⇒ 在飞配额池能在页面 dispose 时作废（不传则用进程默认池，无账本）
   return {
     ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
     ...createAppNativeCapabilities(CapError),

@@ -23,6 +23,16 @@
 //     `unzip()` 在那两端如实报 `unsupported`（**不影响其余 11 个方法可用**）。
 import { invokeHost } from './capability-invoke'
 import { decodeBytes, encodeString, normalizeEncoding, toArrayBuffer } from './capability-app-fs-encoding'
+// ★★★#1236 在飞配额池（S3 的 ② 背压 / ③ 回收 / ④ 并发一体）——见该文件头注释
+import {
+  FS_MAX_INFLIGHT_BYTES,
+  FS_MAX_READ_BYTES,
+  FS_MAX_WRITE_BYTES,
+  createFsGovernor,
+  getDefaultFsGovernor,
+} from './capability-app-fs-governor'
+import type { CapabilityResourceRegistry } from './capability-resources'
+import type { FsGovernor } from './capability-app-fs-governor'
 import {
   UNZIP_MAX_ENTRIES,
   UNZIP_MAX_ENTRY_BYTES,
@@ -172,6 +182,18 @@ function writeSavedIndex(idx: SavedIndex): boolean {
   return r.ok
 }
 
+/**
+ * ★★★#1236 配额估算：声明"这个文件多大"（走宿主 `fs.stat`）。
+ * ★为什么必须问宿主：JS 侧看不到文件系统，没有 size 就**无法给并发总和设上界**。
+ * ★stat 失败 ⇒ 按 0 计（**不因此拒绝合法调用**）：真实字节在读到后再复核一次（见 readFile）。
+ */
+function declaredSize(path: string): number {
+  const r = invokeHost('fs.stat', { path })
+  if (!r.ok) return 0
+  const n = Number((r.data as { size?: unknown } | null)?.size ?? 0)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 /** 桥成员对象（★抽取器契约：顶层唯一 `return { 显式属性 }`） */
 export interface AppFileSystemBridge {
   getFileSystem?: () => FileSystemBridge
@@ -182,7 +204,15 @@ export interface AppFileSystemBridge {
  *
  * @returns 空对象 ⇒ 宿主缺 `fs.*` 基础面（如实不可用，装配层不提供该方法）
  */
-export function createAppFileSystem(): AppFileSystemBridge {
+export function createAppFileSystem(
+  opts: { resources?: CapabilityResourceRegistry; owner?: string; governor?: FsGovernor } = {},
+): AppFileSystemBridge {
+  /**
+   * ★★★#1236 在飞配额池：**每个方法各自的单次上限不等于整体有界**——
+   *   10 个页面同时 unzip 512 MiB 包 = 5 GiB 峰值 ⇒ 必然 OOM。池负责 ② 背压 / ③ 回收 / ④ 并发。
+   * ★传入账本时建独立池（页面级 dispose 能作废在飞操作）；否则用进程默认池。
+   */
+  const gov: FsGovernor = opts.governor ?? (opts.resources ? createFsGovernor(opts) : getDefaultFsGovernor())
   const unsupported = (method: string): Promise<never> => {
     const why = APP_FS_UNSUPPORTED[method] ?? '未实现'
     return Promise.reject(new Error(`file-system.unsupported: ${method} —— ${why}`))
@@ -190,15 +220,43 @@ export function createAppFileSystem(): AppFileSystemBridge {
 
   const fs: FileSystemBridge = {
     // ── 基础面（真实可用）──
-    readFile: (path: string) => {
-      const r = invokeHost('fs.readBytes', { path })
-      if (!r.ok) return Promise.reject(new Error(`file-system.failed: readFile ${path}：宿主拒绝`))
-      return Promise.resolve(utf8Decode(bytesOf(r.data)))
+    readFile: async (path: string) => {
+      // ★契约：异步面返回 **string**（UTF-8）；wx 的"不传 encoding ⇒ ArrayBuffer"只在
+      //   `readFileSync` 上生效（其签名是 `string | ArrayBuffer`，见 #1231）。
+      // ★① 单次上限（比宿主 64 MiB 更紧：字节 + JSON number[] 副本会翻倍）
+      const declared = declaredSize(path)
+      if (declared > FS_MAX_READ_BYTES) {
+        throw new Error(`file-system.tooLarge: readFile ${path} ${declared}B > ${FS_MAX_READ_BYTES}B`)
+      }
+      // ★②③④ 在飞配额（异步面：拿不到就排队；页面退出会作废）
+      const lease = await gov.acquire('readFile', Math.max(1, declared))
+      try {
+        if (lease.cancelled) throw new Error(`file-system.busy: readFile ${path} 已释放（页面退出）`)
+        const r = invokeHost('fs.readBytes', { path })
+        if (!r.ok) throw new Error(`file-system.failed: readFile ${path}：宿主拒绝`)
+        const bytes = bytesOf(r.data)
+        if (bytes.length > FS_MAX_READ_BYTES) {
+          throw new Error(`file-system.tooLarge: readFile ${path} 实际 ${bytes.length}B > ${FS_MAX_READ_BYTES}B`)
+        }
+        return utf8Decode(bytes)
+      } finally {
+        lease.release()
+      }
     },
-    writeFile: (path: string, data: string) => {
-      const r = invokeHost('fs.writeBytes', { path, bytes: utf8Encode(String(data)) })
-      if (!r.ok) return Promise.reject(new Error(`file-system.failed: writeFile ${path}：宿主拒绝`))
-      return Promise.resolve()
+    writeFile: async (path: string, data: string) => {
+      // ★契约：异步面只收 string（按 UTF-8 编码）；ArrayBuffer 走 `writeFileSync`（#1231）
+      const bytesOut = utf8Encode(String(data))
+      if (bytesOut.length > FS_MAX_WRITE_BYTES) {
+        throw new Error(`file-system.tooLarge: writeFile ${path} ${bytesOut.length}B > ${FS_MAX_WRITE_BYTES}B`)
+      }
+      const lease = await gov.acquire('writeFile', bytesOut.length)
+      try {
+        if (lease.cancelled) throw new Error(`file-system.busy: writeFile ${path} 已释放（页面退出）`)
+        const r = invokeHost('fs.writeBytes', { path, bytes: bytesOut })
+        if (!r.ok) throw new Error(`file-system.failed: writeFile ${path}：宿主拒绝`)
+      } finally {
+        lease.release()
+      }
     },
     remove: (path: string) => {
       const r = invokeHost('fs.remove', { path })
@@ -270,6 +328,13 @@ export function createAppFileSystem(): AppFileSystemBridge {
       if (!appFileSystemOptionalAvailable('inflateRaw')) {
         throw new Error('file-system.unsupported: unzip —— 本端宿主无裸解压（fs.inflateRaw）')
       }
+      // ★★★#1236 ②③④：整个解压持有**一个**租约（峰值估算 = zip 本体 + 最大条目 < zip×2 的安全上界）。
+      //   ★为什么按 zip 本体估：中央目录声明的解压量可以被撒谎，只有磁盘上的 zip 大小是真的；
+      //     真正解码时 inflateEntry 仍逐条复核声明的尺寸。
+      const zipSize = declaredSize(zipPath)
+      const lease = await gov.acquire('unzip', Math.max(1, Math.min(FS_MAX_INFLIGHT_BYTES, zipSize * 2)))
+      try {
+      if (lease.cancelled) throw new Error(`file-system.busy: unzip ${zipPath} 已释放（页面退出）`)
       const rb = invokeHost('fs.readBytes', { path: zipPath })
       if (!rb.ok) throw new Error(`file-system.failed: unzip 读不到 ${zipPath}`)
       const zip = bytesOf(rb.data)
@@ -309,6 +374,9 @@ export function createAppFileSystem(): AppFileSystemBridge {
         }
         const w = invokeHost('fs.writeBytes', { path: dest, bytes: Array.from(data) })
         if (!w.ok) throw new Error(`file-system.failed: unzip 写入失败 ${dest}`)
+      }
+      } finally {
+        lease.release()
       }
     },
     // ── ★★★#1230 保存文件三件套（纯 JS 组合：rename/remove/stat/readBytes/writeBytes）──
@@ -362,16 +430,39 @@ export function createAppFileSystem(): AppFileSystemBridge {
     },
     // ── ★★★#1231 Sync 变体（10）—— 宿主同步派发，编码在共享层 ──
     readFileSync: (path: string, encoding?: string) => {
-      const r = invokeHost('fs.readBytes', { path })
-      if (!r.ok) throw new Error(`file-system.failed: readFileSync ${path}：宿主拒绝`)
-      const bytes = bytesOf(r.data)
+      // ★① 单次上限 + ④ 同步面**不排队**（排队会死锁）：拿不到配额当场抛 file-system.busy
+      const declared = declaredSize(path)
+      if (declared > FS_MAX_READ_BYTES) {
+        throw new Error(`file-system.tooLarge: readFileSync ${path} ${declared}B > ${FS_MAX_READ_BYTES}B`)
+      }
+      const lease = gov.tryAcquire('readFileSync', Math.max(1, declared))
+      let bytes: Uint8Array
+      try {
+        const r = invokeHost('fs.readBytes', { path })
+        if (!r.ok) throw new Error(`file-system.failed: readFileSync ${path}：宿主拒绝`)
+        bytes = bytesOf(r.data)
+      } finally {
+        lease.release()
+      }
+      if (bytes.length > FS_MAX_READ_BYTES) {
+        throw new Error(`file-system.tooLarge: readFileSync ${path} 实际 ${bytes.length}B > ${FS_MAX_READ_BYTES}B`)
+      }
       // ★★wx 语义：不传 encoding ⇒ **ArrayBuffer**。
       if (encoding === undefined || encoding === '') return toArrayBuffer(bytes)
       return decodeBytes(bytes, normalizeEncoding(encoding))
     },
     writeFileSync: (path: string, data: string | ArrayBuffer, encoding?: string) => {
-      const r = invokeHost('fs.writeBytes', { path, bytes: dataToBytes(data, encoding) })
-      if (!r.ok) throw new Error(`file-system.failed: writeFileSync ${path}：宿主拒绝`)
+      const out = dataToBytes(data, encoding)
+      if (out.length > FS_MAX_WRITE_BYTES) {
+        throw new Error(`file-system.tooLarge: writeFileSync ${path} ${out.length}B > ${FS_MAX_WRITE_BYTES}B`)
+      }
+      const lease = gov.tryAcquire('writeFileSync', out.length)
+      try {
+        const r = invokeHost('fs.writeBytes', { path, bytes: out })
+        if (!r.ok) throw new Error(`file-system.failed: writeFileSync ${path}：宿主拒绝`)
+      } finally {
+        lease.release()
+      }
     },
     existsSync: (path: string) => {
       const r = invokeHost('fs.exists', { path })
@@ -415,6 +506,15 @@ export function createAppFileSystem(): AppFileSystemBridge {
     },
     appendFileSync: (path: string, data: string | ArrayBuffer, encoding?: string) => {
       // ★★同步语境无并发窗口 ⇒ "读全文 + 拼 + 整写"安全（与异步 appendFile 的差别）。
+      // ★★★#1236：虽然无并发窗口，但**整份读进内存** ⇒ 必须占配额（否则 N 个页面的 append 会拼出 OOM）。
+      const add = dataToBytes(data, encoding)
+      const curSize = declaredSize(path)
+      const total = curSize + add.length
+      if (total > FS_MAX_WRITE_BYTES) {
+        throw new Error(`file-system.tooLarge: appendFileSync ${path} 结果 ${total}B > ${FS_MAX_WRITE_BYTES}B`)
+      }
+      const lease = gov.tryAcquire('appendFileSync', Math.max(1, total))
+      try {
       const ex = invokeHost('fs.exists', { path })
       let prev: number[] = []
       if (ex.ok && Boolean((ex.data as { exists?: boolean } | null)?.exists)) {
@@ -422,8 +522,11 @@ export function createAppFileSystem(): AppFileSystemBridge {
         if (!rb.ok) throw new Error(`file-system.failed: appendFileSync 读原内容失败 ${path}`)
         prev = Array.from(bytesOf(rb.data))
       }
-      const r = invokeHost('fs.writeBytes', { path, bytes: prev.concat(dataToBytes(data, encoding)) })
+      const r = invokeHost('fs.writeBytes', { path, bytes: prev.concat(add) })
       if (!r.ok) throw new Error(`file-system.failed: appendFileSync ${path}：宿主拒绝`)
+      } finally {
+        lease.release()
+      }
     },
   } as FileSystemBridge
 

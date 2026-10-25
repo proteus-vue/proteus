@@ -14,7 +14,9 @@
 // 【状态四档】✅ 直接可用 · ⚠️ 端已落地但桥未提供 → 调用返回 `*.unsupported` 显式降级 ·
 //   🟡 能力桥未接线 · ⬜ 端未开始（含 📋 规划已入库，汇总时并入"未开始"）。
 import { appEndStatus } from './harmony-host-keys.mjs'
+import { audit as scaleAudit } from '../../../scripts/capability-scale-audit.mjs'   // ★#1239 规模档复用同一份判据
 import { loadPureShellMembers } from './bridge-impl-reality.mjs'
+import { loadAppShellMembers } from './app-bridge-reality.mjs'   // ★#1237 App 侧空壳判据（补 #1090 欠账）
 
 /** ends.ts 的文档状态 → 四档标记 */
 export const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
@@ -96,6 +98,35 @@ export function capabilityEndStatuses({
         })
         status = a.status
         note = a.note
+        // ★★★#1237（补 #1090 欠账）：**App 桥成员是纯空壳 ⇒ 不得标 ✅**。
+        //   判据：方法体里零 invokeHost 调用、只有 unsupported 出口（见 app-bridge-reality.mjs）。
+        //   ★放在规模档判定**之前**：空壳是"根本没实现"，规模档是"实现了但撑不住"——
+        //     前者更根本，先说清"它是空壳"比说"它只有 S1"更准确。
+        if (status === '✅') {
+          const appShellsHit = refs.filter((r) => shellsFor(root, 'app')?.has(r))
+          if (appShellsHit.length) {
+            status = '⚠️'
+            note = en
+              ? 'App bridge ' + appShellsHit.join('/') + ' is a pure shell (no host invoke, always unsupported) → always Err'
+              : 'App 桥 ' + appShellsHit.join('/') + ' 是纯空壳（零 invokeHost 调用、只有 unsupported 出口）→ 恒 Err'
+          }
+        }
+        // ★★★#1239（§1.0 交付门槛）：**规模档不达标 ⇒ 不得标 ✅**。
+        //   原文：「声明 ✅ 的能力，规模档必须 ≥ S2；高频/大数据（网络/文件/媒体/socket/日志/埋点）要求 S3。
+        //   S1 可以存在，但**不得标 ✅**——应如实标 ⚠️ 并写明「仅 S1」」
+        if (status === '✅') {
+          const sc = scaleAudit(capSlug)
+          if (sc && !sc.error) {
+            const need = sc.needsS3 ? 'S3' : 'S2'
+            const ok = sc.needsS3 ? sc.tier === 'S3' : sc.tier !== 'S1'
+            if (!ok) {
+              status = '⚠️'
+              note = en
+                ? `Bridge wired, but scale tier is ${sc.tier} (requires ${need}) — not production-scale`
+                : `桥已接线，但规模档仅 **${sc.tier}**（本类要求 ${need}）——**不得算生产可用**`
+            }
+          }
+        }
         break
       }
       default:
@@ -209,11 +240,18 @@ export function loadBridgeShells(root) {
 
 const shellCache = new Map()
 
-/** 某端的纯空壳桥成员集（按 root 缓存）。 */
+/**
+ * 某端的纯空壳桥成员集（按 root 缓存）。
+ * ★#1237：`app` 端走**另一套判据**（`app-bridge-reality.mjs`）——
+ *   App 桥成员不直接调平台 API（JS 里没有 navigator/wx），它调 `invokeHost(...)`。
+ *   ⇒ "平台入口"的定义不同，不能用同一份分类器（用错了不是漏判就是全判空壳）。
+ */
 function shellsFor(root, end) {
   if (!root) return undefined
   const key = root + '::' + end
-  if (!shellCache.has(key)) shellCache.set(key, loadPureShellMembers(root, end))
+  if (!shellCache.has(key)) {
+    shellCache.set(key, end === 'app' ? loadAppShellMembers(root).shells : loadPureShellMembers(root, end))
+  }
   return shellCache.get(key)
 }
 

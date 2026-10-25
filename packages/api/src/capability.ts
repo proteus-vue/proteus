@@ -1,15 +1,14 @@
 // packages/api/src/capability.ts —— 能力层**工厂 + Hook + 响应式存储**（G-32 B3 · 决策 #870 拆分后）
 //   createCapabilityBridge / createCapabilityHooks / createReactiveStorage。类型契约见 capability-types.ts（本文件转发）。
 import { detectRuntime } from '@proteus-vue/shared'
-import { createAuth } from './auth'
 import { mpBridgeExt, webBridgeExt } from './generated/bridge-ext'
 import { detectAppHost } from './capability-app'
 // ★★2026-10-19（决策 #1067）：App 端三组能力（生命周期 + 平台能力 + 设备域）统一装配
 import { createAppCapabilities } from './capability-app-device'
 import { createSubscriptionScope } from './capability-hooks-scope' // ★#1071
-import { makeCapabilityRuntime } from './capability-runtime'; import type { CapabilityHooksOptions } from './capability-hooks-options'   // ★#1094 G-43
+import { makeCapabilityRuntime } from './capability-runtime'; import type { CapabilityHooksOptions } from './capability-hooks-options'; import { mergeWebWithApp } from './capability-app-fallback'   // ★#1094 G-43 · #1238
 import { getSharedCapabilityBridge, registerBridgeFactory } from './capability-bridge-shared'
-import type { AuthStorage } from './auth'
+import { createAuth } from './auth'; import type { AuthStorage } from './auth'
 import { CapError, capErr, capOk, wrap } from './capability-types'
 import { probeOf } from './capability-probe'   // ★#1133 探测面（90 行映射表，独立职责）
 // ★#1133：请求管线（拦截器 / 重试 / 去重 / 并发 / 任务句柄）——平台无关策略层
@@ -31,7 +30,7 @@ export function createCapabilityBridge(resOpts: CapabilityHooksOptions = {}): Ca
   // ★★App 端三组能力的装配收在 `capability-app-device.ts::createAppCapabilities`（决策 #1067）。
   const appCaps = detectAppHost() ? createAppCapabilities(CapError, resOpts) : ({} as Record<string, never>)
   if (detectRuntime() === 'mp' && g.wx) return { ...wxBridge(g.wx), ...mpBridgeExt(g.wx, CapError), ...appCaps }
-  return { ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError), ...appCaps }
+  return mergeWebWithApp({ ...webBridge(globalThis), ...webBridgeExt(globalThis, CapError) }, appCaps)   // ★#1238 禁止 web 兜底冒充（见 capability-app-fallback.ts）
 }
 
 registerBridgeFactory(createCapabilityBridge) // ★#1072 模块加载即登记（ESM: import 先执行）

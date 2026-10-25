@@ -12,7 +12,11 @@
 //      且 `clear()` 后 `info().keys` 必须为空。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { HOST_INVOKE_KEY } from '../packages/api/src/capability-invoke'
-import { createAppFileStorage, appKvStorageAvailable, APP_KV_STORE_PATH } from '../packages/api/src/capability-app-storage'
+import {
+  createAppFileStorage, appKvStorageAvailable, APP_KV_STORE_PATH,
+  STORAGE_MAX_TOTAL_BYTES, STORAGE_MAX_VALUE_BYTES, STORAGE_MAX_KEY_BYTES, STORAGE_MAX_KEYS,
+  storageStats, getStorageLastError, __resetStorageStats,
+} from '../packages/api/src/capability-app-storage'
 
 const g = globalThis as Record<string, unknown>
 
@@ -57,6 +61,7 @@ function installFsHost(opts: { missing?: string[] } = {}): HostStore {
 
 beforeEach(() => {
   delete g[HOST_INVOKE_KEY]
+  __resetStorageStats()   // ★#1241 读数在模块级 ⇒ 用例间必须归零
 })
 afterEach(() => {
   delete g[HOST_INVOKE_KEY]
@@ -131,7 +136,7 @@ describe('★★★#1207 App 端 KV 存储（getStorage）', () => {
     expect(st.get<number>('ok')).toBe(1)
   })
 
-  it('★★异步面与 info 如实（limitSize=0 不编假上限）', async () => {
+  it('★★异步面与 info 如实（limitSize 报**本层真强制**的上限，不是平台配额）', async () => {
     installFsHost()
     const st = mk()!
     const w = await st.setAsync('x', 'y')
@@ -143,8 +148,133 @@ describe('★★★#1207 App 端 KV 存储（getStorage）', () => {
     if (inf.ok) {
       expect(inf.data.keys).toContain('x')
       expect(inf.data.currentSize, '★currentSize 应 > 0').toBeGreaterThan(0)
-      // ★App 端没有平台配额概念 ⇒ limitSize 如实 0，不编一个假的
-      expect(inf.data.limitSize, '★编了假上限').toBe(0)
+      // ★★#1241 口径变更（原断言是 `limitSize===0`，理由"App 没有平台配额概念，不编假上限"）：
+      //   现在本层**真有一个强制上限** STORAGE_MAX_TOTAL_BYTES（超了 setAsync 回 storage.tooLarge）
+      //   ⇒ 报它才是如实；报 0 反而会让业务以为"无限"。
+      //   ★关键是"报的数必须真的被强制"——下面同时断言它真的会拒（见 ⑧）。
+      expect(inf.data.limitSize, '★limitSize 必须是本层真强制的那个常量').toBe(STORAGE_MAX_TOTAL_BYTES)
     }
+  })
+
+  // ══════════════ ★★★#1241 四项必答（§1.0 S3）的可触发判据 ══════════════
+  // ★每条都断言**行为**（拒绝 / 计数 / 落盘次数 / 回滚），不是"常量存在"。
+  //   本仓教训（#1223）：判据分支被前面的通用分支吃掉 ⇒ 死代码也算"有实现"（假绿）。
+
+  it('⑥ ① 上限·单值：超过 STORAGE_MAX_VALUE_BYTES ⇒ setAsync 回 storage.tooLarge 且不落盘', async () => {
+    const host = installFsHost()
+    const st = mk()!
+    const huge = 'x'.repeat(STORAGE_MAX_VALUE_BYTES + 10)
+    const r = await st.setAsync('big', huge)
+    expect(r.ok, '★超限必须显式报错，不静默截断').toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('storage.tooLarge')
+    expect(host.files.has(APP_KV_STORE_PATH), '★被拒的写入不该落盘').toBe(false)
+    expect(getStorageLastError(), '同步错误通道可读').toMatch(/storage\.tooLarge/)
+    expect(storageStats().refused).toBe(1)
+  })
+
+  it('⑦ ① 上限·键名：超过 STORAGE_MAX_KEY_BYTES ⇒ 拒绝', async () => {
+    installFsHost()
+    const st = mk()!
+    const r = await st.setAsync('k'.repeat(STORAGE_MAX_KEY_BYTES + 1), 1)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('storage.tooLarge')
+    expect(storageStats().refused).toBe(1)
+  })
+
+  it('⑧ ①④ 上限·总额与键数：总额超限拒绝；键数超限回 storage.tooManyKeys', async () => {
+    installFsHost()
+    const st = mk()!
+    // 总额：用一个接近单值上限的值 × 若干键把文档推过 STORAGE_MAX_TOTAL_BYTES
+    const chunk = 'y'.repeat(STORAGE_MAX_VALUE_BYTES - 64)
+    let refusedByTotal = false
+    for (let i = 0; i < 12; i++) {
+      const r = await st.setAsync('t' + i, chunk)
+      if (!r.ok && r.error.code === 'storage.tooLarge') { refusedByTotal = true; break }
+    }
+    expect(refusedByTotal, '★文档总额超过 8 MiB ⇒ 显式拒绝（这是修掉"越 64 MiB 后全部键静默消失"的那道闸）').toBe(true)
+    // 键数：把 STORAGE_MAX_KEYS 顶满后再加一个
+    const st2 = mk()!
+    await st2.clearAsync()
+    let hitManyKeys = false
+    for (let i = 0; i <= STORAGE_MAX_KEYS; i++) {
+      const r = await st2.setAsync('n' + i, 1)
+      if (!r.ok && r.error.code === 'storage.tooManyKeys') { hitManyKeys = true; break }
+    }
+    expect(hitManyKeys, '★键数上界触发 storage.tooManyKeys').toBe(true)
+  })
+
+  it('⑨ ② 背压·写合并：coalesce 模式下同微任务多次 set 只落盘一次，且 coalesced 计数', async () => {
+    const host = installFsHost()
+    const st = createAppFileStorage({ coalesce: true }).getStorage!()
+    const before = host.calls.filter((c) => c === 'fs.writeBytes').length
+    st.set('a', 1)
+    st.set('b', 2)
+    st.set('c', 3)
+    expect(storageStats().dirty, '★未落盘标记可观测').toBe(true)
+    // 值立即可见（内存先认——合并不改变读语义）
+    expect(st.get<number>('a')).toBe(1)
+    expect(host.calls.filter((c) => c === 'fs.writeBytes').length - before, '★此时还没落盘').toBe(0)
+    await Promise.resolve()   // 让微任务跑
+    const writes = host.calls.filter((c) => c === 'fs.writeBytes').length - before
+    expect(writes, '★三次 set 只落盘一次').toBe(1)
+    expect(storageStats().coalesced, '省掉 2 次落盘').toBe(2)
+    expect(storageStats().dirty).toBe(false)
+  })
+
+  it('⑩ ② 默认不合并：coalesce 缺省时每次 set 都立即落盘（不偷偷延迟持久化）', async () => {
+    const host = installFsHost()
+    const st = mk()!
+    st.set('a', 1)
+    const n1 = host.calls.filter((c) => c === 'fs.writeBytes').length
+    st.set('b', 2)
+    const n2 = host.calls.filter((c) => c === 'fs.writeBytes').length
+    expect(n2 - n1, '★默认语义：每次 set 一次落盘').toBe(1)
+    expect(storageStats().coalesced).toBe(0)
+  })
+
+  it('⑪ ③ 回收：文档缓存登记进账本；release 后缓存回滚到已落盘快照', async () => {
+    installFsHost()
+    const { createCapabilityResourceRegistry } = await import('../packages/api/src/capability-resources')
+    const registry = createCapabilityResourceRegistry({ owner: 'test' })
+    const st = createAppFileStorage({ coalesce: true, resources: registry }).getStorage!()
+    st.set('durable', 'yes')
+    await Promise.resolve()          // 落盘
+    st.set('pending', 'no')          // 未落盘的修改
+    expect(registry.countsByType()['storage-doc'], '文档缓存已登记').toBe(1)
+    registry.releaseAll()
+    expect(registry.size(), '账本归零').toBe(0)
+    expect(storageStats().dirty, '★未落盘标记被清').toBe(false)
+    // ★回滚语义：只有已落盘的那条还在，未落盘的"pending"不能假装持久化
+    expect(st.get<string>('durable'), '已落盘的值仍可读（release 只是丢缓存，不是清数据）').toBe('yes')
+    expect(st.get<string>('pending'), '★未落盘的修改不被当作已持久化').toBeUndefined()
+  })
+
+  it('⑫ ④ 并发/读数：storageStats 六项齐全且键数/字节随写入更新', async () => {
+    installFsHost()
+    const st = mk()!
+    await st.setAsync('a', 1)
+    await st.setAsync('b', 'hello')
+    const s = storageStats()
+    expect(Object.keys(s).sort()).toEqual(['coalesced', 'dirty', 'keys', 'refused', 'totalBytes', 'writes'])
+    expect(s.keys, '键数跟随').toBe(2)
+    expect(s.totalBytes, '字节数跟随').toBeGreaterThan(0)
+    expect(s.writes).toBe(2)
+  })
+
+  it('⑬ ③ 宿主读失败不装空文档：记 lastError（原实现静默返回空 ⇒ 看起来"键全没了"）', async () => {
+    const host = installFsHost()
+    host.files.set(APP_KV_STORE_PATH, Array.from(new TextEncoder().encode('{"a":1}')))
+    // 探测（`{probe:true}`）放行；真正的读失败 ⇒ 非 "不存在" 的错误
+    const orig = g[HOST_INVOKE_KEY] as (m: string, a: string) => string
+    g[HOST_INVOKE_KEY] = (m: string, a: string) => {
+      const probe = /"probe"\s*:\s*true/.test(a)
+      return m === 'fs.readBytes' && !probe
+        ? JSON.stringify({ ok: false, missing: false, reason: 'IO 错误：权限不足' })
+        : orig(m, a)
+    }
+    __resetStorageStats()
+    const st = mk()!
+    expect(st.get('a'), '读失败时读到 undefined（不抛）').toBeUndefined()
+    expect(getStorageLastError(), '★读失败必须记错，不能装作"空文档"').toMatch(/storage\.load/)
   })
 })
