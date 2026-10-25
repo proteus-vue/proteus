@@ -129,6 +129,10 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 60;
   min-width: 208px;
+  /* ★高菜单（比如 28 项的语言列表）在小窗口里要能滚 —— 否则会顶出屏幕、下面的项永远点不到 */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;

@@ -515,7 +515,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
+const { langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -782,7 +782,23 @@ const checks = [
       tabsBeforeMenu >= 1 &&
       tabsAfterMenu === tabsBeforeMenu - 1,
   ],
-  // ㉜ 贴边定位：**只有**装不下才翻转，翻转后必须贴着鼠标；hover 底色必须是中性灰
+  // ㉝ 语言模式：状态栏显示当前类型 + 手选后真的换了解析器（纯文本 0 个着色 span）
+  [
+    `㉝ 语言模式：状态栏「${langChip?.text ?? '—'}」(${langChip?.lang ?? '—'}) · 选单 ${langMenu.count} 项（含 Python/Rust=${langMenu.hasPy && langMenu.hasRust}）· 纯文本→${langPlain.chip} 着色 span=${langPlain.tokens} · Rust→${langRust.chip} 着色 span=${langRust.tokens} · 回自动→${langAuto.chip} 着色 span=${langAuto.tokens}`,
+    langChip?.lang === 'vue' &&
+      langChip.text.includes('Vue') &&
+      langMenu.count >= 20 &&
+      langMenu.hasPy &&
+      langMenu.hasRust &&
+      langPlain.chip === 'plain' &&
+      langPlain.host === 'plain' &&
+      langPlain.tokens === 0 &&
+      langRust.chip === 'rust' &&
+      langRust.tokens > 0 &&
+      langAuto.chip === 'vue' &&
+      langAuto.tokens > 0,
+  ],
+  // ㉜ 贴边定位，翻转后必须贴着鼠标；hover 底色必须是中性灰
   [
     `㉜ 菜单定位：锚点(${anchorX},${anchorY}) · 尺寸 ${edgeMenu ? Math.round(edgeMenu.right - edgeMenu.left) + '×' + Math.round(edgeMenu.bottom - edgeMenu.top) : '—'} · 实际 left/top=${edgeMenu ? Math.round(edgeMenu.left) + '/' + Math.round(edgeMenu.top) : '—'} · hover 底色=${edgeMenu?.bg ?? '—'} · 光标=${edgeMenu?.cursor ?? '—'}（禁用项=${edgeMenu?.disabledCursor ?? '—'}）`,
     (() => {

@@ -44,12 +44,9 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
-import { vue } from '@codemirror/lang-vue'
-import { rust } from '@codemirror/lang-rust'
-import { javascript } from '@codemirror/lang-javascript'
-import { css } from '@codemirror/lang-css'
-import { cpp, objectiveC } from '@codemirror/legacy-modes/mode/clike'
-import languageMap from '../languages.json'
+import { Compartment } from '@codemirror/state'
+import { langExtension, langLabel } from '../langs'
+import { editorLang, effectiveLangId, langOverrides, trackEditorFile } from '../editorLang'
 import { copyText, hasBridge, listFiles, readText, writeText, type SearchHit } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
@@ -193,32 +190,13 @@ function revealPath(path: string) {
 }
 
 /* ─── 编辑器 ────────────────────────────────────────────────────────────── */
-/** ★扩展名 → 语言 id 的映射在 `ui/src/languages.json`（**单一真源**）。
- *  为什么放 JSON 而不是写在这里：门禁要按**同一份数据**扫真实目录（判据 ⑳ 覆盖表），
- *  写死在组件里就只能靠人盯着——而"新增了文件类型但忘了接语言"恰恰是没人会盯着的那类事。 */
-const LANGUAGES = languageMap.languages as Record<string, string>
-
-/** 语言 id → CodeMirror 扩展。★全仓只有这里出现"具体哪个语言包"，换/加包只改这一处。 */
-const FACTORY: Record<string, () => Extension> = {
-  vue: () => vue(),
-  rust: () => rust(),
-  ts: () => javascript({ typescript: true }),
-  tsx: () => javascript({ typescript: true, jsx: true }),
-  js: () => javascript(),
-  jsx: () => javascript({ jsx: true }),
-  css: () => css(),
-  // ★ObjC 没有官方 Lezer 语法（社区也没成熟包）⇒ 用 legacy clike 的 objectiveC：
-  //   能出 C 家族的关键字/字符串/数字/注释，ObjC 特有语法（`@interface`、`[obj msg]`）只当普通文本。
-  //   这是业界通行降级；README 里如实写"到 C 级"，不吹成"支持 Objective-C"。
-  objc: () => StreamLanguage.define(objectiveC),
-  cpp: () => StreamLanguage.define(cpp),
-}
+/** ★语言扩展放 **Compartment**（决策 #1241）：用户在状态栏手选语言时**就地重配**，
+ *  不重建 state —— 重建会丢 undo 历史（"改个语言模式结果不能撤销了"是最气人的那类退化）。
+ *  扩展名 → 语言 id 的映射在 `ui/src/languages.json`；语言 id → 解析器在 `ui/src/langs.ts`。 */
+const langComp = new Compartment()
 
 function langFor(path: string) {
-  const dot = path.lastIndexOf('.')
-  const ext = dot >= 0 ? path.slice(dot).toLowerCase() : ''
-  const id = LANGUAGES[ext]
-  return id && FACTORY[id] ? FACTORY[id]!() : [] // 未登记 / 未实现 ⇒ 纯文本
+  return langComp.of(langExtension(effectiveLangId(path)))
 }
 
 /** 语法着色：把 lezer 的 token 标签映射到 `--syn-*` 色板。
@@ -385,6 +363,9 @@ async function open(path: string) {
   if (cached && rec0) {
     await nextTick()
     view?.setState(cached)
+    // ★这条分支也必须登记：文件已在内存时走这里，漏了状态栏就会停在上一个文件的类型上（实测踩到）
+    trackEditorFile(path)
+    host.value?.setAttribute('data-lang', effectiveLangId(path))
     dirty.value = cached.doc.toString() !== rec0.base
     setTabDirty(path, dirty.value)
     lineCount.value = cached.doc.lines
@@ -401,6 +382,8 @@ async function open(path: string) {
     states.set(path, st)
     await nextTick()
     view?.setState(st)
+    trackEditorFile(path)
+    host.value?.setAttribute('data-lang', effectiveLangId(path))
     dirty.value = false
     setTabDirty(path, false)
     lineCount.value = st.doc.lines
@@ -546,6 +529,22 @@ function onEditorMenu(e: MouseEvent) {
   )
 }
 
+// 状态栏手选语言 → 就地重配（决策 #1241）。只在"当前打开的这个文件"上生效，
+// 且生效值没变时不重复 dispatch（切标签时 path 变化也会触发本 watch）。
+watch(
+  () => `${editorLang.path}|${langOverrides[editorLang.path] ?? ''}`,
+  () => {
+    const p = editorLang.path
+    if (!view || !p || p !== cur.value) return
+    const eff = effectiveLangId(p)
+    if (host.value?.getAttribute('data-lang') === eff) return
+    view.dispatch({ effects: langComp.reconfigure(langExtension(eff)) })
+    host.value?.setAttribute('data-lang', eff)
+    states.set(p, view.state)
+    if (langOverrides[p]) pushToast(`语言模式：${langLabel(eff)}`, 'info')
+  },
+)
+
 /** 树行图标：目录分展开/折叠；文件按扩展名取类型图标与类型色 */
 function nodeIcon(node: { path: string; dir: boolean }): { name: string; color?: string } {
   if (node.dir) return { name: ws.codeCollapsed.includes(node.path) ? 'folder' : 'folderOpen' }
@@ -687,7 +686,7 @@ onBeforeUnmount(() => {
           </button>
           <span v-else-if="saving" class="meta">保存中…</span>
           <span style="flex: 1" />
-          <span class="note" id="codeNote">⌘S 保存 · 着色 .vue/.rs/.ts/.css/.m</span>
+          <span class="note" id="codeNote">⌘S 保存 · 底部可切语言模式（28 种）</span>
         </div>
         <!-- 标签栏（2026-10-25 · 决策 #1217）：点=切换，×=关闭，小圆点=未保存。
              ★标签只负责"切换文件"，缓冲与 undo 历史在 states 池里，切标签不重建 state。 -->

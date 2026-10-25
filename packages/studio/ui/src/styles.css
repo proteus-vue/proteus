@@ -168,6 +168,11 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
         background:var(--bg-elevated);border-top:1px solid var(--border-subtle);
         font-size:var(--fs-2xs);color:var(--fg-muted);font-variant-numeric:tabular-nums;
         letter-spacing:.2px}
+/* 语言模式 chip（决策 #1241）：状态栏右侧、紧挨提示语；中性灰，不用品牌色 */
+.status .lang{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;
+  border:1px solid transparent;border-radius:var(--r-sm);background:transparent;
+  color:var(--fg-muted);font:inherit;cursor:pointer}
+.status .lang:hover{background:var(--bg-overlay);border-color:var(--border-subtle);color:var(--fg)}
 .status .k{color:var(--fg-subtle);margin-right:var(--sp1);text-transform:uppercase;font-size:9px}
 
 /* ── 右栏通用语法（★2026-10-23 提到全局：此前 .kv 在 Device/Pipeline/Runtime 三处**一字不差抄了三遍**）

@@ -12,6 +12,9 @@ import CodePanel from './panels/CodePanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
 import StudioMark from './icons/StudioMark.vue'
 import ContextMenu from './ContextMenu.vue'
+import { detectLangId, editorLang, effectiveLangId, langOverrides, setLangOverride } from './editorLang'
+import { LANGS, langLabel } from './langs'
+import { openMenu } from './contextmenu'
 import ToastStack from './ToastStack.vue'
 import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 import { onMenuAction, wireMenu } from './menu'
@@ -88,6 +91,24 @@ const screenStyle = computed(() => {
   // 而 getBoundingClientRect **含 transform** ⇒ 原生矩形自动跟随。
   return { ...size, transform: `translate(${pan.value.x}px, ${pan.value.y}px)` }
 })
+/** 当前文件的语言模式名（手选优先）——底部状态栏的 chip 用它 */
+const langNow = computed(() => langLabel(effectiveLangId(editorLang.path)))
+
+function pickLang(e: MouseEvent) {
+  const p = editorLang.path
+  if (!p) return
+  const auto = detectLangId(p)
+  openMenu(
+    e,
+    [
+      { id: '__auto', label: `自动（${langLabel(auto)}）`, accel: langOverrides[p] ? '' : '✓' },
+      { id: '__sep', label: '', sep: true },
+      ...LANGS.map((l) => ({ id: l.id, label: l.label, accel: langOverrides[p] === l.id ? '✓' : '' })),
+    ],
+    (id) => setLangOverride(p, id === '__auto' ? '' : id),
+  )
+}
+
 const zoomLabel = computed(() =>
   Math.abs(ws.zoom - 1) < 0.001 ? '适应' : `${Math.round(ws.zoom * 100)}%`,
 )
@@ -408,6 +429,18 @@ const hud = computed(() => {
       <span><span class="k">pan</span> <span id="span">{{ Math.round(pan.x) }},{{ Math.round(pan.y) }}</span></span>
       <span title="设备像素坐标"><span class="k">pick</span> <span id="spick">{{ pick ? `${pick.x},${pick.y}` : '—' }}</span></span>
       <span style="flex:1" />
+      <!-- 语言模式（决策 #1241）：这里是**当前文件**的类型，点开可手动改；
+           只在代码视图 + 有打开文件时出现，避免设备视图里显示一个过期的类型 -->
+      <button
+        v-if="view === 'code' && editorLang.path"
+        class="lang"
+        id="langMode"
+        :data-lang="effectiveLangId(editorLang.path)"
+        :title="`语言模式：${langNow}（点击切换）`"
+        @click="pickLang"
+      >
+        <StudioIcon name="code" :size="11" />{{ langNow }}
+      </button>
       <span id="shint">{{ hint }}</span>
     </div>
 

@@ -383,5 +383,60 @@ const edgeMenu = await page.evaluate(() => {
 await page.keyboard.press('Escape')
 await page.waitForTimeout(150)
 
-  return { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
+  // ── ㉝ 语言模式（决策 #1241）：状态栏显示当前类型 + 手选后真的换解析器 ───────────
+  // ★数"被着色"的 span（颜色 ≠ 正文色），不是数 CM 的内部类名：
+  //   CM 的 `ͼ*` 类在纯文本下也有 36 个（行号/装饰），拿它判着色是假绿。
+  const tokenCount = `(() => {
+    const host = document.getElementById('codeHost')
+    if (!host) return -1
+    const fg = getComputedStyle(host.querySelector('.cm-content') || host).color
+    return [...host.querySelectorAll('.cm-line span')].filter((s) => getComputedStyle(s).color !== fg).length
+  })()`
+  const langChip = await page.evaluate(() => {
+    const b = document.getElementById('langMode')
+    return b ? { text: (b.textContent || '').trim(), lang: b.getAttribute('data-lang') } : null
+  })
+  await page.click('#langMode')
+  await page.waitForTimeout(250)
+  const langMenu = await page.evaluate(() => ({
+    count: document.querySelectorAll('#ctxMenu [data-menu-item]').length,
+    hasPy: !!document.querySelector('#ctxMenu [data-menu-item="py"]'),
+    hasRust: !!document.querySelector('#ctxMenu [data-menu-item="rust"]'),
+  }))
+  // 选"纯文本" ⇒ 必须一个着色 span 都不剩；再选 Rust ⇒ 又有
+  await page.click('#ctxMenu [data-menu-item="plain"]')
+  await page.waitForTimeout(320)
+  const langPlain = await page.evaluate(
+    (q) => ({
+      chip: document.getElementById('langMode')?.getAttribute('data-lang') ?? '',
+      host: document.getElementById('codeHost')?.getAttribute('data-lang') ?? '',
+      tokens: eval(q),
+    }),
+    tokenCount,
+  )
+  await page.click('#langMode')
+  await page.waitForTimeout(220)
+  await page.click('#ctxMenu [data-menu-item="rust"]')
+  await page.waitForTimeout(320)
+  const langRust = await page.evaluate(
+    (q) => ({
+      chip: document.getElementById('langMode')?.getAttribute('data-lang') ?? '',
+      tokens: eval(q),
+    }),
+    tokenCount,
+  )
+  // 回到自动
+  await page.click('#langMode')
+  await page.waitForTimeout(220)
+  await page.click('#ctxMenu [data-menu-item="__auto"]')
+  await page.waitForTimeout(320)
+  const langAuto = await page.evaluate(
+    (q) => ({
+      chip: document.getElementById('langMode')?.getAttribute('data-lang') ?? '',
+      tokens: eval(q),
+    }),
+    tokenCount,
+  )
+
+  return { langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

@@ -14368,3 +14368,25 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **判据**：㉜ 里一并读 `getComputedStyle(item).cursor` 与禁用项的 cursor，
     要求 `pointer` / `default`。**破坏性验证**：改回 default ⇒ ㉜ 立刻红。
     ★选它做判据的原因：光标形态是"这一类视觉反馈"里最容易漏、也最容易用一行 CSS 回归的东西。
+
+1241. **语言模式：从 5 种扩到 28 种 + 底部状态栏可手动切换 · 判据 ㉝**（2026-10-25 · 用户「着色高亮文件支持还太少，把主流语言全部加进去；底部状态栏没有当前文件类型、缺手动选择」）:
+  - **注册表化**：新建 `ui/src/langs.ts`（id / 显示名 / 是否官方语法树 / 构造器），
+    `languages.json` 仍是"扩展名 → 语言 id"的单一真源（判据 ⑳ 扫真实目录）。
+    以前 `FACTORY` 只认 vue/rust/ts/tsx/js/jsx/css/objc/cpp 九种，其余一律纯文本。
+  - **28 种语言**：官方 Lezer——Vue / TypeScript / TSX / JavaScript / JSX / Rust / CSS；
+    legacy 流式——JSON / Markdown / Python / Go / Java / Kotlin / C / C++ / Objective-C / Shell /
+    YAML / TOML / SQL / XML / HTML / Ruby / Swift / Lua / Diff / Dockerfile；外加 Plain Text。
+    ★**等级如实标**：官方=有语法树（缩进/折叠准），legacy=只着色。`LangDef.ast` 就是这个标记。
+  - **Markdown 自己写了个 40 行流模式**：这个版本的 `legacy-modes` **没有** markdown，
+    而 .md 太常见。只认标题/粗斜体/行内代码/围栏/引用/链接/列表——够读，不假装是完整解析器。
+  - **状态栏语言 chip**（`#langMode`）：显示当前生效的语言（手选优先），点开是**全部 28 种 + 自动**；
+    `editorLang.ts` 这一层 store 给"编辑器"和"状态栏"共读，避免两边显示的与著色的不是同一个。
+    覆盖按**文件**记（切走再回来还是你选的那个），但**不写 state.json**——它是"我现在怎么看这个文件"，不是文件属性。
+  - **★热切换用 Compartment，不重建 state**：重建会丢 undo 历史（"改个语言模式结果倒不回去了"）。
+    `langComp.reconfigure()` + 把新 state 写回标签池即可。
+  - **判据 ㉝**：状态栏显示「Vue」→ 选单 ≥20 项且含 Python/Rust → 选"纯文本"后**被着色的 span = 0**
+    → 选 Rust 后 >0 → 回"自动"又回到 Vue。**破坏性验证**：让 `setLangOverride` 空转 ⇒ 立刻红。
+    ★判定用的是"**颜色 ≠ 正文色的 span 数**"，不是 CM 的内部类名——`ͼ*` 那套在纯文本下也有 36 个，
+      拿它判着色就是假绿（第一版正是这么写的，当场被自己的断言抓出来）。
+  - **顺手修掉的 bug**：`open()` 的"内存里已有 state"分支没有登记语言 ⇒ 状态栏会停在上一个文件的类型上
+    （判据 ㉝ 第一次跑就暴露了：切到 App.vue 了，chip 还写着 Rust）。
