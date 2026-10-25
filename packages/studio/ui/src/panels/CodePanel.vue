@@ -57,6 +57,7 @@ import FolderIcon from '../icons/FolderIcon.vue'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
+import DiffView from '../DiffView.vue'
 import { fileTypeIcon } from '../fileIcons'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
@@ -305,6 +306,7 @@ function makeState(doc: string, path: string) {
         const rec = recs.get(cur.value)
         dirty.value = !!rec && now !== rec.base
         setTabDirty(cur.value, dirty.value)
+        if (showDiff.value) refreshDiff()
         lineCount.value = u.state.doc.lines
       }),
     ],
@@ -367,6 +369,7 @@ async function open(path: string) {
     // ★这条分支也必须登记：文件已在内存时走这里，漏了状态栏就会停在上一个文件的类型上（实测踩到）
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
+    if (showDiff.value) refreshDiff()
     dirty.value = cached.doc.toString() !== rec0.base
     setTabDirty(path, dirty.value)
     lineCount.value = cached.doc.lines
@@ -385,6 +388,7 @@ async function open(path: string) {
     view?.setState(st)
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
+    if (showDiff.value) refreshDiff()
     dirty.value = false
     setTabDirty(path, false)
     lineCount.value = st.doc.lines
@@ -594,6 +598,25 @@ async function save() {
   if (ok) pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
 }
 
+/* ── Diff 视图（决策 #1245）：比"磁盘基线 vs 当前缓冲" ───────────────────── */
+const showDiff = ref(false)
+const diffBase = ref('')
+const diffNow = ref('')
+
+function refreshDiff() {
+  const p = cur.value
+  if (!p) return
+  const rec = recs.get(p)
+  if (!rec) return
+  diffBase.value = rec.base
+  diffNow.value = view ? view.state.doc.toString() : ''
+}
+
+function toggleDiff() {
+  showDiff.value = !showDiff.value
+  if (showDiff.value) refreshDiff()
+}
+
 /** 这个文件有没有未保存改动（不依赖"当前标签"，关闭其他标签时也要能判断） */
 function isDirtyPath(path: string): boolean {
   const rec = recs.get(path)
@@ -780,6 +803,10 @@ onBeforeUnmount(() => {
             <span class="bullet" />未保存
           </button>
           <span v-else-if="saving" class="meta">保存中…</span>
+          <button class="dtoggle" id="diffToggle" :class="{ on: showDiff }" :aria-pressed="showDiff"
+                  title="对比磁盘上的版本（看未保存的改动）" @click="toggleDiff">
+            Diff
+          </button>
           <span style="flex: 1" />
           <span class="note" id="codeNote">⌘S 保存 · 底部可切语言模式（28 种）</span>
         </div>
@@ -803,7 +830,8 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
         <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
-        <div v-show="!err" class="host" id="codeHost" ref="host" @contextmenu.prevent="onEditorMenu" />
+        <div v-show="!err && !showDiff" class="host" id="codeHost" ref="host" @contextmenu.prevent="onEditorMenu" />
+        <DiffView v-if="showDiff" :original="diffBase" :modified="diffNow" :path="cur" />
       </div>
     </div>
   </div>
@@ -924,6 +952,12 @@ onBeforeUnmount(() => {
 .files button.dir {
   color: var(--fg);
 }
+/* Diff 开关：低存在感的文字按钮，开了才亮（和"未保存"chip 区分开，别抢注意力） */
+.dtoggle{flex:none;height:18px;padding:0 6px;border:1px solid transparent;border-radius:var(--r-sm);
+  background:transparent;color:var(--fg-subtle);font:11px/16px -apple-system,'PingFang SC',sans-serif;
+  cursor:pointer}
+.dtoggle:hover{background:var(--bg-overlay);border-color:var(--border-subtle);color:var(--fg)}
+.dtoggle.on{background:rgba(255,255,255,.08);border-color:var(--border);color:var(--fg)}
 .ico {
   flex: none;
   opacity: 0.8;

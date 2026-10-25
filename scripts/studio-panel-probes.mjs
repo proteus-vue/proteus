@@ -511,5 +511,36 @@ await page.waitForTimeout(150)
     () => (window.__STUB_CALLS__ || []).filter((x) => x.cmd === 'close_now').length,
   )
 
-  return { dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
+  // ── ⑱g Diff 视图（决策 #1245）：改一行 ⇒ 有增有删，开关能来回切 ──────────────
+  await page.locator('.cm-content').click()
+  await page.keyboard.press('Meta+ArrowUp')
+  await page.keyboard.press('Home')
+  await page.keyboard.press('Shift+End')
+  await page.keyboard.type('// diff-probe-line')
+  await page.waitForTimeout(220)
+  await page.click('#diffToggle')
+  await page.waitForTimeout(320)
+  const diffState = await page.evaluate(() => {
+    const v = document.getElementById('diffView')
+    if (!v) return null
+    const adds = [...v.querySelectorAll('.row.add .txt')].map((n) => n.textContent ?? '')
+    return {
+      added: Number(v.getAttribute('data-added') ?? 0),
+      removed: Number(v.getAttribute('data-removed') ?? 0),
+      adds: adds.slice(0, 3),
+      hostHidden: getComputedStyle(document.getElementById('codeHost')).display === 'none',
+    }
+  })
+  await page.click('#diffToggle')
+  await page.waitForTimeout(260)
+  const diffClosed = await page.evaluate(() => ({
+    view: !!document.getElementById('diffView'),
+    hostVisible: getComputedStyle(document.getElementById('codeHost')).display !== 'none',
+  }))
+  // 复原：撤销掉那段替换，别把脏缓冲留给后面的步骤
+  await page.locator('.cm-content').click()
+  await page.keyboard.press('Meta+z')
+  await page.waitForTimeout(220)
+
+  return { diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

@@ -532,7 +532,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
+const { diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -727,6 +727,17 @@ const checks = [
   [
     `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
     failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
+  ],
+  // ⑱g Diff 视图：改一行 → 有增有删；开关来回切时编辑器与 Diff 互斥
+  [
+    `⑱g Diff：+${diffState?.added ?? '—'} −${diffState?.removed ?? '—'} · 新增行含探针=${(diffState?.adds ?? []).some((x) => x.includes('// diff-probe-line'))} · 打开时编辑区隐藏=${diffState?.hostHidden} · 关掉后 Diff 消失=${!diffClosed.view} 编辑区回来=${diffClosed.hostVisible}`,
+    !!diffState &&
+      diffState.added >= 1 &&
+      diffState.removed >= 1 &&
+      diffState.adds.some((x) => x.includes('// diff-probe-line')) &&
+      diffState.hostHidden === true &&
+      diffClosed.view === false &&
+      diffClosed.hostVisible === true,
   ],
   // ⑱f 关窗口/退出拦截：脏计数要同步给 Rust；被拦下后三选一，选完才放行
   [

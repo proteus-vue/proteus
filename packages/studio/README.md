@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **51 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **52 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -821,7 +821,19 @@ node packages/studio/icons/make-icon.mjs   # 两个通道各出 icns + 1024 png
 覆盖按**文件**记（切走再回来还在），但**不写 `state.json`**——它是"我现在怎么看这个文件"，不是文件属性。
 切换用 **Compartment.reconfigure**，不重建 state（否则会丢 undo 历史）。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **51 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
+## Diff 视图（2026-10-25 · 决策 #1245）
+
+文件 bar 上的 **`Diff`** 按钮：比"**磁盘上的版本** ↔ **当前缓冲**"，也就是"我改了哪几行还没存"。
+
+- 行级 LCS 自己实现（`ui/src/diff.ts`，不引 `@codemirror/merge`——本仓装依赖要用户本地 pnpm）；
+- 呈现：双列行号 + `−/+` + **8% 淡底** + 3 行上下文、长间隔折成 `···`，头部只留 `+N −M`；
+- 打开时编辑器 `v-show=false`，Diff 占同一块区域——**不叠层**；
+- 性能兜底：`MAX_CELLS=4e6` 以上退化成整块替换并标 `truncated`，不让编辑器卡死。
+
+★边界（如实）：**只做行级**，没有词级/字符级高亮，也没有三栏合并。
+`DiffResult.rows` 接口留好——将来引库只换实现。下一步：**Git 只读**（数据源从"基线"扩到"HEAD"）。
+
+### 编辑器判据（`check:studio-panel` 已扩到 **52 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
