@@ -180,6 +180,8 @@ public final class HostCapabilities {
                 return ok(FileTransferCapability.readBytes(activity, args));
             case "fs.remove":
                 return ok(FileTransferCapability.remove(activity, args));
+            case "fs.exists":   // ★#1226 getFileSystem 基础面
+                return ok(FileTransferCapability.exists(activity, args));
             // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
             case "log":
                 return ok(dev.proteus.layoutcore.runtime.LogCapability.write(args));

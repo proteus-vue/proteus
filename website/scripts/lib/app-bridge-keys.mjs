@@ -77,6 +77,8 @@ export const APP_BRIDGE_SOURCES = [
   //   （`capability-app-log.ts::createAppLog`，装配层用条件 spread 引入）。
   //   ★不登记就会被判「桥未接线」——与 #1207 的 createAppFileStorage 同一形态。
   { file: 'packages/api/src/capability-app-log.ts', functions: ['createAppLog'] },
+  // ★★★#1226 App 能力批 1：文件系统基础面（`getFileSystem`）
+  { file: 'packages/api/src/capability-app-filesystem.ts', functions: ['createAppFileSystem'] },
 
 ]
 

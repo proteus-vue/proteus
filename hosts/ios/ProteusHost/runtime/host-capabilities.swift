@@ -191,6 +191,7 @@ final class HostCapabilities: NSObject {
                     case "fs.writeBytes": return ok(try FileTransferCapability.writeBytes(args))
                     case "fs.readBytes": return ok(try FileTransferCapability.readBytes(args))
                     case "fs.remove": return ok(try FileTransferCapability.remove(args))
+                    case "fs.exists": return ok(try FileTransferCapability.exists(args))   // ★#1226
                     default: return miss("未实现的 fs 方法：\(method)")
                     }
                 } catch let e as WsError {

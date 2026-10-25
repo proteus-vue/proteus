@@ -71,6 +71,15 @@ function extractCasesInDir(dir, extRe) {
 }
 
 /** 从源码抽取 `method == "xxx"`（C++）。 */
+/**
+ * 从派发函数里抽 `method == "..."`（同 extractMethodEq，但显式声明用途：
+ * 鸿蒙 `fs.*` 走 `dispatch()` 的前缀判定，字面量在 dispatch 内部）。
+ * ★★#1226：不补这条扫描面 ⇒ 已实现的 fs 方法会被算成未覆盖（#1121 同族）。
+ */
+function extractFsDispatch(file) {
+  return extractMethodEq(file).filter((m) => m.startsWith("fs."))
+}
+
 function extractMethodEq(file) {
   const out = []
   for (const m of fs.readFileSync(path.join(ROOT, file), 'utf-8').matchAll(/method\s*==\s*"([^"]+)"/g)) out.push(m[1])
@@ -102,6 +111,9 @@ const ENDS = {
     capability: [
       ...extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h').filter((m) => !m.startsWith('screen.')),
       ...extractMethodEq('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h'),
+      // ★★★#1226：`fs.*` 在 proteus_fs.h 的 `dispatch()` 里（前缀判定转发，不写 4 个 case）
+      //   ⇒ 不补扫就会把**已实现**的四个 fs 方法算成未覆盖（#1121 同族）。
+      ...extractFsDispatch('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_fs.h'),
     ],
   },
 }

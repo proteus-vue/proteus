@@ -103,6 +103,21 @@ public final class FileTransferCapability {
         return o;
     }
 
+    /**
+     * ★★★#1226 `fs.exists`：`{ path }` → `{ exists, isFile, isDir }`
+     *   为 `getFileSystem` 的基础面补上最后一个方法（现有 fs.* 已有 read/write/remove）。
+     *   ★**路径非法仍拒**（复用 `resolve` 的沙箱校验——不开第二份）；“不存在”不是错误，回 exists=false。
+     */
+    public static JSONObject exists(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        File f = resolve(ctx, path);
+        JSONObject o = new JSONObject();
+        o.put("exists", f.exists());
+        o.put("isFile", f.isFile());
+        o.put("isDir", f.isDirectory());
+        return o;
+    }
+
     /** `fs.remove`：`{ path }` → `{}`（**幂等**：不存在也算成功）。 */
     public static JSONObject remove(Context ctx, JSONObject args) throws Exception {
         String path = args.optString("path", "");

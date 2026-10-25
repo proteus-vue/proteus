@@ -28,6 +28,7 @@ import { CapError as ProteusCapError } from './capability-types'
 import { createAppLifecycleCapabilities, createAppNativeCapabilities, getHostLifecycleBus } from './capability-app'
 import { createAppFileStorage } from './capability-app-storage'   // ★#1207 App 端 KV 存储
 import { appLogAvailable, createAppLog } from './capability-app-log'   // ★#1225 App 端日志通道
+import { appFileSystemAvailable, createAppFileSystem } from './capability-app-filesystem'   // ★#1226 文件系统（基础面）
 // ★★★决策 #1081：App 端元素查询（`useElement` 选择器通路）——解析器由装配层注入
 import { createAppElementCapabilities } from './capability-app-element'
 // ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
@@ -261,12 +262,14 @@ export function createAppCapabilities<E extends Error = Error>(
    */
   const appKv = createAppFileStorage()
   const appLog = createAppLog()
+  const appFs = createAppFileSystem()
   return {
     ...createAppLifecycleCapabilities(getHostLifecycleBus(), CapError),
     ...createAppNativeCapabilities(CapError),
     ...createAppDeviceCapabilities(CapError, resOpts),
     ...appKv,   // ★#1207 KV 存储（宿主缺 fs.* 时是空对象 ⇒ 不提供 getStorage）
     ...(appLogAvailable() ? appLog : {}),   // ★#1225 日志（宿主缺 log 时**不提供** ⇒ useLog 如实 unsupported）
+    ...(appFileSystemAvailable() ? appFs : {}),   // ★#1226 文件系统基础面（其余 22 个方法具名 unsupported）
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
     ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
     connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）

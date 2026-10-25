@@ -222,6 +222,28 @@ inline std::string readBytes(const std::string& argsJson) {
   return out;
 }
 
+/** ★★★#1226 `fs.exists`：`{ path }` → `{ exists, isFile, isDir }`
+ *  为 `getFileSystem` 基础面补最后一个方法；路径非法仍拒（复用 resolveSandboxPath）。 */
+inline std::string exists(const std::string& argsJson) {
+  std::string rel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "path", &rel) || rel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.exists 需要 { path }\"}";
+  }
+  const std::string abs = proteus::http::resolveSandboxPath(rel);
+  if (abs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）：" +
+           jsonEscape(rel) + "\"}";
+  }
+  struct stat st{};
+  const bool has = ::stat(abs.c_str(), &st) == 0;
+  const bool isFile = has && S_ISREG(st.st_mode);
+  const bool isDir = has && S_ISDIR(st.st_mode);
+  char b[160];
+  std::snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"exists\":%s,\"isFile\":%s,\"isDir\":%s}}",
+                has ? "true" : "false", isFile ? "true" : "false", isDir ? "true" : "false");
+  return b;
+}
+
 /** `fs.remove`：`{ path }` → `{}`（**幂等**：不存在也算成功，与 Android/iOS 同） */
 inline std::string remove(const std::string& argsJson) {
   std::string rel;
@@ -250,6 +272,7 @@ inline bool dispatch(const std::string& method, const std::string& argsJson, std
   if (method == "fs.writeBytes") { *out = writeBytes(argsJson); return true; }
   if (method == "fs.readBytes") { *out = readBytes(argsJson); return true; }
   if (method == "fs.remove") { *out = remove(argsJson); return true; }
+  if (method == "fs.exists") { *out = exists(argsJson); return true; }
   if (method.rfind("fs.", 0) == 0) {
     *out = "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 fs 方法：" + jsonEscape(method) + "\"}";
     return true;

@@ -60,6 +60,16 @@ enum FileTransferCapability {
         return ["bytes": data.map { Int($0) }, "size": data.count]
     }
 
+    /// ★★★#1226 `fs.exists`：`{ path }` → `{ exists, isFile, isDir }`
+    ///   为 `getFileSystem` 基础面补最后一个方法；路径非法仍拒（复用 resolve 的沙箱校验）。
+    static func exists(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        let url = try resolve(path)
+        var isDir: ObjCBool = false
+        let ok = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+        return ["exists": ok, "isFile": ok && !isDir.boolValue, "isDir": ok && isDir.boolValue]
+    }
+
     /// `fs.remove`：`{ path }` → `{}`（幂等）
     static func remove(_ args: [String: Any]) throws -> [String: Any] {
         let path = (args["path"] as? String) ?? ""
