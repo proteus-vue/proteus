@@ -402,6 +402,87 @@ inline std::string rmdir(const std::string& argsJson) {
   return "{\"ok\":true,\"data\":{}}";
 }
 
+// ── ★★★#1228 `getFileSystem` **复合面**（copy/rename/getFileInfo）──
+//   ★★沙箱校验：`src/旧` 与 `dest/新` **两端都**过 resolveSandboxPath。
+
+/** `fs.copy`：`{ src, dest }` → `{ dest, size }`。★**不覆盖已存在的 dest**。 */
+inline std::string copy(const std::string& argsJson) {
+  std::string srcRel, destRel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "src", &srcRel) || srcRel.empty() ||
+      !jstr(argsJson.c_str(), argsJson.size(), "dest", &destRel) || destRel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.copy 需要 { src, dest }\"}";
+  }
+  const std::string sAbs = proteus::http::resolveSandboxPath(srcRel);
+  const std::string dAbs = proteus::http::resolveSandboxPath(destRel);
+  if (sAbs.empty() || dAbs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）\"}";
+  }
+  struct stat st{};
+  if (::stat(sAbs.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.copy: 源不是文件\"}";
+  }
+  if (::stat(dAbs.c_str(), &st) == 0) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.copy: 目标已存在（拒绝静默覆盖）\"}";
+  }
+  FILE* in = std::fopen(sAbs.c_str(), "rb");
+  if (in == nullptr) return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.copy 打不开源\"}";
+  FILE* outp = std::fopen(dAbs.c_str(), "wb");
+  if (outp == nullptr) { std::fclose(in); return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.copy 打不开目标（目录不存在？）\"}"; }
+  std::vector<char> buf(64 * 1024);
+  long long total = 0;
+  size_t n;
+  bool okc = true;
+  while ((n = std::fread(buf.data(), 1, buf.size(), in)) > 0) {
+    if (std::fwrite(buf.data(), 1, n, outp) != n) { okc = false; break; }
+    total += static_cast<long long>(n);
+  }
+  std::fclose(in);
+  std::fclose(outp);
+  if (!okc) return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.copy 写入失败\"}";
+  char b[192];
+  std::snprintf(b, sizeof(b), "{\"ok\":true,\"data\":{\"dest\":\"%s\",\"size\":%lld}}", jsonEscape(destRel).c_str(), total);
+  return b;
+}
+
+/** `fs.rename`：`{ oldPath, newPath }` → `{ newPath }`。★目标已存在 ⇒ 报错。 */
+inline std::string renamePath(const std::string& argsJson) {
+  std::string oldRel, newRel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "oldPath", &oldRel) || oldRel.empty() ||
+      !jstr(argsJson.c_str(), argsJson.size(), "newPath", &newRel) || newRel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rename 需要 { oldPath, newPath }\"}";
+  }
+  const std::string oAbs = proteus::http::resolveSandboxPath(oldRel);
+  const std::string nAbs = proteus::http::resolveSandboxPath(newRel);
+  if (oAbs.empty() || nAbs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）\"}";
+  }
+  struct stat st{};
+  if (::stat(oAbs.c_str(), &st) != 0) return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rename: 源不存在\"}";
+  if (::stat(nAbs.c_str(), &st) == 0) return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rename: 目标已存在\"}";
+  if (::rename(oAbs.c_str(), nAbs.c_str()) != 0) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rename 失败\"}";
+  }
+  return "{\"ok\":true,\"data\":{\"newPath\":\"" + jsonEscape(newRel) + "\"}}";
+}
+
+/** `fs.getFileInfo`：`{ path }` → `{ size, digest, digestSupported }`。
+ *  ★★**本端不做摘要**：runtime 侧无 sha256 实现，且本仓对第三方依赖克制
+ *    （#1204）⇒ 回 digest="" + digestSupported:false。**不拿假摘要冒充**。
+ *  ★要校验摘要请用 `fs.readBytes` + JS 侧计算，或在宿主侧补 sha256（独立批次）。 */
+inline std::string getFileInfo(const std::string& argsJson) {
+  std::string abs, err;
+  if (!resolveOrErr(argsJson, "fs.getFileInfo", abs, err)) return err;
+  struct stat st{};
+  if (::stat(abs.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.getFileInfo: 不是文件\"}";
+  }
+  char b[192];
+  std::snprintf(b, sizeof(b),
+                "{\"ok\":true,\"data\":{\"size\":%lld,\"digest\":\"\",\"digestSupported\":false}}",
+                static_cast<long long>(st.st_size));
+  return b;
+}
+
 /** 方法分派：命中 `fs.*` 返回 true（结果写进 `out`） */
 inline bool dispatch(const std::string& method, const std::string& argsJson, std::string* out) {
   if (method == "fs.writeBytes") { *out = writeBytes(argsJson); return true; }
@@ -412,6 +493,9 @@ inline bool dispatch(const std::string& method, const std::string& argsJson, std
   if (method == "fs.readdir") { *out = readdir(argsJson); return true; }
   if (method == "fs.mkdir") { *out = mkdir(argsJson); return true; }
   if (method == "fs.rmdir") { *out = rmdir(argsJson); return true; }
+  if (method == "fs.copy") { *out = copy(argsJson); return true; }
+  if (method == "fs.rename") { *out = renamePath(argsJson); return true; }
+  if (method == "fs.getFileInfo") { *out = getFileInfo(argsJson); return true; }
   if (method.rfind("fs.", 0) == 0) {
     *out = "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 fs 方法：" + jsonEscape(method) + "\"}";
     return true;

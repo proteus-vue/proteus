@@ -207,6 +207,69 @@ public final class FileTransferCapability {
         if (!f.delete()) throw new IOException("fs.rmdir: 删不掉目录 " + f.getName());
     }
 
+    // ── ★★★#1228 `getFileSystem` **复合面**（copyFile/rename/getFileInfo）──
+    //   ★★沙箱校验：`src` 与 `dest` **两端都**过 `resolve()`——只校验一端等于
+    //     允许把沙箱外的文件拷进来 / 把沙箱内的文件拷出去。
+
+    /** `fs.copy`：`{ src, dest }` → `{ dest, size }`。★**不覆盖已存在的 dest**（报错——静默覆盖 = 丢数据）。 */
+    public static JSONObject copy(Context ctx, JSONObject args) throws Exception {
+        String src = args.optString("src", "");
+        String dest = args.optString("dest", "");
+        File s = resolve(ctx, src);
+        File d = resolve(ctx, dest);
+        if (!s.isFile()) throw new IOException("fs.copy: 源不是文件 " + src);
+        if (d.exists()) throw new IOException("fs.copy: 目标已存在 " + dest + "（拒绝静默覆盖）");
+        File parent = d.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IOException("fs.copy: 建目标目录失败");
+        java.nio.file.Files.copy(s.toPath(), d.toPath(), java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+        JSONObject o = new JSONObject();
+        o.put("dest", dest);
+        o.put("size", d.length());
+        return o;
+    }
+
+    /** `fs.rename`：`{ oldPath, newPath }` → `{ newPath }`。★目标已存在 ⇒ 报错（同 copy）。 */
+    public static JSONObject rename(Context ctx, JSONObject args) throws Exception {
+        String oldPath = args.optString("oldPath", "");
+        String newPath = args.optString("newPath", "");
+        File s = resolve(ctx, oldPath);
+        File d = resolve(ctx, newPath);
+        if (!s.exists()) throw new IOException("fs.rename: 源不存在 " + oldPath);
+        if (d.exists()) throw new IOException("fs.rename: 目标已存在 " + newPath);
+        if (!s.renameTo(d)) throw new IOException("fs.rename 失败：" + oldPath + " → " + newPath);
+        JSONObject o = new JSONObject();
+        o.put("newPath", newPath);
+        return o;
+    }
+
+    /** `fs.getFileInfo`：`{ path, digestAlgorithm? }` → `{ size, digest }`。
+     *  ★`digestAlgorithm` 默认 `sha256`；`md5` / `sha1` 也认。不认识的算法 ⇒ **报错**（不静默假设为 md5）。
+     *  ★超大文件边读边算（不把整文件读进内存）——与 `fs.readBytes` 的 64 MiB 上限无关。 */
+    public static JSONObject getFileInfo(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        String alg = args.optString("digestAlgorithm", "sha256").trim().toLowerCase();
+        String jcaName;
+        if ("sha256".equals(alg)) jcaName = "SHA-256";
+        else if ("sha1".equals(alg)) jcaName = "SHA-1";
+        else if ("md5".equals(alg)) jcaName = "MD5";
+        else throw new IllegalArgumentException("fs.getFileInfo: 不支持的 digestAlgorithm「" + alg + "」（仅 sha256/sha1/md5）");
+        File f = resolve(ctx, path);
+        if (!f.isFile()) throw new IOException("fs.getFileInfo: 不是文件 " + path);
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance(jcaName);
+        long total = 0;
+        byte[] buf = new byte[64 * 1024];
+        try (FileInputStream in = new FileInputStream(f)) {
+            int n;
+            while ((n = in.read(buf)) > 0) { md.update(buf, 0, n); total += n; }
+        }
+        StringBuilder hex = new StringBuilder();
+        for (byte b : md.digest()) hex.append(String.format("%02x", b & 0xFF));
+        JSONObject o = new JSONObject();
+        o.put("size", total);
+        o.put("digest", hex.toString());
+        return o;
+    }
+
     /** 诊断读数：沙箱根（判据确认"写到了哪里"）。 */
     public static String sandboxRoot(Context ctx) {
         return ctx.getFilesDir().getAbsolutePath();

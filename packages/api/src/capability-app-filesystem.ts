@@ -26,6 +26,8 @@ export const APP_FS_BASE_METHODS = [
   'readFile', 'writeFile', 'remove', 'exists',
   // ★★★#1227 目录面
   'stat', 'readdir', 'mkdir', 'rmdir',
+  // ★★★#1228 复合面
+  'copyFile', 'rename', 'getFileInfo',
 ] as const
 
 /**
@@ -34,9 +36,6 @@ export const APP_FS_BASE_METHODS = [
  */
 export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {
   appendFile: '宿主无 append 语义（读全文拼接再整写会在并发下丢数据）',
-  copyFile: '宿主缺 fs.copy',
-  rename: '宿主缺 fs.rename',
-  getFileInfo: '宿主缺 fs.stat（摘要需 size + digest）',
   saveFile: '宿主无"临时文件→持久目录"概念',
   getSavedFileList: '宿主无保存文件索引',
   removeSavedFile: '宿主无保存文件索引',
@@ -59,7 +58,8 @@ export function appFileSystemAvailable(): boolean {
     const r = invokeHost(m, { probe: true })
     if (!r.ok && r.missing) return false
   }
-  for (const m of ['fs.exists', 'fs.stat', 'fs.readdir', 'fs.mkdir', 'fs.rmdir']) {
+  for (const m of ['fs.exists', 'fs.stat', 'fs.readdir', 'fs.mkdir', 'fs.rmdir',
+                   'fs.copy', 'fs.rename', 'fs.getFileInfo']) {
     const r = invokeHost(m, { probe: true })
     if (!r.ok && r.missing) return false
   }
@@ -177,6 +177,27 @@ export function createAppFileSystem(): AppFileSystemBridge {
       const r = invokeHost('fs.rmdir', { path, ...(recursive === undefined ? {} : { recursive }) })
       if (!r.ok) return Promise.reject(new Error(`file-system.failed: rmdir ${path}：宿主拒绝`))
       return Promise.resolve()
+    },
+    // ── ★★★#1228 复合面（真实可用）──
+    copyFile: (src: string, dest: string) => {
+      const r = invokeHost('fs.copy', { src, dest })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: copy ${src} → ${dest}：宿主拒绝`))
+      return Promise.resolve()
+    },
+    rename: (oldPath: string, newPath: string) => {
+      const r = invokeHost('fs.rename', { oldPath, newPath })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: rename ${oldPath} → ${newPath}：宿主拒绝`))
+      return Promise.resolve()
+    },
+    getFileInfo: (path: string, digestAlgorithm?: string) => {
+      const r = invokeHost('fs.getFileInfo', { path, ...(digestAlgorithm === undefined ? {} : { digestAlgorithm }) })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: getFileInfo ${path}：宿主拒绝`))
+      const d = (r.data ?? {}) as { size?: unknown; digest?: unknown; digestSupported?: unknown }
+      // ★digestSupported 如果宿主明确说 false（鸿蒙现状）⇒ digest 为空字符串，不假造
+      return Promise.resolve({
+        size: Number(d.size ?? 0),
+        digest: typeof d.digest === 'string' ? d.digest : '',
+      })
     },
   } as FileSystemBridge
 

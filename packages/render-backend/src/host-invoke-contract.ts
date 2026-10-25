@@ -85,6 +85,10 @@ export const HOST_CAPABILITY_METHODS = [
   'fs.readdir',
   'fs.mkdir',
   'fs.rmdir',
+  // ★★★#1228 复合面
+  'fs.copy',
+  'fs.rename',
+  'fs.getFileInfo',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

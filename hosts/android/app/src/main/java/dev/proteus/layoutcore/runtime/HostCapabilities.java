@@ -191,6 +191,13 @@ public final class HostCapabilities {
                 return ok(FileTransferCapability.mkdir(activity, args));
             case "fs.rmdir":
                 return ok(FileTransferCapability.rmdir(activity, args));
+            // ★★★#1228 getFileSystem **复合面**
+            case "fs.copy":
+                return ok(FileTransferCapability.copy(activity, args));
+            case "fs.rename":
+                return ok(FileTransferCapability.rename(activity, args));
+            case "fs.getFileInfo":
+                return ok(FileTransferCapability.getFileInfo(activity, args));
             // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
             case "log":
                 return ok(dev.proteus.layoutcore.runtime.LogCapability.write(args));

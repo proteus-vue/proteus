@@ -12,6 +12,7 @@
 //   · 覆盖写，非原子替换——中断可能留半截文件（已在能力页端边界写明）。
 
 import Foundation
+import CryptoKit   // ★#1228 getFileInfo 的摘要（iOS 13+ 系统框架，不需 bridging header）
 
 enum FileTransferCapability {
 
@@ -138,6 +139,75 @@ enum FileTransferCapability {
         }
         try FileManager.default.removeItem(at: url)
         return [:]
+    }
+
+    // ── ★★★#1228 `getFileSystem` **复合面**（copyFile/rename/getFileInfo）──
+    //   ★★沙箱校验：`src` 与 `dest` **两端都**过 `resolve()`。
+
+    /// `fs.copy`：`{ src, dest }` → `{ dest, size }`。★**不覆盖已存在的 dest**。
+    static func copy(_ args: [String: Any]) throws -> [String: Any] {
+        let src = (args["src"] as? String) ?? ""
+        let dest = (args["dest"] as? String) ?? ""
+        let s = try resolve(src)
+        let d = try resolve(dest)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: s.path, isDirectory: &isDir), !isDir.boolValue else {
+            throw WsError.invalid("fs.copy: 源不是文件 \(src)")
+        }
+        guard !FileManager.default.fileExists(atPath: d.path) else {
+            throw WsError.invalid("fs.copy: 目标已存在 \(dest)（拒绝静默覆盖）")
+        }
+        try FileManager.default.createDirectory(at: d.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: s, to: d)
+        let size = (try? d.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        return ["dest": dest, "size": size]
+    }
+
+    /// `fs.rename`：`{ oldPath, newPath }` → `{ newPath }`。★目标已存在 ⇒ 报错。
+    static func rename(_ args: [String: Any]) throws -> [String: Any] {
+        let oldPath = (args["oldPath"] as? String) ?? ""
+        let newPath = (args["newPath"] as? String) ?? ""
+        let s = try resolve(oldPath)
+        let d = try resolve(newPath)
+        guard FileManager.default.fileExists(atPath: s.path) else {
+            throw WsError.invalid("fs.rename: 源不存在 \(oldPath)")
+        }
+        guard !FileManager.default.fileExists(atPath: d.path) else {
+            throw WsError.invalid("fs.rename: 目标已存在 \(newPath)")
+        }
+        try FileManager.default.moveItem(at: s, to: d)
+        return ["newPath": newPath]
+    }
+
+    /// `fs.getFileInfo`：`{ path, digestAlgorithm? }` → `{ size, digest }`。
+    ///   ★默认 sha256；不认识的算法 ⇒ **报错**（不静默当 md5）。边读边算（不全读入内存）。
+    static func getFileInfo(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        let alg = ((args["digestAlgorithm"] as? String) ?? "sha256").lowercased()
+        let url = try resolve(path)
+        guard let h = try? FileHandle(forReadingFrom: url) else {
+            throw WsError.invalid("fs.getFileInfo: 不是文件 \(path)")
+        }
+        defer { try? h.close() }
+        var total = 0
+        var digest = ""
+        switch alg {
+        case "sha256":
+            var hasher = SHA256()
+            while let chunk = try h.read(upToCount: 64 * 1024), !chunk.isEmpty { total += chunk.count; hasher.update(data: chunk) }
+            digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        case "sha1":
+            var hasher = Insecure.SHA1()
+            while let chunk = try h.read(upToCount: 64 * 1024), !chunk.isEmpty { total += chunk.count; hasher.update(data: chunk) }
+            digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        case "md5":
+            var hasher = Insecure.MD5()
+            while let chunk = try h.read(upToCount: 64 * 1024), !chunk.isEmpty { total += chunk.count; hasher.update(data: chunk) }
+            digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        default:
+            throw WsError.invalid("fs.getFileInfo: 不支持的 digestAlgorithm「\(alg)」（仅 sha256/sha1/md5）")
+        }
+        return ["size": total, "digest": digest]
     }
 
     /// `fs.remove`：`{ path }` → `{}`（幂等）

@@ -197,6 +197,10 @@ final class HostCapabilities: NSObject {
                     case "fs.readdir": return ok(try FileTransferCapability.readdir(args))
                     case "fs.mkdir": return ok(try FileTransferCapability.mkdir(args))
                     case "fs.rmdir": return ok(try FileTransferCapability.rmdir(args))
+                    // ★★★#1228 getFileSystem **复合面**
+                    case "fs.copy": return ok(try FileTransferCapability.copy(args))
+                    case "fs.rename": return ok(try FileTransferCapability.rename(args))
+                    case "fs.getFileInfo": return ok(try FileTransferCapability.getFileInfo(args))
                     default: return miss("未实现的 fs 方法：\(method)")
                     }
                 } catch let e as WsError {
