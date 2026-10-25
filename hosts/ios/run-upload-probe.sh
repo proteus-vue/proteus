@@ -63,6 +63,30 @@ add(p.first_ok === true, `首字节正确（实得 ${p.server_first}）`)
 add(p.last_ok === true, `末字节正确（实得 ${p.server_last}）`)
 add(p.fields_ok === true, `表单字段正确（实得 ${JSON.stringify(p.server_fields)}）`)
 
+// ★★★#1252：**内存有界**（S3 的核心性质）——峰值块必须远小于文件，且与文件大小无关。
+//   ★此前 iOS 侧**没有这条判据**（Android 版有 `peak_chunk_bytes <= 128 KiB`）。
+//     而那正是"上传是不是真流式"的唯一硬证据：整包进内存时峰值块会随文件线性增长。
+//   ★读数来自 `UploadBackpressure`（#1252 新增）——它此前**一个读数都没有**，
+//     审计给 upload 判"背压 ✅"命中的是**下载流**的常量（交叉污染）。
+const bp = r.host_upload_backpressure
+if (bp && typeof bp === 'object') {
+  add(Number(bp.peak_chunk_bytes) > 0, `宿主记账峰值块 > 0（实得 ${bp.peak_chunk_bytes}B）`)
+  add(
+    Number(bp.peak_chunk_bytes) <= 128 * 1024,
+    `★峰值块 ${bp.peak_chunk_bytes}B ≤ 128 KiB（与 ${sizeMiB} MiB 文件**无关**）`,
+  )
+  add(
+    Number(bp.chunks) > 1,
+    `★边读边写（${bp.chunks} 块 ⇒ 不是整包一次写）`,
+  )
+  // ★慢写次数**不判红**：它是"磁盘 I/O 压力"的读数，不是正确性判据
+  //   （慢写 > 0 只说明当时磁盘忙，不影响传输正确性）。打印出来供诊断。
+  console.log(`  ℹ 拼装侧慢写：${bp.slow_writes} 次 / ${bp.slow_write_ms}ms（读数，不判红）`)
+} else {
+  // ★缺读数 ⇒ 明确报红，不静默跳过（否则"没有读数"会被当成"通过"）
+  add(false, '★报告缺 host_upload_backpressure（上传背压读数未被采集）')
+}
+
 let bad = 0
 for (const [ok, msg] of chk) { console.log(`  ${ok ? '✅' : '✗'} ${msg}`); if (!ok) bad++ }
 console.log(`\n  读数：${JSON.stringify(p).slice(0, 600)}`)

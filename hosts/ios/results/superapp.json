@@ -1,5 +1,5 @@
 {
-  "apply_ops_host_ms" : 0.0010728836059570312,
+  "apply_ops_host_ms" : 0.0029802322387695312,
   "capture_probe" : "{\"channel\":true,\"raw\":\"{\\\"data\\\":{\\\"pipSupported\\\":false,\\\"recording\\\":false,\\\"recordingSupported\\\":true,\\\"userCaptureSupported\\\":true},\\\"ok\\\":true}\",\"recording\":\"off\",\"pip\":\"unsupported\",\"done\":true}",
   "cross_check_ok" : true,
   "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
@@ -29,10 +29,10 @@
     "total_ms" : -1
   },
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"anim_hook_missing\":0,\"mount_calls\":1,\"visible_calls\":1,\"destroy_calls\":0,\"rect_calls\":0,\"shared_calls\":0,\"content_node_total\":73,\"screens\":[{\"rootNodeId\":100,\"screenId\":\"index#1\",\"visible\":true}],\"anim_completed\":0,\"anim_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"live_screens\":1},\"ok\":true}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"anim_hook_missing\":0,\"shared_calls\":0,\"anim_calls\":0,\"content_node_total\":73,\"rect_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"visible_calls\":1,\"mount_calls\":1,\"anim_completed\":0,\"live_screens\":1,\"destroy_calls\":0,\"screens\":[{\"screenId\":\"index#1\",\"rootNodeId\":100,\"visible\":true}]}}",
   "host_upload_backpressure" : {
-    "chunks" : 0,
-    "peak_chunk_bytes" : 0,
+    "chunks" : 256,
+    "peak_chunk_bytes" : 16384,
     "slow_write_ms" : 0,
     "slow_writes" : 0
   },
@@ -46,17 +46,17 @@
   "isect_register" : "{\"ok\":true}",
   "isect_retick" : "0",
   "jsTasks" : {
-    "avgMs" : 7.0714285714285712,
+    "avgMs" : 6.0666666666666664,
     "enabled" : true,
     "long" : 0,
-    "maxMs" : 37,
+    "maxMs" : 36,
     "recent" : [
 
     ],
     "recentCount" : 0,
     "recentP95Ms" : 0,
     "thresholdMs" : 50,
-    "total" : 14
+    "total" : 15
   },
   "kernel_rect" : {
     "baseline" : 13.330078125,
@@ -69,15 +69,15 @@
     "x" : 330,
     "y" : 239
   },
-  "mount_anim_ms" : 0.067949295043945312,
-  "mount_emit_ms" : 12.043952941894531,
-  "mount_flat_ms" : 0.51593780517578125,
-  "mount_glass_ms" : 0.011920928955078125,
+  "mount_anim_ms" : 0.055074691772460938,
+  "mount_emit_ms" : 12.253999710083008,
+  "mount_flat_ms" : 0.52297115325927734,
+  "mount_glass_ms" : 0.012993812561035156,
   "mount_history" : [
     {
-      "anim_ms" : 0.067949295043945312,
-      "emit_ms" : 12.043952941894531,
-      "flat_ms" : 0.51593780517578125,
+      "anim_ms" : 0.055074691772460938,
+      "emit_ms" : 12.253999710083008,
+      "flat_ms" : 0.52297115325927734,
       "glass_blur_build_ms" : -1,
       "glass_blur_ms" : -1,
       "glass_blur_radius_px" : -1,
@@ -87,34 +87,34 @@
       "glass_hide_ms" : -1,
       "glass_install_ms" : -1,
       "glass_metal_ms" : -1,
-      "glass_ms" : 0.011920928955078125,
+      "glass_ms" : 0.012993812561035156,
       "glass_px_per_pt" : -1,
       "glass_raster_ms" : -1,
       "glass_total_ms" : -1,
-      "host_ms" : 30.430078506469727,
-      "layers_ms" : 11.366009712219238,
-      "layout_ms" : 0.25701522827148438,
-      "measure_ms" : 10.133981704711914,
-      "pin_ms" : 0.016093254089355469,
-      "post_ms" : 0.16200542449951172,
-      "rects_ms" : 0.13303756713867188,
+      "host_ms" : 29.808998107910156,
+      "layers_ms" : 11.579036712646484,
+      "layout_ms" : 0.2689361572265625,
+      "measure_ms" : 8.9880228042602539,
+      "pin_ms" : 0.016927719116210938,
+      "post_ms" : 0.15199184417724609,
+      "rects_ms" : 0.14901161193847656,
       "sample_ms" : -1,
-      "scroll_ms" : 0.0050067901611328125,
-      "svg_ms" : 0.065088272094726562,
-      "wrap_ms" : 5.9690475463867188
+      "scroll_ms" : 0.0048875808715820312,
+      "svg_ms" : 0.066995620727539062,
+      "wrap_ms" : 6.072998046875
     }
   ],
-  "mount_host_ms" : 30.445098876953125,
-  "mount_layers_ms" : 11.366009712219238,
-  "mount_layout_ms" : 0.25701522827148438,
-  "mount_measure_ms" : 10.133981704711914,
-  "mount_pin_ms" : 0.016093254089355469,
-  "mount_post_ms" : 0.16200542449951172,
-  "mount_rects_ms" : 0.13303756713867188,
+  "mount_host_ms" : 29.825091361999512,
+  "mount_layers_ms" : 11.579036712646484,
+  "mount_layout_ms" : 0.2689361572265625,
+  "mount_measure_ms" : 8.9880228042602539,
+  "mount_pin_ms" : 0.016927719116210938,
+  "mount_post_ms" : 0.15199184417724609,
+  "mount_rects_ms" : 0.14901161193847656,
   "mount_sample_ms" : -1,
-  "mount_scroll_ms" : 0.0050067901611328125,
-  "mount_svg_ms" : 0.065088272094726562,
-  "mount_wrap_ms" : 5.9690475463867188,
+  "mount_scroll_ms" : 0.0048875808715820312,
+  "mount_svg_ms" : 0.066995620727539062,
+  "mount_wrap_ms" : 6.072998046875,
   "ok" : true,
   "pump" : {
     "anim_start_calls" : 0,
@@ -128,7 +128,7 @@
     "running" : false
   },
   "rendered_page" : "index",
-  "run_ts" : 1792914896.8881102,
+  "run_ts" : 1792915548.7492099,
   "scroll_probe" : {
     "after_drag_down_100k" : 9,
     "after_drag_left_100k_x" : 0,
@@ -216,9 +216,9 @@
   "transfer_ok" : false,
   "transfer_probe" : "skipped (PROTEUS_TRANSFER_PROBE_URL 未设置)",
   "upload_base" : "http:\/\/192.168.31.23:8797",
-  "upload_ok" : false,
-  "upload_probe" : "{\"size_mib\":4,\"ok\":false,\"code\":\"\",\"error\":\"fetch.failed: The Internet connection appears to be offline.\"}",
-  "upload_probe_rounds" : 1,
+  "upload_ok" : true,
+  "upload_probe" : "{\"size_mib\":4,\"download_path\":\"download\/1792915548318-download?size=4194304\",\"download_ok\":true,\"upload_status\":200,\"upload_reply\":{\"ok\":true,\"bytes\":4194304,\"filename\":\"1792915548318-download?size=4194304\",\"fields\":{\"tag\":\"probe\"},\"first\":0,\"last\":255,\"sum\":772158,\"sampled\":4194304},\"server_bytes\":4194304,\"server_first\":0,\"server_last\":255,\"server_fields\":{\"tag\":\"probe\"},\"bytes_ok\":true,\"first_ok\":true,\"last_ok\":true,\"fields_ok\":true,\"ok\":true}",
+  "upload_probe_rounds" : 2,
   "ws_ok" : false,
   "ws_probe" : "skipped (PROTEUS_WS_PROBE_URL 未设置)"
 }
