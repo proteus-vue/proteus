@@ -250,7 +250,7 @@ export function createCapabilityHooks(
   }
   const scope = createSubscriptionScope() // ★#1071 订阅回收袋
   const res = makeCapabilityRuntime(opts)   // ★#1094 边界资源账本（G-43；不传 = 旧行为）
-  const fpipe = createFetchPipeline(bridge, { ...opts.fetch, abortable: opts.fetch?.abortable ?? detectRuntime() !== 'mp' })   // ★#1133
+  const fpipe = createFetchPipeline(bridge, { ...opts.fetch, abortable: opts.fetch?.abortable ?? detectRuntime() !== 'mp', resources: res.resources ?? undefined })   // ★#1133 · ★#1243 账本（回收）
 
   // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
   const listeners: Array<(s: SensorSample) => void> = []

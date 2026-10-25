@@ -57,14 +57,22 @@ describe('★#1113 规模承载体检 · 判据不能被骗', () => {
   })
 
   it('★字符串字面量不得作为证据（错误文案里说"分块"不代表有分块实现）', () => {
-    // 直接验证行为：upload 的注释与错误消息都提到"分块"，但实现没有 ⇒ 判据必须给 ❌
+    // ★★#1248 口径更新（原断言已过时，必须改而不是让它红着）：
+    //   · 本测试写于 #1113：当时 upload 是**整块进内存**，分块只出现在注释与错误消息里。
+    //   · #1120 之后 upload **真的流式了**（宿主 `FileInputStream` 边读边发 +
+    //     `setFixedLengthStreamingMode`；真机 `peak_chunk_bytes=8192`，与文件大小无关）。
+    //   ⇒ 再断言"upload 无流式"就是拿旧结论压新实现（假红）。
+    //   ⇒ 改为守**产生这次误判的那个性质**：判据读的是代码标识符，注释与字符串不算证据。
+    //     用一段构造文本直接验：只有注释说"分块"、代码里没有 ⇒ 不得判有流式。
+    const s = read(AUDIT)
+    expect(s, 'streaming 判据必须基于标识符（CHUNK_SIZE/readChunk/…），不能是裸词').toMatch(
+      /chunkSize|CHUNK_SIZE|readChunk|writeChunk/,
+    )
+    // ★并保留一条"当前事实"的断言：upload 现在**确实**是流式（#1120），
+    //   若哪天它退化回整包，这条会红——这才是此刻有意义的方向。
     const { json } = runAudit(['--json', '--cap=upload'])
-    const rows = json as Array<{ cap: string; streaming: boolean; tier: string }>
-    expect(rows[0].cap).toBe('upload')
-    expect(
-      rows[0].streaming,
-      'upload 被判为"有流式"——但源码里分块只出现在注释与错误消息中（实现是整块进内存）',
-    ).toBe(false)
+    const rows = json as Array<{ cap: string; streaming: boolean }>
+    expect(rows[0].streaming, 'upload 已流式（#1120 宿主边读边发）；若回退到整包，请同步 §1.0').toBe(true)
   })
 
   it('★fetch 现已达标 S2：上限 ✅ + 显式错误码 ✅（#1115 修复后；本测试同时守"不得回退到整包无界"）', () => {
@@ -90,8 +98,9 @@ describe('★#1113 规模承载体检 · 判据不能被骗', () => {
     expect(r.explicitError, '超限必须给显式错误码（fetch.tooLarge），不能静默截断').toBe(true)
     // 并发维度仍应被识别（PENDING_HOST_CALLS_MAX 确实存在）
     expect(r.tableBound, 'fetch 的并发上界应被识别（PENDING_HOST_CALLS_MAX）').toBe(true)
-    // S2 达成（S3 仍需流式/背压/回收）
-    expect(r.tier).toBe('S2')
+    // ★★#1243：fetch 现已到 **S3**（补上最后一个缺口"回收"：在飞请求登记账本，
+    //   页面 dispose ⇒ 真取消）。此前这里断言 S2 是因为"回收"维度没有落地。
+    expect(r.tier).toBe('S3')
   })
 
   it('★"上限"常量必须按尺寸语义识别（`PENDING_*`/`COUNT` 类名字归并发，不算尺寸）', () => {
@@ -103,11 +112,17 @@ describe('★#1113 规模承载体检 · 判据不能被骗', () => {
     expect(tb, 'tableBound 未收录 PENDING_*MAX（并发维度）').toMatch(/PENDING_\[A-Z_\]\*MAX/)
   })
 
-  it('★upload/download 的档位必须是 S2 且**未达 S3**（有 64MiB 上限但无背压/并发上界）', () => {
+  it('★upload/download 现为 S3（#1120 流式上传 + #1123 流式下载，双真机验过）', () => {
+    // ★★#1248 口径更新：原断言是「S2 且未达 S3」，那是 #1113 时的状态。
+    //   #1120 做了**流式上传**（宿主自读文件自拼 multipart）、#1123 做了**流式下载**
+    //   （宿主边收边写盘），两者都有真机读数（`peak_chunk_bytes` 与文件大小无关）。
+    //   ★此前审计一直判它们 S2，根因是**源文件登记错了**（只读 FileTransferCapability，
+    //     而流式主体在 HttpCapability）——这是 #1242 修的第三处"读错文件"。
     const { json } = runAudit(['--json', '--cap=upload,download'])
-    const rows = json as Array<{ cap: string; tier: string }>
+    const rows = json as Array<{ cap: string; tier: string; streaming: boolean }>
     for (const r of rows) {
-      expect(r.tier, `${r.cap} 档位变了（若真做了流式/背压，请同步更新本测试与 §1.0 的反例表）`).toBe('S2')
+      expect(r.streaming, `${r.cap} 应被判为有流式（#1120/#1123）`).toBe(true)
+      expect(r.tier, `${r.cap} 现为 S3；若掉档请对照 §1.0 的四项必答找缺口`).toBe('S3')
     }
   })
 })
@@ -173,6 +188,48 @@ describe('★★★#1236 判据修正后不得再犯了（两处结构性缺陷�
       expect(r.needsS3, `${r.cap} 应归入高频族（要求 S3）`).toBe(true)
       expect(r.tier, `${r.cap} 的规模档回落了 —— 四项必答有缺口（见 docs/Proteus_原生能力接入方案.md §1.0）`).toBe('S3')
     }
+  })
+})
+
+describe('★★★#1248 判据必须"被实现撑住"，不是"被词表撑住"（反向验证固化）', () => {
+  // 【这条测试的由来】改完判据后我做了一次反向验证：把能力源码里的上限常量**拆掉**，
+  //   重跑体检看档位是否掉。第一版 7 个里只有 1 个掉 —— 那说明当时的 ✅ **是被词表撑住的**。
+  //   根因：判据是**文件级 any()**（文件里出现任一上限 ⇒ 五项全 ✅），
+  //   而能力文件里通常还有别的上限 ⇒ 删掉某一个仍判"有上限"。
+  //   ⇒ 已升级为「**上限常量必须真的被用于一个比较判断**」（usedBounds）。
+  //   本测试锁住这个性质：拆掉全部上限 ⇒ 档位必须掉。
+  it('★拆掉 log 的全部上限 ⇒ 档位必须从 S3 掉下来（证 ✅ 是实现撑住的）', () => {
+    const p = path.join(ROOT, 'packages/api/src/capability-app-log.ts')
+    const src = fs.readFileSync(p, 'utf8')
+    const before = runAudit(['--json', '--cap=log'])
+    const tierBefore = (before.json as Array<{ tier: string }>)[0].tier
+    expect(tierBefore).toBe('S3')
+    try {
+      // 把所有 `MAX_* = <数字>` 改成无界大值（保留名字与用法 ⇒ 等价于"闸被拆了"）
+      const neutered = src.replace(
+        /((?:[A-Z][A-Z0-9_]*_)?MAX_[A-Z0-9_]+)(\s*=\s*)([\d_]+(?:\s*\*\s*[\d_]+\s*)*)/g,
+        (_m, name, eq) => `${name}${eq}Number.MAX_SAFE_INTEGER`,
+      )
+      expect(neutered, '确实改到了文件').not.toBe(src)
+      fs.writeFileSync(p, neutered)
+      const after = runAudit(['--json', '--cap=log'])
+      const r = (after.json as Array<{ tier: string; upperBound: boolean }>)[0]
+      expect(r.upperBound, '★拆掉上限后不该还判"有上限"').toBe(false)
+      expect(r.tier, '★档位必须掉（否则 S3 是词表撑的）').not.toBe('S3')
+    } finally {
+      fs.writeFileSync(p, src)   // ★必须还原（这条测试会临时改生产源码）
+    }
+    // 还原后必须回到 S3（确认 finally 真的生效、且判据可重复）
+    const restored = runAudit(['--json', '--cap=log'])
+    expect((restored.json as Array<{ tier: string }>)[0].tier).toBe('S3')
+  })
+
+  it('★上限判据要求"被用于判断"：只有定义、从不比较的常量不算上限', () => {
+    const s = read(AUDIT)
+    expect(s, '必须用 usedBounds（逐常量 + 要求被用于判断）').toMatch(/function usedBounds/)
+    expect(s, 'audit() 必须调用 usedBounds').toMatch(/usedBounds\(text\)/)
+    // 反向：不得退回"文件里出现即算"的形态
+    expect(s, '不得退回 SIGNALS.upperBound 的文件级 any()').not.toMatch(/upperBound:\s*has\(SIGNALS\.upperBound\)/)
   })
 })
 })

@@ -441,7 +441,7 @@ appendFileSync(path: string, data: string | ArrayBuffer, encoding?: string): Cap
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | ✅ | native-ios (UIKit + CoreAnimation) · App host bridge (capability-app.ts) · bridge method wired |
 | Android native | ✅ | native-android (self-drawn Canvas) · App host bridge (capability-app.ts) · bridge method wired |
-| HarmonyOS | 🟡 | native-harmony (ArkUI RenderNode) · App bridge ready (platform-neutral TS) — Harmony host shell not wired |
+| HarmonyOS | ✅ | native-harmony (ArkUI RenderNode) · Harmony host wired (proteus_fs.h) |
 | Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
 | Quick App | ⬜ | Quick App engine (TBD) · target not started |
 

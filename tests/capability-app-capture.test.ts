@@ -19,6 +19,8 @@ import {
   installCaptureChannel,
   normalizeCapturePush,
   resetCaptureSubscriptions,
+  CAPTURE_MAX_SUBSCRIPTIONS, CAPTURE_MAX_DISPATCH_PER_PUSH,
+  captureStatsSnapshot, __resetCaptureStats,
 } from '../packages/api/src/capability-app-capture'
 
 /** 装一个假宿主（记录调用 + 回指定 data） */
@@ -188,4 +190,66 @@ describe('★#1083 ③ 通道装配（幂等 + 可观测）', () => {
   it('宿主方法名契约与实现一致（device.capture）', () => {
     expect(APP_CAPTURE_METHODS.capture).toBe('device.capture')
   })
+
+// ══════════════ ★★★#1247 §1.0 四项必答（screen-capture 此前是 S1）══════════════
+
+describe('⑥ 规模承载：screen-capture 的四项必答', () => {
+  beforeEach(() => { resetCaptureSubscriptions(); __resetCaptureStats() })
+
+  it('① 订阅上界：超过 CAPTURE_MAX_SUBSCRIPTIONS ⇒ 显式抛 screen-capture.tooManySubscriptions', async () => {
+    const api = (await import('../packages/api/src/capability-app-capture')).createAppCaptureCapabilities()
+      .getScreenCapture()
+    const offs: Array<() => void> = []
+    for (let i = 0; i < CAPTURE_MAX_SUBSCRIPTIONS; i++) offs.push(api.onRecordingStateChange(() => undefined))
+    let code = ''
+    try {
+      api.onRecordingStateChange(() => undefined)
+    } catch (e) {
+      code = (e as { code?: string }).code ?? ''
+    }
+    expect(code, '★超限必须显式拒绝').toBe('screen-capture.tooManySubscriptions')
+    expect(captureStatsSnapshot().rejectedSubscriptions).toBe(1)
+    expect(captureStatsSnapshot().peakSubscriptions, '峰值被记录').toBe(CAPTURE_MAX_SUBSCRIPTIONS)
+    for (const off of offs) off()
+  })
+
+  it('② 背压·无订阅者：事件来了没人听 ⇒ 计入 pushesUnheard（必须可查）', () => {
+    const fired = dispatchCapturePush({ recording: true })
+    expect(fired, '无订阅者 ⇒ 命中 0').toBe(0)
+    expect(captureStatsSnapshot().pushesUnheard, '★"用户录屏了但没人知道"被计数').toBe(1)
+    expect(captureStatsSnapshot().pushesDispatched, '收到计数 +1').toBe(1)
+  })
+
+  it('③ 背压·单次派发上界：订阅者超过 CAPTURE_MAX_DISPATCH_PER_PUSH ⇒ 截断并计数', async () => {
+    const api = (await import('../packages/api/src/capability-app-capture')).createAppCaptureCapabilities()
+      .getScreenCapture()
+    let calls = 0
+    for (let i = 0; i < CAPTURE_MAX_DISPATCH_PER_PUSH + 5; i++) {
+      api.onUserCapture(() => { calls++ })
+    }
+    dispatchCapturePush({ userCapture: true })
+    expect(calls, '★单次最多派发 CAPTURE_MAX_DISPATCH_PER_PUSH 个').toBe(CAPTURE_MAX_DISPATCH_PER_PUSH)
+    expect(captureStatsSnapshot().dispatchTruncated, '截断被计数').toBe(1)
+  })
+
+  it('④ 非法载荷计入 pushesDropped（"来了多少"与"派发多少"能对上）', () => {
+    __resetCaptureStats()
+    const n = dispatchCapturePush({ notAField: 1 })
+    expect(n, '非法载荷 ⇒ 0').toBe(0)
+    expect(captureStatsSnapshot().pushesDropped, '★丢弃被计数').toBe(1)
+    expect(captureStatsSnapshot().pushesDispatched, '合法派发计数不增加').toBe(0)
+  })
+
+  it('⑤ 回收：取消订阅后计数回落（上界不被假订阅吃掉）', async () => {
+    const api = (await import('../packages/api/src/capability-app-capture')).createAppCaptureCapabilities()
+      .getScreenCapture()
+    const off1 = api.onUserCapture(() => undefined)
+    const off2 = api.onUserCapture(() => undefined)
+    expect(captureStatsSnapshot().userCaptureSubscriptions).toBe(2)
+    off1()
+    expect(captureStatsSnapshot().userCaptureSubscriptions, '★取消即释放').toBe(1)
+    off2()
+    expect(captureStatsSnapshot().userCaptureSubscriptions).toBe(0)
+  })
+})
 })

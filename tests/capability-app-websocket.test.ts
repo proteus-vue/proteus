@@ -24,6 +24,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   createAppWebSocket, dispatchWsPush, installWsChannel, resetWsConnections,
   wsConnectionCount, APP_WS_PUSH_KEY, APP_WS_METHODS,
+  WS_MAX_CONNECTIONS, WS_MAX_SEND_BYTES, WS_MAX_HANDLERS_PER_EVENT,
+  WS_SLOW_DISPATCH_MS, WS_MAX_DISPATCH_PER_PUSH,
+  wsStatsSnapshot, __resetWsStats, __setWsClock,
 } from '../packages/api/src/capability-websocket'
 import { HOST_INVOKE_KEY } from '../packages/api/src/capability-invoke'
 
@@ -48,7 +51,7 @@ function clearHost() {
 }
 
 describe('★#1093 ① 通道契约：open 受理即返 + 事件经壳推', () => {
-  beforeEach(() => { resetWsConnections(); clearHost() })
+  beforeEach(() => { resetWsConnections(); clearHost(); __resetWsStats() })
   afterEach(() => { resetWsConnections(); clearHost() })
 
   it('ws.open 返回 id，且**不等待握手**（open 事件由壳推）', async () => {
@@ -204,6 +207,11 @@ describe('★#1093 ③ 发送与关闭', () => {
 })
 
 describe('★#1093 ④ 通道安装幂等 + 推送载荷容错', () => {
+  // ★★#1244：本块此前**没有** beforeEach/afterEach ⇒ 用例间状态串联（新增的 S3 判据会建 64 条连接、
+  //   累计 sendFailures，导致后面的用例假红）。状态型判据必须自带隔离。
+  beforeEach(() => { resetWsConnections(); clearHost(); __resetWsStats() })
+  afterEach(() => { resetWsConnections(); clearHost(); __setWsClock(null) })
+
   it('installWsChannel 幂等（重复调用不覆盖已有函数）', () => {
     resetWsConnections()
     installWsChannel()
@@ -257,5 +265,82 @@ describe('★#1093 ④ 通道安装幂等 + 推送载荷容错', () => {
     dispatchWsPush({ id: 11, event: 'message', text: 'from-ios' })
     dispatchWsPush({ id: 11, event: 'message', binary: [1, 2] })
     expect(got).toEqual([{ data: 'from-ios' }, { data: [1, 2] }])
+  })
+
+  // ══════════════ ★★★#1244 §1.0 S3 四项必答（ws 此前是 S1）══════════════
+  // ★判据口径与 fetch 一致：不只看"读数存在"，而是**造出条件**后断言读数变了。
+  //   慢分发用**注入时钟**制造（不用真实耗时——本仓红线：禁止任何形式的盲等）。
+
+  it('⑦ 上限·单条发送：超过 WS_MAX_SEND_BYTES ⇒ 经 error 事件回报、不发、连接保留', async () => {
+    installFakeHost((m) => (m === APP_WS_METHODS.open ? { id: 1 } : {}))
+    const ws = await createAppWebSocket()('wss://x.test')
+    const errs: unknown[] = []
+    ws.on('error', (p) => errs.push(p))
+    ws.send('x'.repeat(WS_MAX_SEND_BYTES + 1))
+    expect(errs.length, '★超限经 error 事件回报（send 签名是 void，不能抛）').toBe(1)
+    expect((errs[0] as { tooLarge?: boolean }).tooLarge, '带可辨识标记').toBe(true)
+    expect(wsStatsSnapshot().sendFailures, '发送失败被计数').toBe(1)
+    expect(wsConnectionCount(), '★连接保留（不因单条过大而断）').toBe(1)
+  })
+
+  it('⑧ 背压·慢分发：注入时钟造出 >WS_SLOW_DISPATCH_MS ⇒ 计 slowDispatches', async () => {
+    const fake = installFakeHost((m) => (m === APP_WS_METHODS.open ? { id: 1 } : {}))
+    const ws = await createAppWebSocket()('wss://x.test')
+    ws.on('message', () => undefined)
+    // ★假时钟：每次读 +10ms ⇒ 一次分发必然记到 10ms（> 8ms 阈值），零真实等待
+    let t = 0
+    __setWsClock(() => (t += 10))
+    dispatchWsPush({ id: 1, event: 'message', data: 'x' })
+    __setWsClock(null)
+    const st = wsStatsSnapshot()
+    expect(st.slowDispatches, '★慢分发被计数（ws 的背压形态：宿主线程被占）').toBe(1)
+    expect(st.dispatchMs, '累计耗时也记了').toBeGreaterThanOrEqual(WS_SLOW_DISPATCH_MS)
+    expect(fake.length, '宿主真的被调用过（不是空跑）').toBeGreaterThan(0)
+  })
+
+  it('⑨ 背压·单次分发上界：订阅者超过 WS_MAX_DISPATCH_PER_PUSH ⇒ 截断并计数', async () => {
+    installFakeHost((m) => (m === APP_WS_METHODS.open ? { id: 1 } : {}))
+    const ws = await createAppWebSocket()('wss://x.test')
+    let calls = 0
+    for (let i = 0; i < WS_MAX_DISPATCH_PER_PUSH + 5; i++) ws.on('message', () => { calls++ })
+    dispatchWsPush({ id: 1, event: 'message', data: 'y' })
+    expect(calls, '★单次最多调 WS_MAX_DISPATCH_PER_PUSH 个（防一条消息卡死整条通道）').toBe(WS_MAX_DISPATCH_PER_PUSH)
+    expect(wsStatsSnapshot().dispatchTruncated, '截断被计数').toBe(1)
+  })
+
+  it('⑩ 并发·连接数上界：超过 WS_MAX_CONNECTIONS ⇒ 显式拒绝 websocket.tooManyConnections', async () => {
+    installFakeHost((m, a) => (m === APP_WS_METHODS.open ? { id: Number((a as { url?: string }).url?.split('/n/')[1] ?? 1) } : {}))
+    const connect = createAppWebSocket()
+    // ★直接用可辨识的 id 批量连（避免 id 重复覆盖 conns 条目）
+    let n = 0
+    installFakeHost((m) => (m === APP_WS_METHODS.open ? { id: ++n } : {}))
+    for (let i = 0; i < WS_MAX_CONNECTIONS; i++) await connect(`wss://x.test/${i}`)
+    expect(wsConnectionCount()).toBe(WS_MAX_CONNECTIONS)
+    await expect(connect('wss://x.test/overflow'), '★超限必须显式拒绝').rejects.toThrow(
+      /websocket\.tooManyConnections/,
+    )
+    expect(wsStatsSnapshot().rejectedConnections).toBe(1)
+    expect(wsStatsSnapshot().peakConnections, '峰值被记录（上界真的被逼近过）').toBe(WS_MAX_CONNECTIONS)
+  })
+
+  it('⑪ 订阅者上界：单事件超过 WS_MAX_HANDLERS_PER_EVENT ⇒ 显式抛（不静默不挂）', async () => {
+    installFakeHost((m) => (m === APP_WS_METHODS.open ? { id: 1 } : {}))
+    const ws = await createAppWebSocket()('wss://x.test')
+    for (let i = 0; i < WS_MAX_HANDLERS_PER_EVENT; i++) ws.on('message', () => undefined)
+    expect(() => ws.on('message', () => undefined), '★超限如实抛（静默不挂会让业务以为订阅成功）').toThrow(
+      /websocket\.tooManyHandlers/,
+    )
+    expect(wsStatsSnapshot().rejectedHandlers).toBe(1)
+  })
+
+  it('⑫ 读数·无主消息计入 messagesDropped（"消息丢了"必须可查）', async () => {
+    installFakeHost(() => ({}))
+    resetWsConnections()
+    __resetWsStats()
+    const hit = dispatchWsPush({ id: 9999, event: 'message', data: 'orphan' })
+    expect(hit, '无订阅者 ⇒ 命中 0').toBe(0)
+    const st = wsStatsSnapshot()
+    expect(st.messagesDropped, '★丢弃被计数').toBe(1)
+    expect(st.messagesReceived, '收到计数也 +1（两者能对上）').toBe(1)
   })
 })

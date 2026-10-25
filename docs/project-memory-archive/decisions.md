@@ -14063,3 +14063,90 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     代码视图边界）搬进 `scripts/studio-panel-probes.mjs`（330 行），门禁回到 **937 行**。
     拆法按职责：probe 只负责"把页面驱动到某状态并取数"，check 只负责断言与文案；
     每个 probe 返回扁平对象，调用方解构接住（判据段零改动）。
+
+1242. **App 能力规模档补齐第二批：upload/download 假红修正 + fetch/ws/socket-task/sensor/screen-capture 五项到 S3**（2026-10-25 · 承接 #1236，用户「好的继续」）:
+
+【① 审计工具的**第三处"读错文件"**（假红）】
+  `upload` / `download` 的流式主体在 `HttpCapability`（宿主直读文件边读边发 / 边收边写盘），
+  而 `CAP_SOURCES` 只登记了 `FileTransferCapability` ⇒ 两个**已在 #1120/#1123 双真机验到 S3** 的能力
+  一直显示"流式 ❌ / 背压 ❌"。★假红与假绿同害：团队会去"修"一个没坏的东西。
+  ⇒ 登记补上 `HttpCapability.java` / `http-capability.swift`。
+  ★同轮还抓到一个**我自己造成的交叉污染**：一度想用同文件里**下载流**的 `STREAM_QUEUE_DEPTH` /
+  `backpressureWaits` 顶替上传的背压证据——那是无效证据（下载的背压不能证明上传有背压）。
+  ⇒ 给上传**自己的**读数 `UploadBackpressure`（见 ③）。
+
+【② 判据的结构性缺陷（本轮共四处，逐个修）】
+  · **上限正则要求乘法表达式** ⇒ 裸数字上限 `SENSOR_MAX_SUBSCRIPTIONS = 64` 完全漏判（假红）。
+  · **显式报错只认 `tooLarge` 一族** ⇒ `tooManySubscriptions` / `tooManyConnections` / `busy` 全漏判。
+  · **背压"有界"一侧不认订阅/句柄上界** ⇒ sensor / ws 的真上界被判成"无背压"。
+  · **tableBound 不认 `MAX_TASKS`** ⇒ socket-task 的句柄上界漏判。
+  ★四处都是**判据的语义假设过窄**，不是实现缺失。每修一处都跑全表，确认除目标项外**零档位变化**。
+
+【③ ★★★ 最严重的一处：判据是**文件级 any()**，不是"这个能力有上界"】
+  **反向验证抓出来的**：把 `LOG_MAX_QUEUE` / `STORAGE_MAX_KEYS` / `FS_MAX_INFLIGHT_OPS` 等常量
+  **逐个删掉**后重跑体检 —— **7 个里 6 个档位完全不变**。
+  根因：原判据只要文件里出现**任一**上限就五项全 ✅，而能力文件里通常还有别的上限。
+  ⇒ 当时的 S3 **不是被实现撑住的，是被词表撑住的**（与 #1109「断言符号存在等于没断言」同族，第 4 次）。
+  **修法**：`upperBound` 升级为 `usedBounds()` —— 要求上限常量**真的被用于一个比较/取限判断**
+  （`x >= NAME` / `NAME > x` / `Math.min(..., NAME)`），并输出 `upperBoundNames` 供人复核。
+  ★反向验证 v2（拆掉**全部**上限）：`log` / `sensor` / `screen-capture` 3/7 掉档；
+    其余 4 项的宿主文件里还有真上限（`MAX_MESSAGE` / `MAX_BODY_BYTES`）⇒ 档位**不该**掉。
+    ★v1 我写成"删一个就得掉"——那是**期望写错**，不是判据失效（已在注释里如实记下这个弯路）。
+  ★已固化：`tests/capability-scale-audit.test.ts` 的「拆掉 log 的全部上限 ⇒ 档位必须掉」。
+
+【④ 五项补到 S3（都是**真缺口**，不是凑指标）】
+  · **fetch**（#1243）：唯一缺口是**回收**——页面卸载时在飞请求**没人取消**。
+    新增 `FetchPipelineOptions.resources`：每个在飞请求登记 `http-request`，正常结算销账，
+    `releaseAll()` ⇒ 真取消。
+    ★★判据 ③ 抓出一个**真 bug**：第一版账本调的是 `abortCtl.abort()`（只置 `signal.aborted`），
+      而管线的**结算判据是 `task.aborted`** ⇒ release 之后 `result` **永不结算**，
+      业务看到的是**永久挂起**（比不取消更糟）。修法：改调任务级 abort + 兜底强制 `finish`。
+      ★这是"断言条目消失"(假绿) → "断言信号置位"(仍不够) → **断言 `result` 被结算**（对）的三级递进。
+    判据 **5 条**（含去重命中不重复登记），破坏性验证 **4/4**。
+  · **websocket**（#1244）：连接表原是**无界 Map**。补 `WS_MAX_CONNECTIONS=64`（超限显式拒，
+    **不淘汰旧连接**——WS 有业务语义，淘汰谁都是错的判断）· `WS_MAX_SEND_BYTES=16MiB`（与宿主同值；
+    ★在 JS 侧也判一次：宿主超限会用 1009 **关整条连接**，而业务只是"这条太大"）·
+    `WS_MAX_HANDLERS_PER_EVENT=128` · `WS_MAX_DISPATCH_PER_PUSH=64`（N 个慢订阅者串行会占住宿主线程）·
+    慢分发计数（**可注入时钟** `__setWsClock`——判据不许靠真实耗时，本仓禁盲等）。
+    ★★ws 的背压形态与 fetch 不同：fetch 有队列深度，ws 是**壳推同步调进 JS、慢订阅者占住宿主线程**
+      ⇒ 证据是"分发耗时"，不是"队列 + 丢弃"。这一点写在常量注释里，避免下一个人误加 JS 侧队列
+      （加了反而更糟：JS 队列只能缓冲**已经进了 JS 的**消息，而问题恰是"进不来"）。
+    判据 **6 条**，破坏性验证 **6/6**。
+    ★顺带修掉测试结构缺陷：describe ④ 此前**没有** beforeEach/afterEach ⇒ 用例间状态串联。
+  · **socket-task**（#1245）：`pendingSends` 是**无界数组**——弱网/服务端不回握手时业务继续 send
+    ⇒ 无限增长 ⇒ OOM。补 `SOCKET_TASK_MAX_PENDING_SENDS=1024`（**丢最旧 + 计数**，不抛：
+    `send` 签名是 void 语义）· `SOCKET_TASK_MAX_MESSAGE_BYTES=16MiB` · `SOCKET_TASK_MAX_TASKS=128`。
+    ★为什么任务上界不能靠 ws 的 `WS_MAX_CONNECTIONS`：`createSocketTask` 是**同步返回句柄 + 异步连接**
+      ⇒ `connecting` 期间**还没有连接**，那条上界管不到它（逐条上限 ≠ 整体上限，#1236 同源）。
+    账本：每任务登记 `socket-task`，release 清积压 + 清订阅 + 关连接。
+    ★判据 ④ 抓出一个小 bug：release 清了数组但没同步模块级读数（`pendingSends` 恒显示旧值）。
+  · **sensor**（#1246）：`sensorSubs` 无界，且**每次采样遍历全部订阅者**（加速度计 ~50Hz）
+    ⇒ 泄漏不是慢死，而是**直接把采样率打下去**。补 `SENSOR_MAX_SUBSCRIPTIONS=64` +
+    分发耗时/丢弃计数 + `clearSensorSubscriptions()`（生产也用得上的整体清空入口）。
+  · **screen-capture**（#1247）：两组订阅集合无界。补 `CAPTURE_MAX_SUBSCRIPTIONS=64` ·
+    `CAPTURE_MAX_DISPATCH_PER_PUSH=32` · 慢派发/截断/无人听 三项计数。
+    ★**派发上界必须 < 订阅上界**（32 < 64）：两个都取 64 时"单次派发上限"**永远不会生效**
+      （订阅数先撞上界）⇒ 这条闸形同虚设。这个坑是判据 ③ 假红时暴露的。
+
+【⑤ 反巨型化：两处超线都**按职责拆文件**，没有压缩历史注释】
+  · `HttpCapability.java` 991 → 我加 27 行破 1000 ⇒ 拆出 `UploadBackpressure.java`
+    （阻塞式背压度量 + `streamBody` 流式请求体）。拆完 973 行。
+    ★`check:android-host-compile` 当场抓到两个真错：漏 `package` 声明（11 个错）、
+      嵌套类可见性不够 ⇒ 那正是零设备编译检查的存在意义（不让编译错留到真机）。
+  · `capability.ts` 1012 基线 → 我的账本透传 +5 行 ⇒ 压成一行（信息零损失），1011 行（比基线少 1）。
+
+【⑥ 决策号】#1239–#1241 = 上一批（storage/log）；本批 #1242–#1247；#1248 给判据升级。
+  ★#1232–#1235 仍是 Studio 会话的号（已在 #1236 记过勘误），本轮未再触碰。
+
+【诚实边界（不粉饰）】
+  ① 全部是**单元判据 + 静态结构证据**，本批**未做真机验证**：改动集中在共享 JS 层（三端同一份）。
+     真机只在需要证明"宿主真的做了什么"时才必要（如 #1225 的 logcat 对拍、#1119 的 peak_chunk_bytes）。
+  ② 配额池/上界的字节数是**调用方声明**的预估（stat size / zip 本体 ×2 / 实际字节）——
+     方向正确（保证并发总和有界），不是精确计量。
+  ③ 审计工具仍是**静态体检**，不能证明真实规模下不崩；它现在只回答
+     "有没有**被真正使用**的上限/背压/账本/并发上界痕迹"。
+  ④ `streaming ❌` 对 ws / socket-task / storage / log / file-system / sensor / screen-capture 是
+     **语义不适用**（这些能力本来就是"单次调用"或"事件推送"，不是流式传输）——不硬凑。
+
+【门禁】check:file-size ✅ · check:content ✅ · check:script-compile ✅ · check:host-invoke-contract ✅
+  · check:android-host-compile ✅ · 定向测试 154 全绿（12 个文件，含 fetch-cancel 回归）

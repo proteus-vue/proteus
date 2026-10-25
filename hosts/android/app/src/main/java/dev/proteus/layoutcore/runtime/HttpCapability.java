@@ -473,36 +473,10 @@ public final class HttpCapability {
             cfg.headers.remove("Content-Type");
             cfg.headers.remove("content-type");
             // ★★#1160：回调式请求体——**边读文件边写**，内存只有缓冲块（与换栈前同语义）
-            cfg.bodyWriter = new HttpTransport.BodyWriter() {
-                @Override public okhttp3.MediaType contentType() {
-                    return cfg.contentType == null ? null : okhttp3.MediaType.parse(cfg.contentType);
-                }
-                @Override public long contentLength() { return total; }
-                @Override public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
-                    sink.write(headNormal);
-                    sink.write(headFile);
-                    // ★★核心：边读文件边写，内存只有缓冲块
-                    java.io.InputStream in = new java.io.FileInputStream(src);
-                    try {
-                        byte[] buf = new byte[STREAM_CHUNK];
-                        int n;
-                        long sent = 0;
-                        while ((n = in.read(buf)) > 0) {
-                            sink.write(buf, 0, n);
-                            sent += n;
-                            stats.sentBytes = sent;
-                            stats.chunks++;
-                            if (n > stats.peakChunkBytes) stats.peakChunkBytes = n;
-                            if (sent > MAX_SAVE_BYTES) throw new java.io.IOException(
-                                    new UploadFileTooLarge(sent).getMessage());
-                        }
-                    } finally {
-                        closeQuietly(in);
-                    }
-                    sink.write(tail);
-                    sink.flush();
-                }
-            };
+            //   ★#1242：实现搬到 `UploadBackpressure.streamBody`（本文件已近硬上限，
+            //     而"宿主边读边发 + 背压记账"是一个内聚职责 ⇒ 整体搬走，不留半段）
+            cfg.bodyWriter = UploadBackpressure.streamBody(
+                    cfg.contentType, total, src, headNormal, headFile, tail, stats, MAX_SAVE_BYTES);
             call = HttpTransport.newCall(cfg);
             registerRequest(f.reqId, call);   // ★#1121：可取消
             resp = HttpTransport.execute(call, cfg.httpDns);   // ★#1169：带 per-call DNS 表
@@ -530,22 +504,30 @@ public final class HttpCapability {
     }
 
     /** 上传记账（判据读它证明"内存只与块大小相关"）。 */
-    static final class UploadStats {
+    public static final class UploadStats {
         volatile long fileBytes = 0;
         volatile long totalBytes = 0;
         volatile long sentBytes = 0;
         volatile int chunks = 0;
         volatile int peakChunkBytes = 0;
+        /**
+         * ★★★#1242：**上传侧阻塞式背压**（§1.0 S3 第 ② 维度）。
+         * 形态与判据见 {@link UploadBackpressure}（单独成类：本文件已近 1000 行硬上限）。
+         * ★为什么不能用同文件的下载流读数顶替：那是**交叉污染**——下载的背压证据不能
+         *   证明上传有背压。上传没有队列也没有丢弃，唯一证据是**单次写入耗时**。
+         */
+        volatile UploadBackpressure backpressure = new UploadBackpressure();
         volatile boolean completed = false;
         volatile String path = null;
         volatile String error = null;
     }
+
     private static UploadStats lastUploadStats = new UploadStats();
     public static UploadStats lastUploadStats() { return lastUploadStats; }
 
     /** 上传文件超限（与下载侧同值）。 */
-    static final class UploadFileTooLarge extends Exception {
-        UploadFileTooLarge(long atLeast) {
+    public static final class UploadFileTooLarge extends Exception {
+        public UploadFileTooLarge(long atLeast) {
             super("fetch.tooLarge: 上传文件超过上限 " + MAX_SAVE_BYTES + "B（" + atLeast + "B）");
         }
     }
@@ -712,7 +694,7 @@ public final class HttpCapability {
      * 流式块大小。★与 {@link #READ_CHUNK} 分开：后者是"从流里读多少"，这里决定"回推给 JS 的粒度"。
      * 取 16 KiB：与 READ_CHUNK 同量级 ⇒ 一次读一块、推一块，不额外攒批（攒批会加延迟）。
      */
-    private static final int STREAM_CHUNK = 16 * 1024;
+    public static final int STREAM_CHUNK = 16 * 1024;
 
     /**
      * ★★★**背压的实现点**：待推队列的深度上限。

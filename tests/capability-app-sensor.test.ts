@@ -9,7 +9,10 @@
 //   ⑤ 三端读数**原样透传**（不做单位换算——Android m/s² / iOS g / 鸿蒙各 SensorId 口径不同）。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { CapError } from '../packages/api/src/capability-types'
-import { APP_DEVICE_METHODS, APP_SENSOR_KEY, createAppDeviceCapabilities } from '../packages/api/src/capability-app-device'
+import {
+  APP_DEVICE_METHODS, APP_SENSOR_KEY, createAppDeviceCapabilities,
+  SENSOR_MAX_SUBSCRIPTIONS, sensorStatsSnapshot, __resetSensorStats, clearSensorSubscriptions,
+} from '../packages/api/src/capability-app-device'
 import { decodeInvokeFrame, encodeResolveFrame } from '../packages/api/src/invoke-wire'
 import { utf8Decode, utf8Encode } from '@proteus-vue/shared'
 import { HOST_INVOKE_BYTES_KEY, HOST_INVOKE_KEY } from '../packages/api/src/capability-invoke'
@@ -147,5 +150,73 @@ describe('④ 诚实降级分档', () => {
     })
     const e = await caps().readSensor('accelerometer').catch((x: CapError) => x)
     expect((e as CapError).code).toBe('sensor.failed')
+  })
+
+// ══════════════ ★★★#1246 §1.0 四项必答（sensor 此前是 S1）══════════════
+})
+describe('⑤ 规模承载：sensor 的四项必答', () => {
+  // ★订阅是**模块级**集合 ⇒ 用例间必须清空（否则前一个用例的 64 个订阅会把后面全部顶到上界）
+  beforeEach(() => { clearSensorSubscriptions(); __resetSensorStats() })
+  /** 走真实壳推通道分发（`__proteusHostSensor`）——与宿主调进来完全同路径 */
+  const push = (p: unknown): unknown =>
+    (globalThis as Record<string, unknown>)[APP_SENSOR_KEY] instanceof Function
+      ? ((globalThis as Record<string, unknown>)[APP_SENSOR_KEY] as (x: unknown) => unknown)(p)
+      : 'channel-missing'
+
+  it('① 订阅上界：超过 SENSOR_MAX_SUBSCRIPTIONS ⇒ 显式抛 sensor.tooManySubscriptions', () => {
+    installBytesHost(() => ({ x: 0, y: 0, z: 0 }))
+    const api = caps()
+    api.subscribeSensor('accelerometer', () => undefined)   // 触发 installSensorChannel
+    const offs: Array<() => void> = []
+    // 已有 1 个 ⇒ 再补到上界
+    for (let i = 1; i < SENSOR_MAX_SUBSCRIPTIONS; i++) {
+      offs.push(api.subscribeSensor('accelerometer', () => undefined))
+    }
+    let code = ''
+    try {
+      api.subscribeSensor('accelerometer', () => undefined)
+    } catch (e) {
+      code = (e as CapError).code
+    }
+    expect(code, '★超限必须显式拒绝（静默不挂会让业务以为订阅成功）').toBe('sensor.tooManySubscriptions')
+    expect(sensorStatsSnapshot().rejectedSubscriptions).toBe(1)
+    expect(sensorStatsSnapshot().peakSubscriptions, '峰值被记录（上界真的被逼近过）').toBe(
+      SENSOR_MAX_SUBSCRIPTIONS,
+    )
+    for (const off of offs) off()
+  })
+
+  it('② 背压：无订阅者的采样计入 samplesDropped（"漏采样"必须可查）', () => {
+    const api = caps()
+    api.subscribeSensor('accelerometer', () => undefined)   // 装通道
+    __resetSensorStats()
+    const n = push({ kind: 'accelerometer', x: 1, y: 2, z: 3, timestamp: 1 })
+    expect(n, '通道存在').toBe('ok')
+    const st = sensorStatsSnapshot()
+    expect(st.samplesDispatched, '有订阅者 ⇒ 计数增加').toBe(1)
+    // ★再推一条**无人订阅的 kind** ⇒ 命中 0 ⇒ 计入丢弃
+    push({ kind: 'gyroscope', x: 1, y: 2, z: 3, timestamp: 2 })
+    expect(sensorStatsSnapshot().samplesDropped, '★无人订阅的采样被计数（漏采样可查）').toBe(1)
+  })
+
+  it('③ 背压：订阅者收到的采样与分发计数一致（不是"计数在涨但没人收到"）', () => {
+    const api = caps()
+    let got = 0
+    const off = api.subscribeSensor('accelerometer', () => { got++ })
+    push({ kind: 'accelerometer', x: 1, y: 2, z: 3, timestamp: 1 })
+    push({ kind: 'accelerometer', x: 2, y: 3, z: 4, timestamp: 2 })
+    expect(got, '★订阅者真的收到 2 条').toBe(2)
+    expect(sensorStatsSnapshot().samplesDispatched).toBeGreaterThanOrEqual(2)
+    off()
+  })
+
+  it('④ 并发：订阅取消后槽位立即释放（否则上界会被假订阅吃掉）', () => {
+    const api = caps()
+    const off1 = api.subscribeSensor('gyroscope', () => undefined)
+    const off2 = api.subscribeSensor('gyroscope', () => undefined)
+    const before = sensorStatsSnapshot().subscriptions
+    off1()
+    expect(sensorStatsSnapshot().subscriptions, '★取消即释放槽位').toBe(before - 1)
+    off2()
   })
 })

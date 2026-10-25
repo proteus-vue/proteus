@@ -99,6 +99,32 @@ export interface FetchPipelineOptions {
    *     管线内部的取消通道不该冒充用户意图。
    */
   abortable?: boolean
+  /**
+   * ★★★#1243：**边界资源账本**（G-43）——每个在飞请求登记一条 `http-request`。
+   *
+   * 【为什么必须有（§1.0 S3 的"回收"维度，fetch 此前唯一缺口）】
+   *   此前 `fetch` 的上限/流式/背压/并发四项都已在 `fetch` 名下有证据，唯独**回收**没有：
+   *   页面卸载时在飞的请求**没人取消** ⇒ 传输继续跑、内存继续涨、结果无人消费。
+   *   `useFetchTask().abort()` 要业务自己记得调——**默认路径没人兜**（违反 G-43.4
+   *   「默认路径框架代管，业务零心智负担」）。
+   *   ⇒ 登记进账本后，页面 scope dispose ⇒ `releaseAll()` ⇒ 逐条 `abort()`（真掐断）。
+   *
+   * 【诚实边界】账本 release 调的是 `task.abort()`——它**尽力**通知宿主（`http.cancel`）；
+   *   老壳不支持 `http.cancel` 时 JS 侧照常 reject 但后端传输不停（见 `attachAbort` 的注释）。
+   *   ★这是能力位差异，不假装已兜住。
+   */
+  resources?: FetchPipelineResources
+}
+
+/** 账本的结构子集（不硬依赖 `capability-resources`——与本仓 `OwnedLike` 同款做法）。 */
+export interface FetchPipelineResources {
+  register(opts: {
+    type: string
+    release: () => void
+    owner?: string
+    byteSize?: number
+    sourceLocation?: string | null
+  }): { id: string; release(): boolean }
 }
 
 /** 任务状态（`FetchTask.state`）。 */
@@ -752,6 +778,34 @@ export function createFetchPipeline(
     const result = new Promise<FetchResult<T>>((r) => (resolveOuter = r))
     let didRun = false
 
+    /**
+     * ★#1243：本任务在账本里的条目（`null` = 未传账本）。
+     * ★为什么放在 fetchTask 里而不是 try/finally：任务的**结算点只有一个**（finish），
+     *   而 abort/成功/失败/超时/去重共享 都会走到它 ⇒ 在这里销账不会漏。
+     */
+    let ledger: { release(): boolean } | null = null
+    /**
+     * ★★#1243（判据 ③ 抓出的真 bug，第一版修错了）：
+     *   第一版这里调的是 `abortCtl.abort()` —— 那只置 `signal.aborted`，
+     *   而管线的**结算判据是 `task.aborted`**（在排队/请求的各检查点读它）。
+     *   ⇒ 账本 release 之后：信号置位了，但 `result` **永不结算**——
+     *     下游不消费 signal 时（绝大多数腿不消费）业务看到的是**永久挂起**，比不取消更糟。
+     *   ⇒ 必须调**任务级** `task.abort()`（它会置 task.aborted + 摘队列 + finish）。
+     *   ★这正是"断言条目消失"(假绿) 与"断言信号置位"(仍不够) 的区别——
+     *     真正要断言的是**`result` 被结算**（见 tests/fetch-request-ledger.test.ts 的 ③）。
+     * ★延迟绑定：`task` 在下面才声明 ⇒ 用一层间接（release 时 task 一定已存在，
+     *   因为 register 发生在同一函数体内、release 最早也要到账本 dispose）。
+     */
+    let abortTask: (() => void) | null = null
+    if (opts.resources) {
+      ledger = opts.resources.register({
+        type: 'http-request',
+        owner: (opts as { owner?: string }).owner,
+        sourceLocation: 'packages/api/src/capability-fetch-pipeline.ts',
+        release: () => { abortTask?.() },
+      })
+    }
+
     const finish = (v: FetchResult<T>): void => {
       state = 'done'
       if (didRun) {
@@ -759,6 +813,8 @@ export function createFetchPipeline(
         running = Math.max(0, running - 1)
         pump()
       }
+      // ★#1243：正常结算也要销账（否则账本会把已完成请求当泄漏，直到页面退出）
+      if (ledger) { ledger.release(); ledger = null }
       resolveOuter(v)
     }
 
@@ -768,6 +824,8 @@ export function createFetchPipeline(
       const shared = inflightMap.get(key)
       if (shared) {
         state = 'running'
+        // ★#1243：去重命中 ⇒ 本任务没有自己的传输 ⇒ **立刻销账**（否则账本会多算一条不存在的请求）
+        if (ledger) { ledger.release(); ledger = null }
         void shared.then((v) => {
           const m = (v as { meta?: FetchMeta }).meta
           state = 'done'
@@ -807,7 +865,7 @@ export function createFetchPipeline(
     queue.push(entry)
     pump()
 
-    return {
+    const taskHandle = {
       id,
       result,
       get state() {
@@ -833,6 +891,30 @@ export function createFetchPipeline(
         abortCtl.abort()
       },
     }
+    /**
+     * ★#1243：账本 release 走**任务级** abort（见上方 void 注释里的 bug 取证）。
+     * ★为什么不在 `abort` 定义处互相引用（② 也没出现）——`abortCtl` 那条路径的
+     *   "在飞不结算"问题依旧：`abort()` 的 ② 分支只置信号，靠**下游**腿自己
+     *   检查 `signal.aborted` 后抛错来结算。对本仓三端腿这是成立的（它们都消费 signal），
+     *   但账本不能赌"下游一定消费"——所以账本这条路径额外保证结算。
+     */
+    abortTask = () => {
+      // ★TS 的窄化会把 `state` 收成 'running' | 'queued'（它看不到 finish 里对 state 的改写）
+      //   ⇒ 用局部快照判断"是否仍未结算"，语义更清楚也避开无意义比较。
+      const wasDone = (state as FetchTaskState) === 'done'
+      if (wasDone) return
+      taskHandle.abort('owner-dropped')
+      // ★兜底：若 abort 只置了信号而没结算（下游不消费 signal 的腿），这里强制结算。
+      //   判据 ③ 正是靠这一条从"永久挂起"变成"如实 fetch.aborted"。
+      if ((state as FetchTaskState) !== 'done') {
+        finish({
+          ok: false,
+          error: { code: 'fetch.aborted', message: '请求已取消（页面/作用域已释放）' } as never,
+          meta: { id, attempts: 0, queuedMs: 0, totalMs: 0, attemptMs: [], deduped: false, priority },
+        })
+      }
+    }
+    return taskHandle
   }
 
   return {

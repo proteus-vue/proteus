@@ -18,7 +18,12 @@
 //   ⑥ `close` 后状态变 closed，后续 `send` reject；
 //   ⑦ 复用底层 ws：**只有一个** ws 连接（不额外开第二条）。
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createAppSocketTask } from '../packages/api/src/capability-socket-task'
+import {
+  createAppSocketTask,
+  SOCKET_TASK_MAX_PENDING_SENDS, SOCKET_TASK_MAX_MESSAGE_BYTES, SOCKET_TASK_MAX_TASKS,
+  socketTaskStats, __resetSocketTaskStats, socketTaskLive, __resetSocketTaskLive,
+} from '../packages/api/src/capability-socket-task'
+import { createCapabilityResourceRegistry } from '../packages/api/src/capability-resources'
 import { createAppWebSocket, dispatchWsPush, resetWsConnections, wsConnectionCount } from '../packages/api/src/capability-websocket'
 import { HOST_INVOKE_KEY } from '../packages/api/src/capability-invoke'
 
@@ -176,5 +181,64 @@ describe('★#1096 ⑤ 复用底层 ws（不额外开连接）', () => {
     expect(wsConnectionCount()).toBe(1)
     dispatchWsPush({ id: 108, event: 'open' })
     expect(task.isConnected()).toBe(true)
+  })
+})
+
+// ══════════════ ★★★#1245 §1.0 四项必答（socket-task 此前无上界）══════════════
+
+describe('⑤ 规模承载：socket-task 的四项必答', () => {
+  // ★读数与存活计数都是**模块级** ⇒ 用例间必须归零（否则前一个用例的 128 个任务会顶到上界）
+  beforeEach(() => { __resetSocketTaskStats(); __resetSocketTaskLive(); resetWsConnections() })
+  it('① 积压上界：连接未建立时狂发 ⇒ 丢最旧 + 计数（原实现是无界数组 ⇒ OOM）', () => {
+    // ★造一个"永远不 open"的 ws 工厂 ⇒ 所有 send 都进 pendingSends
+    const neverOpen = (() => new Promise(() => undefined)) as unknown as ReturnType<typeof createAppWebSocket>
+    const mk = createAppSocketTask(neverOpen)
+    const t = mk('wss://x.test')
+    for (let i = 0; i < SOCKET_TASK_MAX_PENDING_SENDS + 10; i++) void t.send('m' + i)
+    const st = socketTaskStats()
+    expect(st.pendingSends, '★积压被上界钉住').toBe(SOCKET_TASK_MAX_PENDING_SENDS)
+    expect(st.droppedBeforeOpen, '★丢弃了最旧的 10 条并计数').toBe(10)
+    expect(st.peakPendingSends, '峰值 = 上界（真的逼近过）').toBe(SOCKET_TASK_MAX_PENDING_SENDS)
+  })
+
+  it('② 上限·单条：超过 SOCKET_TASK_MAX_MESSAGE_BYTES ⇒ reject socket-task.tooLarge', async () => {
+    const neverOpen = (() => new Promise(() => undefined)) as unknown as ReturnType<typeof createAppWebSocket>
+    const t = createAppSocketTask(neverOpen)('wss://x.test')
+    const e = await t.send('x'.repeat(SOCKET_TASK_MAX_MESSAGE_BYTES + 1)).catch((x: { code?: string }) => x)
+    expect((e as { code?: string }).code, '★超限必须显式报错').toBe('socket-task.tooLarge')
+    expect(socketTaskStats().rejectedTooLarge).toBe(1)
+  })
+
+  it('③ 并发·任务数上界：超过 SOCKET_TASK_MAX_TASKS ⇒ 显式抛 socket-task.tooManyTasks', () => {
+    const neverOpen = (() => new Promise(() => undefined)) as unknown as ReturnType<typeof createAppWebSocket>
+    const mk = createAppSocketTask(neverOpen)
+    const tasks: unknown[] = []
+    for (let i = 0; i < SOCKET_TASK_MAX_TASKS; i++) tasks.push(mk(`wss://x.test/${i}`))
+    expect(socketTaskLive().live).toBe(SOCKET_TASK_MAX_TASKS)
+    let code = ''
+    try {
+      mk('wss://x.test/overflow')
+    } catch (e) {
+      code = (e as { code?: string }).code ?? ''
+    }
+    expect(code, '★超限必须显式拒绝（不淘汰现有连接——那会掐断用户正在用的 socket）').toBe(
+      'socket-task.tooManyTasks',
+    )
+    expect(socketTaskLive().rejected).toBe(1)
+    void tasks
+  })
+
+  it('④ 回收：账本登记任务，release 清积压 + 清订阅', () => {
+    const neverOpen = (() => new Promise(() => undefined)) as unknown as ReturnType<typeof createAppWebSocket>
+    // ★用文件顶部的静态 import（ESM 下没有 require —— 第一版写成 require 直接 module-not-found）
+    const registry = createCapabilityResourceRegistry({ owner: 'page' })
+    const mk = createAppSocketTask(neverOpen, registry, 'page')
+    const t = mk('wss://x.test')
+    void t.send('a')
+    void t.send('b')
+    expect(registry.countsByType()['socket-task'], '★任务已登记为边界资源').toBe(1)
+    registry.releaseAll()
+    expect(registry.size(), '账本归零').toBe(0)
+    expect(socketTaskStats().pendingSends, '★release ⇒ 积压被清空（消息正文不再驻留）').toBe(0)
   })
 })

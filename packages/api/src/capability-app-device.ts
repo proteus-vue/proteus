@@ -205,8 +205,18 @@ export function createAppDeviceCapabilities<E extends Error = Error>(
     stopSensor: (kind: SensorKind) =>
       callAsync<void>(APP_DEVICE_METHODS.sensorStop, { kind }, 'sensor').then(() => undefined),
     subscribeSensor: (kind: SensorKind, cb: (sample: SensorSample) => void): (() => void) => {
+      // ★★★#1246 ②④ 订阅数上界：**每次采样要遍历全部订阅者**（高频能力）⇒
+      //   泄漏不是慢死，而是直接把采样率打下去。超限显式拒（不淘汰别人的订阅）。
+      if (sensorSubs.size >= SENSOR_MAX_SUBSCRIPTIONS) {
+        sensorStats.rejectedSubscriptions++
+        throw new CapError(
+          'sensor.tooManySubscriptions',
+          `传感器订阅已达上界 ${SENSOR_MAX_SUBSCRIPTIONS}（当前 ${sensorSubs.size}）——疑似未 off 订阅`,
+        )
+      }
       const entry = { kind, cb }
       sensorSubs.add(entry)
+      if (sensorSubs.size > sensorStats.peakSubscriptions) sensorStats.peakSubscriptions = sensorSubs.size
       // ★#1094：同上——传感器流也登记（宿主侧在真采样，属于最典型的边界资源）
       let res: CapabilityResource | null = null
       if (resOpts.resources) {
@@ -273,7 +283,7 @@ export function createAppCapabilities<E extends Error = Error>(
     ...createAppElementCapabilities(CapError),   // ★#1081 元素查询（createElementQuery/createIntersection）
     ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
     connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
-    createSocketTask: createAppSocketTask(appWs),   // ★#1096 C28 低层句柄（复用同一 ws 腿）
+    createSocketTask: createAppSocketTask(appWs, resOpts.resources ?? undefined, resOpts.owner),   // ★#1096 C28 低层句柄（复用同一 ws 腿）· ★#1245 透传账本
     ...createAppTransfer(resOpts),   // ★#1095 App 端 upload/download（复用 http.request 字节腿 + 宿主 fs）
     getLocalService: createAppLocalService(resOpts),   // ★#1097 C78 mDNS（NsdManager / NWBrowser）
   }
@@ -433,6 +443,86 @@ function createMediaQueryObserver<E extends Error>(
 
 /** 传感器订阅者（按 kind 分组：同一个采样只分发给对应 kind 的订阅者） */
 const sensorSubs = new Set<{ kind: SensorKind; cb: (s: SensorSample) => void }>()
+
+/* ══════════════ ★★★#1246 §1.0 四项必答（sensor 此前是 S1）══════════════ */
+
+/**
+ * ②④ 传感器**订阅者上界**。
+ *
+ * 【为什么必须有】`sensorSubs` 原来是无界 Set，且每次采样都要遍历**全部**订阅者
+ *   （见 `dispatchSensor`）。页面不 off 订阅 / 组件重复挂载 ⇒
+ *   ① 内存无限涨 ② **每次采样的 CPU 与订阅数成正比**（采样是高频的：加速度计 ~50Hz）
+ *   ⇒ 3 个泄漏页面就能把主线程拖到掉帧。
+ *   ★这是"高频能力"的典型形态：泄漏不是慢死，而是**直接把采样率打下去**。
+ *
+ * 【取值】64：单页面合理的传感器订阅远低于此（同一传感器多处订阅本就该合并）。
+ * 【策略】超限**显式拒绝**（`sensor.tooManySubscriptions`）——不淘汰现有订阅：
+ *   静默停掉别人的传感器订阅 = 业务数据静默缺失（比报错危险）。
+ */
+export const SENSOR_MAX_SUBSCRIPTIONS = 64
+
+/** ① 单条采样载荷上限（字节，序列化后）——超出由宿主拒（防伪造超大载荷） */
+export const SENSOR_MAX_SAMPLE_BYTES = 4096
+
+/** ② 分发耗时超过该毫秒数即记一次慢分发（订阅者多/慢 ⇒ 采样率被打下去） */
+export const SENSOR_SLOW_DISPATCH_MS = 8
+
+/** 规模读数（探针/判据用） */
+export interface SensorStats {
+  /** 当前订阅数 */
+  subscriptions: number
+  /** 历史峰值订阅数 */
+  peakSubscriptions: number
+  /** 因超订阅上界被拒绝的次数 */
+  rejectedSubscriptions: number
+  /** 累计分发的采样条数 */
+  samplesDispatched: number
+  /** 因无订阅者被丢弃的采样条数 */
+  samplesDropped: number
+  /** 慢分发次数（② 背压的核心读数） */
+  slowDispatches: number
+  /** 累计分发耗时（ms） */
+  dispatchMs: number
+}
+
+const sensorStats: SensorStats = {
+  subscriptions: 0,
+  peakSubscriptions: 0,
+  rejectedSubscriptions: 0,
+  samplesDispatched: 0,
+  samplesDropped: 0,
+  slowDispatches: 0,
+  dispatchMs: 0,
+}
+
+/** 读规模读数 */
+export function sensorStatsSnapshot(): SensorStats {
+  return { ...sensorStats, subscriptions: sensorSubs.size }
+}
+
+/**
+ * ★★★#1246 **清空全部传感器订阅**（显式入口，生产也可用）。
+ *
+ * 【为什么需要（不是"只为测试"）】
+ *   `sensorSubs` 是**模块级**集合——订阅者只能靠拿到 off 函数来取消。
+ *   一旦 off 函数丢了（组件卸载路径没保存、热重载、页面对不上号），
+ *   那些订阅就**永久占位**：既占上界配额，又让每次采样多遍历一遍。
+ *   ⇒ 必须有一个"整体清空"的确定性入口（等同 G-43 的 `releaseAll`）。
+ *   ★生产用法：宿主切到后台/用户登出这类"全部作废"的时机。
+ */
+export function clearSensorSubscriptions(): void {
+  sensorSubs.clear()
+}
+
+/** 仅测试用：重置读数 */
+export function __resetSensorStats(): void {
+  sensorStats.peakSubscriptions = 0
+  sensorStats.rejectedSubscriptions = 0
+  sensorStats.samplesDispatched = 0
+  sensorStats.samplesDropped = 0
+  sensorStats.slowDispatches = 0
+  sensorStats.dispatchMs = 0
+}
 let sensorInstalled = false
 
 /** 归一壳推载荷（容忍缺字段：三端读数形状不同，只保证 kind + 存在的分量） */
@@ -465,15 +555,26 @@ function installSensorChannel(): void {
   sensorInstalled = true
   const handler = (payload: unknown): string => {
     const sample = normalizeSensor(payload)
-    if (!sample) return 'bad-payload'
+    // ★#1246 ②：坏载荷计入丢弃（否则"收到多少条"与"分发多少条"对不上）
+    if (!sample) { sensorStats.samplesDropped++; return 'bad-payload' }
+    const t0 = Date.now()
+    let matched = 0
     for (const s of [...sensorSubs]) {
       if (s.kind !== sample.kind) continue
+      matched++
       try {
         s.cb(sample)
       } catch {
         /* 单个订阅者抛错不影响其它订阅者 */
       }
     }
+    // ★#1246 ② 背压：分发耗时（订阅者多/慢 ⇒ 宿主线程被占 ⇒ 采样率被打下去）
+    const elapsed = Date.now() - t0
+    sensorStats.dispatchMs += elapsed
+    if (elapsed >= SENSOR_SLOW_DISPATCH_MS) sensorStats.slowDispatches++
+    // ★#1246 ② 无订阅者 ⇒ 采样白来（计入丢弃；这是"漏采样"的唯一可观测痕迹）
+    if (matched === 0) sensorStats.samplesDropped++
+    else sensorStats.samplesDispatched++
     return 'ok'
   }
   const g = globalThis as Record<string, unknown>
