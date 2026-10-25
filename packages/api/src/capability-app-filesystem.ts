@@ -22,6 +22,7 @@
 //     鸿蒙 `zlib.h` **只有 raw deflate、没有 ZIP 容器解析** ⇒ 该两端宿主未实现 ⇒
 //     `unzip()` 在那两端如实报 `unsupported`（**不影响其余 11 个方法可用**）。
 import { invokeHost } from './capability-invoke'
+import { decodeBytes, encodeString, normalizeEncoding, toArrayBuffer } from './capability-app-fs-encoding'
 import type { FileStat, FileSystemBridge } from './capability-types'
 
 /** 基础面（真实可用）的方法名 */
@@ -35,6 +36,9 @@ export const APP_FS_BASE_METHODS = [
   'unzip',
   // ★★★#1230 保存文件三件套（纯 JS 组合 fs.*，三端一致可用）
   'saveFile', 'getSavedFileList', 'removeSavedFile',
+  // ★★★#1231 Sync 变体 10 个（宿主同步派发 ⇒ 真同步；编码在共享层）
+  'readFileSync', 'writeFileSync', 'existsSync', 'statSync', 'readdirSync',
+  'mkdirSync', 'renameSync', 'unlinkSync', 'copyFileSync', 'appendFileSync',
 ] as const
 
 /**
@@ -42,17 +46,10 @@ export const APP_FS_BASE_METHODS = [
  * ★这张表是"诚实登记"的唯一来源——门禁/文档都读它（不手写第二份清单）。
  */
 export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {
-  appendFile: '宿主无 append 语义（读全文拼接再整写会在并发下丢数据）',
-  readFileSync: '宿主 fs.readBytes 走同步派发，但契约要求返回 string（需先定编码约定）',
-  writeFileSync: '同上（需先定编码约定）',
-  existsSync: '同上',
-  statSync: '宿主有 fs.stat（#1227），缺的是同步返回 string 的编码约定',
-  readdirSync: '宿主有 fs.readdir（#1227），缺的是同步返回 string 的编码约定',
-  mkdirSync: '宿主有 fs.mkdir（#1227），缺的是同步返回 string 的编码约定',
-  renameSync: '宿主有 fs.rename（#1228），缺的是同步返回 string 的编码约定',
-  unlinkSync: '宿主有 fs.remove（幂等），缺的是同步返回 string 的编码约定',
-  copyFileSync: '宿主有 fs.copy（#1228），缺的是同步返回 string 的编码约定',
-  appendFileSync: '宿主无 append 语义',
+  // ★★#1231：10 个 Sync 变体**已全部实现**。仅剩异步 `appendFile`：它的
+  //   "读全文+拼接+整写"在 `await` 边界会被别的写插入 ⇒ 丢数据；
+  //   同一算法在**同步**语境下无并发窗口 ⇒ `appendFileSync` 可以安全实现。
+  appendFile: '存在 `appendFileSync`；异步版的"读全文+拼接+整写"在 await 边界会被别的写插入 ⇒ 丢数据',
 }
 
 /** 宿主是否具备基础面所需的 `fs.*` 四件套 */
@@ -136,6 +133,18 @@ let savedSeq = 0
 type SavedIndex = Record<string, { size: number; createTime: number }>
 
 /** 读索引（文件不存在 / 损坏 ⇒ 空索引——与 getStorage 同委态） */
+/**
+ * 写入数据 → 字节（同步 API 共用）。
+ * ★`ArrayBuffer` ⇒ 直接当字节；`string` ⇒ 按 `encoding`（缺省 utf8）编码。
+ * ★**不静默降级**：编码无法表示该字符串时 `encodeString` 抛错（不截断、不替换）。
+ */
+function dataToBytes(data: string | ArrayBuffer, encoding?: string): number[] {
+  if (typeof data === 'string') return encodeString(data, normalizeEncoding(encoding))
+  const buf = data as ArrayBuffer
+  if (buf && typeof (buf as { byteLength?: unknown }).byteLength === 'number') return Array.from(new Uint8Array(buf))
+  throw new Error('file-system.failed: data 必须是 string 或 ArrayBuffer')
+}
+
 function readSavedIndex(): SavedIndex {
   const r = invokeHost('fs.readBytes', { path: APP_SAVED_INDEX })
   if (!r.ok) return {}
@@ -304,6 +313,71 @@ export function createAppFileSystem(): AppFileSystemBridge {
         delete idx[path]
         if (!writeSavedIndex(idx)) throw new Error('file-system.failed: removeSavedFile 写索引失败')
       }
+    },
+    // ── ★★★#1231 Sync 变体（10）—— 宿主同步派发，编码在共享层 ──
+    readFileSync: (path: string, encoding?: string) => {
+      const r = invokeHost('fs.readBytes', { path })
+      if (!r.ok) throw new Error(`file-system.failed: readFileSync ${path}：宿主拒绝`)
+      const bytes = bytesOf(r.data)
+      // ★★wx 语义：不传 encoding ⇒ **ArrayBuffer**。
+      if (encoding === undefined || encoding === '') return toArrayBuffer(bytes)
+      return decodeBytes(bytes, normalizeEncoding(encoding))
+    },
+    writeFileSync: (path: string, data: string | ArrayBuffer, encoding?: string) => {
+      const r = invokeHost('fs.writeBytes', { path, bytes: dataToBytes(data, encoding) })
+      if (!r.ok) throw new Error(`file-system.failed: writeFileSync ${path}：宿主拒绝`)
+    },
+    existsSync: (path: string) => {
+      const r = invokeHost('fs.exists', { path })
+      if (!r.ok) throw new Error(`file-system.failed: existsSync ${path}：宿主拒绝`)
+      return Boolean((r.data as { exists?: boolean } | null)?.exists)
+    },
+    statSync: (path: string) => {
+      const r = invokeHost('fs.stat', { path })
+      if (!r.ok) throw new Error(`file-system.failed: statSync ${path}：宿主拒绝`)
+      const d = (r.data ?? {}) as Partial<FileStat>
+      return {
+        size: Number(d.size ?? 0),
+        mode: Number(d.mode ?? 0),
+        lastAccessedTime: Number(d.lastAccessedTime ?? 0),
+        lastModifiedTime: Number(d.lastModifiedTime ?? 0),
+        isDirectory: Boolean(d.isDirectory),
+        isFile: Boolean(d.isFile),
+      }
+    },
+    readdirSync: (path: string) => {
+      const r = invokeHost('fs.readdir', { path })
+      if (!r.ok) throw new Error(`file-system.failed: readdirSync ${path}：宿主拒绝`)
+      const d = r.data as { entries?: unknown } | null
+      return Array.isArray(d?.entries) ? (d!.entries as unknown[]).map((x) => String(x)) : []
+    },
+    mkdirSync: (path: string, recursive?: boolean) => {
+      const r = invokeHost('fs.mkdir', { path, ...(recursive === undefined ? {} : { recursive }) })
+      if (!r.ok) throw new Error(`file-system.failed: mkdirSync ${path}：宿主拒绝`)
+    },
+    renameSync: (oldPath: string, newPath: string) => {
+      const r = invokeHost('fs.rename', { oldPath, newPath })
+      if (!r.ok) throw new Error(`file-system.failed: renameSync ${oldPath} → ${newPath}：宿主拒绝`)
+    },
+    unlinkSync: (path: string) => {
+      const r = invokeHost('fs.remove', { path })
+      if (!r.ok) throw new Error(`file-system.failed: unlinkSync ${path}：宿主拒绝`)
+    },
+    copyFileSync: (src: string, dest: string) => {
+      const r = invokeHost('fs.copy', { src, dest })
+      if (!r.ok) throw new Error(`file-system.failed: copyFileSync ${src} → ${dest}：宿主拒绝`)
+    },
+    appendFileSync: (path: string, data: string | ArrayBuffer, encoding?: string) => {
+      // ★★同步语境无并发窗口 ⇒ "读全文 + 拼 + 整写"安全（与异步 appendFile 的差别）。
+      const ex = invokeHost('fs.exists', { path })
+      let prev: number[] = []
+      if (ex.ok && Boolean((ex.data as { exists?: boolean } | null)?.exists)) {
+        const rb = invokeHost('fs.readBytes', { path })
+        if (!rb.ok) throw new Error(`file-system.failed: appendFileSync 读原内容失败 ${path}`)
+        prev = Array.from(bytesOf(rb.data))
+      }
+      const r = invokeHost('fs.writeBytes', { path, bytes: prev.concat(dataToBytes(data, encoding)) })
+      if (!r.ok) throw new Error(`file-system.failed: appendFileSync ${path}：宿主拒绝`)
     },
   } as FileSystemBridge
 

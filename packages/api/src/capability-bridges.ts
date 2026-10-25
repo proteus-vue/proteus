@@ -5,6 +5,7 @@
 //   契约在 capability-types.ts；工厂/Hook 在 capability.ts。★纯机械搬迁，行为零变化。
 import { detectRuntime } from '@proteus-vue/shared'
 import { createAppLifecycleCapabilities, detectAppHost, getHostLifecycleBus, installAppEventSource, installPageEmitBridge, installWebEventSources, installWxAppEventBridge } from './capability-app'
+import { decodeBytes, encodeString } from './capability-app-fs-encoding'   // ★#1231 Sync 编码（三端同一份）
 import { BRIDGE_DECLS } from './bridge-decls/index'
 // ★#1122：Web / MP 的 fetch 腿（同一条 useFetch 的两个平台后端）
 import { webRequest, mpRequest } from './capability-fetch-legs'
@@ -202,14 +203,13 @@ function memoryFileSystem(): FileSystemBridge {
       return asyncOk()
     },
     unzip: () => Promise.reject(new CapError('file-system.unsupported', 'web 内存降级不支持解压')),
-    readFileSync: (path) => {
+    readFileSync: (path, encoding) => {
       const v = mem.get(path)
       if (v === undefined) throw new CapError('file-system.read-failed', `内存文件不存在: ${path}`)
-      return v
+      // ★#1231 wx 语义：不传 encoding ⇒ ArrayBuffer
+      return encoding === undefined || encoding === '' ? Uint8Array.from(encodeString(v, 'utf8')).slice().buffer : v
     },
-    writeFileSync: (path, data) => {
-      mem.set(path, data)
-    },
+    writeFileSync: (path, data) => mem.set(path, typeof data === 'string' ? data : decodeBytes(new Uint8Array(data as ArrayBuffer), 'utf8')),   // ★#1231 ArrayBuffer ⇒ 按 UTF-8 存
     existsSync: (path) => mem.has(path) || isDir(path),
     statSync: (path) => {
       if (!mem.has(path) && !isDir(path)) throw new CapError('file-system.stat-failed', `不存在: ${path}`)
@@ -383,13 +383,14 @@ function wxFileSystem(wx: WxLike): FileSystemBridge {
     getSavedFileList,
     removeSavedFile,
     unzip,
-    readFileSync: (path) => {
+    readFileSync: (path, encoding) => {
       req(fs?.readFileSync, 'readFileSync')
-      return String((fs!.readFileSync as (o: { filePath: string; encoding?: string }) => string | ArrayBuffer)({ filePath: path, encoding: 'utf8' }))
+      // ★#1231 wx 语义：不传 encoding ⇒ ArrayBuffer（透传给平台）
+      return (fs!.readFileSync as (o: { filePath: string; encoding?: string }) => string | ArrayBuffer)(encoding ? { filePath: path, encoding } : { filePath: path })
     },
-    writeFileSync: (path, data) => {
+    writeFileSync: (path, data, encoding) => {
       req(fs?.writeFileSync, 'writeFileSync')
-      ;(fs!.writeFileSync as (o: { filePath: string; data: string; encoding?: string }) => void)({ filePath: path, data, encoding: 'utf8' })
+      ;(fs!.writeFileSync as (o: { filePath: string; data: string | ArrayBuffer; encoding?: string }) => void)(encoding ? { filePath: path, data: data as string | ArrayBuffer, encoding } : { filePath: path, data: data as string | ArrayBuffer })   // ★#1231 ArrayBuffer 直写
     },
     existsSync: (path) => {
       if (!fs?.accessSync) throw new CapError('file-system.unsupported', 'FileSystemManager.accessSync 缺失')
@@ -424,9 +425,9 @@ function wxFileSystem(wx: WxLike): FileSystemBridge {
       req(fs?.copyFileSync, 'copyFileSync')
       ;(fs!.copyFileSync as (x: { srcPath: string; destPath: string }) => void)({ srcPath: src, destPath: dest })
     },
-    appendFileSync: (path, data) => {
+    appendFileSync: (path, data, encoding) => {
       req(fs?.appendFileSync, 'appendFileSync')
-      ;(fs!.appendFileSync as (x: { filePath: string; data: string; encoding?: string }) => void)({ filePath: path, data, encoding: 'utf8' })
+      ;(fs!.appendFileSync as (x: { filePath: string; data: string | ArrayBuffer; encoding?: string }) => void)(encoding ? { filePath: path, data: data as string | ArrayBuffer, encoding } : { filePath: path, data: data as string | ArrayBuffer })
     },
   }
   void prom

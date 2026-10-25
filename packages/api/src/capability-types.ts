@@ -336,8 +336,10 @@ export interface FileSystemBridge {
   /** 解压 */
   unzip(zipPath: string, targetPath: string): Promise<void>
   // —— Sync 变体（对齐官方 *Sync；同步阻塞，仅小文件/启动期用） ——
-  readFileSync(path: string): string
-  writeFileSync(path: string, data: string): void
+  /** ★★★wx 语义：**不传 encoding ⇒ ArrayBuffer**；传了按该编码解码。
+   * 支持 utf8/latin1(binary)/ascii/base64/hex/ucs2 · 写入同理（data 可为 ArrayBuffer）。 */
+  readFileSync(path: string, encoding?: string): string | ArrayBuffer
+  writeFileSync(path: string, data: string | ArrayBuffer, encoding?: string): void
   existsSync(path: string): boolean
   statSync(path: string): FileStat
   readdirSync(path: string): string[]
@@ -345,7 +347,7 @@ export interface FileSystemBridge {
   renameSync(oldPath: string, newPath: string): void
   unlinkSync(path: string): void
   copyFileSync(src: string, dest: string): void
-  appendFileSync(path: string, data: string): void
+  appendFileSync(path: string, data: string | ArrayBuffer, encoding?: string): void
 }
 
 /** 文件/目录信息（wx.Stats 子集） */
