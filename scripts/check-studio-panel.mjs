@@ -403,6 +403,24 @@ const closed = await page.evaluate(() => ({
   path: document.getElementById('codePath')?.textContent?.trim() ?? '',
 }))
 
+// ── ㉔ 沉浸式标题栏（决策 #1219）────────────────────────────────────────────
+// 【为什么不只在配置里改】`titleBarStyle: Overlay` 只是让内容画到窗口顶部；
+//   真正"不打架"还取决于两件外面的事：① 顶栏能拖窗口（`data-tauri-drag-region`）；
+//   ② 给原生红绿灯留出宽度（trafficLightPosition 14 + 52 宽 ⇒ 左内边距 ≥76）。
+//   ★红绿灯的**实际像素位置**在这里测不到（Playwright 里是普通浏览器，没有原生窗口）——
+//     那条只能人眼看，README 里如实写了。
+const titleConf = JSON.parse(fs.readFileSync(path.join(STUDIO, 'tauri.conf.json'), 'utf8')).app.windows[0]
+const titleBar = await page.evaluate(() => {
+  const top = document.querySelector('.top')
+  const brand = document.querySelector('.brand')
+  return {
+    drag: !!top && top.hasAttribute('data-tauri-drag-region'),
+    padLeft: top ? parseFloat(getComputedStyle(top).paddingLeft) : -1,
+    brandX: brand ? Math.round(brand.getBoundingClientRect().x) : -1,
+    height: top ? Math.round(top.getBoundingClientRect().height) : -1,
+  }
+})
+
 // ── ⑬ 真实指针点击 → 落点标记（★修正 B1：原来的判据测的是一条死路）──────────────
 // 【原来的判据错在哪】B1 认为"画布是叠在 HTML 之上的原生 NSView，HTML 收不到点击"，
 //   于是从 `window.__EMIT__` 注入 `canvas-click` 事件 —— 判据绿了，但真实点击根本没这条通路：
@@ -784,6 +802,17 @@ const checks = [
       !undoKept.includes('// edited by gate') &&
       closed.count === tabState.count - 1 &&
       closed.path.endsWith('App.vue'),
+  ],
+  // ㉔ 沉浸式标题栏：配置 Overlay + 顶栏可拖 + 给红绿灯留位
+  [
+    `㉔ 沉浸式标题栏：${titleConf.titleBarStyle}/hiddenTitle=${titleConf.hiddenTitle} · 红绿灯 x=${titleConf.trafficLightPosition?.x} · 顶栏可拖=${titleBar.drag} · 左内边距 ${titleBar.padLeft}px（品牌 x=${titleBar.brandX}）`,
+    titleConf.titleBarStyle === 'Overlay' &&
+      titleConf.hiddenTitle === true &&
+      (titleConf.trafficLightPosition?.x ?? 0) >= 10 &&
+      titleBar.drag &&
+      titleBar.padLeft >= 76 &&
+      titleBar.brandX >= 80 &&
+      titleBar.height === 40,
   ],
   // ㉓ 标签栏在编辑器区内（起点 ≥ 文件树右边界；宽度 == 右栏宽度）
   [

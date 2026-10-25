@@ -66,8 +66,11 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
      grid-template-rows:40px minmax(0,1fr) 24px;
      grid-template-areas:"top top top" "rail main side" "status status status";}
 
-.top{grid-area:top;display:flex;align-items:center;gap:var(--sp3);padding:0 var(--sp4);
-     background:var(--bg-surface);border-bottom:1px solid var(--border-subtle)}
+/* 沉浸式标题栏：左侧 84px 让位给原生红绿灯（14 + 52 + 18 间隙）；
+   `-webkit-app-region: no-drag` 不能用在按钮上——Tauri 只认 data-tauri-drag-region 属性。 */
+.top{grid-area:top;display:flex;align-items:center;gap:var(--sp3);padding:0 var(--sp4) 0 84px;
+     background:var(--bg-surface);border-bottom:1px solid var(--border-subtle);
+     -webkit-user-select:none;user-select:none;cursor:default}
 .brand{font-weight:600;letter-spacing:.2px;font-size:var(--fs-md)}
 .brand span{color:var(--accent)}
 .chip{display:inline-flex;align-items:center;gap:var(--sp1);height:22px;padding:0 9px;

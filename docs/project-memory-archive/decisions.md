@@ -13575,3 +13575,16 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     `.host` 补 `min-height: 0`（纵向 flex 里不补就不滚动）。
   - **破坏性验证**：给 `.tabs` 加 `margin-left: -232px`（模拟跨界）⇒ ㉓ 红（`x=49 < 281`）；还原 ⇒ 36/36。
   - **一般教训**：**布局必须有几何判据**——"功能绿"不代表"长得对"，而人眼第一眼看的恰恰是长得对不对。
+
+1219. **Studio 沉浸式标题栏（macOS Overlay + 原生红绿灯浮在自绘顶栏上）· 判据 ㉔ · 决策**（2026-10-25 · 用户「自定义沉浸式导航栏，不是现在的原生，主流 IDE 的导航栏都是沉浸式的」）:
+  - **做法**（VS Code / Xcode 同款）：`titleBarStyle: Overlay` + `hiddenTitle: true` +
+    `trafficLightPosition {x:14,y:13}` + `acceptFirstMouse: true`。内容画到窗口 y=0，
+    **原生红绿灯保留**（自绘三个圆点会丢系统行为：全屏/缩放/无障碍）。
+  - **代码侧两件约束（少一件就坏）**：① `.top` 左内边距 84px 给红绿灯让位（14+52+18）；
+    ② `data-tauri-drag-region` 只加在顶栏与品牌文字上——芯片/按钮不带 ⇒ 仍可点。
+    ★Tauri 只认该属性，`-webkit-app-region` 无效（Electron 的习惯带不过来）。
+  - **判据 36→37**：㉔ 配置（Overlay / hiddenTitle / 红绿灯 x≥10）+ DOM（可拖属性 / 左内边距 ≥76 /
+    品牌 x≥80 / 顶栏 40px）。
+  - **诚实边界**：红绿灯的**实际像素位置**Playwright 测不到（普通浏览器，没有原生窗口），
+    门禁只保证"留了位、能拖、配置对"，最后一眼要人看；`trafficLightPosition` 的 y 若与系统字号
+    有偏差，改一个数字即可（13 是按 40px 栏高 + 14px 灯高算的）。
