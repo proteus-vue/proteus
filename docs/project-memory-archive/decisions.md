@@ -14390,3 +14390,64 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
       拿它判着色就是假绿（第一版正是这么写的，当场被自己的断言抓出来）。
   - **顺手修掉的 bug**：`open()` 的"内存里已有 state"分支没有登记语言 ⇒ 状态栏会停在上一个文件的类型上
     （判据 ㉝ 第一次跑就暴露了：切到 App.vue 了，chip 还写着 Rust）。
+
+1251. **iOS worker 上界真机通过（第 16 成 / 第 17 拒）——三处"零报错但白跑"的弯路**（2026-10-25 · 承接 #1250，用户「好的继续」）:
+
+【起点】#1250 的诚实边界①写了「iOS 的 `MAX_WORKERS` 仍只有 `swiftc -typecheck` 覆盖，真机未跑」。
+  本轮补上。
+
+【真机结果：通过】
+  新探针 `--worker-bound-probe=`，走**完整 JS 桥**（`useWorker` → `bridge.createWorker` → `invokeHost`），
+  不是直调宿主——因为 #1096 真机抓过"桥把 workerId 丢了导致 post/terminate 断链"这类问题。
+  回执：`1..16` 全部 `ok:true`，第 `17` 起全部
+  `worker.tooManyWorkers: 存活 worker 已达上界 16（当前 16）——疑似未 terminate`。
+  ★判据同时断言"第 16 个成功"与"第 17 个被拒"——只断言后者时，把上界写成 0 也能通过。
+
+【★★★ 三处弯路（全是"命令成功、报告正常、结果不对"）】
+  ① **漏 `--superapp`**：`SuperappProbes.firstArg()` 只在 `SuperappScene` 里被调用，
+     而 `run-selfdraw.sh` 默认构建 **selfdraw** 应用（`SelfDrawSceneDelegate`）——两套宿主**互不相通**。
+     表现：命令成功退出、报告正常落盘、**里面根本没有探针字段**（连跑 3 次才发现报告 14 个键
+     全是布局/动画，没有我的）。⇒ 已写进 `docs/contract-index.md` 第 8 节的**第一条必填项**。
+     ★这与 #1134「探针漏登记 ⇒ 报告永远是旧的」同族：**跑通了 ≠ 跑的是你的东西**。
+  ② **`export { x } from '…'` 不会引入本地绑定**：我写成
+     `import { installWorkerProbe } …; export { appWorkerBoundProbe, … } from …`，
+     而使用处是 `installWorkerProbe(appWorkerBoundProbe)` ⇒ 后者在该模块作用域内**未定义**。
+     ★**tsc 与 esbuild 都不报错**（`export … from` 让这个名字"看起来存在"）——
+       真机表现是 `ReferenceError: Can't find variable: appWorkerBoundProbe`，探针 60s 超时。
+     ⇒ 必须 `import { appWorkerBoundProbe, installWorkerProbe }`。
+     ★教训：**类型检查通过 ≠ 运行时名字存在**；这条只有真机能抓（本仓第 5 次同族）。
+  ③ **新 Swift 文件漏登记编译清单**：`upload-backpressure.swift` 建好后报
+     `cannot find 'UploadBackpressure' in scope`——需要**同时**加进
+     `hosts/ios/check-selfdraw-compile.sh` 与 `hosts/ios/run-selfdraw.sh`（两处）。
+     ★只加一处 = "零设备检查过但构建漏" 或 "构建含但检查漏"，两种都是静默偏差。
+
+【★ 顺带补 iOS 上传背压读数（#1252，抓出一个真缺口 + 一处判据误判）】
+  · **真缺口**：iOS 上传路径**一个背压读数都没有**；而审计给 `upload` 判"背压 ✅"时，
+    命中的是**下载流**的 `backpressureWaits` / `backpressureMs`（`BodyLimitDelegate`）。
+    ★这是**交叉污染**——我在 #1242 批评过自己一次同款错误（那次是 Android 用下载常量顶替上传），
+      这是它的镜像：**同一错误换一端又犯一次**。
+  · **形态差异（写进注释，不粉饰）**：Android 是"边读文件边 `sink.write`"⇒ 慢写 = TCP 发送
+    窗口满 = 真背压；iOS 是"拼临时文件 + 官方 `uploadTask(with:fromFile:)`"⇒
+    **发送侧的背压发生在系统里、本端观测不到**，能观测的是**拼装侧**的磁盘 I/O。
+    ⇒ 指标同为"慢写次数"（`SLOW_WRITE_MS = 4`，与 Android 同值），
+    但**不假装能观测系统发送侧**（那是能力边界，如实登记）。
+  · 读数已接进 upload 探针的 `extraReadings`——此前是 `{ _ in [:] }`（空），
+    "读数写了但没人采集"是同一族缺陷（断言/产出存在 ≠ 被消费）。
+  · 按职责拆出 `hosts/ios/ProteusHost/runtime/upload-backpressure.swift`
+    （`http-capability.swift` 一度 1015 行超 1000 上限）。
+    ★**没有压缩"自定义 InputStream 连试 4 轮全败"那段取证注释**——那正是下一次改动最需要的
+      东西（本仓纪律：不为省行删历史注释）。
+
+【诚实边界（不粉饰）】
+  ① iOS 的**上传流式回归未在真机跑通**：`run-upload-probe.sh` 报
+     `fetch.failed: The Internet connection appears to be offline` ——
+     设备连不上 Mac 的局域网服务（iOS 无 `adb reverse`，需同一网段 + 服务在跑）。
+     ★我的改动只加了计时与记账（`git diff` 只有 6 行，不碰网络逻辑），
+       但这属于**未验证**，不作"无回归"的结论。
+  ② worker 只验"上界会拒"，**未验**"并发 16 个 worker 不崩/不卡"（那要压测）。
+  ③ iOS 探针的 `max` 参数经 `kickFormat` 传成**字符串**（`"16"`），探针内部按 `+1` 比较时
+     多跑了几轮（到 20）——不影响判据（第 16/17 的判定正确），如实记下。
+
+【门禁】check:file-size ✅ · check:contract-index ✅ · host-probe-registry 7/7 ✅
+  · iOS `swiftc -typecheck` ✅ · 两个 shell 脚本 `bash -n` ✅
+  · 真机：`bash hosts/ios/run-selfdraw.sh --superapp --worker-bound-probe=16` → `worker_bound_ok: true`
