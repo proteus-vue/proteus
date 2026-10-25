@@ -19,7 +19,7 @@
 //     否则"红=错误"和"红=字符串"会在同一屏上互相误导。
 //   ★仍然不自己写分词器（G-56.1 红线：编辑器内核只用现成的）。
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorState, type Extension } from '@codemirror/state'
 import {
   EditorView,
@@ -35,6 +35,7 @@ import {
   HighlightStyle,
   StreamLanguage,
   bracketMatching,
+  forceParsing,
   indentOnInput,
   syntaxHighlighting,
 } from '@codemirror/language'
@@ -290,6 +291,36 @@ function mountEditor() {
   view = new EditorView({ state: makeState('', ''), parent: host.value })
 }
 
+/** 把「整篇解析」放到后台时间切片里做完（决策 #1216）。
+ *  ★为什么必须预热：CM 默认只解析**视口附近**，其余交给后台；一旦跳到还没解析的区域，
+ *    它会在那一帧**同步补解析**——文字先出来、颜色晚到。实测（220~8000 行、Playwright、同一份 web-dist）：
+ *      · `.m`（StreamLanguage）220 行：冷跳 **131ms**
+ *      · `.ts` 8000 行：冷跳 **239ms**
+ *      · 热跳（树已就绪）：9–27ms
+ *    用户看到的就是"滚到哪、哪才开始着色"。
+ *  ★为什么用 requestIdleCallback + forceParsing 小配额，而不是一次 `forceParsing(total, 1000)`：
+ *    后者会**阻塞主线程 1 秒**（打字/滚动全卡）；这里每片 8ms、只在空闲时跑，跑完为止。
+ *  ★返回 false 表示配额用完、还没解析完 ⇒ 继续排下一片；返回 true 就停。 */
+const idle = (fn: () => void) =>
+  'requestIdleCallback' in window
+    ? window.requestIdleCallback(fn, { timeout: 250 })
+    : window.setTimeout(fn, 16)
+
+function warmParse(v: EditorView) {
+  const total = v.state.doc.length
+  // 进度落到 DOM 上（`data-parse=warming|full`）：门禁 ㉑ 靠它判断"整篇解析完了没"，
+  // 而不是靠 sleep 猜——判据要能看见被测对象的状态，不能靠等。
+  const mark = (s: string) => host.value?.setAttribute('data-parse', s)
+  mark('warming')
+  const step = () => {
+    if (view !== v) return // 已切到别的文件/视图：这一轮作废，别继续烧 CPU
+    const done = forceParsing(v, total, 8)
+    if (done) mark('full')
+    else idle(step)
+  }
+  idle(step)
+}
+
 async function open(path: string) {
   // ① 离开当前文件前，把未保存的内容收进缓冲（不弹窗、不丢）
   if (dirty.value && cur.value && view) {
@@ -313,6 +344,7 @@ async function open(path: string) {
     lineCount.value = doc ? doc.replace(/\n$/, '').split('\n').length : 0
     await nextTick()
     view?.setState(makeState(doc, path))
+    warmParse(view)
   } catch (e) {
     err.value = String((e as Error)?.message ?? e)
     savedText = ''
@@ -369,6 +401,20 @@ async function boot() {
     files.value[0]!
   await open(pref)
 }
+
+/** 切到代码视图时补两件事（启动阶段面板是 v-show 隐藏的）：
+ *  ① `requestMeasure()`：隐藏时量的宽高是 0，显示后不重量，滚动/视口映射可能是错的；
+ *  ② 继续预热解析（只在可见时做，避免设备投屏时白烧 CPU）。 */
+watch(
+  () => ws.view,
+  (v) => {
+    if (v !== 'code' || !view) return
+    nextTick(() => {
+      view?.requestMeasure()
+      warmParse(view!)
+    })
+  },
+)
 
 onMounted(boot)
 onBeforeUnmount(() => {

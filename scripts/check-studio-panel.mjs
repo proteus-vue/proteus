@@ -122,6 +122,12 @@ const port = server.address().port
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
 
+// ㉑ 用的大文件（4000 次循环 = 8000 行）：只在 localStorage.__BIG__=1 时返回
+const BIG_DOC = Array.from(
+  { length: 4000 },
+  (_, i) => `export const v${i + 1} = ${i + 1} // line ${i + 1}\nconst s${i + 1} = 'text-${i + 1}'`,
+).join('\n')
+
 // 桩：只替换"值怎么送到页面"，其余与真机一致（含 set_canvas_rect 的调用）
 // ★`read_text` 也在这里桩掉：代码视图（G4 第一块砖）启动时会读文件，不桩就会抛"未实现"
 //   ⇒ 被判据 ⑧（无 JS 错误）判红。桩内容故意含 `const`，供判据 ⑪ 断言"面板真的渲染了内容"。
@@ -140,6 +146,9 @@ await page.addInitScript((payload) => {
         //   那样 ⑲ 系列永远测不到东西（假绿）。VUE/RUST/TS 三份都含 `stubLine`，⑪/⑱ 的断言不变。
         if (cmd === 'read_text') {
           const p = String(args?.path ?? '')
+          // ★大文件性能判据（㉑）用：置 localStorage.__BIG__=1 后只给一份 8000 行的 TS
+          if (payload.big && window.localStorage.getItem('__BIG__') === '1')
+            return { text: payload.big, mtime_us: 1700000000000000 }
           const VUE =
             '<template>\n  <div class="card">{{ total }}</div>\n</template>\n\n' +
             '<script setup lang="ts">\nconst stubLine = 1\nconst label = \'ok\'\n' +
@@ -166,13 +175,15 @@ await page.addInitScript((payload) => {
         }
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
         if (cmd === 'list_files')
-          return [
-            'packages/studio/ui/src/App.vue',
-            'packages/studio/ui/src/bridge.ts',
-            'packages/studio/ui/src/styles.css',
-            'packages/studio/src/main.rs',
-            'packages/studio/native/embed_view.m',
-          ]
+          return window.localStorage.getItem('__BIG__') === '1'
+            ? ['packages/studio/big.ts']
+            : [
+                'packages/studio/ui/src/App.vue',
+                'packages/studio/ui/src/bridge.ts',
+                'packages/studio/ui/src/styles.css',
+                'packages/studio/src/main.rs',
+                'packages/studio/native/embed_view.m',
+              ]
         // ★G5 会话状态：用 localStorage 模拟磁盘——这样 reload 后还能验「恢复上次视图」
         if (cmd === 'load_state') return localStorage.getItem('__stub_state__') ?? '{}'
         if (cmd === 'save_state') {
@@ -185,7 +196,7 @@ await page.addInitScript((payload) => {
   }
   // ★这里刻意**不再**桩 `__TAURI__.event.listen`：指针输入已经不在 Tauri 事件里走了
   //   （B1 那条原生 mouseDown 通路是死路，见 README「输入通路」）。留个桩只会让人以为它还在用。
-}, stats)
+}, { ...stats, big: BIG_DOC })
 
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
@@ -452,6 +463,73 @@ const restored = await page.evaluate(() => ({
 }))
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
+
+// ── ㉑ 大文件着色性能（决策 #1216）────────────────────────────────────────────
+// 【为什么要有这条】用户实测："两百多行的文件，滚动到哪才开始着色"。
+//   根因不是语言包慢，而是 **CM 只解析视口附近**：跳到没解析的区域时，它在那一帧同步补解析
+//   ⇒ 文字先出来、颜色晚到。实测（8000 行 .ts，同一台机、同一份 web-dist）：
+//     不预热 213ms（静置 800ms 后仍是 213ms —— CM 并不会自己把整篇解析完）
+//     预热后 15ms（forceParsing 空闲切片）
+//   ⇒ 这条判据就是钉住"冷跳必须快"，防止以后有人把 warmParse 删掉。
+await page.evaluate(() => {
+  localStorage.setItem('__BIG__', '1')
+  localStorage.setItem('__stub_state__', JSON.stringify({ view: 'code', codeFile: 'packages/studio/big.ts' }))
+})
+await page.reload()
+// ★等"整篇解析完"的信号（UI 写在 #codeHost 的 data-parse 上），而不是 sleep 猜：
+//   预热被摘掉时这个状态永远到不了 full ⇒ 下面的等待超时 + 冷跳超阈值，两条都会红。
+let parseFull = true
+try {
+  await page.waitForFunction(
+    () => document.getElementById('codeHost')?.getAttribute('data-parse') === 'full',
+    { timeout: 8000 },
+  )
+} catch {
+  parseFull = false
+}
+const perf = await page.evaluate(async () => {
+  const sc = () => document.querySelector('.cm-scroller')
+  while (!document.querySelector('.cm-content')) await new Promise((r) => requestAnimationFrame(r))
+  const base = getComputedStyle(document.querySelector('.cm-content')).color
+  const visibleColored = () => {
+    const s = sc()
+    if (!s) return 0
+    const top = s.getBoundingClientRect().top
+    const rows = [...document.querySelectorAll('.cm-line')].filter((n) => {
+      const r = n.getBoundingClientRect()
+      return r.bottom > top && r.top < top + s.clientHeight
+    })
+    return rows.filter((n) =>
+      [...n.querySelectorAll('span')].some((x) => getComputedStyle(x).color !== base),
+    ).length
+  }
+  const t0 = performance.now()
+  while (performance.now() < t0 + 6000 && visibleColored() < 3) await new Promise((r) => requestAnimationFrame(r))
+  const openMs = Math.round(performance.now() - t0)
+  const s = sc()
+  void openMs
+  const scrollHeight = s.scrollHeight
+  // ★先做一次**不计时**的往返跳：reload 后第一次跳要额外付一次"全文档高度布局"的钱（153k px），
+  //   那属于加载成本，不是用户感知的滚动成本。只测第二次（稳态），才和"滚着看代码"同源。
+  s.scrollTop = s.scrollHeight
+  await new Promise((r) => requestAnimationFrame(r))
+  await new Promise((r) => requestAnimationFrame(r))
+  s.scrollTop = 0
+  await new Promise((r) => requestAnimationFrame(r))
+  await new Promise((r) => requestAnimationFrame(r))
+  s.scrollTop = s.scrollHeight
+  const t1 = performance.now()
+  while (performance.now() < t1 + 6000 && visibleColored() < 3) await new Promise((r) => requestAnimationFrame(r))
+  const cold1 = Math.round(performance.now() - t1)
+  s.scrollTop = 0
+  await new Promise((r) => requestAnimationFrame(r))
+  await new Promise((r) => requestAnimationFrame(r))
+  const t2 = performance.now()
+  s.scrollTop = s.scrollHeight
+  while (performance.now() < t2 + 6000 && visibleColored() < 3) await new Promise((r) => requestAnimationFrame(r))
+  const cold2 = Math.round(performance.now() - t2)
+  return { openMs, cold1, cold2, coldMs: cold1, scrollHeight }
+})
 await browser.close()
 server.close()
 // ⑩ fixture 与原始采集输出必须数值一致（防"改 fixture 让判据变绿"这类静默漂移）
@@ -692,6 +770,15 @@ const checks = [
       Math.abs(panReset.x - box1.x) < 1.5,
   ],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
+  // ㉑ 大文件冷跳着色（见脚本里的长注释：这条钉的是 warmParse 不能掉）
+  [
+    `㉑ 8000 行 .ts：整篇 ${parseFull ? '已解析' : '未解析完'} · 打开着色 ${perf.openMs}ms · 冷跳 ${perf.coldMs}/${perf.cold2}ms（首次/稳态，上限 400ms）· scrollHeight ${perf.scrollHeight}`,
+    parseFull &&
+      perf.scrollHeight > 100000 &&
+      perf.coldMs >= 0 &&
+      perf.coldMs <= 400 &&
+      perf.openMs <= 1500,
+  ],
 ]
 let bad = 0
 for (const [label, ok] of checks) {

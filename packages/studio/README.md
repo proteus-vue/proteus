@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **32 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **33 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -575,7 +575,34 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
 ★**桩内容必须按文件类型给**：判据里 `read_text` 的桩原先只有一段 JavaScript，塞给 `.vue` 解析器
 只会得到"整篇一个颜色"，那样 ⑲ 永远测不到东西（假绿）。现在按扩展名返回 SFC / Rust / TS / CSS / ObjC 片段。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **32 条**）
+## 大文件着色性能（2026-10-25 · 决策 #1216）
+
+**用户实测**：「两百多行的文件，打开还是滚动到哪才有颜色；VS Code 上万行都很快。」
+
+**先量，再改**（探针：同一份 web-dist + Playwright，只换文件类型/行数；单位 ms，`冷跳` = 打开后立刻跳到未看过的区域）：
+
+| 文件 | 打开→可见区着色 | 冷跳（未预热） | 冷跳（预热后） |
+|---|---|---|---|
+| `.ts` 8000 行 | 56 | **239** | **14** |
+| `.ts` 2300 行 | 74 | 18 | — |
+| `.vue` 606 行 | 136 | 27 | — |
+| `.m` 220 行（StreamLanguage） | 159 | **131** | **15** |
+
+**根因不在语言包**：CodeMirror 默认**只解析视口附近**，其余留给后台；一旦跳到还没解析的区域，
+它会在那一帧**同步补解析** ⇒ 文字先出来、颜色晚到。所以文件越大、越"跳"，越明显；
+`.m` 走的是 CM5 遗留 StreamLanguage（状态要顺序回放），所以 220 行就要 131ms。
+
+**修法**：打开文件后把「整篇解析」放进**空闲时间切片**里做完（`forceParsing` 每次 8ms，
+`requestIdleCallback` 驱动；切文件即作废，不继续烧 CPU）。★不要写成一次性
+`forceParsing(total, 1000)`——那会**阻塞主线程 1 秒**（打字、滚动全卡），比慢更糟。
+另外切到代码视图时补一次 `requestMeasure()`：面板启动时是 `v-show` 隐藏的，隐藏时量到的宽高是 0。
+
+**判据 ㉑（8000 行 .ts）**：① 整篇解析完成（`#codeHost` 上的 `data-parse=full`，**确定性信号**）；
+② 冷跳 ≤400ms（首次跳动含 JIT/布局：预热后实测 64–147ms，探针 14–15ms；不预热 237–275ms）。
+★破坏性验证：把 `warmParse` 整体停用 ⇒ `data-parse` 永远到不了 `full`、冷跳 275ms ⇒ 判据红。
+★门槛为什么留这么宽：CI 机器更慢，宽上限防假红；真正兜底是 ① 这个布尔信号。
+
+### 编辑器判据（`check:studio-panel` 已扩到 **33 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
@@ -583,6 +610,7 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
 - ⑲ / ⑲b / ⑲c / ⑲d / ⑲e **语法着色生效**（5 种语言各一条：量浏览器算出的 `color`；
   必须**逐个文件真打开**——语言包按扩展名注入，只测一个文件证明不了别的类型也接上了）；
 - ⑳ **覆盖表**：树里每种扩展名都要有归属（防止新增文件类型静默掉队）；
+- ㉑ **8000 行大文件**：整篇解析完成 + 冷跳着色 ≤400ms（见上节「大文件着色性能」）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；
