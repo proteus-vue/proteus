@@ -24,6 +24,8 @@ import { appTlsProbe } from './entry-superapp-probes-tls'
 export { appTlsProbe } from './entry-superapp-probes-tls'
 // ★★★#1155：传输层事实取证探针（HTTP/2 与连接复用**是否已在工作**——决定 P1 要不要引 OkHttp）
 import { appTransportProbe } from './entry-superapp-probes-transport'
+// ★★★#1251 worker 上界探针（单列见该文件头；import+export 并一行以守 1000 行上限）
+import { appWorkerBoundProbe, installWorkerProbe } from './entry-superapp-probes-worker'; export { appWorkerBoundProbe, installWorkerProbe } from './entry-superapp-probes-worker'
 export { appTransportProbe } from './entry-superapp-probes-transport'
 // ★★★#1160：POST 带请求体探针（补"整包路径 + 请求体"的用例空白）
 import { appBodyProbe } from './entry-superapp-probes-body'
@@ -946,6 +948,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppCancelProbe?: (b: string, c?: number, s?: number, d?: number) => string
 }).__proteusHostAppCancelProbe = (b: string, c?: number, s?: number, d?: number) => appCancelProbe(b, c, s, d)
+// ★★★#1251：worker 上界探针的安装收在它自己的模块里（主文件已到 1000 行上限，
+//   照 #1180 的 installHttpDnsProbes 先例——把"安装"和"实现"放一处，主文件只留一行调用）
 // ★★★#1122：**走 useFetch 门面**的探针（验证门面真的透传 S3 字段）
 ;(globalThis as unknown as {
   __proteusHostAppUseFetchProbe?: (b: string, c?: number, s?: number, d?: number) => string
@@ -991,3 +995,4 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 }).__proteusHostAppBodyProbe = (b: string) => appBodyProbe(b)
 // ★★★#1169/#1179/#1180：HTTPDNS 三条探针统一安装（实现见 entry-superapp-probes-httpdns-prod）
 installHttpDnsProbes(appHttpDnsProbe, appHttpDnsBProbe)
+installWorkerProbe(appWorkerBoundProbe)   // ★#1251 worker 上界探针（安装与实现同处，见该文件）

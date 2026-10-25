@@ -61,7 +61,20 @@ enum SuperappProbes {
       resultKey: "__proteusHostUploadProbeResult",
       reportPrefix: "upload",
       deadlineSeconds: 240,
-      extraReadings: { _ in [:] },
+      // ★★★#1252：把**上传侧自己的**背压读数带进报告。
+      //   ★此前这里是 `{ _ in [:] }`（空），而 iOS 的上传路径**一个读数都没有**——
+      //     审计工具给 upload 判"背压 ✅"时命中的是**下载流**的 `backpressureWaits`
+      //     （交叉污染：下载的背压不能证明上传有背压）。
+      //   ⇒ 现在有独立的 `host_upload_backpressure`，字段名与 Android `UploadBackpressure.toJson` 对齐。
+      extraReadings: { _ in
+        let b = UploadBackpressure.snapshot()
+        return ["host_upload_backpressure": [
+          "slow_writes": b.slowWrites,
+          "slow_write_ms": b.slowWriteMs,
+          "chunks": b.chunks,
+          "peak_chunk_bytes": b.peakChunkBytes,
+        ]]
+      },
     ),
     ProbeConfig(
       argPrefix: "--cancel-probe=",
@@ -73,6 +86,16 @@ enum SuperappProbes {
         let cs = HttpCapability.cancelStats()
         return ["host_cancel_stats": ["calls": cs.calls, "hits": cs.hits, "misses": cs.misses]]
       },
+    ),
+    // ★★★#1251：worker 数上界探针（补 #1250 的"iOS 未上真机"缺口）
+    //   ★判据刻意同时断言"第 max 个成功"与"第 max+1 个被拒"——只断言后者时把上界写成 0 也能过。
+    ProbeConfig(
+      argPrefix: "--worker-bound-probe=",
+      kickFormat: "__proteusHostAppWorkerBoundProbe(%@)",
+      resultKey: "__proteusHostWorkerBoundProbeResult",
+      reportPrefix: "worker_bound",
+      deadlineSeconds: 60,
+      extraReadings: { _ in [:] },
     ),
     // ★★★#1126：**走 useFetch 门面**的判据（此前只在 Android 跑过，#1122 的诚实边界①）
     //   ★这条与 `--stream-probe` / `--cancel-probe` 的区别：那两个打底层 `invokeHostStream`，

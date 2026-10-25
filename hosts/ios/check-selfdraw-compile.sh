@@ -71,6 +71,7 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/InvokeWire.swift"
   "$HERE/ProteusHost/runtime/invoke-bytes-bridge.swift"
   "$HERE/ProteusHost/runtime/http-capability.swift"
+  "$HERE/ProteusHost/runtime/upload-backpressure.swift"   # ★#1252 上传背压（拆出以守 1000 行）
   # ★#1180：HTTPDNS 生产实现（本地 CONNECT 代理 + 按表缓存 session）
   #   ★必须与 http-capability 同编译单元：后者调 `session(for:)`（扩展在此）与 `HttpDnsProxies`
   #     （漏加 ⇒ "cannot find 'HttpDnsProxies' in scope"）

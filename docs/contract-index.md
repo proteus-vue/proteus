@@ -257,6 +257,13 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 
 **必须跑**：`npx vitest run tests/host-probe-registry.test.ts`（三处集合必须相等）
 **★后果**：漏任一处的表现是 **"报告永远是旧的"**（App 走常驻模式永不退出），**不报错**。#1134 三处全漏，连跑两轮空转。
+★★★**#1251 第一个必填项：`--superapp` 标志（漏了 = 探针静默不跑）**：
+  `SuperappProbes.firstArg()` 只在 `SuperappScene`（`hosts/ios/ProteusHost/shell/superapp-scene.swift`）里被调用；
+  而 `run-selfdraw.sh` 默认构建 **selfdraw** 应用（`SelfDrawSceneDelegate`）——两套宿主**互不相通**。
+  ⇒ 跑任何 iOS 探针必须写成 `bash hosts/ios/run-selfdraw.sh --superapp --<probe>=<args>`。
+  ★漏掉 `--superapp` 的表现：**命令成功退出、报告正常落盘、只是里面没有你的探针字段**——
+    零报错、零警告（本轮实测：连跑 3 次才发现报告里 14 个键全是布局/动画）。
+
 ★★**#1149 补的第四方**：该判据现在还把 `hosts/ios/ProteusHost/shell/superapp-probes.swift` 的 `argPrefix` 集合拉进来比对——
 原判据只比脚本内部三处，**新探针只加进 Swift、脚本一处都不加时全绿**，而现场表现是
 `--cache-probe=` 被当成设备 UDID ⇒ 安装失败（旧脚本还把失败原因 grep 掉了，下面一片空白）。

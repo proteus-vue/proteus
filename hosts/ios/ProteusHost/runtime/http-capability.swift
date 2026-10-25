@@ -158,6 +158,7 @@ final class HttpCapability {
         return u
     }
 
+
     /// ★★★#1120：把 multipart **拼成临时文件**（内存只用一个 16 KiB 块，与文件大小无关）。
     ///
     /// 【为什么是"拼临时文件"而不是"边读边发"】
@@ -194,10 +195,15 @@ final class HttpCapability {
         defer { inStream.close() }
         var buf = [UInt8](repeating: 0, count: chunkSize)
         var written = Int64(headData.count)
+        // ★#1252：每个块单独计时 ⇒ **拼装侧的慢写**（磁盘 I/O 瓶颈）可观测
+        //   ★实现收在 upload-backpressure.swift（本文件已近 1000 行，见那儿的说明）
+        UploadBackpressure.reset()
         while true {
             let n = inStream.read(&buf, maxLength: chunkSize)
             if n <= 0 { break }
+            let w0 = DispatchTime.now().uptimeNanoseconds
             out.write(Data(buf[0..<n]))
+            UploadBackpressure.recordWrite(elapsedNs: DispatchTime.now().uptimeNanoseconds - w0, bytes: n)
             written += Int64(n)
             // ★超 1 GiB 拒绝（与 Android 同值口径）——避免拼出超大临时文件
             if written > Int64(HttpCapability.MAX_SAVE_BYTES) {
