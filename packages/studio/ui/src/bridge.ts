@@ -119,6 +119,24 @@ type ListenFn = (
   cb: (e: { payload: unknown }) => void,
 ) => Promise<() => void>
 
+/** 订阅"关闭被拦下"事件（决策 #1244）。
+ *
+ *  ★为什么 Rust 不直接弹框：确认框是 **UI**，归前端；Rust 只负责"阻止关闭 + 告知脏数量"。
+ *    和菜单同样的双路：原生走 `app:close-blocked`，浏览器/门禁走 `studio:close-blocked` 自定义事件
+ *    —— 这样门禁能驱动同一条通路（但**证明不了** AppKit 真的拦下了关闭，那一段只能人眼验）。
+ */
+export function onCloseBlocked(cb: (dirty: number) => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('app:close-blocked', (e) => cb(Number(e.payload ?? 0))).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = (e: Event) => cb(Number((e as CustomEvent).detail ?? 0))
+  addEventListener('studio:close-blocked', h)
+  return () => removeEventListener('studio:close-blocked', h)
+}
+
 /** 订阅菜单动作。
  *
  *  ★为什么要有浏览器兜底：Tauri 之外（Playwright 门禁、直接用浏览器开 web-dist）没有事件系统。

@@ -10,6 +10,7 @@
 use serde::Serialize;
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::time::{Duration, Instant};
+use tauri::Emitter;
 use tauri::Manager;
 
 /// 抓屏参数的计算（纯函数 + 单测；与 Tauri/窗口无关）
@@ -134,6 +135,25 @@ fn copy_text(text: String) {
     unsafe {
         poc_copy_text(c.as_ptr())
     };
+}
+
+/* ── 关窗口/退出前的拦截（决策 #1244）─────────────────────────────────────
+ * 前端把"脏缓冲数量"同步过来；窗口收到关闭请求时，只要还有脏的就**拦下来**并通知前端弹确认框。
+ * 前端选完（保存并关闭 / 不保存）再调 `close_now()` 放行。
+ * ★为什么状态放 Rust：关闭请求是**系统事件**，必须在这一层就能判断——前端来不及接。
+ */
+static DIRTY_BUFFERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static ALLOW_CLOSE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[tauri::command]
+fn set_dirty_count(n: usize) {
+    DIRTY_BUFFERS.store(n, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tauri::command]
+fn close_now(window: tauri::Window) {
+    ALLOW_CLOSE.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = window.close();
 }
 
 #[tauri::command]
@@ -503,6 +523,8 @@ fn main() {
             load_state,
             save_state,
             copy_text,
+            set_dirty_count,
+            close_now,
             search_text
         ])
         .setup(|app| {
@@ -513,6 +535,15 @@ fn main() {
                 poll_window(h, 100);
             });
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let dirty = DIRTY_BUFFERS.load(std::sync::atomic::Ordering::Relaxed);
+                if dirty > 0 && !ALLOW_CLOSE.load(std::sync::atomic::Ordering::Relaxed) {
+                    api.prevent_close();
+                    let _ = window.emit("app:close-blocked", dirty);
+                }
+            }
         })
         .build(tauri::generate_context!())
         .expect("Studio 启动失败")

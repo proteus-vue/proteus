@@ -70,6 +70,9 @@ export function stubTauri(payload) {
             ],
           }
         }
+        // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭
+        if (cmd === 'set_dirty_count') return null
+        if (cmd === 'close_now') return null
         // 剪贴板（决策 #1234）：右键菜单「复制相对路径」
         if (cmd === 'copy_text') return null
         if (cmd === 'list_files')

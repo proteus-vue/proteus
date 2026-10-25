@@ -483,5 +483,33 @@ await page.waitForTimeout(150)
   await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
   await page.waitForTimeout(350)
 
-  return { dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
+  // ── ⑱f 关窗口/退出也要拦（决策 #1244）：脏计数同步给 Rust + 被拦下后弹同一套三选一 ──
+  await page.locator('.cm-content').click()
+  await page.keyboard.type('// close-window-probe')
+  await page.waitForTimeout(260)
+  const dirtySynced = await page.evaluate(() => {
+    const c = (window.__STUB_CALLS__ || []).filter((x) => x.cmd === 'set_dirty_count')
+    return c.length ? Number(c[c.length - 1].args?.n ?? -1) : -1
+  })
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('studio:close-blocked', { detail: 1 })))
+  await page.waitForTimeout(320)
+  const winDlg = await page.evaluate(() => {
+    const d = document.getElementById('confirmDialog')
+    return d ? [...d.querySelectorAll('[data-act]')].map((b) => b.getAttribute('data-act')) : null
+  })
+  await page.click('#confirmDialog [data-act="cancel"]')
+  await page.waitForTimeout(260)
+  const closeNowAfterCancel = await page.evaluate(
+    () => (window.__STUB_CALLS__ || []).filter((x) => x.cmd === 'close_now').length,
+  )
+  // 再来一次，这次"保存并关闭"⇒ 必须真的放行（close_now 被调用一次）
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('studio:close-blocked', { detail: 1 })))
+  await page.waitForTimeout(320)
+  await page.click('#confirmDialog [data-act="save"]')
+  await page.waitForTimeout(420)
+  const closeNowAfterSave = await page.evaluate(
+    () => (window.__STUB_CALLS__ || []).filter((x) => x.cmd === 'close_now').length,
+  )
+
+  return { dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

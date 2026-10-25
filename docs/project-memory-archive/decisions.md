@@ -14486,3 +14486,17 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     （对话框没弹出时不能把整条门禁崩在超时上——这是第 3 次踩同一个坑，已形成固定写法）。
   - **不做的事（如实说）**：**关窗口 / 退出应用**目前还没有拦。那要走 Rust 的 close-requested 往返
     （前端脏计数 → 阻止关闭 → 弹框 → 再关），是另一条链路；这次只覆盖"关标签"。
+
+1244. **关窗口 / 退出也要拦：脏计数同步到 Rust + close-requested 往返 · 判据 ⑱f**（2026-10-25 · 用户「好的」= 接着把关窗口/退出补上）:
+  - **为什么状态要放 Rust**：关闭请求是**系统事件**（点红点 / ⌘W / ⌘Q），发生在 AppKit 层，
+    前端"来不及"接——所以必须由 Rust 在 `CloseRequested` 里判断，再回头叫前端弹框。
+  - **协议**：前端 `watch(dirtySet)` → `set_dirty_count(n)`（原子变量）；
+    Rust 收到关闭请求时若 `dirty > 0 && !ALLOW_CLOSE` ⇒ `api.prevent_close()` + `emit("app:close-blocked", dirty)`；
+    前端弹**同一套三选一**（保存并关闭 / 不保存 / 取消）⇒ 选完调 `close_now()`（置 `ALLOW_CLOSE` 再关）。
+    ★复用同一套确认框与 `savePath()`：关标签和关窗口的语义本来就该一致。
+  - **判据 ⑱f**：输入 → 断言 `set_dirty_count` 收到 ≥1 → 派发 `studio:close-blocked`
+    → 三选一齐全 → 选"取消"后 `close_now` **0 次** → 再来一次选"保存并关闭"后 **1 次**。
+    **破坏性验证**：把"选完放行"那行去掉 ⇒ 立刻红（保存并关闭后=0 次）。
+  - **诚实边界**：㉕/⑱f 走的都是**浏览器兜底通路**（`studio:close-blocked` 自定义事件）。
+    它证明"弹框 + 决策 + 放行"这条链是通的，**不证明** AppKit 真的 `prevent_close` 了——
+    后者只能人眼验：改点东西后点红点，窗口应该**不关**、而是弹框。

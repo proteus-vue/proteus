@@ -532,7 +532,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
+const { dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -727,6 +727,17 @@ const checks = [
   [
     `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
     failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
+  ],
+  // ⑱f 关窗口/退出拦截：脏计数要同步给 Rust；被拦下后三选一，选完才放行
+  [
+    `⑱f 关窗口：脏计数=${dirtySynced} · 对话框=${winDlg ? winDlg.join('/') : '未弹出'} · 取消后 close_now=${closeNowAfterCancel} 次 · 保存并关闭后=${closeNowAfterSave} 次`,
+    dirtySynced >= 1 &&
+      !!winDlg &&
+      winDlg.includes('save') &&
+      winDlg.includes('discard') &&
+      winDlg.includes('cancel') &&
+      closeNowAfterCancel === 0 &&
+      closeNowAfterSave === 1,
   ],
   // ⑱e 关闭未保存标签：必须拦（三选一），取消要真的不关
   [

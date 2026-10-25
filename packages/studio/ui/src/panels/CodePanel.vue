@@ -47,7 +47,7 @@ import { tags } from '@lezer/highlight'
 import { Compartment } from '@codemirror/state'
 import { langExtension, langLabel } from '../langs'
 import { editorLang, effectiveLangId, langOverrides, trackEditorFile } from '../editorLang'
-import { copyText, hasBridge, listFiles, readText, writeText, type SearchHit } from '../bridge'
+import { copyText, hasBridge, invoke, listFiles, onCloseBlocked, readText, writeText, type SearchHit } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
@@ -710,8 +710,27 @@ const menuOffs = [
   }),
 ]
 
+/** 脏缓冲数量同步给 Rust（决策 #1244）：窗口的关闭请求在**系统层**就要判断，前端来不及接。 */
+watch(
+  () => dirtySet.value.length,
+  (n) => {
+    if (hasBridge()) void invoke('set_dirty_count', { n })
+  },
+  { immediate: true },
+)
+
+/** 关闭被拦下（⌘W 关窗口 / 点红点 / ⌘Q）⇒ 弹同一套三选一；选完再放行。 */
+const offCloseBlocked = onCloseBlocked((n) => {
+  const dirty = [...dirtySet.value]
+  void (async () => {
+    if (!dirty.length || (await confirmDiscard(dirty))) await invoke('close_now')
+    else if (n > 0) pushToast('已取消关闭', 'info')
+  })()
+})
+
 onMounted(boot)
 onBeforeUnmount(() => {
+  offCloseBlocked()
   view?.destroy()
   view = null
   menuOffs.forEach((off) => off())
