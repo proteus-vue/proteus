@@ -79,3 +79,34 @@ export const saveState = (json: string): Promise<void> => invoke<void>('save_sta
 // 但 GL 视图是 `addSubview ... positioned:NSWindowBelow` 挂的，**在所有兄弟视图最下面**，
 // 而 WKWebView 铺满 contentView ⇒ 真实点击全被 webview 吃掉，那个回调一次都不会触发。
 // 正确做法：`#canvas` 是真实 DOM 元素，pointer 事件直接在前端处理（零坐标翻转、零 C 接缝）。
+
+// ── 菜单（决策 #1221）──────────────────────────────────────────────────────
+/** 原生菜单事件。Rust 侧把 `ACTIONS` 里登记的动作 id 用 `emit("menu", id)` 送过来。 */
+export interface MenuBridge {
+  /** true = 走的是真 Tauri 事件通道；false = 浏览器/门禁里的兜底（DOM 事件） */
+  native: boolean
+  off: () => void
+}
+
+type ListenFn = (
+  name: string,
+  cb: (e: { payload: unknown }) => void,
+) => Promise<() => void>
+
+/** 订阅菜单动作。
+ *
+ *  ★为什么要有浏览器兜底：Tauri 之外（Playwright 门禁、直接用浏览器开 web-dist）没有事件系统。
+ *    兜底走 `window` 上的 `studio:menu` 自定义事件 ⇒ **同一套 dispatch** 能在门禁里被驱动。
+ *    但要说清：这条只证明"动作侧通了"，**不证明原生菜单真的发得出来**（那一段只能人眼验）。
+ */
+export function onMenu(cb: (id: string) => void): MenuBridge {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('menu', (e) => cb(String(e.payload ?? ''))).then((f) => (off = f))
+    return { native: true, off: () => off?.() }
+  }
+  const h = (e: Event) => cb(String((e as CustomEvent).detail ?? ''))
+  addEventListener('studio:menu', h)
+  return { native: false, off: () => removeEventListener('studio:menu', h) }
+}

@@ -11,6 +11,7 @@ import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
 import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
+import { onMenuAction, wireMenu } from './menu'
 
 const { stats, error, hasBridge } = useStats(500)
 const rect = ref('—')
@@ -93,6 +94,20 @@ function setZoom(z: number) {
   void syncRect()
 }
 
+/* ─── 菜单动作（决策 #1221）───────────────────────────────────────────────────
+ * 原生菜单只送 id 过来，具体做什么在这里定。★菜单、快捷键、面板按钮共用**同一批函数**——
+ * 不复制第二份逻辑（复制出来的第二份一定会漂移，这是本仓反复踩过的坑）。
+ * ★`nativeMenu` 由 wireMenu() 给出：true = 窗口里真的挂着我们建的 NSMenu。
+ */
+let nativeMenu = false
+const menuOffs = [
+  onMenuAction('view.device', () => void switchView('device')),
+  onMenuAction('view.code', () => void switchView('code')),
+  onMenuAction('view.zoomReset', () => setZoom(1)),
+  onMenuAction('view.zoomIn', () => setZoom(ws.zoom + 0.25)),
+  onMenuAction('view.zoomOut', () => setZoom(ws.zoom - 0.25)),
+]
+
 /** 画布矩形：HTML 定布局，原生跟随（#1173 的接线，这里只是搬到 Vue 里） */
 async function syncRect() {
   const stage = stageEl.value
@@ -133,8 +148,12 @@ async function switchView(v: ViewName) {
 }
 
 /* 缩放快捷键（IDE 通用）：⌘0 适应 / ⌘= 放大 / ⌘- 缩小。
-   ★只在设备视图生效——代码视图里 ⌘- 该留给「编辑器字号」，不能在这里抢。 */
+   ★只在设备视图生效——代码视图里 ⌘- 该留给「编辑器字号」，不能在这里抢。
+   ★原生菜单在时直接返回：这三组快捷键做了 menu accelerator，在 **NSApplication 层**就被吃掉了，
+     webview 的 keydown 根本收不到（真机上这里不会执行）；只有浏览器/门禁才走这条兜底。
+     留着它是因为"没菜单的环境也该能缩放"，同时 **不能** 两边都执行（会一次跳两档）。 */
 function onKey(e: KeyboardEvent) {
+  if (nativeMenu) return
   if (view.value !== 'device' || !(e.metaKey || e.ctrlKey)) return
   if (e.key === '0') {
     e.preventDefault()
@@ -224,12 +243,16 @@ onMounted(async () => {
   rectTimer = setInterval(syncRect, 1000)
   addEventListener('resize', syncRect)
   addEventListener('keydown', onKey)
+  // 接上原生菜单（#1221）。★放在最后：处理器在上面的模块作用域已注册完，
+  //   此刻起用户点菜单才有东西可接。
+  nativeMenu = wireMenu().native
 })
 onBeforeUnmount(() => {
   if (rectTimer) clearInterval(rectTimer)
   if (rafId) cancelAnimationFrame(rafId)
   removeEventListener('resize', syncRect)
   removeEventListener('keydown', onKey)
+  menuOffs.forEach((off) => off())
 })
 
 /** 点击标记的百分比位置（相对设备屏幕，不用关心舞台的像素值与平移） */

@@ -14,6 +14,8 @@ use tauri::Manager;
 
 /// 抓屏参数的计算（纯函数 + 单测；与 Tauri/窗口无关）
 mod capture;
+/// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
+mod menu;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -449,6 +451,11 @@ fn main() {
     default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
+        // 自有菜单栏（决策 #1221）。★必须在 setup 里 `set_menu` 之外另走这条：
+        //   Builder::menu 是**唯一**能让 Tauri 不装默认菜单的入口；在 setup 里 set_menu
+        //   虽然也能换掉，但默认菜单会先被创建、`on_menu_event` 会同时收到两套 id。
+        .menu(menu::build)
+        .on_menu_event(|app, ev| menu::dispatch(app, ev.id().0.as_str()))
         .invoke_handler(tauri::generate_handler![
             set_canvas_rect,
             stats,

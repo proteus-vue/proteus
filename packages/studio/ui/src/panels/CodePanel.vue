@@ -52,6 +52,7 @@ import { cpp, objectiveC } from '@codemirror/legacy-modes/mode/clike'
 import languageMap from '../languages.json'
 import { hasBridge, listFiles, readText, writeText } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
+import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
@@ -473,10 +474,23 @@ watch(
   },
 )
 
+
+/* ─── 菜单动作（决策 #1221）：文件菜单属于编辑器，注册在这里 ──────────────────
+ * ★⌘S / ⌘W 的**唯一**通路在真机上是菜单（accelerator 在 NSApplication 层被吃掉，
+ *   CodeMirror 的 keymap 收不到）。所以这两个处理器不是"锦上添花"，
+ *   少了它们真机上按 ⌘S 就真的什么都不会发生。 */
+const menuOffs = [
+  onMenuAction('file.save', () => void save()),
+  onMenuAction('file.closeTab', () => {
+    if (cur.value) close(cur.value)
+  }),
+]
+
 onMounted(boot)
 onBeforeUnmount(() => {
   view?.destroy()
   view = null
+  menuOffs.forEach((off) => off())
 })
 </script>
 

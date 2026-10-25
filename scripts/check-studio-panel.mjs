@@ -535,6 +535,82 @@ const restored = await page.evaluate(() => ({
   path: document.getElementById('codePath')?.textContent?.trim() ?? '',
   files: document.querySelectorAll('#codeFiles button[data-file]').length,
 }))
+// ── ㉕ 菜单：每个动作项都必须有人接、而且真的做事（决策 #1221）──────────────
+// 【为什么要有】菜单项是"承诺"：用户点"保存"就要保存。最坏的情况不是没有菜单，
+//   而是菜单在、点了没反应——它比没有更容易让人以为是自己不会用。
+//   ⇒ 两条一起测：① 从 `src/menu.rs` 的 ACTIONS 表读出**全部** id（不另抄一份），逐个派发；
+//     ② 每个 id 断言一个**可观测的效果**（视图切了/缩放变了/真写了盘/标签少了），
+//        不是"没人报错"就算过。
+// ★诚实边界：这里派发的是 `window` 上的 `studio:menu` 兜底事件，证明的是**动作侧**；
+//   原生 NSMenu 点到 JS 那一段（Tauri event）在 Playwright 里没有，只能人眼验。
+const menuDead = []
+page.on('console', (m) => {
+  if (m.type() === 'warning' && m.text().includes('菜单动作无人处理')) menuDead.push(m.text())
+})
+const menuSrc = fs.readFileSync(path.join(STUDIO, 'src', 'menu.rs'), 'utf8')
+const menuActs = [...menuSrc.matchAll(/\("([a-z]+\.[A-Za-z]+)",\s*"([^"]*)",\s*"([^"]*)"\)/g)].map((m) => ({
+  id: m[1],
+  label: m[2],
+  accel: m[3],
+}))
+// 登记了还要真的放进菜单里：`action(app, "id")` 至少出现一次
+const notBuilt = menuActs.filter((a) => !menuSrc.includes(`action(app, "${a.id}")`))
+const fireMenu = (id) =>
+  page.evaluate((x) => window.dispatchEvent(new CustomEvent('studio:menu', { detail: x })), id)
+const railOn = (label) =>
+  page.evaluate((l) => !!document.querySelector(`.rail button[aria-label="${l}"].on`), label)
+const zoomText = () => page.evaluate(() => document.getElementById('zoomLabel')?.textContent?.trim() ?? '')
+
+await fireMenu('view.device')
+await page.waitForTimeout(200)
+const menuDevice = await railOn('设备画布')
+await fireMenu('view.code')
+await page.waitForTimeout(200)
+const menuCode = await railOn('代码（只读）')
+// 缩放：标签只在设备视图里可见 ⇒ 先切回去
+await fireMenu('view.device')
+await page.waitForTimeout(200)
+await fireMenu('view.zoomIn')
+await page.waitForTimeout(120)
+const menuZoomIn = await zoomText()
+await fireMenu('view.zoomReset')
+await page.waitForTimeout(120)
+const menuZoomReset = await zoomText()
+await fireMenu('view.zoomOut')
+await page.waitForTimeout(120)
+const menuZoomOut = await zoomText()
+await fireMenu('view.zoomReset')
+await fireMenu('view.code')
+await page.waitForTimeout(250)
+// 保存：先造一个脏缓冲，再让菜单去存（断言真的把这段文本发出去了）
+await page.locator('.cm-content').click()
+await page.keyboard.type('// menu-save')
+await page.waitForTimeout(150)
+const writesBefore = await page.evaluate(
+  () => window.__STUB_CALLS__.filter((c) => c.cmd === 'write_text').length,
+)
+await fireMenu('file.save')
+await page.waitForTimeout(500)
+const menuSaved = await page.evaluate((n) => {
+  const w = window.__STUB_CALLS__.filter((c) => c.cmd === 'write_text')
+  return w.length > n ? String(w[w.length - 1].args?.text ?? '') : ''
+}, writesBefore)
+// 关标签：菜单的「关闭标签页」= 当前标签消失、标签数 -1
+const tabsBeforeMenu = await page.evaluate(
+  () => document.querySelectorAll('#codeTabs button[data-tab]').length,
+)
+await fireMenu('file.closeTab')
+await page.waitForTimeout(500)
+const tabsAfterMenu = await page.evaluate(
+  () => document.querySelectorAll('#codeTabs button[data-tab]').length,
+)
+// 收尾：把编辑器恢复成"有标签的代码视图"，快照才不会是空的
+await page.evaluate(() =>
+  localStorage.setItem('__stub_state__', JSON.stringify({ view: 'code', codeFile: 'packages/studio/ui/src/App.vue' })),
+)
+await page.reload()
+await page.waitForTimeout(900)
+
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
 
@@ -819,6 +895,23 @@ const checks = [
       titleBar.chipX >= 80 &&
       !titleBar.brand &&
       titleBar.height === 40,
+  ],
+  // ㉕ 菜单：登记 → 建进菜单 → 前端有人接 → 每个动作真的做事
+  [
+    `㉕ 菜单动作 ${menuActs.length} 项全部有人接（死项 ${menuDead.length} · 未建进菜单 ${notBuilt.map((a) => a.id).join(',') || '无'}）· 视图切换 ${menuDevice}/${menuCode} · 缩放 ${menuZoomIn}/${menuZoomReset}/${menuZoomOut} · 菜单保存=${menuSaved.includes('// menu-save')} · 关标签 ${tabsBeforeMenu}→${tabsAfterMenu}`,
+    menuActs.length >= 7 &&
+      new Set(menuActs.map((a) => a.id)).size === menuActs.length &&
+      new Set(menuActs.map((a) => a.accel)).size === menuActs.length &&
+      notBuilt.length === 0 &&
+      menuDead.length === 0 &&
+      menuDevice === true &&
+      menuCode === true &&
+      menuZoomIn === '125%' &&
+      menuZoomReset === '适应' &&
+      menuZoomOut === '75%' &&
+      menuSaved.includes('// menu-save') &&
+      tabsBeforeMenu >= 1 &&
+      tabsAfterMenu === tabsBeforeMenu - 1,
   ],
   // ㉓ 标签栏在编辑器区内（起点 ≥ 文件树右边界；宽度 == 右栏宽度）
   [

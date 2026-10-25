@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **37 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **38 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -655,7 +655,48 @@ macOS 原生标题栏被换成"内容画到窗口顶部 + 原生红绿灯浮在�
 ★**诚实边界**：红绿灯的**实际像素位置**只能在真窗口里看，Playwright 里是普通浏览器 —— 门禁测的是"留了位、能拖、配置对"，
 最后一眼要人看。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **37 条**）
+## 菜单栏（2026-10-25 · 决策 #1221）
+
+Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo…Select All + Fullscreen…）：
+里面没有一条通向 Studio 自己。换成自有菜单后，菜单第一次成为"能力的目录"：
+
+| 菜单 | 内容 | 谁执行 |
+|---|---|---|
+| Proteus Studio | 关于 / 服务 / 隐藏 / 全部显示 / 退出 | **AppKit**（预定义项） |
+| 文件 | 保存 ⌘S · 关闭标签页 ⌘W | **前端**（`file.save` / `file.closeTab`） |
+| 编辑 | 撤销 ⌘Z · 重做 ⇧⌘Z · 剪切 · 拷贝 · 粘贴 · 全选 | **AppKit**（responder chain） |
+| 视图 | 设备画面 ⌘1 · 代码 ⌘2 · 设备画面实际大小 ⌘0 · 放大 ⌘= · 缩小 ⌘− · 切换全屏 | 前端 + AppKit |
+| 窗口 | 最小化 ⌘M · 缩放 · 前置全部窗口 | **AppKit** |
+
+**两条硬规矩**：
+
+1. **不留死项**。`src/menu.rs` 的 `ACTIONS` 是唯一登记处；门禁从**这个文件**读出全部 id
+   （不另抄一份），逐个派发到前端，**每个 id 断言一个可观测的效果**（视图切了 / 缩放变了 /
+   真写了盘 / 标签少了）。加一项却没接处理器 ⇒ 红。
+2. **系统行为不自己画**。撤销/剪切/拷贝/粘贴/全选、隐藏、最小化、全屏、退出一律用
+   `PredefinedMenuItem` —— 它们走 AppKit 的 responder chain；自绘会丢输入法、撤销栈与无障碍。
+
+**★一个必须知道的事实**：菜单快捷键在 **NSApplication 层**就被吃掉了，webview 收不到 keydown
+⇒ 真机上 CodeMirror 的 ⌘S keymap **永远不会触发**，"保存"的唯一通路是 菜单 → 事件 → 前端。
+所以 `file.save` / `file.closeTab` 这两个处理器不是锦上添花，删了就等于 ⌘S/⌘W 失效。
+
+**判据 ㉕**：登记（7 项、id 与快捷键都不重复）→ 建进菜单（每个 id 都有 `action(app, "id")`）→
+前端有人接（0 死项）→ 每项有效果。实测：
+
+```
+✓ ㉕ 菜单动作 7 项全部有人接（死项 0 · 未建进菜单 无）· 视图切换 true/true ·
+   缩放 125%/适应/75% · 菜单保存=true · 关标签 1→0
+```
+
+★**破坏性验证三条都翻红**：① 摘掉 `file.save` 处理器 ⇒ 死项 1 + 菜单保存=false；
+② 把 `view.zoomOut` 从菜单里删掉（登记还在）⇒ 「未建进菜单 view.zoomOut」；
+③ 把放大步长改成 0 ⇒ 缩放读到 `适应/适应/75%`。
+
+★**诚实边界**：门禁派发的是 `window` 上的 `studio:menu` 兜底事件，证明**动作侧**；
+「原生 NSMenu 点到 JS」那一段（Tauri event）在 Playwright 里不存在，只能人眼点一次。
+没有"帮助"菜单：现在没有任何帮助内容可给，摆一个只有标题的空菜单就是在装作有。
+
+### 编辑器判据（`check:studio-panel` 已扩到 **38 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
@@ -667,6 +708,7 @@ macOS 原生标题栏被换成"内容画到窗口顶部 + 原生红绿灯浮在�
 - ㉒ / ㉒b **多标签 + 文本缓冲**：脏标记按文件独立、⌘Z 跨标签仍生效、关标签回相邻（见上节）；
 - ㉓ **标签栏不跨界**：起点 ≥ 文件树右边界、宽度 == 右栏宽度（布局回归）；
 - ㉔ **沉浸式标题栏**：Overlay/hiddenTitle/红绿灯位置 + 顶栏可拖 + 左内边距（见上节）；
+- ㉕ **菜单没有死项**：`menu.rs` 的 ACTIONS 逐项派发，每项必须有效果（见下节）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；
