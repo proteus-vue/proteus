@@ -48,6 +48,7 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/element-rect.swift"
   "$HERE/ProteusHost/runtime/capture-capability.swift"
   "$HERE/ProteusHost/runtime/host-lifecycle-events.swift"
+  "$HERE/ProteusHost/runtime/log-capability.swift"
   "$HERE/ProteusHost/runtime/screen-host.swift"
   # ★★★C27 WebSocket（决策 #1093）：URLSessionWebSocketTask 腿（ws.open/send/close + 壳推事件流）
   "$HERE/ProteusHost/runtime/websocket-capability.swift"

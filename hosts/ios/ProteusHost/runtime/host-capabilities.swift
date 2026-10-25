@@ -83,6 +83,10 @@ final class HostCapabilities: NSObject {
             return ok(updateCheck())
         case "update.apply":
             return ok(["applied": false]) // ★不假装：无待应用更新
+        // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
+        case "log":
+            do { return ok(try LogCapability.write(args)) }
+            catch { return fail("\(error)") }
         // ★#1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request
         case "http.cancel":
             return ok(HttpCapability.cancel(args))

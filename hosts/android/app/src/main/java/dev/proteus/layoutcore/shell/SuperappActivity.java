@@ -196,6 +196,21 @@ public class SuperappActivity extends android.app.Activity {
                 if (getIntent() != null && "1".equals(getIntent().getStringExtra("glassdbg")) && draw.view() != null) {
                     draw.view().glassDebug = true;
                 }
+                // ★★★#1225 通用能力直通探针：`--es capprobe "<method>|<json>"` ⇒ 调宿主能力并把回执打 logcat
+                //   （与鸿蒙 `--cap-method` 同语义；真机验任何宿主方法都用它，不是一次性脚手架）
+                String capProbe = getIntent() != null ? getIntent().getStringExtra("capprobe") : null;
+                if (capProbe != null && capProbe.contains("|")) {
+                    String[] cp = capProbe.split("\\|", 2);
+                    String cpArgs = cp[1].isEmpty() ? "{}" : cp[1];
+                    // ★与 capability-invoke.ts 同一判据：两条腿都试（通用全局 → JNI 主通道）
+                    String cpJs = "(function(){var a=" + org.json.JSONObject.quote(cpArgs) + ",m=" + org.json.JSONObject.quote(cp[0]) + ";" +
+                            "try{if(typeof __proteusHostInvoke==='function')return String(__proteusHostInvoke(m,a));}catch(e){}" +
+                            "try{if(typeof proteusHost!=='undefined'&&proteusHost&&typeof proteusHost.invoke==='function')return String(proteusHost.invoke(m,a));}catch(e){return 'ERR:'+e}" +
+                            "return 'no-hook';})()";
+                    QuickJsEngine.EvalResult cr = QuickJsEngine.eval(cpJs);
+                    android.util.Log.i("ProteusCapProbe", "CAP_RECEIPT method=" + cp[0] + " args=" + cpArgs +
+                            " -> " + (cr != null && cr.value != null ? cr.value : "<null>"));
+                }
                 // ★决策 #983 可回归诊断：`--es alphaprobe 1` ⇒ RuntimeShader alpha 是否生效（离屏探针，自判 PASS/FAIL）
                 if (getIntent() != null && "1".equals(getIntent().getStringExtra("alphaprobe"))) {
                     dev.proteus.layoutcore.GlassAlphaProbe.runAsync();

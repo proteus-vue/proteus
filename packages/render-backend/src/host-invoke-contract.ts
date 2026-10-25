@@ -73,6 +73,9 @@ export const HOST_CAPABILITY_METHODS = [
   'fs.writeBytes',
   'fs.readBytes',
   'fs.remove',
+  // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 三端宿主各加一个方法；
+  //   #1212 口径二修：此前误判为 A 类零原生，实际宿主根本没有 log.* ⇒ 必须写原生）。
+  'log',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

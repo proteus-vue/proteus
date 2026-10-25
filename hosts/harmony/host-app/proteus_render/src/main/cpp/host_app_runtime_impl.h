@@ -153,10 +153,10 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
     }
-    // ★dev 项目 console（决策 #730）：垫片 → invoke('dev.console') ⇒ 回收给宿主上报（面板 Console·项目通道）。
-    if (method == "dev.console") {
-        std::string level, text;
-        jstr(argsJson.c_str(), argsJson.size(), "level", &level);
+    // ★dev console（#730）与 log 通道（#1225）均回收给宿主
+    if (method == "log") return proteus::logcap::write(argsJson, jstr, PROTEUS_APP_RT_DOMAIN);
+    if (method == "dev.console") {   // eslint-disable-line
+        std::string level, text; jstr(argsJson.c_str(), argsJson.size(), "level", &level);
         jstr(argsJson.c_str(), argsJson.size(), "text", &text);
         devConsoleAppend(level.empty() ? "log" : level, text);
         return "{\"ok\":true}";

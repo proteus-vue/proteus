@@ -73,6 +73,10 @@ export const APP_BRIDGE_SOURCES = [
   //   ★这里登记的是**文件与工厂**，不是"一定有 getStorage"：宿主缺 `fs.*` 时装配层
   //     **不提供**该方法（鸿蒙现状）⇒ 运行时如实 `storage.unsupported`，不掺假。
   { file: 'packages/api/src/capability-app-storage.ts', functions: ['createAppFileStorage'] },
+  // ★★★#1225 App 能力批 1：日志通道（`log`）在独立工厂
+  //   （`capability-app-log.ts::createAppLog`，装配层用条件 spread 引入）。
+  //   ★不登记就会被判「桥未接线」——与 #1207 的 createAppFileStorage 同一形态。
+  { file: 'packages/api/src/capability-app-log.ts', functions: ['createAppLog'] },
 
 ]
 

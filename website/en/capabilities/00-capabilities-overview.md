@@ -17,8 +17,8 @@ order: 0
 | Web SPA | 51 | 33 | 0 | 0 | 61% |
 | WeChat Mini Program | 80 | 4 | 0 | 0 | 95% |
 | Headless (SSR / testing) | 84 | 0 | 0 | 0 | 100% |
-| iOS native | 36 | 0 | 48 | 0 | 43% |
-| Android native | 36 | 0 | 48 | 0 | 43% |
+| iOS native | 37 | 0 | 47 | 0 | 44% |
+| Android native | 37 | 0 | 47 | 0 | 44% |
 | HarmonyOS | 15 | 0 | 69 | 0 | 18% |
 | Flutter hybrid | 0 | 0 | 84 | 0 | 0% |
 | Quick App | 0 | 0 | 0 | 84 | 0% |
@@ -37,7 +37,7 @@ order: 0
 | Account & Payment | 3/9 | 8/9 | 9/9 | 0/9 | 0/9 | 0/9 | 0/9 | 0/9 |
 | Notifications & Sharing | 2/10 | 9/10 | 10/10 | 0/10 | 0/10 | 0/10 | 0/10 | 0/10 |
 | App & Lifecycle | 10/13 | 12/13 | 13/13 | 13/13 | 13/13 | 0/13 | 0/13 | 0/13 |
-| Observability & Debugging | 2/3 | 3/3 | 3/3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
+| Observability & Debugging | 2/3 | 3/3 | 3/3 | 1/3 | 1/3 | 0/3 | 0/3 | 0/3 |
 
 ## Network & Communication (11)
 

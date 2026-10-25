@@ -180,6 +180,9 @@ public final class HostCapabilities {
                 return ok(FileTransferCapability.readBytes(activity, args));
             case "fs.remove":
                 return ok(FileTransferCapability.remove(activity, args));
+            // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
+            case "log":
+                return ok(dev.proteus.layoutcore.runtime.LogCapability.write(args));
             // ── #1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request ──
             case "http.cancel":
                 return ok(HttpCapability.cancel(args));
