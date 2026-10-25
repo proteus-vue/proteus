@@ -40,7 +40,7 @@ withDefaults(defineProps<{ size?: number }>(), { size: 56 })
     </defs>
 
     <!-- 取景框：四角 L。语义是"被框住 = 被检视/取证" —— Studio 与引擎的分工就在这一层 -->
-    <g stroke="currentColor" stroke-opacity="0.55" stroke-width="21" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="currentColor" stroke-opacity="0.72" stroke-width="21" stroke-linecap="round" stroke-linejoin="round">
       <path d="M226 282 V216 a26 26 0 0 1 26 -26 H318" />
       <path d="M706 190 H772 a26 26 0 0 1 26 26 V282" />
       <path d="M226 742 V808 a26 26 0 0 0 26 26 H318" />
