@@ -367,8 +367,18 @@ const edgeMenu = await page.evaluate(() => {
   if (!el) return null
   const r = el.getBoundingClientRect()
   const item = document.querySelector('#ctxMenu [data-menu-item="undo"]')
-  const bg = item ? getComputedStyle(item).backgroundColor : ''
-  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, vw: innerWidth, vh: innerHeight, bg }
+  const dis = el.querySelector('[data-menu-item][disabled]')
+  return {
+    left: r.left,
+    top: r.top,
+    right: r.right,
+    bottom: r.bottom,
+    vw: innerWidth,
+    vh: innerHeight,
+    bg: item ? getComputedStyle(item).backgroundColor : '',
+    cursor: item ? getComputedStyle(item).cursor : '',
+    disabledCursor: dis ? getComputedStyle(dis).cursor : '（无禁用项）',
+  }
 })
 await page.keyboard.press('Escape')
 await page.waitForTimeout(150)

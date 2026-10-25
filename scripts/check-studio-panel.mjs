@@ -784,7 +784,7 @@ const checks = [
   ],
   // ㉜ 贴边定位：**只有**装不下才翻转，翻转后必须贴着鼠标；hover 底色必须是中性灰
   [
-    `㉜ 菜单定位：锚点(${anchorX},${anchorY}) · 尺寸 ${edgeMenu ? Math.round(edgeMenu.right - edgeMenu.left) + '×' + Math.round(edgeMenu.bottom - edgeMenu.top) : '—'} · 实际 left/top=${edgeMenu ? Math.round(edgeMenu.left) + '/' + Math.round(edgeMenu.top) : '—'} · hover 底色=${edgeMenu?.bg ?? '—'}`,
+    `㉜ 菜单定位：锚点(${anchorX},${anchorY}) · 尺寸 ${edgeMenu ? Math.round(edgeMenu.right - edgeMenu.left) + '×' + Math.round(edgeMenu.bottom - edgeMenu.top) : '—'} · 实际 left/top=${edgeMenu ? Math.round(edgeMenu.left) + '/' + Math.round(edgeMenu.top) : '—'} · hover 底色=${edgeMenu?.bg ?? '—'} · 光标=${edgeMenu?.cursor ?? '—'}（禁用项=${edgeMenu?.disabledCursor ?? '—'}）`,
     (() => {
       if (!edgeMenu) return false
       const w = edgeMenu.right - edgeMenu.left
@@ -801,7 +801,9 @@ const checks = [
         edgeMenu.bottom <= edgeMenu.vh
       const m = (edgeMenu.bg.match(/\d+/g) ?? []).map(Number).slice(0, 3)
       const neutral = m.length === 3 && Math.max(...m) - Math.min(...m) <= 14
-      return xOk && yOk && inside && neutral
+      // 可点项必须是手指光标；禁用项不能被写成 pointer（那会骗人去点）
+      const cursorOk = edgeMenu.cursor === 'pointer' && (edgeMenu.disabledCursor === 'default' || edgeMenu.disabledCursor.startsWith('（'))
+      return xOk && yOk && inside && neutral && cursorOk
     })(),
   ],
   // ㉛ 瞬时反馈：复制成功出 toast、连点叠着、3 秒内自己消失

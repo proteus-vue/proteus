@@ -14360,3 +14360,11 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     **破坏性验证**：上翻时故意多偏 120px ⇒ ㉜ 立刻红（left/top 打印 590 vs 期望 710）。
   - ★判据自己踩的坑：第一版用 `dispatchEvent('mouseenter')` 读 hover 底色，读到 `rgba(0,0,0,0)`——
     Vue 的 class 更新在 nextTick，同一个 evaluate 里读不到。改用 Playwright 的**真实 hover**。
+
+1240. **菜单项光标改"手指"（可点=pointer，禁用=default）· 判据 ㉜ 加断言**（2026-10-25 · 用户「鼠标放上菜单时鼠标样式得切换成手指吧？」）:
+  - **为什么漏了**：菜单项当时写的是 `cursor: default`（跟 VS Code 的菜单一致），但本应用里
+    **文件树、标签、脏标记全是 `pointer`** ⇒ 只有菜单是箭头，就变成"这里像不能点"。
+    一致性优先：改成 `pointer`，禁用项保持 `default`（禁用项给手指等于骗人去点）。
+  - **判据**：㉜ 里一并读 `getComputedStyle(item).cursor` 与禁用项的 cursor，
+    要求 `pointer` / `default`。**破坏性验证**：改回 default ⇒ ㉜ 立刻红。
+    ★选它做判据的原因：光标形态是"这一类视觉反馈"里最容易漏、也最容易用一行 CSS 回归的东西。

@@ -148,7 +148,9 @@ onBeforeUnmount(() => {
   color: var(--fg);
   font: 12px/24px -apple-system, 'PingFang SC', sans-serif;
   text-align: left;
-  cursor: default;
+  /* ★可点的项必须是"手指"（决策 #1240）：中性灰高亮在深色界面里很轻，
+     光靠底色变化不够，光标形态是最直接的第二重反馈。禁用项保持箭头。 */
+  cursor: pointer;
 }
 /* ★中性高亮（8% 白），不用品牌蓝 —— 蓝底在深色界面里太跳，是"粗糙"的主要来源 */
 .item.active:not(:disabled) {
