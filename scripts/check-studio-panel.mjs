@@ -326,6 +326,17 @@ await page.waitForTimeout(200)
 const undoKept = await page.evaluate(
   () => document.querySelector('.cm-content')?.textContent ?? '',
 )
+// ── ⑱d 菜单的「撤销」必须真的撤销（决策 #1242）─────────────────────────────────
+// 【为什么单独立一条】原生菜单用 `PredefinedMenuItem::undo` 时，AppKit 把 ⌘Z 交给
+//   **WKWebView 的 undoManager**，而撤销栈在 CodeMirror 里 ⇒ 按 ⌘Z 完全没反应，
+//   而且菜单把键吃掉了、CM 的 keymap 也收不到。改成自绘动作（edit.undo → 前端 undo(view)）后要验：
+//   派发菜单动作，文档必须真的回退。
+await page.keyboard.type('// menu-undo-probe')
+await page.waitForTimeout(120)
+const beforeMenuUndo = await page.evaluate(() => document.querySelector('.cm-content')?.textContent ?? '')
+await page.evaluate(() => window.dispatchEvent(new CustomEvent('studio:menu', { detail: 'edit.undo' })))
+await page.waitForTimeout(220)
+const afterMenuUndo = await page.evaluate(() => document.querySelector('.cm-content')?.textContent ?? '')
 // ── ㉓ 标签栏必须待在编辑器区内（不能跨界压到左栏文件树上，决策 #1218）──────
 // 【为什么单独立一条】这是纯布局约束，功能测试全绿也可能错：标签栏原先挂在 `.codepane`
 //   下（整页宽度）⇒ 横跨整页、正好压在左栏树的上面。用户截图一眼看出，而 35 条判据全绿。
@@ -710,6 +721,11 @@ const checks = [
   [
     `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
     failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
+  ],
+  // ⑱d 菜单「撤销」真的撤销（不是把键交给 WKWebView 的 undoManager）
+  [
+    `⑱d 菜单撤销：输入前含标记=${beforeMenuUndo.includes('// menu-undo-probe')} · 撤销后残留=${afterMenuUndo.includes('// menu-undo-probe')}`,
+    beforeMenuUndo.includes('// menu-undo-probe') && !afterMenuUndo.includes('// menu-undo-probe'),
   ],
   // ⑱c 脏缓冲：切到别的文件再切回来，改过的内容还在（否则"切一下丢编辑"是最气人的）
   [

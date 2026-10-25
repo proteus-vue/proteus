@@ -626,9 +626,29 @@ watch(
  * ★⌘S / ⌘W 的**唯一**通路在真机上是菜单（accelerator 在 NSApplication 层被吃掉，
  *   CodeMirror 的 keymap 收不到）。所以这两个处理器不是"锦上添花"，
  *   少了它们真机上按 ⌘S 就真的什么都不会发生。 */
+/** 焦点是否在普通输入框里（搜索框/未来的表单）——
+ *  这时撤销/全选该作用于**输入框**，不是编辑器文档。 */
+function inPlainInput(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')
+}
+
 const menuOffs = [
   onMenuAction('file.save', () => void save()),
   onMenuAction('edit.find', () => searchBox.value?.focus()),
+  // 撤销/重做/全选：菜单加速键会把 ⌘Z 吃掉（见 src/menu.rs 注释），所以真正的实现在这里。
+  onMenuAction('edit.undo', () => {
+    if (inPlainInput()) document.execCommand('undo')
+    else if (view) undo(view)
+  }),
+  onMenuAction('edit.redo', () => {
+    if (inPlainInput()) document.execCommand('redo')
+    else if (view) redo(view)
+  }),
+  onMenuAction('edit.selectAll', () => {
+    if (inPlainInput()) document.execCommand('selectAll')
+    else if (view) selectAll(view)
+  }),
   onMenuAction('file.closeTab', () => {
     if (cur.value) close(cur.value)
   }),

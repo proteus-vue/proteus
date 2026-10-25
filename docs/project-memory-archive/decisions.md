@@ -14451,3 +14451,19 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【门禁】check:file-size ✅ · check:contract-index ✅ · host-probe-registry 7/7 ✅
   · iOS `swiftc -typecheck` ✅ · 两个 shell 脚本 `bash -n` ✅
   · 真机：`bash hosts/ios/run-selfdraw.sh --superapp --worker-bound-probe=16` → `worker_bound_ok: true`
+
+1242. **⌘Z 失效的根因：原生菜单用 `PredefinedMenuItem::undo` 把键交给了 WKWebView · 判据 ⑱d**（2026-10-25 · 用户「测试撤销动作怎么没反应了呢？记得前几次撤销都是有效果的」）:
+  - **症状与时间线对得上**：菜单（#1221）建起来之前，⌘Z 是纯 JS 事件 → CM6 的 `historyKeymap` 生效；
+    菜单建起来之后，"编辑 → 撤销"用的是 `PredefinedMenuItem::undo`。
+  - **根因**：AppKit 的 `undo:` 走 **responder chain** → 落到 **WKWebView 的 undoManager**，
+    而编辑器的撤销栈在 **CodeMirror** 里。更糟的是**菜单项会吃掉这个键**，所以 CM 的 keymap 也收不到
+    —— **两条路一起死**，表现就是"完全没反应"（不是撤销错了，是没人执行）。
+  - **修复**：撤销/重做/全选改成**自绘动作**（`edit.undo` / `edit.redo` / `edit.selectAll`，
+    ⌘Z / ⇧⌘Z / ⌘A），前端在 `CodePanel` 里落到 CM6 的 `undo/redo/selectAll`；
+    焦点在普通输入框（搜索框）时退回 `document.execCommand`。
+    **剪切/拷贝/粘贴仍用预定义项**——它们作用在焦点元素的原生编辑命令上，contenteditable 里是通的（输入法也正确）。
+  - **判据 ⑱d**：输入标记 → 派发菜单动作 `edit.undo` → 文档里标记必须消失。
+    破坏性验证：摘掉前端处理器 ⇒ 立刻红（`撤销后残留=true`）。
+    另外 ㉕ 的"死项"检查自动覆盖了三条新动作（菜单动作 8 → 11 项，全部有人接）。
+  - ★教训：**"系统预定义菜单项"和"应用自己的文档模型"是两个世界**。凡是编辑栈在自己手里的
+    （CodeMirror/Monaco/xterm），撤销/全选就必须自己接，不能用系统项——否则键被吃掉且不生效。

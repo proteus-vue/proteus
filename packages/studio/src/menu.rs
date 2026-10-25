@@ -25,6 +25,9 @@ use tauri::{AppHandle, Emitter, Runtime};
 pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("file.save", "保存", "CmdOrCtrl+S"),
     ("file.closeTab", "关闭标签页", "CmdOrCtrl+W"),
+    ("edit.undo", "撤销", "CmdOrCtrl+Z"),
+    ("edit.redo", "重做", "CmdOrCtrl+Shift+Z"),
+    ("edit.selectAll", "全选", "CmdOrCtrl+A"),
     ("edit.find", "查找…", "CmdOrCtrl+F"),
     ("view.device", "设备画面", "CmdOrCtrl+1"),
     ("view.code", "代码", "CmdOrCtrl+2"),
@@ -90,13 +93,19 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         "编辑",
         true,
         &[
-            &PredefinedMenuItem::undo(app, Some("撤销"))?,
-            &PredefinedMenuItem::redo(app, Some("重做"))?,
+            // ★撤销/重做/全选必须走**自己的动作**，不能用 `PredefinedMenuItem`（2026-10-25 实测踩到）：
+            //   AppKit 的 undo:/selectAll: 打到 **WKWebView 的 undoManager**，而编辑器的撤销栈在
+            //   CodeMirror 里 —— 结果就是"按 ⌘Z 完全没反应"。更糟的是菜单项会**吃掉**这个键，
+            //   CM 自己的 keymap 也收不到，两条路一起死。
+            //   剪切/拷贝/粘贴仍然用预定义项：它们作用于**当前焦点元素**的原生编辑命令，
+            //   contenteditable 里是通的（输入法也正确）。
+            &action(app, "edit.undo")?,
+            &action(app, "edit.redo")?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, Some("剪切"))?,
             &PredefinedMenuItem::copy(app, Some("拷贝"))?,
             &PredefinedMenuItem::paste(app, Some("粘贴"))?,
-            &PredefinedMenuItem::select_all(app, Some("全选"))?,
+            &action(app, "edit.selectAll")?,
             &PredefinedMenuItem::separator(app)?,
             &action(app, "edit.find")?,
         ],
