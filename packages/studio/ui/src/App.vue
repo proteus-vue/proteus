@@ -259,10 +259,10 @@ const hud = computed(() => {
   <div class="app">
     <!-- 沉浸式标题栏（2026-10-25 · 决策 #1219）：窗口用 titleBarStyle=Overlay + hiddenTitle，
          内容一直画到窗口顶部，原生红绿灯（trafficLightPosition 14,13）浮在这条上。
-         ★可拖拽区域靠 `data-tauri-drag-region`：只给"标题条本身"和品牌文字，
-           按钮/芯片（子元素）不带该属性 ⇒ 仍然可点。左内边距 84px 是给红绿灯让位。 -->
+         ★可拖拽区域靠 `data-tauri-drag-region`：只给标题条本身；芯片/按钮（子元素）不带 ⇒ 仍然可点。
+         左内边距 84px 给红绿灯让位。★不再放品牌文字：窗口标题 + macOS 菜单栏已经说明是哪个应用，
+         重复一遍只会挤占拖拽区（用户 2026-10-25 指出"冗余"）。 -->
     <div class="top" data-tauri-drag-region>
-      <div class="brand" data-tauri-drag-region>Proteus <span>Studio</span></div>
       <div class="chip"><span class="dot" :class="{ off: !running }" /><span id="linkChip">{{ linkText }}</span></div>
       <div class="chip">镜像 60fps 上限</div>
       <div style="flex:1" />

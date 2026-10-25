@@ -412,12 +412,13 @@ const closed = await page.evaluate(() => ({
 const titleConf = JSON.parse(fs.readFileSync(path.join(STUDIO, 'tauri.conf.json'), 'utf8')).app.windows[0]
 const titleBar = await page.evaluate(() => {
   const top = document.querySelector('.top')
-  const brand = document.querySelector('.brand')
+  const chip = document.querySelector('.top .chip')
   return {
     drag: !!top && top.hasAttribute('data-tauri-drag-region'),
     padLeft: top ? parseFloat(getComputedStyle(top).paddingLeft) : -1,
-    brandX: brand ? Math.round(brand.getBoundingClientRect().x) : -1,
+    chipX: chip ? Math.round(chip.getBoundingClientRect().x) : -1,
     height: top ? Math.round(top.getBoundingClientRect().height) : -1,
+    brand: !!document.querySelector('.top .brand'),
   }
 })
 
@@ -805,13 +806,18 @@ const checks = [
   ],
   // ㉔ 沉浸式标题栏：配置 Overlay + 顶栏可拖 + 给红绿灯留位
   [
-    `㉔ 沉浸式标题栏：${titleConf.titleBarStyle}/hiddenTitle=${titleConf.hiddenTitle} · 红绿灯 x=${titleConf.trafficLightPosition?.x} · 顶栏可拖=${titleBar.drag} · 左内边距 ${titleBar.padLeft}px（品牌 x=${titleBar.brandX}）`,
+    `㉔ 沉浸式标题栏：${titleConf.titleBarStyle}/hiddenTitle=${titleConf.hiddenTitle} · 红绿灯 x=${titleConf.trafficLightPosition?.x},y=${titleConf.trafficLightPosition?.y} · 顶栏可拖=${titleBar.drag} · 左内边距 ${titleBar.padLeft}px（首个 chip x=${titleBar.chipX}，品牌已移除=${!titleBar.brand}）`,
     titleConf.titleBarStyle === 'Overlay' &&
       titleConf.hiddenTitle === true &&
       (titleConf.trafficLightPosition?.x ?? 0) >= 10 &&
+      // ★y 的语义不是"灯的 top"：wry 把标题栏容器加高到 `灯高 + y`，灯固定在容器底部
+      //   ⇒ 灯中心 ≈ y - 1.5。40px 顶栏要居中 ⇒ y≈22（实测 y=13 时中心 11，差 9px）。
+      (titleConf.trafficLightPosition?.y ?? 0) >= 20 &&
+      (titleConf.trafficLightPosition?.y ?? 0) <= 24 &&
       titleBar.drag &&
       titleBar.padLeft >= 76 &&
-      titleBar.brandX >= 80 &&
+      titleBar.chipX >= 80 &&
+      !titleBar.brand &&
       titleBar.height === 40,
   ],
   // ㉓ 标签栏在编辑器区内（起点 ≥ 文件树右边界；宽度 == 右栏宽度）

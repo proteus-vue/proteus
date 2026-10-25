@@ -71,8 +71,6 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .top{grid-area:top;display:flex;align-items:center;gap:var(--sp3);padding:0 var(--sp4) 0 84px;
      background:var(--bg-surface);border-bottom:1px solid var(--border-subtle);
      -webkit-user-select:none;user-select:none;cursor:default}
-.brand{font-weight:600;letter-spacing:.2px;font-size:var(--fs-md)}
-.brand span{color:var(--accent)}
 .chip{display:inline-flex;align-items:center;gap:var(--sp1);height:22px;padding:0 9px;
       border-radius:var(--r-pill);background:var(--bg-elevated);border:1px solid var(--border);
       color:var(--fg-muted);font-size:var(--fs-xs);white-space:nowrap}

@@ -13616,3 +13616,17 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   ★★**反例（踩过并弃用）**：为凑行数去删压**既有的历史注释** —— 那是拿别人的记录给新增腾空间，试了 8 轮仍不归零，最终弃用。正确还债法已写进任务板（iOS 抽 `TextStyleTails.swift` / 编译器五张表抽 `cse/props.ts`）。
   **⑧ 诚实边界**：a) `text-indent` 百分比（相对包含块宽）**未支持**，编译期诊断跳过；b) Android 低版本（< API 29）`word-spacing` 不生效（已告警，非静默）；c) `word-spacing` 对 CJK 语义弱（无词间空格，主承载西文/混排，与 Web 一致）；d) Skyline 的 `overflow-wrap` 是"属性不可表达"，但其默认断词行为与 break-word 观感一致 —— 这一点写进了文档而非笼统标"不支持"。
   **⑨ 落点**：`packages/contracts/src/style.ts` · `style-ir-registry.generated.ts` · `packages/runtime/src/style-safety/{whitelist,platform-narrowing}.ts` · `packages/compiler/src/{style-safety/index.ts, cse/{compute,dynamic,extract,parse}.ts, vapor/template.ts}` · `packages/component-ir/src/{pnode,pnode-style}.ts` · `packages/consistency/src/{appliers/{app,skyline},coverage,probes/web,snapshot}.ts` · `platform/android/.../ProteusTextPlatform.java` · `hosts/android/.../{VaporRenderHost,ProteusHostView,TextCmdSpec,TextIndentSpans}.java` · `platform/ios/.../ProteusTextAdapter.swift` · `hosts/ios/.../selfdraw-scene.swift` · `hosts/harmony/.../{proteus_text_platform.h,proteus_text_tails.h,proteus_render.cpp,proteus_host.cpp}`（+prebuilt 同步）· `tests/{text-indent-spacing-wrap,cse-batch-b-tail}.test.ts` · `css-conformance/pages/font.vue` + 三端截图 · 三个验收包。
+
+1220. **Studio 标题栏二修：红绿灯垂直居中（y=22）· 去掉冗余品牌文字 · 判据 ㉔ 更新 · 决策**（2026-10-25 · 承接 #1219 · 用户截图「这个感觉是不是有点儿冗余？标题栏和系统窗口按钮没有垂直居中吧？」）:
+  - **先量**（截图 1130×112 @2x，按像素解析）：红绿灯顶部 **4.5 CSS px**、直径 13、中心 **11px**；
+    40px 顶栏中心 **20px** ⇒ **高了 9px**。用户肉眼判断正确。
+  - **查清 wry 语义**（`wry-0.57.0/src/wkwebview/class/wry_web_view_parent.rs::inset_traffic_lights`）：
+    它**不是**把灯摆到 `(x,y)`，而是把**标题栏容器高度**设为 `灯高 + y`，灯只改 x、y 不动
+    （固定在容器底部）⇒ **灯中心 ≈ y − 1.5**。所以直觉的 y=13 反而把灯顶到了 11px。
+    ⇒ **y=22**（中心 20.5）才是居中。
+  - **冗余**：顶栏的 "Proteus Studio" 品牌文字与窗口标题/macOS 菜单栏重复，且挤占拖拽区 ⇒ 删除；
+    顶栏现在只剩 84px 红绿灯留白 + 两个状态芯片。
+  - **判据 ㉔ 跟着改**：从"品牌 x≥80"改成"首个芯片 x≥80 + 品牌已移除"，并新增 `y∈[20,24]`
+    （这条能抓住"有人凭直觉把 y 调回 13"）。
+  - **一般教训**：**第三方库的坐标注释不能当语义用**——`inset` 这个名字看起来是"内边距"，
+    实际是"容器加高"；量一次像素比读十行注释快。
