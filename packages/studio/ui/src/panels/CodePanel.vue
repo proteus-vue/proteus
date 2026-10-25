@@ -656,7 +656,7 @@ onBeforeUnmount(() => {
           v-for="r in rows"
           :key="r.node.path"
           :class="{ on: r.node.path === cur, dir: r.node.dir }"
-          :style="{ paddingLeft: `${8 + r.depth * 12}px` }"
+          :style="{ paddingLeft: `${8 + r.depth * 14}px` }"
           :title="r.node.path"
           :data-dir="r.node.dir ? r.node.path : undefined"
           :data-file="r.node.dir ? undefined : r.node.path"
@@ -665,13 +665,9 @@ onBeforeUnmount(() => {
           @click="r.node.dir ? toggle(r.node.path) : open(r.node.path)"
           @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
         >
-          <!-- 折叠箭头 + 类型图标：箭头只占位不显示在文件行上，这样同级名字都对齐 -->
-          <span
-            class="caret"
-            :class="{ open: r.node.dir && !ws.codeCollapsed.includes(r.node.path) }"
-          >
-            <StudioIcon v-if="r.node.dir" name="chevron" :size="12" />
-          </span>
+          <!-- ★不再画折叠箭头（决策 #1238）：目录**图标本身**就是展开/折叠的开关——
+               闭合与展开是两套形状，点行即切；层级改由缩进表达。
+               少一个 12px 箭头，名字整体左移，和同级文件名的左边界才真正对齐。 -->
           <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
           <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
           <span class="name">{{ r.node.name }}</span>
@@ -837,18 +833,6 @@ onBeforeUnmount(() => {
 .ico {
   flex: none;
   opacity: 0.8;
-}
-/* 折叠箭头：12px 固定宽度（文件行的空占位同宽，保证同级名字左对齐） */
-.caret {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 12px;
-  height: 12px;
-  transition: transform var(--dur) var(--ease);
-}
-.caret.open {
-  transform: rotate(90deg);
 }
 .name {
   overflow: hidden;
