@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#282c36"/><stop offset="0.55" stop-color="#191c23"/><stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/><stop offset="0.55" stop-color="#6366f1"/><stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="gStem" gradientUnits="userSpaceOnUse" x1="408" y1="232" x2="408" y2="784">
+      <stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+    <linearGradient id="gBowl" gradientUnits="userSpaceOnUse" x1="408" y1="232" x2="680" y2="564">
+      <stop offset="0" stop-color="#c4b5fd"/><stop offset="0.5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.26"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.08"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)"><rect x="100" y="100" width="824" height="824" fill="url(#bg2)"/></g>
+  <rect x="101" y="101" width="822" height="822" rx="185" fill="none" stroke="url(#rim)" stroke-width="2"/>
+  <g transform="translate(-30,2)">
+    <path d="M408 284 H 566 A 114 114 0 0 1 680 398" fill="none" stroke="#ffffff" stroke-width="104" stroke-linecap="butt"/>
+    <path d="M680 398 A 114 114 0 0 1 566 512 H 408" fill="none" stroke="#ffffff" stroke-width="104" stroke-linecap="butt"/>
+    <rect x="356" y="232" width="104" height="552" rx="52" fill="#ffffff"/>
+  </g>
+</svg>
