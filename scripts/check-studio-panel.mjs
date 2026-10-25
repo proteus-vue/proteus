@@ -515,7 +515,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone } =
+const { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -781,6 +781,28 @@ const checks = [
       menuSaved.includes('// menu-save') &&
       tabsBeforeMenu >= 1 &&
       tabsAfterMenu === tabsBeforeMenu - 1,
+  ],
+  // ㉜ 贴边定位：**只有**装不下才翻转，翻转后必须贴着鼠标；hover 底色必须是中性灰
+  [
+    `㉜ 菜单定位：锚点(${anchorX},${anchorY}) · 尺寸 ${edgeMenu ? Math.round(edgeMenu.right - edgeMenu.left) + '×' + Math.round(edgeMenu.bottom - edgeMenu.top) : '—'} · 实际 left/top=${edgeMenu ? Math.round(edgeMenu.left) + '/' + Math.round(edgeMenu.top) : '—'} · hover 底色=${edgeMenu?.bg ?? '—'}`,
+    (() => {
+      if (!edgeMenu) return false
+      const w = edgeMenu.right - edgeMenu.left
+      const h = edgeMenu.bottom - edgeMenu.top
+      const fitsRight = anchorX + w <= edgeMenu.vw - 8
+      const fitsDown = anchorY + h <= edgeMenu.vh - 8
+      // 装得下 ⇒ 左上角贴锚点；装不下 ⇒ 翻转，右下角贴锚点。两种都必须"贴着鼠标"。
+      const xOk = fitsRight ? Math.abs(edgeMenu.left - anchorX) <= 1 : Math.abs(edgeMenu.right - anchorX) <= 1
+      const yOk = fitsDown ? Math.abs(edgeMenu.top - anchorY) <= 1 : Math.abs(edgeMenu.bottom - anchorY) <= 1
+      const inside =
+        edgeMenu.left >= 0 &&
+        edgeMenu.top >= 0 &&
+        edgeMenu.right <= edgeMenu.vw &&
+        edgeMenu.bottom <= edgeMenu.vh
+      const m = (edgeMenu.bg.match(/\d+/g) ?? []).map(Number).slice(0, 3)
+      const neutral = m.length === 3 && Math.max(...m) - Math.min(...m) <= 14
+      return xOk && yOk && inside && neutral
+    })(),
   ],
   // ㉛ 瞬时反馈：复制成功出 toast、连点叠着、3 秒内自己消失
   [

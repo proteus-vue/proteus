@@ -348,5 +348,30 @@ await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
 const escClosed = await page.evaluate(() => !document.getElementById('ctxMenu'))
 
-  return { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone }
+// ── ㉜ 贴边定位 + 中性高亮（决策 #1239）────────────────────────────────────────
+// 在编辑器**右下角**右键：菜单必须向上/向左翻转并**贴着鼠标**（翻转后 right≈x、bottom≈y），
+// 而且 hover 底色必须是中性灰（8% 白），不能是品牌蓝。
+const hostBox = await page.locator('#codeHost').boundingBox()
+const anchorX = Math.round(hostBox.x + hostBox.width - 24)
+const anchorY = Math.round(hostBox.y + hostBox.height - 18)
+await page.mouse.click(anchorX, anchorY, { button: 'right' })
+await page.waitForTimeout(260)
+// 先用真实鼠标 hover 一个菜单项（让 Vue 的 active 状态真的更新），再读底色
+try {
+  await page.hover('#ctxMenu [data-menu-item="undo"]', { timeout: 1500 })
+} catch {
+  /* 菜单没出来时留给断言报错 */
+}
+const edgeMenu = await page.evaluate(() => {
+  const el = document.getElementById('ctxMenu')
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  const item = document.querySelector('#ctxMenu [data-menu-item="undo"]')
+  const bg = item ? getComputedStyle(item).backgroundColor : ''
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, vw: innerWidth, vh: innerHeight, bg }
+})
+await page.keyboard.press('Escape')
+await page.waitForTimeout(150)
+
+  return { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

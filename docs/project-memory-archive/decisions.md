@@ -14343,3 +14343,20 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 
 【门禁】check:file-size ✅ · check:content ✅ · check:contract-index ✅
   · check:android-host-compile ✅ · 定向测试 43 全绿（含 host-probe-registry）
+
+1239. **右键菜单两处修：贴边定位「先量后放」+ 高亮改中性灰（主流 IDE 风）· 判据 ㉜**（2026-10-25 · 用户「偏下位置右键时弹出位置不在鼠标上方；蓝色底太粗糙」）:
+  - **定位错在哪**：上一版用 `EST_H(34) × 项数` **估算**高度来判断要不要上翻。
+    估高了就把菜单丢到离鼠标很远的地方（用户截图：点在下半屏，菜单弹到上半屏）。
+    ⇒ 改成 **先量后放**：`openMenu()` 只记**锚点**；组件先按锚点渲染但 `visibility:hidden`，
+    `nextTick` 量真实尺寸 → `placeMenu(w,h,vw,vh)`：装不下才翻转（右下角贴鼠标），仍越界才夹边距。
+    **永不用估算值定位置。**
+  - **高亮为什么"粗糙"**：hover 用的是品牌蓝填充（`--accent` 整块），在深色界面里"跳"出来。
+    VS Code / JetBrains 的菜单高亮都是**中性灰**（≈8% 白）。改成 `rgba(255,255,255,.08)`，
+    危险项 hover 改成 14% 红；顺手把行高收到 24、圆角 8、边框用 `--border-subtle`、阴影更收敛。
+  - **补键盘操作**（主流 IDE 都有，之前只有 Esc）：↑↓ 移动（跳过分隔线/禁用项、可循环）、
+    Enter 执行、Home/End 到首尾；`active` 与 hover 共用一个状态。
+  - **判据 ㉜**：在编辑器右下角右键，断言**只有装不下才翻转**、翻转后右下角贴住锚点（±1px）、
+    菜单完整在窗口内、hover 底色 RGB 三通道差 ≤14（即中性灰，不是品牌蓝）。
+    **破坏性验证**：上翻时故意多偏 120px ⇒ ㉜ 立刻红（left/top 打印 590 vs 期望 710）。
+  - ★判据自己踩的坑：第一版用 `dispatchEvent('mouseenter')` 读 hover 底色，读到 `rgba(0,0,0,0)`——
+    Vue 的 class 更新在 nextTick，同一个 evaluate 里读不到。改用 Playwright 的**真实 hover**。
