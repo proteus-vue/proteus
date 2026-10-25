@@ -346,6 +346,25 @@ const closed = await page.evaluate(() => ({
 //   ② 给原生红绿灯留出宽度（trafficLightPosition 14 + 52 宽 ⇒ 左内边距 ≥76）。
 //   ★红绿灯的**实际像素位置**在这里测不到（Playwright 里是普通浏览器，没有原生窗口）——
 //     那条只能人眼看，README 里如实写了。
+// ★能力（capabilities）：插件命令**默认被 ACL 拒**（`plugin:window|start_dragging` 等），
+//   只写 `data-tauri-drag-region` 是拖不动的（2026-10-25 实测：整条标题栏拖不动、双击不缩放）。
+//   这里同时看**源文件**与**构建产物**（gen/schemas/capabilities.json 是嵌进二进制的那份），
+//   两者不一致 ⇒ 改了能力没重编，运行时仍是旧的。
+const CAP_NEED = [
+  'core:window:allow-start-dragging',
+  'core:window:allow-internal-toggle-maximize',
+  'core:event:allow-listen',
+  'core:event:allow-unlisten',
+]
+const capSrcPath = path.join(STUDIO, 'capabilities', 'default.json')
+const capGenPath = path.join(STUDIO, 'gen', 'schemas', 'capabilities.json')
+const capSrc = fs.existsSync(capSrcPath) ? JSON.parse(fs.readFileSync(capSrcPath, 'utf8')) : null
+const capGen = fs.existsSync(capGenPath) ? JSON.parse(fs.readFileSync(capGenPath, 'utf8')) : null
+const capMissingSrc = capSrc ? CAP_NEED.filter((x) => !(capSrc.permissions ?? []).includes(x)) : CAP_NEED
+const capMissingGen = capGen?.default
+  ? CAP_NEED.filter((x) => !(capGen.default.permissions ?? []).includes(x))
+  : CAP_NEED
+
 const titleConf = JSON.parse(fs.readFileSync(path.join(STUDIO, 'tauri.conf.json'), 'utf8')).app.windows[0]
 const titleBar = await page.evaluate(() => {
   const top = document.querySelector('.top')
@@ -357,6 +376,71 @@ const titleBar = await page.evaluate(() => {
     height: top ? Math.round(top.getBoundingClientRect().height) : -1,
     brand: !!document.querySelector('.top .brand'),
   }
+})
+
+// ── ㉔b 标题栏**真的**能拖、双击能缩放（决策 #1231）────────────────────────────
+// 【为什么必须升级判据】旧判据只断言"`.top` 上有 data-tauri-drag-region 属性"——**假绿**：
+//   Tauri 的规则是「bare/`true` = 只有**直接点在这个元素上**才算；`deep` = 子树里任何位置都算」，
+//   而标题条里塞着芯片和 spacer，点击永远先落在**子元素**上 ⇒ bare 模式下整条栏拖不动、双击也不缩放。
+//   ⇒ 这里直接把 **Tauri 自己的 `drag.js`** 注入页面（不是自己复述规则），
+//     在几个真实坐标上派发 mousedown/mouseup，断言它**真的发了** `plugin:window|start_dragging`
+//     与 `plugin:window|internal_toggle_maximize`。
+//   ★crate 源码找不到时（比如 CI 只 clone 本仓）退回"最小镜像规则"，并在输出里说明。
+function tauriDragScript() {
+  const home = process.env.HOME || ''
+  const reg = path.join(home, '.cargo', 'registry', 'src')
+  try {
+    for (const vendor of fs.readdirSync(reg)) {
+      const dir = path.join(reg, vendor)
+      for (const crate of fs.readdirSync(dir)) {
+        if (/^tauri-2\./.test(crate)) {
+          const f = path.join(dir, crate, 'src', 'window', 'scripts', 'drag.js')
+          if (fs.existsSync(f)) return { src: fs.readFileSync(f, 'utf8'), from: f }
+        }
+      }
+    }
+  } catch {
+    /* 没装 rust 源码：走镜像 */
+  }
+  const mirror = `;(function(){
+    const A='data-tauri-drag-region'
+    const CLICK=new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA','LABEL','SUMMARY'])
+    const isClick=(el)=>CLICK.has(el.tagName)||(el.hasAttribute('contenteditable')&&el.getAttribute('contenteditable')!=='false')||(el.hasAttribute('tabindex')&&el.getAttribute('tabindex')!=='-1')
+    function isDrag(path){for(const el of path){if(!(el instanceof HTMLElement))continue;const a=el.getAttribute(A);if(isClick(el)&&a===null)return false;if(a===null)continue;if(a==='false')return false;if(a==='deep')return true;if(a===''||a==='true')return el===path[0]}return false}
+    document.addEventListener('mousedown',(e)=>{if(e.button===0&&(e.detail===1||e.detail===2)&&isDrag(e.composedPath())){if(e.detail===2){window.__DRAG_INIT__=[e.clientX,e.clientY];return}window.__TAURI_INTERNALS__?.invoke('plugin:window|start_dragging')}})
+    document.addEventListener('mouseup',(e)=>{if(e.button===0&&e.detail===2&&window.__DRAG_INIT__&&e.clientX===window.__DRAG_INIT__[0]&&e.clientY===window.__DRAG_INIT__[1]&&isDrag(e.composedPath()))window.__TAURI_INTERNALS__?.invoke('plugin:window|internal_toggle_maximize')})
+  })()`
+  return { src: mirror, from: '（镜像规则：crate 源码不可用）' }
+}
+const dragScript = tauriDragScript()
+await page.addScriptTag({
+  content: `window.__TAURI_INTERNALS__=window.__TAURI_INTERNALS__||{};window.__TAURI_INTERNALS__.invoke=(c)=>{window.__DRAG_CALLS__=window.__DRAG_CALLS__||[];window.__DRAG_CALLS__.push(c);return Promise.resolve()};`,
+})
+await page.addScriptTag({ content: dragScript.src.replace('__TEMPLATE_os_name__', "'macos'") })
+const dragProbe = await page.evaluate(() => {
+  const bar = document.querySelector('.top')
+  const b = bar.getBoundingClientRect()
+  // 三点：芯片上、spacer 上、右边芯片上 —— 都是"点在子元素上"的真实情形
+  const xs = [b.x + 40, b.x + b.width * 0.5, b.right - 60]
+  const y = b.y + b.height / 2
+  const fire = (type, x, detail) =>
+    document.elementFromPoint(x, y).dispatchEvent(
+      new MouseEvent(type, { bubbles: true, composed: true, clientX: x, clientY: y, button: 0, detail }),
+    )
+  const out = []
+  for (const x of xs) {
+    window.__DRAG_CALLS__ = []
+    const el = document.elementFromPoint(x, y)
+    fire('mousedown', x, 1)
+    out.push({ hit: el.className || el.tagName, drag: [...window.__DRAG_CALLS__] })
+  }
+  // 双击（macOS 在 mouseup 上切最大化）
+  window.__DRAG_CALLS__ = []
+  const x2 = b.x + b.width * 0.5
+  fire('mousedown', x2, 2)
+  fire('mouseup', x2, 2)
+  const dbl = [...window.__DRAG_CALLS__]
+  return { out, dbl, mode: bar.getAttribute('data-tauri-drag-region') }
 })
 
 // ── ⑬ 真实指针点击 → 落点标记（★修正 B1：原来的判据测的是一条死路）──────────────
@@ -852,6 +936,18 @@ const checks = [
       !undoKept.includes('// edited by gate') &&
       closed.count === tabState.count - 1 &&
       closed.path.endsWith('App.vue'),
+  ],
+  // ㉔c 能力（ACL）：标题栏拖拽/双击缩放与菜单事件，必须同时写进源文件**和**构建产物
+  [
+    `㉔c 能力：源文件缺 ${capMissingSrc.join(',') || '无'} · 构建产物缺 ${capMissingGen.join(',') || '无'}${capGen ? '' : '（capabilities.json 不存在：没编过？）'}`,
+    !!capSrc && !!capGen?.default && capMissingSrc.length === 0 && capMissingGen.length === 0,
+  ],
+  // ㉔b 标题栏真的能拖 / 双击能缩放（注入 Tauri 的 drag.js，看它有没有发 window 命令）
+  [
+    `㉔b 标题栏拖拽：drag-region=${JSON.stringify(dragProbe.mode)} · 三点命中 ${dragProbe.out.map((o) => `${o.hit || o.drag.length}→${o.drag.length ? '拖' : '不拖'}`).join(' / ')} · 双击→${dragProbe.dbl.length ? '缩放' : '无反应'}${dragScript.from.includes('镜像') ? '（镜像规则）' : ''}`,
+    dragProbe.mode === 'deep' &&
+      dragProbe.out.every((o) => o.drag.includes('plugin:window|start_dragging')) &&
+      dragProbe.dbl.includes('plugin:window|internal_toggle_maximize'),
   ],
   // ㉔ 沉浸式标题栏：配置 Overlay + 顶栏可拖 + 给红绿灯留位
   [

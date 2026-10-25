@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Studio 主窗口依赖的插件能力：标题栏拖拽/双击缩放、菜单事件订阅","local":true,"windows":["main"],"permissions":["core:window:allow-start-dragging","core:window:allow-internal-toggle-maximize","core:event:allow-listen","core:event:allow-unlisten"]}}

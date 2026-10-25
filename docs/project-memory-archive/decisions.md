@@ -13893,3 +13893,31 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     更贴近 Dock，因为它拿的是进程自己的图标。
   - **为什么不直接删 `bundle.icon`**：那张图同时给 Linux/Windows 当窗口图标，删掉只是把问题挪个地方；
     显式覆盖语义更清楚，也不影响将来跨平台。
+
+1231. **标题栏拖不动 / 双击不缩放 —— 两层根因（drag-region 语义 + ACL 全拒）· 修复**（2026-10-25 · 用户「测试标题栏无法拖拽应用和双击缩放应用」）:
+  - **第一层：`data-tauri-drag-region` 是 bare 值**。读 `tauri/src/window/scripts/drag.js`：
+    `bare`/`"true"` ⇒ **只有直接点在该元素上**才算拖拽（`el === composedPath[0]`）；
+    `"deep"` ⇒ 子树里任何位置都算。标题条里塞着芯片与 spacer，点击先落在子元素上 ⇒ 拖不动。
+    修复：`.top` 改 `data-tauri-drag-region="deep"`（`<button>/<input>` 仍会自动阻断）。
+  - **★★第二层（真凶）：ACL 把所有 `plugin:` 命令全拒了**。Tauri 2 的 IPC 里：
+    `if (plugin_command.is_some() || has_app_acl_manifest || !is_local) && invoke.acl.is_none() { reject }`
+    而本仓**没有 `capabilities/` 目录**、`gen/schemas/capabilities.json` 是 `{}` ⇒ `plugin:window|start_dragging`
+    被拒，JS 侧 reject 是**静默**的（没人 catch）⇒ 表现就是"点了没反应"。
+    ⇒ 新增 `packages/studio/capabilities/default.json`：
+    `core:window:allow-start-dragging` / `allow-internal-toggle-maximize` / `core:event:allow-listen` / `allow-unlisten`。
+  - **★顺带发现一个"假绿"**：`plugin:event|listen` 同样被拒 ⇒ **菜单在真机上从来没生效过**——
+    门禁 ㉕ 测的是**浏览器兜底路径**（`studio:menu` DOM 事件），它证明"动作侧通了"，
+    但**不证明原生菜单点得到**。加了 `core:event:allow-listen` 后这条路才真正通。
+  - **取证过程（老实说）**：加临时探针把 `plugin:window|is_maximized` 的结果回传给宿主日志，
+    读到 `acl-probe window-plugin DENIED: Command plugin:window|is_maximized not allowed by ACL`；
+    补上能力后改探 `start_dragging`，结果**应用直接卡在拖拽跟踪循环里**（`performWindowDragWithEvent:`
+    没有鼠标事件收尾）——这反而是"已被放行"的证据。探针用完已删。
+    **教训**：`start_dragging` 不能拿来当探针（会挂住主线程），要探就探无副作用的命令。
+  - **判据升级（两条，补的是不同的一半）**：
+    · **㉔b**：把 **Tauri 自己的 `drag.js`** 注入页面（crate 源码找不到时退回最小镜像），
+      在三个真实坐标派发 mousedown/mouseup，断言它**真的发了** `plugin:window|start_dragging`
+      与 `internal_toggle_maximize` —— 证明"DOM + 判定规则"这一半；旧判据只看属性在不在，是假绿。
+    · **㉔c**：`capabilities/default.json` 与 `gen/schemas/capabilities.json`（**嵌进二进制的那份**）
+      都必须包含四项能力 —— 证明"命令被允许"这一半；两者不一致 = 改了能力没重编。
+  - **诚实边界**：㉔b 里的 `__TAURI_INTERNALS__.invoke` 是桩，它证明不了"JS→Rust 真的被接受"；
+    那半边只有 ㉔c（ACL）+ 人手拖一次能证。
