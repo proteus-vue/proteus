@@ -515,7 +515,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone } =
+const { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -792,8 +792,8 @@ const checks = [
   ],
   // ㉘ 目录图标两态（展开 folderOpen / 折叠 folder）
   [
-    `㉘ 目录图标：展开=${dirOpen} · 折叠=${dirClosed}（packages/studio/ui）`,
-    dirOpen === 'folderOpen' && dirClosed === 'folder',
+    `㉘ 目录图标：展开=${dirOpen}(svg data-open=${markOpen}) · 折叠=${dirClosed}(svg data-open=${markClosed})`,
+    dirOpen === 'folderOpen' && dirClosed === 'folder' && markOpen === '1' && markClosed === '0',
   ],
   // ㉙ 文件类型图标：不同语言不同记号 + 不同类型色
   [

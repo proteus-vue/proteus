@@ -283,9 +283,13 @@ const iconSamples = await page.evaluate((paths) => {
 ])
 const dirSel = '#codeFiles button[data-dir="packages/studio/ui"]'
 const dirOpen = await page.getAttribute(dirSel, 'data-icon')
+// ★同时看**画出来的那个 svg**（data-open）：只断言 data-icon 的话，
+//   即使图标组件被换回"两态同一个形状"也照样绿——那又是结构性假绿。
+const markOpen = await page.getAttribute(`${dirSel} svg[data-open]`, 'data-open')
 await page.click(dirSel)
 await page.waitForTimeout(250)
 const dirClosed = await page.getAttribute(dirSel, 'data-icon')
+const markClosed = await page.getAttribute(`${dirSel} svg[data-open]`, 'data-open')
 await page.click(dirSel) // 还原
 await page.waitForTimeout(250)
 
@@ -344,5 +348,5 @@ await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
 const escClosed = await page.evaluate(() => !document.getElementById('ctxMenu'))
 
-  return { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone }
+  return { iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone }
 }

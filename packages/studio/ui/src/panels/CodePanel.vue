@@ -56,6 +56,7 @@ import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
 import SearchBox from './SearchBox.vue'
 import FileIcon from '../icons/FileIcon.vue'
+import FolderIcon from '../icons/FolderIcon.vue'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { fileTypeIcon } from '../fileIcons'
@@ -671,8 +672,8 @@ onBeforeUnmount(() => {
           >
             <StudioIcon v-if="r.node.dir" name="chevron" :size="12" />
           </span>
-          <StudioIcon v-if="r.node.dir" :name="nodeIcon(r.node).name" :size="14" class="ico" />
-          <FileIcon v-else :path="r.node.path" :size="15" class="ico" />
+          <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
+          <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
           <span class="name">{{ r.node.name }}</span>
         </button>
         </nav>
