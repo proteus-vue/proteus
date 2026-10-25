@@ -13506,3 +13506,25 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     本次的 dylib 清理是**手工**做的，脚本里没有 prune；`stat -f '%m-%d %H:%M:%S'` 写法是错误的
     （`%m` 是权限位、`%H` 不存在 ⇒ `bad format`），正确是 `stat -f '%Sm' -t '<时间格式>'`。
   - **下一步**：G5 三项（窗口尺寸记忆 / 面板可插拔 / `main.rs` 按命令分组拆）。
+
+1215. **Studio 语法着色补齐到 7/7 扩展名（lang-javascript / lang-css / legacy-modes）+ 覆盖表判据 ⑳ · 决策**（2026-10-25 · 承接 #1213 的"只有 .vue/.rs" · 用户「支持的语言是不是比较少？」）:
+  - **回答"是不是自研"**：四层里我们只有最后一层 —— CodeMirror 6 内核 / Lezer 增量解析 / 官方 `lang-*` 语法 /
+    `HighlightStyle` 的 token→颜色映射（约 40 行，性质同 VS Code theme）。**一行语法分析没写**。
+  - **覆盖事实**：代码视图 17 个文件，`.vue`(8)+`.rs`(2) 有高亮，`.ts`(4)/`.m`/`.h`/`.css` 纯文本 = **59%**。
+    ★`.vue` 内部的 `<script lang="ts">` 本来就有 TS 高亮（lang-vue 自带 JS 解析器），缺的是**独立文件**。
+  - **交付**：`ui/src/languages.json` 作为「扩展名 → 语言 id」**单一真源**（`languages` / `plain` 两档，plain 必写理由）；
+    `CodePanel.vue` 的 `FACTORY` 是全仓唯一出现具体语言包的地方；`.ts/.tsx/.js/.jsx`=lang-javascript、
+    `.css`=lang-css、`.m/.h`=legacy-modes（objectiveC / cpp）、`.json` 显式登记纯文本。
+  - **判据 28 → 32**：⑲c `.ts`（关键字/字符串/数字）· ⑲d `.css`（属性名/数字/注释）· ⑲e `.m`（关键字/数字/注释）·
+    ⑳ **覆盖表**（Node 侧扫真实目录，与 json 同一份数据）⇒ 实测 19/6、13/6、8/5；7 种扩展名全有归属。
+  - **破坏性验证**：删 `.ts` 登记 + ts/css/objc 三工厂改 `() => []` ⇒ ⑲c/d/e 全红（`0 token/0 色`）、
+    ⑳ 点名「缺登记 .ts」；还原后**重建 web-dist** 再跑 ⇒ 32/32。
+    ★踩一次：`--no-build` 会复用变异时的产物 ⇒ 还原后必须重建（否则误判"还没修好"）。
+  - **顺带修自己写的两处硬编码**：⑪c「3 个文件」、⑫b「reload 后 files===3」——加两个桩文件就必红。
+    改成 5 与 `restored.files === codeView.fileCount`。**教训**：判据里的数字要能从被测数据推出来，否则一次正常改动就翻红。
+  - **诚实边界**：ObjC 无官方 Lezer 语法（社区无成熟包）⇒ clike 只到 **C 级**（`@interface`/`[obj msg]` 当普通文本），
+    且 legacy-modes 是 CM5 遗留 StreamLanguage（有着色、没有语法树 ⇒ 无结构化折叠/选中）；
+    README 写「C 级降级」，不吹「支持 Objective-C」。
+  - **产物**：`.app` 已重打包（47MB · 09:31）；**运行中的实例仍是旧二进制**（不响应 quit AppleEvent，未强杀，
+    怕用户有未保存编辑）⇒ 需用户退出重开。
+  - **下一步**：G5 三项（窗口尺寸记忆 / 面板可插拔 / `main.rs` 命令拆分）。

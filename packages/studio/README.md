@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **28 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **32 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -502,16 +502,38 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
 缓冲只在内存（刷新即丢，不给仓库留临时副本）；`base`/`mtime` 记的是**开始编辑时**那一版，
 保存时仍按它做冲突检测——否则切一次文件就把"别人改过"这条线索刷新掉了。
 
-### 语法着色（2026-10-25 · 决策 #1213）
+### 语法着色（2026-10-25 · 决策 #1213 / #1215）
 
-`HighlightStyle` + `@lezer/highlight` 的 `tags`：语言包本来就在（`.vue` = `@codemirror/lang-vue`，
-`.rs` = `@codemirror/lang-rust`），缺的只是"把 token 标签映射成颜色"这一层——它需要
-`@lezer/highlight`（`@codemirror/language` 的**传递依赖**，pnpm 隔离布局下 import 不到），
-现已由用户在根 `package.json` 装成直接依赖：
+**用的是成熟方案，我们只写「配色」这一层**——一行语法分析都没写：
+
+| 层 | 谁做的 | 说明 |
+|---|---|---|
+| 编辑器内核 | CodeMirror 6（MIT） | Chrome DevTools 的 Sources、Replit、Jupyter、Sourcegraph、React 官方文档都在用 |
+| 分词 / 语法树 | **Lezer** 增量解析器 | CM6 作者 Marijn Haverbeke（ProseMirror 同作者）；只重解改动区间 ⇒ 打字不掉帧 |
+| 语言语法 | 官方 `@codemirror/lang-*` | 每种语言一个 Lezer grammar，我们只决定「挑哪个包」 |
+| token → 颜色 | **我们（约 40 行）** | `HighlightStyle.define([...])`，性质等同 VS Code 的 theme 文件 |
+
+**依赖**（都在仓库根；本目录刻意无 `package.json`，见 #1187）：
 
 ```bash
-pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 @lezer/highlight
+pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
+  @codemirror/lang-vue @codemirror/lang-rust @codemirror/lang-javascript \
+  @codemirror/lang-css @codemirror/legacy-modes @lezer/highlight
 ```
+
+**覆盖：代码视图里 7 种扩展名全部有归属**（`ui/src/languages.json` 是**单一真源**）：
+
+| 扩展名 | 语言 | 备注 |
+|---|---|---|
+| `.vue` | `lang-vue` | 内部 `<script>` / `<style>` 由它自带的 JS/CSS/HTML 解析器负责 |
+| `.rs` | `lang-rust` | |
+| `.ts` `.tsx` `.js` `.jsx` | `lang-javascript` | `{typescript:true}` / `{jsx:true}` 按扩展名给 |
+| `.css` | `lang-css` | 就是存 `--syn-*` 的那个文件，自己高亮自己 |
+| `.m` `.h` | `legacy-modes` 的 clike | ★**ObjC 没有官方 Lezer 语法**（社区也没成熟包）⇒ 用 CM5 遗留模式：能出 C 家族的关键字/字符串/数字/注释，`@interface`、`[obj msg]` 只当普通文本。**如实写作「C 级降级」，不吹成「支持 Objective-C」** |
+| `.json` | —（显式登记为纯文本） | 只出现在映射表里；要读 config 时再装 `lang-json` |
+
+★**为什么映射放 JSON 而不是写死在组件里**：门禁要按**同一份数据**扫真实目录（判据 ⑳）——
+写死在组件里就只能靠人盯着，而「新增了文件类型但忘了接语言」恰恰是没人会盯着的那类事。
 
 **色板另立 `--syn-*` 一列**（`ui/src/styles.css`），**不复用** `--ok/--warn/--bad`：
 
@@ -532,27 +554,35 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 @lezer/highlight
 ★**普通变量名刻意不着色**：全都有颜色等于没颜色，变量继承正文色才能让上面这些类别凸显。
 ★仍然**不自研分词器**（G-56.1 红线），也不 hack 库内部 `.specs`。
 
-**判据 ⑲/⑲b 量的是浏览器算出来的 `color`，不是"代码里有 `syntaxHighlighting(...)`"**：
+**判据 ⑲ 系列量的是浏览器算出来的 `color`，不是"代码里有 `syntaxHighlighting(...)`"**：
 
 | 判据 | 断言 | 实测 |
 |---|---|---|
-| ⑲ `.vue` | token 数 ≥15 · 颜色种类 ≥4 · **标签 / 关键字 / 字符串三类各自不同色且都 ≠ 正文色** | 38 个 token / 7 种颜色 / 3/3 |
-| ⑲b `.rs` | token 数 ≥12 · 颜色种类 ≥3 · **关键字 / 字符串 / 数字三类各自不同色且都 ≠ 正文色** | 24 个 token / 6 种颜色 / 3/3 |
+| ⑲ `.vue` | token ≥15 · 颜色 ≥4 种 · **标签 / 关键字 / 字符串各自不同色且都 ≠ 正文色** | 38 token / 7 色 / 3/3 |
+| ⑲b `.rs` | token ≥12 · 颜色 ≥3 种 · **关键字 / 字符串 / 数字** | 24 token / 6 色 / 3/3 |
+| ⑲c `.ts` | token ≥10 · 颜色 ≥3 种 · **关键字 / 字符串 / 数字** | 19 token / 6 色 / 3/3 |
+| ⑲d `.css` | **属性名 / 数字 / 注释** 三类（CSS 没有"关键字"概念） | 13 token / 6 色 / 3/3 |
+| ⑲e `.m` | **关键字 / 数字 / 注释**（C 级降级的真实能力边界） | 8 token / 5 色 / 3/3 |
+| ⑳ 覆盖表 | 树里出现的**每个扩展名**都必须在 `languages.json` 有归属 | 7 种全有归属 |
 
-★**破坏性验证（两条，都当场翻红）**：
-1. 摘掉 `syntaxHighlighting(studioHighlight)` 这一行 ⇒ ⑲ `2 个 token / 1 种颜色`、⑲b `0 / 0` ⇒ 红；
-2. 让字符串与数字**都取关键字色**（token 数不变、整体仍有 5 种颜色）⇒ 两条都红
-   （`3/3` 的位置数还在，但"三类不同色"不成立）——证明断言**不是**"有颜色就算过"。
+★**破坏性验证（三条，都当场翻红）**：
+1. 摘掉 `syntaxHighlighting(studioHighlight)` ⇒ ⑲ `2 token / 1 色`、⑲b `0 / 0` ⇒ 红；
+2. 让字符串与数字**都取关键字色**（token 数不变、整体仍有 5 种颜色）⇒ 红
+   （`3/3` 的位置数还在，但"三类不同色"不成立）——证明断言**不是**"有颜色就算过"；
+3. 把 `.ts` 从 `languages.json` 删掉 + 把 ts/css/objc 三个工厂改成 `() => []` ⇒
+   ⑲c/d/e 全红（`0 token / 0 色`）、⑳ 点名「缺登记 .ts」——证明覆盖表不是摆设。
+
 ★**桩内容必须按文件类型给**：判据里 `read_text` 的桩原先只有一段 JavaScript，塞给 `.vue` 解析器
-只会得到"整篇一个颜色"，那样 ⑲ 永远测不到东西（假绿）。现在 `.rs` 返回 Rust 片段、其余返回 SFC。
+只会得到"整篇一个颜色"，那样 ⑲ 永远测不到东西（假绿）。现在按扩展名返回 SFC / Rust / TS / CSS / ObjC 片段。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **28 条**）
+### 编辑器判据（`check:studio-panel` 已扩到 **32 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
-- ⑪c 目录树渲染出 **6 个目录 + 3 个文件**且默认打开 `App.vue`（自证）；
+- ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
 - ⑪d **点第二个文件能切换**（按**路径**选，不按序号——折叠会改变序号，踩过两次）；
-- ⑲ / ⑲b **语法着色生效**（`.vue` / `.rs` 各一条：量浏览器算出的 `color`，三类 token 必须各自不同色
-  且都 ≠ 正文色；两条破坏性验证见上节）；
+- ⑲ / ⑲b / ⑲c / ⑲d / ⑲e **语法着色生效**（5 种语言各一条：量浏览器算出的 `color`；
+  必须**逐个文件真打开**——语言包按扩展名注入，只测一个文件证明不了别的类型也接上了）；
+- ⑳ **覆盖表**：树里每种扩展名都要有归属（防止新增文件类型静默掉队）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；
@@ -695,7 +725,7 @@ Studio 记住**上次的视图与打开的文件**，重启回到原处。
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
 | **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
-| **G4** | 编辑器容器 | **编辑器已成（CodeMirror 6 · 可编辑 + ⌘S 写回 + 脏缓冲 + 冲突检测 + **语法着色 .vue/.rs**，决策 #1211/#1213）**：左栏 ◈ 切换 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号/当前行/选区/括号匹配/Tab 缩进 · **真实 pointer 点击 → 设备像素落点**（⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还差**：**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | 设备侧视图树 |
+| **G4** | 编辑器容器 | **编辑器已成（CodeMirror 6 · 可编辑 + ⌘S 写回 + 脏缓冲 + 冲突检测 + **语法着色 9 类扩展名**，决策 #1211/#1213/#1215）**：左栏 ◈ 切换 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号/当前行/选区/括号匹配/Tab 缩进 · **真实 pointer 点击 → 设备像素落点**（⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还差**：**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | 设备侧视图树 |
 | **G5** | 持久化 / 模块化 | **会话状态已成（#1190 续）**：视图（设备/代码）与上次打开的文件落 `~/Library/Application Support/dev.proteus.studio/state.json`，重启即恢复；判据 ⑫/⑫b 守着。**还没做**：窗口尺寸记忆、面板可插拔、`main.rs` 按命令分组拆 | 先拆命令再谈模块化（现在 408 行仍在可读范围） |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
 | — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |

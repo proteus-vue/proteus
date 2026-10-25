@@ -135,9 +135,9 @@ await page.addInitScript((payload) => {
         if (cmd === 'stats') return payload
         if (cmd === 'set_canvas_rect') return null
         // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
-        // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn），
-        //   把一段 JavaScript 塞给 .vue 解析器只会得到"整篇一个颜色"，
-        //   那样 ⑲ 永远测不到东西（假绿）。两份都含 `stubLine`，⑪/⑱ 的断言不变。
+        // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn / CSS 的
+        //   `color:` / ObjC 的 `static`），把一段 JavaScript 塞给 .vue 解析器只会得到"整篇一个颜色"，
+        //   那样 ⑲ 系列永远测不到东西（假绿）。VUE/RUST/TS 三份都含 `stubLine`，⑪/⑱ 的断言不变。
         if (cmd === 'read_text') {
           const p = String(args?.path ?? '')
           const VUE =
@@ -147,7 +147,16 @@ await page.addInitScript((payload) => {
           const RUST =
             'use std::fs;\n\nfn main() {\n    let stubLine = 1;\n    let second = 2;\n' +
             '    println!("{} {}", stubLine, second);\n}\n'
-          return { text: p.endsWith('.rs') ? RUST : VUE, mtime_us: 1700000000000000 }
+          const TS =
+            'export const stubLine = 1\n\nconst label = \'ok\'\n\n' +
+            'export function stubFn(): number {\n  return stubLine + 2\n}\n'
+          const CSS = '.stub {\n  color: red;\n  width: 32px;\n}\n\n/* note */\n'
+          const OBJC =
+            '#import <Foundation/Foundation.h>\n\n// note\nstatic int stubLine = 1;\n\n' +
+            'int main(void) {\n    return stubLine;\n}\n'
+          const byExt = { '.vue': VUE, '.rs': RUST, '.ts': TS, '.css': CSS, '.m': OBJC }
+          const ext = p.slice(p.lastIndexOf('.'))
+          return { text: byExt[ext] ?? VUE, mtime_us: 1700000000000000 }
         }
         if (cmd === 'write_text') {
           // 模拟"磁盘上已被别人改过"：让前端把冲突如实显示出来（不谎称已保存）
@@ -157,7 +166,13 @@ await page.addInitScript((payload) => {
         }
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
         if (cmd === 'list_files')
-          return ['packages/studio/ui/src/App.vue', 'packages/studio/src/main.rs', 'packages/studio/native/embed_view.m']
+          return [
+            'packages/studio/ui/src/App.vue',
+            'packages/studio/ui/src/bridge.ts',
+            'packages/studio/ui/src/styles.css',
+            'packages/studio/src/main.rs',
+            'packages/studio/native/embed_view.m',
+          ]
         // ★G5 会话状态：用 localStorage 模拟磁盘——这样 reload 后还能验「恢复上次视图」
         if (cmd === 'load_state') return localStorage.getItem('__stub_state__') ?? '{}'
         if (cmd === 'save_state') {
@@ -249,12 +264,25 @@ const tokenSpans = () =>
     }
   })
 const tokensVue = await tokenSpans()
-await page.locator('#codeFiles button[data-file="packages/studio/src/main.rs"]').click()
-await page.waitForTimeout(250)
+/** 打开某个文件并等渲染完成（统一 250ms，与原有节奏一致） */
+const openFile = async (p) => {
+  await page.locator(`#codeFiles button[data-file="${p}"]`).click()
+  await page.waitForTimeout(250)
+}
+await openFile('packages/studio/src/main.rs')
 const tokensRust = await tokenSpans()
 const switchedPath = await page.evaluate(
   () => document.getElementById('codePath')?.textContent?.trim() ?? '',
 )
+// ⑲c/⑲d/⑲e：另外三类（TS / CSS / ObjC）各取一次样——同一台机器、同一套配色，
+//   ★必须**逐个文件真打开**：语言包按扩展名注入，只测一个文件证明不了别的类型也接上了。
+await openFile('packages/studio/ui/src/bridge.ts')
+const tokensTs = await tokenSpans()
+await openFile('packages/studio/ui/src/styles.css')
+const tokensCss = await tokenSpans()
+await openFile('packages/studio/native/embed_view.m')
+const tokensObjc = await tokenSpans()
+await openFile('packages/studio/src/main.rs') // 回 main.rs：⑱ 的编辑/保存仍在这个文件上
 
 // ⑰ 目录可折叠：收起一个**与当前文件无关**的目录 ⇒ 里面的文件从可见行里消失，且折叠进会话状态
 await page.locator('#codeFiles button[data-dir="packages/studio/native"]').click()
@@ -467,6 +495,42 @@ const rustKw = colOf(tokensRust, (t) => t === 'let')
 const rustStr = colOf(tokensRust, (t) => t.includes('{}'))
 const rustNum = colOf(tokensRust, (t) => t === '1')
 const rustColors = [rustKw, rustStr, rustNum]
+const tsKw = colOf(tokensTs, (t) => t === 'const')
+const tsStr = colOf(tokensTs, (t) => t.includes("'ok'"))
+const tsNum = colOf(tokensTs, (t) => t === '1')
+const tsColors = [tsKw, tsStr, tsNum]
+const cssProp = colOf(tokensCss, (t) => t === 'color')
+const cssNum = colOf(tokensCss, (t) => t.startsWith('32'))
+const cssComment = colOf(tokensCss, (t) => t.includes('/* note'))
+const cssColors = [cssProp, cssNum, cssComment]
+const objcKw = colOf(tokensObjc, (t) => t === 'static')
+const objcNum = colOf(tokensObjc, (t) => t === '1')
+const objcComment = colOf(tokensObjc, (t) => t.includes('// note'))
+const objcColors = [objcKw, objcNum, objcComment]
+
+/* ── ⑳ 覆盖表：树里出现的每个扩展名都必须有归属（语言包 or 显式登记为纯文本）──
+   ★这是"防静默掉队"的判据：新增一个 .tsx 文件却没人接语言包时，⑲ 系列不会红
+     （它只测已打开的那几个文件），但 ⑳ 会。基准取 languages.json（与 UI 同一份数据）。 */
+const langMapPath = path.join(STUDIO, 'ui', 'src', 'languages.json')
+const langMap = JSON.parse(fs.readFileSync(langMapPath, 'utf8'))
+const knownExt = new Set([
+  ...Object.keys(langMap.languages ?? {}),
+  ...Object.keys(langMap.plain ?? {}),
+])
+const COVER_ROOTS = ['ui/src', 'src', 'native'] // ★必须与 CodePanel 的 ROOTS 一致
+const seenExt = new Set()
+const walkExt = (dir) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) walkExt(full)
+    else {
+      const dot = e.name.lastIndexOf('.')
+      if (dot > 0) seenExt.add(e.name.slice(dot).toLowerCase())
+    }
+  }
+}
+for (const r of COVER_ROOTS) walkExt(path.join(STUDIO, r))
+const missingExt = [...seenExt].filter((e) => !knownExt.has(e)).sort()
 
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
@@ -491,7 +555,7 @@ const checks = [
   [
     `⑪c 目录树渲染 ${codeView.dirCount} 个目录 + ${codeView.fileCount} 个文件，默认打开 App.vue`,
     codeView.listed &&
-      codeView.fileCount === 3 &&
+      codeView.fileCount === 5 &&
       codeView.dirCount === 6 &&
       codeView.curPath.endsWith('ui/src/App.vue'),
   ],
@@ -513,6 +577,33 @@ const checks = [
       distinctOf(tokensRust).size >= 3 &&
       rustColors.every((c) => !!c && c !== tokensRust.base) &&
       new Set(rustColors).size === 3,
+  ],
+  // ⑲c/.ts ⑲d/.css ⑲e/.m：语言包是按扩展名注入的，必须逐个文件真打开才证明"接上了"
+  [
+    `⑲c .ts 着色：${tokensTs.items.length} 个 token · ${distinctOf(tokensTs).size} 种颜色 · 关键字/字符串/数字 ${tsColors.filter(Boolean).length}/3`,
+    tokensTs.items.length >= 10 &&
+      distinctOf(tokensTs).size >= 3 &&
+      tsColors.every((c) => !!c && c !== tokensTs.base) &&
+      new Set(tsColors).size === 3,
+  ],
+  [
+    `⑲d .css 着色：${tokensCss.items.length} 个 token · ${distinctOf(tokensCss).size} 种颜色 · 属性/数字/注释 ${cssColors.filter(Boolean).length}/3`,
+    tokensCss.items.length >= 5 &&
+      cssColors.every((c) => !!c && c !== tokensCss.base) &&
+      new Set(cssColors).size === 3,
+  ],
+  [
+    `⑲e .m 着色（C 级降级，ObjC 无官方语法）：${tokensObjc.items.length} 个 token · ${distinctOf(tokensObjc).size} 种颜色 · 关键字/数字/注释 ${objcColors.filter(Boolean).length}/3`,
+    tokensObjc.items.length >= 5 &&
+      objcColors.every((c) => !!c && c !== tokensObjc.base) &&
+      new Set(objcColors).size === 3,
+  ],
+  // ⑳ 覆盖表：树里每种扩展名都要有归属，否则新类型会静默掉队
+  [
+    `⑳ 覆盖表：树里 ${seenExt.size} 种扩展名（${[...seenExt].sort().join(' ')}）${
+      missingExt.length ? `· 缺登记 ${missingExt.join(' ')}` : '· 全部有归属'
+    }`,
+    missingExt.length === 0,
   ],
   // ⑰ 目录可折叠：收起后里面的文件从可见行里消失（目录行本身还在，才能再展开）
   [
@@ -563,7 +654,7 @@ const checks = [
   // ⑫b reload 后恢复上次视图与文件（这条才是"重启即恢复"的真正判据）
   [
     `⑫b reload 后恢复上次的视图与文件${restored.path.endsWith('main.rs') ? '' : `（当前 ${restored.path || '空'}）`}`,
-    restored.files === 3 && restored.path.endsWith('main.rs'),
+    restored.files === codeView.fileCount && restored.path.endsWith('main.rs'),
   ],
   // ⑭ 等比适配：屏幕矩形比例必须等于设备比例，且**原生视图收到的矩形与之一致**
   //    （只比值不够：HTML 对了但没把新矩形发给原生，画面上仍是拉伸的旧尺寸）

@@ -11,17 +11,16 @@
 //   ② **原子替换**：临时文件 + rename（直接 write 中途失败会留下半个源文件）；
 //   ③ 保留权限位（rename 会换成新文件的 mode）。
 //
-// 【★语法着色（2026-10-25）】`HighlightStyle` + `@lezer/highlight` 的 `tags`：
-//   语言包已在（`.vue` = @codemirror/lang-vue，`.rs` = @codemirror/lang-rust），
-//   缺的只是"把 token 标签映射成颜色"这一层——它需要 `@lezer/highlight`，
-//   而那是 `@codemirror/language` 的**传递依赖**（pnpm 隔离布局下应用代码 import 不到），
-//   已由用户在根 `package.json` 显式装成直接依赖（^1.2.5）。
+// 【★语法着色（2026-10-25 · #1213 / #1215）】`HighlightStyle` + `@lezer/highlight` 的 `tags`：
+//   语言包：`.vue` lang-vue · `.rs` lang-rust · `.ts/.tsx/.js/.jsx` lang-javascript ·
+//   `.css` lang-css · `.m/.h` legacy-modes 的 clike（ObjC 无官方 Lezer 语法 ⇒ C 级降级）。
+//   扩展名 → 语言的映射在 `ui/src/languages.json`（单一真源，门禁 ⑳ 按它扫真实目录）。
 //   ★色板另立 `--syn-*` 一列（见 styles.css）：不复用 --bad/--ok 这类**状态**语义色，
 //     否则"红=错误"和"红=字符串"会在同一屏上互相误导。
 //   ★仍然不自己写分词器（G-56.1 红线：编辑器内核只用现成的）。
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { EditorState } from '@codemirror/state'
+import { EditorState, type Extension } from '@codemirror/state'
 import {
   EditorView,
   drawSelection,
@@ -34,6 +33,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import {
   HighlightStyle,
+  StreamLanguage,
   bracketMatching,
   indentOnInput,
   syntaxHighlighting,
@@ -41,6 +41,10 @@ import {
 import { tags } from '@lezer/highlight'
 import { vue } from '@codemirror/lang-vue'
 import { rust } from '@codemirror/lang-rust'
+import { javascript } from '@codemirror/lang-javascript'
+import { css } from '@codemirror/lang-css'
+import { cpp, objectiveC } from '@codemirror/legacy-modes/mode/clike'
+import languageMap from '../languages.json'
 import { hasBridge, listFiles, readText, writeText } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import StudioIcon from '../icons/StudioIcon.vue'
@@ -145,10 +149,32 @@ function revealPath(path: string) {
 }
 
 /* ─── 编辑器 ────────────────────────────────────────────────────────────── */
-const langFor = (path: string) => {
-  if (path.endsWith('.vue')) return vue()
-  if (path.endsWith('.rs')) return rust()
-  return [] // 其他类型按纯文本（不为一个文件类型再加一个语言包，装了也没人维护）
+/** ★扩展名 → 语言 id 的映射在 `ui/src/languages.json`（**单一真源**）。
+ *  为什么放 JSON 而不是写在这里：门禁要按**同一份数据**扫真实目录（判据 ⑳ 覆盖表），
+ *  写死在组件里就只能靠人盯着——而"新增了文件类型但忘了接语言"恰恰是没人会盯着的那类事。 */
+const LANGUAGES = languageMap.languages as Record<string, string>
+
+/** 语言 id → CodeMirror 扩展。★全仓只有这里出现"具体哪个语言包"，换/加包只改这一处。 */
+const FACTORY: Record<string, () => Extension> = {
+  vue: () => vue(),
+  rust: () => rust(),
+  ts: () => javascript({ typescript: true }),
+  tsx: () => javascript({ typescript: true, jsx: true }),
+  js: () => javascript(),
+  jsx: () => javascript({ jsx: true }),
+  css: () => css(),
+  // ★ObjC 没有官方 Lezer 语法（社区也没成熟包）⇒ 用 legacy clike 的 objectiveC：
+  //   能出 C 家族的关键字/字符串/数字/注释，ObjC 特有语法（`@interface`、`[obj msg]`）只当普通文本。
+  //   这是业界通行降级；README 里如实写"到 C 级"，不吹成"支持 Objective-C"。
+  objc: () => StreamLanguage.define(objectiveC),
+  cpp: () => StreamLanguage.define(cpp),
+}
+
+function langFor(path: string) {
+  const dot = path.lastIndexOf('.')
+  const ext = dot >= 0 ? path.slice(dot).toLowerCase() : ''
+  const id = LANGUAGES[ext]
+  return id && FACTORY[id] ? FACTORY[id]!() : [] // 未登记 / 未实现 ⇒ 纯文本
 }
 
 /** 语法着色：把 lezer 的 token 标签映射到 `--syn-*` 色板。
@@ -365,7 +391,7 @@ onBeforeUnmount(() => {
         {{ notice }}
       </span>
       <span style="flex: 1" />
-      <span class="note" id="codeNote">⌘S 保存 · 语法着色 .vue / .rs</span>
+      <span class="note" id="codeNote">⌘S 保存 · 着色 .vue/.rs/.ts/.css/.m</span>
     </div>
     <div class="split">
       <nav class="files" id="codeFiles">

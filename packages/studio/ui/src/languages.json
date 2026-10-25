@@ -1,0 +1,17 @@
+{
+  "_comment": "代码视图的「扩展名 → 语言」单一真源（决策 #1215）。★门禁 check:studio-panel 会扫 packages/studio 下的真实目录：树里出现的每个扩展名都必须在这里登记（languages 给语言包，plain 给理由），否则判据 ⑳ 红 —— 这样新增文件类型不会静默掉队。",
+  "languages": {
+    ".vue": "vue",
+    ".rs": "rust",
+    ".ts": "ts",
+    ".tsx": "tsx",
+    ".js": "js",
+    ".jsx": "jsx",
+    ".css": "css",
+    ".m": "objc",
+    ".h": "cpp"
+  },
+  "plain": {
+    ".json": "结构化数据：代码视图只浏览 studio 源码；暂不引 lang-json（将来要读 config 再加）"
+  }
+}
