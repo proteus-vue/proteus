@@ -70,6 +70,76 @@ enum FileTransferCapability {
         return ["exists": ok, "isFile": ok && !isDir.boolValue, "isDir": ok && isDir.boolValue]
     }
 
+    // ── ★★★#1227 `getFileSystem` **目录面**（stat/readdir/mkdir/rmdir）──
+    //   ★沙箱校验全部走 `resolve()`（不开第二份）。
+
+    /// `fs.stat`：`{ path }` → FileStat。
+    ///   ★诚实边界：`lastAccessedTime` 在 iOS 上**不保证可用**（`contentAccessDate` 常 nil）
+    ///     ⇒ 拿不到就回 0，**不拿 mtime 冒充**。
+    static func stat(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        let url = try resolve(path)
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .isDirectoryKey, .isRegularFileKey,
+                                        .contentModificationDateKey, .contentAccessDateKey]
+        let v = try url.resourceValues(forKeys: keys)
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        let mode = (attrs[.posixPermissions] as? NSNumber)?.intValue ?? 0
+        let mtime = (v.contentModificationDate ?? (attrs[.modificationDate] as? Date) ?? Date(timeIntervalSince1970: 0))
+        let atime = v.contentAccessDate ?? Date(timeIntervalSince1970: 0)
+        return [
+            "size": (v.fileSize ?? (attrs[.size] as? NSNumber)?.intValue) ?? 0,
+            "mode": mode,
+            "lastAccessedTime": Int(atime.timeIntervalSince1970 * 1000),
+            "lastModifiedTime": Int(mtime.timeIntervalSince1970 * 1000),
+            "isDirectory": v.isDirectory ?? false,
+            "isFile": v.isRegularFile ?? false,
+        ]
+    }
+
+    /// `fs.readdir`：`{ path }` → `{ entries: string[] }`（只返名字）。非目录 ⇒ 报错。
+    static func readdir(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        let url = try resolve(path)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
+            throw WsError.invalid("fs.readdir: 不是目录 \(path)")
+        }
+        let names = try FileManager.default.contentsOfDirectory(atPath: url.path)
+        return ["entries": names.sorted()]
+    }
+
+    /// `fs.mkdir`：`{ path, recursive? }` → `{}`。★幂等（已存在且是目录 ⇒ 成功）。
+    static func mkdir(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        let recursive = (args["recursive"] as? Bool) ?? false
+        let url = try resolve(path)
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) {
+            if isDir.boolValue { return [:] }   // 幂等
+            throw WsError.invalid("fs.mkdir: 同名文件已存在 \(path)")
+        }
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: recursive)
+        return [:]
+    }
+
+    /// `fs.rmdir`：`{ path, recursive? }` → `{}`。★幂等（不存在 ⇒ 成功）。
+    ///   ★★**关键差异**：本平台的 `removeItem` **天然递归** ⇒ `recursive:false` 时必须
+    ///     **先检查目录为空**；否则会静默删掉整棵树（与 POSIX `rmdir` 语义相反）。
+    static func rmdir(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        let recursive = (args["recursive"] as? Bool) ?? false
+        let url = try resolve(path)
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { return [:] }
+        guard isDir.boolValue else { throw WsError.invalid("fs.rmdir: 不是目录 \(path)（文件请用 fs.remove）") }
+        if !recursive {
+            let kids = try FileManager.default.contentsOfDirectory(atPath: url.path)
+            guard kids.isEmpty else { throw WsError.invalid("fs.rmdir: 目录非空 \(path)（需 recursive=true）") }
+        }
+        try FileManager.default.removeItem(at: url)
+        return [:]
+    }
+
     /// `fs.remove`：`{ path }` → `{}`（幂等）
     static func remove(_ args: [String: Any]) throws -> [String: Any] {
         let path = (args["path"] as? String) ?? ""

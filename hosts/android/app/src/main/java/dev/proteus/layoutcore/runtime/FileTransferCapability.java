@@ -129,6 +129,84 @@ public final class FileTransferCapability {
         return new JSONObject();
     }
 
+    // ── ★★★#1227 `getFileSystem` **目录面**（stat/readdir/mkdir/rmdir）──
+    //   ★沙箱校验全部走 `resolve()`（不开第二份——#1212：两份沙箱根必然漂移）。
+
+    /** `fs.stat`：`{ path }` → FileStat（size/mode/时间/isFile/isDir）。
+     *  ★诚实边界：`mode` 是**当前进程可见的 owner 权限近似**（canRead/canWrite/canExecute 拼成 0o400/0o200/0o100），
+     *    不是完整 POSIX mode——App 沙箱里只有当前用户，完整 mode 无消费方；拿不到就不假装拿到。 */
+    public static JSONObject stat(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        File f = resolve(ctx, path);
+        if (!f.exists()) throw new IOException("fs.stat: 不存在 " + path);
+        JSONObject o = new JSONObject();
+        o.put("size", f.length());
+        int mode = 0;
+        if (f.canRead()) mode |= 0x100;   // 0o400
+        if (f.canWrite()) mode |= 0x80;   // 0o200
+        if (f.canExecute()) mode |= 0x40; // 0o100
+        o.put("mode", mode);
+        long mtime = f.lastModified();
+        // ★`lastAccessedTime`：Android 的 `File` **拿不到 atime**（只有 mtime）⇒ 回 0 并在文档登记，**不拿 mtime 冒充**
+        o.put("lastAccessedTime", 0);
+        o.put("lastModifiedTime", mtime);
+        o.put("isDirectory", f.isDirectory());
+        o.put("isFile", f.isFile());
+        return o;
+    }
+
+    /** `fs.readdir`：`{ path }` → `{ entries: string[] }`（只返**名字**，不返绝对路径——与 wx 同形）。
+     *  ★非目录 / 不存在 ⇒ **报错**（不返空数组：空数组会让业务以为"目录存在但是空的"）。 */
+    public static JSONObject readdir(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        File d = resolve(ctx, path);
+        if (!d.isDirectory()) throw new IOException("fs.readdir: 不是目录 " + path);
+        String[] names = d.list();
+        if (names == null) throw new IOException("fs.readdir: 读目录失败 " + path);
+        JSONArray arr = new JSONArray();
+        for (String n : names) arr.put(n);
+        JSONObject o = new JSONObject();
+        o.put("entries", arr);
+        return o;
+    }
+
+    /** `fs.mkdir`：`{ path, recursive? }` → `{}`。★**幂等**：已存在且是目录 ⇒ 成功（与 `mkdir -p` 同意）。
+     *  已存在但是**文件** ⇒ 报错（不能把文件当目录用）。 */
+    public static JSONObject mkdir(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        boolean recursive = args.optBoolean("recursive", false);
+        File d = resolve(ctx, path);
+        if (d.isDirectory()) return new JSONObject();   // 幂等
+        if (d.exists()) throw new IOException("fs.mkdir: 同名文件已存在 " + path);
+        boolean ok = recursive ? d.mkdirs() : d.mkdir();
+        if (!ok && !d.isDirectory()) throw new IOException("fs.mkdir 失败：" + path);
+        return new JSONObject();
+    }
+
+    /** `fs.rmdir`：`{ path, recursive? }` → `{}`。★**幂等**：不存在 ⇒ 成功。
+     *  ★★关键：`File.delete()` **删不掉非空目录**（返 false）⇒ recursive 必须**自己递归**。
+     *  ★**不跟随符号链接**（`listFiles`/`delete` 本身不跟随）⇒ 沙箱外的目标不会被误删。 */
+    public static JSONObject rmdir(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        boolean recursive = args.optBoolean("recursive", false);
+        File d = resolve(ctx, path);
+        if (!d.exists()) return new JSONObject();   // 幂等
+        if (!d.isDirectory()) throw new IOException("fs.rmdir: 不是目录 " + path + "（文件请用 fs.remove）");
+        if (recursive) deleteTree(d);
+        else if (!d.delete()) throw new IOException("fs.rmdir: 目录非空或删除失败 " + path);
+        return new JSONObject();
+    }
+
+    /** 递归删子树（不跟随符号链接；任一制度失败 ⇒ 报错，不假装清完）。 */
+    private static void deleteTree(File f) throws IOException {
+        File[] kids = f.listFiles();
+        if (kids != null) for (File k : kids) {
+            if (k.isDirectory() && !java.nio.file.Files.isSymbolicLink(k.toPath())) deleteTree(k);
+            else if (!k.delete()) throw new IOException("fs.rmdir: 删不掉 " + k.getName());
+        }
+        if (!f.delete()) throw new IOException("fs.rmdir: 删不掉目录 " + f.getName());
+    }
+
     /** 诊断读数：沙箱根（判据确认"写到了哪里"）。 */
     public static String sandboxRoot(Context ctx) {
         return ctx.getFilesDir().getAbsolutePath();

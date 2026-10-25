@@ -154,7 +154,7 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";
     }
     // ★dev console（#730）与 log 通道（#1225）均回收给宿主
-    if (method == "log") return proteus::logcap::write(argsJson, jstr, PROTEUS_APP_RT_DOMAIN);
+    if (method == "log") return proteus::logcap::write(argsJson, jstr, PROTEUS_APP_RT_DOMAIN_LOCAL);
     if (method == "dev.console") {   // eslint-disable-line
         std::string level, text; jstr(argsJson.c_str(), argsJson.size(), "level", &level);
         jstr(argsJson.c_str(), argsJson.size(), "text", &text);

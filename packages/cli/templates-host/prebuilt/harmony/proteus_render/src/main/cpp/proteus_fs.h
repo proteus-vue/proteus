@@ -36,6 +36,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
@@ -267,12 +268,150 @@ inline std::string remove(const std::string& argsJson) {
   return "{\"ok\":true,\"data\":{}}";
 }
 
+// ── ★★★#1227 `getFileSystem` **目录面**（stat/readdir/mkdir/rmdir）──
+//   ★沙箱校验全部走 resolveSandboxPath（不开第二份）。
+
+/** 把沙箱相对路径解析成绝对路径；失败时把错误回执写进 `err`。 */
+inline bool resolveOrErr(const std::string& argsJson, const char* who, std::string& abs, std::string& err) {
+  std::string rel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "path", &rel) || rel.empty()) {
+    err = std::string("{\"ok\":false,\"missing\":false,\"reason\":\"") + who + " 需要 { path }\"}";
+    return false;
+  }
+  abs = proteus::http::resolveSandboxPath(rel);
+  if (abs.empty()) {
+    err = std::string("{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）：") +
+          jsonEscape(rel) + "\"}";
+    return false;
+  }
+  return true;
+}
+
+/** `fs.stat`：`{ path }` → FileStat。★`lastAccessedTime` 用 `st_atime`（POSIX 可用）。 */
+inline std::string stat(const std::string& argsJson) {
+  std::string abs, err;
+  if (!resolveOrErr(argsJson, "fs.stat", abs, err)) return err;
+  struct stat st{};
+  if (::stat(abs.c_str(), &st) != 0) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.stat: 不存在\"}";
+  }
+  char b[320];
+  std::snprintf(b, sizeof(b),
+                "{\"ok\":true,\"data\":{\"size\":%lld,\"mode\":%d,\"lastAccessedTime\":%lld,"
+                "\"lastModifiedTime\":%lld,\"isDirectory\":%s,\"isFile\":%s}}",
+                static_cast<long long>(st.st_size), static_cast<int>(st.st_mode & 0777),
+                static_cast<long long>(st.st_atime) * 1000, static_cast<long long>(st.st_mtime) * 1000,
+                S_ISDIR(st.st_mode) ? "true" : "false", S_ISREG(st.st_mode) ? "true" : "false");
+  return b;
+}
+
+/** `fs.readdir`：`{ path }` → `{ entries: string[] }`（只返名字；排序保证确定性）。 */
+inline std::string readdir(const std::string& argsJson) {
+  std::string abs, err;
+  if (!resolveOrErr(argsJson, "fs.readdir", abs, err)) return err;
+  DIR* d = ::opendir(abs.c_str());
+  if (d == nullptr) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.readdir: 不是目录或无权读\"}";
+  }
+  std::vector<std::string> names;
+  struct dirent* ent = nullptr;
+  while ((ent = ::readdir(d)) != nullptr) {
+    const std::string n = ent->d_name;
+    if (n == "." || n == "..") continue;
+    names.push_back(n);
+  }
+  ::closedir(d);
+  std::sort(names.begin(), names.end());   // ★确定性（目录顺序本就不可额定）
+  std::string out = "{\"ok\":true,\"data\":{\"entries\":[";
+  for (size_t i = 0; i < names.size(); i++) {
+    if (i > 0) out += ",";
+    out += "\"" + jsonEscape(names[i]) + "\"";
+  }
+  out += "]}}";
+  return out;
+}
+
+/** `fs.mkdir`：`{ path, recursive? }` → `{}`。★幂等（已存在且是目录 ⇒ 成功）。 */
+inline std::string mkdir(const std::string& argsJson) {
+  std::string abs, err;
+  if (!resolveOrErr(argsJson, "fs.mkdir", abs, err)) return err;
+  bool recursive = false;
+  jnum(argsJson.c_str(), argsJson.size(), "recursive", nullptr);   // 仅占位（保持契约形状）
+  { std::string rv; if (jstr(argsJson.c_str(), argsJson.size(), "recursive", &rv)) recursive = (rv == "true" || rv == "1"); }
+  struct stat st{};
+  if (::stat(abs.c_str(), &st) == 0) {
+    if (S_ISDIR(st.st_mode)) return "{\"ok\":true,\"data\":{}}";   // 幂等
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.mkdir: 同名文件已存在\"}";
+  }
+  if (recursive) {
+    // 逐段创建父目录
+    std::string cur;
+    for (size_t i = 0; i < abs.size(); i++) {
+      cur += abs[i];
+      if (abs[i] == '/' || i + 1 == abs.size()) {
+        if (cur != "/") ::mkdir(cur.c_str(), 0700);
+      }
+    }
+  } else if (::mkdir(abs.c_str(), 0700) != 0) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.mkdir 失败（父目录不存在？）\"}";
+  }
+  if (::stat(abs.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.mkdir 后目录不存在\"}";
+  }
+  return "{\"ok\":true,\"data\":{}}";
+}
+
+/** 递归删子树（PID 下用 lstat 判断，**不跟随符号链接**）。 */
+inline bool removeTree(const std::string& abs) {
+  DIR* d = ::opendir(abs.c_str());
+  if (d == nullptr) return false;
+  std::vector<std::string> kids;
+  struct dirent* ent = nullptr;
+  while ((ent = ::readdir(d)) != nullptr) {
+    const std::string n = ent->d_name;
+    if (n == "." || n == "..") continue;
+    kids.push_back(n);
+  }
+  ::closedir(d);
+  for (const auto& k : kids) {
+    const std::string p = abs + "/" + k;
+    struct stat st{};
+    if (::lstat(p.c_str(), &st) != 0) continue;
+    if (S_ISDIR(st.st_mode)) { if (!removeTree(p)) return false; }
+    else if (::unlink(p.c_str()) != 0) return false;
+  }
+  return ::rmdir(abs.c_str()) == 0;
+}
+
+/** `fs.rmdir`：`{ path, recursive? }` → `{}`。★幂等（不存在 ⇒ 成功）。 */
+inline std::string rmdir(const std::string& argsJson) {
+  std::string abs, err;
+  if (!resolveOrErr(argsJson, "fs.rmdir", abs, err)) return err;
+  bool recursive = false;
+  { std::string rv; if (jstr(argsJson.c_str(), argsJson.size(), "recursive", &rv)) recursive = (rv == "true" || rv == "1"); }
+  struct stat st{};
+  if (::stat(abs.c_str(), &st) != 0) return "{\"ok\":true,\"data\":{}}";   // 幂等
+  if (!S_ISDIR(st.st_mode)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rmdir: 不是目录（文件请用 fs.remove）\"}";
+  }
+  if (recursive) {
+    if (!removeTree(abs)) return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rmdir: 递归删除失败\"}";
+  } else if (::rmdir(abs.c_str()) != 0) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.rmdir: 目录非空或删除失败（需 recursive=true）\"}";
+  }
+  return "{\"ok\":true,\"data\":{}}";
+}
+
 /** 方法分派：命中 `fs.*` 返回 true（结果写进 `out`） */
 inline bool dispatch(const std::string& method, const std::string& argsJson, std::string* out) {
   if (method == "fs.writeBytes") { *out = writeBytes(argsJson); return true; }
   if (method == "fs.readBytes") { *out = readBytes(argsJson); return true; }
   if (method == "fs.remove") { *out = remove(argsJson); return true; }
   if (method == "fs.exists") { *out = exists(argsJson); return true; }
+  if (method == "fs.stat") { *out = stat(argsJson); return true; }
+  if (method == "fs.readdir") { *out = readdir(argsJson); return true; }
+  if (method == "fs.mkdir") { *out = mkdir(argsJson); return true; }
+  if (method == "fs.rmdir") { *out = rmdir(argsJson); return true; }
   if (method.rfind("fs.", 0) == 0) {
     *out = "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 fs 方法：" + jsonEscape(method) + "\"}";
     return true;

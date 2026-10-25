@@ -80,6 +80,11 @@ export const HOST_CAPABILITY_METHODS = [
   //   其余 22 个 FileSystemBridge 方法**仍缺宿主实现**（readdir/stat/mkdir/rmdir/copy/rename/unzip…）
   //   ⇒ JS 侧如实 unsupported（见 capability-app-filesystem.ts 的 APP_FS_UNSUPPORTED）。
   'fs.exists',
+  // ★★★#1227 `getFileSystem` **目录面**（stat/readdir/mkdir/rmdir）
+  'fs.stat',
+  'fs.readdir',
+  'fs.mkdir',
+  'fs.rmdir',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

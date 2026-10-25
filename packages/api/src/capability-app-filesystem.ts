@@ -19,10 +19,14 @@
 //     ⇒ 如实归入 unsupported（宁可少一个方法，不给一个会静默丢数据的实现）；
 //   · 路径校验由宿主负责（拒绝绝对路径与 `..`）——本层**不复制**沙箱校验（一份就够）。
 import { invokeHost } from './capability-invoke'
-import type { FileSystemBridge } from './capability-types'
+import type { FileStat, FileSystemBridge } from './capability-types'
 
 /** 基础面（真实可用）的方法名 */
-export const APP_FS_BASE_METHODS = ['readFile', 'writeFile', 'remove', 'exists'] as const
+export const APP_FS_BASE_METHODS = [
+  'readFile', 'writeFile', 'remove', 'exists',
+  // ★★★#1227 目录面
+  'stat', 'readdir', 'mkdir', 'rmdir',
+] as const
 
 /**
  * 其余方法的**具名缺口语义**：方法名 → 缺哪个宿主能力。
@@ -32,10 +36,6 @@ export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {
   appendFile: '宿主无 append 语义（读全文拼接再整写会在并发下丢数据）',
   copyFile: '宿主缺 fs.copy',
   rename: '宿主缺 fs.rename',
-  stat: '宿主缺 fs.stat',
-  mkdir: '宿主缺 fs.mkdir（writeBytes 会自动建父目录，但显式建目录需要它）',
-  rmdir: '宿主缺 fs.rmdir',
-  readdir: '宿主缺 fs.readdir（Android File.delete 删不掉非空目录 ⇒ 不能靠遍历绕开）',
   getFileInfo: '宿主缺 fs.stat（摘要需 size + digest）',
   saveFile: '宿主无"临时文件→持久目录"概念',
   getSavedFileList: '宿主无保存文件索引',
@@ -59,8 +59,10 @@ export function appFileSystemAvailable(): boolean {
     const r = invokeHost(m, { probe: true })
     if (!r.ok && r.missing) return false
   }
-  const ex = invokeHost('fs.exists', { probe: true })
-  if (!ex.ok && ex.missing) return false
+  for (const m of ['fs.exists', 'fs.stat', 'fs.readdir', 'fs.mkdir', 'fs.rmdir']) {
+    const r = invokeHost(m, { probe: true })
+    if (!r.ok && r.missing) return false
+  }
   return true
 }
 
@@ -143,6 +145,38 @@ export function createAppFileSystem(): AppFileSystemBridge {
       if (!r.ok) return Promise.reject(new Error(`file-system.failed: exists ${path}：宿主拒绝`))
       const d = r.data as { exists?: boolean } | null
       return Promise.resolve(Boolean(d && d.exists))
+    },
+    // ── ★★★#1227 目录面（真实可用）──
+    stat: (path: string) => {
+      const r = invokeHost('fs.stat', { path })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: stat ${path}：宿主拒绝`))
+      const d = (r.data ?? {}) as Partial<FileStat>
+      // ★字段逐项验证（不直接 as 强转：宿主缺字段时要能发现）
+      return Promise.resolve({
+        size: Number(d.size ?? 0),
+        mode: Number(d.mode ?? 0),
+        lastAccessedTime: Number(d.lastAccessedTime ?? 0),
+        lastModifiedTime: Number(d.lastModifiedTime ?? 0),
+        isDirectory: Boolean(d.isDirectory),
+        isFile: Boolean(d.isFile),
+      })
+    },
+    readdir: (path: string) => {
+      const r = invokeHost('fs.readdir', { path })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: readdir ${path}：宿主拒绝`))
+      const d = r.data as { entries?: unknown } | null
+      const list = Array.isArray(d?.entries) ? (d!.entries as unknown[]) : []
+      return Promise.resolve(list.map((x) => String(x)))
+    },
+    mkdir: (path: string, recursive?: boolean) => {
+      const r = invokeHost('fs.mkdir', { path, ...(recursive === undefined ? {} : { recursive }) })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: mkdir ${path}：宿主拒绝`))
+      return Promise.resolve()
+    },
+    rmdir: (path: string, recursive?: boolean) => {
+      const r = invokeHost('fs.rmdir', { path, ...(recursive === undefined ? {} : { recursive }) })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: rmdir ${path}：宿主拒绝`))
+      return Promise.resolve()
     },
   } as FileSystemBridge
 
