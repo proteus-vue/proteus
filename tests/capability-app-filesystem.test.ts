@@ -57,7 +57,7 @@ describe('★★★App 能力批 1 · getFileSystem 基础面（#1226）', () =>
     const { createAppFileSystem, APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
     const fs = createAppFileSystem().getFileSystem!() as unknown as Record<string, () => Promise<unknown>>
     const names = Object.keys(APP_FS_UNSUPPORTED)
-    expect(names.length, '未支持方法数（unzip 后 14 个）').toBe(14)
+    expect(names.length, '未支持方法数（保存三件套后 = 11：仅剩 appendFile + 10 个 Sync）').toBe(11)
     for (const n of names) {
       expect(typeof fs[n], `${n} 必须是函数（不是 undefined）`).toBe('function')
       await expect(fs[n]!()).rejects.toThrow(/file-system\.unsupported/)
@@ -70,7 +70,7 @@ describe('★★★App 能力批 1 · getFileSystem 基础面（#1226）', () =>
     const total = APP_FS_BASE_METHODS.length + Object.keys(APP_FS_UNSUPPORTED).length
     // ★写死 26 是为了让"契约新增方法却没登记"当场红（比读类型更硬——类型在运行时读不到）
     expect(total, '基础面 + 未支持 必须覆盖 FileSystemBridge 的全部方法').toBe(26)
-    expect(APP_FS_BASE_METHODS.length, '★#1229 unzip 后基础面 = 12').toBe(12)
+    expect(APP_FS_BASE_METHODS.length, '★#1230 保存三件套后基础面 = 15').toBe(15)
   })
 
   it('⑤ appendFile 明确归 unsupported（读全文拼接再整写会在并发下丢数据）', async () => {

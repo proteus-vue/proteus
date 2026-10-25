@@ -33,6 +33,8 @@ export const APP_FS_BASE_METHODS = [
   'copyFile', 'rename', 'getFileInfo',
   // ★★★#1229 压缩包（宿主不支持时不提供该方法）
   'unzip',
+  // ★★★#1230 保存文件三件套（纯 JS 组合 fs.*，三端一致可用）
+  'saveFile', 'getSavedFileList', 'removeSavedFile',
 ] as const
 
 /**
@@ -41,18 +43,15 @@ export const APP_FS_BASE_METHODS = [
  */
 export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {
   appendFile: '宿主无 append 语义（读全文拼接再整写会在并发下丢数据）',
-  saveFile: '宿主无"临时文件→持久目录"概念',
-  getSavedFileList: '宿主无保存文件索引',
-  removeSavedFile: '宿主无保存文件索引',
   readFileSync: '宿主 fs.readBytes 走同步派发，但契约要求返回 string（需先定编码约定）',
   writeFileSync: '同上（需先定编码约定）',
   existsSync: '同上',
-  statSync: '宿主缺 fs.stat',
-  readdirSync: '宿主缺 fs.readdir',
-  mkdirSync: '宿主缺 fs.mkdir',
-  renameSync: '宿主缺 fs.rename',
-  unlinkSync: '宿主缺 fs.unlink（可复用 fs.remove，但需先定 Sync 语义）',
-  copyFileSync: '宿主缺 fs.copy',
+  statSync: '宿主有 fs.stat（#1227），缺的是同步返回 string 的编码约定',
+  readdirSync: '宿主有 fs.readdir（#1227），缺的是同步返回 string 的编码约定',
+  mkdirSync: '宿主有 fs.mkdir（#1227），缺的是同步返回 string 的编码约定',
+  renameSync: '宿主有 fs.rename（#1228），缺的是同步返回 string 的编码约定',
+  unlinkSync: '宿主有 fs.remove（幂等），缺的是同步返回 string 的编码约定',
+  copyFileSync: '宿主有 fs.copy（#1228），缺的是同步返回 string 的编码约定',
   appendFileSync: '宿主无 append 语义',
 }
 
@@ -124,6 +123,36 @@ function utf8Encode(s: string): number[] {
     } else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f))
   }
   return out
+}
+
+/** 保存文件的专用目录（沙箱相对）——与普通文件分开，便于"保存的东西"与"工作文件"区分 */
+export const APP_SAVED_DIR = 'saved'
+/** 保存索引（与 KV 存储同目录；单文件 JSON，原子性边界同 getStorage） */
+export const APP_SAVED_INDEX = 'storage/proteus-saved.json'
+/** 进程内单调序号（解决 `Date.now()` 毫秒碰撞——同一毫秒两次 saveFile 会撞名） */
+let savedSeq = 0
+
+/** 索引条目（path → 元数据） */
+type SavedIndex = Record<string, { size: number; createTime: number }>
+
+/** 读索引（文件不存在 / 损坏 ⇒ 空索引——与 getStorage 同委态） */
+function readSavedIndex(): SavedIndex {
+  const r = invokeHost('fs.readBytes', { path: APP_SAVED_INDEX })
+  if (!r.ok) return {}
+  try {
+    const text = utf8Decode(bytesOf(r.data))
+    const parsed = text ? (JSON.parse(text) as { entries?: unknown }) : null
+    const e = parsed?.entries
+    return e && typeof e === 'object' && !Array.isArray(e) ? (e as SavedIndex) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** 写索引（返回是否成功；失败时调用方如实报错） */
+function writeSavedIndex(idx: SavedIndex): boolean {
+  const r = invokeHost('fs.writeBytes', { path: APP_SAVED_INDEX, bytes: utf8Encode(JSON.stringify({ entries: idx })) })
+  return r.ok
 }
 
 /** 桥成员对象（★抽取器契约：顶层唯一 `return { 显式属性 }`） */
@@ -226,6 +255,55 @@ export function createAppFileSystem(): AppFileSystemBridge {
       const r = invokeHost('fs.unzip', { zipPath, targetPath })
       if (!r.ok) return Promise.reject(new Error(`file-system.failed: unzip ${zipPath} → ${targetPath}：宿主拒绝`))
       return Promise.resolve()
+    },
+    // ── ★★★#1230 保存文件三件套（纯 JS 组合：rename/remove/stat/readBytes/writeBytes）──
+    //   ★模型：保存的文件放 `saved/`，索引放 `storage/proteus-saved.json`（与 KV 存储同委态）。
+    //   ★**为什么能纯 JS**：`fs.rename/remove/stat/readBytes/writeBytes` 三端均已可用
+    //     （#1226~#1228）⇒ 不需新宿主方法（与 getStorage 同套工艺）。
+    saveFile: async (tempPath: string) => {
+      const ex = invokeHost('fs.exists', { path: tempPath })
+      if (!ex.ok || !(ex.data as { exists?: boolean } | null)?.exists) {
+        throw new Error(`file-system.failed: saveFile 源不存在 ${tempPath}`)
+      }
+      const mk = invokeHost('fs.mkdir', { path: APP_SAVED_DIR, recursive: true })
+      if (!mk.ok) throw new Error('file-system.failed: saveFile 建保存目录失败')
+      // ★目标名 = 时间戳 + 原文件名（避免同名冲突；rename 对已存在目标会报错）
+      const base = tempPath.split('/').filter(Boolean).pop() ?? 'file'
+      const now = Date.now()
+      // ★★进程内单调序号：同一毫秒内连续保存同名文件也不会撞路径（判据 ⑥ 抽出的真缺陷）
+      const dest = `${APP_SAVED_DIR}/${now}-${++savedSeq}-${base}`
+      const rn = invokeHost('fs.rename', { oldPath: tempPath, newPath: dest })
+      if (!rn.ok) throw new Error(`file-system.failed: saveFile 移动失败 ${tempPath}`)
+      const st = invokeHost('fs.stat', { path: dest })
+      const size = st.ok ? Number((st.data as { size?: unknown } | null)?.size ?? 0) : 0
+      const idx = readSavedIndex()
+      idx[dest] = { size, createTime: now }
+      if (!writeSavedIndex(idx)) throw new Error('file-system.failed: saveFile 写索引失败')
+      return dest
+    },
+    getSavedFileList: async () => {
+      const idx = readSavedIndex()
+      const out: { filePath: string; size: number; createTime: number }[] = []
+      let pruned = false
+      for (const [p, meta] of Object.entries(idx)) {
+        const ex = invokeHost('fs.exists', { path: p })
+        const alive = ex.ok && Boolean((ex.data as { exists?: boolean } | null)?.exists)
+        // ★★**漂移修剪**：文件被外部删了 ⇒ 从索引剔掉（否则返回一堆不存在的路径）
+        if (!alive) { delete idx[p]; pruned = true; continue }
+        out.push({ filePath: p, size: Number(meta.size ?? 0), createTime: Number(meta.createTime ?? 0) })
+      }
+      if (pruned) writeSavedIndex(idx)
+      return out.sort((a, b) => b.createTime - a.createTime)   // 新的在前
+    },
+    removeSavedFile: async (path: string) => {
+      // ★宿主 fs.remove 幂等（文件不存在也算成功）⇒ 索引一并清理即可
+      const r = invokeHost('fs.remove', { path })
+      if (!r.ok) throw new Error(`file-system.failed: removeSavedFile ${path}：宿主拒绝`)
+      const idx = readSavedIndex()
+      if (path in idx) {
+        delete idx[path]
+        if (!writeSavedIndex(idx)) throw new Error('file-system.failed: removeSavedFile 写索引失败')
+      }
     },
   } as FileSystemBridge
 

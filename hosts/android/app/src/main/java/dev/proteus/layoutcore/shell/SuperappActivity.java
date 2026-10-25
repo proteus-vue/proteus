@@ -199,6 +199,14 @@ public class SuperappActivity extends android.app.Activity {
                 // ★★★#1225 通用能力直通探针：`--es capprobe "<method>|<json>"` ⇒ 调宿主能力并把回执打 logcat
                 //   （与鸿蒙 `--cap-method` 同语义；真机验任何宿主方法都用它，不是一次性脚手架）
                 String capProbe = getIntent() != null ? getIntent().getStringExtra("capprobe") : null;
+                // ★#1230 扩展：`js:<表达式>` ⇒ 直接 eval（验 **JS 层** 能力；saveFile 三件套这类不走宿主 invoke）
+                if (capProbe != null && capProbe.startsWith("js:")) {
+                    String expr = capProbe.substring(3);
+                    QuickJsEngine.EvalResult jr = QuickJsEngine.eval(expr);
+                    android.util.Log.i("ProteusCapProbe", "JS_RECEIPT expr=" + expr +
+                            " -> " + (jr != null && jr.value != null ? jr.value : "<null>") +
+                            (jr != null && jr.error != null ? " ERR=" + jr.error : ""));
+                }
                 if (capProbe != null && capProbe.contains("|")) {
                     String[] cp = capProbe.split("\\|", 2);
                     String cpArgs = cp[1].isEmpty() ? "{}" : cp[1];
