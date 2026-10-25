@@ -12,6 +12,7 @@
 //   · 覆盖写，非原子替换——中断可能留半截文件（已在能力页端边界写明）。
 
 import Foundation
+import zlib   // ★#1232 裸解压（ZIP 条目用 raw deflate）
 import CryptoKit   // ★#1228 getFileInfo 的摘要（iOS 13+ 系统框架，不需 bridging header）
 
 enum FileTransferCapability {
@@ -143,6 +144,60 @@ enum FileTransferCapability {
 
     // ── ★★★#1228 `getFileSystem` **复合面**（copyFile/rename/getFileInfo）──
     //   ★★沙箱校验：`src` 与 `dest` **两端都**过 `resolve()`。
+
+    /// ★★★#1232 `fs.inflateRaw`：`{ bytes }` → `{ bytes, size }`（**裸 deflate**，ZIP 条目用）。
+    ///   ★**ZIP 容器解析不在本层**（放共享 JS 层：EOCD/中央目录/zip slip 单一实现）。
+    ///   ★输出上限 128 MiB（zip bomb 第一道闸）。
+    static func inflateRaw(_ args: [String: Any]) throws -> [String: Any] {
+        guard let arr = args["bytes"] as? [Int] else {
+            throw WsError.invalid("fs.inflateRaw 需要 { bytes: number[] }")
+        }
+        var src = [UInt8]()
+        src.reserveCapacity(arr.count)
+        for v in arr { src.append(UInt8(truncatingIfNeeded: v)) }
+        let out = try inflateRawBytes(src)
+        return ["bytes": out.map { Int($0) }, "size": out.count]
+    }
+
+    /// 裸 deflate 解压实现（zlib 流式；边解边扩，有上限）。
+    private static func inflateRawBytes(_ input: [UInt8]) throws -> [UInt8] {
+        let MAX_OUT = 128 * 1024 * 1024
+        if input.isEmpty { return [] }
+        var strm = z_stream()
+        // ★-15 = raw deflate（无 zlib 头；ZIP 条目就是这种）
+        var rc = inflateInit2_(&strm, -15, zlibVersion(), Int32(MemoryLayout<z_stream>.size))
+        guard rc == Z_OK else { throw WsError.invalid("fs.inflateRaw: inflateInit2 失败 rc=\(rc)") }
+        defer { inflateEnd(&strm) }
+        var out = [UInt8]()
+        out.reserveCapacity(max(256, input.count * 3))
+        let chunk = 64 * 1024
+        var buf = [UInt8](repeating: 0, count: chunk)
+        try input.withUnsafeBufferPointer { inPtr in
+            strm.next_in = UnsafeMutablePointer(mutating: inPtr.baseAddress)
+            strm.avail_in = uInt(inPtr.count)
+            repeat {
+                var produced = 0
+                try buf.withUnsafeMutableBufferPointer { outPtr -> Void in
+                    strm.next_out = outPtr.baseAddress
+                    strm.avail_out = uInt(chunk)
+                    rc = inflate(&strm, Z_NO_FLUSH)
+                    if rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR {
+                        throw WsError.invalid("fs.inflateRaw: inflate 失败 rc=\(rc)")
+                    }
+                    produced = chunk - Int(strm.avail_out)
+                }
+                if produced > 0 {
+                    out.append(contentsOf: buf[0..<produced])
+                    if out.count > MAX_OUT {
+                        throw WsError.invalid("fs.inflateRaw: 解压后超过 \(MAX_OUT)B（可疑 zip bomb）")
+                    }
+                }
+                if rc == Z_STREAM_END { break }
+                if produced == 0 && strm.avail_in == 0 { break }   // 输入耗尽且无产出 ⇒ 截断的流
+            } while true
+        }
+        return out
+    }
 
     /// `fs.copy`：`{ src, dest }` → `{ dest, size }`。★**不覆盖已存在的 dest**。
     static func copy(_ args: [String: Any]) throws -> [String: Any] {

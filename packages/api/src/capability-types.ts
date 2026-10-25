@@ -467,9 +467,9 @@ export interface FSAdapter {
   unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
   // Sync 变体（对齐官方；返回 CapResult 保持契约一致——同步失败返回 Err 而非抛）
   /** 同步读文件（阻塞主线程——仅小文件/启动期用） */
-  readFileSync(path: string): CapResult<string>
+  readFileSync(path: string, encoding?: string): CapResult<string | ArrayBuffer>
   /** 同步写文件（阻塞主线程） */
-  writeFileSync(path: string, data: string): CapResult<void>
+  writeFileSync(path: string, data: string | ArrayBuffer, encoding?: string): CapResult<void>
   /** 同步判断存在 */
   existsSync(path: string): CapResult<boolean>
   /** 同步取文件信息 */
@@ -485,7 +485,7 @@ export interface FSAdapter {
   /** 同步复制 */
   copyFileSync(src: string, dest: string): CapResult<void>
   /** 同步追加 */
-  appendFileSync(path: string, data: string): CapResult<void>
+  appendFileSync(path: string, data: string | ArrayBuffer, encoding?: string): CapResult<void>
 }
 
 // ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut

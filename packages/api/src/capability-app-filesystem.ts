@@ -23,6 +23,14 @@
 //     `unzip()` 在那两端如实报 `unsupported`（**不影响其余 11 个方法可用**）。
 import { invokeHost } from './capability-invoke'
 import { decodeBytes, encodeString, normalizeEncoding, toArrayBuffer } from './capability-app-fs-encoding'
+import {
+  UNZIP_MAX_ENTRIES,
+  UNZIP_MAX_ENTRY_BYTES,
+  UNZIP_MAX_TOTAL_BYTES,
+  inflateEntry,
+  parseZipCentralDirectory,
+  safeEntryPath,
+} from './capability-app-unzip'
 import type { FileStat, FileSystemBridge } from './capability-types'
 
 /** 基础面（真实可用）的方法名 */
@@ -76,7 +84,7 @@ export function appFileSystemAvailable(): boolean {
  *   `fs.unzip`：只有 Android 有原生 `ZipInputStream`；iOS `compression.h` 与鸿蒙 `zlib.h`
  *   都**只有 raw deflate、没有 ZIP 容器解析**（EOCD/中央目录/local header）。
  */
-export function appFileSystemOptionalAvailable(method: 'unzip'): boolean {
+export function appFileSystemOptionalAvailable(method: 'inflateRaw'): boolean {
   const r = invokeHost(`fs.${method}`, { probe: true })
   return r.ok || r.missing !== true
 }
@@ -256,14 +264,52 @@ export function createAppFileSystem(): AppFileSystemBridge {
         digest: typeof d.digest === 'string' ? d.digest : '',
       })
     },
-    unzip: (zipPath: string, targetPath: string) => {
-      // ★★端可选能力：宿主没有该方法 ⇒ **unsupported**（不是 failed）
-      if (!appFileSystemOptionalAvailable('unzip')) {
-        return Promise.reject(new Error('file-system.unsupported: unzip —— 本端宿主无 ZIP 容器解析能力（仅 Android 有 ZipInputStream）'))
+    unzip: async (zipPath: string, targetPath: string) => {
+      // ★★★#1232：**ZIP 容器在这里解析（三端同一份）**，宿主只提供裸解压。
+      //   ⇒ zip slip 只有一份实现（不会出现“Android 拦住、iOS 漏”）。
+      if (!appFileSystemOptionalAvailable('inflateRaw')) {
+        throw new Error('file-system.unsupported: unzip —— 本端宿主无裸解压（fs.inflateRaw）')
       }
-      const r = invokeHost('fs.unzip', { zipPath, targetPath })
-      if (!r.ok) return Promise.reject(new Error(`file-system.failed: unzip ${zipPath} → ${targetPath}：宿主拒绝`))
-      return Promise.resolve()
+      const rb = invokeHost('fs.readBytes', { path: zipPath })
+      if (!rb.ok) throw new Error(`file-system.failed: unzip 读不到 ${zipPath}`)
+      const zip = bytesOf(rb.data)
+      const entries = parseZipCentralDirectory(zip)
+      if (entries.length > UNZIP_MAX_ENTRIES) {
+        throw new Error(`file-system.failed: unzip 条目超过 ${UNZIP_MAX_ENTRIES}（可疑 zip bomb）`)
+      }
+      // 目标目录先建好
+      const mk = invokeHost('fs.mkdir', { path: targetPath, recursive: true })
+      if (!mk.ok) throw new Error(`file-system.failed: unzip 建目标目录失败 ${targetPath}`)
+      let totalBytes = 0
+      for (const e of entries) {
+        const rel = safeEntryPath(e.name)
+        // ★★zip slip：条目名逃出目标目录 ⇒ **整次解压失败**（不是跳过——
+        //   “跳过”会让攻击者只需多放一条正常条目就能让整体看起来成功）
+        if (rel === null) {
+          throw new Error(`file-system.failed: unzip 条目越出目标目录（拒绝 zip slip）：${e.name}`)
+        }
+        const dest = `${targetPath}/${rel}`
+        if (e.isDirectory) {
+          const d = invokeHost('fs.mkdir', { path: dest, recursive: true })
+          if (!d.ok) throw new Error(`file-system.failed: unzip 建目录失败 ${dest}`)
+          continue
+        }
+        if (e.uncompressedSize > UNZIP_MAX_ENTRY_BYTES) {
+          throw new Error(`file-system.failed: unzip 单条目超过 ${UNZIP_MAX_ENTRY_BYTES}B（可疑 zip bomb）：${e.name}`)
+        }
+        totalBytes += e.uncompressedSize
+        if (totalBytes > UNZIP_MAX_TOTAL_BYTES) {
+          throw new Error(`file-system.failed: unzip 总解压量超过 ${UNZIP_MAX_TOTAL_BYTES}B（可疑 zip bomb）`)
+        }
+        const data = inflateEntry(zip, e)
+        // ★**不覆盖已存在文件**（覆盖 = 丢数据）
+        const ex = invokeHost('fs.exists', { path: dest })
+        if (ex.ok && Boolean((ex.data as { exists?: boolean } | null)?.exists)) {
+          throw new Error(`file-system.failed: unzip 目标已存在（拒绝静默覆盖）：${dest}`)
+        }
+        const w = invokeHost('fs.writeBytes', { path: dest, bytes: Array.from(data) })
+        if (!w.ok) throw new Error(`file-system.failed: unzip 写入失败 ${dest}`)
+      }
     },
     // ── ★★★#1230 保存文件三件套（纯 JS 组合：rename/remove/stat/readBytes/writeBytes）──
     //   ★模型：保存的文件放 `saved/`，索引放 `storage/proteus-saved.json`（与 KV 存储同委态）。

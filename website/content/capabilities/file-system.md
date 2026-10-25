@@ -286,7 +286,7 @@ unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
 ### `readFileSync`
 
 ```ts
-readFileSync(path: string): CapResult<string>
+readFileSync(path: string, encoding?: string): CapResult<string | ArrayBuffer>
 ```
 
 **说明**：同步读文件（阻塞主线程——仅小文件/启动期用）
@@ -294,13 +294,14 @@ readFileSync(path: string): CapResult<string>
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `path` | `string` | 是 | 路径 |
+| `encoding` | `string` | 否 | 字符串参数 |
 
-**返回值**：`CapResult<string>`
+**返回值**：`CapResult<string \| ArrayBuffer>`
 
 ### `writeFileSync`
 
 ```ts
-writeFileSync(path: string, data: string): CapResult<void>
+writeFileSync(path: string, data: string | ArrayBuffer, encoding?: string): CapResult<void>
 ```
 
 **说明**：同步写文件（阻塞主线程）
@@ -308,7 +309,8 @@ writeFileSync(path: string, data: string): CapResult<void>
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `path` | `string` | 是 | 路径 |
-| `data` | `string` | 是 | 数据 |
+| `data` | `string \| ArrayBuffer` | 是 | 数据 |
+| `encoding` | `string` | 否 | 字符串参数 |
 
 **返回值**：`CapResult<void>`
 
@@ -416,7 +418,7 @@ copyFileSync(src: string, dest: string): CapResult<void>
 ### `appendFileSync`
 
 ```ts
-appendFileSync(path: string, data: string): CapResult<void>
+appendFileSync(path: string, data: string | ArrayBuffer, encoding?: string): CapResult<void>
 ```
 
 **说明**：同步追加
@@ -424,7 +426,8 @@ appendFileSync(path: string, data: string): CapResult<void>
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `path` | `string` | 是 | 路径 |
-| `data` | `string` | 是 | 数据 |
+| `data` | `string \| ArrayBuffer` | 是 | 数据 |
+| `encoding` | `string` | 否 | 字符串参数 |
 
 **返回值**：`CapResult<void>`
 
@@ -462,8 +465,8 @@ C43 FSAdapter（useFileSystem 句柄——方法均返回 Result<T>）
 | `getSavedFileList` | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | 已保存文件列表 |
 | `removeSavedFile` | `removeSavedFile(path: string): Promise<CapResult<void>>` | 删除已保存文件。 |
 | `unzip` | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | 解压 zip。 |
-| `readFileSync` | `readFileSync(path: string): CapResult<string>` | 同步读文件（阻塞主线程——仅小文件/启动期用） |
-| `writeFileSync` | `writeFileSync(path: string, data: string): CapResult<void>` | 同步写文件（阻塞主线程） |
+| `readFileSync` | `readFileSync(path: string, encoding?: string): CapResult<string \| ArrayBuffer>` | 同步读文件（阻塞主线程——仅小文件/启动期用） |
+| `writeFileSync` | `writeFileSync(path: string, data: string \| ArrayBuffer, encoding?: string): CapResult<void>` | 同步写文件（阻塞主线程） |
 | `existsSync` | `existsSync(path: string): CapResult<boolean>` | 同步判断存在 |
 | `statSync` | `statSync(path: string): CapResult<FileStat>` | 同步取文件信息 |
 | `readdirSync` | `readdirSync(path: string): CapResult<string[]>` | 同步读目录 |
@@ -471,7 +474,7 @@ C43 FSAdapter（useFileSystem 句柄——方法均返回 Result<T>）
 | `renameSync` | `renameSync(oldPath: string, newPath: string): CapResult<void>` | 同步重命名 |
 | `unlinkSync` | `unlinkSync(path: string): CapResult<void>` | 同步删除 |
 | `copyFileSync` | `copyFileSync(src: string, dest: string): CapResult<void>` | 同步复制 |
-| `appendFileSync` | `appendFileSync(path: string, data: string): CapResult<void>` | 同步追加 |
+| `appendFileSync` | `appendFileSync(path: string, data: string \| ArrayBuffer, encoding?: string): CapResult<void>` | 同步追加 |
 
 ### `FileStat`
 

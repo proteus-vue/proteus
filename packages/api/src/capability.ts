@@ -531,8 +531,9 @@ export function createCapabilityHooks(
         getSavedFileList: () => wrap(fs.getSavedFileList()),
         removeSavedFile: (path) => wrap(fs.removeSavedFile(path)),
         unzip: (zip, target) => wrap(fs.unzip(zip, target)),
-        readFileSync: (path) => sync(() => fs.readFileSync(path)),
-        writeFileSync: (path, data) => sync(() => fs.writeFileSync(path, data)),
+        // ★#1231：`encoding` **必须透传**（否则用户传了也被吞掉 ⇒ 总是 ArrayBuffer）
+        readFileSync: (path, encoding) => sync(() => fs.readFileSync(path, encoding)),
+        writeFileSync: (path, data, encoding) => sync(() => fs.writeFileSync(path, data, encoding)),
         existsSync: (path) => sync(() => fs.existsSync(path)),
         statSync: (path) => sync(() => fs.statSync(path)),
         readdirSync: (path) => sync(() => fs.readdirSync(path)),
@@ -540,7 +541,7 @@ export function createCapabilityHooks(
         renameSync: (o, n) => sync(() => fs.renameSync(o, n)),
         unlinkSync: (path) => sync(() => fs.unlinkSync(path)),
         copyFileSync: (src, dest) => sync(() => fs.copyFileSync(src, dest)),
-        appendFileSync: (path, data) => sync(() => fs.appendFileSync(path, data)),
+        appendFileSync: (path, data, encoding) => sync(() => fs.appendFileSync(path, data, encoding)),
       }
     },
     // ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut（缺桥 → Err 非抛异常）

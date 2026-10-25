@@ -198,8 +198,10 @@ public final class HostCapabilities {
                 return ok(FileTransferCapability.rename(activity, args));
             case "fs.getFileInfo":
                 return ok(FileTransferCapability.getFileInfo(activity, args));
-            case "fs.unzip":   // ★#1229（含 zip slip + zip bomb 防护）
-                return ok(FileTransferCapability.unzip(activity, args));
+            // ★★★#1232：`fs.unzip` 已改为**共享 JS 层实现**（ZIP 容器解析 + zip slip 单一实现）
+            //   宿主只提供裸解压；Android 原生的 `unzip`（ZipInputStream）不再被调用。
+            case "fs.inflateRaw":
+                return ok(FileTransferCapability.inflateRaw(activity, args));
             // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
             case "log":
                 return ok(dev.proteus.layoutcore.runtime.LogCapability.write(args));

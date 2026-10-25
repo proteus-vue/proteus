@@ -270,6 +270,42 @@ public final class FileTransferCapability {
         return o;
     }
 
+    /** ★★★#1232 `fs.inflateRaw`：`{ bytes }` → `{ bytes, size }`（**裸 deflate**，ZIP 条目用）。
+     *  ★★为什么只做裸解压、不做 unzip：ZIP 容器解析（EOCD/中央目录/local header + zip slip 校验）
+     *    放**共享 JS 层一份** ⇒ 三端不会各写一套安全逻辑（zip slip 是最容易写错的地方）。
+     *  ★上限：解压后 > 128 MiB ⇒ 报错（zip bomb 第一道闸在宿主，JS 层还有条目数/总量）。 */
+    public static JSONObject inflateRaw(Context ctx, JSONObject args) throws Exception {
+        JSONArray in = args.optJSONArray("bytes");
+        if (in == null) throw new IllegalArgumentException("fs.inflateRaw 需要 { bytes: number[] }");
+        byte[] src = new byte[in.length()];
+        for (int i = 0; i < src.length; i++) src[i] = (byte) (in.optInt(i) & 0xFF);
+        final long MAX_OUT = 128L * 1024 * 1024;
+        // ★true = nowrap（裸 deflate）——ZIP 条目没有 zlib 头
+        java.util.zip.Inflater inf = new java.util.zip.Inflater(true);
+        try {
+            inf.setInput(src);
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream(Math.max(64, src.length * 3));
+            byte[] buf = new byte[64 * 1024];
+            while (!inf.finished()) {
+                int n = inf.inflate(buf);
+                if (n == 0) {
+                    if (inf.needsInput() || inf.needsDictionary()) break;
+                }
+                bos.write(buf, 0, n);
+                if (bos.size() > MAX_OUT) throw new IOException("fs.inflateRaw: 解压后超过 " + MAX_OUT + "B（可疑 zip bomb）");
+            }
+            byte[] out = bos.toByteArray();
+            JSONArray arr = new JSONArray();
+            for (byte b : out) arr.put(b & 0xFF);
+            JSONObject o = new JSONObject();
+            o.put("bytes", arr);
+            o.put("size", out.length);
+            return o;
+        } finally {
+            inf.end();
+        }
+    }
+
     /** ★★★#1229 `fs.unzip`：`{ zipPath, targetPath }` → `{ entries, bytes }`。
      *  ★★**zip slip 防护**：每个条目的落地路径**规范化后必须仍在目标目录之下**；
      *    否则条目名写成 `../../evil.sh` 就能写到沙箱外。

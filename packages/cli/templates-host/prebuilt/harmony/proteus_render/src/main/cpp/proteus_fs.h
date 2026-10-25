@@ -38,6 +38,7 @@
 #include <string>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <zlib.h>   // ★#1232 裸解压（ZIP 条目用 raw deflate）
 #include <unistd.h>
 #include <vector>
 
@@ -405,6 +406,72 @@ inline std::string rmdir(const std::string& argsJson) {
 // ── ★★★#1228 `getFileSystem` **复合面**（copy/rename/getFileInfo）──
 //   ★★沙箱校验：`src/旧` 与 `dest/新` **两端都**过 resolveSandboxPath。
 
+/** ★★★#1232 `fs.inflateRaw`：`{ bytes }` → `{ bytes, size }`（**裸 deflate**，ZIP 条目用）。
+ *  ★**ZIP 容器解析不在本层**：EOCD/中央目录/local header + zip slip 校验都在
+ *    共享 JS 层一份（三端不会各写一套安全逻辑）。
+ *  ★输出上限 128 MiB（zip bomb 第一道闸，JS 层还有条目数/总量）。 */
+inline std::string inflateRaw(const std::string& argsJson) {
+  // 从 JSON 里取 `bytes` 数组（本包的 json 读取器不支持数组 ⇒ 手写最小解析）
+  const std::string key = "\"bytes\"";
+  const size_t kp = argsJson.find(key);
+  const size_t lb = kp == std::string::npos ? std::string::npos : argsJson.find('[', kp);
+  const size_t rb = lb == std::string::npos ? std::string::npos : argsJson.find(']', lb);
+  if (lb == std::string::npos || rb == std::string::npos || rb < lb) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.inflateRaw 需要 { bytes: number[] }\"}";
+  }
+  std::vector<uint8_t> src;
+  {
+    long acc = 0;
+    bool has = false;
+    for (size_t i = lb + 1; i < rb; i++) {
+      const char ch = argsJson[i];
+      if (ch >= '0' && ch <= '9') { acc = acc * 10 + (ch - '0'); has = true; if (acc > 255) return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.inflateRaw: 字节值超出 0..255\"}"; }
+      else if (ch == ',' || ch == ' ') { if (has) { src.push_back((uint8_t)acc); acc = 0; has = false; } }
+      else return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.inflateRaw: bytes 只接整数数组\"}";
+    }
+    if (has) src.push_back((uint8_t)acc);
+  }
+  const long long MAX_OUT = 128LL * 1024 * 1024;
+  z_stream zs{};
+  // ★-15 = raw deflate（ZIP 条目无 zlib 头）
+  if (inflateInit2(&zs, -15) != Z_OK) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.inflateRaw: inflateInit2 失败\"}";
+  }
+  std::vector<uint8_t> out;
+  out.reserve(src.empty() ? 256 : src.size() * 3);
+  std::vector<uint8_t> buf(64 * 1024);
+  zs.next_in = src.empty() ? Z_NULL : src.data();
+  zs.avail_in = (uInt)src.size();
+  int rc = Z_OK;
+  do {
+    zs.next_out = buf.data();
+    zs.avail_out = (uInt)buf.size();
+    rc = inflate(&zs, Z_NO_FLUSH);
+    if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR) {
+      inflateEnd(&zs);
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.inflateRaw: inflate 失败\"}";
+    }
+    const size_t produced = buf.size() - zs.avail_out;
+    if (produced > 0) {
+      out.insert(out.end(), buf.begin(), buf.begin() + (long)produced);
+      if ((long long)out.size() > MAX_OUT) {
+        inflateEnd(&zs);
+        return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.inflateRaw: 解压后超过 128MiB（可疑 zip bomb）\"}";
+      }
+    }
+    if (rc == Z_STREAM_END) break;
+    if (produced == 0 && zs.avail_in == 0) break;   // 输入耗尽且无产出 ⇒ 截断的流
+  } while (true);
+  inflateEnd(&zs);
+  std::string r = "{\"ok\":true,\"data\":{\"bytes\":[";
+  for (size_t i = 0; i < out.size(); i++) {
+    if (i > 0) r += ",";
+    r += std::to_string((int)out[i]);
+  }
+  r += "],\"size\":" + std::to_string((long long)out.size()) + "}}";
+  return r;
+}
+
 /** `fs.copy`：`{ src, dest }` → `{ dest, size }`。★**不覆盖已存在的 dest**。 */
 inline std::string copy(const std::string& argsJson) {
   std::string srcRel, destRel;
@@ -496,6 +563,7 @@ inline bool dispatch(const std::string& method, const std::string& argsJson, std
   if (method == "fs.copy") { *out = copy(argsJson); return true; }
   if (method == "fs.rename") { *out = renamePath(argsJson); return true; }
   if (method == "fs.getFileInfo") { *out = getFileInfo(argsJson); return true; }
+  if (method == "fs.inflateRaw") { *out = inflateRaw(argsJson); return true; }
   if (method.rfind("fs.", 0) == 0) {
     *out = "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 fs 方法：" + jsonEscape(method) + "\"}";
     return true;

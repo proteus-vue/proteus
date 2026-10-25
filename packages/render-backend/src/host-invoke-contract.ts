@@ -90,7 +90,8 @@ export const HOST_CAPABILITY_METHODS = [
   'fs.rename',
   'fs.getFileInfo',
   // ★★★#1229 `fs.unzip`（仅 Android：平台有 ZipInputStream；iOS/鸿蒙无 ZIP 容器 API）
-  'fs.unzip',
+  // ★★★#1232 裸解压（ZIP 容器解析改到共享 JS 层 ⇒ 三端同一份；宿主只需这一个）
+  'fs.inflateRaw',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',
