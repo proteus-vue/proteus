@@ -5,12 +5,12 @@
   "dactyl_metrics" : "{\"end\":\"ios\",\"samples\":[],\"sampled\":0,\"dropped\":0}",
   "dactyl_samples" : "{\"sampled\":0,\"pending\":0,\"dropped\":0}",
   "dactyl_trail" : "{\"points\":[],\"count\":0}",
-  "element_class_selector" : "{\"ok\":true,\"selector\":\".sa-item\",\"nodeId\":11,\"source\":\"screen\",\"screen\":\"index\",\"left\":16,\"top\":214,\"right\":374,\"bottom\":262,\"width\":358,\"height\":48,\"scrollY\":9}",
-  "element_compound_selector" : "{\"ok\":true,\"selector\":\"view.sa-item\",\"nodeId\":11,\"source\":\"screen\",\"screen\":\"index\",\"left\":16,\"top\":214,\"right\":374,\"bottom\":262,\"width\":358,\"height\":48,\"scrollY\":9}",
-  "element_not_found" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#no-such-element-xyz\",\"screen\":\"index\",\"registry\":{\"vue\":0,\"screens\":{\"index\":64}}}",
-  "element_probe" : "{\"ok\":true,\"selector\":\"#idx-read-theme\",\"nodeId\":14,\"source\":\"screen\",\"screen\":\"index\",\"left\":330,\"top\":230,\"right\":358,\"bottom\":247,\"width\":28,\"height\":17,\"scrollY\":9}",
-  "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"index\"}",
-  "element_registry" : "{\"vue\":0,\"screens\":{\"index\":64}}",
+  "element_class_selector" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\".sa-item\",\"screen\":\"font\",\"registry\":{\"vue\":0,\"screens\":{\"index\":98,\"font\":72}}}",
+  "element_compound_selector" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"view.sa-item\",\"screen\":\"font\",\"registry\":{\"vue\":0,\"screens\":{\"index\":98,\"font\":72}}}",
+  "element_not_found" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#no-such-element-xyz\",\"screen\":\"font\",\"registry\":{\"vue\":0,\"screens\":{\"index\":98,\"font\":72}}}",
+  "element_probe" : "{\"ok\":true,\"selector\":\"#case-font-size\",\"nodeId\":5,\"source\":\"screen\",\"screen\":\"font\",\"left\":26,\"top\":-796,\"right\":364,\"bottom\":-768,\"width\":338,\"height\":28,\"scrollY\":991}",
+  "element_pseudo_selector" : "{\"ok\":false,\"error\":\"unsupported\",\"reason\":\"伪类（`:hover` \/ `:nth-child` 等）未支持：App 端无 CSS 引擎语义\",\"selector\":\"view:hover\",\"screen\":\"font\"}",
+  "element_registry" : "{\"vue\":0,\"screens\":{\"index\":98,\"font\":72}}",
   "glass_history" : [
 
   ],
@@ -29,49 +29,48 @@
     "total_ms" : -1
   },
   "host_id" : "ios",
-  "host_stats" : "{\"data\":{\"rect_calls\":0,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.stats\"],\"visible_calls\":1,\"anim_completed\":0,\"anim_hook_missing\":0,\"anim_calls\":0,\"screens\":[{\"visible\":true,\"rootNodeId\":100,\"screenId\":\"index#1\"}],\"mount_calls\":1,\"shared_calls\":0,\"destroy_calls\":0,\"live_screens\":1,\"content_node_total\":73},\"ok\":true}",
-  "interaction_probe" : "{\"press_styles\":3,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
+  "host_stats" : "{\"ok\":true,\"data\":{\"rect_calls\":0,\"live_screens\":2,\"anim_hook_missing\":0,\"visible_calls\":3,\"destroy_calls\":0,\"anim_completed\":0,\"mount_calls\":2,\"calls\":[\"screen.mount\",\"screen.visible\",\"screen.mount\",\"screen.visible\",\"screen.visible\",\"screen.stats\"],\"content_node_total\":168,\"shared_calls\":0,\"anim_calls\":0,\"screens\":[{\"visible\":true,\"rootNodeId\":110,\"screenId\":\"font#2\"},{\"visible\":false,\"screenId\":\"index#1\",\"rootNodeId\":100}]}}",
+  "interaction_probe" : "{\"press_styles\":0,\"press_applied\":0,\"press_anim_starts\":0,\"press_anim_stops\":0,\"field_specs\":0,\"field_ticks\":0,\"field_nodes_touched\":0,\"field_touched_now\":0,\"pseudo_parents\":0,\"last_field_ids\":[]}",
   "isect_after" : "[]",
   "isect_after_hits" : "0",
   "isect_initial" : "[]",
   "isect_initial_hits" : "0",
   "isect_ok" : false,
-  "isect_rect_probe" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#mine-row-dark\",\"screen\":\"index\",\"registry\":{\"vue\":0,\"screens\":{\"index\":64}}}",
+  "isect_rect_probe" : "{\"ok\":false,\"error\":\"not-found\",\"selector\":\"#mine-row-dark\",\"screen\":\"font\",\"registry\":{\"vue\":0,\"screens\":{\"index\":98,\"font\":72}}}",
   "isect_register" : "{\"ok\":true}",
   "isect_retick" : "0",
   "jsTasks" : {
-    "avgMs" : 7.2142857142857144,
+    "avgMs" : 10,
     "enabled" : true,
-    "long" : 0,
-    "maxMs" : 36,
+    "long" : 1,
+    "maxMs" : 85,
     "recent" : [
-
+      {
+        "label" : "eval:__proteusSuperappRender",
+        "ms" : 85
+      }
     ],
-    "recentCount" : 0,
-    "recentP95Ms" : 0,
+    "recentCount" : 1,
+    "recentP95Ms" : 85,
     "thresholdMs" : 50,
-    "total" : 14
+    "total" : 18
   },
   "kernel_rect" : {
-    "baseline" : 13.330078125,
-    "clipH" : 144,
-    "clipW" : 358,
-    "clipX" : 16,
-    "clipY" : 223,
-    "height" : 17,
-    "width" : 28,
-    "x" : 330,
-    "y" : 239
+    "baseline" : 19.04296875,
+    "height" : 28,
+    "width" : 338,
+    "x" : 26,
+    "y" : 195
   },
-  "mount_anim_ms" : 0.054001808166503906,
-  "mount_emit_ms" : 12.143969535827637,
-  "mount_flat_ms" : 0.48696994781494141,
+  "mount_anim_ms" : 0.06008148193359375,
+  "mount_emit_ms" : 41.725993156433105,
+  "mount_flat_ms" : 0.95796585083007812,
   "mount_glass_ms" : 0,
   "mount_history" : [
     {
-      "anim_ms" : 0.054001808166503906,
-      "emit_ms" : 12.143969535827637,
-      "flat_ms" : 0.48696994781494141,
+      "anim_ms" : 0.074028968811035156,
+      "emit_ms" : 21.142959594726562,
+      "flat_ms" : 0.82790851593017578,
       "glass_blur_build_ms" : -1,
       "glass_blur_ms" : -1,
       "glass_blur_radius_px" : -1,
@@ -85,30 +84,59 @@
       "glass_px_per_pt" : -1,
       "glass_raster_ms" : -1,
       "glass_total_ms" : -1,
-      "host_ms" : 29.168009757995605,
-      "layers_ms" : 11.518001556396484,
-      "layout_ms" : 0.23996829986572266,
-      "measure_ms" : 8.6240768432617188,
-      "pin_ms" : 0.017046928405761719,
-      "post_ms" : 0.13899803161621094,
-      "rects_ms" : 0.14197826385498047,
+      "host_ms" : 41.272997856140137,
+      "layers_ms" : 20.153999328613281,
+      "layout_ms" : 0.39005279541015625,
+      "measure_ms" : 10.855913162231445,
+      "pin_ms" : 0.022053718566894531,
+      "post_ms" : 0.16105175018310547,
+      "rects_ms" : 0.14102458953857422,
       "sample_ms" : -1,
-      "scroll_ms" : 0.0050067901611328125,
-      "svg_ms" : 0.067949295043945312,
-      "wrap_ms" : 6.1240196228027344
+      "scroll_ms" : 0.0079870223999023438,
+      "svg_ms" : 0.064969062805175781,
+      "wrap_ms" : 6.2869787216186523
+    },
+    {
+      "anim_ms" : 0.06008148193359375,
+      "emit_ms" : 41.725993156433105,
+      "flat_ms" : 0.95796585083007812,
+      "glass_blur_build_ms" : -1,
+      "glass_blur_ms" : -1,
+      "glass_blur_radius_px" : -1,
+      "glass_blur_readback_ms" : -1,
+      "glass_crop_px" : 0,
+      "glass_glass_count" : 0,
+      "glass_hide_ms" : -1,
+      "glass_install_ms" : -1,
+      "glass_metal_ms" : -1,
+      "glass_ms" : 0,
+      "glass_px_per_pt" : -1,
+      "glass_raster_ms" : -1,
+      "glass_total_ms" : -1,
+      "host_ms" : 78.732967376708984,
+      "layers_ms" : 40.65096378326416,
+      "layout_ms" : 1.0600090026855469,
+      "measure_ms" : 25.761961936950684,
+      "pin_ms" : 0.010013580322265625,
+      "post_ms" : 0.11599063873291016,
+      "rects_ms" : 0.19204616546630859,
+      "sample_ms" : -1,
+      "scroll_ms" : 0.009059906005859375,
+      "svg_ms" : 0.045895576477050781,
+      "wrap_ms" : 6.6159963607788086
     }
   ],
-  "mount_host_ms" : 29.183030128479004,
-  "mount_layers_ms" : 11.518001556396484,
-  "mount_layout_ms" : 0.23996829986572266,
-  "mount_measure_ms" : 8.6240768432617188,
-  "mount_pin_ms" : 0.017046928405761719,
-  "mount_post_ms" : 0.13899803161621094,
-  "mount_rects_ms" : 0.14197826385498047,
+  "mount_host_ms" : 78.750967979431152,
+  "mount_layers_ms" : 40.65096378326416,
+  "mount_layout_ms" : 1.0600090026855469,
+  "mount_measure_ms" : 25.761961936950684,
+  "mount_pin_ms" : 0.010013580322265625,
+  "mount_post_ms" : 0.11599063873291016,
+  "mount_rects_ms" : 0.19204616546630859,
   "mount_sample_ms" : -1,
-  "mount_scroll_ms" : 0.0050067901611328125,
-  "mount_svg_ms" : 0.067949295043945312,
-  "mount_wrap_ms" : 6.1240196228027344,
+  "mount_scroll_ms" : 0.009059906005859375,
+  "mount_svg_ms" : 0.045895576477050781,
+  "mount_wrap_ms" : 6.6159963607788086,
   "ok" : true,
   "pump" : {
     "anim_start_calls" : 0,
@@ -121,58 +149,68 @@
     "pumps" : 0,
     "running" : false
   },
-  "rendered_page" : "index",
-  "run_ts" : 1792580269.554122,
+  "rendered_page" : "font",
+  "run_ts" : 1792897413.6318901,
   "scroll_probe" : {
-    "after_drag_down_100k" : 9,
+    "after_drag_down_100k" : 991,
     "after_drag_left_100k_x" : 0,
     "after_drag_right_100k_x" : 0,
     "after_drag_up_100k" : 0,
     "ok" : false,
-    "range" : 9,
+    "range" : 991,
     "range_set" : true
   },
   "state" : {
-    "current" : "index",
-    "depth" : 1,
+    "current" : "font",
+    "depth" : 2,
     "screens" : [
-      "glass-nav",
+      "animation",
+      "at-rules",
+      "background-position",
+      "background",
+      "border-style",
+      "border",
+      "box-model",
+      "effects",
+      "flex",
+      "font",
+      "grid-auto-flow",
+      "grid-auto",
+      "grid-template-areas",
+      "grid-tracks",
       "index",
-      "messages",
-      "mine",
-      "verify"
+      "justify-self",
+      "line-clamp",
+      "math-functions",
+      "misc",
+      "outline",
+      "overflow-page",
+      "overflow",
+      "place-items",
+      "position-scroll",
+      "position",
+      "safe-area",
+      "text-shadow",
+      "text",
+      "units",
+      "vw-vh",
+      "word-break"
     ],
     "stack" : [
-      "index"
+      "index",
+      "font"
     ],
     "tabItems" : [
-      {
-        "glyph" : "sym:house",
-        "label" : "首页",
-        "name" : "index"
-      },
-      {
-        "badge" : 3,
-        "glyph" : "sym:message",
-        "label" : "消息",
-        "name" : "messages"
-      },
-      {
-        "glyph" : "sym:person",
-        "label" : "我的",
-        "name" : "mine"
-      }
+
     ],
     "tabLabels" : {
-      "index" : "Proteus 超级应用",
-      "messages" : "消息",
-      "mine" : "我的",
-      "verify" : "验收控制台"
+      "border" : "CSS 验收 · 边框",
+      "justify-self" : "CSS 验收 · 网格自对齐",
+      "text" : "CSS 验收 · 文本",
+      "word-break" : "CSS 验收 · 断词"
     },
     "tabs" : [
-      "index",
-      "messages",
-      "mine"
+
     ],
     "tabSpec" : {
       "badge" : {
@@ -200,19 +238,20 @@
     }
   },
   "switch_log" : [
-
+    {
+      "current" : "font",
+      "dy" : 2600,
+      "offset" : 991,
+      "ok" : true,
+      "scroll" : "font",
+      "via" : "scroll-inject"
+    }
   ],
   "tabs" : [
-    "index",
-    "messages",
-    "mine"
+
   ],
   "transfer_ok" : false,
   "transfer_probe" : "skipped (PROTEUS_TRANSFER_PROBE_URL 未设置)",
-  "transport_base" : "https:\/\/192.168.1.124:9300",
-  "transport_ok" : true,
-  "transport_probe" : "{\"base\":\"https:\/\/192.168.1.124:9300\",\"rounds\":3,\"plain_base\":\"\",\"client_protos\":[\"h2\",\"h2\",\"h2\"],\"client_peers\":[\"192.168.0.47:57263\",\"192.168.0.47:57263\",\"192.168.0.47:57263\"],\"client_same_conn\":true,\"first_ok\":true,\"transport_per_round\":[{\"proto\":\"h2\",\"reused\":false,\"dnsMs\":0,\"connectMs\":41,\"tlsMs\":32,\"ttfbMs\":11.5},{\"proto\":\"h2\",\"reused\":true,\"ttfbMs\":9},{\"proto\":\"h2\",\"reused\":true,\"ttfbMs\":11.1}],\"transport_first\":{\"proto\":\"h2\",\"reused\":false,\"dnsMs\":0,\"connectMs\":41,\"tlsMs\":32,\"ttfbMs\":11.5},\"transport_last\":{\"proto\":\"h2\",\"reused\":true,\"ttfbMs\":11.1},\"host_stats\":{\"accepted\":1,\"challenges\":2,\"default_handled\":0,\"last_network_error\":\"\",\"metrics\":{\"after_complete\":0,\"before_complete\":3,\"collecting_calls\":3},\"rejected\":0,\"with_pins\":1},\"server_stats\":{\"channels\":{\"tls\":{\"requests\":3,\"protocols\":{\"h2\":3},\"conns\":{\"192.168.0.47:57263\":3},\"connections\":1,\"reused\":true}},\"globalConnections\":2,\"spki\":\"9ZP1kkGxo492Dd3USicZZ\/iaj70DW8eYSkBdpgprS2Q=\",\"port\":9300},\"server_protocols\":{\"h2\":3},\"server_requests\":3,\"server_connections\":1,\"http2_ok\":true,\"conn_reused_ok\":true,\"ok\":true}",
-  "transport_probe_rounds" : 1,
   "ws_ok" : false,
   "ws_probe" : "skipped (PROTEUS_WS_PROBE_URL 未设置)"
 }

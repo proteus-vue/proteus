@@ -8,6 +8,7 @@
 //     已在 scripts/check-host-layering.mjs 具名登记（待后端拆分）。
 //   NAPI 模块名 `proteus_host`（.so = libproteus_host.so）；ArkTS 侧 `import ... from 'proteus_host'`。
 #include "proteus_host_helpers.h"
+#include "proteus_text_tails.h"
 #include "host_app_runtime_impl.h"
 #include "http_probe.h"   // ★T-app-fetch：真机 HTTP 通路判据（走真实 invokeBytes）
 #include "transport_probe.h"   // ★★★#1156：鸿蒙传输层事实取证（多轮同 host:port ⇒ 服务端判复用）
@@ -423,11 +424,9 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         bool tabular = false;
         { std::string fvn; jstr(it.c_str(), it.size(), "fontVariantNumeric", &fvn); tabular = (fvn == "tabular-nums"); }
         double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);   // ★批次 20：字距（设计 px）
-        // ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：词间距 / 首行缩进（设计 px ⇒ ×density）
-        double wsDesign = 0; jnum(it.c_str(), it.size(), "wordSpacing", &wsDesign);
-        double tiDesign = 0; jnum(it.c_str(), it.size(), "textIndent", &tiDesign);
+        const auto tails = proteus::readTextTails(it, jstr, jnum);
         measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, nullptr, &basepx, fst, tabular,
-                          0, "", 0, 0.0, wsDesign * density, tiDesign * density);
+                          0, "", 0, 0.0, tails.wordSpacing * density, tails.textIndent * density);
         // ★批次 13：line-height ⇒ 行盒高覆盖字形高
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
@@ -475,10 +474,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             const bool single = (ws == "nowrap" || ws == "pre");
             int clampLines = 0;   // ★★★line-clamp 项（2026-10-08）：多行截断行数
             std::string wbM; jstr(it.c_str(), it.size(), "wordBreak", &wbM);
-            // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出 / 词间距 / 首行缩进
-            std::string owM; jstr(it.c_str(), it.size(), "overflowWrap", &owM);
-            double wsM = 0; jnum(it.c_str(), it.size(), "wordSpacing", &wsM);
-            double tiM = 0; jnum(it.c_str(), it.size(), "textIndent", &tiM);
+            const auto tails = proteus::readTextTails(it, jstr, jnum);
             std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
             double lhDesign = lineHeightDesignPx(lhTok, fs);
             double wpx = 0, hpx = 0;
@@ -492,7 +488,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 //   ⇒ 盒高只算一行 ⇒ 第二行溢出）。lineHeight 声明时盒高 = 行数 × 行高。
                 int lines = 0;
                 measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff, &lines, fst, tabular,
-                                         0, "", 0, 0.0, owM, wsM * density, tiM * density);
+                                         0, "", 0, 0.0, tails.overflowWrap, tails.wordSpacing * density, tails.textIndent * density);
                 if (lines < 1) lines = 1;
                 const double perLine = (hpx > 0) ? (hpx / lines) : 0;
                 // ★★line-clamp 项：测量封顶——行数 = min(自然行数, clamp)（与绘制 maxLines 同源）
@@ -508,7 +504,7 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 // ★pre/nowrap：`\n` 仍成立（pre）或忽略（nowrap）——按**实测行数**算盒高（否则 pre 的第二行溢出）
                 int lines = 0;
                 measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, &lines, nullptr, fst, tabular,
-                                  0, "", 0, 0.0, wsM * density, tiM * density);
+                                  0, "", 0, 0.0, tails.wordSpacing * density, tails.textIndent * density);
                 if (lines < 1) lines = 1;
                 if (lhDesign > 0) hpx = lines * lhDesign * density;
             }
