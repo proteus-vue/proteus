@@ -482,37 +482,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="codepane">
-    <div class="bar">
-      <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
-      <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
-      <!-- 未保存：可点的 chip（⌘S 之外的第二条路径） -->
-      <button v-if="dirty" class="dirty" id="codeDirty" title="保存（⌘S）" @click="save">
-        <span class="bullet" />未保存
-      </button>
-      <span v-else-if="saving" class="meta">保存中…</span>
-      <span class="notice" id="codeNotice" :class="{ bad: !!notice && !notice.startsWith('已保存') }">
-        {{ notice }}
-      </span>
-      <span style="flex: 1" />
-      <span class="note" id="codeNote">⌘S 保存 · 着色 .vue/.rs/.ts/.css/.m</span>
-    </div>
-    <!-- 标签栏（2026-10-25 · 决策 #1217）：点=切换，×=关闭，小圆点=未保存。
-         ★标签只负责"切换文件"，缓冲与 undo 历史在 states 池里，切标签不重建 state。 -->
-    <div v-if="tabs.length" class="tabs" id="codeTabs">
-      <button
-        v-for="p in tabs"
-        :key="p"
-        class="tab"
-        :class="{ on: p === cur }"
-        :title="p"
-        :data-tab="p"
-        @click="open(p)"
-      >
-        <span class="tname">{{ p.split('/').pop() }}</span>
-        <span v-if="dirtySet.includes(p)" class="tdot" aria-label="未保存" />
-        <span class="tclose" role="button" aria-label="关闭" @click.stop="close(p)">×</span>
-      </button>
-    </div>
     <div class="split">
       <nav class="files" id="codeFiles">
         <button
@@ -537,7 +506,45 @@ onBeforeUnmount(() => {
           <span class="name">{{ r.node.name }}</span>
         </button>
       </nav>
+      <!-- ★右栏 = 编辑器自己的区域（决策 #1218）：文件信息条 + 标签栏 + 编辑器**都在这里**。
+           原先它们是 `.codepane` 的直接子元素 ⇒ 横跨整页、压在左栏树上面（用户截图指出）。
+           IDE 的通用布局就是"左栏只有树，编辑器头部跟着编辑器"。 -->
       <div class="pane">
+        <div class="bar">
+          <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
+          <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
+          <!-- 未保存：可点的 chip（⌘S 之外的第二条路径） -->
+          <button v-if="dirty" class="dirty" id="codeDirty" title="保存（⌘S）" @click="save">
+            <span class="bullet" />未保存
+          </button>
+          <span v-else-if="saving" class="meta">保存中…</span>
+          <span
+            class="notice"
+            id="codeNotice"
+            :class="{ bad: !!notice && !notice.startsWith('已保存') }"
+          >
+            {{ notice }}
+          </span>
+          <span style="flex: 1" />
+          <span class="note" id="codeNote">⌘S 保存 · 着色 .vue/.rs/.ts/.css/.m</span>
+        </div>
+        <!-- 标签栏（2026-10-25 · 决策 #1217）：点=切换，×=关闭，小圆点=未保存。
+             ★标签只负责"切换文件"，缓冲与 undo 历史在 states 池里，切标签不重建 state。 -->
+        <div v-if="tabs.length" class="tabs" id="codeTabs">
+          <button
+            v-for="p in tabs"
+            :key="p"
+            class="tab"
+            :class="{ on: p === cur }"
+            :title="p"
+            :data-tab="p"
+            @click="open(p)"
+          >
+            <span class="tname">{{ p.split('/').pop() }}</span>
+            <span v-if="dirtySet.includes(p)" class="tdot" aria-label="未保存" />
+            <span class="tclose" role="button" aria-label="关闭" @click.stop="close(p)">×</span>
+          </button>
+        </div>
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
         <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
         <div v-show="!err" class="host" id="codeHost" ref="host" />
@@ -689,17 +696,21 @@ onBeforeUnmount(() => {
 .pane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
 }
 /* 编辑器宿主：撑满剩余空间；滚动交给 .cm-scroller */
 .host {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   user-select: text;
 }
 /* 标签栏：行高 28px（4px 网格）；活动标签用底部 2px 强调条，不靠"变亮"单维度 */
 .tabs {
+  flex: none;
   display: flex;
   align-items: stretch;
   height: 28px;

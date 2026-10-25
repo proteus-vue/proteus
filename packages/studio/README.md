@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **35 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **36 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -616,12 +616,16 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
 - 关标签 = 丢弃该文件的缓冲（**这是"关闭"的语义，不是"隐藏"**；未保存内容会一起丢，当前没有二次确认）；
 - 会话状态 `ws.openFiles` 落盘（去重 + 上限 12），重启恢复标签列表，只恢复磁盘上还在的文件。
 
+**布局（决策 #1218）**：文件信息条 + 标签栏 + 编辑器**都在右栏 `.pane` 里**，左栏从顶到底只有树。
+★第一版把 bar/tabs 挂在 `.codepane` 下（整页宽度）⇒ 标签横跨整页、压在左栏树上——用户截图一眼看出，
+而当时 35 条判据**全绿**（功能都对，位置错了）。所以补了 ㉓：标签栏起点 ≥ 树右边界、宽度 == 右栏宽度。
+
 **判据 ㉒ / ㉒b**：两个标签并存 · 脏标记按文件独立 · **切回后 ⌘Z 仍能撤销之前的输入**
 （撤销前必须确实有可撤的内容——否则"把编辑丢掉"的实现也能让"撤销后不含标记"成立，那是假绿）·
 关标签回到相邻标签。
 ★**破坏性验证**：把缓冲池换成"每次重新读盘" ⇒ ⑱c / ㉒ / ㉒b 三条同时红。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **35 条**）
+### 编辑器判据（`check:studio-panel` 已扩到 **36 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
@@ -631,6 +635,7 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
 - ⑳ **覆盖表**：树里每种扩展名都要有归属（防止新增文件类型静默掉队）；
 - ㉑ **8000 行大文件**：整篇解析完成 + 冷跳着色 ≤400ms（见上节「大文件着色性能」）；
 - ㉒ / ㉒b **多标签 + 文本缓冲**：脏标记按文件独立、⌘Z 跨标签仍生效、关标签回相邻（见上节）；
+- ㉓ **标签栏不跨界**：起点 ≥ 文件树右边界、宽度 == 右栏宽度（布局回归）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；

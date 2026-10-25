@@ -382,6 +382,19 @@ await page.waitForTimeout(200)
 const undoKept = await page.evaluate(
   () => document.querySelector('.cm-content')?.textContent ?? '',
 )
+// ── ㉓ 标签栏必须待在编辑器区内（不能跨界压到左栏文件树上，决策 #1218）──────
+// 【为什么单独立一条】这是纯布局约束，功能测试全绿也可能错：标签栏原先挂在 `.codepane`
+//   下（整页宽度）⇒ 横跨整页、正好压在左栏树的上面。用户截图一眼看出，而 35 条判据全绿。
+const tabLayout = await page.evaluate(() => {
+  const rect = (sel) => {
+    const el = document.querySelector(sel)
+    if (!el) return null
+    const b = el.getBoundingClientRect()
+    return { x: Math.round(b.x), r: Math.round(b.right), y: Math.round(b.y), w: Math.round(b.width) }
+  }
+  return { tabs: rect('#codeTabs'), files: rect('#codeFiles'), pane: rect('.pane') }
+})
+
 // 关掉 main.rs 标签 ⇒ 回到相邻标签（App.vue），标签数 -1
 await page.locator('#codeTabs button[data-tab="packages/studio/src/main.rs"] .tclose').click()
 await page.waitForTimeout(500)
@@ -771,6 +784,15 @@ const checks = [
       !undoKept.includes('// edited by gate') &&
       closed.count === tabState.count - 1 &&
       closed.path.endsWith('App.vue'),
+  ],
+  // ㉓ 标签栏在编辑器区内（起点 ≥ 文件树右边界；宽度 == 右栏宽度）
+  [
+    `㉓ 标签栏不跨界：标签 x=${tabLayout.tabs?.x} ≥ 树右边界 ${tabLayout.files?.r}（右栏 ${tabLayout.pane?.x}..${tabLayout.pane?.r}，标签宽 ${tabLayout.tabs?.w}）`,
+    !!tabLayout.tabs &&
+      !!tabLayout.files &&
+      !!tabLayout.pane &&
+      tabLayout.tabs.x >= tabLayout.files.r - 1 &&
+      Math.abs(tabLayout.tabs.w - tabLayout.pane.w) <= 1,
   ],
   // ⑫ G5：切换要落盘（否则"记住上次"只是口头承诺）
   [
