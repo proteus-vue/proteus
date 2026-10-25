@@ -139,6 +139,8 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
        justify-content:center;gap:var(--sp2);color:var(--fg-subtle);pointer-events:none}
 .empty svg{opacity:.5}
+/* 产品标记：比普通占位图标亮（它是品牌，不是"缺省图形"），但不抢正文 */
+.empty .mark{opacity:.92;margin-bottom:var(--sp1)}
 .empty p{margin:0;font-size:var(--fs-sm);font-weight:500;color:var(--fg-muted)}
 .empty span{font-size:var(--fs-xs);color:var(--fg-subtle)}
 

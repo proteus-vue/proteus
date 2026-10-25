@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#282c36"/><stop offset="0.55" stop-color="#191c23"/><stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.44" r="0.52">
+      <stop offset="0" stop-color="#8b8cff" stop-opacity="0.32"/><stop offset="0.6" stop-color="#8b8cff" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#8b8cff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0.5" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#d3c6ff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <linearGradient id="left" x1="0.25" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/></linearGradient>
+    <linearGradient id="right" x1="0.75" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <clipPath id="ctile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/><stop offset="0.45" stop-color="#ffffff" stop-opacity="0.03"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="cube"><polygon points="512,212 771.8,362 771.8,662 512,812 252.2,662 252.2,362"/></clipPath>
+  </defs>
+
+
+  <g fill="none" stroke="#e9eeff" stroke-opacity="0.70" stroke-width="21" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M226 282 V216 a26 26 0 0 1 26 -26 H318"/>
+    <path d="M706 190 H772 a26 26 0 0 1 26 26 V282"/>
+    <path d="M226 742 V808 a26 26 0 0 0 26 26 H318"/>
+    <path d="M706 834 H772 a26 26 0 0 0 26 -26 V742"/>
+  </g>
+
+  <polygon points="512,212 771.8,362 512,512 252.2,362" fill="url(#top)"/>
+  <polygon points="512,212 771.8,362 512,512 252.2,362" fill="url(#sheen)"/>
+  <polygon points="252.2,362 512,512 512,812 252.2,662" fill="url(#left)"/>
+  <polygon points="512,512 771.8,362 771.8,662 512,812" fill="url(#right)"/>
+  <g clip-path="url(#cube)" stroke="#ffffff" stroke-width="15" stroke-linecap="round" stroke-opacity="0.94">
+    <line x1="252.2" y1="362" x2="512" y2="512"/>
+    <line x1="771.8" y1="362" x2="512" y2="512"/>
+    <line x1="512" y1="512" x2="512" y2="812"/>
+  </g>
+</svg>

@@ -9,14 +9,40 @@
 #   3. 脚本本身就是"产物怎么来的"的文档——比一句 `cargo tauri build` 更可复核。
 #   若将来装了 tauri-cli，`cargo tauri build` 也能直接用（tauri.conf 的 bundle 段已配好）。
 #
-# 用法：./package-app.sh [--open]
+# 用法：./package-app.sh [--open] [--channel preview]
+#   --channel preview 打「预览通道」：名字带 Preview、bundle id 加 .preview、图标用绿色那套
+#   ⇒ 两个通道可以**同时装在机器上**（LaunchServices 按 bundle id 区分，不会互相顶掉）。
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(git -C "$HERE" rev-parse --show-toplevel)"
-APP_NAME="Proteus Studio"
 BIN_NAME="proteus-studio-shell"
 OUT_DIR="$HERE/build-app"
+
+OPEN_AFTER=0
+CHANNEL="release"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --open) OPEN_AFTER=1 ;;
+    --channel) CHANNEL="${2:-release}"; shift ;;
+    --channel=*) CHANNEL="${1#*=}" ;;
+    *) echo "✗ 未知参数：$1（可用：--open / --channel preview）"; exit 2 ;;
+  esac
+  shift
+done
+
+# 通道 → 名字 / id 后缀 / 图标源（决策 #1228：通道靠**色相**，不靠角标）
+if [ "$CHANNEL" = "preview" ]; then
+  APP_NAME="Proteus Studio Preview"
+  IDENT_SUFFIX=".preview"
+  ICNS="icons/icon-preview.icns"
+  ICNS_SRC=("icons/icon-preview.svg" "icons/icon-preview-small.svg")
+else
+  APP_NAME="Proteus Studio"
+  IDENT_SUFFIX=""
+  ICNS="icons/icon.icns"
+  ICNS_SRC=("icons/icon.svg" "icons/icon-small.svg")
+fi
 APP="$OUT_DIR/$APP_NAME.app"
 
 cd "$HERE"
@@ -71,10 +97,10 @@ BIN="$HERE/target/release/$BIN_NAME"
 # ③ 图标：**源 SVG 比 icns 新就重生成**（决策 #1224）
 #   ★原先是"缺了才生成" ⇒ 改了图标却把旧图标打进包，外面一点看不出来——和"包里是三天前的
 #     UI"是同一类"看起来构建过"的错。判定基准是**源文件 mtime**，不是"文件在不在"。
-if [ ! -f "$HERE/icons/icon.icns" ] \
-  || [ "$HERE/icons/icon.svg" -nt "$HERE/icons/icon.icns" ] \
-  || [ "$HERE/icons/icon-small.svg" -nt "$HERE/icons/icon.icns" ]; then
-  echo "▸ 重新生成图标（icon.svg / icon-small.svg 有更新）"
+if [ ! -f "$HERE/$ICNS" ] \
+  || [ "$HERE/${ICNS_SRC[0]}" -nt "$HERE/$ICNS" ] \
+  || [ "$HERE/${ICNS_SRC[1]}" -nt "$HERE/$ICNS" ]; then
+  echo "▸ 重新生成图标（${ICNS_SRC[0]} / ${ICNS_SRC[1]} 有更新）"
   node "$HERE/icons/make-icon.mjs"
 fi
 
@@ -86,7 +112,7 @@ fi
 #     代价：已从依赖里消失的旧 dylib 不会被自动清理（多留几十 MB，不影响运行）。
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -f "$BIN" "$APP/Contents/MacOS/$BIN_NAME"
-cp -f "$HERE/icons/icon.icns" "$APP/Contents/Resources/icon.icns"
+cp -f "$HERE/$ICNS" "$APP/Contents/Resources/icon.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 VERSION="$(python3 -c "import json;print(json.load(open('$HERE/tauri.conf.json'))['version'])")"
@@ -101,7 +127,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
   <key>CFBundleExecutable</key><string>$BIN_NAME</string>
   <key>CFBundleIconFile</key><string>icon.icns</string>
-  <key>CFBundleIdentifier</key><string>$IDENT</string>
+  <key>CFBundleIdentifier</key><string>$IDENT$IDENT_SUFFIX</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>$APP_NAME</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -136,7 +162,7 @@ printf '  ✓ 新鲜度：UI %s · 二进制 %s · 包内 %s\n' \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$BIN")" \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP/Contents/MacOS/$BIN_NAME")"
 
-if [ "${1:-}" = "--open" ]; then
+if [ "$OPEN_AFTER" = "1" ]; then
   echo "▸ 打开"
   open "$APP"
 fi

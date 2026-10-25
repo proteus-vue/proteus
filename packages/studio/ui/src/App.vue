@@ -10,6 +10,7 @@ import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
+import StudioMark from './icons/StudioMark.vue'
 import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 import { onMenuAction, wireMenu } from './menu'
 
@@ -339,7 +340,8 @@ const hud = computed(() => {
           </div>
           <!-- 空状态：生产 IDE 必须有——不然用户看到纯黑会以为坏了 -->
           <div v-if="!running" class="empty">
-            <StudioIcon name="device" :size="28" />
+            <!-- 产品标记（立方体 + 取景框）：只在尺寸够大的地方用 —— 空状态正是这种地方 -->
+            <StudioMark :size="58" class="mark" />
             <p>等待首帧</p>
             <span v-if="!hasBridge">无 Tauri 桥（浏览器直开时属正常）</span>
             <span v-else>没有输入源：接 Android（adb）或 iPhone（--stream）</span>

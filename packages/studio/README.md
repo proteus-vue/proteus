@@ -747,32 +747,31 @@ Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo
 「原生 NSMenu 点到 JS」那一段（Tauri event）在 Playwright 里不存在，只能人眼点一次。
 没有"帮助"菜单：现在没有任何帮助内容可给，摆一个只有标题的空菜单就是在装作有。
 
-## 应用图标（2026-10-25 · 决策 #1224）
+## 应用图标与产品标记（2026-10-25 · 决策 #1224 → #1228）
 
-品牌立方体（`docs/brand/avatar.svg`：一套源码 → 三个渲染目标）**加一层 Studio 语义**：
-四角选中框把立方体框住 = **被检视、被取证**。容器换成深石墨底（IDE 的日常底色），
-与白底的品牌头像在产品矩阵上区分开。完整设计说明见 `docs/brand/README.md`。
+**两个标记，分工按尺寸**：
 
-| 文件 | 作用 |
-|---|---|
-| `icons/icon.svg` | **源文件**（1024 · 完整标记：立方体 a=300 + 四角框） |
-| `icons/icon-small.svg` | **16/32px 专用**（立方体 72%、无框）——小尺寸只认剪影 |
-| `icons/make-icon.mjs` | 生成器：SVG → 按目标尺寸**矢量栅格化** → iconset 十档 → `iconutil` 打包 |
-| `icons/icon.icns` / `icon.png` | 构建产物（打包用 / 文档用） |
+| | 应用图标 | 产品标记 |
+|---|---|---|
+| 图形 | **P 字标**（极简） | **立方体 + 取景框** |
+| 文件 | `icons/icon.svg` / `icon-small.svg`（正式）· `icon-preview*.svg`（预览） | `docs/brand/studio-mark.svg` / `-glyph.svg` |
+| 用在哪 | Dock / Finder / 菜单栏 | 应用内空状态（`ui/src/icons/StudioMark.vue`）、文档、官网首屏 |
+| 为什么 | 16–32px 仍认得出 | 取景框在 32px 会糊成四团脏点，只适合大尺寸 |
+
+**双通道**（靠色相，不靠角标）：正式 = 紫→蓝，预览 = 绿→青。
+`pnpm run build:studio-app` / `build:studio-app:preview` →
+装成「Proteus Studio」/「Proteus Studio Preview」（bundle id 带 `.preview`，**两个可以同时装**）。
 
 ```bash
-node packages/studio/icons/make-icon.mjs   # 改完 SVG 必须跑
+node packages/studio/icons/make-icon.mjs   # 两个通道各出 icns + 1024 png
 ```
 
-★**为什么不是一张图缩到底**：32px 下选中框会糊成四团灰点（实测）；Apple 的图标也是分尺寸出图。
-★**为什么栅格化而不是缩放位图**：16px 的图是按 16px 重新算的，不是 1024 缩下去。
-★**判据 ㉗**：`icns` 必须比任一份源 SVG 新 + **内含各档尺寸逐一对**，防的是"改了图标却把旧 icns
-打进包"——外面完全看不出来，和"包里是三天前的 UI"同一类假象。
-★这条判据写错过两次，都是"查的东西不是真实产物"：第一版数 `AppIcon.iconset/` 的十档
-（那是 gitignore 的构建中间物，CI 里不存在）；第二版解析 icns 却把 16/32 写成 `icp4/icp5`
-（真身是 `ic04/ic05` 的 ARGB 块）⇒ 报"缺 16"。**判据要贴着真实格式写，不能照着自己的想象写。**
+★**小尺寸另出一份**：16/32 用 `*-small.svg`（字形放大 12%、去投影、去高光扫带、补光加强）。
+★**判据 ㉗**：两套 icns 都要「比源 SVG 新 + 内含 16/32/64/128/256/512/1024 七档 + png 1024」，
+输出形如 `release 同步·10 档 | preview 同步·10 档`——防的是"改了图标却把旧 icns 打进包"。
+★**已知限制**：两个通道共用同一个 `state.json`（数据目录未按 bundle id 分），同机双开会互相覆盖工作区状态。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
+### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；

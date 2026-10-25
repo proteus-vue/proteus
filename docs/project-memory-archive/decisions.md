@@ -13837,3 +13837,23 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     + `system-compare.png`（2×2 含 64/32）+ `size-check.png`。
   - **下一步**：用户选定风格后 → 替换 `icon.svg`/`icon-small.svg`（正式）→ `make-icon.mjs`；
     若要双通道，再加 `icon-preview.icns` 与打包参数（`--channel preview`），判据 ㉗ 扩一条校验两套 icns。
+
+1228. **应用图标换成 P 字标（双通道）；立方体 + 取景框改当产品标记 · 判据 ㉗ 扩到两套 · 决策**（2026-10-25 · 用户「按你的来，应用图标选极简风格，取景框立方体用在应用内空状态、文档、官网首屏」）:
+  - **分工按尺寸定**，不是按喜好：应用图标 = **P 字标**（16–32px 仍干净）；立方体 + 取景框 = **产品标记**
+    （只出现在尺寸够大的地方：应用内空状态、文档、官网首屏）——因为取景框在 32px 会糊成四团脏点
+    （实测 `icons/options/size-check.png`）。
+  - **图标文件**：`icon.svg` / `icon-small.svg`（正式，紫→蓝）、`icon-preview.svg` / `icon-preview-small.svg`
+    （预览，绿→青）。小尺寸版：字形放大 12%、**去投影、去高光扫带**、补光加强。
+  - **通道靠色相**（VS Code Insiders / Chrome Canary 同款）：`package-app.sh --channel preview` →
+    装成 **Proteus Studio Preview**，bundle id `dev.proteus.studio.shell.preview` ⇒ **两个通道能同时装**
+    （LaunchServices 按 id 区分）。根脚本：`pnpm run build:studio-app:preview`。
+  - **产品标记落地**：`docs/brand/studio-mark.svg`（带底，文档/官网用）+ `studio-mark-glyph.svg`（透明）
+    + 应用内组件 `ui/src/icons/StudioMark.vue`（渐变 id 前缀 `sm-`，避免与官网 `bm*` 撞）；
+    已接进 `App.vue` 的**空状态**（替换原来 28px 的 device 图标）。
+  - **`make-icon.mjs` 重构**：按通道循环出 `icon.icns` + `icon-preview.icns`（各自 1024 png）；
+    中间目录 `AppIcon.iconset` 复用（gitignore 的构建物）。
+  - **判据 ㉗ 扩到两套**：两个 icns 都要「比源 SVG 新 + 内含 16/32/64/128/256/512/1024 七档 + png 1024」。
+    输出形如 `release 同步·10 档 | preview 同步·10 档`。
+  - **诚实边界**：两个通道共用同一个二进制与 web-dist（只有图标/名称/bundle id 不同），
+    数据目录仍是 `dev.proteus.studio.shell` 的 state.json ⇒ **同机双开时工作区状态会互相覆盖**。
+    若要真隔离，得让 Rust 侧按 bundle id 分目录（记在下一步）。

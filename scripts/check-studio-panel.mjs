@@ -477,50 +477,49 @@ const restored = await page.evaluate(() => ({
 //   跑起来一切正常，只有 Dock 里那个图标是旧的 —— 和"包里是三天前的 UI"同一类假象。
 //   ⇒ 两条：① icns 必须比任一份源 SVG 新；② iconset 十档的像素尺寸必须与 Apple 规定一致。
 const iconsDir = path.join(STUDIO, 'icons')
-const icnsPath = path.join(iconsDir, 'icon.icns')
-const srcNewest = Math.max(
-  fs.statSync(path.join(iconsDir, 'icon.svg')).mtimeMs,
-  fs.statSync(path.join(iconsDir, 'icon-small.svg')).mtimeMs,
-)
-const icnsAgeMin = fs.existsSync(icnsPath)
-  ? Math.round((srcNewest - fs.statSync(icnsPath).mtimeMs) / 60000)
-  : NaN
-
-// ★查**产物**（icns 里的分块），不查中间目录 `AppIcon.iconset/` ——
-//   那个是 gitignore 的构建中间物，CI 新克隆里根本不存在（查它 = 在 CI 上必红）。
-//   icns 结构：'icns' + 总长 + 若干 (4字节type, 4字节len, 数据)；PNG 型的尺寸直接在 IHDR 里。
-// ★16/32 在真实 icns 里是 **ic04/ic05（ARGB，不是 PNG）**，icp4/icp5 是它们的 PNG 变体；
-//   第一版只写了 icp*，结果判据报"缺 16"——查的是我自己编的类型表，不是文件里真有的东西。
+// 两个通道各一套：正式（紫/蓝）与预览（绿/青）——通道靠色相，判据要同时盯住两套。
+const ICON_CHANNELS = [
+  { name: 'release', icns: 'icon.icns', src: ['icon.svg', 'icon-small.svg'], png: 'icon.png' },
+  { name: 'preview', icns: 'icon-preview.icns', src: ['icon-preview.svg', 'icon-preview-small.svg'], png: 'icon-preview.png' },
+]
 const ICNS_TYPE = {
   ic04: 16, ic05: 32, icp4: 16, icp5: 32, icp6: 64,
   ic07: 128, ic08: 256, ic09: 512, ic10: 1024,
   ic11: 32, ic12: 64, ic13: 256, ic14: 512,
 }
-const icnsSizes = []
-if (fs.existsSync(icnsPath)) {
-  const b = fs.readFileSync(icnsPath)
-  const ok = b.toString('ascii', 0, 4) === 'icns'
+const NEED_SIZES = [16, 32, 64, 128, 256, 512, 1024]
+
+/** 解析 icns 的分块（★16/32 在真文件里是 ic04/ic05 的 ARGB，不是 PNG） */
+function readIcns(file) {
+  const b = fs.readFileSync(file)
+  const out = []
   let off = 8
-  while (ok && off + 8 <= b.length) {
+  while (off + 8 <= b.length) {
     const type = b.toString('ascii', off, off + 4)
     const len = b.readUInt32BE(off + 4)
     if (len < 8 || off + len > b.length) break
     const isPng = b.toString('hex', off + 8, off + 12) === '89504e47'
-    if (ICNS_TYPE[type]) {
-      // PNG 的尺寸从 IHDR 读；老式 ARGB 读不出来，按类型表算（并标记"未验证像素"）
-      icnsSizes.push([type, isPng ? b.readUInt32BE(off + 8 + 16) : ICNS_TYPE[type], isPng])
-    }
+    if (ICNS_TYPE[type]) out.push([type, isPng ? b.readUInt32BE(off + 8 + 16) : ICNS_TYPE[type]])
     off += len
   }
+  return out
 }
-const needSizes = [16, 32, 64, 128, 256, 512, 1024]
-const missingSizes = needSizes.filter((n) => !icnsSizes.some(([, w]) => w === n))
-const wrongSizes = icnsSizes.filter(([t, w, png]) => png && ICNS_TYPE[t] !== w).map(([t, w]) => `${t}=${w}`)
-const iconPngOk = fs.existsSync(path.join(iconsDir, 'icon.png'))
-  ? fs.readFileSync(path.join(iconsDir, 'icon.png')).readUInt32BE(16) === 1024
-  : false
+// ★查**产物**（icns 分块），不查 `AppIcon.iconset/`——那是 gitignore 的中间物，CI 里不存在。
+const iconReport = ICON_CHANNELS.map((c) => {
+  const icnsPath = path.join(iconsDir, c.icns)
+  const exists = fs.existsSync(icnsPath)
+  const srcNewest = Math.max(...c.src.map((f) => fs.statSync(path.join(iconsDir, f)).mtimeMs))
+  const ageMin = exists ? Math.round((srcNewest - fs.statSync(icnsPath).mtimeMs) / 60000) : NaN
+  const slices = exists ? readIcns(icnsPath) : []
+  const missing = NEED_SIZES.filter((n) => !slices.some(([, w]) => w === n))
+  const pngOk = fs.existsSync(path.join(iconsDir, c.png))
+    ? fs.readFileSync(path.join(iconsDir, c.png)).readUInt32BE(16) === 1024
+    : false
+  return { ...c, exists, ageMin, slices: slices.length, missing, pngOk }
+})
+const iconOk = iconReport.every((r) => r.exists && r.ageMin <= 0 && r.missing.length === 0 && r.pngOk)
 
-// ── ㉕ 菜单// ── ㉕ 菜单：每个动作项都必须有人接、而且真的做事（决策 #1221）──────────────
+// ── ㉕ 菜单// ── ㉕ 菜单// ── ㉕ 菜单：每个动作项都必须有人接、而且真的做事（决策 #1221）──────────────
 // 【为什么要有】菜单项是"承诺"：用户点"保存"就要保存。最坏的情况不是没有菜单，
 //   而是菜单在、点了没反应——它比没有更容易让人以为是自己不会用。
 //   ⇒ 两条一起测：① 从 `src/menu.rs` 的 ACTIONS 表读出**全部** id（不另抄一份），逐个派发；
@@ -888,10 +887,15 @@ const checks = [
       tabsBeforeMenu >= 1 &&
       tabsAfterMenu === tabsBeforeMenu - 1,
   ],
-  // ㉗ 图标：icns 与源 SVG 同步 + icns 内各档尺寸正确
+  // ㉗ 图标（双通道）：icns 与源 SVG 同步 + icns 内各档尺寸正确
   [
-    `㉗ 图标：${fs.existsSync(icnsPath) ? `icns 比源 SVG ${icnsAgeMin <= 0 ? '新' : `旧 ${icnsAgeMin} 分钟`}` : 'icns 缺失'} · 内含 ${icnsSizes.length} 档（缺 ${missingSizes.join(',') || '无'} · 尺寸错 ${wrongSizes.join(',') || '无'}）· icon.png 1024=${iconPngOk}`,
-    fs.existsSync(icnsPath) && icnsAgeMin <= 0 && missingSizes.length === 0 && wrongSizes.length === 0 && iconPngOk,
+    `㉗ 图标：${iconReport
+      .map(
+        (r) =>
+          `${r.name} ${r.exists ? `${r.ageMin <= 0 ? '同步' : `旧 ${r.ageMin} 分钟`}·${r.slices} 档${r.missing.length ? `缺${r.missing.join(',')}` : ''}${r.pngOk ? '' : '·png 非 1024'}` : '缺失'}`,
+      )
+      .join(' | ')}`,
+    iconOk,
   ],
   // ㉖ 搜索：命中数一致 + 点一条真的跳到那一格（不是"打开文件就算过"）
   [
