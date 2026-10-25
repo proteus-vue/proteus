@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | `cargo build --release`；双击版 `./package-app.sh` → `build-app/Proteus Studio.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **26 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **28 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -439,7 +439,7 @@ PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 | 目录树 | 前端把 `list_files` 的扁平路径拼成树（`buildTree` → 扁平化成可见行 + 缩进渲染） | 递归组件要多一个文件、多一层 props/emit，而这里只需要"行 + 缩进"；扁平化后行数 == 可见节点数 |
 | 折叠 | 目录可折叠，**存"折叠了谁"**进会话状态（`ws.codeCollapsed`） | 默认全展开 ⇒ 新增目录自动可见；存"展开了谁"会让新目录默认隐藏 |
 | 读文件 | Rust 命令 `read_text`（`canonicalize` + 仓库根前缀比对 ⇒ 拒绝 `../`；≤512KB；只读） | 引 `@tauri-apps/plugin-fs` 会把前端依赖树和 capabilities 配置一起拉进来，而"只读仓库文本"20 行就够 |
-| 展示 | 右侧 `<pre>` + 行号（等宽、可选中、深色） | 编辑器见下面的"卡点"——**依赖装不进来** |
+| 展示 | **CodeMirror 6 编辑器**（可编辑 + ⌘S 写回，见下节） | 先只读 `<pre>` 打通"读"，再接内核——两步都各有判据，出问题能定位在哪一层 |
 | 切换 | `view` 状态；**切到 code 时 `set_canvas_rect(0,0,0,0)`** | ★GL 视图是独立 NSView，只隐藏 HTML 里的 `#canvas` **盖不住它** ⇒ 判据 ⑪b 专门盯这条 |
 
 **★诚实边界**：仓库根取自编译期 `CARGO_MANIFEST_DIR` ⇒ **只在开发机直接跑二进制时有效**；
@@ -477,21 +477,57 @@ pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 \
 缓冲只在内存（刷新即丢，不给仓库留临时副本）；`base`/`mtime` 记的是**开始编辑时**那一版，
 保存时仍按它做冲突检测——否则切一次文件就把"别人改过"这条线索刷新掉了。
 
-**★语法着色还没上（差一个包）**：着色要 `@lezer/highlight` 的 `tags`，而它只是
-`@codemirror/language` 的**传递依赖**——pnpm 隔离布局下应用代码 import 不到
-（`node_modules/@lezer` 不存在，实测 `ERR_MODULE_NOT_FOUND`）。装一个包即可：
+### 语法着色（2026-10-25 · 决策 #1213）
+
+`HighlightStyle` + `@lezer/highlight` 的 `tags`：语言包本来就在（`.vue` = `@codemirror/lang-vue`，
+`.rs` = `@codemirror/lang-rust`），缺的只是"把 token 标签映射成颜色"这一层——它需要
+`@lezer/highlight`（`@codemirror/language` 的**传递依赖**，pnpm 隔离布局下 import 不到），
+现已由用户在根 `package.json` 装成直接依赖：
 
 ```bash
 pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 @lezer/highlight
 ```
 
-★不自己写分词器（那是编辑器内核）；也不去 hack 库内部的 `.specs` 字段（会在升级时静默烂掉）。
+**色板另立 `--syn-*` 一列**（`ui/src/styles.css`），**不复用** `--ok/--warn/--bad`：
 
-**判据**（`check:studio-panel` 已扩到 **26 条**）：
+| 类别 | token | 值 | 理由 |
+|---|---|---|---|
+| 关键字 | `--syn-keyword` | 紫 `#c792ea` | |
+| 字符串 / 属性值 | `--syn-string` | 绿 `#c3e88d` | |
+| 数字 / 布尔 / null | `--syn-number` | 橙 `#f78c6c` | |
+| 注释 | `--syn-comment` | 灰 `#6d7480` + **斜体** | 不只靠颜色区分（色觉障碍下仍可分） |
+| 类型 / 标签名 | `--syn-type` | 青 `#7fdbca` | |
+| 属性名 | `--syn-attr` | 黄 `#ffcb6b` | |
+| 函数名 | `--syn-fn` | 蓝 `#82aaff` | |
+| 运算符 / 括号 | `--syn-punct` | 暗一档 | |
+| 词法错误 | `--syn-invalid` | 红 + 波浪线 | |
+
+★**为什么不复用语义色**：`--bad` 的含义是"错误/失败"。拿它去标字符串，同一屏上"红"就有两种意思
+（"这行报错"还是"这是个字符串"）⇒ 读代码时被误导。两套色板互不借用。
+★**普通变量名刻意不着色**：全都有颜色等于没颜色，变量继承正文色才能让上面这些类别凸显。
+★仍然**不自研分词器**（G-56.1 红线），也不 hack 库内部 `.specs`。
+
+**判据 ⑲/⑲b 量的是浏览器算出来的 `color`，不是"代码里有 `syntaxHighlighting(...)`"**：
+
+| 判据 | 断言 | 实测 |
+|---|---|---|
+| ⑲ `.vue` | token 数 ≥15 · 颜色种类 ≥4 · **标签 / 关键字 / 字符串三类各自不同色且都 ≠ 正文色** | 38 个 token / 7 种颜色 / 3/3 |
+| ⑲b `.rs` | token 数 ≥12 · 颜色种类 ≥3 · **关键字 / 字符串 / 数字三类各自不同色且都 ≠ 正文色** | 24 个 token / 6 种颜色 / 3/3 |
+
+★**破坏性验证（两条，都当场翻红）**：
+1. 摘掉 `syntaxHighlighting(studioHighlight)` 这一行 ⇒ ⑲ `2 个 token / 1 种颜色`、⑲b `0 / 0` ⇒ 红；
+2. 让字符串与数字**都取关键字色**（token 数不变、整体仍有 5 种颜色）⇒ 两条都红
+   （`3/3` 的位置数还在，但"三类不同色"不成立）——证明断言**不是**"有颜色就算过"。
+★**桩内容必须按文件类型给**：判据里 `read_text` 的桩原先只有一段 JavaScript，塞给 `.vue` 解析器
+只会得到"整篇一个颜色"，那样 ⑲ 永远测不到东西（假绿）。现在 `.rs` 返回 Rust 片段、其余返回 SFC。
+
+### 编辑器判据（`check:studio-panel` 已扩到 **28 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 3 个文件**且默认打开 `App.vue`（自证）；
 - ⑪d **点第二个文件能切换**（按**路径**选，不按序号——折叠会改变序号，踩过两次）；
+- ⑲ / ⑲b **语法着色生效**（`.vue` / `.rs` 各一条：量浏览器算出的 `color`，三类 token 必须各自不同色
+  且都 ≠ 正文色；两条破坏性验证见上节）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；
@@ -634,7 +670,7 @@ Studio 记住**上次的视图与打开的文件**，重启回到原处。
 | # | 缺口 | 现状 | 前置 |
 |---|---|---|---|
 | **G3** | iOS 通道 | ✅ **全链路通（#1190 · 2026-10-23）**：iPhone 12 → Mac（888×1920 · ~60fps · 9.6 Mbps · 10s 295 帧合法 H.264）→ **Studio 画布上屏**（`results/studio-ios-frame.png`）；首帧尺寸自动适配，不再需要手工设 `POC_LIVE_W/H` | — |
-| **G4** | 编辑器容器 | **编辑器已成（CodeMirror 6 · 可编辑 + ⌘S 写回 + 脏缓冲 + 冲突检测）**：左栏 ◈ 切换 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号/当前行/选区/括号匹配/Tab 缩进 · **真实 pointer 点击 → 设备像素落点**（⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还差**：语法着色（缺 `@lezer/highlight` 一个包，见「编辑器」）、**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | 设备侧视图树 |
+| **G4** | 编辑器容器 | **编辑器已成（CodeMirror 6 · 可编辑 + ⌘S 写回 + 脏缓冲 + 冲突检测 + **语法着色 .vue/.rs**，决策 #1211/#1213）**：左栏 ◈ 切换 · **目录树（可折叠、折叠状态持久化）** · 点谁读谁 · 行号/当前行/选区/括号匹配/Tab 缩进 · **真实 pointer 点击 → 设备像素落点**（⑬）· **拖拽平移**（⑯/⑯b）· 切走时把原生画布收成 0×0。**还差**：**元素信息 B2**（依赖设备侧视图树，目前不存在）、触摸回传 | 设备侧视图树 |
 | **G5** | 持久化 / 模块化 | **会话状态已成（#1190 续）**：视图（设备/代码）与上次打开的文件落 `~/Library/Application Support/dev.proteus.studio/state.json`，重启即恢复；判据 ⑫/⑫b 守着。**还没做**：窗口尺寸记忆、面板可插拔、`main.rs` 按命令分组拆 | 先拆命令再谈模块化（现在 408 行仍在可读范围） |
 | — | 元素拾取数据源 | **确认不存在** | G-54 的 `locateAssertion` 仍无「断言 id → 代码位置」注册表；面板明说"不显示盒模型/计算样式" |
 | — | 类型检查 | 未接 `vue-tsc` | 本目录没有 tsconfig；接的话要单独一份 `tsconfig.studio.json` 进 CI |

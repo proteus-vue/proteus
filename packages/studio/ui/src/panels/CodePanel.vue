@@ -11,11 +11,14 @@
 //   ② **原子替换**：临时文件 + rename（直接 write 中途失败会留下半个源文件）；
 //   ③ 保留权限位（rename 会换成新文件的 mode）。
 //
-// 【★语法着色还没上，原因是硬的】着色要 `@lezer/highlight` 的 `tags`，
-//   而它只是 `@codemirror/language` 的**传递依赖**——pnpm 的隔离布局下应用代码 import 不到
-//   （`node_modules/@lezer` 不存在，实测 `ERR_MODULE_NOT_FOUND`）。装一个包即可：
-//     pnpm add -w --store-dir /Volumes/data1/.pnpm-store/v3 @lezer/highlight
-//   ★不自己写分词器（那是编辑器内核）；也不去 hack 库的内部 `.specs` 字段。
+// 【★语法着色（2026-10-25）】`HighlightStyle` + `@lezer/highlight` 的 `tags`：
+//   语言包已在（`.vue` = @codemirror/lang-vue，`.rs` = @codemirror/lang-rust），
+//   缺的只是"把 token 标签映射成颜色"这一层——它需要 `@lezer/highlight`，
+//   而那是 `@codemirror/language` 的**传递依赖**（pnpm 隔离布局下应用代码 import 不到），
+//   已由用户在根 `package.json` 显式装成直接依赖（^1.2.5）。
+//   ★色板另立 `--syn-*` 一列（见 styles.css）：不复用 --bad/--ok 这类**状态**语义色，
+//     否则"红=错误"和"红=字符串"会在同一屏上互相误导。
+//   ★仍然不自己写分词器（G-56.1 红线：编辑器内核只用现成的）。
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { EditorState } from '@codemirror/state'
@@ -29,7 +32,13 @@ import {
   lineNumbers,
 } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { bracketMatching, indentOnInput } from '@codemirror/language'
+import {
+  HighlightStyle,
+  bracketMatching,
+  indentOnInput,
+  syntaxHighlighting,
+} from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 import { vue } from '@codemirror/lang-vue'
 import { rust } from '@codemirror/lang-rust'
 import { hasBridge, listFiles, readText, writeText } from '../bridge'
@@ -139,8 +148,43 @@ function revealPath(path: string) {
 const langFor = (path: string) => {
   if (path.endsWith('.vue')) return vue()
   if (path.endsWith('.rs')) return rust()
-  return [] // 其他类型先按纯文本（着色依赖还没装，见文件头）
+  return [] // 其他类型按纯文本（不为一个文件类型再加一个语言包，装了也没人维护）
 }
+
+/** 语法着色：把 lezer 的 token 标签映射到 `--syn-*` 色板。
+ *  ★只列"读代码时真的要区分"的类别；普通变量名**刻意不给颜色**——
+ *    全都有颜色等于没颜色，变量继承正文色才能让关键字/字符串/类型凸显出来。
+ *  ★注释用斜体：IDE 通用语汇，且不只靠颜色区分（色觉障碍下仍可分）。 */
+const studioHighlight = HighlightStyle.define([
+  {
+    tag: [
+      tags.keyword,
+      tags.controlKeyword,
+      tags.moduleKeyword,
+      tags.operatorKeyword,
+      tags.definitionKeyword,
+    ],
+    color: 'var(--syn-keyword)',
+  },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.attributeValue], color: 'var(--syn-string)' },
+  { tag: [tags.number, tags.bool, tags.null], color: 'var(--syn-number)' },
+  {
+    tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
+    color: 'var(--syn-comment)',
+    fontStyle: 'italic',
+  },
+  {
+    tag: [tags.typeName, tags.className, tags.namespace, tags.tagName],
+    color: 'var(--syn-type)',
+  },
+  { tag: [tags.attributeName, tags.propertyName], color: 'var(--syn-attr)' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--syn-fn)' },
+  {
+    tag: [tags.operator, tags.punctuation, tags.separator, tags.bracket, tags.angleBracket],
+    color: 'var(--syn-punct)',
+  },
+  { tag: tags.invalid, color: 'var(--syn-invalid)', textDecoration: 'underline wavy' },
+])
 
 /** 主题：全部用 Studio 的语义 token，不引 theme-one-dark（避免两套色板打架） */
 const theme = EditorView.theme(
@@ -188,6 +232,7 @@ function makeState(doc: string, path: string) {
       bracketMatching(),
       indentOnInput(),
       langFor(path),
+      syntaxHighlighting(studioHighlight),
       theme,
       // ⌘S 放最前：它能 preventDefault 掉浏览器/宿主的保存行为
       keymap.of([
@@ -320,7 +365,7 @@ onBeforeUnmount(() => {
         {{ notice }}
       </span>
       <span style="flex: 1" />
-      <span class="note" id="codeNote">⌘S 保存 · 语法着色待装 @lezer/highlight</span>
+      <span class="note" id="codeNote">⌘S 保存 · 语法着色 .vue / .rs</span>
     </div>
     <div class="split">
       <nav class="files" id="codeFiles">

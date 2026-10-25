@@ -13450,3 +13450,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   `HttpProbe.ets`（能力直通模式 `--cap-method/--cap-args`）· `EntryAbility.ets`（参数解析）·
   `run-http-probe.sh`（base64url）· `tests/harmony-fs-capability.test.ts`（6 条）·
   `hosts/harmony/results/fs-probe-*.json`（5 份真机证据）· 契约索引新增一行。
+
+1213. **Studio 语法着色落地（`.vue` / `.rs`）：判据量的是浏览器算出来的 `color`，两条破坏性验证都翻红 · 决策**（2026-10-25 · 承接 #1211「仍未做：语法着色」· 用户「刚才安装了依赖，看看能不能做语法着色了」）:
+  - **前置取证**：`node_modules/@lezer/highlight@1.2.5` 在，根 `package.json` 有 `"@lezer/highlight": "^1.2.5"`
+    （用户在自己终端装的，lockfile 同步变更）。**语言包本来就在**（`@codemirror/lang-vue` / `lang-rust`），
+    缺的只是"token 标签 → 颜色"这一层。
+  - **实现**：`HighlightStyle.define([...])` + `syntaxHighlighting(studioHighlight)` 进 extensions；
+    `attributeValue` 归到字符串色（HTML 属性值本来就是字符串）；`langFor` 的注释同步改（不再是"依赖没装"）。
+  - **★色板另立 `--syn-*` 九项**（`styles.css`：keyword 紫 / string 绿 / number 橙 / comment 灰+斜体 /
+    type 青 / attr 黄 / fn 蓝 / punct 暗一档 / invalid 红波浪）。**不复用 `--ok/--warn/--bad`**：
+    状态色与 token 色混用会让"红"在同一屏有两种意思（这行报错 vs 这是个字符串）。
+    **普通变量名刻意不着色**——全都有色等于没色，继承正文色才能让上面这些类别凸显。
+  - **判据 26 → 28**（`scripts/check-studio-panel.mjs`）：
+    · ⑲ `.vue`：token ≥15 · 颜色种类 ≥4 · **标签/关键字/字符串三类各自不同色且都 ≠ 正文色** ⇒ 实测 38 token / 7 色；
+    · ⑲b `.rs`：token ≥12 · 颜色种类 ≥3 · **关键字/字符串/数字** ⇒ 实测 24 token / 6 色。
+    ★量的对象是 `getComputedStyle().color`（浏览器算出来的），**不是**"代码里有 `syntaxHighlighting`"——
+    后者只能证明一段可能没人调用的配置存在（#1207 的 `__EMIT__`、#1205 的 dump 对≠上屏对，同源）。
+  - **★★破坏性验证两条，都当场翻红**：① 摘掉 `syntaxHighlighting(studioHighlight)` ⇒ ⑲ `2 token / 1 色`、
+    ⑲b `0 / 0` ⇒ rc=1；② 让字符串与数字**都取关键字色**（token 数不变、整体仍有 5 种颜色）⇒ 两条仍红
+    ⇒ 证明断言不是"有颜色就算过"，而是"这三类必须各自可分"。
+  - **★★顺手修掉一处假绿**：判据桩的 `read_text` 原先只返回一段 JavaScript，塞给 `.vue` 解析器只会得到
+    "整篇一个颜色" ⇒ ⑲ 永远测不到东西。改成**按文件类型给桩**（`.rs` 给 Rust 片段、其余给 SFC），
+    两份都保留 `stubLine` ⇒ ⑪/⑱ 原有断言零改动。
+  - **门禁**：`pnpm check:studio-panel` **28/28**（Vite 构建 + Playwright；含 ⑲/⑲b）。
+  - **诚实边界**：判据跑在 Playwright 的**桩数据**上，真实 Tauri 窗口里的观感**没手动看过**
+    （TCC 拦截图 + 原生窗口无法自动点击）⇒ 最后一跳要用户点一次才算真通；`cargo test` 仍不在 CI。
+  - **下一步**：G5 三项（窗口尺寸记忆 / 面板可插拔 / `main.rs` 按命令分组拆）+ 元素信息（属能力线，
+    需 G-54 的「断言 id → 代码位置」注册表）。

@@ -135,11 +135,20 @@ await page.addInitScript((payload) => {
         if (cmd === 'stats') return payload
         if (cmd === 'set_canvas_rect') return null
         // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
-        if (cmd === 'read_text')
-          return {
-            text: 'const stubLine = 1\nconst second = 2\nexport { stubLine, second }\n',
-            mtime_us: 1700000000000000,
-          }
+        // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn），
+        //   把一段 JavaScript 塞给 .vue 解析器只会得到"整篇一个颜色"，
+        //   那样 ⑲ 永远测不到东西（假绿）。两份都含 `stubLine`，⑪/⑱ 的断言不变。
+        if (cmd === 'read_text') {
+          const p = String(args?.path ?? '')
+          const VUE =
+            '<template>\n  <div class="card">{{ total }}</div>\n</template>\n\n' +
+            '<script setup lang="ts">\nconst stubLine = 1\nconst label = \'ok\'\n' +
+            'export { stubLine, label }\n</script>\n'
+          const RUST =
+            'use std::fs;\n\nfn main() {\n    let stubLine = 1;\n    let second = 2;\n' +
+            '    println!("{} {}", stubLine, second);\n}\n'
+          return { text: p.endsWith('.rs') ? RUST : VUE, mtime_us: 1700000000000000 }
+        }
         if (cmd === 'write_text') {
           // 模拟"磁盘上已被别人改过"：让前端把冲突如实显示出来（不谎称已保存）
           if (window.__FAIL_WRITE__) throw new Error('文件已被外部修改（磁盘 2 ≠ 打开时 1，可能是并发会话）⇒ 已拒绝覆盖')
@@ -221,8 +230,28 @@ const codeView = await page.evaluate(() => {
 })
 // ⑪c：点第二个**文件**，路径与内容都要跟着换（验证 open 通路，不是只有默认那个能看）
 //   ★按路径选而不是 nth-child：树里目录也是 button，序号会随折叠/排序变化（踩过两次）。
+//
+// ── ⑲ 语法着色（2026-10-25）──────────────────────────────────────────────
+// 【为什么量 DOM 颜色，而不是断言"代码里有 syntaxHighlighting(...)"】
+//   后者只能证明一段**可能没人调用**的配置存在——本仓已有两次同源假绿：
+//   #1207（判据从 `window.__EMIT__` 注入，而真实入口一次都不触发）、
+//   #1205（dump 读 FBO，永远正确，但上屏是拉伸的）。
+//   这里取的是浏览器**算出来的 color**：扩展没挂上 ⇒ 全部同色 ⇒ 必然翻红。
+const tokenSpans = () =>
+  page.evaluate(() => {
+    const spans = [...document.querySelectorAll('.cm-line span')]
+    return {
+      base: getComputedStyle(document.querySelector('.cm-content')).color,
+      items: spans.map((el) => ({
+        t: (el.textContent || '').trim(),
+        c: getComputedStyle(el).color,
+      })),
+    }
+  })
+const tokensVue = await tokenSpans()
 await page.locator('#codeFiles button[data-file="packages/studio/src/main.rs"]').click()
 await page.waitForTimeout(250)
+const tokensRust = await tokenSpans()
 const switchedPath = await page.evaluate(
   () => document.getElementById('codePath')?.textContent?.trim() ?? '',
 )
@@ -427,6 +456,18 @@ const pickXY = parseXY(pickSeen.status)
 const panXY = parseXY(panSeen.status)
 const panResetXY = parseXY(panReset.status)
 
+/* ── ⑲ 着色取色（页面只交 (文本, 颜色)，比较放在 Node 侧，红的时候能打出实际色值）── */
+const colOf = (s, pred) => s.items.find((i) => pred(i.t))?.c ?? ''
+const distinctOf = (s) => new Set(s.items.map((i) => i.c))
+const vueTag = colOf(tokensVue, (t) => t.includes('template'))
+const vueKw = colOf(tokensVue, (t) => t === 'const')
+const vueStr = colOf(tokensVue, (t) => t.includes('card') || t.includes("'ok'"))
+const vueColors = [vueTag, vueKw, vueStr]
+const rustKw = colOf(tokensRust, (t) => t === 'let')
+const rustStr = colOf(tokensRust, (t) => t.includes('{}'))
+const rustNum = colOf(tokensRust, (t) => t === '1')
+const rustColors = [rustKw, rustStr, rustNum]
+
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
   ['② 画布矩形也被同步（HTML 驱动原生）', seen.calls.some((c) => c === 'set_canvas_rect')],
@@ -457,6 +498,21 @@ const checks = [
   [
     `⑪d 点第二个文件能切换（open 通路，不只是默认那个能看）${switchedPath.endsWith('main.rs') ? '' : `（当前 ${switchedPath}）`}`,
     switchedPath.endsWith('main.rs'),
+  ],
+  // ⑲ 语法着色：三类 token 必须**各自不同色**且都 ≠ 正文色（整篇一个色 = 着色没生效）
+  [
+    `⑲ .vue 着色：${tokensVue.items.length} 个 token · ${distinctOf(tokensVue).size} 种颜色 · 标签/关键字/字符串 ${vueColors.filter(Boolean).length}/3`,
+    tokensVue.items.length >= 15 &&
+      distinctOf(tokensVue).size >= 4 &&
+      vueColors.every((c) => !!c && c !== tokensVue.base) &&
+      new Set(vueColors).size === 3,
+  ],
+  [
+    `⑲b .rs 着色：${tokensRust.items.length} 个 token · ${distinctOf(tokensRust).size} 种颜色 · 关键字/字符串/数字 ${rustColors.filter(Boolean).length}/3`,
+    tokensRust.items.length >= 12 &&
+      distinctOf(tokensRust).size >= 3 &&
+      rustColors.every((c) => !!c && c !== tokensRust.base) &&
+      new Set(rustColors).size === 3,
   ],
   // ⑰ 目录可折叠：收起后里面的文件从可见行里消失（目录行本身还在，才能再展开）
   [
