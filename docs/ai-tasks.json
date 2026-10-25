@@ -3590,7 +3590,7 @@
       "id": "T-studio-tabs",
       "title": "Studio 多标签 + 每文件独立文本缓冲（EditorState 池，undo 历史跨标签保留）",
       "type": "capability",
-      "status": "in_progress",
+      "status": "done",
       "owner": "session:wb-studio",
       "scope": [
         "packages/studio/ui/src/panels/CodePanel.vue",
@@ -3602,12 +3602,12 @@
       ],
       "decision": 1217,
       "branch": null,
-      "verification": "pnpm run check:studio-panel（新增 ㉒：两标签 / 脏标记按标签独立 / 切回后 ⌘Z 仍可撤销 / 关标签回到相邻）&& pnpm run build:studio-app",
+      "verification": "pnpm run check:studio-panel（35/35，㉒ 两标签+脏标记独立 / ㉒b ⌘Z 跨标签仍可撤销+关标签回相邻；破坏性验证：去掉缓冲池 ⇒ ⑱c/㉒/㉒b 三条红）&& pnpm run build:studio-app",
       "related": [
         "T-studio-editor",
         "T-studio-file-tree"
       ],
-      "note": "【in_progress · 决策 #1217】第一刀（基础编辑能力）第一块：多标签是后面 diff/git/DAP 的文件模型基础。★缓冲用 EditorState 池而不是重读磁盘——重读会丢 undo 历史与未保存内容。★每个文件独立 base/mtime，避免'改 A 存 B'。"
+      "note": "【done · 决策 #1217】多标签 + 每文件 EditorState 池（切标签连 undo 历史一起恢复，不是重新读盘）。基线 base/mtime 按文件分开。ws.openFiles 落盘（去重/上限 12）。★判据 33→35；★破坏性验证：把池子换成每次重读 ⇒ ⑱c/㉒/㉒b 同时红。★边界：关标签=丢弃未保存内容（无二次确认，WKWebView 的 confirm 会静默返回 false）。"
     }
   ]
 }

@@ -5,6 +5,10 @@
 //   行号 / 当前行 / 选区 / 括号匹配 / Tab 缩进 / ⌘Z / **⌘S 写回**。
 //   编辑器内核用现成的（G-56.1 红线：绝不自研），这里只做**接线与主题**。
 //
+// 【多标签 + 文本缓冲（2026-10-25 · #1217）】每个打开的文件一份 `EditorState` 存在 `states` 池里：
+//   切标签恢复的是**同一份 state**（含未保存内容与 undo 历史），不是重新读盘。
+//   基线（base/mtime）按文件分开，避免"改 A 存 B"。
+//
 // 【写回的三个硬约束（都在 Rust 侧，前端只是调用方）】
 //   ① **mtime 冲突检测**：打开时记 mtime，保存时回传；磁盘上的值变了 ⇒ 拒绝覆盖。
 //      本仓常驻多个 AI 会话同时改文件，没有这条，Studio 保存一次就会静默吃掉别人的改动；
@@ -54,7 +58,6 @@ import StudioIcon from '../icons/StudioIcon.vue'
 const ws = useWorkspaceState()
 /** 列哪些子树（都是 Studio 自己的源码——显示它自己，一眼能核对"屏幕这段 == 仓库那段"） */
 const ROOTS = ['packages/studio/ui/src', 'packages/studio/src', 'packages/studio/native'] as const
-const PREFIX = 'packages/studio/'
 
 const files = ref<string[]>([])
 const cur = ref('')
@@ -66,27 +69,33 @@ const dirty = ref(false)
 const lineCount = ref(0)
 const host = ref<HTMLElement | null>(null)
 
-/** 打开时读到的 mtime（保存时回传做冲突检测）；0 = 未知 ⇒ Rust 侧不做阻断 */
-let mtime = 0
-/** 磁盘上的那份内容（判断"脏"的基准） */
-let savedText = ''
 let view: EditorView | null = null
 
-/** 未保存缓冲：切走再切回来不丢编辑。
- *  ★为什么不用 `confirm()` 问"放弃修改？"：Tauri 的 WKWebView 需要宿主实现
- *    `runJavaScriptConfirmPanel`，没实现时 `confirm` 会**静默返回 false**——
- *    表现是"点了另一个文件没反应"，而且完全无声。IDE 的常规做法就是留住脏缓冲（多标签同款）。
- *  ★缓冲只在内存：刷新/重启即丢（磁盘上没有任何"临时副本"，不给仓库留垃圾）。
- *  ★`base`/`mtime` 记的是**用户开始编辑时**磁盘上的那份，保存时仍按它做冲突检测——
- *    否则切一次文件就会把"别人改过"这条线索刷新掉。 */
-interface DirtyBuffer {
-  text: string
+/** 每个文件的**磁盘基线**（保存冲突检测用）。★必须按文件分开：多标签共用一份 = "改 A 存 B"。 */
+interface FileRec {
   base: string
   mtime: number
 }
-const buffers = new Map<string, DirtyBuffer>()
+const recs = new Map<string, FileRec>()
 
-const short = (p: string) => (p.startsWith(PREFIX) ? p.slice(PREFIX.length) : p)
+/** ★★文本缓冲 = 每个文件一份 `EditorState`（不是"切标签重新读盘"）。
+ *  重新读盘会同时丢掉两样东西：**未保存内容**和**undo 历史**——后者只存在于 state 里。
+ *  判据 ㉒ 就是钉这个：切走再切回，⌘Z 必须还能撤销之前的输入。
+ *  ★state 只在内存：刷新/重启即丢（磁盘上不留任何"临时副本"）。
+ *  ★`base`/`mtime` 记的是**用户开始编辑时**磁盘上的那份，保存时仍按它做冲突检测——
+ *    否则切一次文件就会把"别人改过"这条线索刷新掉。 */
+const states = new Map<string, EditorState>()
+
+/** 打开的标签（顺序 = 标签栏顺序）。 */
+const tabs = ref<string[]>([])
+/** 有未保存改动的标签（Map 不是响应式的，单独存一份给标签上的圆点用）。 */
+const dirtySet = ref<string[]>([])
+const setTabDirty = (p: string, on: boolean) => {
+  const has = dirtySet.value.includes(p)
+  if (on && !has) dirtySet.value = [...dirtySet.value, p]
+  else if (!on && has) dirtySet.value = dirtySet.value.filter((x) => x !== p)
+}
+
 
 /* ─── 目录树（扁平化渲染：一次 v-for + 缩进，比递归组件少一层抽象）───────────── */
 interface TreeNode {
@@ -276,11 +285,14 @@ function makeState(doc: string, path: string) {
         indentWithTab,
       ]),
       EditorView.updateListener.of((u) => {
-        if (u.docChanged) {
-          const now = u.state.doc.toString()
-          dirty.value = now !== savedText
-          lineCount.value = u.state.doc.lines
-        }
+        if (!u.docChanged || !cur.value) return
+        // ★每次改动都把 state 收进池子：切标签时才能连 undo 历史一起恢复
+        states.set(cur.value, u.state)
+        const now = u.state.doc.toString()
+        const rec = recs.get(cur.value)
+        dirty.value = !!rec && now !== rec.base
+        setTabDirty(cur.value, dirty.value)
+        lineCount.value = u.state.doc.lines
       }),
     ],
   })
@@ -322,49 +334,90 @@ function warmParse(v: EditorView) {
 }
 
 async function open(path: string) {
-  // ① 离开当前文件前，把未保存的内容收进缓冲（不弹窗、不丢）
-  if (dirty.value && cur.value && view) {
-    buffers.set(cur.value, { text: view.state.doc.toString(), base: savedText, mtime })
-  }
+  if (!path) return
+  // ★点同一个标签 = 什么都不做：重新读盘会把未保存内容与 undo 历史一起冲掉
+  if (path === cur.value && states.has(path)) return
   cur.value = path
   ws.codeFile = path
   revealPath(path)
-  loading.value = true
+  if (!tabs.value.includes(path)) tabs.value.push(path)
+  ws.openFiles = [...tabs.value]
   err.value = ''
   notice.value = ''
-  try {
-    // ② 总是读一次磁盘：既要 baseline，也要"现在磁盘是什么样"这条事实
-    const f = await readText(path)
-    // ③ 有脏缓冲就恢复它（连带**当时**的 mtime，冲突检测才不会被切文件刷新掉）
-    const buf = buffers.get(path)
-    const doc = buf ? buf.text : f.text
-    savedText = buf ? buf.base : f.text
-    mtime = buf ? buf.mtime : f.mtime_us
-    dirty.value = !!buf
-    lineCount.value = doc ? doc.replace(/\n$/, '').split('\n').length : 0
+  loading.value = true
+
+  // ① 内存里已有这个文件的 state ⇒ 直接恢复（含未保存内容与 undo 历史），**不读盘**
+  const cached = states.get(path)
+  const rec0 = recs.get(path)
+  if (cached && rec0) {
     await nextTick()
-    view?.setState(makeState(doc, path))
-    warmParse(view)
+    view?.setState(cached)
+    dirty.value = cached.doc.toString() !== rec0.base
+    setTabDirty(path, dirty.value)
+    lineCount.value = cached.doc.lines
+    loading.value = false
+    if (view) warmParse(view)
+    return
+  }
+
+  // ② 第一次打开：读盘，建 state + 基线
+  try {
+    const f = await readText(path)
+    recs.set(path, { base: f.text, mtime: f.mtime_us })
+    const st = makeState(f.text, path)
+    states.set(path, st)
+    await nextTick()
+    view?.setState(st)
+    dirty.value = false
+    setTabDirty(path, false)
+    lineCount.value = st.doc.lines
+    if (view) warmParse(view)
   } catch (e) {
     err.value = String((e as Error)?.message ?? e)
-    savedText = ''
     dirty.value = false
   } finally {
     loading.value = false
   }
 }
 
+/** 关标签：删掉它的 state 与基线（未保存内容一起丢——"关闭"的语义，不是"隐藏"）。 */
+function close(path: string) {
+  const i = tabs.value.indexOf(path)
+  if (i < 0) return
+  tabs.value.splice(i, 1)
+  states.delete(path)
+  recs.delete(path)
+  setTabDirty(path, false)
+  ws.openFiles = [...tabs.value]
+  if (cur.value !== path) return
+  const next = tabs.value[Math.max(0, i - 1)] ?? ''
+  cur.value = ''
+  if (next) {
+    void open(next)
+    return
+  }
+  // 没有标签了：清空编辑器（保留实例，避免重建）
+  dirty.value = false
+  lineCount.value = 0
+  view?.setState(makeState('', ''))
+  host.value?.removeAttribute('data-parse')
+}
+
 async function save() {
   if (!view || !cur.value || saving.value) return
+  const rec = recs.get(cur.value)
+  if (!rec) return
   const body = view.state.doc.toString()
-  if (body === savedText) return
+  if (body === rec.base) return
   saving.value = true
   notice.value = ''
   try {
-    mtime = await writeText(cur.value, body, mtime)
-    savedText = body
+    const nm = await writeText(cur.value, body, rec.mtime)
+    rec.base = body
+    rec.mtime = nm
     dirty.value = false
-    buffers.delete(cur.value)
+    setTabDirty(cur.value, false)
+    states.set(cur.value, view.state)
     notice.value = `已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
   } catch (e) {
     // ★失败必须显示出来：静默失败的保存比不保存更糟（用户以为已落盘）
@@ -399,7 +452,11 @@ async function boot() {
     files.value.find((f) => f === ws.codeFile) ??
     files.value.find((f) => f.endsWith('ui/src/App.vue')) ??
     files.value[0]!
+  // 恢复上次的标签列表：只留"磁盘上还在"的（被删/改名的体面丢弃），当前文件排最前
+  const restored = ws.openFiles.filter((p) => files.value.includes(p))
   await open(pref)
+  for (const p of restored) if (p !== pref && !tabs.value.includes(p)) tabs.value.push(p)
+  ws.openFiles = [...tabs.value]
 }
 
 /** 切到代码视图时补两件事（启动阶段面板是 v-show 隐藏的）：
@@ -438,6 +495,23 @@ onBeforeUnmount(() => {
       </span>
       <span style="flex: 1" />
       <span class="note" id="codeNote">⌘S 保存 · 着色 .vue/.rs/.ts/.css/.m</span>
+    </div>
+    <!-- 标签栏（2026-10-25 · 决策 #1217）：点=切换，×=关闭，小圆点=未保存。
+         ★标签只负责"切换文件"，缓冲与 undo 历史在 states 池里，切标签不重建 state。 -->
+    <div v-if="tabs.length" class="tabs" id="codeTabs">
+      <button
+        v-for="p in tabs"
+        :key="p"
+        class="tab"
+        :class="{ on: p === cur }"
+        :title="p"
+        :data-tab="p"
+        @click="open(p)"
+      >
+        <span class="tname">{{ p.split('/').pop() }}</span>
+        <span v-if="dirtySet.includes(p)" class="tdot" aria-label="未保存" />
+        <span class="tclose" role="button" aria-label="关闭" @click.stop="close(p)">×</span>
+      </button>
     </div>
     <div class="split">
       <nav class="files" id="codeFiles">
@@ -623,6 +697,86 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
   user-select: text;
+}
+/* 标签栏：行高 28px（4px 网格）；活动标签用底部 2px 强调条，不靠"变亮"单维度 */
+.tabs {
+  display: flex;
+  align-items: stretch;
+  height: 28px;
+  padding: 0 var(--sp1);
+  gap: 2px;
+  overflow-x: auto;
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp1);
+  max-width: 220px;
+  padding: 0 var(--sp2);
+  border: 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: var(--fs-xs) / 28px ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 transparent;
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.tab:hover {
+  background: var(--bg-surface);
+  color: var(--fg);
+}
+.tab.on {
+  background: var(--bg-surface);
+  color: var(--fg);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.tname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 未保存：一个 5px 圆点（与顶栏 chip 用同一语汇），不抢文字宽度 */
+.tdot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+/* 关闭：hover 才显形，常驻会显得很吵（IDE 的通用做法） */
+.tclose {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-sm);
+  color: var(--fg-subtle);
+  font-size: 13px;
+  line-height: 13px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+.tab:hover .tclose,
+.tab.on .tclose,
+.tclose:focus-visible {
+  opacity: 1;
+}
+.tclose:hover {
+  background: var(--bg-overlay);
+  color: var(--fg);
 }
 .err {
   margin: var(--sp4);

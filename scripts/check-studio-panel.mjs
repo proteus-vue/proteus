@@ -348,6 +348,48 @@ const roundTrip = await page.evaluate(() => ({
 // ── ⑫ G5 会话状态：切换后要落盘；reload 后要能**恢复上次的视图与文件** ──────────
 const savedState = await page.evaluate(() => localStorage.getItem('__saved_state__') ?? '')
 
+// ── ㉒ 多标签 + 每文件独立缓冲（决策 #1217）──────────────────────────────────
+// 【为什么这么测】多标签最容易做成"看起来有标签、其实每次切都重新读盘"：
+//   那种实现下，切回来**未保存内容还在**（因为从 buffers 恢复了文本），但 **undo 历史没了**。
+//   所以关键断言是：切走再切回，⌘Z 必须还能撤销之前的输入（history 只存在于 EditorState 里）。
+const tabState = await page.evaluate(() => ({
+  count: document.querySelectorAll('#codeTabs button[data-tab]').length,
+  labels: [...document.querySelectorAll('#codeTabs .tname')].map((n) => n.textContent ?? ''),
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+}))
+// 切到 App.vue：脏标记必须跟着"文件"走（main.rs 有未保存 → 只有它的标签带圆点）
+await page.locator('#codeTabs button[data-tab="packages/studio/ui/src/App.vue"]').click()
+await page.waitForTimeout(250)
+const dirtyByTab = await page.evaluate(() => {
+  const dot = (p) => !!document.querySelector(`#codeTabs button[data-tab="${p}"] .tdot`)
+  return {
+    main: dot('packages/studio/src/main.rs'),
+    app: dot('packages/studio/ui/src/App.vue'),
+    path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+  }
+})
+// 切回 main.rs，⌘Z ×2：撤销掉 ⑱/⑱b 的两段输入（重新读盘的实现会"撤不动"）
+await page.locator('#codeTabs button[data-tab="packages/studio/src/main.rs"]').click()
+await page.waitForTimeout(250)
+await page.locator('.cm-content').click()
+// ★必须先断言"撤销前确实有东西可撤"：否则一个把编辑丢掉的重读实现也能让 ⌘Z 后"不含标记"（假绿）
+const beforeUndo = await page.evaluate(
+  () => document.querySelector('.cm-content')?.textContent ?? '',
+)
+await page.keyboard.press('Meta+z')
+await page.keyboard.press('Meta+z')
+await page.waitForTimeout(200)
+const undoKept = await page.evaluate(
+  () => document.querySelector('.cm-content')?.textContent ?? '',
+)
+// 关掉 main.rs 标签 ⇒ 回到相邻标签（App.vue），标签数 -1
+await page.locator('#codeTabs button[data-tab="packages/studio/src/main.rs"] .tclose').click()
+await page.waitForTimeout(500)
+const closed = await page.evaluate(() => ({
+  count: document.querySelectorAll('#codeTabs button[data-tab]').length,
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+}))
+
 // ── ⑬ 真实指针点击 → 落点标记（★修正 B1：原来的判据测的是一条死路）──────────────
 // 【原来的判据错在哪】B1 认为"画布是叠在 HTML 之上的原生 NSView，HTML 收不到点击"，
 //   于是从 `window.__EMIT__` 注入 `canvas-click` 事件 —— 判据绿了，但真实点击根本没这条通路：
@@ -711,6 +753,24 @@ const checks = [
     roundTrip.path.endsWith('main.rs') &&
       roundTrip.text.includes('// edited by gate') &&
       roundTrip.dirty,
+  ],
+  // ㉒ 多标签：标签数/标签名 + 脏标记按文件独立
+  [
+    `㉒ 多标签：${tabState.count} 个标签（${tabState.labels.join(' / ')}）· 脏标记按文件独立（main=${dirtyByTab.main} app=${dirtyByTab.app}）`,
+    tabState.count >= 2 &&
+      tabState.labels.includes('App.vue') &&
+      tabState.labels.includes('main.rs') &&
+      dirtyByTab.main === true &&
+      dirtyByTab.app === false &&
+      dirtyByTab.path.endsWith('App.vue'),
+  ],
+  // ㉒b：⌘Z 跨标签仍生效（undo 历史真的在 state 里）+ 关标签回到相邻
+  [
+    `㉒b 切回后 ⌘Z 仍可撤销（撤销前有编辑=${beforeUndo.includes('// edited by gate')}，撤销后无=${!undoKept.includes('// edited by gate')}）· 关标签后剩 ${closed.count} 个并回到「${closed.path.split('/').pop() || '空'}」`,
+    beforeUndo.includes('// edited by gate') &&
+      !undoKept.includes('// edited by gate') &&
+      closed.count === tabState.count - 1 &&
+      closed.path.endsWith('App.vue'),
   ],
   // ⑫ G5：切换要落盘（否则"记住上次"只是口头承诺）
   [
