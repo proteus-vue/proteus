@@ -176,9 +176,12 @@ describe('★★★#1236 判据修正后不得再犯了（两处结构性缺陷�
     //   ★断言**代码结构**而不是文本——注释里记录了这个 bug 的说明，文本匹配会命中注释，
     //     那正是本仓反复踩的"判据读错文本层"（不能在新判据里再犯一次）。
     //   · SIGNALS.backpressure 必须已停用（置 null），否则旧的单关键词路径还在
-    expect(s, 'SIGNALS.backpressure 必须已停用（改走 hasBackpressure 成对判定）').toMatch(/backpressure:\s*null/)
-    //   · audit() 必须真的调用 hasBackpressure（不是留着函数不用——"符号存在"不等于"被调用"）
-    expect(s, 'audit() 未调用 hasBackpressure ⇒ 成对判据没接进读取路径').toMatch(/backpressure:\s*hasBackpressure\(text\)/)
+    expect(s, 'SIGNALS.backpressure 必须已停用（改走成对判定）').toMatch(/backpressure:\s*null/)
+    //   · 背压必须是"有界 + 计数"**两个证据都存在**——#1249 后落在 audit() 的 bpBound/bpCounter
+    //     ★不放钉具体调用形态（那只是实现的写法，会随重构失效而误红）
+    expect(s, 'audit() 里背压必须同时要求"有界"与"计数"两个证据').toMatch(
+      /backpressure:\s*Boolean\(\s*bpBound\s*&&\s*bpCounter\s*\)/,
+    )
   })
 
   it('★★★三项（log/storage/file-system）按 §1.0 到 S3（高频族要求 S3）', () => {
@@ -226,10 +229,122 @@ describe('★★★#1248 判据必须"被实现撑住"，不是"被词表撑住"
 
   it('★上限判据要求"被用于判断"：只有定义、从不比较的常量不算上限', () => {
     const s = read(AUDIT)
-    expect(s, '必须用 usedBounds（逐常量 + 要求被用于判断）').toMatch(/function usedBounds/)
-    expect(s, 'audit() 必须调用 usedBounds').toMatch(/usedBounds\(text\)/)
+    expect(s, '必须有 usedBounds（逐常量 + 要求被用于判断）').toMatch(/function usedBounds/)
+    expect(s, 'audit() 必须调用 usedBounds').toMatch(/usedBounds\(docs\)/)
     // 反向：不得退回"文件里出现即算"的形态
     expect(s, '不得退回 SIGNALS.upperBound 的文件级 any()').not.toMatch(/upperBound:\s*has\(SIGNALS\.upperBound\)/)
+  })
+})
+
+describe('★★★#1249 五维判据都必须"被实现撑住"（每个维度都能被删红）', () => {
+  // 【由来】#1248 发现 upperBound 是文件级 any()；#1249 把同一测试套到其余四维：
+  //   6 个里 4 个仍不翻转 ⇒ 同样的结构性假绿。本轮把五维全部改成"证据必须被使用"，
+  //   并**给每个维度输出证据（文件:行 + 片段）**——光有布尔值看不出来源，假绿永远藏得住。
+  // 【本测试守什么】对每个维度，找到该能力**真正依赖的那处实现**，全部拆掉 ⇒ 该维度必须翻转。
+  //   ★注意"全部"：能力通常有**冗余闸**（ws 有 5 处背压计数、log 有 3 处上限比较），
+  //     只拆一处不该掉——那是设计的冗余，不是判据失效（v1/v2/v3 三次写错期望都是这个原因）。
+
+  const withMutation = (file: string, res: RegExp[], check: () => void): void => {
+    const p = path.join(ROOT, file)
+    const backup = fs.readFileSync(p, 'utf8')
+    try {
+      for (const re of res) {
+        const next = fs.readFileSync(p, 'utf8').replace(re, 'false')
+        fs.writeFileSync(p, next)
+      }
+      check()
+    } finally {
+      fs.writeFileSync(p, backup)   // ★必须还原（这条测试会临时改生产源码）
+    }
+  }
+
+  const auditOf = (cap: string): { tier: string; [k: string]: unknown } => {
+    const { json } = runAudit(['--json', `--cap=${cap}`])
+    return (json as Array<{ tier: string; [k: string]: unknown }>)[0]!
+  }
+
+  it('① upperBound：拆掉 log 的全部上限比较 ⇒ 维度翻转', () => {
+    expect(auditOf('log').upperBound).toBe(true)
+    withMutation(
+      'packages/api/src/capability-app-log.ts',
+      [
+        /msgBytes > LOG_MAX_MESSAGE_BYTES/g,
+        /dataBytes > LOG_MAX_DATA_BYTES/g,
+        /sent \+ failed\.length < LOG_MAX_BATCH/g,
+        /pending\.length >= LOG_MAX_QUEUE/g,
+      ],
+      () => {
+        expect(auditOf('log').upperBound, '★拆掉全部上限比较后不该还判有上限').toBe(false)
+        expect(auditOf('log').tier, '★档位必须掉').not.toBe('S3')
+      },
+    )
+    expect(auditOf('log').upperBound, '还原后回到 true').toBe(true)
+  })
+
+  it('② backpressure：拆掉 ws 的全部 5 处背压计数 ⇒ 维度翻转', () => {
+    expect(auditOf('websocket').backpressure).toBe(true)
+    withMutation(
+      'packages/api/src/capability-websocket.ts',
+      [
+        /wsStats\.slowDispatches\+\+/g,
+        /wsStats\.messagesDropped\+\+/g,
+        /wsStats\.dispatchTruncated\+\+/g,
+        /wsStats\.rejectedConnections\+\+/g,
+        /wsStats\.rejectedHandlers\+\+/g,
+      ],
+      () => {
+        expect(auditOf('websocket').backpressure, '★计数全拆后不该还判有背压').toBe(false)
+      },
+    )
+  })
+
+  it('③ tableBound：拆掉 ws 的全部表项上界比较 ⇒ 维度翻转', () => {
+    expect(auditOf('websocket').tableBound).toBe(true)
+    withMutation(
+      'packages/api/src/capability-websocket.ts',
+      [/conns\.size >= WS_MAX_CONNECTIONS/g, /set\.size >= WS_MAX_HANDLERS_PER_EVENT/g],
+      () => {
+        expect(auditOf('websocket').tableBound, '★拆掉上界比较后不该还判有并发上界').toBe(false)
+      },
+    )
+  })
+
+  it('④ resourceLedger：拆掉 register+release 钩子 ⇒ 维度翻转', () => {
+    expect(auditOf('log').resourceLedger).toBe(true)
+    withMutation(
+      'packages/api/src/capability-app-log.ts',
+      [/opts\.resources\.register\(\{[\s\S]{0,500}?release: \(\) => \{ pending\.length = 0 \},\n    \}\)/],
+      () => {
+        expect(auditOf('log').resourceLedger, '★拆掉账本登记后不该还判有账本').toBe(false)
+      },
+    )
+  })
+
+  it('⑤ 五个维度都必须给出**可核对的证据**（文件:行 + 片段），不是只有布尔值', () => {
+    // ★这是本轮的另一个关键改动：布尔值看不出"命中了哪一行"，
+    //   而 #1249 的四处假绿正是靠"看命中的是哪一行"才定位到的。
+    const r = auditOf('log') as unknown as {
+      evidence: Record<string, { file: string; line: number; snippet: string } | null>
+    }
+    for (const dim of ['upperBound', 'tableBound', 'backpressureBound', 'backpressureCounter', 'resourceLedger', 'explicitError']) {
+      const ev = r.evidence[dim]
+      expect(ev, `${dim} 必须给出证据（否则假绿看不出）`).toBeTruthy()
+      expect(ev!.file, `${dim} 证据要指到文件`).toMatch(/\.(ts|java|swift|h)$/)
+      expect(ev!.line, `${dim} 证据要指到行`).toBeGreaterThan(0)
+      expect(ev!.snippet.length, `${dim} 证据要带片段`).toBeGreaterThan(0)
+    }
+  })
+
+  it('⑥ 不许跨能力污染：ws 的证据里不得出现 sensor/capture 的常量', () => {
+    // ★#1249 实测：websocket 的源列表曾包含装配文件 capability-app-device.ts，
+    //   于是 SENSOR_MAX_* / CAPTURE_MAX_* 被算进 ws 的档位 ⇒ 删掉 ws 自己的连接上界后
+    //   仍 ✅（别人的上界在撑着）。这是"证据来源"层面的假绿，最隐蔽。
+    const r = auditOf('websocket') as unknown as { upperBoundNames: string[]; tableBoundNames: string[] }
+    const all = [...r.upperBoundNames, ...r.tableBoundNames]
+    expect(
+      all.filter((n) => /^SENSOR_|^CAPTURE_/.test(n)),
+      '★ws 的上界证据里出现了 sensor/capture 的常量 ⇒ 跨能力污染',
+    ).toEqual([])
   })
 })
 })

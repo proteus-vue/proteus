@@ -537,7 +537,32 @@ public final class HostCapabilities {
 
     // ────────────────────────── C53 Worker（真实线程） ──────────────────────────
 
+    /**
+     * ★★★#1250 同时存活的 **Worker 数上界**（§1.0 ④「同时 N 个实例会怎样」）。
+     *
+     * 【为什么必须有（这是超级应用规模下的真风险）】
+     *   `workerPool` 是 `newCachedThreadPool()`（**每来一个任务就开一条线程，无上限**），
+     *   而 `workers` 是**无界** `ConcurrentHashMap`。
+     *   业务在列表里每个卡片建一个 worker（很常见的误用）⇒ 300 个卡片 = 300 条线程 +
+     *   300 份 worker 槽位 ⇒ 线程栈（默认 1 MB/条）就吃掉 300 MB，且上下文切换把主线程拖垮。
+     *   ★"宿主可能会拒"不算上界——那是**别人**的决定，我们这边会先长满。
+     *
+     * 【取值】16：单页面合理的并发 worker 数远低于此（worker 是"重计算隔离"，不是"随手建"）。
+     * 【策略】超限**显式拒绝**（`worker.tooManyWorkers`），**不淘汰**旧 worker：
+     *   终止一个用户还在用的 worker = 静默丢掉它手里的任务（比报错危险得多）。
+     */
+    static final int MAX_WORKERS = 16;
+
     private JSONObject workerCreate(JSONObject args) {
+        // ★#1250 ④ 上界闸（在分配 id / 建槽位之前判）
+        // ★用 `IllegalStateException`（本类既有风格，见 webassembly 那几处）——
+        //   不要引 `JSONException`：本文件没 import 它，且它语义是"JSON 格式错"，
+        //   而这里错的是**资源配额**，不是数据格式。
+        if (workers.size() >= MAX_WORKERS) {
+            throw new IllegalStateException(
+                    "worker.tooManyWorkers: 存活 worker 已达上界 " + MAX_WORKERS
+                            + "（当前 " + workers.size() + "）——疑似未 terminate");
+        }
         int id = workerSeq.incrementAndGet();
         WorkerSlot slot = new WorkerSlot(id, args.optString("scriptPath", ""));
         workers.put(id, slot);

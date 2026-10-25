@@ -68,6 +68,18 @@ const userCaptureSubs = new Set<() => void>()
 export const CAPTURE_MAX_SUBSCRIPTIONS = 64
 
 /**
+ * ① **单次壳推载荷上限**（字节）。
+ *
+ * 【为什么需要（这是 ① 维度的真缺口，不是凑数）】
+ *   `CAPTURE_MAX_SUBSCRIPTIONS` 限的是"能挂多少个订阅"（§1.0 ④ 表项维度），
+ *   而 ① 问的是"**单次调用能吞多大**"。录屏/截屏的壳推载荷来自宿主
+ *   （`__proteusHostCapture`），正常只有 `{recording:boolean}` 或 `{userCapture:true}`——
+ *   极小。若宿主被改写/注入而推来一个大对象，本端会把它原样派发给每个订阅者。
+ *   ⇒ 超过此值**整条丢弃并计数**（不派发半截：状态型事件派发错值比不派发危险）。
+ */
+export const CAPTURE_MAX_PUSH_BYTES = 4096
+
+/**
  * ① 单次派发的**订阅者调用数上限**（超出部分本次跳过）。
  * ★意义与 ws 的 `WS_MAX_DISPATCH_PER_PUSH` 同族：N 个慢回调串行会让**宿主线程**被占住
  *   （壳推是宿主同步调进来的）⇒ 单次派发必须有界。
@@ -173,6 +185,17 @@ export function normalizeCapturePush(payload: unknown): { recording?: boolean; u
 
 /** 派发一次壳推（供测试直接调；生产由全局钩子调）。返回派发给多少订阅者。 */
 export function dispatchCapturePush(payload: unknown): number {
+  // ★★★#1249 ① 单次载荷上限（`CAPTURE_MAX_PUSH_BYTES`）——超限整条丢弃，不派发半截
+  let bytes = 0
+  try {
+    bytes = typeof payload === 'string' ? payload.length : JSON.stringify(payload)?.length ?? 0
+  } catch {
+    bytes = 0
+  }
+  if (bytes > CAPTURE_MAX_PUSH_BYTES) {
+    captureStats.pushesDropped++
+    return 0
+  }
   const n = normalizeCapturePush(payload)
   // ★#1247 ②：非法载荷计入丢弃（否则"来了多少"与"派发多少"对不上）
   if (!n) { captureStats.pushesDropped++; return 0 }

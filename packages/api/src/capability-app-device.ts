@@ -554,6 +554,26 @@ function installSensorChannel(): void {
   if (sensorInstalled && typeof existing === 'function') return
   sensorInstalled = true
   const handler = (payload: unknown): string => {
+    /**
+     * ★★★#1249 ① **单条采样载荷上限**（此前 `SENSOR_MAX_SAMPLE_BYTES` 只定义、从未使用——
+     *   那是**装饰性常量**，被"上限必须被使用"的新判据当场抓出）。
+     *
+     * 【为什么需要】采样载荷是**宿主推过来的**（`__proteusHostSensor`），本端不产生它：
+     *   宿主出错/被改写/被注入时可能推一个几 MB 的对象，而本函数会把它原样分发给每个订阅者，
+     *   并**在每个订阅者的回调里**反复持有（页面越活跃持有越多）。
+     *   ⇒ 超限**整条丢弃并计数**（不截断：采样是数值结构，截断后语义错；丢了就丢了，
+     *     下次采样 20ms 后就来——这比"分发一个残缺的样本"诚实）。
+     */
+    let payloadBytes = 0
+    try {
+      payloadBytes = typeof payload === 'string' ? payload.length : JSON.stringify(payload)?.length ?? 0
+    } catch {
+      payloadBytes = 0
+    }
+    if (payloadBytes > SENSOR_MAX_SAMPLE_BYTES) {
+      sensorStats.samplesDropped++
+      return 'too-large'
+    }
     const sample = normalizeSensor(payload)
     // ★#1246 ②：坏载荷计入丢弃（否则"收到多少条"与"分发多少条"对不上）
     if (!sample) { sensorStats.samplesDropped++; return 'bad-payload' }

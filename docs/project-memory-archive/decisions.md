@@ -14150,3 +14150,69 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 
 【门禁】check:file-size ✅ · check:content ✅ · check:script-compile ✅ · check:host-invoke-contract ✅
   · check:android-host-compile ✅ · 定向测试 154 全绿（12 个文件，含 fetch-cancel 回归）
+
+1249. **体检判据从"文件级 any()"推广到全部五维 —— 修掉三处新假绿 + 抓出两处真 bug，worker 从盲区转正**（2026-10-25 · 承接 #1242，用户「好的继续」）:
+
+【起因】#1248 只把 `upperBound` 从"文件里出现即算"改成"必须被用于判断"。
+  本轮问了一句：#1249 **其余四维是不是同一个毛病？**
+  ⇒ 把同一套反向验证（删掉真实现看维度是否翻转）套到 backpressure / resourceLedger /
+    tableBound / streaming 上：**6 个里 4 个不翻转**。同一结构缺陷，只修了一个维度。
+
+【三处新假绿（本轮修掉的，都是"证据来源"层面的）】
+  · **跨能力污染**（最隐蔽）：`websocket` 的源列表包含装配文件 `capability-app-device.ts`，
+    于是 `SENSOR_MAX_* / CAPTURE_MAX_*` 被算进 ws 的档位 ⇒ 删掉 ws 自己的连接上界后**仍 ✅**
+    （别人的上界在撑着）。⇒ 从 ws 的源里去掉装配文件；并加判据 ⑥ 守着
+    （ws 的证据里不得出现 SENSOR_/CAPTURE_ 常量）。
+  · **装饰性常量**：`LOG_PENDING_MAX` / `SENSOR_MAX_SAMPLE_BYTES` 只定义、**从未使用**。
+    ⇒ 前者删掉（`LOG_MAX_QUEUE` 才是真的那道闸）；后者**真的用上**（宿主推来的采样载荷
+      可能任意大，超限整条丢弃并计数——采样是数值结构，截断后语义错，丢了 20ms 后还有下一条）。
+  · **局部即全体**：原判据在**整个 text** 上 `some()`，只要任意一行命中就算该维度成立。
+    ⇒ 改为**逐文件 + 必须找到"被使用"的那一行**，并把证据（`文件:行 + 片段`）放进
+      `audit().evidence`——布尔值看不出命中了哪一行，而上面几处假绿正是靠"看命中的是哪一行"才定位到的。
+
+【★两种合法形态的区分（这决定了实现该往哪写）】
+  · `backpressure`：① **有界**（任一上限被比较）**且** ② **计数被递增**（`x++` / `x += n`）。
+    ★只认"被递增"的计数器：这就是与假绿 `dropFirst(docs.count`（Swift 标准库调用，不被递增）
+      的分界线——那条正则骗过一次，现在有结构性判据。
+  · `resourceLedger`：`register({ ... release: ... })` **且带 release 钩子**。
+    ★不再要求本文件出现 `.release(` —— 释放的**执行**由 owner 的 `releaseAll()` 负责
+      （能力只负责登记 + 提供钩子），要求它不符合 G-43 的分工。
+  · 名字形态三种都必须认：`MAX_XXX` / `XXX_MAX_YYY` / **`XXX_MAX`**（后缀式，
+    如 `PENDING_HOST_CALLS_MAX`——第一版漏了它，导致 fetch 的并发上界被误判为无）。
+
+【★★ 抓出的两处真 bug（都是"看起来有，实际没有"）】
+  · **socket-task 账本只登记不消费**：`done()` 只写 `ledgerEntry = null`（**引用置空 ≠ 释放**）
+    ⇒ registry 内部 live Map 里的条目**永久残留** ⇒ `registry.size()` 永不减、
+      DevTools 的 Ownership 视图一堆"存活"的已结束任务（**诊断信息变噪声，比没有更糟**）。
+    ⇒ 改为真的调 `release()`。★同族：#1119「断言符号存在等于没断言」——这里是"置空引用不等于释放资源"。
+  · **screen-capture 的两个上界同值 64** ⇒ 订阅数先撞上界，**"单次派发上限"永远不会生效**
+    （那条闸形同虚设）。⇒ 派发上限改 32（必须 < 订阅上界），并把理由写进常量注释。
+
+【★★★ worker：从"从来没被体检过"转为已覆盖】
+  原 `worker: { ts: [], hosts: [] }` ⇒ 体检直接报"找不到源文件"。
+  ★这个盲区很讽刺：worker 恰是最容易在超级应用规模下**把线程数打爆**的一项——
+    Android `workerPool = newCachedThreadPool()`（每任务一条线程，无上限）+ `workers` 无界
+    `ConcurrentHashMap`；iOS 每个 worker 一条 `DispatchQueue`。业务在列表里每卡片建一个 worker
+    （很常见的误用）⇒ 300 卡片 = 300 条线程 ≈ 300 MB 栈 + 上下文切换拖垮主线程。
+  ⇒ **两端各补 `MAX_WORKERS = 16`（同值）+ 超限显式拒绝** `worker.tooManyWorkers`。
+    ★不淘汰旧 worker：终止一个用户还在用的 worker = 静默丢掉它手里的任务（比报错危险）。
+    ★Android 用 `IllegalStateException`（本类既有风格），**不引 `JSONException`**——
+      本文件没 import 它，且它语义是"JSON 格式错"，而这里错的是**资源配额**。
+  现档位 **S2**（≥S2 达标；背压/账本/并发三项候选，如实未做）。
+
+【★三种 stderr/变异写错的自纠（记下来免得下次再犯）】
+  · v1「删一处就得掉档」——**期望写错**：能力有**冗余闸**（ws 有 5 处背压计数、log 有 3 处上限比较），
+    删一处不该掉。v4 改成"拆掉全部"后 4/4 全翻转。
+  · 正则转义在 `--script` 的普通字符串里被吃掉（`\s` → `s`、`\d` → `d`）⇒ 判据恒不匹配、
+    全部能力掉到 S1（假红）。改用 `String.raw`。
+  · `safe-edit` 的括号计数告警要当真（test 文件被插入块打断结构 ⇒ 多余 `})` ⇒ 语法错）。
+
+【诚实边界】
+  ① 仍是**静态结构证据 + 单元判据**，本批**未做真机验证**（改动集中在共享层；worker 的两端宿主
+     改动已过零设备编译/类型检查）。
+  ② 五维的"被使用"是**语法级**判断，不保证语义正确（比如 `x >= MAX` 写反了它看不出来）——
+     那属真机压测与人工复核。
+  ③ `worker` 的背压/账本维度**如实未做**（worker 没有队列、也没有登记进 G-43 账本）⇒ 停在 S2。
+
+【门禁】check:file-size ✅ · check:content ✅ · check:android-host-compile ✅
+  · iOS swiftc -typecheck ✅ · tsc ✅ · 定向测试 **161 全绿**（12 文件）

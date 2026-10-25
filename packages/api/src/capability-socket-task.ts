@@ -215,8 +215,24 @@ export function createAppSocketTask(
         },
       })
     }
-    /** ③ 结算时销账（幂等） */
-    const done = (): void => { if (ledgerEntry) { ledgerEntry = null } }
+    /**
+     * ③ 结算时销账（幂等）。
+     *
+     * ★★★#1249 **真 bug（本轮"账本必须有 release 消费路径"的新判据抓出）**：
+     *   第一版只写 `ledgerEntry = null` —— **引用置空 ≠ 释放**。
+     *   账本里的条目（registry 内部 live Map）**仍然存在**：
+     *     · `registry.size()` 永远不减 ⇒ 页面跑久了账本无限增长；
+     *     · 更糟：账本只登记不消费，DevTools 的 Ownership 视图会显示一堆"存活"的任务，
+     *       而它们早已结束 ⇒ **诊断信息变成噪声**（比没有更糟）。
+     *   ⇒ 必须调 `ledgerEntry.release()`（它会把条目从 live Map 里删掉并跑钩子）。
+     *   ★同族教训：#1119「断言符号存在等于没断言」——这里是"置空引用不等于释放资源"。
+     */
+    const done = (): void => {
+      if (!ledgerEntry) return
+      const e = ledgerEntry
+      ledgerEntry = null
+      try { e.release() } catch { /* 释放失败不阻断清理：账本本身幂等 */ }
+    }
     let conn: { send: (d: string | ArrayBuffer) => void; close: (c?: number, r?: string) => void; on: (e: 'open' | 'message' | 'close' | 'error', h: (p?: unknown) => void) => () => void } | null = null
 
     connFactory(url).then(

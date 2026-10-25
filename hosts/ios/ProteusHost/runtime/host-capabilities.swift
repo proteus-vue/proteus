@@ -115,7 +115,8 @@ final class HostCapabilities: NSObject {
         case "window.setSize":
             return ok(windowSetSize(args))
         case "worker.create":
-            return ok(workerCreate(args))
+            // ★#1250：workerCreate 现在会 throw（上界闸）⇒ 必须 try（外层 catch 会转成 fail）
+            do { return ok(try workerCreate(args)) } catch { return fail("\(error)") }
         case "worker.post":
             return workerPost(args)
         case "worker.terminate":
@@ -277,7 +278,25 @@ final class HostCapabilities: NSObject {
 
     // ────────────────────────── C53 Worker（真后台线程） ──────────────────────────
 
-    private func workerCreate(_ args: [String: Any]) -> [String: Any] {
+    /// ★★★#1250 同时存活的 **Worker 数上界**（§1.0 ④）。
+    ///
+    /// 【为什么必须有】`workers` 是**无界字典**，每个 worker 一条 `DispatchQueue`（真线程）。
+    ///   业务在列表里每卡片建一个 worker ⇒ 几百条线程 ⇒ 内存与调度双爆。
+    ///   "宿主可能会拒"不算上界——那是别人的决定，我们这边会先长满。
+    /// 【取值】16（与 Android `MAX_WORKERS` **同值**——两端口径必须一致，否则同一份源码行为不同）。
+    /// 【策略】超限显式拒绝（`worker.tooManyWorkers`），**不淘汰**旧 worker（终止 = 静默丢任务）。
+    static let MAX_WORKERS = 16
+
+    private func workerCreate(_ args: [String: Any]) throws -> [String: Any] {
+        // ★#1250 ④ 上界闸（分配 id / 建队列之前判）
+        if workers.count >= Self.MAX_WORKERS {
+            throw NSError(
+                domain: "proteus",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey:
+                    "worker.tooManyWorkers: 存活 worker 已达上界 \(Self.MAX_WORKERS)（当前 \(workers.count)）——疑似未 terminate"]
+            )
+        }
         workerSeq += 1
         let id = workerSeq
         let label = "proteus.worker.\(id)"

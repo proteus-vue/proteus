@@ -53,7 +53,11 @@ const CAP_SOURCES = {
     ts: ['capability-transfer.ts'],
     hosts: ['HttpCapability.java', 'http-capability.swift', 'FileTransferCapability.java', 'file-transfer-capability.swift'],
   },
-  websocket: { ts: ['capability-websocket.ts', 'capability-app-device.ts'], hosts: ['websocket-capability.swift', 'WebSocketCapability.java'] },
+  // ★★#1249 去掉 capability-app-device.ts：那是**装配文件**（含 sensor/capture 等别家的上限），
+  //   把它算进 ws 的源 ⇒ `SENSOR_MAX_* / CAPTURE_MAX_*` 会出现在 ws 的证据里
+  //   （**跨能力污染**：删掉 ws 自己的连接上界后，sensor 的上界仍然撑着 ws 的 tableBound）。
+  //   ★装配层只需要证明"ws 方法被接进桥"——那由 app-bridge-keys 与能力页负责，不是规模档的事。
+  websocket: { ts: ['capability-websocket.ts'], hosts: ['websocket-capability.swift', 'WebSocketCapability.java'] },
   'socket-task': { ts: ['capability-socket-task.ts'], hosts: ['websocket-capability.swift', 'WebSocketCapability.java'] },
   sensor: { ts: ['capability-app-device.ts'], hosts: ['DeviceCapability.java', 'device-capability.swift'] },
   // ★★#1243 补齐：`capability-fetch-pipeline.ts` 是**回收**维度的落点（在飞请求登记账本 +
@@ -64,7 +68,14 @@ const CAP_SOURCES = {
     hosts: ['HttpCapability.java', 'http-capability.swift'],
   },
   'screen-capture': { ts: ['capability-app-capture.ts'], hosts: ['CaptureCapability.java', 'capture-capability.swift'] },
-  worker: { ts: [], hosts: [] },
+  // ★★★#1250 补登记（此前是**盲区**：`worker: { ts: [], hosts: [] }` ⇒ 体检直接报
+  //   "找不到源文件" ⇒ 这个能力**从来没被体检过**，而它恰恰是最容易在超级应用规模下
+  //   把线程数打爆的一项（Android `newCachedThreadPool` + 无界 workers Map / iOS 每 worker 一条队列）。
+  //   ★只登记 TS 侧不够：上限闸在**宿主**（MAX_WORKERS 与 `workers.size() >= MAX_WORKERS`）。
+  worker: {
+    ts: ['capability-app.ts'],
+    hosts: ['HostCapabilities.java', 'host-capabilities.swift'],
+  },
   // ★#1239 修正：原登记指向 Web/MP 桥 ⇒ App 侧实现永远探不到（永远 S1）
   storage: {
     ts: ['capability-app-storage.ts', 'capability-app-filesystem.ts'],
@@ -251,44 +262,120 @@ function findByName(dir, name, acc = []) {
 }
 
 /**
- * ★★★#1248 **上限常量必须真的被用于判断**（不是"文件里有这个常量"）。
+ * ★★★#1248/#1249 **五个维度都必须"被真的使用"**，不是"文件里出现过这个词"。
  *
- * 【为什么必须升级（反向验证抓出的结构性假绿）】
- *   实测：把 `STORAGE_MAX_KEYS` / `LOG_MAX_QUEUE` / `WS_MAX_CONNECTIONS` 等常量
- *   **逐个删掉**后重跑体检 —— **7 个里 6 个档位完全不变**。
- *   根因：原判据是**文件级 any()**（`text` 里出现任一上限就五项全 ✅），
- *   而能力文件里通常还有别的上限 ⇒ 删掉某一个仍被判"有上限"。
- *   ★这证明当时的 S3 **不是被实现撑住的，是被词表撑住的**——与本仓 #1109
- *     「断言符号存在等于没断言」完全同族（第 4 次）。
+ * 【为什么（两轮反向验证，各抓一批假绿）】
+ *   · #1248：把上限常量逐个删掉 ⇒ 7 个里 6 个档位不变 ⇒ 原判据是**文件级 any()**。
+ *     改法：上限常量必须出现在**比较/取限**里。
+ *   · #1249：同一测试套用到其余四维 ⇒ 6 个里 4 个仍不变：
+ *       - \`websocket.resourceLedger\` 删掉本文件的 register 仍 ✅
+ *         ⇒ 命中的是**装配文件** \`capability-app-device.ts\` 里 sensor/capture 的 register（跨能力污染）；
+ *       - \`log.tableBound\` 的 \`LOG_PENDING_MAX\` **只定义从未使用**（装饰性常量）；
+ *       - \`log.backpressure\` / \`storage.backpressure\` 删掉丢弃逻辑仍 ✅
+ *         ⇒ 命中的是**常量定义处**的同一个名字，不是"这个闸在工作"。
+ *   ⇒ 本轮把纪律推广到全部五维，并且**每个维度都输出证据（文件:行 + 片段）**：
+ *     光有布尔值看不出来源，假绿就永远藏得住（这次就是靠"哪一行命中的"才定位到的）。
  *
- * 【新判据】对每个候选上限常量 `NAME = <num>`，要求同一文件里存在
- *   **对 NAME 的比较/取用**（`> NAME` / `>= NAME` / `< NAME` / `=== NAME` /
- *   `Math.min(..., NAME)` / `length >= NAME` 等），并且该常量名本身带容量语义。
- *   ★只要有一个常量"被真的用于判断"就算达成——因为能力的上限闸可能分散在多处。
+ * 【五维的"被使用"各是什么形态（不是同一个词表）】
+ *   upperBound     上限常量被**比较**（\`x >= NAME\` / \`NAME > x\`）——尺寸族
+ *   tableBound     上限常量被**比较**——并发/表项族（PENDING/CONN/TASKS/ENTRIES/…）
+ *   backpressure   ① 有界：任一常量被比较；② 计数：计数器被**递增**（\`x++\` / \`x += n\`）
+ *   resourceLedger \`register(...)\` 调用**且带 release 钩子**，且有 \`release(\`/\`releaseAll(\` 消费路径
+ *   streaming      分块 API 被**调用**（\`chunkSize\` / \`CHUNK_SIZE\` / \`readChunk\` 出现在调用或赋值里）
+ *   explicitError  抛错/错误码**出现在 throw/return 分支**里（沿用原词表，但要求同文件有 throw）
  */
-function usedBounds(text) {
+
+/** 逐文件的文本（带行号定位） */
+function readAllDetailed(files) {
+  const docs = []
+  for (const f of files) {
+    if (!f) continue
+    let p = path.join(API_DIR, f)
+    if (!fs.existsSync(p)) {
+      for (const root of Object.values(HOSTS)) {
+        const hit = findByName(root, f)
+        if (hit) { p = hit; break }
+      }
+    }
+    if (!fs.existsSync(p)) continue
+    const rel = path.relative(ROOT, p)
+    docs.push({ rel, text: stripComments(fs.readFileSync(p, 'utf8')) })
+  }
+  return docs
+}
+
+/** 在文档集合里找第一个命中 \`re\` 的位置 → 证据（文件:行 + 片段） */
+function findEvidence(docs, re) {
+  for (const d of docs) {
+    const lines = d.text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      if (re.test(lines[i])) {
+        return { file: d.rel, line: i + 1, snippet: lines[i].trim().slice(0, 120) }
+      }
+    }
+  }
+  return null
+}
+
+/** 名字 → 维度分类（表项族 / 尺寸族）。★分类只用于"算哪一维"，不再用于"是否算上限" */
+/**
+ * 维度分类（只决定"算哪一维"，不决定"算不算上限"）。
+ * ★#1249 把 QUEUE / DEPTH / KEYS / PENDING_WRITES 归到**表项**族：
+ *   它们界限的是"表里能装多少条"（§1.0 ④ 的"表项上界"），不是"一次能吞多少字节"（①）。
+ *   ★这条分类是**人定的口径**，有模糊地带（如 LOG_MAX_QUEUE 既是内存上界也是表项上界）。
+ *     故输出里把 `upperBoundNames` / `tableBoundNames` 如实列出，让复核者一眼看到依据。
+ */
+const TABLE_WORD = /PENDING|CONN|TASKS|ENTRIES|ITEMS|HANDLERS|SUBSCRIPTIONS|SESSIONS|HANDLES|INFLIGHT|CALLS|SLOTS|QUEUE|DEPTH|KEYS/i
+const SIZE_WORD_LOCAL = /SIZE|BYTES|LEN|LENGTH|BODY|RESPONSE|CONTENT|MESSAGES|SAMPLES|CHUNK|BATCH|PAYLOAD/i
+
+/** 收集"被用于比较"的上限常量：[{name, kind, ev}] */
+function usedBounds(docs) {
   const out = []
-  for (const m of text.matchAll(/(?:^|[^A-Za-z0-9])((?:[A-Z][A-Z0-9_]*_)?MAX_[A-Z0-9_]+)\s*=\s*[\d_]/g)) {
-    const name = m[1]
-    /**
-     * ★★★#1248 关键修正：这里**不能再套 COUNT_WORD 排除**。
-     *   原判据（文件级）用 COUNT_WORD 是为了**区分维度**（`PENDING_HOST_CALLS_MAX` 是并发、
-     *   不是"响应体能吞多大"，见 #1114/#1115 的假绿）；
-     *   但升级到"逐常量 + 必须被用于判断"之后，这个排除反而把**真上限**打掉了：
-     *   `LOG_MAX_QUEUE`（队列容量，是真上限）、`MAX_TASKS`/`MAX_CONNECTIONS`（句柄上界）
-     *   名字里都带 COUNT_WORD 的词 ⇒ 全被跳过 ⇒ 全部能力掉到 S1（假红，本轮实测）。
-     *   ⇒ 现在的口径：**只要它被用于一个"拒绝/停止"判断**，就说明实现真的用它设了闸；
-     *     名字属于哪个维度由 `upperBoundNames` 如实列出，交由人复核（不再由词表替人下结论）。
-     */
-    if (!SIZE_WORD.test(name)) continue
-    // ★"被用于判断"：名字在同文件里出现在比较/取小/判等的一侧
-    const used = new RegExp(
-      '(?:[<>]=?|===?|!==?)\\s*' + name + '\\b' +   // x >= NAME
-        '|\\b' + name + '\\s*(?:[<>]=?|===?|!==?)' +  // NAME > x
-        '|\\b(?:Math\\.min|Math\\.max)\\([^)]*\\b' + name + '\\b',  // Math.min(..., NAME)
-      'i',
-    ).test(text)
-    if (used) out.push(name)
+  for (const d of docs) {
+    const lines = d.text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // ★#1249：名字形态有三种（都必须认）：
+      //   ① MAX_XXX（前缀式，如 MAX_BODY_BYTES）
+      //   ② XXX_MAX_YYY（中缀式，如 LOG_MAX_QUEUE）
+      //   ③ XXX_MAX（**后缀式**，如 PENDING_HOST_CALLS_MAX）—— 第一版漏了这种，
+      //      导致 fetch 的并发上界（PENDING_HOST_CALLS_MAX）被判"无并发上界"（假红）。
+      const m = new RegExp('(?:^|[^A-Za-z0-9])((?:[A-Z][A-Z0-9_]*_)?MAX(?:_[A-Z0-9_]+)?)\\s*=\\s*[\\d_]').exec(line)
+      if (!m) continue
+      const name = m[1]
+      // ★必须真的以 MAX 为"上限语义"的一部分（排除 MAXIMIZE 之类的偶然词）
+      if (!/(?:^MAX|_MAX$|_MAX_)/.test(name)) continue
+      // ★必须"被用于比较"：同文件里存在对 NAME 的比较/取限
+      const usedRe = new RegExp(
+        '(?:[<>]=?|===?|!==?)\\s*' + name + '\\b' +
+          '|\\b' + name + '\\s*(?:[<>]=?|===?|!==?)' +
+          '|\\b(?:Math\\.min|Math\\.max)\\s*\\([^)]*\\b' + name + '\\b',
+      )
+      const ev = findEvidence(docs, usedRe)
+      if (!ev) continue
+      const kind = TABLE_WORD.test(name) && !SIZE_WORD_LOCAL.test(name) ? 'table' : 'size'
+      out.push({ name, kind, ev })
+    }
+  }
+  return out
+}
+
+/** 计数器是否被**递增**（\`x++\` / \`++x\` / \`x += n\` / \`x = x + n\`） */
+function incrementedCounters(docs) {
+  const out = []
+  const re = /(?:([A-Za-z_$][\w$.]*)\s*(?:\+\+|--|\+=|-=)|(?:\+\+|--)\s*([A-Za-z_$][\w$.]*))/
+  for (const d of docs) {
+    const lines = d.text.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const m = re.exec(lines[i])
+      if (!m) continue
+      const name = m[1] ?? m[2]
+      if (!name) continue
+      // ★排除循环变量（\`i++\` / \`k++\`）与明显的计数器无关形态
+      if (/^(i|j|k|n|p|idx|seq|t|w|x|y|z)$/.test(name)) continue
+      if (!/(count|Count|dropped|Dropped|rejected|Rejected|truncated|Truncated|coalesced|Coalesced|slow|Slow|waited|Waited|sent|Sent|failure|Failure|written|Written|chunks|dispatched|Dispatched|ms|Ms|bytes|Bytes|inflight|Inflight)/.test(name)) continue
+      out.push({ name, ev: { file: d.rel, line: i + 1, snippet: lines[i].trim().slice(0, 120) } })
+    }
   }
   return out
 }
@@ -296,31 +383,70 @@ function usedBounds(text) {
 export function audit(cap) {
   const cfg = CAP_SOURCES[cap]
   if (!cfg) return { cap, error: '未登记源文件（在 CAP_SOURCES 补一行）' }
-  const { text, found } = readAll([...cfg.ts, ...cfg.hosts])
-  if (!found.length) return { cap, error: '找不到源文件（能力可能未实现）' }
+  const docs = readAllDetailed([...cfg.ts, ...cfg.hosts])
+  if (!docs.length) return { cap, error: '找不到源文件（能力可能未实现）' }
 
-  const has = (reList) => reList.some((re) => re.test(text))
-  const bounds = usedBounds(text)
+  const bounds = usedBounds(docs)
+  const sizeBounds = bounds.filter((b) => b.kind === 'size')
+  const tableBounds = bounds.filter((b) => b.kind === 'table')
+  const counters = incrementedCounters(docs)
+
+  // ② 背压 = 有界（任一被比较的上限）+ 计数（被递增且语义是丢弃/阻塞/合并）
+  const bpBound = bounds[0] ?? null
+  const bpCounter = counters.find((c) =>
+    /dropped|Dropped|rejected|Rejected|truncated|Truncated|coalesced|Coalesced|slow|Slow|waited|Waited|backpressure/.test(c.name),
+  ) ?? null
+
+  // ③ 回收：register 带 release 钩子 **且** 有消费路径（release/releaseAll）
+  // ★#1249：账本 = **register 且带 release 钩子**。
+  //   ★不再额外要求本文件出现 \`.release(\`：释放的**执行**由 owner 的 \`releaseAll()\` 负责
+  //     （能力只负责登记 + 提供钩子）；要求它反而不符合 G-43 的分工。
+  const ledgerRegister = findEvidence(docs, /\.register\s*\(\s*\{/)
+  const ledgerReleaseHook = findEvidence(docs, /release\s*:\s*(?:\(|function|async)/)
+  const ledgerEv = ledgerRegister && ledgerReleaseHook ? ledgerRegister : null
+
+  // 流式：分块 API 被调用/赋值（不是"出现过这个词"）
+  const streamingEv = findEvidence(docs, /(?:readChunk|writeChunk|chunkSize|CHUNK_SIZE|STREAM_CHUNK)\s*[(=:]/)
+
+  // 显式报错：必须有 throw/reject 分支，且同文件出现可辨识错误码
+  const throwEv = findEvidence(docs, /\bthrow\b|\.reject\s*\(|\breturn\s+reject\b|capErr\s*\(|errOf\s*\(/)
+  const errCodeEv = findEvidence(docs, /\b\w+\.(?:tooLarge|tooMany[A-Za-z]*|busy|unsupported|failed)\b|BodyTooLarge|TooLargeException|PayloadTooLarge/)
+
   const r = {
     cap,
-    sources: found,
-    // ★#1248：必须是"被用于判断"的上限，不是"文件里出现过"
-    upperBound: bounds.length > 0,
-    upperBoundNames: bounds,
-    explicitError: has(SIGNALS.explicitError),
-    streaming: has(SIGNALS.streaming),
-    backpressure: hasBackpressure(text),
-    resourceLedger: has(SIGNALS.resourceLedger),
-    tableBound: has(SIGNALS.tableBound),
+    sources: docs.map((d) => d.rel),
+    // ★五维全部要求"被使用"，并附证据（文件:行 + 片段）
+    upperBound: Boolean(sizeBounds.length),
+    upperBoundNames: sizeBounds.map((b) => b.name),
+    tableBound: Boolean(tableBounds.length),
+    tableBoundNames: tableBounds.map((b) => b.name),
+    backpressure: Boolean(bpBound && bpCounter),
+    resourceLedger: Boolean(ledgerEv),
+    streaming: Boolean(streamingEv),
+    explicitError: Boolean(throwEv && errCodeEv),
+    evidence: {
+      upperBound: sizeBounds[0]?.ev ?? null,
+      tableBound: tableBounds[0]?.ev ?? null,
+      backpressureBound: bpBound?.ev ?? null,
+      backpressureCounter: bpCounter?.ev ?? null,
+      resourceLedger: ledgerEv,
+      streaming: streamingEv,
+      explicitError: errCodeEv,
+    },
   }
   // 规模档推导（保守：只按结构证据）
   //   S1 基本可用 · S2 = 上限 + 显式报错 · S3 = S2 + 背压 + 回收 + 并发上界
+  // ★§1.0 原文是「背压/流式」（斜杠 = 该族二选一），所以流式不是 S3 的必要条件。
   r.tier = r.upperBound && r.explicitError
     ? (r.backpressure && r.resourceLedger && r.tableBound ? 'S3' : 'S2')
     : 'S1'
   // 高频/大数据能力要求 S3
   // ★§1.0 明列的高频/大数据族（网络/文件/媒体/socket/日志/埋点）要求 S3
-  r.needsS3 = ['websocket', 'socket-task', 'upload', 'download', 'sensor', 'fetch', 'log', 'file-system', 'storage'].includes(cap)
+  //   ★#1249 补 screen-capture：它属**媒体**族（录屏就是媒体采集），此前漏了 ⇒ 只按 ≥S2 判。
+  r.needsS3 = [
+    'websocket', 'socket-task', 'upload', 'download', 'sensor', 'fetch',
+    'log', 'file-system', 'storage', 'screen-capture',
+  ].includes(cap)
   return r
 }
 

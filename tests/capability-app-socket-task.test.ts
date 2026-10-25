@@ -241,4 +241,21 @@ describe('⑤ 规模承载：socket-task 的四项必答', () => {
     expect(registry.size(), '账本归零').toBe(0)
     expect(socketTaskStats().pendingSends, '★release ⇒ 积压被清空（消息正文不再驻留）').toBe(0)
   })
+
+  it('⑤ 账本**真的被消费**：连接关闭后条目从账本消失（置空引用 ≠ 释放）', async () => {
+    // ★★★#1249：本轮新判据（账本必须有 release 消费路径）抓出的真 bug ——
+    //   第一版 `done()` 只写 `ledgerEntry = null`（引用置空），账本条目**永久残留**
+    //   ⇒ registry.size() 永不减、Ownership 视图一堆"存活"的已结束任务（诊断变噪声）。
+    makeFactory(1)   // ★必须先装宿主桩：否则 ws.open 回 missing ⇒ 连接根本没建立 ⇒ 不会有账本条目
+    const registry = createCapabilityResourceRegistry({ owner: 'page' })
+    const mk = createAppSocketTask(createAppWebSocket(), registry, 'page')
+    const task = mk('ws://live')
+    await Promise.resolve(); await Promise.resolve()
+    expect(registry.countsByType()['socket-task'], '建好即在账上').toBe(1)
+    // 推 close ⇒ 状态进终态 ⇒ 必须销账
+    dispatchWsPush({ id: 1, event: 'close', code: 1000 })
+    await Promise.resolve()
+    expect(registry.size(), '★结束后账本必须归零（不是"引用置空"）').toBe(0)
+    void task
+  })
 })
