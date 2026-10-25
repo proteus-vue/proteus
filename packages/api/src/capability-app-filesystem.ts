@@ -18,6 +18,9 @@
 //   · **不做 `appendFile`**：宿主没有 append 语义，用"读全文+拼接+整写"会在并发下丢数据
 //     ⇒ 如实归入 unsupported（宁可少一个方法，不给一个会静默丢数据的实现）；
 //   · 路径校验由宿主负责（拒绝绝对路径与 `..`）——本层**不复制**沙箱校验（一份就够）。
+//   · ★★**`unzip` 是端可选能力**：Android 有 `ZipInputStream`；iOS `compression.h` 与
+//     鸿蒙 `zlib.h` **只有 raw deflate、没有 ZIP 容器解析** ⇒ 该两端宿主未实现 ⇒
+//     `unzip()` 在那两端如实报 `unsupported`（**不影响其余 11 个方法可用**）。
 import { invokeHost } from './capability-invoke'
 import type { FileStat, FileSystemBridge } from './capability-types'
 
@@ -28,6 +31,8 @@ export const APP_FS_BASE_METHODS = [
   'stat', 'readdir', 'mkdir', 'rmdir',
   // ★★★#1228 复合面
   'copyFile', 'rename', 'getFileInfo',
+  // ★★★#1229 压缩包（宿主不支持时不提供该方法）
+  'unzip',
 ] as const
 
 /**
@@ -39,7 +44,6 @@ export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {
   saveFile: '宿主无"临时文件→持久目录"概念',
   getSavedFileList: '宿主无保存文件索引',
   removeSavedFile: '宿主无保存文件索引',
-  unzip: '宿主缺 fs.unzip',
   readFileSync: '宿主 fs.readBytes 走同步派发，但契约要求返回 string（需先定编码约定）',
   writeFileSync: '同上（需先定编码约定）',
   existsSync: '同上',
@@ -58,12 +62,27 @@ export function appFileSystemAvailable(): boolean {
     const r = invokeHost(m, { probe: true })
     if (!r.ok && r.missing) return false
   }
+  // ★★★**这里只探「必需面」**。
+  //   ★★自查拉出的真 bug：曾把 `fs.unzip` 也列进这里 ⇒ iOS/鸿蒙（无 ZIP 容器 API）
+  //   探测不到 ⇒ `appFileSystemAvailable()` 返 false ⇒ 装配层**不提供 getFileSystem**
+  //   ⇒ 连 `readFile`/`writeFile` 都没了（11 个方法一并消失）。
+  //   ★**端差异不等于整体不可用**：可选能力单独探测（见下的 optional）。
   for (const m of ['fs.exists', 'fs.stat', 'fs.readdir', 'fs.mkdir', 'fs.rmdir',
                    'fs.copy', 'fs.rename', 'fs.getFileInfo']) {
     const r = invokeHost(m, { probe: true })
     if (!r.ok && r.missing) return false
   }
   return true
+}
+
+/**
+ * ★可选能力探测（**不影响** `appFileSystemAvailable`）。
+ *   `fs.unzip`：只有 Android 有原生 `ZipInputStream`；iOS `compression.h` 与鸿蒙 `zlib.h`
+ *   都**只有 raw deflate、没有 ZIP 容器解析**（EOCD/中央目录/local header）。
+ */
+export function appFileSystemOptionalAvailable(method: 'unzip'): boolean {
+  const r = invokeHost(`fs.${method}`, { probe: true })
+  return r.ok || r.missing !== true
 }
 
 /** 宿主回执里取字节（与 capability-app-storage.ts 同口径：number[] / base64 / Uint8Array 都接） */
@@ -198,6 +217,15 @@ export function createAppFileSystem(): AppFileSystemBridge {
         size: Number(d.size ?? 0),
         digest: typeof d.digest === 'string' ? d.digest : '',
       })
+    },
+    unzip: (zipPath: string, targetPath: string) => {
+      // ★★端可选能力：宿主没有该方法 ⇒ **unsupported**（不是 failed）
+      if (!appFileSystemOptionalAvailable('unzip')) {
+        return Promise.reject(new Error('file-system.unsupported: unzip —— 本端宿主无 ZIP 容器解析能力（仅 Android 有 ZipInputStream）'))
+      }
+      const r = invokeHost('fs.unzip', { zipPath, targetPath })
+      if (!r.ok) return Promise.reject(new Error(`file-system.failed: unzip ${zipPath} → ${targetPath}：宿主拒绝`))
+      return Promise.resolve()
     },
   } as FileSystemBridge
 

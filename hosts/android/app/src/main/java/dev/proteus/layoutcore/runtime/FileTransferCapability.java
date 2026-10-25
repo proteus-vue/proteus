@@ -270,6 +270,64 @@ public final class FileTransferCapability {
         return o;
     }
 
+    /** ★★★#1229 `fs.unzip`：`{ zipPath, targetPath }` → `{ entries, bytes }`。
+     *  ★★**zip slip 防护**：每个条目的落地路径**规范化后必须仍在目标目录之下**；
+     *    否则条目名写成 `../../evil.sh` 就能写到沙箱外。
+     *  ★**zip bomb 防护**：条目数 / 单条解压后大小 / 总解压大小 三个上限。
+     *  ★加密条目：`ZipInputStream` 解不开 ⇒ **如实报错**（不静默产出空文件）。 */
+    public static JSONObject unzip(Context ctx, JSONObject args) throws Exception {
+        String zipPath = args.optString("zipPath", "");
+        String targetPath = args.optString("targetPath", "");
+        File zip = resolve(ctx, zipPath);
+        File target = resolve(ctx, targetPath);
+        if (!zip.isFile()) throw new IOException("fs.unzip: zip 不是文件 " + zipPath);
+        if (!target.exists() && !target.mkdirs()) throw new IOException("fs.unzip: 建目标目录失败 " + targetPath);
+        // ★规范化目标目录（后缀加 /，防 `foo` 与 `foobar` 前缀误判）
+        final String targetRoot = target.getCanonicalPath() + File.separator;
+        final int MAX_ENTRIES = 4096;
+        final long MAX_ENTRY_BYTES = 128L * 1024 * 1024;
+        final long MAX_TOTAL_BYTES = 512L * 1024 * 1024;
+        int entries = 0;
+        long total = 0;
+        byte[] buf = new byte[64 * 1024];
+        try (java.util.zip.ZipInputStream zin =
+                     new java.util.zip.ZipInputStream(new java.io.BufferedInputStream(new FileInputStream(zip)))) {
+            java.util.zip.ZipEntry e;
+            while ((e = zin.getNextEntry()) != null) {
+                if (++entries > MAX_ENTRIES) throw new IOException("fs.unzip: 条目超过 " + MAX_ENTRIES + "（可疑 zip bomb）");
+                String name = e.getName();
+                // ★★zip slip：解析后的 canonical 路径必须以目标目录为前缀
+                File out = new File(target, name);
+                String canon = out.getCanonicalPath();
+                if (!canon.equals(target.getCanonicalPath()) && !canon.startsWith(targetRoot)) {
+                    throw new IOException("fs.unzip: 条目越出目标目录（拒绝 zip slip）：" + name);
+                }
+                if (e.isDirectory()) {
+                    if (!out.isDirectory() && !out.mkdirs()) throw new IOException("fs.unzip: 建目录失败 " + name);
+                    continue;
+                }
+                File parent = out.getParentFile();
+                if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IOException("fs.unzip: 建父目录失败 " + name);
+                long wrote = 0;
+                try (FileOutputStream fos = new FileOutputStream(out)) {
+                    int n;
+                    while ((n = zin.read(buf)) > 0) {
+                        wrote += n;
+                        total += n;
+                        if (wrote > MAX_ENTRY_BYTES) throw new IOException("fs.unzip: 单条目超过 " + MAX_ENTRY_BYTES + "B（可疑 zip bomb）：" + name);
+                        if (total > MAX_TOTAL_BYTES) throw new IOException("fs.unzip: 总解压量超过 " + MAX_TOTAL_BYTES + "B（可疑 zip bomb）");
+                        fos.write(buf, 0, n);
+                    }
+                }
+                zin.closeEntry();
+            }
+        }
+        JSONObject o = new JSONObject();
+        o.put("entries", entries);
+        o.put("bytes", total);
+        return o;
+    }
+
     /** 诊断读数：沙箱根（判据确认"写到了哪里"）。 */
     public static String sandboxRoot(Context ctx) {
         return ctx.getFilesDir().getAbsolutePath();

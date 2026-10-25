@@ -57,7 +57,7 @@ describe('★★★App 能力批 1 · getFileSystem 基础面（#1226）', () =>
     const { createAppFileSystem, APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
     const fs = createAppFileSystem().getFileSystem!() as unknown as Record<string, () => Promise<unknown>>
     const names = Object.keys(APP_FS_UNSUPPORTED)
-    expect(names.length, '未支持方法数（复合面完成后 15 个）').toBe(15)
+    expect(names.length, '未支持方法数（unzip 后 14 个）').toBe(14)
     for (const n of names) {
       expect(typeof fs[n], `${n} 必须是函数（不是 undefined）`).toBe('function')
       await expect(fs[n]!()).rejects.toThrow(/file-system\.unsupported/)
@@ -70,11 +70,22 @@ describe('★★★App 能力批 1 · getFileSystem 基础面（#1226）', () =>
     const total = APP_FS_BASE_METHODS.length + Object.keys(APP_FS_UNSUPPORTED).length
     // ★写死 26 是为了让"契约新增方法却没登记"当场红（比读类型更硬——类型在运行时读不到）
     expect(total, '基础面 + 未支持 必须覆盖 FileSystemBridge 的全部方法').toBe(26)
-    expect(APP_FS_BASE_METHODS.length, '★#1228 复合面后基础面 = 11（读写存删 + 目录面 4 + 复合面 3）').toBe(11)
+    expect(APP_FS_BASE_METHODS.length, '★#1229 unzip 后基础面 = 12').toBe(12)
   })
 
   it('⑤ appendFile 明确归 unsupported（读全文拼接再整写会在并发下丢数据）', async () => {
     const { APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
     expect(APP_FS_UNSUPPORTED.appendFile, 'appendFile 有具名理由').toMatch(/并发/)
+  })
+
+  it('⑥ ★回归：可选能力（unzip）缺失**不得**打死必需面探测', async () => {
+    // ★★本条护着一个我真实引入过的 bug：把 fs.unzip 列进必需探测 ⇒ iOS/鸿蒙
+    //   （无 ZIP 容器 API）整个 getFileSystem 不可用 ⇒ 连 readFile/writeFile 都没了。
+    const mod = await import('../packages/api/src/capability-app-filesystem')
+    // ① 必需面探测的方法清单里**不得**出现 fs.unzip
+    const src = String(((mod as unknown as { appFileSystemAvailable: { toString(): string } }).appFileSystemAvailable))
+    expect(src.includes('fs.unzip'), '必需探测里不应含 fs.unzip').toBe(false)
+    // ② 可选能力有独立探测函数
+    expect(typeof mod.appFileSystemOptionalAvailable, '可选能力有独立探测').toBe('function')
   })
 })
