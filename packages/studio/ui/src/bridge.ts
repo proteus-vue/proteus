@@ -70,6 +70,9 @@ export const writeText = (path: string, text: string, expect: number): Promise<n
 /** 列仓库内若干子树下的源码文件（G4 文件列表）。边界同上，另有扩展名白名单与 300 条上限。 */
 export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]>('list_files', { roots })
 
+/** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
+export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
+
 /** 工作区状态（G5）：落在 `~/Library/Application Support/dev.proteus.studio/state.json`。 */
 export const loadState = (): Promise<string> => invoke<string>('load_state')
 export const saveState = (json: string): Promise<void> => invoke<void>('save_state', { json })

@@ -1,0 +1,330 @@
+// scripts/studio-panel-probes.mjs —— Studio 面板门禁的**采集段**（决策 #1235 拆出）
+//
+// 【为什么单独成文件】判据脚本已经 1200+ 行，超过仓库的 1000 行红线。
+//   拆法按**职责**：这里只做"把页面驱动到某个状态、把读数取回来"（probe），
+//   断言与文案留在 `check-studio-panel.mjs`（check）。
+//   ⇒ 改探针不改判据、改判据不碰探针；两边都能独立读。
+//
+// 【约定】每个 probe 接收 (page, studio 目录)，返回一个**扁平对象**，
+//   调用方用解构接住（变量名与原来完全一致，判据段零改动）。
+import fs from 'node:fs'
+import path from 'node:path'
+
+export async function probeTitlebar(page, studio) {
+  const STUDIO = studio
+// ── ㉔ 沉浸式标题栏（决策 #1219）────────────────────────────────────────────
+// 【为什么不只在配置里改】`titleBarStyle: Overlay` 只是让内容画到窗口顶部；
+//   真正"不打架"还取决于两件外面的事：① 顶栏能拖窗口（`data-tauri-drag-region`）；
+//   ② 给原生红绿灯留出宽度（trafficLightPosition 14 + 52 宽 ⇒ 左内边距 ≥76）。
+//   ★红绿灯的**实际像素位置**在这里测不到（Playwright 里是普通浏览器，没有原生窗口）——
+//     那条只能人眼看，README 里如实写了。
+// ★能力（capabilities）：插件命令**默认被 ACL 拒**（`plugin:window|start_dragging` 等），
+//   只写 `data-tauri-drag-region` 是拖不动的（2026-10-25 实测：整条标题栏拖不动、双击不缩放）。
+//   这里同时看**源文件**与**构建产物**（gen/schemas/capabilities.json 是嵌进二进制的那份），
+//   两者不一致 ⇒ 改了能力没重编，运行时仍是旧的。
+const CAP_NEED = [
+  'core:window:allow-start-dragging',
+  'core:window:allow-internal-toggle-maximize',
+  'core:event:allow-listen',
+  'core:event:allow-unlisten',
+]
+const capSrcPath = path.join(STUDIO, 'capabilities', 'default.json')
+const capGenPath = path.join(STUDIO, 'gen', 'schemas', 'capabilities.json')
+const capSrc = fs.existsSync(capSrcPath) ? JSON.parse(fs.readFileSync(capSrcPath, 'utf8')) : null
+const capGen = fs.existsSync(capGenPath) ? JSON.parse(fs.readFileSync(capGenPath, 'utf8')) : null
+const capMissingSrc = capSrc ? CAP_NEED.filter((x) => !(capSrc.permissions ?? []).includes(x)) : CAP_NEED
+const capMissingGen = capGen?.default
+  ? CAP_NEED.filter((x) => !(capGen.default.permissions ?? []).includes(x))
+  : CAP_NEED
+
+const titleConf = JSON.parse(fs.readFileSync(path.join(STUDIO, 'tauri.conf.json'), 'utf8')).app.windows[0]
+const titleBar = await page.evaluate(() => {
+  const top = document.querySelector('.top')
+  const chip = document.querySelector('.top .chip')
+  return {
+    drag: !!top && top.hasAttribute('data-tauri-drag-region'),
+    padLeft: top ? parseFloat(getComputedStyle(top).paddingLeft) : -1,
+    chipX: chip ? Math.round(chip.getBoundingClientRect().x) : -1,
+    height: top ? Math.round(top.getBoundingClientRect().height) : -1,
+    brand: !!document.querySelector('.top .brand'),
+  }
+})
+
+// ── ㉔b 标题栏**真的**能拖、双击能缩放（决策 #1231）────────────────────────────
+// 【为什么必须升级判据】旧判据只断言"`.top` 上有 data-tauri-drag-region 属性"——**假绿**：
+//   Tauri 的规则是「bare/`true` = 只有**直接点在这个元素上**才算；`deep` = 子树里任何位置都算」，
+//   而标题条里塞着芯片和 spacer，点击永远先落在**子元素**上 ⇒ bare 模式下整条栏拖不动、双击也不缩放。
+//   ⇒ 这里直接把 **Tauri 自己的 `drag.js`** 注入页面（不是自己复述规则），
+//     在几个真实坐标上派发 mousedown/mouseup，断言它**真的发了** `plugin:window|start_dragging`
+//     与 `plugin:window|internal_toggle_maximize`。
+//   ★crate 源码找不到时（比如 CI 只 clone 本仓）退回"最小镜像规则"，并在输出里说明。
+function tauriDragScript() {
+  const home = process.env.HOME || ''
+  const reg = path.join(home, '.cargo', 'registry', 'src')
+  try {
+    for (const vendor of fs.readdirSync(reg)) {
+      const dir = path.join(reg, vendor)
+      for (const crate of fs.readdirSync(dir)) {
+        if (/^tauri-2\./.test(crate)) {
+          const f = path.join(dir, crate, 'src', 'window', 'scripts', 'drag.js')
+          if (fs.existsSync(f)) return { src: fs.readFileSync(f, 'utf8'), from: f }
+        }
+      }
+    }
+  } catch {
+    /* 没装 rust 源码：走镜像 */
+  }
+  const mirror = `;(function(){
+    const A='data-tauri-drag-region'
+    const CLICK=new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA','LABEL','SUMMARY'])
+    const isClick=(el)=>CLICK.has(el.tagName)||(el.hasAttribute('contenteditable')&&el.getAttribute('contenteditable')!=='false')||(el.hasAttribute('tabindex')&&el.getAttribute('tabindex')!=='-1')
+    function isDrag(path){for(const el of path){if(!(el instanceof HTMLElement))continue;const a=el.getAttribute(A);if(isClick(el)&&a===null)return false;if(a===null)continue;if(a==='false')return false;if(a==='deep')return true;if(a===''||a==='true')return el===path[0]}return false}
+    document.addEventListener('mousedown',(e)=>{if(e.button===0&&(e.detail===1||e.detail===2)&&isDrag(e.composedPath())){if(e.detail===2){window.__DRAG_INIT__=[e.clientX,e.clientY];return}window.__TAURI_INTERNALS__?.invoke('plugin:window|start_dragging')}})
+    document.addEventListener('mouseup',(e)=>{if(e.button===0&&e.detail===2&&window.__DRAG_INIT__&&e.clientX===window.__DRAG_INIT__[0]&&e.clientY===window.__DRAG_INIT__[1]&&isDrag(e.composedPath()))window.__TAURI_INTERNALS__?.invoke('plugin:window|internal_toggle_maximize')})
+  })()`
+  return { src: mirror, from: '（镜像规则：crate 源码不可用）' }
+}
+const dragScript = tauriDragScript()
+await page.addScriptTag({
+  content: `window.__TAURI_INTERNALS__=window.__TAURI_INTERNALS__||{};window.__TAURI_INTERNALS__.invoke=(c)=>{window.__DRAG_CALLS__=window.__DRAG_CALLS__||[];window.__DRAG_CALLS__.push(c);return Promise.resolve()};`,
+})
+await page.addScriptTag({ content: dragScript.src.replace('__TEMPLATE_os_name__', "'macos'") })
+const dragProbe = await page.evaluate(() => {
+  const bar = document.querySelector('.top')
+  const b = bar.getBoundingClientRect()
+  // 三点：芯片上、spacer 上、右边芯片上 —— 都是"点在子元素上"的真实情形
+  const xs = [b.x + 40, b.x + b.width * 0.5, b.right - 60]
+  const y = b.y + b.height / 2
+  const fire = (type, x, detail) =>
+    document.elementFromPoint(x, y).dispatchEvent(
+      new MouseEvent(type, { bubbles: true, composed: true, clientX: x, clientY: y, button: 0, detail }),
+    )
+  const out = []
+  for (const x of xs) {
+    window.__DRAG_CALLS__ = []
+    const el = document.elementFromPoint(x, y)
+    fire('mousedown', x, 1)
+    out.push({ hit: el.className || el.tagName, drag: [...window.__DRAG_CALLS__] })
+  }
+  // 双击（macOS 在 mouseup 上切最大化）
+  window.__DRAG_CALLS__ = []
+  const x2 = b.x + b.width * 0.5
+  fire('mousedown', x2, 2)
+  fire('mouseup', x2, 2)
+  const dbl = [...window.__DRAG_CALLS__]
+  return { out, dbl, mode: bar.getAttribute('data-tauri-drag-region') }
+})
+
+  return { titleConf, titleBar, dragProbe, dragScript, capSrc, capGen, capMissingSrc, capMissingGen }
+}
+
+export async function probeMenu(page, studio) {
+  const STUDIO = studio
+// ── ㉕ 菜单：每个动作项都必须有人接、而且真的做事（决策 #1221）──────────────
+// 【为什么要有】菜单项是"承诺"：用户点"保存"就要保存。最坏的情况不是没有菜单，
+//   而是菜单在、点了没反应——它比没有更容易让人以为是自己不会用。
+//   ⇒ 两条一起测：① 从 `src/menu.rs` 的 ACTIONS 表读出**全部** id（不另抄一份），逐个派发；
+//     ② 每个 id 断言一个**可观测的效果**（视图切了/缩放变了/真写了盘/标签少了），
+//        不是"没人报错"就算过。
+// ★诚实边界：这里派发的是 `window` 上的 `studio:menu` 兜底事件，证明的是**动作侧**；
+//   原生 NSMenu 点到 JS 那一段（Tauri event）在 Playwright 里没有，只能人眼验。
+const menuDead = []
+page.on('console', (m) => {
+  if (m.type() === 'warning' && m.text().includes('菜单动作无人处理')) menuDead.push(m.text())
+})
+const menuSrc = fs.readFileSync(path.join(STUDIO, 'src', 'menu.rs'), 'utf8')
+const menuActs = [...menuSrc.matchAll(/\("([a-z]+\.[A-Za-z]+)",\s*"([^"]*)",\s*"([^"]*)"\)/g)].map((m) => ({
+  id: m[1],
+  label: m[2],
+  accel: m[3],
+}))
+// 登记了还要真的放进菜单里：`action(app, "id")` 至少出现一次
+const notBuilt = menuActs.filter((a) => !menuSrc.includes(`action(app, "${a.id}")`))
+const fireMenu = (id) =>
+  page.evaluate((x) => window.dispatchEvent(new CustomEvent('studio:menu', { detail: x })), id)
+const railOn = (label) =>
+  page.evaluate((l) => !!document.querySelector(`.rail button[aria-label="${l}"].on`), label)
+const zoomText = () => page.evaluate(() => document.getElementById('zoomLabel')?.textContent?.trim() ?? '')
+
+await fireMenu('view.device')
+await page.waitForTimeout(200)
+const menuDevice = await railOn('设备画布')
+await fireMenu('view.code')
+await page.waitForTimeout(200)
+const menuCode = await railOn('代码（只读）')
+// 缩放：标签只在设备视图里可见 ⇒ 先切回去
+await fireMenu('view.device')
+await page.waitForTimeout(200)
+await fireMenu('view.zoomIn')
+await page.waitForTimeout(120)
+const menuZoomIn = await zoomText()
+await fireMenu('view.zoomReset')
+await page.waitForTimeout(120)
+const menuZoomReset = await zoomText()
+await fireMenu('view.zoomOut')
+await page.waitForTimeout(120)
+const menuZoomOut = await zoomText()
+await fireMenu('view.zoomReset')
+await fireMenu('view.code')
+await page.waitForTimeout(250)
+// 查找 ⌘F：菜单项必须把焦点送进搜索框（否则"有菜单但按了没反应"）
+await fireMenu('edit.find')
+await page.waitForTimeout(200)
+const menuFind = await page.evaluate(() => document.activeElement?.id ?? '')
+
+// 保存：先造一个脏缓冲，再让菜单去存（断言真的把这段文本发出去了）
+await page.locator('.cm-content').click()
+await page.keyboard.type('// menu-save')
+await page.waitForTimeout(150)
+const writesBefore = await page.evaluate(
+  () => window.__STUB_CALLS__.filter((c) => c.cmd === 'write_text').length,
+)
+await fireMenu('file.save')
+await page.waitForTimeout(500)
+const menuSaved = await page.evaluate((n) => {
+  const w = window.__STUB_CALLS__.filter((c) => c.cmd === 'write_text')
+  return w.length > n ? String(w[w.length - 1].args?.text ?? '') : ''
+}, writesBefore)
+// 关标签：菜单的「关闭标签页」= 当前标签消失、标签数 -1
+const tabsBeforeMenu = await page.evaluate(
+  () => document.querySelectorAll('#codeTabs button[data-tab]').length,
+)
+await fireMenu('file.closeTab')
+await page.waitForTimeout(500)
+const tabsAfterMenu = await page.evaluate(
+  () => document.querySelectorAll('#codeTabs button[data-tab]').length,
+)
+// 收尾：把编辑器恢复成"有标签的代码视图"，快照才不会是空的
+await page.evaluate(() =>
+  localStorage.setItem('__stub_state__', JSON.stringify({ view: 'code', codeFile: 'packages/studio/ui/src/App.vue' })),
+)
+await page.reload()
+await page.waitForTimeout(900)
+
+  return { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoomReset, menuZoomOut, menuFind, menuSaved, tabsBeforeMenu, tabsAfterMenu }
+}
+
+export async function probeSearch(page, studio) {
+  const STUDIO = studio
+// ── ㉖ 搜索：命中数对得上 + 点一条**真的跳到那一格**（决策 #1222）──────────────
+// 【为什么不是"有没有结果"就完事】搜索最容易做假的地方是：列表出来了、点了也有反应，
+//   但光标落在文件开头——用户还得自己找。所以这里断言 **data-caret 落在 4:9**
+//   （RUST 桩里 `stubLine` 的起始格），以及搜索时目录树**让位**、清除后回来。
+await page.locator('#codeSearch').click()
+await page.locator('#codeSearch').fill('stub')
+await page.waitForTimeout(600) // 220ms 防抖 + 一次 IPC 往返
+const searchState = await page.evaluate(() => ({
+  hits: document.querySelectorAll('#codeHits .hit').length,
+  meta: document.getElementById('codeSearchMeta')?.textContent?.trim() ?? '',
+  treeGone: !document.getElementById('codeFiles'),
+}))
+await page.locator('#codeHits .hit').first().click()
+await page.waitForTimeout(700)
+const jumped = await page.evaluate(() => ({
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+  caret: document.getElementById('codeHost')?.getAttribute('data-caret') ?? '',
+  active: document.querySelector('.cm-activeLine')?.textContent ?? '',
+}))
+await page.click('#codeSearchClear')
+await page.waitForTimeout(300)
+const treeBack = await page.evaluate(() => !!document.getElementById('codeFiles'))
+
+// 引擎如实显示：没装 rg 时必须是「内置扫描（装 ripgrep 更快）」，不能假装是 rg
+await page.evaluate(() => localStorage.setItem('__NORG__', '1'))
+await page.locator('#codeSearch').fill('stub')
+await page.waitForTimeout(600)
+const engineShown = await page.evaluate(() => ({
+  meta: document.getElementById('codeSearchMeta')?.textContent?.trim() ?? '',
+  hits: document.querySelectorAll('#codeHits .hit').length,
+}))
+await page.evaluate(() => localStorage.removeItem('__NORG__'))
+await page.click('#codeSearchClear')
+await page.waitForTimeout(300)
+
+  return { searchState, jumped, treeBack, engineShown }
+}
+
+export async function probeCodeExtras(page, studio) {
+  const STUDIO = studio
+// ── ㉘/㉙/㉚ 代码视图的"边界功能"（决策 #1232/#1233/#1234）──────────────────
+// ★菜单项点击要**容错**：菜单没弹出来时不能让整条门禁崩掉（那样后面的判据全丢，
+//   "红了"也看不出是哪一条——第一版就是这么挂的）。超时就记 false，继续往下跑。
+const pickMenu = async (id) => {
+  try {
+    await page.click(`#ctxMenu [data-menu-item="${id}"]`, { timeout: 1500 })
+    return true
+  } catch {
+    return false
+  }
+}
+// ㉘ 目录两态图标 · ㉙ 文件类型图标 · ㉚ 三处右键菜单（标签/文件树/编辑器）
+// 先把第二个文件打开，右键菜单的"关闭其他"才有意义
+await page.click('#codeFiles button[data-file="packages/studio/src/main.rs"]')
+await page.waitForTimeout(350)
+// ★不依赖"上一步留下了哪些标签"：先把 App.vue 也打开，保证它的标签一定在
+await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
+await page.waitForTimeout(350)
+const iconSamples = await page.evaluate((paths) => {
+  const out = {}
+  for (const p of paths) {
+    const b = document.querySelector(`#codeFiles button[data-file="${p}"]`)
+    const svg = b?.querySelector('svg')
+    out[p] = b ? { icon: b.getAttribute('data-icon'), color: svg ? getComputedStyle(svg).color : '' } : null
+  }
+  return out
+}, [
+  'packages/studio/ui/src/App.vue',
+  'packages/studio/ui/src/bridge.ts',
+  'packages/studio/ui/src/styles.css',
+  'packages/studio/src/main.rs',
+  'packages/studio/native/embed_view.m',
+])
+const dirSel = '#codeFiles button[data-dir="packages/studio/ui"]'
+const dirOpen = await page.getAttribute(dirSel, 'data-icon')
+await page.click(dirSel)
+await page.waitForTimeout(250)
+const dirClosed = await page.getAttribute(dirSel, 'data-icon')
+await page.click(dirSel) // 还原
+await page.waitForTimeout(250)
+
+// ㉚a 标签右键 → 关闭其他
+await page.click('#codeTabs button[data-tab="packages/studio/ui/src/App.vue"]', { button: 'right' })
+await page.waitForTimeout(220)
+const tabMenu = await page.evaluate(() => {
+  const m = document.getElementById('ctxMenu')
+  return { open: !!m, items: [...(m?.querySelectorAll('[data-menu-item]') ?? [])].map((b) => b.getAttribute('data-menu-item')) }
+})
+const pickedCloseOthers = await pickMenu('closeOthers')
+await page.waitForTimeout(400)
+const afterCloseOthers = await page.evaluate(() => ({
+  tabs: document.querySelectorAll('#codeTabs button[data-tab]').length,
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+}))
+
+// ㉚b 文件树右键 → 复制相对路径（走 Rust 剪贴板命令）
+await page.click('#codeFiles button[data-file="packages/studio/src/main.rs"]', { button: 'right' })
+await page.waitForTimeout(220)
+const nodeMenu = await page.evaluate(() => {
+  const m = document.getElementById('ctxMenu')
+  return { items: [...(m?.querySelectorAll('[data-menu-item]') ?? [])].map((b) => b.getAttribute('data-menu-item')) }
+})
+const pickedCopyPath = await pickMenu('copyPath')
+await page.waitForTimeout(250)
+const copiedPath = await page.evaluate(() => {
+  const c = (window.__STUB_CALLS__ || []).filter((x) => x.cmd === 'copy_text')
+  return c.length ? String(c[c.length - 1].args?.text ?? '') : ''
+})
+
+// ㉚c 编辑器右键 → 保存/撤销/重做/全选；Esc 关闭
+await page.click('#codeHost', { button: 'right', position: { x: 60, y: 60 } })
+await page.waitForTimeout(220)
+const editorMenu = await page.evaluate(() => {
+  const m = document.getElementById('ctxMenu')
+  return { items: [...(m?.querySelectorAll('[data-menu-item]') ?? [])].map((b) => b.getAttribute('data-menu-item')) }
+})
+await page.keyboard.press('Escape')
+await page.waitForTimeout(200)
+const escClosed = await page.evaluate(() => !document.getElementById('ctxMenu'))
+
+  return { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed }
+}

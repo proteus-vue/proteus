@@ -14020,3 +14020,46 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 【门禁】check:file-size ✅ · check:content ✅ · check:script-compile ✅ · check:host-invoke-contract ✅
   ★`check:ai-tasks` 红是**先于本轮就存在**的（`git stash` 后复现）：Studio 的 `T-studio-package-app`
   scope 指向已删的 `packages/studio/icons/make-icon.py` —— 不代 Studio 会话改它的条目。
+
+1232. **文件树：目录两态图标 + 文件类型图标 + 类型色**（2026-10-25 · 用户「文件树目录打开和关闭不同图标、主流语言文件图标而不是统一一个文件图标」）:
+  - **目录**：`folder` / `folderOpen` 两个形状（展开时前翻盖打开），**不靠颜色区分**——
+    灰度截图、色觉障碍下也要看得出。
+  - **文件类型**：新增 `ui/src/fileIcons.ts`（扩展名 → 图标 + 类型色），登记
+    vue/ts/tsx/js/jsx/rs/css/json/md/py/m/h。★**每个类型只留一个记号**（V / T / J / R / # / {} / M / P / C）：
+    13px 的树行里双字母会糊成一团，单记号 + 类型色两条腿才立得住。
+  - **类型色是"文件类型色"不是"状态色"**：和语法着色同一纪律，**不借 `--ok/--warn/--bad`**；
+    色值集中在 `fileIcons.ts` 一张表里，加语言只改这张表。
+  - 判据 **㉘**（折叠/展开的 `data-icon` 必须是 `folder`/`folderOpen`）与
+    **㉙**（五种语言五个不同图标名 + ≥4 种颜色）钉住；破坏性验证：把 `nodeIcon` 改回"目录一个图标、
+    文件一个图标" ⇒ 两条同时红。
+
+1233. **全局右键菜单（标签栏 / 文件树 / 编辑器三处上下文）**（2026-10-25 · 用户「右键菜单（标签栏的，全局自适应右键菜单）」）:
+  - **一个菜单 + 一份上下文**（`ui/src/contextmenu.ts` + `ContextMenu.vue`）：
+    开关、互斥（同一时刻只有一个）、贴边翻转、点外面/Esc/滚动/失焦关闭**都在这一层**；
+    调用方只给"我这儿有哪些项"和"选中了怎么处理"。
+    ★不这么做的话，每个组件各写一份，必然出现"两个菜单同时开着"。
+  - **三处上下文**：标签（关闭 / 关闭其他 / 关闭右侧 / 复制相对路径）·
+    文件树（展开-折叠 或 打开 / 复制路径 / 刷新文件树）· 编辑器（保存 / 撤销 / 重做 / 全选 / 复制路径）。
+    ★**动作全部落到既有的那批函数**（`close` / `save` / CM6 的 `undo` / `redo` / `selectAll`），
+    没有第二份实现。为此把 `close()` 拆成 `forget()`（只丢标签+缓冲）+ 三个组合操作。
+  - **复制路径走 Rust 的 `copy_text`（NSPasteboard）**，不用 `navigator.clipboard`：
+    WKWebView 里后者要"用户手势 + 焦点"同时满足，菜单项点完焦点常在菜单节点上 ⇒ 会静默失败。
+  - 判据 **㉚**：标签右键 → 菜单弹出且含 `closeOthers` → 点击后只剩 1 个标签且回到 App.vue；
+    文件树右键 → `copyPath` → 桩收到 `copy_text('packages/studio/src/main.rs')`；
+    编辑器右键 → 含 save/undo/redo/selectAll；Esc 关闭。**破坏性验证**：去掉标签的 contextmenu ⇒ 红。
+  - ★**判据自己先摔了一跤**：第一版菜单点击没有超时保护，菜单没弹出来时整条门禁**崩在 TimeoutError**，
+    后面的判据全丢、连"哪条红"都看不出来。改成 `pickMenu()`（超时记 false 继续）后才既有红点又跑得完。
+
+1234. **`build.rs` 没声明原生依赖 ⇒ 改了 `.m` 不重编（链接期才炸）· 判据脚本按职责再拆**（2026-10-25）:
+  - **症状**：给 `native/embed_view.m` 追加 `poc_copy_text()` 后 `cargo build --release` 报
+    `Undefined symbols: _poc_copy_text` —— Rust 侧调用了，但**原生 .a 里没有这个符号**。
+  - **根因**：`build.rs` 只写了 `cc::Build::file(...)`，**没有 `cargo:rerun-if-changed`**。
+    build script 被 cargo 判成 fresh 时根本不会重跑 ⇒ 旧 .o 一直用。
+    （`cc` 自己会发 rerun-if-changed，但那要 build script **先**跑起来才发得出来——鸡生蛋。）
+  - **修复**：`build.rs` 显式声明 `native/embed_view.m`、`native/live_stream.h`、`build.rs`。
+    这三行是"改了原生代码却没生效"的总开关，**别删**。
+    ★同类教训（本仓已第三次）：**"构建过"和"构建进去了"是两件事**，证据只能是链接/运行结果。
+  - **判据脚本再拆**：`check-studio-panel.mjs` 1222 行超红线 ⇒ 把四段**采集**（标题栏/菜单/搜索/
+    代码视图边界）搬进 `scripts/studio-panel-probes.mjs`（330 行），门禁回到 **937 行**。
+    拆法按职责：probe 只负责"把页面驱动到某状态并取数"，check 只负责断言与文案；
+    每个 probe 返回扁平对象，调用方解构接住（判据段零改动）。

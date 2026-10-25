@@ -37,6 +37,8 @@ extern "C" {
     fn poc_report(path: *const c_char);
     /// 把应用图标切到**当前 bundle 的 icon.icns**（决策 #1230，实现见 native/embed_view.m）
     fn poc_use_bundle_icon();
+    /// 写系统剪贴板（NSPasteboard，决策 #1234）
+    fn poc_copy_text(s: *const c_char);
 }
 
 /// 面板读数。字段名就是 HTML 侧读的名字 —— 少一层映射少一处漂移。
@@ -120,6 +122,18 @@ async fn search_text(query: String) -> Result<search::Outcome, String> {
     tauri::async_runtime::spawn_blocking(move || search::run(&root, &q, 300))
         .await
         .map_err(|e| format!("搜索线程异常：{e}"))?
+}
+
+/// 把文本写进系统剪贴板（右键菜单「复制相对路径」用）。
+/// ★为什么不走浏览器的 `navigator.clipboard`：WKWebView 里它要**用户手势 + 焦点**同时满足，
+///   菜单项点击后焦点常在菜单节点上 ⇒ 会静默失败。NSPasteboard 没有这些前提。
+#[tauri::command]
+fn copy_text(text: String) {
+    let c = CString::new(text).unwrap_or_default();
+    #[cfg(target_os = "macos")]
+    unsafe {
+        poc_copy_text(c.as_ptr())
+    };
 }
 
 #[tauri::command]
@@ -488,6 +502,7 @@ fn main() {
             list_files,
             load_state,
             save_state,
+            copy_text,
             search_text
         ])
         .setup(|app| {

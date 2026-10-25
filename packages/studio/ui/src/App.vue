@@ -11,6 +11,7 @@ import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
 import StudioMark from './icons/StudioMark.vue'
+import ContextMenu from './ContextMenu.vue'
 import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 import { onMenuAction, wireMenu } from './menu'
 
@@ -408,5 +409,8 @@ const hud = computed(() => {
       <span style="flex:1" />
       <span id="shint">{{ hint }}</span>
     </div>
+
+    <!-- 全局右键菜单（决策 #1234）：标签栏/文件树/编辑器各自 openMenu，这里只负责画与关 -->
+    <ContextMenu />
   </div>
 </template>

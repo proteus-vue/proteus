@@ -70,6 +70,8 @@ export function stubTauri(payload) {
             ],
           }
         }
+        // 剪贴板（决策 #1234）：右键菜单「复制相对路径」
+        if (cmd === 'copy_text') return null
         if (cmd === 'list_files')
           return window.localStorage.getItem('__BIG__') === '1'
             ? ['packages/studio/big.ts']

@@ -762,3 +762,17 @@ void poc_use_bundle_icon(void) {
     fprintf(stderr, "[studio] Dock 图标已切到包内 icon.icns\n");
   }
 }
+
+// ── 写系统剪贴板（决策 #1234）────────────────────────────────────────────────
+// 右键菜单的「复制相对路径」用它。不用 navigator.clipboard：WKWebView 里需要用户手势 + 焦点，
+// 菜单项点击后焦点在菜单节点上，容易静默失败。
+void poc_copy_text(const char *s) {
+  @autoreleasepool {
+    if (s == NULL) return;
+    NSString *str = [NSString stringWithUTF8String:s];
+    if (str == nil) return;
+    NSPasteboard *pb = [NSPasteboard generalPasteboard];
+    [pb clearContents];
+    [pb setString:str forType:NSPasteboardTypeString];
+  }
+}

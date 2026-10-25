@@ -34,7 +34,7 @@ import {
   keymap,
   lineNumbers,
 } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo, selectAll, undo } from '@codemirror/commands'
 import {
   HighlightStyle,
   StreamLanguage,
@@ -50,11 +50,13 @@ import { javascript } from '@codemirror/lang-javascript'
 import { css } from '@codemirror/lang-css'
 import { cpp, objectiveC } from '@codemirror/legacy-modes/mode/clike'
 import languageMap from '../languages.json'
-import { hasBridge, listFiles, readText, writeText, type SearchHit } from '../bridge'
+import { copyText, hasBridge, listFiles, readText, writeText, type SearchHit } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
 import SearchBox from './SearchBox.vue'
+import { openMenu } from '../contextmenu'
+import { fileTypeIcon } from '../fileIcons'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
 const ws = useWorkspaceState()
@@ -411,7 +413,8 @@ async function open(path: string) {
 }
 
 /** 关标签：删掉它的 state 与基线（未保存内容一起丢——"关闭"的语义，不是"隐藏"）。 */
-function close(path: string) {
+/** 只把标签与它的缓冲丢掉，不切换当前文件（关闭兄弟标签时要用） */
+function forget(path: string) {
   const i = tabs.value.indexOf(path)
   if (i < 0) return
   tabs.value.splice(i, 1)
@@ -419,6 +422,25 @@ function close(path: string) {
   recs.delete(path)
   setTabDirty(path, false)
   ws.openFiles = [...tabs.value]
+}
+
+/** 关掉除 `keep` 以外的所有标签 */
+function closeOthers(keep: string) {
+  for (const p of [...tabs.value]) if (p !== keep) forget(p)
+  if (cur.value !== keep) void open(keep)
+}
+
+/** 关掉 `path` 右侧的所有标签 */
+function closeRight(path: string) {
+  const i = tabs.value.indexOf(path)
+  if (i < 0) return
+  for (const p of tabs.value.slice(i + 1)) forget(p)
+}
+
+function close(path: string) {
+  const i = tabs.value.indexOf(path)
+  if (i < 0) return
+  forget(path)
   if (cur.value !== path) return
   const next = tabs.value[Math.max(0, i - 1)] ?? ''
   cur.value = ''
@@ -431,6 +453,107 @@ function close(path: string) {
   lineCount.value = 0
   view?.setState(makeState('', ''))
   host.value?.removeAttribute('data-parse')
+}
+
+/* ─── 右键菜单（决策 #1234）：三处上下文，一套开关/定位 ──────────────────────
+ * 标签栏 / 文件树 / 编辑器各给自己那份项，**动作都落到同一批函数**（close/save/undo…），不复制逻辑。
+ */
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+function flash(msg: string) {
+  notice.value = msg
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => {
+    if (notice.value === msg) notice.value = ''
+  }, 1800)
+}
+
+async function copyPath(p: string) {
+  try {
+    await copyText(p)
+    flash('已复制路径')
+  } catch (e) {
+    flash('复制失败：' + String((e as Error)?.message ?? e))
+  }
+}
+
+function onTabMenu(e: MouseEvent, p: string) {
+  const i = tabs.value.indexOf(p)
+  openMenu(
+    e,
+    [
+      { id: 'close', label: '关闭', accel: '⌘W', danger: true },
+      { id: 'closeOthers', label: '关闭其他', disabled: tabs.value.length < 2 },
+      { id: 'closeRight', label: '关闭右侧', disabled: i >= tabs.value.length - 1 },
+      { id: 's1', label: '', sep: true },
+      { id: 'copyPath', label: '复制相对路径' },
+    ],
+    (id) => {
+      if (id === 'close') close(p)
+      else if (id === 'closeOthers') closeOthers(p)
+      else if (id === 'closeRight') closeRight(p)
+      else if (id === 'copyPath') void copyPath(p)
+    },
+  )
+}
+
+async function refreshFiles() {
+  try {
+    files.value = await listFiles([...ROOTS])
+    flash('文件树已刷新')
+  } catch (e) {
+    err.value = String((e as Error)?.message ?? e)
+  }
+}
+
+function onNodeMenu(e: MouseEvent, node: { path: string; dir: boolean }) {
+  const collapsed = ws.codeCollapsed.includes(node.path)
+  openMenu(
+    e,
+    [
+      node.dir
+        ? { id: 'toggle', label: collapsed ? '展开目录' : '折叠目录' }
+        : { id: 'open', label: '打开' },
+      { id: 's1', label: '', sep: true },
+      { id: 'copyPath', label: '复制相对路径' },
+      { id: 'refresh', label: '刷新文件树' },
+    ],
+    (id) => {
+      if (id === 'toggle') toggle(node.path)
+      else if (id === 'open') void open(node.path)
+      else if (id === 'copyPath') void copyPath(node.path)
+      else if (id === 'refresh') void refreshFiles()
+    },
+  )
+}
+
+function onEditorMenu(e: MouseEvent) {
+  if (!cur.value) return
+  openMenu(
+    e,
+    [
+      { id: 'save', label: '保存', accel: '⌘S', disabled: !dirty.value },
+      { id: 's1', label: '', sep: true },
+      { id: 'undo', label: '撤销', accel: '⌘Z' },
+      { id: 'redo', label: '重做', accel: '⇧⌘Z' },
+      { id: 'selectAll', label: '全选', accel: '⌘A' },
+      { id: 's2', label: '', sep: true },
+      { id: 'copyPath', label: '复制相对路径' },
+    ],
+    (id) => {
+      if (id === 'save') void save()
+      else if (id === 'undo' && view) undo(view)
+      else if (id === 'redo' && view) redo(view)
+      else if (id === 'selectAll' && view) selectAll(view)
+      else if (id === 'copyPath' && cur.value) void copyPath(cur.value)
+    },
+  )
+}
+
+/** 树行图标：目录分展开/折叠；文件按扩展名取类型图标与类型色 */
+function nodeIcon(node: { path: string; dir: boolean }): { name: string; color?: string } {
+  if (node.dir) return { name: ws.codeCollapsed.includes(node.path) ? 'folder' : 'folderOpen' }
+  const t = fileTypeIcon(node.path)
+  return t ? { name: t.icon, color: t.color } : { name: 'file' }
 }
 
 async function save() {
@@ -542,7 +665,9 @@ onBeforeUnmount(() => {
           :data-dir="r.node.dir ? r.node.path : undefined"
           :data-file="r.node.dir ? undefined : r.node.path"
           :aria-expanded="r.node.dir ? !ws.codeCollapsed.includes(r.node.path) : undefined"
+          :data-icon="nodeIcon(r.node).name"
           @click="r.node.dir ? toggle(r.node.path) : open(r.node.path)"
+          @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
         >
           <!-- 折叠箭头 + 类型图标：箭头只占位不显示在文件行上，这样同级名字都对齐 -->
           <span
@@ -551,7 +676,12 @@ onBeforeUnmount(() => {
           >
             <StudioIcon v-if="r.node.dir" name="chevron" :size="12" />
           </span>
-          <StudioIcon :name="r.node.dir ? 'folder' : 'file'" :size="13" class="ico" />
+          <StudioIcon
+            :name="nodeIcon(r.node).name"
+            :size="14"
+            class="ico"
+            :style="nodeIcon(r.node).color ? { color: nodeIcon(r.node).color } : undefined"
+          />
           <span class="name">{{ r.node.name }}</span>
         </button>
         </nav>
@@ -589,6 +719,7 @@ onBeforeUnmount(() => {
             :title="p"
             :data-tab="p"
             @click="open(p)"
+            @contextmenu.prevent.stop="onTabMenu($event, p)"
           >
             <span class="tname">{{ p.split('/').pop() }}</span>
             <span v-if="dirtySet.includes(p)" class="tdot" aria-label="未保存" />
@@ -597,7 +728,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
         <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
-        <div v-show="!err" class="host" id="codeHost" ref="host" />
+        <div v-show="!err" class="host" id="codeHost" ref="host" @contextmenu.prevent="onEditorMenu" />
       </div>
     </div>
   </div>
