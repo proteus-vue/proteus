@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **39 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **40 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -747,7 +747,32 @@ Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo
 「原生 NSMenu 点到 JS」那一段（Tauri event）在 Playwright 里不存在，只能人眼点一次。
 没有"帮助"菜单：现在没有任何帮助内容可给，摆一个只有标题的空菜单就是在装作有。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **39 条**）
+## 应用图标（2026-10-25 · 决策 #1224）
+
+品牌立方体（`docs/brand/avatar.svg`：一套源码 → 三个渲染目标）**加一层 Studio 语义**：
+四角选中框把立方体框住 = **被检视、被取证**。容器换成深石墨底（IDE 的日常底色），
+与白底的品牌头像在产品矩阵上区分开。完整设计说明见 `docs/brand/README.md`。
+
+| 文件 | 作用 |
+|---|---|
+| `icons/icon.svg` | **源文件**（1024 · 完整标记：立方体 a=300 + 四角框） |
+| `icons/icon-small.svg` | **16/32px 专用**（立方体 72%、无框）——小尺寸只认剪影 |
+| `icons/make-icon.mjs` | 生成器：SVG → 按目标尺寸**矢量栅格化** → iconset 十档 → `iconutil` 打包 |
+| `icons/icon.icns` / `icon.png` | 构建产物（打包用 / 文档用） |
+
+```bash
+node packages/studio/icons/make-icon.mjs   # 改完 SVG 必须跑
+```
+
+★**为什么不是一张图缩到底**：32px 下选中框会糊成四团灰点（实测）；Apple 的图标也是分尺寸出图。
+★**为什么栅格化而不是缩放位图**：16px 的图是按 16px 重新算的，不是 1024 缩下去。
+★**判据 ㉗**：`icns` 必须比任一份源 SVG 新 + **内含各档尺寸逐一对**，防的是"改了图标却把旧 icns
+打进包"——外面完全看不出来，和"包里是三天前的 UI"同一类假象。
+★这条判据写错过两次，都是"查的东西不是真实产物"：第一版数 `AppIcon.iconset/` 的十档
+（那是 gitignore 的构建中间物，CI 里不存在）；第二版解析 icns 却把 16/32 写成 `icp4/icp5`
+（真身是 `ic04/ic05` 的 ARGB 块）⇒ 报"缺 16"。**判据要贴着真实格式写，不能照着自己的想象写。**
+
+### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
@@ -761,6 +786,7 @@ Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo
 - ㉔ **沉浸式标题栏**：Overlay/hiddenTitle/红绿灯位置 + 顶栏可拖 + 左内边距（见上节）；
 - ㉕ **菜单没有死项**：`menu.rs` 的 ACTIONS 逐项派发，每项必须有效果（见下节）；
 - ㉖ **搜索**：命中数对得上、点一条**光标落在那一格**（`data-caret`）、目录树让位/回来（见下节）；
+- ㉗ **图标**：`icon.icns` 必须比源 SVG 新 + iconset 十档尺寸正确（见「应用图标」）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；

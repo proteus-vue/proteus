@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Proteus Studio 小尺寸图标（16/32px 专用 · 决策 #1224）
+     【为什么单独一份】macOS 在 16/32px 下只认得出**剪影**：主图标里的选中框在这个尺寸会糊成脏点
+     （实测 32px 只剩四团灰）。Apple 自己的图标也是分尺寸出 artwork 的，不是一张图缩到底。
+     这一版：立方体放大到 72%（a=370）、去掉选中框、内缝加粗，保留三色分面与深底。
+     ★几何角度与 icon.svg / docs/brand/avatar.svg 完全一致，只是尺度与细节不同。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Proteus Studio">
+  <title>Proteus Studio（小尺寸）</title>
+  <defs>
+    <linearGradient id="smBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c313c"/>
+      <stop offset="0.55" stop-color="#1c1f27"/>
+      <stop offset="1" stop-color="#13161b"/>
+    </linearGradient>
+    <linearGradient id="smTop" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#d3c6ff"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="smLeft" x1="0.25" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+    <linearGradient id="smRight" x1="0.75" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <clipPath id="smCube">
+      <polygon points="512,142 832.4,327 832.4,697 512,882 191.6,697 191.6,327"/>
+    </clipPath>
+    <clipPath id="smCube">
+      <polygon points="512,142 832.4,327 832.4,697 512,882 191.6,697 191.6,327"/>
+    </clipPath>
+    <clipPath id="smTile">
+      <rect x="100" y="100" width="824" height="824" rx="186"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#smTile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#smBg)"/>
+  </g>
+
+  <!-- 立方体：a=370 ⇒ 高 740 / 宽 640.8，中心 (512,512) -->
+  <polygon points="512,142 832.4,327 512,512 191.6,327" fill="url(#smTop)"/>
+  <polygon points="191.6,327 512,512 512,882 191.6,697" fill="url(#smLeft)"/>
+  <polygon points="512,512 832.4,327 832.4,697 512,882" fill="url(#smRight)"/>
+  <g clip-path="url(#smCube)" stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-opacity="0.96">
+    <line x1="191.6" y1="327" x2="512" y2="512"/>
+    <line x1="832.4" y1="327" x2="512" y2="512"/>
+    <line x1="512" y1="512" x2="512" y2="882"/>
+  </g>
+</svg>

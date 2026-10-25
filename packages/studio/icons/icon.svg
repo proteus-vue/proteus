@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Proteus Studio 应用图标（决策 #1224）
+     母题：Proteus 品牌立方体（docs/brand/avatar.svg —— 一套源码 / 三个渲染目标）
+     Studio 层的衍生：**选中框（[ ]）** —— 立方体被"框住"= 被检视、被取证。
+     这正是 Studio 与引擎的区别：引擎产出画面，Studio 把画面拿来比对与留证。
+     ★几何与品牌同源（等距，三面共棱），只是换了容器与打光；改这里请同步 docs/brand/README.md。
+     画布 1024 · macOS Big Sur 网格：squircle 824 + 四周 100 留白 · 圆角 186 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Proteus Studio">
+  <title>Proteus Studio</title>
+  <defs>
+    <linearGradient id="stBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#282c36"/>
+      <stop offset="0.55" stop-color="#191c23"/>
+      <stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+    <radialGradient id="stGlow" cx="0.5" cy="0.44" r="0.52">
+      <stop offset="0" stop-color="#8b8cff" stop-opacity="0.42"/>
+      <stop offset="0.55" stop-color="#6d6bff" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#6d6bff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stTop" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#d3c6ff"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="stLeft" x1="0.25" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+    <linearGradient id="stRight" x1="0.75" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="stRim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.26"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.05"/>
+    </linearGradient>
+    <clipPath id="stCube">
+      <polygon points="512,212 771.8,362 771.8,662 512,812 252.2,662 252.2,362"/>
+    </clipPath>
+    <clipPath id="stCube">
+      <polygon points="512,212 771.8,362 771.8,662 512,812 252.2,662 252.2,362"/>
+    </clipPath>
+    <clipPath id="stTile">
+      <rect x="100" y="100" width="824" height="824" rx="186"/>
+    </clipPath>
+  </defs>
+
+  <!-- 容器：深石墨底 + 立方体背后一团极淡的紫光（让三面有"被照亮"的感觉，不是浮在纯黑上） -->
+  <g clip-path="url(#stTile)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#stBg)"/>
+    <rect x="100" y="100" width="824" height="824" fill="url(#stGlow)"/>
+  </g>
+  <!-- 内描边 hairline：亮底壁纸上也能看见边界（Apple 系图标的通用做法） -->
+  <rect x="101" y="101" width="822" height="822" rx="185" fill="none" stroke="url(#stRim)" stroke-width="2"/>
+
+  <!-- 选中框（四角 L）：Studio 的那一层语义 —— 把立方体**框住**= 检视/取证。
+       ★必须**完整包住**立方体（外扩 24 / 42），否则看起来像在裁切它。
+       ★不做虚线"蚂蚁线"：小尺寸下会糊成脏点；solid 的 L 角在 32px 仍是一条清楚的边。 -->
+  <g fill="none" stroke="#e9eeff" stroke-opacity="0.7" stroke-width="21" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M226 282 V216 a26 26 0 0 1 26 -26 H318"/>
+    <path d="M706 190 H772 a26 26 0 0 1 26 26 V282"/>
+    <path d="M226 742 V808 a26 26 0 0 0 26 26 H318"/>
+    <path d="M706 834 H772 a26 26 0 0 0 26 -26 V742"/>
+  </g>
+
+  <!-- 立方体（等距 · 中心 512,512 · 边长 300 / 总高 600 / 宽 519.6）
+       角度与品牌 avatar 完全一致，只是放大到图标该有的存在感（占容器 73%） -->
+  <polygon points="512,212 771.8,362 512,512 252.2,362" fill="url(#stTop)"/>
+  <polygon points="252.2,362 512,512 512,812 252.2,662" fill="url(#stLeft)"/>
+  <polygon points="512,512 771.8,362 771.8,662 512,812" fill="url(#stRight)"/>
+  <!-- 内缝：三面共棱处描白（与品牌同规则：只描内缝，不描外轮廓） -->
+  <!-- ★剪到立方体轮廓里：round 线帽会在两个侧顶点戳出白色小凸起（1024 下肉眼可见） -->
+  <g clip-path="url(#stCube)" stroke="#ffffff" stroke-width="15" stroke-linecap="round" stroke-opacity="0.94">
+    <line x1="252.2" y1="362" x2="512" y2="512"/>
+    <line x1="771.8" y1="362" x2="512" y2="512"/>
+    <line x1="512" y1="512" x2="512" y2="812"/>
+  </g>
+</svg>

@@ -68,11 +68,14 @@ touch "$HERE/src/main.rs"
 BIN="$HERE/target/release/$BIN_NAME"
 [ -f "$BIN" ] || { echo "✗ 找不到二进制：$BIN"; exit 1; }
 
-# ③ 图标（icns 由脚本生成，可复现）
-if [ ! -f "$HERE/icons/icon.icns" ]; then
-  echo "▸ 生成图标"
-  python3 "$HERE/icons/make-icon.py" >/dev/null
-  iconutil -c icns "$HERE/icons/AppIcon.iconset" -o "$HERE/icons/icon.icns"
+# ③ 图标：**源 SVG 比 icns 新就重生成**（决策 #1224）
+#   ★原先是"缺了才生成" ⇒ 改了图标却把旧图标打进包，外面一点看不出来——和"包里是三天前的
+#     UI"是同一类"看起来构建过"的错。判定基准是**源文件 mtime**，不是"文件在不在"。
+if [ ! -f "$HERE/icons/icon.icns" ] \
+  || [ "$HERE/icons/icon.svg" -nt "$HERE/icons/icon.icns" ] \
+  || [ "$HERE/icons/icon-small.svg" -nt "$HERE/icons/icon.icns" ]; then
+  echo "▸ 重新生成图标（icon.svg / icon-small.svg 有更新）"
+  node "$HERE/icons/make-icon.mjs"
 fi
 
 # ④ 组装 .app —— **原地刷新，不整包删除**（2026-10-25 修）
