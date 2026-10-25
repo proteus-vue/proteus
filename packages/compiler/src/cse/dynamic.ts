@@ -584,6 +584,10 @@ function irFieldCandidatesOf(prop: string): string[] {
     'justify-items': 'justifyItems',
     // ★★★word-break 项（2026-10-06）：行内断词策略（动态类字段候选）
     'word-break': 'wordBreak',
+    // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出 / 首行缩进 / 词间距（动态类字段候选——与 compute.ts 对齐）
+    'overflow-wrap': 'overflowWrap',
+    'text-indent': 'textIndent',
+    'word-spacing': 'wordSpacing',
     'box-sizing': 'boxSizing',
     'pointer-events': 'pointerEvents',
     'white-space': 'whiteSpace',

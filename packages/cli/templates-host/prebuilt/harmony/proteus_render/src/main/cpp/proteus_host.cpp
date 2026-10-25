@@ -423,7 +423,11 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
         bool tabular = false;
         { std::string fvn; jstr(it.c_str(), it.size(), "fontVariantNumeric", &fvn); tabular = (fvn == "tabular-nums"); }
         double lsDesign = 0; jnum(it.c_str(), it.size(), "letterSpacing", &lsDesign);   // ★批次 20：字距（设计 px）
-        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, nullptr, &basepx, fst, tabular);
+        // ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：词间距 / 首行缩进（设计 px ⇒ ×density）
+        double wsDesign = 0; jnum(it.c_str(), it.size(), "wordSpacing", &wsDesign);
+        double tiDesign = 0; jnum(it.c_str(), it.size(), "textIndent", &tiDesign);
+        measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, nullptr, &basepx, fst, tabular,
+                          0, "", 0, 0.0, wsDesign * density, tiDesign * density);
         // ★批次 13：line-height ⇒ 行盒高覆盖字形高
         std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
         double lhDesign = lineHeightDesignPx(lhTok, fs);
@@ -471,6 +475,10 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             const bool single = (ws == "nowrap" || ws == "pre");
             int clampLines = 0;   // ★★★line-clamp 项（2026-10-08）：多行截断行数
             std::string wbM; jstr(it.c_str(), it.size(), "wordBreak", &wbM);
+            // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出 / 词间距 / 首行缩进
+            std::string owM; jstr(it.c_str(), it.size(), "overflowWrap", &owM);
+            double wsM = 0; jnum(it.c_str(), it.size(), "wordSpacing", &wsM);
+            double tiM = 0; jnum(it.c_str(), it.size(), "textIndent", &tiM);
             std::string lhTok; jstr(it.c_str(), it.size(), "lineHeight", &lhTok);
             double lhDesign = lineHeightDesignPx(lhTok, fs);
             double wpx = 0, hpx = 0;
@@ -483,7 +491,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
                 //   （此前用 `hpx / 单行高` 反推——含 `\n` 的文本单行度量本身就是多行高 ⇒ 比值恒 ≈1 ⇒ 行数误判 1
                 //   ⇒ 盒高只算一行 ⇒ 第二行溢出）。lineHeight 声明时盒高 = 行数 × 行高。
                 int lines = 0;
-                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff, &lines, fst, tabular);
+                measureTextWrappedTypoPx(tx, fs * density, boxWpx, &wpx, &hpx, lsDesign * density, wbM, fw, ff, &lines, fst, tabular,
+                                         0, "", 0, 0.0, owM, wsM * density, tiM * density);
                 if (lines < 1) lines = 1;
                 const double perLine = (hpx > 0) ? (hpx / lines) : 0;
                 // ★★line-clamp 项：测量封顶——行数 = min(自然行数, clamp)（与绘制 maxLines 同源）
@@ -498,7 +507,8 @@ static napi_value AppScreenCommands(napi_env env, napi_callback_info info) {
             } else {
                 // ★pre/nowrap：`\n` 仍成立（pre）或忽略（nowrap）——按**实测行数**算盒高（否则 pre 的第二行溢出）
                 int lines = 0;
-                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, &lines, nullptr, fst);
+                measureTextTypoPx(tx, fs * density, &wpx, &hpx, lsDesign * density, fw, ff, &lines, nullptr, fst, tabular,
+                                  0, "", 0, 0.0, wsM * density, tiM * density);
                 if (lines < 1) lines = 1;
                 if (lhDesign > 0) hpx = lines * lhDesign * density;
             }

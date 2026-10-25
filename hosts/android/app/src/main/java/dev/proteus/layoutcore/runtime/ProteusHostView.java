@@ -120,7 +120,7 @@ public class ProteusHostView extends ViewGroup {
          */
         int decoColor;
         int decoStyle;
-        float decoThicknessPx;
+        float decoThicknessPx; float wordSpacingPx, textIndentPx; String overflowWrap;   // ★批 B F3 收尾：词距/缩进/断词溢出
         /**
          * ★★★逐边 border 批（2026-10-05）：**逐边边框规格**——`float[12]`：
          *   [0..3] = 四边宽度（top/right/bottom/left；**NaN = 该边未声明 ⇒ 回落到 uniform borderWidth**）·
@@ -3742,7 +3742,7 @@ public class ProteusHostView extends ViewGroup {
         // ★字号只在**变化时**设置（同字号连排时零开销；见 Cmd.fontSize 注释）
         float lastSize = textPaint.getTextSize();
         int lastWeight = -1;   // ★批次 3：字重变化才重建 typeface（-1 = 首次必设，与默认 paint 对齐）
-        float lastLetter = Float.NaN;   // ★批次 20：字距变化才 setLetterSpacing（NaN = 首次必设）
+        float lastLetter = Float.NaN, lastWordSpacing = Float.NaN;   // ★批次 20 字距 · ★批 B F3 词距（变化才设）
         int lastDecor = -1;   // ★批次 35：装饰变化才设下划线/删除线
         String lastFamRole = null;   // ★批次 36：字体角色变化才重设 typeface
         int lastAlign = -1;    // ★批次 4：文本对齐变化才设 Paint.Align
@@ -4278,6 +4278,7 @@ public class ProteusHostView extends ViewGroup {
                     textPaint.setLetterSpacing(c.fontSize > 0f ? c.letterSpacing / c.fontSize : 0f);
                     lastLetter = c.letterSpacing;
                 }
+                if (c.wordSpacingPx != lastWordSpacing) { lastWordSpacing = c.wordSpacingPx; ProteusTextPlatform.applyWordSpacing(textPaint, c.wordSpacingPx); }   // ★批 B F3 词距
                 // ★批次 35：文本装饰（变化时才设——同值连排零开销）
                 // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：**有自定义颜色/线型/线宽时不能走原生**
                 //   （`setUnderlineText` 只会画文字色的单实线、线宽也不可控）⇒ 交给下方 drawDecorationLines 手绘。
@@ -4331,8 +4332,7 @@ public class ProteusHostView extends ViewGroup {
                 //   Web 的文本 padding 把文字推入内缘，折行/对齐都以内含盒为基准。
                 final float tcx = c.x + c.padL;
                 final float tcw = Math.max(1f, c.w - c.padL - c.padR);
-                final float tx = c.textAlign == 1 ? tcx + tcw * 0.5f
-                        : c.textAlign == 2 ? tcx + tcw - 1f : tcx + 1f;
+                final float tx = c.textAlign == 1 ? tcx + (tcw + c.textIndentPx) * 0.5f : c.textAlign == 2 ? tcx + tcw - 1f : tcx + 1f + c.textIndentPx;   // ★批 B F3：单行时"首行"=唯一行
                 // ★批次 13（line-height，CSS 标准语义）：**半行距居中**——行盒高 = lineHeight 时，
                 //   字形内容区在行盒内**垂直居中**（上下各分一半行距）＝ Web/Skyline 的真 CSS 行为。
                 //   未声明行高 ⇒ 沿用旧 0.8h（既有路径零行为变化）。
@@ -5106,8 +5106,8 @@ public class ProteusHostView extends ViewGroup {
                 ? android.text.Layout.Alignment.ALIGN_CENTER
                 : c.textAlign == 2 ? android.text.Layout.Alignment.ALIGN_OPPOSITE
                 : android.text.Layout.Alignment.ALIGN_NORMAL;
-        android.text.StaticLayout.Builder b = android.text.StaticLayout.Builder
-                .obtain(c.text, 0, c.text.length(), textPaint, w)
+        android.text.StaticLayout.Builder b = android.text.StaticLayout.Builder   // ★批 B F3：首行缩进（唯一实现 TextIndentSpans）
+                .obtain(dev.proteus.layoutcore.runtime.TextIndentSpans.withFirstLineIndent(c.text, c.textIndentPx), 0, c.text.length(), textPaint, w)
                 .setIncludePad(false)
                 .setAlignment(al);
         // ★★★line-clamp 项（2026-10-08）：多行截断——StaticLayout 原生 maxLines + 尾部省略号

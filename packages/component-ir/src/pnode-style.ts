@@ -492,6 +492,19 @@ export function normalizeStyleDecls(decls: Record<string, string>, opts: Normali
       case 'letterSpacing':
         text.letterSpacing = len(v, 'horizontal')
         break
+      // ★★★批 B F3 收尾三项（2026-10-25）
+      case 'overflowWrap':
+        // 断词溢出（封闭集；normal = 初值也照样落字段——与 existing letterSpacing 同处置）
+        if (v === 'normal' || v === 'break-word' || v === 'anywhere') text.overflowWrap = v
+        break
+      case 'textIndent':
+        // 首行缩进（长度；水平轴——只缩首行，语义由宿主文本引擎实现）
+        text.textIndent = len(v, 'horizontal')
+        break
+      case 'wordSpacing':
+        // 词间距（长度，可负；水平轴）
+        text.wordSpacing = len(v, 'horizontal')
+        break
       case 'color':
         text.color = v
         break

@@ -65,7 +65,12 @@ const toKebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())
 const toCamel = (s) => s.replace(/-([a-z])/g, (_m, c) => c.toUpperCase())
 /** ★★★line-clamp 项（2026-10-08）：CSS 名 → IR 字段名别名表（个别能力折叠到**不同名**字段，
  *   名字对不上 ⇒ 实现态被判 not-started 的假阴性）。-webkit-line-clamp → lineClamp。 */
-const FIELD_ALIAS = { '\u002dwebkit-line-clamp': 'lineClamp' }
+const FIELD_ALIAS = {
+  '\u002dwebkit-line-clamp': 'lineClamp',
+  // ★★★批 B F3 收尾（2026-10-25）：`word-wrap` 是 `overflow-wrap` 的**旧别名**（真 Chromium 实测：
+  //   word-wrap:break-word 的 computed overflow-wrap 亦为 break-word）⇒ 同一实现，不重复计数。
+  'word-wrap': 'overflowWrap',
+}
 
 function walkFiles(dir, exts, acc = []) {
   if (!fs.existsSync(dir)) return acc
@@ -355,6 +360,14 @@ const ENGINE_LOCKED_ENDS = {
   // Skyline 官方表**收录** text-decoration-color / text-decoration-style（仅作用于 text 节点），
   //   但**未收录 text-decoration-thickness** ⇒ 仅线宽这一项是引擎边界。
   'text-decoration-thickness': ['skyline'],
+  // ★★★批 B F3 收尾三项（2026-10-25）：
+  //   · overflow-wrap：官方表**未收录**（文本族只有 white-space / text-overflow / word-break /
+  //     word-spacing / letter-spacing）。★方向性：该端文本引擎**默认就断长词**（≈ break-word）
+  //     ⇒ break-word / anywhere 的**观感**与该端默认一致，唯 `normal`（长词整体溢出）表达不了。
+  'overflow-wrap': ['skyline'],
+  //   · text-indent：官方表**未收录**，且无编译期模拟通道（首行缩进是排版几何，不是字符串变换）
+  //     ⇒ 该端引擎锁死；主承载端 = Web（浏览器原生）/ App（三端宿主）。
+  'text-indent': ['skyline'],
 }
 
 const KNOWN_ENGINE_CHANNELS = new Set([

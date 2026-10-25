@@ -1145,6 +1145,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "overflowWrap": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "enum",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "OverflowWrap",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: true,
+    },
+  },
   "overflowX": {
     scope: "semantic",
     domain: "layout",
@@ -1353,6 +1366,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: false,
     },
   },
+  "textIndent": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "length",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "TextIndent",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: true,
+    },
+  },
   "textOverflow": {
     scope: "semantic",
     domain: "paint",
@@ -1509,6 +1535,19 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
       inheritable: true,
     },
   },
+  "wordSpacing": {
+    scope: "semantic",
+    domain: "paint",
+    valueType: "length",
+    sources: {
+      compiler: "APP_PAINT_FIELDS",
+      matrixLevel: "WordSpacing",
+      runtimeWhitelist: false,
+      runtimeForbidden: false,
+      consistencyMatrix: true,
+      inheritable: true,
+    },
+  },
   "zIndex": {
     scope: "semantic",
     domain: "paint",
@@ -1526,15 +1565,15 @@ export const STYLE_IR_FIELDS: Record<string, StyleFieldSpec> = {
 
 /** 摘要（判据与官网数字读它——机器推导，非手写） */
 export const STYLE_IR_SUMMARY = {
-  total: 114,
-  semantic: 89,
+  total: 117,
+  semantic: 92,
   engineOnly: 25,
   byDomain: {
     "derived": 10,
     "edges": 8,
     "layout": 47,
     "matrix-only": 4,
-    "paint": 44,
+    "paint": 47,
     "special": 1,
   },
 } as const

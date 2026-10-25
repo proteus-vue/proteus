@@ -255,6 +255,17 @@ export function specificityOf(segments: CseSegment[]): [number, number, number] 
 
 /* ────────────────────────── 声明解析 + 简写展开 ────────────────────────── */
 
+/**
+ * ★★★批 B F3 收尾（2026-10-25）：CSS 属性**别名归一表**（唯一实现）。
+ *   `word-wrap` 是 `overflow-wrap` 的旧别名（真 Chromium 实测：word-wrap:break-word 的
+ *   computed overflow-wrap 亦为 break-word）——CSE 的级联与继承都以 prop 字符串为键，
+ *   若不归一会变成两条独立属性（父设 word-wrap、子继承不到 overflow-wrap ⇒ 与 Web 不符）。
+ *   ★规则表与 inline style 两个入口共用本表（"同一语义只允许一处实现"）。
+ */
+export const CSE_PROP_ALIAS: Record<string, string> = { 'word-wrap': 'overflow-wrap' }
+/** 归一属性名（无别名 ⇒ 原样；入参须已 toLowerCase） */
+export const canonicalProp = (p: string): string => CSE_PROP_ALIAS[p] ?? p
+
 /** 切 `prop: value` 声明的分号（括号/引号感知） */
 function splitDeclarations(body: string): Array<{ prop: string; value: string; important: boolean }> {
   const out: Array<{ prop: string; value: string; important: boolean }> = []
@@ -267,7 +278,8 @@ function splitDeclarations(body: string): Array<{ prop: string; value: string; i
     if (!t) return
     const i = t.indexOf(':')
     if (i <= 0) return
-    const prop = t.slice(0, i).trim().toLowerCase()
+    // ★★★批 B F3 收尾（2026-10-25）：入口即归一别名（word-wrap → overflow-wrap），见 CSE_PROP_ALIAS
+    const prop = canonicalProp(t.slice(0, i).trim().toLowerCase())
     let value = t.slice(i + 1).trim()
     if (!prop || !value) return
     let important = false

@@ -124,6 +124,11 @@ export function narrowValue(prop: string, value: unknown, platform: StylePlatfor
     case 'JustifySelf':
     // ★★★word-break 项（2026-10-06）：行内断词策略（关键字枚举，平台无关——文本引擎侧消费）。
     case 'WordBreak':
+    // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（关键字枚举）· 首行缩进 / 词间距（长度）——
+    //   全部平台无关（语义在文本引擎侧消费；各端通道差异见验收包 endExpressibility）。
+    case 'OverflowWrap':
+    case 'TextIndent':
+    case 'WordSpacing':
     case 'Color':
       return { valid: true, value }
     case 'Transform':

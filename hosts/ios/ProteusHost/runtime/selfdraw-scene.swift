@@ -3407,6 +3407,9 @@ final class SelfDrawView: UIView {
     static func effectiveWrap(_ style: [String: Any], text: String, boxWidth: CGFloat) -> Bool {
         guard isWrapStyle(style) else { return false }
         if (style["wordBreak"] as? String) == "break-all" { return true }
+        // ★★★批 B F3 收尾（2026-10-25）：`overflow-wrap: break-word/anywhere` ⇒ **允许**长词按盒宽折断
+        //   （此前为对齐 Web `normal` 一律抑制"CoreText 硬折长词"；现在按声明放开）。
+        if let ow = style["overflowWrap"] as? String, ow == "break-word" || ow == "anywhere" { return true }
         guard boxWidth > 1, isUnbreakableToken(text) else { return true }
         var cw = boxWidth
         if let p = style["padding"] as? [String: Any] {
@@ -3490,8 +3493,17 @@ final class SelfDrawView: UIView {
         // ★★★overflow-x 项（2026-10-06）：overflowX/overflowY 也透传（层配置按其开裁剪）
         // ★★★word-break 项（2026-10-06）：wordBreak 也透传（段落样式按其设 lineBreakMode）
         // ★批 A（决策 #651/#652）：position 必须透传——fixed 层需重挂到视图层（不随内容滚动）。
-        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "fontVariantNumeric", "textDecorationColor", "textDecorationStyle", "textDecorationThickness", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position"] {
+        for k in ["backgroundColor", "color", "text", "fontFamily", "fontStyle", "fontVariantNumeric", "textDecorationColor", "textDecorationStyle", "textDecorationThickness", "textAlign", "borderColor", "lineHeight", "whiteSpace", "wordBreak", "overflow", "textOverflow", "overflowX", "overflowY", "position",
+                  // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（字符串）——漏登记 ⇒ style 读 nil ⇒ 静默不生效
+                  "overflowWrap"] {
             if let v = n[k] as? String { style[k] = v }
+        }
+        // ★★★批 B F3 收尾三项（2026-10-25）：首行缩进 / 词间距（**数值**键——与 letterSpacing 同处置，
+        //   两形态都收：NSNumber 走 Double、CGFloat 直取；漏登记 ⇒ 宿主读 nil ⇒ 静默不生效）
+        for k in ["textIndent", "wordSpacing"] {
+            if let v = n[k] as? Double { style[k] = CGFloat(v) }
+            else if let v = n[k] as? CGFloat { style[k] = v }
+            else if let v = n[k] as? Int { style[k] = CGFloat(v) }
         }
         // ★★★修复（2026-10-08 · 子代理审美审查 + 真机取证）：**letterSpacing / textDecoration 此前被本函数丢弃**——
         //   `styleOf` 是建层**必经之路**（superapp 路径 `buildLayers` 用的就是这个 style）+ 度量真源
@@ -3954,9 +3966,17 @@ final class SelfDrawView: UIView {
             ps.lineBreakMode = (style["wordBreak"] as? String) == "break-all" ? .byCharWrapping : .byWordWrapping
             para = ps
         }
-        if kern == 0 && (deco == nil || deco == "none") && para == nil { return text }
+        // ★★★批 B F3 收尾三项（2026-10-25）：
+        //   · word-spacing：只加在**空格字符**上（走平台层 `applySpacing` —— 测量与绘制同源）。
+        //   · text-indent：段落 `firstLineHeadIndent`（只缩首行；`headIndent` 保持 0）。
+        let wordSp = (style["wordSpacing"] as? CGFloat) ?? (style["wordSpacing"] as? Double).map { CGFloat($0) } ?? 0
+        let indent = (style["textIndent"] as? CGFloat) ?? (style["textIndent"] as? Double).map { CGFloat($0) } ?? 0
+        if indent != 0 {
+            if let existing = para { existing.firstLineHeadIndent = indent }
+            else { let ps = NSMutableParagraphStyle(); ps.lineBreakMode = .byWordWrapping; ps.firstLineHeadIndent = indent; para = ps }
+        }
+        if kern == 0 && wordSp == 0 && (deco == nil || deco == "none") && para == nil { return text }
         var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(cgColor: color)]
-        if kern != 0 { attrs[.kern] = kern }
         if let para = para { attrs[.paragraphStyle] = para }
         // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：线型 / 颜色 / 线宽
         //   ★iOS 的 NSUnderlineStyle 是**选项集**：single/double/dotted/dashed + thick。
@@ -3981,7 +4001,10 @@ final class SelfDrawView: UIView {
             if deco == "underline" { attrs[.underlineColor] = uic }
             else if deco == "line-through" { attrs[.strikethroughColor] = uic }
         }
-        return NSAttributedString(string: text, attributes: attrs)
+        let attributed = NSMutableAttributedString(string: text, attributes: attrs)
+        // ★★★批 B F3 收尾（2026-10-25）：字距 + 词距一处实现（词距只落在空格位——见 ProteusTextAdapter.applySpacing）
+        ProteusTextAdapter.applySpacing(attributed, letterSpacing: kern, wordSpacing: wordSp)
+        return attributed
     }
 
     /// ★批次 25（CSS 兼容对齐 · 以 Web 为基准）：`visibility:hidden` ⇒ 层**仍占位、不显示**。
@@ -7428,8 +7451,12 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             let wb = n["wordBreak"] as? String
             // ★★★line-clamp 项（2026-10-08）：测量封顶——盒高 = min(自然行数, clamp) × 行盒高
             let maxLines = (n["lineClamp"] as? Double).map { Int($0) } ?? (n["lineClamp"] as? Int) ?? 0
+            // ★★★批 B F3 收尾三项（2026-10-25）：词间距 / 首行缩进 参与折行度量（与绘制同源）
+            let ws2 = (n["wordSpacing"] as? Double).map { CGFloat($0) } ?? 0
+            let ind2 = (n["textIndent"] as? Double).map { CGFloat($0) } ?? 0
             let sz = ProteusTextAdapter.measureTextWrapped(text, fontSize: fs, fontWeight: fw, fontFamily: fam,
-                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls, wordBreak: wb, maxLines: maxLines)
+                                                             lineWidth: CGFloat(boxW), lineHeight: lh, letterSpacing: ls, wordBreak: wb, maxLines: maxLines,
+                                                             wordSpacing: ws2, textIndent: ind2)
             let prevH = measures["\(id)"]?["height"] ?? 0
             let prevBaseline = measures["\(id)"]?["baseline"] ?? 0   // ★B-T1：基线不随折行变（首行基线）
             if Double(sz.height) > prevH + 0.5 {

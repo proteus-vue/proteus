@@ -54,7 +54,8 @@ static inline double lineHeightDesignPx(const std::string& token, double fontSiz
 static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, const std::string& fontFamily,
                                  const std::string& fontStyle = "", bool tabular = false,
                                  int decoration = 0, const std::string& decoStyle = "",
-                                 uint32_t decoColor = 0, double decoThicknessScale = 0.0) {
+                                 uint32_t decoColor = 0, double decoThicknessScale = 0.0,
+                                 double wordSpacingPx = 0.0) {
     int wi = fontWeight / 100 - 1;
     if (wi < 0) wi = 0; else if (wi > 8) wi = 8;
     OH_Drawing_SetTextStyleFontWeight(tstyle, wi);
@@ -94,6 +95,10 @@ static inline void applyTextFont(OH_Drawing_TextStyle* tstyle, int fontWeight, c
         OH_Drawing_SetTextStyleDecorationStyle(tstyle, ds);
     }
     if (decoThicknessScale > 0.0) OH_Drawing_SetTextStyleDecorationThicknessScale(tstyle, decoThicknessScale);
+    // ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：词间距（物理 px，可负）。
+    //   鸿蒙有**原生**词距 API（OH_Drawing_SetTextStyleWordSpacing，自 API 12）⇒ 不做近似。
+    //   ★与字距的区别：LetterSpacing 作用于每个字符，WordSpacing 只作用于词间空白（与 CSS 语义一致）。
+    if (wordSpacingPx != 0.0) OH_Drawing_SetTextStyleWordSpacing(tstyle, wordSpacingPx);
 }
 
 /// 单行度量（物理 px）：`*outW/*outH` = 最长行宽 / 行盒高（同 iOS `measureText` / Android `measureSingle`）。
@@ -104,7 +109,8 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
                                      int* outLines = nullptr, double* outBaseline = nullptr,
                                      const std::string& fontStyle = "", bool tabular = false,
                                      int decoration = 0, const std::string& decoStyle = "",
-                                     uint32_t decoColor = 0, double decoThicknessScale = 0.0) {
+                                     uint32_t decoColor = 0, double decoThicknessScale = 0.0,
+                                     double wordSpacingPx = 0.0, double textIndentPx = 0.0) {
     *outW = 0;
     *outH = 0;
     if (outLines != nullptr) *outLines = 0;
@@ -115,7 +121,7 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
     OH_Drawing_TypographyStyle* ts = OH_Drawing_CreateTypographyStyle();
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
-    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle, tabular, decoration, decoStyle, decoColor, decoThicknessScale);   // ★唯一实现（字重/字族/斜体/等宽数字/装饰，与绘制同源）
+    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle, tabular, decoration, decoStyle, decoColor, decoThicknessScale, wordSpacingPx);   // ★唯一实现（字重/字族/斜体/等宽数字/装饰/词距，与绘制同源）
     // ★批次 20：字距（物理 px）——影响文本宽度，必须进度量
     if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
@@ -126,6 +132,9 @@ static inline void measureTextTypoPx(const std::string& text, double fontPx, dou
         if (typo != nullptr) {
             OH_Drawing_TypographyLayout(typo, 10000.0);
             *outW = OH_Drawing_TypographyGetLongestLine(typo);
+            // ★★★批 B F3 收尾（2026-10-25）：单行路径的"首行"就是唯一行 ⇒ 缩进直接加进行内宽
+            //   （与 Web 真值一致：text-indent 占首行可用宽）。
+            if (textIndentPx > 0) *outW += textIndentPx;
             *outH = OH_Drawing_TypographyGetHeight(typo);
             if (outLines != nullptr) *outLines = (int)OH_Drawing_TypographyGetLineCount(typo);
             if (outBaseline != nullptr) *outBaseline = OH_Drawing_TypographyGetAlphabeticBaseline(typo);
@@ -145,7 +154,9 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
                                      int fontWeight = 400, const std::string& fontFamily = "",
                                      int* outLines = nullptr, const std::string& fontStyle = "", bool tabular = false,
                                      int decoration = 0, const std::string& decoStyle = "",
-                                     uint32_t decoColor = 0, double decoThicknessScale = 0.0) {
+                                     uint32_t decoColor = 0, double decoThicknessScale = 0.0,
+                                     const std::string& overflowWrap = "", double wordSpacingPx = 0.0,
+                                     double textIndentPx = 0.0) {
     *outW = 0; *outH = 0;
     if (outLines != nullptr) *outLines = 0;
     if (text.empty() || fontPx <= 0 || lineWidthPx <= 1.0) return;
@@ -156,11 +167,16 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
     // ★★★修（2026-10-08 · 用户抓出「鸿蒙案例C文字换行/不垂直居中」）：**绘制已显式 NORMAL，测量也必须 NORMAL**——
     //   否则测量按鸿蒙默认断词在**数字/字母边界**（"1fr"→"1"/"fr"）断开 ⇒ 文本节点被算成 2 行高（98px）
     //   ⇒ 与绘制（1 行）不一致 ⇒ 节点虚高 + 顶对齐（不垂直居中）。两处断词策略必须一致。
+    // ★★★批 B F3 收尾（2026-10-25）：`overflow-wrap: break-word / anywhere` ⇒ **允许**长词按盒宽折断。
+    //   鸿蒙原生枚举：NORMAL=0（词边界断、长词溢出）/ BREAK_ALL=1 / **BREAK_WORD=2**（超宽词才折）。
+    //   ★BREAK_WORD 正是 CSS `overflow-wrap: break-word` 的同义语义（只在"整词放不下"时才断）。
+    const bool wrapBreakWord = (overflowWrap == "break-word" || overflowWrap == "anywhere");
     if (wordBreak == "break-all") OH_Drawing_SetTypographyTextWordBreakType(ts, 1);
+    else if (wrapBreakWord) OH_Drawing_SetTypographyTextWordBreakType(ts, 2); // WORD_BREAK_TYPE_BREAK_WORD
     else OH_Drawing_SetTypographyTextWordBreakType(ts, 0); // WORD_BREAK_TYPE_NORMAL
     OH_Drawing_TextStyle* tstyle = OH_Drawing_CreateTextStyle();
     OH_Drawing_SetTextStyleFontSize(tstyle, fontPx);
-    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle, tabular, decoration, decoStyle, decoColor, decoThicknessScale);   // ★唯一实现（与绘制同源）
+    applyTextFont(tstyle, fontWeight, fontFamily, fontStyle, tabular, decoration, decoStyle, decoColor, decoThicknessScale, wordSpacingPx);   // ★唯一实现（与绘制同源）
     if (letterSpacingPx != 0) OH_Drawing_SetTextStyleLetterSpacing(tstyle, letterSpacingPx);
     OH_Drawing_TypographyCreate* handler = OH_Drawing_CreateTypographyHandler(ts, fc);
     if (handler != nullptr) {
@@ -171,6 +187,16 @@ static inline void measureTextWrappedTypoPx(const std::string& text, double font
             OH_Drawing_TypographyLayout(typo, lineWidthPx);
             *outW = OH_Drawing_TypographyGetLongestLine(typo);
             *outH = OH_Drawing_TypographyGetHeight(typo);
+            // ★★★批 B F3 收尾（2026-10-25）：首行缩进（`OH_Drawing_TypographySetIndents`，API 12+）。
+            //   ★必须在 Layout **之后**设置（该 API 的语义是按已排版结果调整缩进）；
+            //     设置后 AddText 的行宽已按缩进重算 ⇒ 再取一次 LongestLine/Height 覆盖。
+            if (textIndentPx > 0) {
+                const float ind[1] = { (float) textIndentPx };
+                OH_Drawing_TypographySetIndents(typo, 1, ind);
+                *outW = OH_Drawing_TypographyGetLongestLineWithIndent(typo);
+                *outH = OH_Drawing_TypographyGetHeight(typo);
+                if (outLines != nullptr) *outLines = (int)OH_Drawing_TypographyGetLineCount(typo);
+            }
             // ★★★返回**真实行数**（2026-10-08 · 用户抓出「鸿蒙案例 C 文字溢出盒外」）：
             //   宿主此前用 `hpx / 单行高` **反推**行数——但含 `\n` 的文本，`measureTextTypoPx`（宽 10000）
             //   本身就返回**多行高** ⇒ 比值恒 ≈ 1 ⇒ 行数被判 1 ⇒ 盒高只算一行 ⇒ 第二行**溢出盒外**。

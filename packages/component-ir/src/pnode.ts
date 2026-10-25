@@ -144,6 +144,16 @@ export interface TextProps {
   maxLines?: number
   textOverflow?: 'clip' | 'ellipsis'
   whiteSpace?: 'normal' | 'nowrap' | 'pre-wrap'
+  /**
+   * ★★★批 B F3 收尾三项（2026-10-25 · CSS Text · 三项都是**继承**属性）：
+   * · overflowWrap：`normal`（初值）= 长不可断词整体溢出；`break-word` / `anywhere` = 按盒宽折断。
+   *   ★`word-wrap` 是旧别名，编译期归一到本字段（同一语义只有一条路径）。
+   * · textIndent：首行缩进（px；只作用于**首行**）。百分比需包含块宽 ⇒ 编译期诊断跳过。
+   * · wordSpacing：词间距（px，**可为负**——紧排是合法 CSS）。
+   */
+  overflowWrap?: 'normal' | 'break-word' | 'anywhere'
+  textIndent?: ResolvedLength
+  wordSpacing?: ResolvedLength
 }
 
 /**

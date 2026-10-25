@@ -105,6 +105,26 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
       <text id="case-decoration" class="deco-underline">下划线链接</text>
       <text id="case-color" class="col-brand">品牌色文本</text>
     </view>
+
+    <!-- I · 批 B 收尾：text-indent / word-spacing / overflow-wrap（基准 = Web） -->
+    <text class="cc-sec">I · text-indent / word-spacing / overflow-wrap</text>
+    <view class="cc-card">
+      <view class="ti-wrap">
+        <text id="case-indent" class="ti-indent">首行缩进两字宽</text>
+      </view>
+      <view class="ti-wrap">
+        <text id="case-indent-none" class="ti-none">未声明缩进的同段落对照基线</text>
+      </view>
+      <text id="case-word-space-wide" class="wsp-wide">wide word spacing</text>
+      <text id="case-word-space-tight" class="wsp-tight">tight word spacing</text>
+      <text id="case-word-space-none" class="wsp-none">normal word spacing</text>
+      <view class="ow-box">
+        <text id="case-overflow-wrap" class="ow-wrap">abcdefghijklmnopqrstuvwx</text>
+      </view>
+      <view class="ow-box">
+        <text id="case-overflow-normal" class="ow-normal">abcdefghijklmnopqrstuvwx</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -158,4 +178,24 @@ const lhText = '第一行文本\n第二行文本（行高 28px）'
 .dk-double { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline; text-decoration-style: double; text-decoration-color: #5b5bd6; }
 .dk-thick { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline; text-decoration-color: #d64545; text-decoration-thickness: 3px; }
 .dk-short { display: block; font-size: 15px; color: #1a1c22; text-decoration: underline 2px dashed #5b5bd6; }
+/* ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web 真 Chromium 实测）：
+   · text-indent：只缩**首行**（后续行靠左基线）——与 `.ti-none` 对照看首行起点差异。
+   · word-spacing：只改**词间空白**，字符本身间距不变（与 letter-spacing 的区别看这里）。
+   · overflow-wrap：`break-word` ⇒ 长串按盒宽折断；`normal`（对照）⇒ 长串整体溢出（Web 真值）。 */
+.ti-indent { display: block; font-size: 14px; line-height: 22px; color: #1a1c22; text-indent: 28px; white-space: normal; }
+.ti-none { display: block; font-size: 14px; line-height: 22px; color: #4b5058; white-space: normal; }
+.wsp-wide { display: block; font-size: 15px; color: #1a1c22; word-spacing: 8px; }
+.wsp-tight { display: block; font-size: 15px; color: #1a1c22; word-spacing: -2px; }
+.wsp-none { display: block; font-size: 15px; color: #4b5058; }
+.ow-wrap { display: block; font-size: 14px; line-height: 22px; color: #5b5bd6; overflow-wrap: break-word; white-space: normal; }
+.ow-normal { display: block; font-size: 14px; line-height: 22px; color: #d64545; overflow-wrap: normal; white-space: normal; }
+/* ★★★真机取证的形态约束（2026-10-25）：**多行**文本放在卡片里必须包一层全宽 view ——
+   直接作为 `display:flex; flex-direction:column` 卡片的子节点时 Android 端渲染空白
+   （既有缺陷；既有 text 页 case-normal 就是靠这层 view 正常折行渲染的）。 */
+/* ★按 text.vue 的 case-normal 同款形态（真机验证过能渲染多行长中文）：
+   容器给出**显式宽度与最小高**，文本显式 `white-space: normal` + `display: block`。 */
+.ti-wrap { display: flex; flex-direction: column; width: 100%; min-height: 24px; }
+/* ★窄容器（90px）+ 一个放不下的 24 字符无空格串：
+   `break-word` ⇒ 折断成 2 行；`normal` ⇒ 整串溢出右边界（Web 真值，实测 scrollWidth 211 > 100）。 */
+.ow-box { display: flex; flex-direction: column; width: 90px; min-height: 22px; }
 </style>

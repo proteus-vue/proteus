@@ -246,6 +246,10 @@ function styleOf(el: Element, win: Window): NormalizedStyle {
     ['flex-wrap', 'flexWrap'], ['align-content', 'alignContent'],
     ['white-space', 'whiteSpace'],   // ★★补齐（2026-10-05 · whiteSpace 进 semantic 时的四同步债务）
     ['word-break', 'wordBreak'],     // ★★★word-break 项（2026-10-06）：行内断词策略（原样收录）
+    // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（关键字）/ 首行缩进 + 词间距（px 串）
+    ['overflow-wrap', 'overflowWrap'],
+    ['text-indent', 'textIndent'],
+    ['word-spacing', 'wordSpacing'],
     // ★★★背景定位家族（2026-10-07）：size/position/repeat（浏览器 computed 原样小写收录）
     ['background-size', 'backgroundSize'],
     ['background-position', 'backgroundPosition'],

@@ -221,6 +221,30 @@ public final class ProteusTextPlatform {
     }
 
     /**
+     * ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：`word-spacing` 的**版本门**。
+     *   `Paint.setWordSpacing` 是 **API 29** 才有的（本仓 minSdk = 24）。
+     *   ⇒ 低版本**如实不生效**并只告警一次（logcat），不静默近似（不用 ScaleXSpan 假装）。
+     *   ★为什么不用 ScaleXSpan 近似：它横向缩放**整段字形**（字形被压扁），与词间距语义不同。
+     */
+    public static final int WORD_SPACING_MIN_API = 29;
+    private static boolean wordSpacingWarned = false;
+    /** 是否支持 word-spacing（探针可读；低版本 = false 且已告警） */
+    /** ★批 B F3 收尾：把词距应用到 paint（版本门在此——API 29 以下如实跳过并告警一次）。 */
+    public static void applyWordSpacing(android.text.TextPaint tp, float px) {
+        if (px != 0f && supportsWordSpacing()) tp.setWordSpacing(px);
+    }
+
+    public static boolean supportsWordSpacing() {
+        if (android.os.Build.VERSION.SDK_INT >= WORD_SPACING_MIN_API) return true;
+        if (!wordSpacingWarned) {
+            wordSpacingWarned = true;
+            android.util.Log.w("ProteusText", "word-spacing 需要 API " + WORD_SPACING_MIN_API +
+                    "（本机 " + android.os.Build.VERSION.SDK_INT + "）⇒ 本机该属性不生效（如实降级，不做字形缩放近似）");
+        }
+        return false;
+    }
+
+    /**
      * ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：**等宽数字**（`tabular-nums` → OpenType `tnum`）。
      *
      * <p>【为什么必须在本层】tnum 选的是**另一套数字字形**（字宽不同）⇒ 度量与绘制必须同源
@@ -238,6 +262,18 @@ public final class ProteusTextPlatform {
         tp.setTypeface(typefaceOf(familyRole, weight, italic, null));
         if (letterSpacingPx != 0f && sizePx > 0f) tp.setLetterSpacing(letterSpacingPx / sizePx);
         if (tabular) tp.setFontFeatureSettings("\"tnum\" 1");
+        return tp;
+    }
+
+    /**
+     * ★★★批 B F3 收尾三项（2026-10-25）：带**词间距**的 paint（单位 = 物理 px，与 CSS 一致）。
+     *   ★与字距不同：`setLetterSpacing` 的单位是 **em**（要除以字号），`setWordSpacing` 的单位是 **px**。
+     */
+    public static android.text.TextPaint paintForWithWordSpacing(float sizePx, int weight, String familyRole,
+                                                                float letterSpacingPx, boolean italic, boolean tabular,
+                                                                float wordSpacingPx) {
+        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic, tabular);
+        if (wordSpacingPx != 0f && supportsWordSpacing()) tp.setWordSpacing(wordSpacingPx);
         return tp;
     }
 
@@ -302,15 +338,41 @@ public final class ProteusTextPlatform {
     public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
                                          float letterSpacingPx, String wordBreak, int lineClamp,
                                          float boxW, float lineHeightPx, boolean italic, boolean tabular) {
+        return measureWrapped(text, sizePx, weight, familyRole, letterSpacingPx, wordBreak, lineClamp,
+                boxW, lineHeightPx, italic, tabular, 0f, null, 0f);
+    }
+
+    /**
+     * ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：带 **词间距 / 断词溢出 / 首行缩进** 的折行度量。
+     * · wordSpacingPx：词间距（物理 px；影响行宽 ⇒ 影响折行点，必须进度量）
+     * · overflowWrap：`break-word` / `anywhere` ⇒ **允许**长词按盒宽折断；`normal`（缺省）⇒ 维持
+     *   「无断点长串溢出盒宽 ⇒ 单行溢出」的既有判据（= Web normal 的长词整体溢出）。
+     * · textIndentPx：首行缩进（首行可用宽 = 盒宽 − 缩进；Web 真值：缩进占首行、后续行不占）。
+     * ★度量与绘制同源：宿主 mkCmd / applyWrapRemeasure 与本方法共用同一判据。
+     */
+    public static float[] measureWrapped(String text, float sizePx, int weight, String familyRole,
+                                         float letterSpacingPx, String wordBreak, int lineClamp,
+                                         float boxW, float lineHeightPx, boolean italic, boolean tabular,
+                                         float wordSpacingPx, String overflowWrap, float textIndentPx) {
         String mt = applyWordBreak(text, wordBreak);
-        android.text.TextPaint tp = paintFor(sizePx, weight, familyRole, letterSpacingPx, italic, tabular);
-        // ★无断点长串 + 溢出盒宽（normal）⇒ 单行溢出（不增长——与宿主 mkCmd 同步）
-        if (!"break-all".equals(wordBreak) && isUnbreakableToken(text) && tp.measureText(text) > boxW + 0.5f) {
+        android.text.TextPaint tp = paintForWithWordSpacing(sizePx, weight, familyRole, letterSpacingPx, italic, tabular, wordSpacingPx);
+        // ★无断点长串 + 溢出盒宽（normal 且未声明 overflow-wrap 的折断值）⇒ 单行溢出（与宿主 mkCmd 同步）
+        final boolean allowBreakLongWord = "break-word".equals(overflowWrap) || "anywhere".equals(overflowWrap);
+        if (!allowBreakLongWord && !"break-all".equals(wordBreak) && isUnbreakableToken(text) && tp.measureText(text) > boxW + 0.5f) {
             return null;
+        }
+        // ★★★批 B F3 收尾（2026-10-25）：首行缩进 = `LeadingMarginSpan.Standard`（StaticLayout 原生消费——
+        //   首行按 first 缩进、其余行按 rest；本仓只有"首行缩进"语义 ⇒ rest = 0）。
+        java.lang.CharSequence measured = mt;
+        if (textIndentPx != 0f && mt.length() > 0) {
+            android.text.SpannableString ss = new android.text.SpannableString(mt);
+            ss.setSpan(new android.text.style.LeadingMarginSpan.Standard(Math.round(textIndentPx), 0),
+                    0, mt.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            measured = ss;
         }
         android.text.StaticLayout.Builder slb = android.text.StaticLayout.Builder
                 // I2-ALLOW: 文本**测量**宽（StaticLayout 需整型像素宽；测量回执走 remeasure 通道，非绘制几何发射）
-                .obtain(mt, 0, mt.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
+                .obtain(measured, 0, measured.length(), tp, Math.max(1, (int) Math.ceil(boxW)))
                 .setIncludePad(false);
         if (lineClamp > 0) {
             slb.setEllipsize(android.text.TextUtils.TruncateAt.END);

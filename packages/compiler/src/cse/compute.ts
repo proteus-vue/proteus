@@ -35,6 +35,7 @@ import type { CseNode, CseRule, CseStyleSheet, CseTraceStep, CseWinner, CseCompu
 import { foldCalcArithmetic } from '../calc-fold'
 import { isEnvVarName, type EnvVarName } from '@proteus-vue/contracts/env-vars'
 import { expandShorthandDecl } from './shorthand'
+import { canonicalProp } from './parse'
 import { buildIndex, candidatesFor, chainMatches, contextOf, type MatchContext, type RuleIndex } from './match'
 import { cascade, layerContextOf, type CascadeCandidate, type LayerContext } from './cascade'
 import { CSS_NAMED_COLORS } from './colors-named'
@@ -71,7 +72,7 @@ const ENUM_PROPS = new Set([
   // ★★★grid-auto-flow 项（2026-10-08）：类 grid 容器的自动放置（关键字枚举）
   'grid-auto-flow',
   // ★★★word-break 项（2026-10-06）：行内断词策略（关键字枚举，小写归一）
-  'word-break',
+  'word-break', 'overflow-wrap',   // ★批 B F3 加 overflow-wrap
   // ★★★背景定位家族（2026-10-07）：size/position/repeat（关键字/长度/百分比——字符串原样透传，仅归一空白）
   'background-size',
   'background-position',
@@ -79,7 +80,7 @@ const ENUM_PROPS = new Set([
 ])
 /** px-only 长度（CSS 不接受 %：border-width / 字距） */
 const PX_LENGTH_PROPS = new Set([
-  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'letter-spacing',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width', 'letter-spacing', 'text-indent', 'word-spacing',   // ★批 B F3：后两项 px-only
   // ★★★outline 族项（2026-10-08）：轮廓宽 + 偏移（偏移可为负）
   'outline-width', 'outline-offset',
   // font-size 单独处理（em/%/rem 均可绝对化）
@@ -112,6 +113,7 @@ export const CSE_INHERITED_PROPS = new Set([
   'text-transform',
   // ★★★font-variant-numeric 项（2026-10-18 · 批 B F3）：CSS Fonts 继承属性（数字形态）
   'font-variant-numeric',
+  'text-indent', 'word-spacing', 'overflow-wrap',   // ★批 B F3：CSS 继承属性（与 App 折叠面同集）
 ])
 
 /** 各属性 initial 值（`initial`/`unset` 需要；未列 ⇒ initial 不可用（如实记 diagnostic）） */
@@ -137,7 +139,7 @@ const INITIAL_VALUES: Record<string, string> = {
   visibility: 'visible',
   'white-space': 'normal',
   // ★★★word-break 项（2026-10-06）：CSS initial = normal（继承属性）
-  'word-break': 'normal',
+  'word-break': 'normal', 'overflow-wrap': 'normal', 'word-spacing': 'normal', 'text-indent': '0px',   // ★批 B F3
   'margin-top': '0px', 'margin-right': '0px', 'margin-bottom': '0px', 'margin-left': '0px',
   'padding-top': '0px', 'padding-right': '0px', 'padding-bottom': '0px', 'padding-left': '0px',
   opacity: '1',
@@ -572,7 +574,7 @@ export function computeTree(roots: CseNode[], sheet: CseStyleSheet, opts: Comput
       }
       for (let i = 0; i < inline.length; i++) {
         const d = inline[i]!
-        candidates.push({ rule: inlineRule, decl: { prop: d.prop, value: d.value, important: false }, declIdx: i })
+        candidates.push({ rule: inlineRule, decl: { prop: canonicalProp(d.prop.toLowerCase()), value: d.value, important: false }, declIdx: i })
       }
     }
     const winners = cascade(candidates, layerCtx)
@@ -985,7 +987,7 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     // ★★★place-items/justify-items 项（2026-10-08）：网格容器内子项行内轴对齐（CSE 直通 IR 字段）
     'justify-items': 'justifyItems',
     // ★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text）：行内断词策略（继承属性；CSE 直通同名 IR 字段）
-    'word-break': 'wordBreak',
+    'word-break': 'wordBreak', 'overflow-wrap': 'overflowWrap',   // ★批 B F3 加 overflow-wrap
     // ★★★背景定位家族（2026-10-07）：CSE 直通同名 IR 字段（字符串）
     'background-size': 'backgroundSize',
     'background-position': 'backgroundPosition',
@@ -1005,7 +1007,7 @@ function mapToIrField(prop: string, val: CssComputedValue): { field: string; val
     'padding-top': 'paddingTop', 'padding-right': 'paddingRight', 'padding-bottom': 'paddingBottom', 'padding-left': 'paddingLeft',
     top: 'top', right: 'right', bottom: 'bottom', left: 'left',
     'row-gap': 'rowGap', 'column-gap': 'columnGap',
-    'outline-width': 'outlineWidth', 'outline-offset': 'outlineOffset',
+    'outline-width': 'outlineWidth', 'outline-offset': 'outlineOffset', 'text-indent': 'textIndent', 'word-spacing': 'wordSpacing',   // ★批 B F3
   }
   const COLOR_IR: Record<string, string> = {
     color: 'color',

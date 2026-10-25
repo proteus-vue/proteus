@@ -456,6 +456,12 @@ struct TextDrawSpec {
     std::string whiteSpace;
     /** ★★★word-break 项（2026-10-06）：行内断词策略（原样字符串：normal/break-all/break-word；空=未声明）。 */
     std::string wordBreak;
+    /** ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：
+     *  · overflowWrap：normal/break-word/anywhere（空=未声明 ⇒ normal）。
+     *  · wordSpacing / textIndent：物理 px（0=未声明）。 */
+    std::string overflowWrap;
+    double wordSpacing = 0;
+    double textIndent = 0;
     /** ★★全端对齐批：溢出裁切（overflow:hidden 且非 ellipsis）——nowrap 文本超盒宽时裁到盒。 */
     int clipText = 0;
     /** ★批次 16（CSS 兼容对齐 · 以 Web 为基准）：`text-overflow` 是否 ellipsis（单行溢出以 … 截断）。
@@ -942,7 +948,8 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             //   此前这里内联设三项、测量另走 applyTextFont ⇒ 两套实现，加能力必漏一半
             //   （实证：`font-style` 只加到测量侧时，绘制端永远不倾斜）。
             applyTextFont(tstyle, spec->fontWeight, spec->family, spec->fontStyle, spec->tabular,
-                          (spec->textDecoration != 0 ? spec->textDecoration : 0), spec->decoStyle, spec->decoColor, spec->decoThicknessScale);
+                          (spec->textDecoration != 0 ? spec->textDecoration : 0), spec->decoStyle, spec->decoColor, spec->decoThicknessScale,
+                          spec->wordSpacing);   // ★★★批 B F3 收尾：词间距（与测量同源）
             // ★批次 35：文本装饰（0=none/1=underline/4=line-through）
             if (spec->textDecoration != 0) OH_Drawing_SetTextStyleDecoration(tstyle, spec->textDecoration);
             // （字体角色已在上面 applyTextFont 内按角色→字族映射，见平台层）
@@ -982,6 +989,10 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
             //   break-all ⇒ BREAK_ALL（任意字符断）；normal/缺省 ⇒ 不设（引擎默认 = 词边界断）。
             if (spec->wordBreak == "break-all") {
                 OH_Drawing_SetTypographyTextWordBreakType(ts, 1); // WORD_BREAK_TYPE_BREAK_ALL
+            } else if (spec->overflowWrap == "break-word" || spec->overflowWrap == "anywhere") {
+                // ★★★批 B F3 收尾（2026-10-25）：`overflow-wrap: break-word/anywhere` ⇒ BREAK_WORD（超宽词才折，
+                //   正是 CSS 该值的语义）。★与测量侧 measureTextWrappedTypoPx 同判据（否则折行数不一致 ⇒ 盒高错）。
+                OH_Drawing_SetTypographyTextWordBreakType(ts, 2); // WORD_BREAK_TYPE_BREAK_WORD
             } else {
                 // ★★★修（2026-10-08 · 用户抓出「鸿蒙案例C文字换行」）：**显式 NORMAL 断词**——
                 //   鸿蒙 Typography **默认**断词类型会在**数字/字母边界**（如 "1fr" → "1"/"fr"）断开，
@@ -1003,6 +1014,14 @@ static void drawChannelsAndText(OH_Drawing_Canvas* canvas, const TextDrawSpec* s
                     const double contentW = spec->w - spec->padL - spec->padR;
                     const double layoutW = contentW > 1.0 ? contentW : (spec->w > 1.0 ? spec->w : 10000.0);
                     OH_Drawing_TypographyLayout(typo, layoutW);
+                    // ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：**首行缩进**
+                    //   （`OH_Drawing_TypographySetIndents`，API 12+）。只缩首行；其余行不缩（本仓只有
+                    //   首行缩进语义）。★必须在 Layout **之后**设置（语义 = 按已排版结果调缩进），
+                    //   且与测量侧 measureTextWrappedTypoPx 同一次 API 调用 ⇒ 折行结果一致。
+                    if (spec->textIndent > 0) {
+                        const float ind[1] = { (float) spec->textIndent };
+                        OH_Drawing_TypographySetIndents(typo, 1, ind);
+                    }
                     // ★批次 13（CSS 半行距居中）：声明行高 ⇒ 字形内容区在行盒内垂直居中
                     //   （typoH 为字形内容高；offset = (盒高 − 字形高)/2）；未声明 ⇒ 顶对齐（既有）。
                     double offY = 0.0;
@@ -2260,6 +2279,10 @@ static int renderCommandsImpl(const char* jsonCStr, bool fromProbe) {
             { std::string wsV; jsonString(it, "whiteSpace", &wsV); spec->whiteSpace = wsV; }
             // ★★★word-break 项（2026-10-06）：断词策略（渲染侧据此设 TypographyTextWordBreakType）
             { std::string wbV; jsonString(it, "wordBreak", &wbV); spec->wordBreak = wbV; }
+            // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出 / 词间距 / 首行缩进
+            { std::string owV; jsonString(it, "overflowWrap", &owV); spec->overflowWrap = owV; }
+            { double wsV = 0; jsonNumber(it, "wordSpacing", &wsV); spec->wordSpacing = wsV; }
+            { double tiV = 0; jsonNumber(it, "textIndent", &tiV); spec->textIndent = tiV; }
             { double ct = 0; jsonNumber(it, "clipText", &ct); spec->clipText = ct > 0 ? 1 : 0; }
             spec->w = w;
             spec->h = h;

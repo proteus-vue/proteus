@@ -71,6 +71,12 @@ const GRID_AUTO_FLOW = ['row', 'column', 'dense', 'column dense']
  */
 const WORD_BREAK = ['normal', 'break-all']
 /**
+ * ★★★批 B F3 收尾三项（2026-10-25）：`overflow-wrap` 封闭集（CSS Text 3 全集）。
+ *   `normal`（初值）= 长不可断词整体溢出；`break-word` / `anywhere` = 按盒宽折断。
+ *   ★`word-wrap` 是旧别名，编译期归一到同键（本表只认 canonical 名）。
+ */
+const OVERFLOW_WRAP = ['normal', 'break-word', 'anywhere']
+/**
  * ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：**背景图层的图像盒**尺寸/位置/平铺。
  *   值集为**声明形态**（长度/百分比/关键字）——真正的几何解析（pos% 减图尺寸、repeat 平铺相位）在宿主/snapshot 侧。
  *   size：单/双值（长度或百分比；auto）；position：1-2 个（关键字/长度/百分比）；repeat：关键字枚举。
@@ -109,6 +115,11 @@ export const PROP_TYPES = {
   OutlineWidth: isLength,
   OutlineOffset: (v: unknown): boolean => typeof v === 'number' || (typeof v === 'string' && /^-?\d*\.?\d+(px|rpx|%)?$/.test(v.trim())),
   WordBreak: isEnum(WORD_BREAK),
+  // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（枚举）/ 首行缩进 + 词间距（px 长度；
+  //   ★与既有的 LetterSpacing 同一守卫口径——词距可为负，isLength 已允许负值）
+  OverflowWrap: isEnum(OVERFLOW_WRAP),
+  TextIndent: isLength,
+  WordSpacing: isLength,
   BackgroundSize: isBgSize,
   BackgroundPosition: isBgPosition,
   BackgroundRepeat: isEnum(BACKGROUND_REPEAT),

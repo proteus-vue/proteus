@@ -199,7 +199,9 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
           field === 'borderWidth' || field === 'borderRadius' || field === 'borderRadiusPct' ||
           field === 'lineClamp' ||
           // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线宽（px 数值）
-          field === 'textDecorationThickness') {
+          field === 'textDecorationThickness' ||
+          // ★★★批 B F3 收尾三项（2026-10-25）：首行缩进 / 词间距（px 数值；词距可负）
+          field === 'textIndent' || field === 'wordSpacing') {
         put(field, value, value)
         continue
       }
@@ -263,6 +265,8 @@ export function mapStyleIRToApp(fields: Record<string, unknown>): AppMappingResu
         'gridAutoFlow',
         // ★★★word-break 项（2026-10-06）：行内断词策略（字符串枚举，透传宿主文本引擎）
         'wordBreak',
+        // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（字符串枚举，透传宿主文本引擎）
+        'overflowWrap',
         // ★★★背景定位家族（2026-10-07）：字符串形态（宿主解析几何）
         'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
         // ★★★outline 族项（2026-10-08）：线型（枚举字符串）

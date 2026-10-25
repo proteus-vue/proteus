@@ -103,7 +103,11 @@ const VALUE_TYPE_BY_LEVEL = {
   OutlineWidth: 'length',
   OutlineOffset: 'length',
   // ★★★word-break 项（2026-10-06）：行内断词策略值类型（与 runtime PROP_TYPES.WordBreak 同集）
-  WordBreak: 'enum',  // ★★★背景定位家族（2026-10-07）：size/position/repeat 值类型（与 runtime PROP_TYPES 同集）
+  WordBreak: 'enum',
+  // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（枚举）/ 首行缩进 + 词间距（长度）
+  OverflowWrap: 'enum',
+  TextIndent: 'length',
+  WordSpacing: 'length',  // ★★★背景定位家族（2026-10-07）：size/position/repeat 值类型（与 runtime PROP_TYPES 同集）
   BackgroundSize: 'enum',
   BackgroundPosition: 'enum',
   BackgroundRepeat: 'enum',

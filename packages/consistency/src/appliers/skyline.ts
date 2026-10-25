@@ -100,6 +100,17 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
 
   for (const [field, value] of Object.entries(fields)) {
     if (value === undefined || value === null) continue
+    // ★★★批 B F3 收尾三项（2026-10-25）：**Skyline 官方样式表未收录的字段，判定必须先于值族分支**。
+    //   【为什么放在最前】`text-indent` 在 IR 里是 ResolvedLength ⇒ 会被下面的「长度族」通用分支
+    //   直接透传成 `text-indent: 24rpx` ⇒ 写在值族内部的 drop 分支**永远不可达**（死代码），
+    //   而 css:verify 会据此判「可表达」= **假绿**。判据顺序本身是判据的一部分。
+    //   · text-indent：官方表无（文本族仅 white-space/text-overflow/word-break/word-spacing/letter-spacing），
+    //     且无编译期模拟通道（首行缩进是排版几何）⇒ 引擎锁死；主承载 = Web/App。
+    //   ★overflow-wrap 是字符串族、不受该分支影响，其 drop 保留在字符串族内（附方向性说明）。
+    if (field === 'textIndent') {
+      drop(field, value, 'Skyline 官方样式表无 text-indent（首行缩进该端无通道；主承载 = Web/App）')
+      continue
+    }
     // 长度族
     if (isLength(value)) {
       const css = renderLength(value, viewport)
@@ -135,6 +146,12 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
         put(field, kebab(field), `${toRpx(value, viewport)}rpx`)
         continue
       }
+      // ★★★批 B F3 收尾三项（2026-10-25）：`word-spacing` 是 Skyline 官方表**收录**的属性
+      //   （`normal / <length>`；已核 properties 表）⇒ px 量按 rpx 透传（与 letterSpacing 同款）。
+      if (field === 'wordSpacing') {
+        put(field, 'word-spacing', `${toRpx(value, viewport)}rpx`)
+        continue
+      }
       if (field === 'fontSize' || field === 'letterSpacing' || field === 'lineHeight' || field === 'borderWidth' || field === 'borderRadius') {
         // 字号/字距/行高/边框/圆角：px 量 → rpx
         put(field, kebab(field), `${toRpx(value, viewport)}rpx`)
@@ -154,6 +171,16 @@ export function mapStyleIRToSkyline(fields: Record<string, unknown>, opts: Skyli
       continue
     }
     if (typeof value === 'string') {
+      // ★★★批 B F3 收尾三项（2026-10-25）：`overflow-wrap` —— **如实登记为引擎边界**。
+      //   Skyline 官方样式属性表**未收录**（已核 properties 表：文本族只有 white-space / text-overflow /
+      //   word-break / word-spacing / letter-spacing）。
+      //   ★方向性差异必须写明（不是笼统的"不支持"）：Skyline 文本引擎**默认就断长词**（≈ break-word），
+      //     因此 break-word / anywhere 的**观感**与该端默认一致，唯 `normal`（长词整体溢出）表达不了。
+      //     ⇒ 这里 drop 的是"属性本身"；主承载端 = Web（浏览器原生）/ App（自研宿主）。
+      if (field === 'overflowWrap') {
+        drop(field, value, 'Skyline 官方样式表无 overflow-wrap（该端文本引擎默认即断长词 ≈ break-word；normal 的长词溢出语义表达不了）')
+        continue
+      }
       // ★★★text-transform 项（2026-10-18 · 批 B F3）：**如实登记为引擎边界**（不假装可表达）。
       //   Skyline 官方样式属性表**无 text-transform**（已核官方文档：110 条属性里没有它）。
       //   ★本仓的补偿：MP 产物在**编译期**变换**静态文本**（动态文本编译期如实诊断）；

@@ -64,6 +64,13 @@ export type StylePropLevel =
   //   与 white-space 同轴（同属文本换行族）。四同步（INV-CE-07）：
   //   本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
   | 'WordBreak'
+  // ★★★批 B F3 收尾三项（2026-10-25 · CSS Text）：断词溢出 / 首行缩进 / 词间距——三项都是**继承**属性。
+  //   · OverflowWrap 值集 = normal / break-word / anywhere（`word-wrap` 旧别名在编译期归一到同键）
+  //   · TextIndent / WordSpacing 是 px-only 长度（百分比相对包含块宽，三端通道未统一 ⇒ 编译期诊断跳过）
+  //   四同步（INV-CE-07）：本表 + runtime PROP_TYPES/narrowing + compiler 静态校验 + 注册表 VALUE_TYPE_BY_LEVEL。
+  | 'OverflowWrap'
+  | 'TextIndent'
+  | 'WordSpacing'
   // ★★★背景定位家族（2026-10-07 · css:next background-position · 静态单层）：
   //   size/position/repeat 是「背景图/渐变定位」三件套（CSS Backgrounds 3）。
   //   值集 = **四端可表达子集**（MP/Web 原生直通；App 自绘按 Web 几何重写渐变端点/平铺）。
@@ -148,6 +155,10 @@ export const STYLE_PROP_LEVELS = {
   outlineOffset: 'OutlineOffset',
   // ★★★word-break 项（2026-10-06）：行内断词策略（normal/break-all/break-word；keep-all 等诊断跳过）
   wordBreak: 'WordBreak',
+  // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出 / 首行缩进 / 词间距（都是继承属性）
+  overflowWrap: 'OverflowWrap',
+  textIndent: 'TextIndent',
+  wordSpacing: 'WordSpacing',
   // ★★★背景定位家族（2026-10-07）：背景图/渐变的尺寸/位置/平铺（作用对象 = 背景图层的图像盒）
   backgroundSize: 'BackgroundSize',
   backgroundPosition: 'BackgroundPosition',

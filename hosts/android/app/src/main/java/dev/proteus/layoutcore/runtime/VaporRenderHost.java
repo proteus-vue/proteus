@@ -2240,7 +2240,7 @@ public final class VaporRenderHost {
             // ★HA0.5：折行度量抽到**平台适配层**（`ProteusTextPlatform.measureWrapped`，与 iOS `measureTextWrapped` 对称）；
             //   返回 null = 单行且无 clamp（与首遍等价，零操作）。断词/长串溢出/行高封顶都在平台层。
             float[] m2 = ProteusTextPlatform.measureWrapped(t, fs, mw, spec.optString("fontFamily", null), ls,
-                    spec.optString("wordBreak", null), clamp, boxW, lineHeightPxOf(spec, fs), italicOf(spec), tabularOf(spec));
+                    spec.optString("wordBreak", null), clamp, boxW, lineHeightPxOf(spec, fs), italicOf(spec), tabularOf(spec), (float) spec.optDouble("wordSpacing", 0), spec.optString("overflowWrap", null), (float) spec.optDouble("textIndent", 0));
             if (m2 == null) continue;
             JSONObject sz = new JSONObject();
             sz.put("width", m2[0]);
@@ -2499,7 +2499,7 @@ public final class VaporRenderHost {
                 android.text.TextPaint wtp = new android.text.TextPaint();
                 wtp.setTextSize(fs);
                 wtp.setTypeface(ProteusHostView.typefaceOf(spec.optString("fontFamily", null), fw, null));
-                if (ls != 0f && fs > 0f) wtp.setLetterSpacing(ls / fs);
+                if (ls != 0f && fs > 0f) wtp.setLetterSpacing(ls / fs); ProteusTextPlatform.applyWordSpacing(wtp, (float) spec.optDouble("wordSpacing", 0));
                 // ★★★word-break:normal（2026-10-09 · 全端一致）：**无断点长串**且宽 > 内容盒宽
                 //   ⇒ 单行溢出（= Web normal「不折长词」）——否则 Android StaticLayout 会硬折超宽行。
                 JSONObject padW0 = spec.optJSONObject("padding");
@@ -2508,7 +2508,7 @@ public final class VaporRenderHost {
                         : w;
                 if (cw0 < 1f) cw0 = w;
                 final boolean breakAll0 = "break-all".equals(spec.optString("wordBreak", null));
-                if (!breakAll0 && isUnbreakableToken(t) && wtp.measureText(t) > cw0 + 0.5f) {
+                if (!"break-word".equals(spec.optString("overflowWrap", null)) && !"anywhere".equals(spec.optString("overflowWrap", null)) && !breakAll0 && isUnbreakableToken(t) && wtp.measureText(t) > cw0 + 0.5f) {
                     multiLine = false;   // 单行溢出（不折行）
                 } else {
                     android.text.StaticLayout wsl = android.text.StaticLayout.Builder
@@ -2524,13 +2524,8 @@ public final class VaporRenderHost {
                     && "hidden".equals(spec.optString("overflow", null))
                     && !("ellipsis".equals(spec.optString("textOverflow", null)));
             { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, t, fs, textColor, radius, grad, glowSpec, maskSpec, fw, ta, bw, bc, shadowSpec, lh, ls, decor, wsWrap ? 0 : 1, multiLine, clipText, sideBorderOf(spec)); _c.lineClamp = clamp; _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow"));
-                // ★★★text-decoration 三兄弟项（2026-10-18 · 批 B F3）：装饰线颜色/线型/线宽
-                //   （0/0/0 = 未声明 ⇒ 原生实线 + 文字色 + 字体默认线宽，零行为变化）
-                { String dc = spec.optString("textDecorationColor", null); if (dc != null && !dc.isEmpty()) _c.decoColor = parseColor(dc); }
-                { String ds = spec.optString("textDecorationStyle", null);
-                  _c.decoStyle = "double".equals(ds) ? 1 : "dotted".equals(ds) ? 2 : "dashed".equals(ds) ? 3 : "wavy".equals(ds) ? 4 : 0; }
-                { double dt = spec.optDouble("textDecorationThickness", 0); if (dt > 0) _c.decoThicknessPx = (float) dt; }
-                applyTextPad(_c, spec); return _c; }
+                TextCmdSpec.applyPaintTails(_c, spec);   // ★装饰三兄弟 + 批 B F3 三项（抽取：TextCmdSpec）
+                _c.wordSpacingPx = (float) spec.optDouble("wordSpacing", 0); _c.overflowWrap = spec.optString("overflowWrap", null); _c.textIndentPx = (float) spec.optDouble("textIndent", 0); applyTextPad(_c, spec); return _c; }
         }
         { ProteusHostView.Cmd _c = new ProteusHostView.Cmd(x, y, w, h, color, null, 0f, 0, radius, grad, glowSpec, maskSpec, 400, 0, bw, bc, shadowSpec, 0f, 0f, 0, 0, false, false, sideBorderOf(spec)); _c.outline = parseOutline(spec); _c.textShadow = parseTextShadow(spec.optJSONObject("textShadow")); return _c; }
     }

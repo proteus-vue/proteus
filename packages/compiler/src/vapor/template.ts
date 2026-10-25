@@ -125,7 +125,7 @@ export const APP_ENUM_VALUES: Record<string, readonly string[]> = {
 //   判据 = contracts/layers.ts 的 `zIndexOf`（数值→语义层区间映射 + 越界诊断；SSOT）。
 //   ★LY001 立场不变（内联 style/:style 裸 z-index 仍编译期拦——那是"层级控制手段"的逃生口）；
 //     本条服务**类样式**里的 z-index（语料 66 处：路由层叠/壳骨架——合法且跨端必需）。
-export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'textDecorationColor', 'textDecorationStyle', 'textDecorationThickness', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
+export const APP_PAINT_FIELDS = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'fontStyle', 'textTransform', 'fontVariantNumeric', 'fontFamily', 'textAlign', 'lineHeight', 'textOverflow', 'letterSpacing', 'textDecoration', 'textDecorationColor', 'textDecorationStyle', 'textDecorationThickness', 'overflowWrap', 'textIndent', 'wordSpacing', 'visibility', 'borderRadius', 'borderColor', 'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'opacity', 'boxShadow', 'textShadow', 'transform', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'outlineWidth', 'outlineColor', 'outlineStyle', 'outlineOffset', 'zIndex'] as const
 const PAINT_FIELDS = new Set<string>(APP_PAINT_FIELDS)
 /**
  * ★批次 4（CSS 兼容对齐）：`text-align` 的**封闭集**（App 自绘文本在盒内的水平对齐）。
@@ -191,6 +191,8 @@ export const APP_INHERITABLE_FIELDS = ['color', 'fontSize', 'fontWeight', 'fontS
   //   文本子节点继承不到（Web/Skyline 由 CSS 引擎原生继承 ⇒ 跨端不一致）。★补 `whiteSpace` 同样纳入
   //   （white-space 批的潜在缺口，本次同族一并修正）。
   'whiteSpace', 'wordBreak',
+  // ★批 B F3 收尾（2026-10-25）：三项都是 CSS 继承属性（与 APP_INHERITABLE_FIELDS 同集）
+  'textIndent', 'wordSpacing', 'overflowWrap',
 ] as const
 /** ★批次 28：支持 `inherit` 关键字的字段集（可继承 + visibility）。 */
 const INHERIT_KEY_SET = new Set<string>([...APP_INHERITABLE_FIELDS, 'visibility'])
@@ -698,7 +700,9 @@ export function parseStaticStyle(
     // ★批次 9：`var()` 令牌折叠（在键/值解析**之前**——令牌可能承载整个值或一段）
     if (tokens) rawVal = substituteCssVars(rawVal, tokens)
     const markImportant = (engineKey: string): void => { if (important) importantOut?.add(engineKey) }
-    const key = kebabToCamel(rawKey)
+    const keyRaw0 = kebabToCamel(rawKey)
+    // ★批 B F3 收尾（2026-10-25）：`word-wrap` 是 `overflow-wrap` 旧别名（真 Chromium computed 相同）
+    const key = keyRaw0 === 'wordWrap' ? 'overflowWrap' : keyRaw0
     // ★批次 26/27（CSS 兼容对齐 · 以 Web 为基准）：**Web 默认值 / 重置声明** ⇒ 记录**默认值**（不诊断）。
     //   ★批次 27 修正：**不能直接 skip**——重置声明（如 `.b{border:none}`）必须**记录**默认值，
     //   否则覆盖不了低优先级的 `.a{border:1px solid}`（级联失效，实测过）。无 App 字段的（transform 等）⇒ 空记录。
@@ -1323,6 +1327,24 @@ export function parseStaticStyle(
           pushDiag('`' + rawKey + ': ' + rawVal + '` 未解析（支持 auto / from-font / px；百分比需按字号换算，三端通道未统一）——已跳过')
           continue
         }
+        out[key] = n; markImportant(key); continue
+      }
+      // ★批 B F3 收尾（2026-10-25 · 基准 = Web）：初值不发射（normal/0）；text-indent/word-spacing 是
+      //   px-only（百分比需包含块宽，三端通道未统一）；word-spacing 可负（紧排是合法 CSS）。
+      if (key === 'overflowWrap') {
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'normal') continue                        // 初值 ⇒ 不发射（零行为变化）
+        if (v !== 'break-word' && v !== 'anywhere') { pushDiag('style 里 `' + rawKey + ': ' + rawVal + '` 未支持（仅 normal / break-word / anywhere）——已跳过'); continue }
+        out.overflowWrap = v
+        markImportant('overflowWrap')
+        continue
+      }
+      if (key === 'textIndent' || key === 'wordSpacing') {
+        const v = rawVal.trim().toLowerCase()
+        if (v === 'normal' || v === '0' || v === '0px') continue
+        const n = numOf(rawVal)
+        if (n === undefined) { pushDiag('style 里 `' + rawKey + ': ' + rawVal + '` 未解析（支持 px / 数字；百分比相对包含块宽，本版不支持）——已跳过'); continue }
+        if (n === 0) continue
         out[key] = n; markImportant(key); continue
       }
       if (key === 'borderRadius') {

@@ -1,9 +1,9 @@
 # CSS Web 全量能力清单（自动生成——勿手改；生成器 scripts/gen-css-feature-inventory.mjs）
 
 > 总 949 项（property 651 · selector 144 · at-rule 19 · function 105 · unit 30）
-> 实现：**not-started** 518 · **excluded** 280 · **implemented** 150 · **partial** 1
-> 优先级：P2 114 · excluded 280 · done 150 · P1 405
-> ★**可推项（非已实现/非排除）**：519（其中 **P0 0**）
+> 实现：**not-started** 514 · **excluded** 280 · **implemented** 154 · **partial** 1
+> 优先级：P2 114 · excluded 280 · done 154 · P1 401
+> ★**可推项（非已实现/非排除）**：515（其中 **P0 0**）
 
 ## P0 —— 语料在用但未实现（真实需求，最优先）
 
@@ -85,7 +85,6 @@
 | `object-position` | CSS Images | not-started |
 | `order` | CSS Display | not-started |
 | `overflow-clip-margin` | CSS Overflow | not-started |
-| `overflow-wrap` | CSS Text | not-started |
 | `perspective` | CSS Transforms | not-started |
 | `perspective-origin` | CSS Transforms | not-started |
 | `place-content` | CSS Box Alignment | not-started |
@@ -94,5 +93,6 @@
 | `reading-order` | CSS Display | not-started |
 | `rotate` | CSS Transforms | not-started |
 | `scale` | CSS Transforms | not-started |
+| `scroll-margin-bottom` | CSS Scroll Snap | not-started |
 
 （P2 与 excluded 全量见 JSON；本 MD 只列推进面）

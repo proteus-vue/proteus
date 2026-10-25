@@ -220,6 +220,15 @@ function isStaticValueValid(level: string, value: unknown): boolean {
     // ★★★word-break 项（2026-10-06）：行内断词策略封闭集（与 runtime PROP_TYPES.WordBreak 同语义）
     case 'WordBreak':
       return ['normal', 'break-all'].indexOf(String(value)) >= 0
+    // ★★★批 B F3 收尾三项（2026-10-25）：overflow-wrap 封闭集（与 runtime PROP_TYPES.OverflowWrap 同语义）
+    case 'OverflowWrap':
+      return ['normal', 'break-word', 'anywhere'].indexOf(String(value)) >= 0
+    // ★首行缩进 / 词间距：px-only 长度（百分比需包含块宽——三端通道未统一 ⇒ 此处拦下，不静默）。
+    //   词距允许负值（紧排是合法 CSS，真 Chromium computed 为 -3px）；缩进允许负值（悬挂缩进）。
+    case 'TextIndent':
+      return typeof value === 'number' && Number.isFinite(value)
+    case 'WordSpacing':
+      return typeof value === 'number' && Number.isFinite(value)
     case 'Transform':
       return typeof value === 'string' && /^(translate|scale|rotate|skew)/i.test(value)
     case 'TransformOrigin':

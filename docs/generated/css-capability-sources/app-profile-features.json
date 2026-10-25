@@ -752,6 +752,42 @@
       "note": "★★★word-break 项（2026-10-06 · css:next P0·7× · CSS Text · 继承属性）：行内断词策略。值集 = 四端可表达子集（normal / break-all / break-word；keep-all/auto-phrase 诊断跳过）。语料 7 处（长串/代码块 break-all · p-rich-text break-word）。契约：新级别 WordBreak（四同步）；CSE 继承集（word-break 是继承属性）+ 展开映射；编译器 APP_LAYOUT_FIELDS + APP_INHERITABLE_FIELDS（补 white-space 同族）+ 折叠分支（透传宿主文本引擎，内核忽略该键）；consistency 链条（applier/snapshot/probes/coverage）。★承载端：Android StaticLayout setBreakStrategy / iOS CATextLayer lineBreakMode(byCharWrapping) / 鸿蒙 OH_Drawing_SetTypographyTextWordBreakType / MP wxss（官方表支持 normal/break-all）。★normal 断词对齐（2026-10-09）：App 三端（自绘）对「无断点长串且溢出盒宽」显式判为**单行溢出**（= Web normal「不折长词」）——Android `isUnbreakableToken`+单行绘制 / iOS `effectiveWrap`+跳过 CoreText / 鸿蒙 `WORD_BREAK_TYPE_NORMAL`；**MP/Skyline 引擎锁定**（恒软换行，具名豁免）。★诚实边界：keep-all（CJK 专用，Skyline 无、内核无对应）/ auto-phrase（实验）未支持（诊断跳过）；break-word 归一波 overflow-wrap 语义（主流实现等价）"
     },
     {
+      "id": "overflow-wrap",
+      "css": "overflow-wrap（长词折断策略）",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "直映射",
+      "probe": [
+        "overflow-wrap"
+      ],
+      "note": "★★★批 B F3 收尾（2026-10-25 · 基准 = Web 真 Chromium 实测）：`normal`（初值）⇒ **长不可断词整体溢出**（实测：100px 盒 + 28 个 a ⇒ scrollWidth 211、高度 1 行）；`break-word` / `anywhere` ⇒ 按盒宽折断（同例高度 3 行）。★`word-wrap` 是**旧别名**（真 Chromium：word-wrap:break-word 的 computed overflow-wrap 亦为 break-word）⇒ 编译期**入口归一**到同键（`CSE_PROP_ALIAS`，规则表与 inline style 两个入口共用）——不归一的话 CSE 的级联与继承会把它当两条独立属性。★四端：Web = 浏览器原生；App 三端 = 宿主文本引擎的**长词抑制解除**（Android `isUnbreakableToken` 判据 / iOS `effectiveWrap` / 鸿蒙 `WORD_BREAK_TYPE_BREAK_WORD`）——注意这是**反向**改动：此前三端为对齐 Web `normal` 刻意抑制\"引擎默认断长词\"的行为，现在按声明放开；MP/Skyline 官方样式表**未收录**该属性（该端文本引擎默认即断长词 ≈ break-word ⇒ 只有 normal 的长词溢出语义表达不了，具名引擎边界）。"
+    },
+    {
+      "id": "text-indent",
+      "css": "text-indent（首行缩进）",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "直映射",
+      "probe": [
+        "text-indent"
+      ],
+      "note": "★★★批 B F3 收尾（2026-10-25 · 基准 = Web）：首行缩进（`<length>`；CSS **继承**属性）。只作用于**首行**（悬挂缩进靠负值）。初值 0 ⇒ 不发射。★百分比相对**包含块宽**（需运行时盒宽，三端通道未统一）⇒ 编译期诊断跳过（不静默当 0）。★三端承载：iOS `NSMutableParagraphStyle.firstLineHeadIndent` · Android `LeadingMarginSpan.Standard`（StaticLayout 首行偏移）· 鸿蒙 `OH_Drawing_TypographySetIndents`；MP/Skyline 官方样式表**未收录**（具名引擎边界，主承载端 = Web/App）。"
+    },
+    {
+      "id": "word-spacing",
+      "css": "word-spacing（词间距）",
+      "category": "text",
+      "today": "supported",
+      "tier": "L1",
+      "strategy": "直映射",
+      "probe": [
+        "word-spacing"
+      ],
+      "note": "★★★批 B F3 收尾（2026-10-25 · 基准 = Web）：词间距（`<length>`，**可为负**——紧排是合法 CSS，真 Chromium computed 为 -3px；初值 normal = 0 ⇒ 不发射）。CSS **继承**属性。★三端承载：Android `Paint.setWordSpacing`（**API 29+**；本仓 minSdk 24 ⇒ 低版本如实不生效并告警，不静默近似）· iOS 段内空格 `.kern` 叠加 · 鸿蒙 `OH_Drawing_SetTextStyleWordSpacing`；Skyline 官方表**收录**（`normal / <length>`，已核 properties 表）⇒ 映射为 rpx 透传。★诚实边界：CJK 无词间空格 ⇒ 该属性主承载西文/混排（与 Web 一致）。"
+    },
+    {
       "id": "aspect-ratio",
       "css": "aspect-ratio",
       "category": "layout",

@@ -605,6 +605,18 @@
       "valueProbe": null,
       "valueOk": null,
       "supported": true
+    },
+    "text-indent": {
+      "recognized": true,
+      "valueProbe": "10px",
+      "valueOk": true,
+      "supported": true
+    },
+    "overflow-wrap": {
+      "recognized": true,
+      "valueProbe": "break-word",
+      "valueOk": true,
+      "supported": true
     }
   },
   "selectors": {

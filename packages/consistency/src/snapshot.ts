@@ -184,6 +184,10 @@ export interface NormalizedStyle {
   whiteSpace?: string
   // ★★★word-break 项（2026-10-06）：行内断词策略（字符串枚举——Web 计算值原样收录）
   wordBreak?: string
+  // ★★★批 B F3 收尾三项（2026-10-25）：断词溢出（枚举串）/ 首行缩进 + 词间距（浏览器 computed 为 px 串）
+  overflowWrap?: string
+  textIndent?: string
+  wordSpacing?: string
   // ★★★背景定位家族（2026-10-07）：背景图层的图像盒尺寸/位置/平铺（字符串——声明形态；宿主几何各端自解析）
   backgroundSize?: string
   backgroundPosition?: string
@@ -492,6 +496,8 @@ const STYLE_KEYS = new Set([
   'whiteSpace',
   // ★★★word-break 项（2026-10-06）：行内断词策略（与接口/覆盖表同批——闭集纪律）
   'wordBreak',
+  // ★★★批 B F3 收尾三项（2026-10-25）：与接口/覆盖表同批（闭集纪律）
+  'overflowWrap', 'textIndent', 'wordSpacing',
   // ★★★背景定位家族（2026-10-07）：size/position/repeat（与接口/覆盖表同批——闭集纪律）
   'backgroundSize', 'backgroundPosition', 'backgroundRepeat',
   'aspectRatio', 'flexBasis', 'transform', 'boxShadow',
@@ -560,6 +566,7 @@ export function validateStyleSnapshot(snap: unknown): ValidationResult {
         || k === 'textAlign' || k === 'textOverflow' || k === 'textDecoration' || k === 'pointerEvents'
         || k === 'whiteSpace'   // ★★补齐（同 ②）
         || k === 'wordBreak'    // ★★★word-break 项（2026-10-06）
+        || k === 'overflowWrap' || k === 'textIndent' || k === 'wordSpacing'   // ★★★批 B F3 收尾三项（2026-10-25）
         || k === 'backgroundSize' || k === 'backgroundPosition' || k === 'backgroundRepeat'   // ★★★背景定位家族（2026-10-07）
         || k === 'borderTopStyle' || k === 'borderRightStyle' || k === 'borderBottomStyle' || k === 'borderLeftStyle'   // ★★★边框族收口批
         || k === 'outlineStyle'   // ★★★outline 族项（2026-10-08）：轮廓线型（字符串键）

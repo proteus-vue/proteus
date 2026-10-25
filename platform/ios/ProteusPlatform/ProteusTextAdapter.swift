@@ -346,35 +346,77 @@ final class ProteusTextAdapter {
         return rounded
     }
 
+    /**
+     * ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：把 **字距 + 词距** 应用到富文本。
+     *
+     * <p>【为什么词距必须只加在空格上】CSS `word-spacing` 只作用于**词间空白**（U+0020 等）；
+     * 全局 `.kern` 会把**每个字符**都拉开（字形被均匀撑开，与 Web 完全不同）。
+     * CoreText 没有独立的词距属性 ⇒ 用 `.kern` 只覆盖**空格字符的 range**：
+     * 空格位 kern = letterSpacing + wordSpacing（字距在空格上同样生效），其余字符 = letterSpacing。</p>
+     *
+     * <p>★测量与绘制**共用本方法**（同源纪律：两处各自配一套 ⇒ 折行点/盒宽必分叉）。</p>
+     */
+    static func applySpacing(_ m: NSMutableAttributedString, letterSpacing: CGFloat, wordSpacing: CGFloat) {
+        if letterSpacing == 0 && wordSpacing == 0 { return }
+        let full = NSRange(location: 0, length: m.length)
+        if letterSpacing != 0 { m.addAttribute(.kern, value: letterSpacing as NSNumber, range: full) }
+        guard wordSpacing != 0, m.length > 0 else { return }
+        // 空格位：kern = 字距 + 词距（逐个空白字符打 range——空白数量远少于字符总数）
+        let str = m.string as NSString
+        for i in 0..<str.length {
+            let ch = str.character(at: i)
+            // U+0020 空格 / U+00A0 不换行空格 / U+3000 全角空格（Web 的 word-spacing 同样作用于它们）
+            if ch == 0x20 || ch == 0xA0 || ch == 0x3000 {
+                m.addAttribute(.kern, value: (letterSpacing + wordSpacing) as NSNumber,
+                               range: NSRange(location: i, length: 1))
+            }
+        }
+    }
+
     /// ★★全端对齐批（2026-10-05 · white-space 五端对齐）：**按盒宽折行测量**（wrap 模式专用）。
     ///   与 Web 语义对齐：折行后高度 = 行数 × lineHeight（声明行高时）；未声明 ⇒ CoreText 自然高。
     ///   盒宽来自内核解析后的盒（调用方传入）——宿主不自己推布局（纪律：几何唯一来源 = 内核）。
     static func measureTextWrapped(_ text: String, fontSize: CGFloat, fontWeight: CGFloat = 400,
                                     fontFamily: String = "system", lineWidth: CGFloat,
                                     lineHeight: String? = nil, letterSpacing: CGFloat = 0, wordBreak: String? = nil,
-                                    maxLines: Int = 0, tabular: Bool = false) -> CGSize {
+                                    maxLines: Int = 0, tabular: Bool = false,
+                                    wordSpacing: CGFloat = 0, textIndent: CGFloat = 0) -> CGSize {
         if text.isEmpty || lineWidth <= 0 { return .zero }
         // 缓存键含 lineWidth（同文本不同盒宽折行结果不同；前缀 W 与单行键空间区分）
         // ★★★word-break 项（2026-10-06）：键含 wordBreak（不同断词策略折行结果不同）
         // ★★★line-clamp 项（2026-10-08）：键含 maxLines（不同截断行数折行/高度不同）
         // ★font-variant-numeric（2026-10-18）：键含 tabular（tnum 是另一套字形，宽度不同）
-        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(maxLines)\u{1}\(tabular)\u{1}\(text)"
+        // ★★★批 B F3 收尾（2026-10-25）：键含 wordSpacing / textIndent（不同词距与首行缩进 ⇒ 折行结果不同）
+        let key = "W\u{1}\(fontSize)\u{1}\(fontWeight)\u{1}\(fontFamily)\u{1}\(lineWidth)\u{1}\(lineHeight ?? "")\u{1}\(letterSpacing)\u{1}\(wordBreak ?? "")\u{1}\(maxLines)\u{1}\(tabular)\u{1}\(wordSpacing)\u{1}\(textIndent)\u{1}\(text)"
         if let hit = measureCache[key] { measureCacheHits += 1; return hit }
         measureCacheMisses += 1
         let font = ProteusTextAdapter.font(size: fontSize, weight: fontWeight, family: fontFamily, tabular: tabular)
         var attrs: [NSAttributedString.Key: Any] = [.font: font]
-        if letterSpacing != 0 { attrs[.kern] = letterSpacing as NSNumber }
         // ★★★word-break 项（2026-10-06）：断词策略 → 段落 lineBreakMode（与绘制 textLayerString 同源）。
         //   break-all ⇒ byCharWrapping（任意字符断）；其余 ⇒ byWordWrapping。测量须与绘制同策略，否则折行数不一致。
-        if let wb = wordBreak {
+        // ★★★批 B F3 收尾（2026-10-25）：`text-indent` ⇒ 段落 `firstLineHeadIndent`
+        //   （只缩首行；`headIndent` 保持 0 ⇒ 后续行不缩。CoreText 的 boundingRect 会按缩进算首行可用宽 ⇒
+        //    折行点与绘制一致）。
+        let needsPara = wordBreak != nil || textIndent != 0
+        if needsPara {
             let ps = NSMutableParagraphStyle()
-            ps.lineBreakMode = wb == "break-all" ? .byCharWrapping : .byWordWrapping
+            ps.lineBreakMode = (wordBreak == "break-all") ? .byCharWrapping : .byWordWrapping
+            if textIndent != 0 { ps.firstLineHeadIndent = textIndent }
             attrs[.paragraphStyle] = ps
         }
-        let rect = (text as NSString).boundingRect(
+        // ★字距 + 词距走共用 helper（与绘制同源）；无间距时等价于原行为（attrs 不变）
+        let measured: NSAttributedString
+        if letterSpacing != 0 || wordSpacing != 0 {
+            let m = NSMutableAttributedString(string: text, attributes: attrs)
+            ProteusTextAdapter.applySpacing(m, letterSpacing: letterSpacing, wordSpacing: wordSpacing)
+            measured = m
+        } else {
+            measured = NSAttributedString(string: text, attributes: attrs)
+        }
+        let rect = measured.boundingRect(
             with: CGSize(width: lineWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attrs, context: nil)
+            context: nil)
         var height = rect.height
         // ★★★line-clamp 项（2026-10-08）：截断封顶——行数 = min(自然行数, maxLines)；
         //   盒高 = 截断行数 × 行盒高（与绘制同源：宿主按同款截断串绘制）。

@@ -128,6 +128,10 @@ export const SEMANTIC_FIELD_SNAPSHOT_KEYS: Readonly<Record<string, readonly stri
   whiteSpace: ['whiteSpace'],
   // ★★★word-break 项（2026-10-06）：行内断词策略（读数键 = 同名字符串）
   wordBreak: ['wordBreak'],
+  // ★★★批 B F3 收尾三项（2026-10-25）：读数键 = 同名字符串（与 snapshot 接口/闭集同批）
+  overflowWrap: ['overflowWrap'],
+  textIndent: ['textIndent'],
+  wordSpacing: ['wordSpacing'],
   // ★★★背景定位家族（2026-10-07）：size/position/repeat（读数键 = 同名字符串）
   backgroundSize: ['backgroundSize'],
   backgroundPosition: ['backgroundPosition'],

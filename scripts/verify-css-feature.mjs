@@ -93,6 +93,12 @@ const PROBE_VALUES = {
   'overflow-y': ['overflow-y: hidden', 'overflowY', 'hidden'],
   'white-space': ['white-space: nowrap', 'whiteSpace', 'nowrap'],
   'word-break': ['word-break: break-all', 'wordBreak', 'break-all'],
+  // ★★★批 B F3 收尾三项（2026-10-25 · 基准 = Web）：
+  //   overflow-wrap 关键字直通；text-indent / word-spacing 是 px 长度 ⇒ CSE 产出 ResolvedLength
+  //   （parity 比较 {kind:'absolute',dp:N}，与 letter-spacing 的绝对化口径同源）。
+  'overflow-wrap': ['overflow-wrap: break-word', 'overflowWrap', 'break-word'],
+  'text-indent': ['text-indent: 24px', 'textIndent', { kind: 'absolute', dp: 24 }],
+  'word-spacing': ['word-spacing: 6px', 'wordSpacing', { kind: 'absolute', dp: 6 }],
   // ★★★font-style 项（2026-10-18 · 批 B F3）：斜体（CSE 产出 fontStyle 字符串）
   'font-style': ['font-style: italic', 'fontStyle', 'italic'],
   // ★★★text-transform 项（2026-10-18 · 批 B F3）：大小写变换（CSE 产出 textTransform 字符串）

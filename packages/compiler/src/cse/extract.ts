@@ -20,7 +20,7 @@ import { parse as domParse } from '@vue/compiler-dom'
 // ★★★后批：与旧通路**同源**的构建期静态实例化（statics ⇒ 两树同口径）
 import { staticInstantiate } from '../vapor/static-instantiate'
 import type { CseDeclaration, CseNode, CseStyleSheet } from './types'
-import { parseStyleSheet } from './parse'
+import { canonicalProp, parseStyleSheet } from './parse'
 import { expandShorthandDecl } from './shorthand'
 
 /** 提取结果 */
@@ -209,7 +209,8 @@ export function parseInlineStyleToLonghand(style: string): Array<{ prop: string;
     if (!t) continue
     const i = t.indexOf(':')
     if (i <= 0) continue
-    const prop = t.slice(0, i).trim().toLowerCase()
+    // ★★★批 B F3 收尾（2026-10-25）：与规则表同一个别名归一表（CSE_PROP_ALIAS——唯一实现）
+    const prop = canonicalProp(t.slice(0, i).trim().toLowerCase())
     const value = t.slice(i + 1).trim()
     if (!prop || !value) continue
     const expanded: CseDeclaration[] | null = expandShorthandDecl(prop, value, false)

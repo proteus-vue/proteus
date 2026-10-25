@@ -58,6 +58,8 @@ const COMPUTED_PROPS = [
   'outline-width', 'outline-color', 'outline-style', 'outline-offset',
   // ★★★line-clamp 项（2026-10-08）：多行截断行数（Web 基准读数）
   '-webkit-line-clamp',
+  // ★★★批 B F3 收尾三项（2026-10-25）：Web 基准逐案例读数（证据归档，不只靠截图）
+  'text-indent', 'word-spacing', 'overflow-wrap',
 ]
 
 /** 页面清单（机器来源：router/auto-routes.ts 的 routes 表） */

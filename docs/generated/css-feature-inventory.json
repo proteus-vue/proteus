@@ -17,18 +17,18 @@
       "unit": 30
     },
     "byImpl": {
-      "not-started": 518,
+      "not-started": 514,
       "excluded": 280,
-      "implemented": 150,
+      "implemented": 154,
       "partial": 1
     },
     "byPriority": {
       "P2": 114,
       "excluded": 280,
-      "done": 150,
-      "P1": 405
+      "done": 154,
+      "P1": 401
     },
-    "actionable": 519,
+    "actionable": 515,
     "actionableP0": 0
   },
   "entries": [
@@ -11757,20 +11757,22 @@
       "inherited": true,
       "initial": "normal",
       "syntax": "normal | break-word | anywhere",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 OverflowWrap）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
-        "webSupport": null
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "OverflowWrap",
+        "webSupport": true
       },
       "usage": 0,
-      "engineLockedEnds": [],
-      "priority": "P1",
-      "acceptance": "none"
+      "engineLockedEnds": [
+        "skyline"
+      ],
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "overflow-x",
@@ -15148,20 +15150,22 @@
       "inherited": true,
       "initial": "0",
       "syntax": "<length-percentage> && hanging? && each-line?",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 TextIndent）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
-        "webSupport": null
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "TextIndent",
+        "webSupport": true
       },
       "usage": 0,
-      "engineLockedEnds": [],
-      "priority": "P1",
-      "acceptance": "none"
+      "engineLockedEnds": [
+        "skyline"
+      ],
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "text-justify",
@@ -16548,20 +16552,20 @@
       "inherited": true,
       "initial": "normal",
       "syntax": "normal | <length>",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 WordSpacing）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "WordSpacing",
         "webSupport": true
       },
       "usage": 0,
       "engineLockedEnds": [],
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "word-wrap",
@@ -16573,20 +16577,20 @@
       "inherited": true,
       "initial": "normal",
       "syntax": "normal | break-word",
-      "impl": "not-started",
-      "implNote": "",
+      "impl": "implemented",
+      "implNote": "IR 注册表在册（scope=semantic · 矩阵 OverflowWrap）",
       "channel": null,
       "evidencedBy": {
-        "inIrRegistry": false,
-        "irScope": null,
-        "inCompilerFold": false,
-        "matrixLevel": null,
+        "inIrRegistry": true,
+        "irScope": "semantic",
+        "inCompilerFold": true,
+        "matrixLevel": "OverflowWrap",
         "webSupport": null
       },
       "usage": 0,
       "engineLockedEnds": [],
-      "priority": "P1",
-      "acceptance": "none"
+      "priority": "done",
+      "acceptance": "pending"
     },
     {
       "id": "writing-mode",
