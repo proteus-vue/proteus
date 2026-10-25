@@ -25,6 +25,8 @@ const ICONS: Record<string, string> = {
   zoomIn:
     '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4 4"/><path d="M7.75 10.5h5.5M10.5 7.75v5.5"/>',
   zoomOut: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4 4"/><path d="M7.75 10.5h5.5"/>',
+  // 搜索：镜圈 + 手柄（与 zoomIn 同几何去掉内部的 +，这样两处并排也不会显得歪）
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4 4"/>',
   fit: '<path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/>',
   // 目录树（chevron 是 12px 用的细箭头；folder 只画轮廓，实心会在 14px 下糊成一团）
   chevron: '<path d="m9.5 7 5 5-5 5"/>',

@@ -16,6 +16,8 @@ use tauri::Manager;
 mod capture;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
+/// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
+mod search;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -97,6 +99,25 @@ fn stats() -> Stats {
         hwdec: a[17] > 0.5,
         device: device_label(),
     }
+}
+
+
+/// 仓库内全文搜索（决策 #1222）。
+///
+/// 【为什么是 `async` + `spawn_blocking`】rg 是**阻塞子进程**：写进同步 command 会占住
+///   IPC 线程（macOS 上就是主线程）⇒ 搜索时界面卡一下，输入法都会顿。
+///   Tauri 的异步命令跑在 tokio 上，再把阻塞体丢回 blocking 线程池，两边都不占。
+#[tauri::command]
+async fn search_text(query: String) -> Result<search::Outcome, String> {
+    let q = query.trim().to_string();
+    if q.chars().count() < 2 {
+        // ★明确报错，不静默返回空：单字符搜索在这仓里是上万条命中，那不是"搜索"是"扫描"。
+        return Err("至少输入 2 个字符（单字符会命中上万条，不是搜索是扫描）".into());
+    }
+    let root = repo_root()?;
+    tauri::async_runtime::spawn_blocking(move || search::run(&root, &q, 300))
+        .await
+        .map_err(|e| format!("搜索线程异常：{e}"))?
 }
 
 #[tauri::command]
@@ -464,7 +485,8 @@ fn main() {
             write_text,
             list_files,
             load_state,
-            save_state
+            save_state,
+            search_text
         ])
         .setup(|app| {
             let handle = app.handle().clone();

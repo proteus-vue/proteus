@@ -80,6 +80,29 @@ export const saveState = (json: string): Promise<void> => invoke<void>('save_sta
 // 而 WKWebView 铺满 contentView ⇒ 真实点击全被 webview 吃掉，那个回调一次都不会触发。
 // 正确做法：`#canvas` 是真实 DOM 元素，pointer 事件直接在前端处理（零坐标翻转、零 C 接缝）。
 
+/** 一条搜索命中（字段与 Rust 侧 `search::Hit` 一一对应，不另起名字）。 */
+export interface SearchHit {
+  path: string
+  /** 1-based 行号 */
+  line: number
+  /** 1-based **字符**列（不是字节、不是 UTF-16 —— 换算在 search.rs 里做完了） */
+  col: number
+  /** 该行原文（截断到 300 字符） */
+  text: string
+}
+
+/** 搜索结果。`engine` 如实告诉你走的是哪条路——内置扫描比 rg 慢一个量级。 */
+export interface SearchResult {
+  engine: 'rg' | 'builtin'
+  hits: SearchHit[]
+  /** 到了上限被截断（此时"还有更多"，不是全部） */
+  truncated: boolean
+}
+
+/** 仓库内全文搜索。返回 Err 时是**人能读的原因**（查询太短 / rg 报错）。 */
+export const searchText = (query: string): Promise<SearchResult> =>
+  invoke<SearchResult>('search_text', { query })
+
 // ── 菜单（决策 #1221）──────────────────────────────────────────────────────
 /** 原生菜单事件。Rust 侧把 `ACTIONS` 里登记的动作 id 用 `emit("menu", id)` 送过来。 */
 export interface MenuBridge {

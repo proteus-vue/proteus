@@ -25,6 +25,7 @@ use tauri::{AppHandle, Emitter, Runtime};
 pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("file.save", "保存", "CmdOrCtrl+S"),
     ("file.closeTab", "关闭标签页", "CmdOrCtrl+W"),
+    ("edit.find", "查找…", "CmdOrCtrl+F"),
     ("view.device", "设备画面", "CmdOrCtrl+1"),
     ("view.code", "代码", "CmdOrCtrl+2"),
     ("view.zoomReset", "设备画面实际大小", "CmdOrCtrl+0"),
@@ -96,6 +97,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::copy(app, Some("拷贝"))?,
             &PredefinedMenuItem::paste(app, Some("粘贴"))?,
             &PredefinedMenuItem::select_all(app, Some("全选"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &action(app, "edit.find")?,
         ],
     )?;
 

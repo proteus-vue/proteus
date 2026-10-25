@@ -50,10 +50,11 @@ import { javascript } from '@codemirror/lang-javascript'
 import { css } from '@codemirror/lang-css'
 import { cpp, objectiveC } from '@codemirror/legacy-modes/mode/clike'
 import languageMap from '../languages.json'
-import { hasBridge, listFiles, readText, writeText } from '../bridge'
+import { hasBridge, listFiles, readText, writeText, type SearchHit } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
+import SearchBox from './SearchBox.vue'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
 const ws = useWorkspaceState()
@@ -95,6 +96,34 @@ const setTabDirty = (p: string, on: boolean) => {
   const has = dirtySet.value.includes(p)
   if (on && !has) dirtySet.value = [...dirtySet.value, p]
   else if (!on && has) dirtySet.value = dirtySet.value.filter((x) => x !== p)
+}
+
+/* ─── 搜索（决策 #1222 · #1223 拆分）────────────────────────────────────────
+ * 输入与结果列表在 `SearchBox.vue`（它自己管防抖/序号/引擎标注）；这里只留两件事：
+ *   ① `searchActive` —— 搜索时目录树**让位**（同一时刻只有一个列表）；
+ *   ② `jumpTo` —— 真正跳转，因为只有这里持有 `EditorView`。
+ */
+const searchActive = ref(false)
+const searchBox = ref<{ focus: () => void } | null>(null)
+
+/** 跳到某条命中：打开文件 → 把光标放到**行:列**（列是字符列，这里换成 UTF-16 偏移）。 */
+async function jumpTo(h: SearchHit) {
+  await open(h.path)
+  await nextTick()
+  const v = view
+  if (!v) return
+  const ln = Math.min(Math.max(1, h.line), v.state.doc.lines)
+  const info = v.state.doc.line(ln)
+  // ★`Array.from` 按 code point 切：中文 1 个、emoji 2 个 code unit —— 直接拿字符数当偏移会跳偏
+  const idx = Array.from(info.text).slice(0, Math.max(0, h.col - 1)).join('').length
+  const pos = Math.min(info.from + idx, info.to)
+  v.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+  v.focus()
+  // 落点写到 DOM 上（`#codeHost` 的 data-caret="行:字符列"）：人眼与门禁都靠它确认
+  // "真的跳到了那一格"，而不是"文件打开了"。值从 CM 的**实际 selection** 反算，不另记一份。
+  const hitLine = v.state.doc.lineAt(pos)
+  const carets = Array.from(hitLine.text.slice(0, pos - hitLine.from)).length + 1
+  host.value?.setAttribute('data-caret', `${hitLine.number}:${carets}`)
 }
 
 
@@ -481,6 +510,7 @@ watch(
  *   少了它们真机上按 ⌘S 就真的什么都不会发生。 */
 const menuOffs = [
   onMenuAction('file.save', () => void save()),
+  onMenuAction('edit.find', () => searchBox.value?.focus()),
   onMenuAction('file.closeTab', () => {
     if (cur.value) close(cur.value)
   }),
@@ -497,7 +527,12 @@ onBeforeUnmount(() => {
 <template>
   <div class="codepane">
     <div class="split">
-      <nav class="files" id="codeFiles">
+      <!-- 左栏（决策 #1222）：搜索框常驻顶部；一旦有查询，结果列表**替换**目录树
+           （VS Code 同款：同一时刻只有一个列表，不叠浮层、不用管 z 序）。 -->
+      <div class="side">
+        <!-- 搜索框常驻顶部；一旦有查询，结果列表**替换**目录树（VS Code 同款：同一时刻一个列表） -->
+        <SearchBox ref="searchBox" @jump="jumpTo" @active="searchActive = $event" />
+        <nav v-if="!searchActive" class="files" id="codeFiles">
         <button
           v-for="r in rows"
           :key="r.node.path"
@@ -519,7 +554,8 @@ onBeforeUnmount(() => {
           <StudioIcon :name="r.node.dir ? 'folder' : 'file'" :size="13" class="ico" />
           <span class="name">{{ r.node.name }}</span>
         </button>
-      </nav>
+        </nav>
+      </div>
       <!-- ★右栏 = 编辑器自己的区域（决策 #1218）：文件信息条 + 标签栏 + 编辑器**都在这里**。
            原先它们是 `.codepane` 的直接子元素 ⇒ 横跨整页、压在左栏树上面（用户截图指出）。
            IDE 的通用布局就是"左栏只有树，编辑器头部跟着编辑器"。 -->
@@ -642,14 +678,23 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
 }
-/* 目录树（次级侧栏）：行高 24px，落在 4px 网格上 */
-.files {
+/* 左栏容器（决策 #1222/#1223）：上面是 SearchBox（它自带样式），下面要么目录树、要么结果 */
+.side {
   width: 232px;
   flex: none;
-  overflow: auto;
-  padding: var(--sp1) 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
+}
+/* 目录树（次级侧栏）：行高 24px，落在 4px 网格上 */
+.files {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp1) 0;
 }
 .files button {
   display: flex;

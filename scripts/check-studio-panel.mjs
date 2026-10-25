@@ -26,6 +26,8 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { stubTauri } from './studio-panel-stub.mjs'
+import { measureBigFile } from './studio-panel-perf.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDIO = path.join(ROOT, 'packages', 'studio')
@@ -131,72 +133,7 @@ const BIG_DOC = Array.from(
 // 桩：只替换"值怎么送到页面"，其余与真机一致（含 set_canvas_rect 的调用）
 // ★`read_text` 也在这里桩掉：代码视图（G4 第一块砖）启动时会读文件，不桩就会抛"未实现"
 //   ⇒ 被判据 ⑧（无 JS 错误）判红。桩内容故意含 `const`，供判据 ⑪ 断言"面板真的渲染了内容"。
-await page.addInitScript((payload) => {
-  const calls = []
-  window.__STUB_CALLS__ = calls
-  window.__TAURI__ = {
-    core: {
-      invoke: async (cmd, args) => {
-        calls.push({ cmd, args })
-        if (cmd === 'stats') return payload
-        if (cmd === 'set_canvas_rect') return null
-        // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
-        // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn / CSS 的
-        //   `color:` / ObjC 的 `static`），把一段 JavaScript 塞给 .vue 解析器只会得到"整篇一个颜色"，
-        //   那样 ⑲ 系列永远测不到东西（假绿）。VUE/RUST/TS 三份都含 `stubLine`，⑪/⑱ 的断言不变。
-        if (cmd === 'read_text') {
-          const p = String(args?.path ?? '')
-          // ★大文件性能判据（㉑）用：置 localStorage.__BIG__=1 后只给一份 8000 行的 TS
-          if (payload.big && window.localStorage.getItem('__BIG__') === '1')
-            return { text: payload.big, mtime_us: 1700000000000000 }
-          const VUE =
-            '<template>\n  <div class="card">{{ total }}</div>\n</template>\n\n' +
-            '<script setup lang="ts">\nconst stubLine = 1\nconst label = \'ok\'\n' +
-            'export { stubLine, label }\n</script>\n'
-          const RUST =
-            'use std::fs;\n\nfn main() {\n    let stubLine = 1;\n    let second = 2;\n' +
-            '    println!("{} {}", stubLine, second);\n}\n'
-          const TS =
-            'export const stubLine = 1\n\nconst label = \'ok\'\n\n' +
-            'export function stubFn(): number {\n  return stubLine + 2\n}\n'
-          const CSS = '.stub {\n  color: red;\n  width: 32px;\n}\n\n/* note */\n'
-          const OBJC =
-            '#import <Foundation/Foundation.h>\n\n// note\nstatic int stubLine = 1;\n\n' +
-            'int main(void) {\n    return stubLine;\n}\n'
-          const byExt = { '.vue': VUE, '.rs': RUST, '.ts': TS, '.css': CSS, '.m': OBJC }
-          const ext = p.slice(p.lastIndexOf('.'))
-          return { text: byExt[ext] ?? VUE, mtime_us: 1700000000000000 }
-        }
-        if (cmd === 'write_text') {
-          // 模拟"磁盘上已被别人改过"：让前端把冲突如实显示出来（不谎称已保存）
-          if (window.__FAIL_WRITE__) throw new Error('文件已被外部修改（磁盘 2 ≠ 打开时 1，可能是并发会话）⇒ 已拒绝覆盖')
-          window.__LAST_WRITE__ = args
-          return 1700000000000001
-        }
-        // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
-        if (cmd === 'list_files')
-          return window.localStorage.getItem('__BIG__') === '1'
-            ? ['packages/studio/big.ts']
-            : [
-                'packages/studio/ui/src/App.vue',
-                'packages/studio/ui/src/bridge.ts',
-                'packages/studio/ui/src/styles.css',
-                'packages/studio/src/main.rs',
-                'packages/studio/native/embed_view.m',
-              ]
-        // ★G5 会话状态：用 localStorage 模拟磁盘——这样 reload 后还能验「恢复上次视图」
-        if (cmd === 'load_state') return localStorage.getItem('__stub_state__') ?? '{}'
-        if (cmd === 'save_state') {
-          localStorage.setItem('__saved_state__', String(args?.json ?? ''))
-          return null
-        }
-        throw new Error('未实现：' + cmd)
-      },
-    },
-  }
-  // ★这里刻意**不再**桩 `__TAURI__.event.listen`：指针输入已经不在 Tauri 事件里走了
-  //   （B1 那条原生 mouseDown 通路是死路，见 README「输入通路」）。留个桩只会让人以为它还在用。
-}, { ...stats, big: BIG_DOC })
+await page.addInitScript(stubTauri, { ...stats, big: BIG_DOC })
 
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
@@ -582,6 +519,11 @@ const menuZoomOut = await zoomText()
 await fireMenu('view.zoomReset')
 await fireMenu('view.code')
 await page.waitForTimeout(250)
+// 查找 ⌘F：菜单项必须把焦点送进搜索框（否则"有菜单但按了没反应"）
+await fireMenu('edit.find')
+await page.waitForTimeout(200)
+const menuFind = await page.evaluate(() => document.activeElement?.id ?? '')
+
 // 保存：先造一个脏缓冲，再让菜单去存（断言真的把这段文本发出去了）
 await page.locator('.cm-content').click()
 await page.keyboard.type('// menu-save')
@@ -611,6 +553,41 @@ await page.evaluate(() =>
 await page.reload()
 await page.waitForTimeout(900)
 
+// ── ㉖ 搜索：命中数对得上 + 点一条**真的跳到那一格**（决策 #1222）──────────────
+// 【为什么不是"有没有结果"就完事】搜索最容易做假的地方是：列表出来了、点了也有反应，
+//   但光标落在文件开头——用户还得自己找。所以这里断言 **data-caret 落在 4:9**
+//   （RUST 桩里 `stubLine` 的起始格），以及搜索时目录树**让位**、清除后回来。
+await page.locator('#codeSearch').click()
+await page.locator('#codeSearch').fill('stub')
+await page.waitForTimeout(600) // 220ms 防抖 + 一次 IPC 往返
+const searchState = await page.evaluate(() => ({
+  hits: document.querySelectorAll('#codeHits .hit').length,
+  meta: document.getElementById('codeSearchMeta')?.textContent?.trim() ?? '',
+  treeGone: !document.getElementById('codeFiles'),
+}))
+await page.locator('#codeHits .hit').first().click()
+await page.waitForTimeout(700)
+const jumped = await page.evaluate(() => ({
+  path: document.getElementById('codePath')?.textContent?.trim() ?? '',
+  caret: document.getElementById('codeHost')?.getAttribute('data-caret') ?? '',
+  active: document.querySelector('.cm-activeLine')?.textContent ?? '',
+}))
+await page.click('#codeSearchClear')
+await page.waitForTimeout(300)
+const treeBack = await page.evaluate(() => !!document.getElementById('codeFiles'))
+
+// 引擎如实显示：没装 rg 时必须是「内置扫描（装 ripgrep 更快）」，不能假装是 rg
+await page.evaluate(() => localStorage.setItem('__NORG__', '1'))
+await page.locator('#codeSearch').fill('stub')
+await page.waitForTimeout(600)
+const engineShown = await page.evaluate(() => ({
+  meta: document.getElementById('codeSearchMeta')?.textContent?.trim() ?? '',
+  hits: document.querySelectorAll('#codeHits .hit').length,
+}))
+await page.evaluate(() => localStorage.removeItem('__NORG__'))
+await page.click('#codeSearchClear')
+await page.waitForTimeout(300)
+
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
 
@@ -626,60 +603,9 @@ await page.evaluate(() => {
   localStorage.setItem('__stub_state__', JSON.stringify({ view: 'code', codeFile: 'packages/studio/big.ts' }))
 })
 await page.reload()
-// ★等"整篇解析完"的信号（UI 写在 #codeHost 的 data-parse 上），而不是 sleep 猜：
-//   预热被摘掉时这个状态永远到不了 full ⇒ 下面的等待超时 + 冷跳超阈值，两条都会红。
-let parseFull = true
-try {
-  await page.waitForFunction(
-    () => document.getElementById('codeHost')?.getAttribute('data-parse') === 'full',
-    { timeout: 8000 },
-  )
-} catch {
-  parseFull = false
-}
-const perf = await page.evaluate(async () => {
-  const sc = () => document.querySelector('.cm-scroller')
-  while (!document.querySelector('.cm-content')) await new Promise((r) => requestAnimationFrame(r))
-  const base = getComputedStyle(document.querySelector('.cm-content')).color
-  const visibleColored = () => {
-    const s = sc()
-    if (!s) return 0
-    const top = s.getBoundingClientRect().top
-    const rows = [...document.querySelectorAll('.cm-line')].filter((n) => {
-      const r = n.getBoundingClientRect()
-      return r.bottom > top && r.top < top + s.clientHeight
-    })
-    return rows.filter((n) =>
-      [...n.querySelectorAll('span')].some((x) => getComputedStyle(x).color !== base),
-    ).length
-  }
-  const t0 = performance.now()
-  while (performance.now() < t0 + 6000 && visibleColored() < 3) await new Promise((r) => requestAnimationFrame(r))
-  const openMs = Math.round(performance.now() - t0)
-  const s = sc()
-  void openMs
-  const scrollHeight = s.scrollHeight
-  // ★先做一次**不计时**的往返跳：reload 后第一次跳要额外付一次"全文档高度布局"的钱（153k px），
-  //   那属于加载成本，不是用户感知的滚动成本。只测第二次（稳态），才和"滚着看代码"同源。
-  s.scrollTop = s.scrollHeight
-  await new Promise((r) => requestAnimationFrame(r))
-  await new Promise((r) => requestAnimationFrame(r))
-  s.scrollTop = 0
-  await new Promise((r) => requestAnimationFrame(r))
-  await new Promise((r) => requestAnimationFrame(r))
-  s.scrollTop = s.scrollHeight
-  const t1 = performance.now()
-  while (performance.now() < t1 + 6000 && visibleColored() < 3) await new Promise((r) => requestAnimationFrame(r))
-  const cold1 = Math.round(performance.now() - t1)
-  s.scrollTop = 0
-  await new Promise((r) => requestAnimationFrame(r))
-  await new Promise((r) => requestAnimationFrame(r))
-  const t2 = performance.now()
-  s.scrollTop = s.scrollHeight
-  while (performance.now() < t2 + 6000 && visibleColored() < 3) await new Promise((r) => requestAnimationFrame(r))
-  const cold2 = Math.round(performance.now() - t2)
-  return { openMs, cold1, cold2, coldMs: cold1, scrollHeight }
-})
+const perf = await measureBigFile(page)
+const parseFull = perf.parseFull
+
 await browser.close()
 server.close()
 // ⑩ fixture 与原始采集输出必须数值一致（防"改 fixture 让判据变绿"这类静默漂移）
@@ -898,8 +824,8 @@ const checks = [
   ],
   // ㉕ 菜单：登记 → 建进菜单 → 前端有人接 → 每个动作真的做事
   [
-    `㉕ 菜单动作 ${menuActs.length} 项全部有人接（死项 ${menuDead.length} · 未建进菜单 ${notBuilt.map((a) => a.id).join(',') || '无'}）· 视图切换 ${menuDevice}/${menuCode} · 缩放 ${menuZoomIn}/${menuZoomReset}/${menuZoomOut} · 菜单保存=${menuSaved.includes('// menu-save')} · 关标签 ${tabsBeforeMenu}→${tabsAfterMenu}`,
-    menuActs.length >= 7 &&
+    `㉕ 菜单动作 ${menuActs.length} 项全部有人接（死项 ${menuDead.length} · 未建进菜单 ${notBuilt.map((a) => a.id).join(',') || '无'}）· 视图 ${menuDevice}/${menuCode} · 缩放 ${menuZoomIn}/${menuZoomReset}/${menuZoomOut} · 查找焦点=${menuFind || '无'} · 菜单保存=${menuSaved.includes('// menu-save')} · 关标签 ${tabsBeforeMenu}→${tabsAfterMenu}`,
+    menuActs.length >= 8 &&
       new Set(menuActs.map((a) => a.id)).size === menuActs.length &&
       new Set(menuActs.map((a) => a.accel)).size === menuActs.length &&
       notBuilt.length === 0 &&
@@ -909,9 +835,22 @@ const checks = [
       menuZoomIn === '125%' &&
       menuZoomReset === '适应' &&
       menuZoomOut === '75%' &&
+      menuFind === 'codeSearch' &&
       menuSaved.includes('// menu-save') &&
       tabsBeforeMenu >= 1 &&
       tabsAfterMenu === tabsBeforeMenu - 1,
+  ],
+  // ㉖ 搜索：命中数一致 + 点一条真的跳到那一格（不是"打开文件就算过"）
+  [
+    `㉖ 搜索「stub」：${searchState.hits} 条命中（目录树让位=${searchState.treeGone}）· 点第一条 → ${jumped.path.split('/').pop()} 落在 ${jumped.caret}（期望 4:9）· 清除后树回来=${treeBack} · 没 rg 时引擎标注=「${engineShown.meta.split('·').pop()?.trim() ?? ''}」`,
+    searchState.hits === 2 &&
+      searchState.treeGone &&
+      jumped.path.endsWith('main.rs') &&
+      jumped.caret === '4:9' &&
+      jumped.active.includes('let stubLine') &&
+      treeBack &&
+      engineShown.hits === 2 &&
+      engineShown.meta.includes('内置扫描'),
   ],
   // ㉓ 标签栏在编辑器区内（起点 ≥ 文件树右边界；宽度 == 右栏宽度）
   [

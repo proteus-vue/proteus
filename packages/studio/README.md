@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **38 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **39 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -655,6 +655,57 @@ macOS 原生标题栏被换成"内容画到窗口顶部 + 原生红绿灯浮在�
 ★**诚实边界**：红绿灯的**实际像素位置**只能在真窗口里看，Playwright 里是普通浏览器 —— 门禁测的是"留了位、能拖、配置对"，
 最后一眼要人看。
 
+## 搜索（2026-10-25 · 决策 #1222）
+
+左栏顶部常驻一个搜索框（`⌘F` 聚焦），**有查询时结果列表替换目录树**——同一时刻只有一个列表，
+不叠浮层、不用管和原生设备画布抢 z 序（VS Code 的搜索视图顶掉资源管理器，同一个道理）。
+
+**底层是 ripgrep 子进程**，不是自己遍历：
+
+| 决策 | 为什么 |
+|---|---|
+| `rg --json` | 已是这件事的事实标准（VS Code 搜索框底层也是它）；自写遍历慢，还要把"忽略哪些目录"重踩一遍 |
+| `--fixed-strings` | 用户打 `a.b*` 时想找的就是这串字符，不是正则。要正则以后加开关，**不能默默把特殊字符当元字符** |
+| 排除 node_modules/target/dist/build-app/web-dist | 那些不是"我们的代码" |
+| 单文件 `--max-count 50`、总量 300（超了 kill 子进程） | 搜索框不是全量导出工具 |
+| `async` + `spawn_blocking` | rg 是阻塞子进程；写进同步 command 会占住 IPC 线程（macOS 上就是主线程），搜索时连输入法都顿 |
+
+**没有 ripgrep 也能用（决策 #1223）**：本机实测 **没装 rg**。只有 rg 一条路的话，搜索框在用户
+机器上就是"报错 + 让你去 brew install"，那不叫功能。所以内置一路**兜底扫描**：同一套忽略目录、
+同一套扩展名白名单、同样按字面量、同样每行一条、8 线程分段（结果顺序与串行一致）。
+**release 全仓实测 ~2.5s**（11 条命中的最坏情况），所以结果里**如实带上 engine**，
+UI 照实显示 `rg` 或 `内置扫描（装 ripgrep 更快）`——不让用户把兜底速度当成常态。
+装 `brew install ripgrep` 后自动走 rg（代码不用改），标注会变成 `rg`。
+
+★**这条兜底路径是在真仓库上测出来的**，也因此抓到两个只有真数据才暴露的问题：
+① 文件上限 4000 会**整片漏**（还没遍历到 `packages/studio` 就截断，连包名都搜不到）⇒ 放宽到 20000，
+真正的刹车改成"命中上限到了就停"；② 串行扫 1w+ 文件要 12 秒 ⇒ 改 8 线程分段。
+**桩数据永远发现不了"漏了一整棵子树"**，所以 Rust 里留了一条打真仓库的测试。
+
+**★坐标换算（这件事只有一处会错）**：rg 的 `submatches[].start` 是**字节**偏移，
+CodeMirror 的位置是 **UTF-16 code unit**。中文一个字 = 3 字节 / 1 个 code unit。
+⇒ `search.rs` 里先把字节换成**字符列**（单测钉住：`中文abc` 里 `abc` 的字节 6 = 字符 3），
+前端再用 `Array.from(line)` 换成 code unit。少任何一步，跳转就会"看起来差不多但偏了几格"。
+
+**判据 ㉖**：填 `stub` → 断言 **2 条命中**（与桩返回一致）且**目录树让位**；点第一条 → 断言
+`data-caret === "4:9"`（RUST 桩里 `stubLine` 的起始格，**不是"文件打开了"就算过**）+
+当前行文本对得上；清除 → 目录树回来。
+
+```
+✓ ㉖ 搜索「stub」：2 条命中（目录树让位=true）· 点第一条 → main.rs 落在 4:9（期望 4:9）· 清除后树回来=true
+```
+
+★**破坏性验证两条都翻红**：① 跳转只用行首（忽略列）⇒ `4:1`；② 结果不顶掉目录树 ⇒
+`目录树让位=false`。
+
+★**诚实边界**：判据跑在桩数据上（rg 的解析、内置扫描的列号都在 Rust 单测里：`中文abc` 的
+`abc` = 字符 3 / 字节 6）；**替换**（replace）还没做——搜索只读，写回是 diff/重构那一刀的事。
+
+**结构（决策 #1223）**：搜索的输入与结果在 `panels/SearchBox.vue`（只负责"输入 → 结果 → 选中哪条"），
+跳转留在 `CodePanel.vue`（只有它持有 `EditorView`）；判据脚本的 Tauri 桩与性能测量各自成模块
+（`scripts/studio-panel-stub.mjs` / `studio-panel-perf.mjs`）。三个文件都是为了不过 1000 行的
+file-size 红线——**按职责拆**，不是按行数切。
+
 ## 菜单栏（2026-10-25 · 决策 #1221）
 
 Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo…Select All + Fullscreen…）：
@@ -696,7 +747,7 @@ Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo
 「原生 NSMenu 点到 JS」那一段（Tauri event）在 Playwright 里不存在，只能人眼点一次。
 没有"帮助"菜单：现在没有任何帮助内容可给，摆一个只有标题的空菜单就是在装作有。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **38 条**）
+### 编辑器判据（`check:studio-panel` 已扩到 **39 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；
@@ -709,6 +760,7 @@ Tauri 默认给的是**别人的菜单**（About/Hide/Quit + Close Window + Undo
 - ㉓ **标签栏不跨界**：起点 ≥ 文件树右边界、宽度 == 右栏宽度（布局回归）；
 - ㉔ **沉浸式标题栏**：Overlay/hiddenTitle/红绿灯位置 + 顶栏可拖 + 左内边距（见上节）；
 - ㉕ **菜单没有死项**：`menu.rs` 的 ACTIONS 逐项派发，每项必须有效果（见下节）；
+- ㉖ **搜索**：命中数对得上、点一条**光标落在那一格**（`data-caret`）、目录树让位/回来（见下节）；
 - ⑰ **目录可折叠**：收起后里面的文件从可见行消失、目录行仍在、折叠进会话状态；
 - ⑱ **编辑 + ⌘S**：真实键盘输入 → 真实快捷键 → 断言写回的**全文**与回传的 mtime；
 - ⑱b **保存被拒时如实报错**且仍标记未保存（静默失败的保存比不保存更糟）；
