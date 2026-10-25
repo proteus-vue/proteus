@@ -10,7 +10,7 @@
 |---|---|
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
-| 构建应用 | `cargo build --release`；双击版 `./package-app.sh` → `build-app/Proteus Studio.app` |
+| 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
 | **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **28 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
@@ -148,6 +148,31 @@ popen 拉流（进程退出自动重连）→ Annex-B 拆 NAL → **按 `first_m
 ./package-app.sh     # → build-app/Proteus Studio.app（70MB，自包含）
 ./package-app.sh --open
 ```
+
+### ★改了 UI 一定要重打包（2026-10-25 踩过，用户实测症状："打开还是三天前的骨架"）
+
+Tauri 2 把 `frontendDist`（`web-dist/`）**在编译期嵌进可执行文件**（`generate_context!` 这个 proc macro），
+所以：
+
+| 你做了什么 | `web-dist` | `build-app/*.app` |
+|---|---|---|
+| 改 `ui/` + `pnpm check:studio-panel` | ✅ 已重建 | ❌ **仍是旧的**（门禁不打包） |
+| `cargo build --release` | ✅ | ❌ 只是 `target/release/` 更新了 |
+| `./package-app.sh` | ✅ | ✅ |
+
+**而且它静默**：资源是压缩后嵌进二进制的 ⇒ `strings` grep 不到关键字、`.app` 的 mtime 只反映链接时间，
+"看起来构建过了"和"里面是三天前的 UI"从外面分不出来。实例：10-22 14:32 打的包一直没人重打，
+10-23 那一整天的改动（检查器真数据 / Vue 迁移 / 目录树 / 编辑器 / 点选落点）全都不在包里。
+
+现在脚本把两件事写死了：① **每次**都跑 `build-ui.sh`（原先"缺了才构建"）；
+② `touch src/main.rs` 强制重编这个 crate（否则 cargo 认为 fresh，宏不重跑 ⇒ 仍嵌旧资源）。
+仓库根另有 `pnpm run build:studio-app` 一行搞定。
+
+★**工具链也必须同源**（同一天踩到的第二个坑）：本机 PATH 上 `/opt/homebrew/bin/{cargo,rustc}` 是 **1.83**，
+而 `Cargo.lock` 里的依赖要 ≥1.89 ⇒ 直接编会报 `feature edition2024 is required`（cargo 太旧）或
+`time@0.3.55 requires rustc 1.88`（**cargo 换了新的、rustc 还是旧的**——这种错配最难看懂）。
+脚本现在先把 `~/.cargo/bin`（rustup，1.98）放到 PATH 最前，保证 cargo 与 rustc 来自同一个工具链，
+并在构建前把两个版本都打出来。
 
 ### 三件必须做的事（少一件"能双击"就是假的）
 

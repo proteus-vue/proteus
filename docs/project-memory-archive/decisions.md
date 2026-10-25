@@ -13477,3 +13477,32 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     （TCC 拦截图 + 原生窗口无法自动点击）⇒ 最后一跳要用户点一次才算真通；`cargo test` 仍不在 CI。
   - **下一步**：G5 三项（窗口尺寸记忆 / 面板可插拔 / `main.rs` 按命令分组拆）+ 元素信息（属能力线，
     需 G-54 的「断言 id → 代码位置」注册表）。
+
+1214. **Studio 的 .app 陈旧三处缺陷（门禁不打包 / 前端"缺了才构建" / cargo-rustc 错配）+ 批量删除保护逼出"原地刷新" · 决策**（2026-10-25 · 紧接着 #1213 · 用户「build-app 里面的 app 是不是没更新啊，我打开还是第一阶段的骨架」）:
+  - **取证**：`build-app/.../proteus-studio-shell` mtime **10-22 14:32**，`target/release` **10-23 17:06**
+    ⇒ 出门（#1187）之后**一次都没重打包**。用户看到的是阶段 1 骨架，不是"这次语法着色没生效"。
+  - **缺陷 ①（结构性）**：Tauri 2 用 `generate_context!` 把 `frontendDist`（`web-dist/`）**编译期嵌进二进制**；
+    而 `check:studio-panel` 只重建 `web-dist`、**不打包** ⇒「门禁全绿」≠「你双击的 .app 是新的」。
+  - **缺陷 ②**：`package-app.sh` 的前端是 `if [ ! -f web-dist/index.html ]`（缺了才构建）⇒ 改了 UI 直接打包
+    会把**旧产物嵌进新二进制**。改为**每次**都 `build-ui.sh`；并 `touch src/main.rs` 强制重编该 crate
+    （否则 cargo 判 fresh、proc macro 不重跑、仍嵌旧资源）。
+  - **缺陷 ③（工具链错配，最难看出）**：PATH 上 `/opt/homebrew/bin/{cargo,rustc}` 是 **1.83**，
+    而锁里依赖要 ≥1.89 ⇒ 先报 `feature edition2024 is required`；只把 cargo 换成 rustup 的 1.98 仍报
+    `time@0.3.55 requires rustc 1.88` —— **cargo 是新的、rustc 还是 PATH 上旧的**。
+    ⇒ 脚本先把 `~/.cargo/bin` 放到 PATH 最前（**cargo 与 rustc 必须同源**）+ 按 `--version` 兜底挑选 +
+    构建前把两者版本一起打印。（同 AGENTS.md §6.5：默认路径/默认工具链是坑，按"能不能干这件事"选。）
+  - **★批量删除保护逼出更好的做法**：`rm -rf "$APP"`（74 个文件）被
+    `SAFE_DELETE_BULK_CONFIRM_REQUIRED` 拦下 ⇒ 脚本中途退出，而 cargo 那步**已经成功** ⇒ 又一次"看起来构建过"。
+    改为**原地刷新**：覆盖二进制/plist/图标（单文件覆盖），Frameworks 交给**本来就幂等**的 `bundle-dylibs.py` 补齐。
+    代价（已写进 README）：已从依赖消失的旧库不会自动清理。
+  - **顺手清理**：新闭包只有 **15 个 dylib**（旧包 65 个，其中 60 个已不被任何库引用——旧 ffmpeg 版本残留），
+    移到 `build-app/.stale-frameworks-20261025/`；包体 **97MB → 47MB**。
+  - **门禁新增"陈旧 .app"提醒**（**不是判据**、不改退出码；CI 无 `build-app` 时自动跳过）：基准取
+    **UI 源码最新 mtime**，不是 `web-dist`（门禁每次都重建它 ⇒ 拿它比会"每次跑完都报警"，提醒很快被无视）。
+    实测：把包内二进制 `touch -t 202610220000` ⇒ 打出「比 UI 源码旧 4845 分钟」；改回 ⇒ 静默。
+  - **验证**：`codesign --verify --deep --strict` = valid on disk / satisfies DR · `@rpath` 缺失 **0 条** ·
+    绝对路径与 `@loader_path` 残留 **0 条** · 启动后进程存活 · **新包已直接 `open` 给用户看**。
+  - **诚实边界**：UI 是否真的新**仍靠人眼**（TCC 拦截图；资源压缩进二进制，`strings` grep 不到关键字）；
+    本次的 dylib 清理是**手工**做的，脚本里没有 prune；`stat -f '%m-%d %H:%M:%S'` 写法是错误的
+    （`%m` 是权限位、`%H` 不存在 ⇒ `bad format`），正确是 `stat -f '%Sm' -t '<时间格式>'`。
+  - **下一步**：G5 三项（窗口尺寸记忆 / 面板可插拔 / `main.rs` 按命令分组拆）。

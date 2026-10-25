@@ -610,4 +610,28 @@ for (const [label, ok] of checks) {
 if (errors.length) console.log('  JS 错误：\n' + errors.map((e) => '   ' + e).join('\n'))
 console.log(`\n面板快照：${path.relative(ROOT, outPath)}`)
 console.log(`数据来源：${path.relative(ROOT, dataPath)}（真实跑机读数）· 机型来源：${deviceFrom}`)
+
+// ── ★陈旧 .app 提醒（不是判据，不改变退出码；2026-10-25 用户实测踩到）──────────────
+// 【为什么需要】Tauri 把 `web-dist/` **编进二进制**，而本门禁只重建 `web-dist`、**不打包**。
+//   于是"门禁全绿 = 你看的那个 .app 是新的"是**错的**：用户双击打开的还是三天前的骨架。
+//   而且外面看不出来（资源压缩进二进制，strings grep 不到、.app 的 mtime 只反映链接时间）。
+// ⇒ 在这里说一句人话。比较基准取**UI 源码的最新 mtime**（不是 web-dist）：
+//   本门禁每次都会重建 web-dist，拿它比会导致"每次跑完都报警"——那样提醒很快就被无视了。
+const appBin = path.join(STUDIO, 'build-app', 'Proteus Studio.app', 'Contents', 'MacOS', 'proteus-studio-shell')
+const uiSrc = path.join(STUDIO, 'ui', 'src')
+if (fs.existsSync(appBin) && fs.existsSync(uiSrc)) {
+  const newest = (dir) =>
+    fs
+      .readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((d) => d.isFile())
+      .reduce((mx, d) => Math.max(mx, fs.statSync(path.join(d.parentPath ?? d.path, d.name)).mtimeMs), 0)
+  const srcAt = Math.max(newest(uiSrc), fs.statSync(path.join(STUDIO, 'ui', 'index.html')).mtimeMs)
+  const ageMin = (srcAt - fs.statSync(appBin).mtimeMs) / 60000
+  if (ageMin > 1) {
+    console.log(
+      `\n⚠ build-app 里的 .app 比 UI 源码旧 ${Math.round(ageMin)} 分钟 —— 它嵌的是旧前端。` +
+        `\n  要双击看到最新界面请重打包：pnpm run build:studio-app（或 bash packages/studio/package-app.sh）`,
+    )
+  }
+}
 process.exit(bad ? 1 : 0)

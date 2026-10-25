@@ -26,6 +26,7 @@
     "build:showcase:mp": "pnpm --filter proteus-showcase build:mp",
     "build:showcase:web": "pnpm --filter proteus-showcase build:web",
     "build:studio-ui": "bash packages/studio/build-ui.sh",
+    "build:studio-app": "bash packages/studio/package-app.sh",
     "build:web": "pnpm --filter proteus-examples build:web",
     "build:website": "pnpm --filter website build",
     "changeset": "changeset",
