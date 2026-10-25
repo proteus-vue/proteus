@@ -301,6 +301,11 @@ const tabMenu = await page.evaluate(() => {
   return { open: !!m, items: [...(m?.querySelectorAll('[data-menu-item]') ?? [])].map((b) => b.getAttribute('data-menu-item')) }
 })
 const pickedCloseOthers = await pickMenu('closeOthers')
+await page.waitForTimeout(300)
+// 关闭其他也可能命中未保存标签 ⇒ 有新确认框就选"不保存"（这条判据验的是"只剩 1 个标签"）
+if (await page.evaluate(() => !!document.getElementById('confirmDialog'))) {
+  await page.click('#confirmDialog [data-act="discard"]')
+}
 await page.waitForTimeout(400)
 const afterCloseOthers = await page.evaluate(() => ({
   tabs: document.querySelectorAll('#codeTabs button[data-tab]').length,
@@ -438,5 +443,45 @@ await page.waitForTimeout(150)
     tokenCount,
   )
 
-  return { langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
+  // ── ⑱e 关闭未保存标签必须拦截（决策 #1243）──────────────────────────────────
+  await page.locator('.cm-content').click()
+  await page.keyboard.type('// close-probe')
+  await page.waitForTimeout(150)
+  const dirtyBeforeClose = await page.evaluate(() => !!document.querySelector('#codeTabs .tab.dirty, #codeTabs .tclose'))
+  const tabCountBefore = await page.evaluate(() => document.querySelectorAll('#codeTabs button[data-tab]').length)
+  await page.click('#codeTabs button[data-tab="packages/studio/ui/src/App.vue"] .tclose')
+  await page.waitForTimeout(300)
+  const dlgShown = await page.evaluate(() => {
+    const d = document.getElementById('confirmDialog')
+    return d ? { title: (d.querySelector('.title')?.textContent ?? '').trim(), acts: [...d.querySelectorAll('[data-act]')].map((b) => b.getAttribute('data-act')) } : null
+  })
+  // 取消 ⇒ 标签还在、改动还在（对话框没弹出时跳过点击，留给断言报错，别让整条门禁崩在超时）
+  if (dlgShown) await page.click('#confirmDialog [data-act="cancel"]')
+  await page.waitForTimeout(250)
+  const afterCancel = await page.evaluate(() => ({
+    dlg: !!document.getElementById('confirmDialog'),
+    tabs: document.querySelectorAll('#codeTabs button[data-tab]').length,
+    text: document.querySelector('.cm-content')?.textContent ?? '',
+  }))
+  // 再来一次，选"不保存" ⇒ 标签消失、改动丢弃
+  // （标签已经因为"没拦截"被关掉时，这一步会点不到——容错跳过，让断言去红）
+  try {
+    await page.click('#codeTabs button[data-tab="packages/studio/ui/src/App.vue"] .tclose', { timeout: 1500 })
+  } catch {
+    /* 留给断言 */
+  }
+  await page.waitForTimeout(250)
+  if (await page.evaluate(() => !!document.getElementById('confirmDialog'))) {
+    await page.click('#confirmDialog [data-act="discard"]')
+  }
+  await page.waitForTimeout(350)
+  const afterDiscard = await page.evaluate(() => ({
+    dlg: !!document.getElementById('confirmDialog'),
+    tabs: document.querySelectorAll('#codeTabs button[data-tab]').length,
+  }))
+  // 复原：重新打开 App.vue，别把后续截图留在空编辑器上
+  await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
+  await page.waitForTimeout(350)
+
+  return { dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

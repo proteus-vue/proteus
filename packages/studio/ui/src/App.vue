@@ -16,6 +16,7 @@ import { detectLangId, editorLang, effectiveLangId, langOverrides, setLangOverri
 import { LANGS, langLabel } from './langs'
 import { openMenu } from './contextmenu'
 import ToastStack from './ToastStack.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 import { onMenuAction, wireMenu } from './menu'
 
@@ -446,6 +447,8 @@ const hud = computed(() => {
 
     <!-- 全局右键菜单（决策 #1234）：标签栏/文件树/编辑器各自 openMenu，这里只负责画与关 -->
     <ContextMenu />
+    <!-- 关闭前的确认（决策 #1243）：未保存的标签/多标签一起关时三选一 -->
+    <ConfirmDialog />
     <!-- 瞬时反馈（决策 #1236）：复制成功/保存失败这类"说一句就走"的消息，右下角卡片，
          不再挤在状态栏里（状态栏留给常驻信息）。错误不自动消失，等人处理。 -->
     <ToastStack />

@@ -352,7 +352,13 @@ const tabLayout = await page.evaluate(() => {
 
 // 关掉 main.rs 标签 ⇒ 回到相邻标签（App.vue），标签数 -1
 await page.locator('#codeTabs button[data-tab="packages/studio/src/main.rs"] .tclose').click()
-await page.waitForTimeout(500)
+await page.waitForTimeout(300)
+// ★此时 main.rs 是"改动被 ⌘Z 撤回到与原文件不同"的状态（脏）⇒ 关闭会弹确认框，
+//   这条判据只关心"关掉后回到相邻标签"，所以明确选"不保存"（决策 #1243 引入的拦截）
+if (await page.evaluate(() => !!document.getElementById('confirmDialog'))) {
+  await page.click('#confirmDialog [data-act="discard"]')
+}
+await page.waitForTimeout(400)
 const closed = await page.evaluate(() => ({
   count: document.querySelectorAll('#codeTabs button[data-tab]').length,
   path: document.getElementById('codePath')?.textContent?.trim() ?? '',
@@ -526,7 +532,7 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
+const { dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -721,6 +727,19 @@ const checks = [
   [
     `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
     failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
+  ],
+  // ⑱e 关闭未保存标签：必须拦（三选一），取消要真的不关
+  [
+    `⑱e 关闭拦截：对话框=${dlgShown ? `「${dlgShown.title}」${dlgShown.acts.join('/')}` : '未弹出'} · 取消后 标签=${afterCancel.tabs} 改动仍在=${afterCancel.text.includes('// close-probe')} · 不保存后 标签=${afterDiscard.tabs}`,
+    !!dlgShown &&
+      dlgShown.acts.includes('save') &&
+      dlgShown.acts.includes('discard') &&
+      dlgShown.acts.includes('cancel') &&
+      !afterCancel.dlg &&
+      afterCancel.tabs === tabCountBefore &&
+      afterCancel.text.includes('// close-probe') &&
+      !afterDiscard.dlg &&
+      afterDiscard.tabs === tabCountBefore - 1,
   ],
   // ⑱d 菜单「撤销」真的撤销（不是把键交给 WKWebView 的 undoManager）
   [

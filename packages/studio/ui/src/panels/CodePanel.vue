@@ -56,6 +56,7 @@ import FileIcon from '../icons/FileIcon.vue'
 import FolderIcon from '../icons/FolderIcon.vue'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
+import { ask } from '../confirm'
 import { fileTypeIcon } from '../fileIcons'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
@@ -409,21 +410,28 @@ function forget(path: string) {
 }
 
 /** 关掉除 `keep` 以外的所有标签 */
-function closeOthers(keep: string) {
-  for (const p of [...tabs.value]) if (p !== keep) forget(p)
+async function closeOthers(keep: string) {
+  const victims = tabs.value.filter((p) => p !== keep)
+  const dirty = victims.filter(isDirtyPath)
+  if (dirty.length && !(await confirmDiscard(dirty))) return
+  for (const p of victims) forget(p)
   if (cur.value !== keep) void open(keep)
 }
 
 /** 关掉 `path` 右侧的所有标签 */
-function closeRight(path: string) {
+async function closeRight(path: string) {
   const i = tabs.value.indexOf(path)
   if (i < 0) return
-  for (const p of tabs.value.slice(i + 1)) forget(p)
+  const victims = tabs.value.slice(i + 1)
+  const dirty = victims.filter(isDirtyPath)
+  if (dirty.length && !(await confirmDiscard(dirty))) return
+  for (const p of victims) forget(p)
 }
 
-function close(path: string) {
+async function close(path: string) {
   const i = tabs.value.indexOf(path)
   if (i < 0) return
+  if (isDirtyPath(path) && !(await confirmDiscard([path]))) return
   forget(path)
   if (cur.value !== path) return
   const next = tabs.value[Math.max(0, i - 1)] ?? ''
@@ -552,27 +560,75 @@ function nodeIcon(node: { path: string; dir: boolean }): { name: string; color?:
   return t ? { name: t.icon, color: t.color } : { name: 'file' }
 }
 
-async function save() {
-  if (!view || !cur.value || saving.value) return
-  const rec = recs.get(cur.value)
-  if (!rec) return
-  const body = view.state.doc.toString()
-  if (body === rec.base) return
-  saving.value = true
+/**
+ * 保存**指定文件**（不一定是当前标签）——关闭其他标签时要能把它们一起存掉。
+ * 返回是否成功（失败会自己弹错误 toast，调用方据此决定要不要继续关闭）。
+ */
+async function savePath(path: string): Promise<boolean> {
+  const rec = recs.get(path)
+  if (!rec) return false
+  const st = path === cur.value && view ? view.state : states.get(path)
+  if (!st) return false
+  const body = st.doc.toString()
+  if (body === rec.base) return true
   try {
-    const nm = await writeText(cur.value, body, rec.mtime)
+    const nm = await writeText(path, body, rec.mtime)
     rec.base = body
     rec.mtime = nm
-    dirty.value = false
-    setTabDirty(cur.value, false)
-    states.set(cur.value, view.state)
-    pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
+    states.set(path, st)
+    setTabDirty(path, false)
+    if (path === cur.value) dirty.value = false
+    return true
   } catch (e) {
     // ★失败必须显示出来：静默失败的保存比不保存更糟（用户以为已落盘）
     pushToast(String((e as Error)?.message ?? e), 'err')
-  } finally {
-    saving.value = false
+    return false
   }
+}
+
+async function save() {
+  if (!cur.value || saving.value) return
+  saving.value = true
+  const ok = await savePath(cur.value)
+  saving.value = false
+  if (ok) pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
+}
+
+/** 这个文件有没有未保存改动（不依赖"当前标签"，关闭其他标签时也要能判断） */
+function isDirtyPath(path: string): boolean {
+  const rec = recs.get(path)
+  if (!rec) return false
+  const st = path === cur.value && view ? view.state : states.get(path)
+  return !!st && st.doc.toString() !== rec.base
+}
+
+/**
+ * 关闭前的拦截（决策 #1243）：
+ * 有未保存改动就**三选一**——保存并关闭 / 不保存 / 取消。取消是默认落点（防手滑）。
+ * 多个文件一起关时也走这一条，只是文案换成"共 N 个文件"。
+ */
+async function confirmDiscard(paths: string[]): Promise<boolean> {
+  const names = paths.map((p) => p.split('/').pop() ?? p)
+  const one = paths.length === 1
+  const r = await ask({
+    title: one ? '有未保存的修改' : `${paths.length} 个文件有未保存的修改`,
+    body: one
+      ? `「${names[0]}」还没保存。关闭后这些修改会丢失。`
+      : `${names.slice(0, 4).join('、')}${names.length > 4 ? ` 等 ${names.length} 个文件` : ''} 还没保存。关闭后这些修改会丢失。`,
+    actions: [
+      { id: 'save', label: one ? '保存并关闭' : '全部保存并关闭', kind: 'default' },
+      { id: 'discard', label: '不保存', kind: 'danger' },
+      { id: 'cancel', label: '取消', kind: 'cancel' },
+    ],
+  })
+  if (r === 'cancel') return false
+  if (r === 'save') {
+    for (const p of paths) {
+      const ok = await savePath(p)
+      if (!ok) return false // 存盘失败就别关，别让人以为存上了
+    }
+  }
+  return true
 }
 
 async function boot() {
