@@ -269,7 +269,9 @@ const iconSamples = await page.evaluate((paths) => {
   for (const p of paths) {
     const b = document.querySelector(`#codeFiles button[data-file="${p}"]`)
     const svg = b?.querySelector('svg')
-    out[p] = b ? { icon: b.getAttribute('data-icon'), color: svg ? getComputedStyle(svg).color : '' } : null
+    out[p] = b
+      ? { icon: b.getAttribute('data-icon'), color: b.querySelector('[data-tint]')?.getAttribute('data-tint') ?? '' }
+      : null
   }
   return out
 }, [
@@ -315,6 +317,22 @@ const copiedPath = await page.evaluate(() => {
   return c.length ? String(c[c.length - 1].args?.text ?? '') : ''
 })
 
+// ── ㉛ 瞬时反馈（决策 #1236）：复制成功要**看得见**，且 3 秒内自己消失 ──────────────
+const toastAtCopy = await page.evaluate(() =>
+  [...document.querySelectorAll('#toasts .toast')].map((n) => ({
+    kind: n.getAttribute('data-kind'),
+    text: (n.textContent || '').trim(),
+  })),
+)
+// 紧接着再触发一次（刷新文件树）：两次操作**必须叠着**，而不是后一条顶掉前一条
+await page.click('#codeFiles button[data-file="packages/studio/src/main.rs"]', { button: 'right' })
+await page.waitForTimeout(200)
+await pickMenu('refresh')
+await page.waitForTimeout(400)
+const toastStack = await page.evaluate(() => document.querySelectorAll('#toasts .toast').length)
+await page.waitForTimeout(3000)
+const toastGone = await page.evaluate(() => document.querySelectorAll('#toasts .toast').length === 0)
+
 // ㉚c 编辑器右键 → 保存/撤销/重做/全选；Esc 关闭
 await page.click('#codeHost', { button: 'right', position: { x: 60, y: 60 } })
 await page.waitForTimeout(220)
@@ -326,5 +344,5 @@ await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
 const escClosed = await page.evaluate(() => !document.getElementById('ctxMenu'))
 
-  return { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed }
+  return { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone }
 }

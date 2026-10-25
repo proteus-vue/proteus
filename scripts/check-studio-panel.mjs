@@ -263,9 +263,15 @@ await page.keyboard.type('X')
 await page.keyboard.press('Meta+s')
 await page.waitForTimeout(400)
 const failedSave = await page.evaluate(() => ({
-  notice: document.getElementById('codeNotice')?.textContent?.trim() ?? '',
+  // 提示已经搬到 toast（决策 #1236）：状态栏不再承担瞬时反馈
+  notice: [...document.querySelectorAll('#toasts .toast')].map((n) => (n.textContent || '').trim()).join(' | '),
   stillDirty: !!document.getElementById('codeDirty'),
 }))
+// 错误 toast **常驻**（保存冲突要等人处理）⇒ 测完手动关掉，免得挡住后面的交互
+{
+  const x = await page.$('#toasts .toast.err .x')
+  if (x) await x.click()
+}
 
 // ── ⑱c 切走再切回来，未保存的编辑**不能丢**（IDE 的脏缓冲语义）────────────────
 //  ★这条替代了原本的 `confirm('放弃修改？')` 方案：Tauri 的 WKWebView 若没实现
@@ -509,7 +515,8 @@ const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoom
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed } = await probeCodeExtras(page, STUDIO)
+const { iconSamples, dirOpen, dirClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, toastAtCopy, toastStack, toastGone } =
+  await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
@@ -774,6 +781,14 @@ const checks = [
       menuSaved.includes('// menu-save') &&
       tabsBeforeMenu >= 1 &&
       tabsAfterMenu === tabsBeforeMenu - 1,
+  ],
+  // ㉛ 瞬时反馈：复制成功出 toast、连点叠着、3 秒内自己消失
+  [
+    `㉛ 提示：复制后出现 ${toastAtCopy.length} 条（${toastAtCopy[0]?.text ?? '—'}）· 连续操作叠到 ${toastStack} 条 · 3s 后自动消退=${toastGone}`,
+    toastAtCopy.length >= 1 &&
+      toastAtCopy.some((t) => t.kind === 'ok' && t.text.includes('已复制路径')) &&
+      toastStack >= 2 &&
+      toastGone,
   ],
   // ㉘ 目录图标两态（展开 folderOpen / 折叠 folder）
   [

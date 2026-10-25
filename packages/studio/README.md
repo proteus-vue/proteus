@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **45 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **46 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -792,7 +792,19 @@ node packages/studio/icons/make-icon.mjs   # 两个通道各出 icns + 1024 png
 ★**复制路径走 Rust `copy_text`（NSPasteboard）**：WKWebView 的 `navigator.clipboard` 要"手势+焦点"，
 菜单点完焦点常在菜单节点上，会静默失败。
 
-### 编辑器判据（`check:studio-panel` 已扩到 **45 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
+## 图标与反馈的生产标准（2026-10-25 · 决策 #1235/#1236）
+
+**应用图标（去 AI 味）**：单色**同族两档**渐变（正式 `#6E56E6→#5340C9`，预览 `#24B287→#0E8F66`）
++ 一个精确字形。**没有**回光、扫带、投影、三色带——那些是"每层都想加戏、每处都发灰"的 AI 味。
+小尺寸另出一份（字形放大、去细节）。
+
+**文件树徽章**（JetBrains 路子）：统一圆角矩形徽章（类型色底）+ 白色单记号。
+真源 `ui/src/fileIcons.ts`（扩展名 → 图标名 / 类型色 / glyph）；未登记的扩展名退回通用文档徽章。
+
+**瞬时反馈 = toast，不是状态栏**：右下角可堆叠卡片，2.6s 自动消退（最多 4 条）；
+**错误不自动消失**（保存冲突要等人处理，测完手动关）。状态栏只放常驻信息。
+
+### 编辑器判据（`check:studio-panel` 已扩到 **46 条**）### 编辑器判据（`check:studio-panel` 已扩到 **40 条**）
 - ⑪ `read_text` 被调用 + `.cm-content` 渲染出内容 + 无错误；
 - ⑪b 切到代码视图后 `set_canvas_rect` 收到 **w=0/h=0**（原生画布真的让开了）；
 - ⑪c 目录树渲染出 **6 个目录 + 5 个文件**且默认打开 `App.vue`（自证）；

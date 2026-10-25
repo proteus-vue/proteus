@@ -177,8 +177,16 @@ printf '  ✓ 新鲜度：UI %s · 二进制 %s · 包内 %s\n' \
 # ★图标变了就必须提醒：macOS 的 Dock/Finder 图标是**按 bundle 路径+签名**缓存的，
 #   而我们的 ad-hoc 签名是确定性的（`--timestamp=none`）⇒ 内容没变时签名也一样 ⇒ 缓存不会自动失效。
 #   实测症状：包里 icns 已经是新的（sha256 对得上），Dock 里仍是几天前的图标。
+LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [ "$ICON_CHANGED" = "1" ]; then
-  echo "  ⚠ 图标已更新：Dock / Finder 若仍显示旧图标是缓存，执行：killall Dock"
+  # ★只 killall Dock 不够：LaunchServices 的**注册项**本身也缓存图标。
+  #   实测（2026-10-25）：包里 icns 已是新的，Dock/NSRunningApplication.icon 仍是旧的，
+  #   `lsregister -u`（注销）+ `-f`（重注册）之后才刷新。这里直接做掉，不靠人记。
+  echo "  ⚠ 图标已更新：注销并重新注册，清掉 LaunchServices 的旧图标缓存"
+  "$LSREG" -u "$APP" 2>/dev/null || true
+  touch "$APP"
+  "$LSREG" -f "$APP"
+  echo "  ⚠ Dock 若仍显示旧图标，执行：killall Dock"
 fi
 
 if [ "$OPEN_AFTER" = "1" ]; then

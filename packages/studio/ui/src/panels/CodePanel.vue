@@ -55,7 +55,9 @@ import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
 import SearchBox from './SearchBox.vue'
+import FileIcon from '../icons/FileIcon.vue'
 import { openMenu } from '../contextmenu'
+import { pushToast } from '../toast'
 import { fileTypeIcon } from '../fileIcons'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
@@ -66,7 +68,6 @@ const ROOTS = ['packages/studio/ui/src', 'packages/studio/src', 'packages/studio
 const files = ref<string[]>([])
 const cur = ref('')
 const err = ref('')
-const notice = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const dirty = ref(false)
@@ -375,7 +376,6 @@ async function open(path: string) {
   if (!tabs.value.includes(path)) tabs.value.push(path)
   ws.openFiles = [...tabs.value]
   err.value = ''
-  notice.value = ''
   loading.value = true
 
   // ① 内存里已有这个文件的 state ⇒ 直接恢复（含未保存内容与 undo 历史），**不读盘**
@@ -458,13 +458,9 @@ function close(path: string) {
 /* ─── 右键菜单（决策 #1234）：三处上下文，一套开关/定位 ──────────────────────
  * 标签栏 / 文件树 / 编辑器各给自己那份项，**动作都落到同一批函数**（close/save/undo…），不复制逻辑。
  */
-let noticeTimer: ReturnType<typeof setTimeout> | undefined
+/** 瞬时反馈统一走 toast（决策 #1236）：不再塞进状态栏 */
 function flash(msg: string) {
-  notice.value = msg
-  clearTimeout(noticeTimer)
-  noticeTimer = setTimeout(() => {
-    if (notice.value === msg) notice.value = ''
-  }, 1800)
+  pushToast(msg)
 }
 
 async function copyPath(p: string) {
@@ -563,7 +559,6 @@ async function save() {
   const body = view.state.doc.toString()
   if (body === rec.base) return
   saving.value = true
-  notice.value = ''
   try {
     const nm = await writeText(cur.value, body, rec.mtime)
     rec.base = body
@@ -571,10 +566,10 @@ async function save() {
     dirty.value = false
     setTabDirty(cur.value, false)
     states.set(cur.value, view.state)
-    notice.value = `已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+    pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
   } catch (e) {
     // ★失败必须显示出来：静默失败的保存比不保存更糟（用户以为已落盘）
-    notice.value = String((e as Error)?.message ?? e)
+    pushToast(String((e as Error)?.message ?? e), 'err')
   } finally {
     saving.value = false
   }
@@ -676,12 +671,8 @@ onBeforeUnmount(() => {
           >
             <StudioIcon v-if="r.node.dir" name="chevron" :size="12" />
           </span>
-          <StudioIcon
-            :name="nodeIcon(r.node).name"
-            :size="14"
-            class="ico"
-            :style="nodeIcon(r.node).color ? { color: nodeIcon(r.node).color } : undefined"
-          />
+          <StudioIcon v-if="r.node.dir" :name="nodeIcon(r.node).name" :size="14" class="ico" />
+          <FileIcon v-else :path="r.node.path" :size="15" class="ico" />
           <span class="name">{{ r.node.name }}</span>
         </button>
         </nav>
@@ -698,13 +689,6 @@ onBeforeUnmount(() => {
             <span class="bullet" />未保存
           </button>
           <span v-else-if="saving" class="meta">保存中…</span>
-          <span
-            class="notice"
-            id="codeNotice"
-            :class="{ bad: !!notice && !notice.startsWith('已保存') }"
-          >
-            {{ notice }}
-          </span>
           <span style="flex: 1" />
           <span class="note" id="codeNote">⌘S 保存 · 着色 .vue/.rs/.ts/.css/.m</span>
         </div>
@@ -790,19 +774,6 @@ onBeforeUnmount(() => {
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-}
-.notice {
-  max-width: 46%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg-subtle);
-  user-select: text;
-}
-/* 保存失败/冲突：红色，且**必须**能看清全文（这里用 title + 不截断宽度） */
-.notice.bad {
-  color: var(--bad);
-  max-width: 60%;
 }
 .split {
   flex: 1;

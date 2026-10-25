@@ -1,48 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Proteus Studio 应用图标（决策 #1235 · 去 AI 味版）
+     与 docs/brand 的关系：字母 P 取自 Proteus，容器取品牌紫（正式）/ 绿（预览）。
+     ★生产标准：单色同族两档渐变 + 一个精确字形，**没有**回光、扫带、投影、三色带、粒子光晕。
+     那些是"AI 生成图标"的典型痕迹：每层都想加戏，结果每处都发灰。 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="base" x1="0.06" y1="0" x2="0.94" y2="1">
-      <stop offset="0" stop-color="#34d399"/><stop offset="0.52" stop-color="#10b981"/><stop offset="1" stop-color="#0d9488"/>
-    </linearGradient>
-    <radialGradient id="toplight" cx="0.08" cy="0" r="0.62">
-      <stop offset="0" stop-color="#d9fbe8" stop-opacity="0.45"/><stop offset="1" stop-color="#d9fbe8" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="corner" cx="0.95" cy="0.97" r="0.70">
-      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.60"/><stop offset="0.5" stop-color="#8b5cf6" stop-opacity="0.20"/>
-      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
-    </radialGradient>
-    <!-- 字后面的一团回光：让字母像"从里面被点亮"，而不是贴上去 -->
-    <radialGradient id="back" cx="0.5" cy="0.52" r="0.34">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
-    <!-- 斜向高光带：静态图里唯一的"动"暗示 -->
-    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="0.40" stop-color="#ffffff" stop-opacity="0.09"/>
-      <stop offset="0.56" stop-color="#ffffff" stop-opacity="0.02"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    <!-- 单色同族两档：不是"紫→蓝→绿"的多色带，也没有回光/扫带/投影。
+         大厂的扁平图标基本只有"一个色相 + 一档明度差"（Xcode 蓝、VS Code 蓝同款做法） -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#24B287"/>
+      <stop offset="1" stop-color="#0E8F66"/>
     </linearGradient>
     <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/><stop offset="0.36" stop-color="#ffffff" stop-opacity="0.09"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.20"/>
       <stop offset="1" stop-color="#ffffff" stop-opacity="0.03"/>
     </linearGradient>
-    <filter id="soft" x="-25%" y="-25%" width="150%" height="160%">
-      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0a0f33" flood-opacity="0.20"/>
-    </filter>
     <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
   </defs>
-
-  <g clip-path="url(#tile)">
-    <rect x="100" y="100" width="824" height="824" fill="url(#base)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#toplight)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#corner)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#back)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#sweep)"/>
-  </g>
+  <g clip-path="url(#tile)"><rect x="100" y="100" width="824" height="824" fill="url(#bg)"/></g>
   <rect x="101" y="101" width="822" height="822" rx="185" fill="none" stroke="url(#rim)" stroke-width="2"/>
-  <g filter="url(#soft)" transform="translate(-32,2)">
+  <g transform="translate(-32,0)">
     <path d="M408 284 H 566 A 114 114 0 0 1 680 398 A 114 114 0 0 1 566 512 H 408"
-          fill="none" stroke="#ffffff" stroke-width="104" stroke-linecap="butt"/>
-    <rect x="356" y="232" width="104" height="556" fill="#ffffff"/>
+          fill="none" stroke="#ffffff" stroke-width="96" stroke-linecap="butt"/>
+<rect x="356" y="232" width="104" height="556" fill="#ffffff"/>
   </g>
 </svg>

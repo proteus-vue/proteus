@@ -753,9 +753,17 @@ void poc_use_bundle_icon(void) {
       fprintf(stderr, "[studio] 包内没有 icon.icns，Dock 图标保持 Tauri 嵌入的那张\n");
       return;
     }
-    NSImage *img = [[NSImage alloc] initWithContentsOfFile:p];
-    if (img == nil) {
+    // ★按**数据**读，不按路径读（2026-10-25 踩到）：`.icns` 走 IconServices 的**文件缓存**，
+    //   `initWithContentsOfFile:` 在换图之后可能照样返回**上一版**图标——
+    //   包里 icns 明明是新的，Dock 却还是旧的。`initWithData:` 直接读字节，绕过这层缓存。
+    NSData *data = [NSData dataWithContentsOfFile:p];
+    if (data == nil) {
       fprintf(stderr, "[studio] icon.icns 读不出来：%s\n", p.UTF8String);
+      return;
+    }
+    NSImage *img = [[NSImage alloc] initWithData:data];
+    if (img == nil) {
+      fprintf(stderr, "[studio] icon.icns 解码失败：%s\n", p.UTF8String);
       return;
     }
     [NSApplication sharedApplication].applicationIconImage = img;
