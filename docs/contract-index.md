@@ -264,6 +264,35 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 
 ---
 
+## 8b. 真机探针登记（Android · `SuperappActivity` 的 `--es capprobe` 三个分支）
+
+**触发**：改 `hosts/android/app/src/main/java/dev/proteus/layoutcore/shell/SuperappActivity.java`
+的探针分支，或**新增一个"上界/配额类"能力的真机判据**。
+
+| 分支 | 形态 | 用途 |
+|---|---|---|
+| `method\|json` | 调**一次** `caps.invoke` | 验单个宿主方法的语义（#1225 起的通用直通） |
+| `js:<expr>` | **裸** `QuickJsEngine.eval` | 验 **JS 层**（如 saveFile 三件套不走宿主 invoke） |
+| ★★★ `loop:<method>\|<json>\|<n>` | 同一实例连调 n 次，回执打 `LOOP_RECEIPT` | **上界/配额类**：验"第 N 次成功、第 N+1 次被拒" |
+
+**必须跑**：`bash hosts/android/run-worker-bound-probe.sh`（改 worker 相关）或对应能力的探针脚本。
+
+★★**为什么必须用 `loop:`（两条弯路，各自白跑过）**：
+1. **循环 `am start` + `force-stop` 永远验不出上界**：`HostCapabilities caps` 是
+   **Activity 的实例字段**（`boot()` 里 `new`）⇒ 每次重启清空计数器 ⇒ 上界到不了第 17 次。
+   第一版 `run-worker-bound-probe.sh` 就是这么写的（判据必然假红，且**永远不会自己变绿**）。
+2. **`js:` 分支也不行**：它是裸 eval，`__proteusHostInvoke` 在裸上下文里**不存在**
+   （实测 17/17 `ReferenceError`）——那个全局是 bundle 装进上下文后才有的。
+
+★★**判据口径（上界类通用）**：必须**同时**断言"第 N 个成功"与"第 N+1 个被拒"。
+只断言后者时，**把上界写成 0** 也能通过（那种实现第 1 个就全拒，是更糟的 bug）。
+
+★**这一类不能一条命令闭环**：要 USB 设备 + 已构建 APK（`bash hosts/android/build-and-run.sh`）。
+★`build-and-run.sh` 末尾会自己 `am start MainActivity` 并提示 `sleep 6`——
+跑探针脚本前它**已结束**，不会抢占你的 `am start`；但若手动并行跑两者，后面的会顶掉前面的 intent。
+
+---
+
 ## 9. 文档生成器（源文件集合）
 
 **触发**：拆分/改名 `packages/api/src/*.ts` 或 `packages/*/src/*.ts`。

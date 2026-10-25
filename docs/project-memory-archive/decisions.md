@@ -14273,3 +14273,73 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ★代价要说清：没有箭头，第一次用的人要靠"图标会变"来发现可折叠；换来的是更干净的一列。
     若将来要补，正确做法是 **hover 时才淡入**箭头，而不是常驻。
   - `StudioIcon` 里的 `chevron` 一并删除（**不留死代码**）。
+
+1250. **本批首次上真机：worker 上界 5/5 · 上传流式 13/13 无回归；并补上通用 \`loop:\` 探针分支**（2026-10-25 · 用户「好的继续」）:
+
+【为什么要上设备（前两批全是单元判据，没有一条真机证据）】
+  #1242/#1249 给**两端宿主**加了 `MAX_WORKERS = 16` 上界闸（Java / Swift），并拆出了
+  `UploadBackpressure.java`（上传流式请求体整体搬过去）。
+  ★这些改动**单测碰不到**：上界闸在 Java 里、拆分改了 `writeTo` 的实现位置。
+  静态体检只能证明"常量被用于比较"，不能证明"真宿主真的在第 17 次拒绝"。
+  ⇒ 本轮补真机，两条都跑通了。
+
+【① worker 上界真机：5/5 通过】
+  连调 17 次 `worker.create` 的回执：
+  ```
+  15:{"ok":true,"data":{"id":15,"thread":"worker-15"}}
+  16:{"ok":true,"data":{"id":16,"thread":"worker-16"}}
+  17:ERR:IllegalStateException: worker.tooManyWorkers: 存活 worker 已达上界 16（当前 16）——疑似未 terminate
+  ```
+  ★判据刻意**同时**断言"第 16 个成功"与"第 17 个被拒"——只断言后者时，
+    **把上界写成 0** 也能通过（那种实现第 1 个就全拒，是更糟的 bug）。
+
+【② 上传流式无回归：13/13 通过】
+  `bash hosts/android/run-upload-probe.sh`（8 MiB 走"先下载→再上传"完整链路）：
+  · 服务端收到 8388608B、首字节 0 / 末字节 255 / 表单字段正确
+  · ★**`peak_chunk_bytes = 16384`，与 8 MiB 文件无关**（这才是 S3 要的"内存有界"）
+  · 512 块、`total_bytes=8388911 > 8388608`（含 multipart 头尾）
+  ⇒ `UploadBackpressure` 拆分（把 `writeTo` 整体搬到新类）**没有破坏流式语义**。
+
+【③ ★★★ 补上通用 \`loop:\` 探针分支（这一节是本轮最该记的）】
+  `SuperappActivity` 原有两条探针分支，**都不适合验上界**：
+
+  · **循环 \`am start\` + \`force-stop\` 永远验不出上界**：
+    `HostCapabilities caps` 是 **Activity 的实例字段**（`boot()` 里 `new`）——
+    每次重启都**清空 `workers` Map** ⇒ 计数器到不了第 17 次。
+    ★第一版 `run-worker-bound-probe.sh` 就是这么写的：判据必然假红，而且**永远不会自己变绿**
+      （不是我脚本里某个细节写错，是**方法论错了**）。白跑一轮才定位到。
+  · **`js:` 分支也不行**：它是**裸** `QuickJsEngine.eval`，而 `__proteusHostInvoke`
+    在裸上下文里**不存在**（实测 17/17 全是 `ReferenceError: '__proteusHostInvoke' is not defined`）
+    ——那个全局是 bundle 装进上下文之后才有的。
+
+  ⇒ 新增 `--es capprobe "loop:<method>|<json>|<n>"`：**同一实例、同一进程、同一 `caps.invoke` 腿**，
+    重复 n 次并收集回执成一行 `LOOP_RECEIPT`。
+  ★**这不是一次性脚手架**：所有"上界/配额类"能力都要验"第 N 次成功、第 N+1 次被拒"——
+    `ws.open`（WS_MAX_CONNECTIONS）· `socket-task`（SOCKET_TASK_MAX_TASKS）·
+    capture 订阅（CAPTURE_MAX_SUBSCRIPTIONS）· sensor 订阅（SENSOR_MAX_SUBSCRIPTIONS）……
+    后续每一项都直接用它，不必再发明装置。
+  ★与 `method|json` 分支互斥（后者加了 `!startsWith("loop:")`）——否则 `loop:` 串里的 `|`
+    会让它同时命中，method 变成 `loop:worker.create`（实测前的推理，已规避）。
+
+【④ 探针登记进 `docs/contract-index.md` 第 8b 节（新）】
+  原第 8 节只覆盖 **iOS** 探针（#1134 的"报告永远是旧的"教训）。
+  ⇒ 新增 Android 侧：三个分支的形态与用途、**必须跑哪条命令**、
+    ★两条弯路的取证（实例字段 / 裸 eval 无 `__proteusHostInvoke`）、
+    ★上界类判据必须"两边都断言"的口径。
+  `pnpm check:contract-index` ✅（54 个路径引用、17 条跨端门禁全在表内）。
+
+【诚实边界】
+  ① 只验了 **Android**。iOS 的 `MAX_WORKERS` 仍只有 `swiftc -typecheck` 覆盖，**真机未跑**
+     （iOS 探针装置不同，需另建）。
+  ② worker 只验"上界会拒"，**未验**"并发 16 个 worker 不崩/不卡"（那要压测）。
+  ③ 上传探针是 #1120 既有装置的**回归复跑**，不是本轮新写的判据。
+
+【★先于本轮就存在的门禁红（如实记录，未代改）】
+  `pnpm check:no-blind-wait` 红在 `hosts/ios/run-screen-stream.sh`（2 处 sleep，行 98/123）。
+  取证：该文件由 **`d66400b5`（决策 #1190，Studio 会话的 iOS 真机串流）** 引入，
+  不在 `scripts/no-blind-wait-baseline.json` 里，`git stash` 后**同样红** ⇒ **不是本轮引入**。
+  ★它是别人的文件（Studio 会话），我不代改；但这条红是真的（违反"禁止任何 sleep"红线），
+    需要由其 owner 按合法形态（`wait_for.sh` / 让 App 主动上报）修掉。
+
+【门禁】check:file-size ✅ · check:content ✅ · check:contract-index ✅
+  · check:android-host-compile ✅ · 定向测试 43 全绿（含 host-probe-registry）

@@ -207,7 +207,48 @@ public class SuperappActivity extends android.app.Activity {
                             " -> " + (jr != null && jr.value != null ? jr.value : "<null>") +
                             (jr != null && jr.error != null ? " ERR=" + jr.error : ""));
                 }
-                if (capProbe != null && capProbe.contains("|")) {
+                /**
+                 * ★★★#1250 扩展：`loop:<method>|<json>|<n>` ⇒ **在同一个 Activity 实例里连调 n 次**，
+                 * 逐次回执打成一行 `LOOP_RECEIPT`。
+                 *
+                 * 【为什么必须加这个入口（不是一次性脚手架）】
+                 *   所有"**上界/配额**类"能力都要验"第 N+1 次被拒、第 N 次成功"：
+                 *     worker.create（MAX_WORKERS）· ws.open（WS_MAX_CONNECTIONS）·
+                 *     socket-task（SOCKET_TASK_MAX_TASKS）· capture 订阅 · sensor 订阅 …
+                 *   ★而 `HostCapabilities` 是 **Activity 的实例字段**（`boot()` 里 new）——
+                 *     每次 `am force-stop` + 重启都**清空计数器** ⇒ 用"循环 am start"验上界
+                 *     **永远验不出**（第一版脚本这么写的，判据必然假红）。
+                 *   ★`js:` 分支也不行：它是裸 eval，`__proteusHostInvoke` 在裸上下文里不存在
+                 *     （实测 ReferenceError ×17）——那个全局是 bundle 装进 JS 上下文后才有的。
+                 *   ⇒ 必须在同一实例、同一 Java 进程里直调 `caps.invoke`，且重复 n 次。
+                 *
+                 * 【语义】与 `method|json` 完全一致（同一条 `caps.invoke` 调用），只是重复并收集回执。
+                 *   ★与 JS 侧两条腿（`__proteusHostInvoke` → `proteusHost.invoke`）的**落点相同**：
+                 *     那两条腿最终都调到 `HostBridge` → `caps.invoke`。
+                 */
+                if (capProbe != null && capProbe.startsWith("loop:")) {
+                    String rest = capProbe.substring(5);
+                    String[] lp = rest.split("\\|", 3);
+                    String lm = lp.length > 0 ? lp[0] : "";
+                    String la = lp.length > 1 && !lp[1].isEmpty() ? lp[1] : "{}";
+                    int ln = lp.length > 2 ? Math.max(1, Math.min(512, Integer.parseInt(lp[2].trim()))) : 1;
+                    StringBuilder sb = new StringBuilder();
+                    if (caps == null) {
+                        android.util.Log.i("ProteusCapProbe", "LOOP_RECEIPT ERROR caps==null（boot 未完成）");
+                    } else for (int li = 1; li <= ln; li++) {
+                        String one;
+                        try {
+                            one = String.valueOf(caps.invoke(lm, la));
+                        } catch (Exception le) {
+                            one = "ERR:" + le.getClass().getSimpleName() + ": " + le.getMessage();
+                        }
+                        if (li > 1) sb.append(" ||| ");
+                        sb.append(li).append(':').append(one.length() > 140 ? one.substring(0, 140) : one);
+                    }
+                    android.util.Log.i("ProteusCapProbe",
+                            "LOOP_RECEIPT method=" + lm + " n=" + ln + " -> " + sb);
+                }
+                if (capProbe != null && capProbe.contains("|") && !capProbe.startsWith("loop:")) {
                     String[] cp = capProbe.split("\\|", 2);
                     String cpArgs = cp[1].isEmpty() ? "{}" : cp[1];
                     // ★与 capability-invoke.ts 同一判据：两条腿都试（通用全局 → JNI 主通道）
