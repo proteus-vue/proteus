@@ -13857,3 +13857,21 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **诚实边界**：两个通道共用同一个二进制与 web-dist（只有图标/名称/bundle id 不同），
     数据目录仍是 `dev.proteus.studio.shell` 的 state.json ⇒ **同机双开时工作区状态会互相覆盖**。
     若要真隔离，得让 Rust 侧按 bundle id 分目录（记在下一步）。
+
+1229. **两个 .app 同名可执行文件导致 Dock 图标串台 + 图标缓存不自动失效 · 修复**（2026-10-25 · 用户「build-app 里正式版还是很旧的临时图标；预览版启动时图标正常，几秒后变回正式版的 P」）:
+  - **先取证，不猜**：把两个包里的 `Contents/Resources/icon.icns` 按块解出来 —— **两个都是新的**
+    （release 紫 P / preview 绿 P，ic07=128 的 PNG 直接读出来目视确认）。包内没问题，问题在包外。
+  - **根因①（结构性）**：两个 .app 里放了**同名**可执行文件 `proteus-studio-shell`。
+    两份二进制字节相同、ad-hoc 签名也相同，只有 Info.plist 的 id 不同 ⇒ Dock/LaunchServices 解析
+    **运行中进程**的图标时会串到另一边的缓存上（症状正是"预览版先绿、几秒后变紫"）。
+    ⇒ 修复：**按通道分可执行名** —— 预览包用 `proteus-studio-shell-preview`（`CFBundleExecutable` 同步）；
+    打包前 `rm -f` 两种命名残留（否则 `bundle-dylibs.py` 的 `os.listdir(MacOS)[0]` 会挑到旧的）。
+    验证：`lsappinfo list` 现在两条 —— `dev.proteus.studio.shell` 与 `...shell.preview`，executable path 也不同。
+  - **根因②（缓存）**：ad-hoc 签名是确定性的（`--timestamp=none`），内容不变时签名也不变
+    ⇒ macOS 的 icon cache（按 bundle 路径 + 签名）**不会自动失效**。这正是"包里 icns 已是新的、
+    Dock 里还是几天前那个"的原因。修复：`lsregister -f` + `killall Dock`；脚本在**图标指纹变化**时打印提示。
+  - **★用系统自己的图标解析取证**：`NSWorkspace.iconForFile` 把 macOS **实际会用**的图标写成 PNG
+    （JXA 脚本），确认 release=紫 P、preview=绿 P。这比"包内文件对不对"更接近用户看到的东西。
+  - **附带修掉一个真 bug**：`package-app.sh` 里 `$APP（可执行…）` 这种**变量后紧跟中文全角括号**会被 bash
+    当成变量名的一部分 ⇒ `APP?: unbound variable`（`set -u` 下整段构建失败）。改成 `${APP}（`；
+    `$CARGO_MIN（` 同样一处潜伏 bug 一起修。

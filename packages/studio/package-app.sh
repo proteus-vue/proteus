@@ -32,14 +32,20 @@ while [ $# -gt 0 ]; do
 done
 
 # 通道 → 名字 / id 后缀 / 图标源（决策 #1228：通道靠**色相**，不靠角标）
+#  ★**可执行文件名也必须按通道分开**（2026-10-25 实测踩到）：两个 .app 里放**同名**的可执行文件时，
+#    macOS 会把它们当成"同一个可执行程序"的两次运行 —— Dock 图标的解析会串到另一边的缓存上
+#    （症状：预览版启动时图标是绿的，几秒后变成正式版的紫）。两份二进制字节相同，差别只在包身份，
+#    所以让**文件名**先不同，Dock/LaunchServices 才有东西可区分。
 if [ "$CHANNEL" = "preview" ]; then
   APP_NAME="Proteus Studio Preview"
   IDENT_SUFFIX=".preview"
+  EXE_NAME="proteus-studio-shell-preview"
   ICNS="icons/icon-preview.icns"
   ICNS_SRC=("icons/icon-preview.svg" "icons/icon-preview-small.svg")
 else
   APP_NAME="Proteus Studio"
   IDENT_SUFFIX=""
+  EXE_NAME="proteus-studio-shell"
   ICNS="icons/icon.icns"
   ICNS_SRC=("icons/icon.svg" "icons/icon-small.svg")
 fi
@@ -84,7 +90,7 @@ pick_cargo() {
   return 1
 }
 if ! CARGO="$(pick_cargo)"; then
-  echo "✗ 找不到 cargo ≥ $CARGO_MIN（依赖 icu_provider 需要 edition2024；brew 的 1.83 不够）"
+  echo "✗ 找不到 cargo ≥ ${CARGO_MIN}（依赖 icu_provider 需要 edition2024；brew 的 1.83 不够）"
   echo "  装 rustup 工具链，或把 ~/.cargo/bin 放到 PATH 前面"
   exit 1
 fi
@@ -111,8 +117,14 @@ fi
 #   ⇒ 改成覆盖式：可执行文件与 plist 都是单文件覆盖，Frameworks 由 bundle-dylibs.py 幂等补齐。
 #     代价：已从依赖里消失的旧 dylib 不会被自动清理（多留几十 MB，不影响运行）。
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp -f "$BIN" "$APP/Contents/MacOS/$BIN_NAME"
+# 清掉可能残留的另一种命名（否则 bundle-dylibs.py 的 `os.listdir(MacOS)[0]` 可能挑到旧的那个）
+rm -f "$APP/Contents/MacOS/proteus-studio-shell" "$APP/Contents/MacOS/proteus-studio-shell-preview"
+cp -f "$BIN" "$APP/Contents/MacOS/$EXE_NAME"
+OLD_ICON_SUM="$(shasum -a 256 "$APP/Contents/Resources/icon.icns" 2>/dev/null | cut -d' ' -f1 || true)"
 cp -f "$HERE/$ICNS" "$APP/Contents/Resources/icon.icns"
+NEW_ICON_SUM="$(shasum -a 256 "$APP/Contents/Resources/icon.icns" | cut -d' ' -f1)"
+ICON_CHANGED=0
+[ "$OLD_ICON_SUM" = "$NEW_ICON_SUM" ] || ICON_CHANGED=1
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 VERSION="$(python3 -c "import json;print(json.load(open('$HERE/tauri.conf.json'))['version'])")"
@@ -125,7 +137,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
-  <key>CFBundleExecutable</key><string>$BIN_NAME</string>
+  <key>CFBundleExecutable</key><string>$EXE_NAME</string>
   <key>CFBundleIconFile</key><string>icon.icns</string>
   <key>CFBundleIdentifier</key><string>$IDENT$IDENT_SUFFIX</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -152,7 +164,7 @@ codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || echo "⚠ a
 echo "▸ 校验"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null && echo "  ✓ Info.plist 合法"
 codesign -dv "$APP" 2>&1 | grep -E "Identifier|Signature" | sed 's/^/  /' || true
-echo "  ✓ 产物：$APP"
+echo "  ✓ 产物：${APP}（可执行：${EXE_NAME}）"
 du -sh "$APP" | sed 's/^/  /'
 # ★把三个时间点摆出来："看起来构建过"和"里面是三天前的 UI"从外面分不出来，只有时间能说话
 #   ★macOS 的 `stat -f` 里 `%Sm` 才是"最后修改时间"，`-t` 给的是它的格式串；
@@ -160,7 +172,14 @@ du -sh "$APP" | sed 's/^/  /'
 printf '  ✓ 新鲜度：UI %s · 二进制 %s · 包内 %s\n' \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$HERE/web-dist/index.html")" \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$BIN")" \
-  "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP/Contents/MacOS/$BIN_NAME")"
+  "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP/Contents/MacOS/$EXE_NAME")"
+
+# ★图标变了就必须提醒：macOS 的 Dock/Finder 图标是**按 bundle 路径+签名**缓存的，
+#   而我们的 ad-hoc 签名是确定性的（`--timestamp=none`）⇒ 内容没变时签名也一样 ⇒ 缓存不会自动失效。
+#   实测症状：包里 icns 已经是新的（sha256 对得上），Dock 里仍是几天前的图标。
+if [ "$ICON_CHANGED" = "1" ]; then
+  echo "  ⚠ 图标已更新：Dock / Finder 若仍显示旧图标是缓存，执行：killall Dock"
+fi
 
 if [ "$OPEN_AFTER" = "1" ]; then
   echo "▸ 打开"
