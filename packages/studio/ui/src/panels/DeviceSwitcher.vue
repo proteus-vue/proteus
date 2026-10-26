@@ -24,10 +24,11 @@ const groups = computed(() =>
     .filter((g) => g.items.length),
 )
 
-async function refresh() {
+/** `force` = 用户点「刷新」：跳过 iOS 那 30 秒缓存（xcdevice 一次要 ~7s，不能每次都跑） */
+async function refresh(force = false) {
   if (!hasBridge()) return
   try {
-    devices.value = await listDevices()
+    devices.value = await listDevices(force)
   } catch (e) {
     pushToast(String((e as Error)?.message ?? e), 'err')
   }
@@ -59,7 +60,7 @@ function shortSerial(s: string) {
   return s.length > 16 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s
 }
 
-onMounted(refresh)
+onMounted(() => void refresh(false))
 </script>
 
 <template>
@@ -81,6 +82,8 @@ onMounted(refresh)
           <span class="dot" :class="{ off: d.state !== 'device' }" />
           <span class="dmodel">{{ d.model }}</span>
           <span class="dmeta">{{ d.size ?? d.state }} · {{ shortSerial(d.serial) }}</span>
+          <!-- 不可用的原因写**行内**（只放 tooltip 等于没说）：决策 #1276 -->
+          <span v-if="d.note && d.state !== 'device'" class="dnote" :data-note="d.platform">{{ d.note }}</span>
         </button>
       </template>
       <div v-if="!devices.length" class="dnone">没有检测到设备（插上 USB 并允许「USB 调试」）</div>
@@ -88,7 +91,7 @@ onMounted(refresh)
       <div v-else-if="!groups.some((g) => g.platform === 'ios')" class="dnone">
         iOS：没列出设备 —— 检查「设置 → 开发环境 → iOS」的 Xcode 路径，以及手机是否已信任此电脑
       </div>
-      <button class="drefresh" id="devRefresh" @click="refresh">刷新设备列表</button>
+      <button class="drefresh" id="devRefresh" @click="refresh(true)">刷新设备列表</button>
     </div>
     <template #note>
       <span>切换设备会重启采集会话（画面黑一下）。机型/尺寸按串号缓存，不会串台。</span>

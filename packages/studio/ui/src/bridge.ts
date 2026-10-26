@@ -138,7 +138,8 @@ export interface DeviceInfo {
   size: string | null
   current: boolean
 }
-export const listDevices = (): Promise<DeviceInfo[]> => invoke<DeviceInfo[]>('list_devices')
+export const listDevices = (force = false): Promise<DeviceInfo[]> =>
+  invoke<DeviceInfo[]>('list_devices', { force })
 
 /** 切换当前设备：改串号/尺寸 → 用**当前画质档**重建采集命令 → 重启会话 */
 export const selectDevice = (serial: string): Promise<CaptureInfo> =>

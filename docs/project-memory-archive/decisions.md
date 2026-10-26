@@ -15031,3 +15031,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ★这条很重要：`xcrun` 找不到工具时是**静默失败**的（退出码非零但不报错给人看）。
   - **教训**："路径存在" ≠ "工具可用"。凡是要靠外部工具产出的数据，**必须真跑一次看输出**，
     否则挑选逻辑会在"有多个版本、其中一个是坏的"这种真实环境里稳定选错。
+
+1276. **iOS 设备"离线"是检测方式错了：`xctrace` ≠ 可用性（改用 `xcdevice`）+ 别每次都跑（6.8s）**（2026-10-26 · 用户「已插雷电口、早就信任过，刷新还是离线」）:
+  - **用户的事实**：iPhone 插在 USB-C/雷电口上、早就信任过。而面板显示 offline。
+  - **取证（三层，结论完全不同）**：
+    · `ioreg -rc IOUSBHostDevice` ⇒ **USB 层看得见**「iPhone」（线/口没问题）；
+    · `ideviceinfo -k ProductType` ⇒ `iPhone13,2`（**配对正常、lockdown 通**）；
+    · `xcrun xcdevice list` ⇒ `available: true, interface: usb, iOS 26.7.2`（**Xcode 认为可用**）；
+    · `xcrun xctrace list devices` ⇒ 它在 **`== Devices Offline ==`**。
+  - **根因**：**`xctrace` 是 Instruments 的视角**，要求 Xcode 能挂上去做性能采集。
+    本机 Xcode **14.2** vs 设备 **iOS 26** ⇒ Instruments 连不上就标 Offline。
+    ⇒ **用错了数据源**：判断"能不能投屏"应该看 `xcdevice` 的 `available/ignored/reason`，不是 `xctrace`。
+  - **修（两层）**：
+    ① 枚举改用 `xcrun xcdevice list`（JSON）：按 `platform == com.apple.platform.iphoneos` 过滤
+       （自动排除模拟器和本机 Mac），`available && !ignored` 才算在线，`reason` 直接作为不可用原因；
+       `xctrace` 只在 `xcdevice` 完全不可用时兜底（并如实标注"可能是 Instruments 版本过旧"）。
+    ② **性能**：`xcdevice list` 实测 **6.8 秒**。原来连"这套 Xcode 可不可用"都用它验，两个候选就是 14s+ ⇒
+       面板长时间空白、启动日志线程还没跑完就被杀（**这才是"刷新还是离线"的另一半**）。
+       ⇒ 可用性改成**看文件**（`Contents/Developer/usr/bin/xcdevice` 存在 + 读 `version.plist` 版本号，
+       取版本最高的那套）；iOS 列表**缓存 30 秒**，「刷新」按钮才 `force=true` 跳过缓存。
+  - **验证（真实环境，无头跑）**：
+    `[studio] 设备枚举：Android 0 台 · iOS 1 台` +
+    `ios yunlai的iPhone · iOS 26.7.2 (23H127) · device · 00008101-001938AC1A68801E · USB 连接 · 点它切到推流模式…`
+    （Android 0 台是因为用户把线从安卓换到了 iPhone。）
+  - **附带**：启动时打一行「设备枚举：Android N 台 · iOS M 台」+ 逐台明细 —— "列表为空"是最难自查的故障
+    （adb 与 xcrun 都可能**静默失败**），这条日志让人一眼定位。
+  - **教训（今天最贵的一条之一）**：**同一个"设备离线"，三个工具给三种答案。**
+    选数据源要问"我真正需要的是哪个判断"——我要的是"能不能投屏"，不是"能不能做性能采集"。

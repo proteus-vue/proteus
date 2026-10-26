@@ -92,8 +92,8 @@ fn capture_preset(preset: String) -> Result<capture_preset::CaptureInfo, String>
 
 /// 列出设备（异步 + 阻塞线程池：每台要跑 1~2 次 adb，不能占 IPC 线程）
 #[tauri::command]
-async fn list_devices() -> Vec<device::DeviceInfo> {
-    tauri::async_runtime::spawn_blocking(device::list)
+async fn list_devices(force: Option<bool>) -> Vec<device::DeviceInfo> {
+    tauri::async_runtime::spawn_blocking(move || device::list(force.unwrap_or(false)))
         .await
         .unwrap_or_default()
 }
@@ -799,6 +799,30 @@ fn main() {
                 std::thread::sleep(Duration::from_millis(300));
                 poll_window(h, 100);
             });
+            /* 启动时把**设备枚举结果**打一行日志（决策 #1276）：
+               "列表为空"是最难自查的故障（xcrun/adb 都可能静默失败）。这条日志让人一眼看到
+               各平台列到几台、以及 iOS 用的是哪套 Xcode。 */
+            {
+                let h3 = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(1200));
+                    let list = device::list(false);
+                    let android = list.iter().filter(|d| d.platform == "android").count();
+                    let ios = list.iter().filter(|d| d.platform == "ios").count();
+                    eprintln!("[studio] 设备枚举：Android {android} 台 · iOS {ios} 台");
+                    for d in &list {
+                        eprintln!(
+                            "[studio]   {} {} · {} · {}{}",
+                            d.platform,
+                            d.model,
+                            d.state,
+                            d.serial,
+                            if d.note.is_empty() { String::new() } else { format!(" · {}", d.note) }
+                        );
+                    }
+                    drop(h3);
+                });
+            }
             /* 回归钩子（决策 #1267）：`STUDIO_OPEN_SETTINGS_MS=<毫秒>` ⇒ 到点自动开设置窗口。
                用来在**无头**模式下验证"独立窗口真能建起来"——窗建不出来的表现是白窗，
                而判据跑的是 http 页面，天生看不到 Tauri 那一层。 */

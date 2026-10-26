@@ -217,6 +217,8 @@ code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:
 .devrow.dead{opacity:.55;cursor:not-allowed}
 .dmodel{font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dmeta{font-size:var(--fs-xs);color:var(--fg-subtle);font-variant-numeric:tabular-nums}
+/* 不可用的原因（行内第二行）：比 tooltip 更容易被发现 */
+.dnote{grid-column:2 / -1;font-size:var(--fs-xs);color:var(--fg-subtle);line-height:1.5;white-space:normal;text-align:left}
 .dnone{font-size:var(--fs-xs);color:var(--fg-subtle);padding:4px var(--sp2);line-height:1.6}
 .drefresh{margin-top:var(--sp2);align-self:flex-start;padding:2px var(--sp2);border:1px solid var(--border);
           border-radius:var(--r-sm);background:transparent;color:var(--fg-muted);
