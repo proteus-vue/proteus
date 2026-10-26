@@ -114,6 +114,14 @@ export function stubTauri(payload) {
         if (cmd === 'device_swipe') {
           if (window.localStorage.getItem('__TAP_UNSUPPORTED__') === '1')
             throw new Error('当前画面源不支持触控回传（只有 Android / adb 实时投屏能注入）')
+          // ★照 Rust 的类型规则校验（决策 #1262）：真实命令的参数是 u32，
+          //   负数/非整数会被 Tauri 挡在门外并弹红条。桩不照做的话，
+          //   "拖出画布算出负坐标"这类缺陷在判据里永远是绿的。
+          for (const k of ['x1', 'y1', 'x2', 'y2']) {
+            const v = args?.[k]
+            if (!Number.isInteger(v) || v < 0)
+              throw new Error(`invalid args \`${k}\` for command \`device_swipe\`: invalid value: integer \`${v}\`, expected u32`)
+          }
           return `${args?.x1},${args?.y1}→${args?.x2},${args?.y2} @${args?.ms}ms`
         }
         // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭

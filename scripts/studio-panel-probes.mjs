@@ -775,11 +775,36 @@ export async function probeGesture(page) {
   await page.waitForTimeout(300)
   const afterAltDrag = (await swipes()).slice(swipeBase)
   const xAfterAlt = await screenX()
+  // ④ 拖出画布（指针捕获会让拖拽继续产生事件）⇒ 坐标必须被**夹在画布内**，
+  //    绝不能算出负数（真实命令参数是 u32，负数会被 Tauri 拒绝并弹红条，决策 #1262）
+  const rect = await page.evaluate(() => {
+    const r = document.getElementById('canvas').getBoundingClientRect()
+    return { x: r.x, y: r.y, w: r.width, h: r.height }
+  })
+  const beforeOut = (await swipes()).length
+  await page.mouse.move(rect.x + rect.w / 2, rect.y + rect.h / 2)
+  await page.mouse.down()
+  await page.mouse.move(rect.x - 220, rect.y - 180, { steps: 4 })
+  await page.mouse.up()
+  await page.waitForTimeout(300)
+  const afterOut = (await swipes()).slice(swipeBase)
+  const outSwipe = afterOut[afterOut.length - 1] ?? null
+  const outInBounds =
+    !!outSwipe &&
+    [outSwipe.x1, outSwipe.y1, outSwipe.x2, outSwipe.y2].every((v) => Number.isFinite(Number(v)) && Number(v) >= 0)
+  const errToast = await page.evaluate(
+    () => [...document.querySelectorAll('#toasts .toast')].map((n) => n.textContent?.trim() ?? '').join(' | '),
+  )
+
   // 复位平移，别把状态留给后面
   await page.click('.zoom button[aria-label="适应窗口"]')
   await page.waitForTimeout(300)
 
   return {
+    swipeOut: outSwipe,
+    outInBounds,
+    errToast,
+    swipeCountAfterOut: beforeOut,
     swipeOfDrag: afterDrag[0] ?? null,
     swipeCountAfterDrag: afterDrag.length,
     panMovedByPlainDrag: Math.abs(xAfterDrag - xBefore) > 1,

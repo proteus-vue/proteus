@@ -641,7 +641,7 @@ const checks = [
   ],
   // ㊱ 手势：**直接拖拽 = 滑动**、按住不动 = 长按；⌥+拖拽 = 平移（决策 #1261 反转过默认）
   [
-    `㊱ 手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByPlainDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · ⌥拖后累计 ${g.swipeCountAfterAltDrag} 条（应 2）、画布被平移=${g.panMovedByAltDrag}（应 true）`,
+    `㊱ 手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByPlainDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · ⌥拖后累计 ${g.swipeCountAfterAltDrag} 条（应 2）、画布被平移=${g.panMovedByAltDrag}（应 true）· 拖出画布 → ${JSON.stringify(g.swipeOut)}（坐标非负=${g.outInBounds}，报错提示=「${g.errToast.slice(0, 30)}」应空）`,
     g.swipeCountAfterDrag === 1 &&
       Number(g.swipeOfDrag?.x1) === Number(g.swipeOfDrag?.x2) &&
       Number(g.swipeOfDrag?.y2) < Number(g.swipeOfDrag?.y1) - 50 &&
@@ -653,7 +653,10 @@ const checks = [
       Number(g.swipeOfHold?.y1) === Number(g.swipeOfHold?.y2) &&
       Number(g.swipeOfHold?.ms) === 600 &&
       g.swipeCountAfterAltDrag === 2 &&
-      g.panMovedByAltDrag === true,
+      g.panMovedByAltDrag === true &&
+      // ④ 拖出画布：坐标被夹住（不能是负数，否则 u32 直接拒绝）
+      g.outInBounds &&
+      !g.errToast.includes('invalid args'),
   ],
   // ⑱h Git 只读：分支/改动数 + 改动清单可点开 + Diff 可切 HEAD
   [

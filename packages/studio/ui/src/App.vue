@@ -244,9 +244,17 @@ function clientToDevice(clientX: number, clientY: number): { x: number; y: numbe
      `dev_w/h` 未知时（iOS 那条腿 / 探测失败）才回落到码流尺寸。 */
   const dw = d.dev_w > 0 ? d.dev_w : d.width
   const dh = d.dev_h > 0 ? d.dev_h : d.height
+  const x = Math.round(((clientX - r.left) / r.width) * dw)
+  const y = Math.round(((clientY - r.top) / r.height) * dh)
+  /* ★★夹进屏幕范围（决策 #1262）：指针捕获会让拖拽在画布外继续产生 pointermove
+     （拖到窗口外也照样来）⇒ 不夹会算出**负坐标**，而 `device_tap/swipe` 的参数是 `u32`，
+     Tauri 直接拒绝并弹「invalid value: integer -220, expected u32」——用户只看到一条莫名其妙的红条，
+     而该发生的是"手指顶到屏幕边上"。
+     ★为什么只夹这一次：在**映射之后**夹，就等于同时处理了左下越界与右上越界；
+       再在映射前夹一遍只是重复（第一版就写了两道，破坏性验证因此测不出差别）。 */
   return {
-    x: Math.round(((clientX - r.left) / r.width) * dw),
-    y: Math.round(((clientY - r.top) / r.height) * dh),
+    x: Math.min(Math.max(x, 0), dw - 1),
+    y: Math.min(Math.max(y, 0), dh - 1),
   }
 }
 
