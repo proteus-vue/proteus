@@ -14598,3 +14598,9 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     也没自动化点击真窗口）⇒ 这一条仍欠一次人眼；b) `.app` 未重打包；c) 只做单指点击，
     滑动/长按/多指要走 `input swipe`/`sendevent`（下一批）；d) 熄屏守卫 1.5s 缓存有边界情形。
   - **下一步**：①真机人眼验一次端到端；②滑动/长按（零依赖）；③终端 pty（需 xterm.js，要用户装依赖）。
+  - **★真机补充取证（2026-10-26 14:1x，用户点亮屏幕后）**：证据 `results/touch-e2e.txt`。
+    亮屏后 `input tap 318 1101`（桌面天气小组件 bounds 中点）⇒ 前台变 `com.miui.weather2/.ActivityWeatherMain`；
+    `input tap 267 1334`（设置页「蓝牙」行中点）⇒ 前台变 `com.android.settings/.SubSettings` 并列出已配对耳机
+    ⇒ **坐标空间 = 设备像素，且精确命中**。★**时序坑**：`am start` 之后**立刻**点同一行没反应（页面还在绘制），
+    补一次 dump（≈1.5s）再点就正常 ⇒ 远程操作"刚出现的页面"要等目标画完，**不是注入失败**。
+    ⇒ 唯一仍未覆盖的一段是"人在 Studio 窗口里点画布"（TCC 拦截图 + 无法自动化点原生窗口），不再声称已验证。
