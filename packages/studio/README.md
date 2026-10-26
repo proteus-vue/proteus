@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **55 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **56 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -25,7 +25,8 @@
 | 原生 GL 画布能挂进 Tauri 窗口，且**位置由 HTML 布局决定**（不是写死全屏） | 日志 `canvas rect = 80.0,68.0 996.0x748.0` 与 CSS 网格算出来的完全一致（左栏 56 + 内边距 24 = 80；顶栏 44 + 24 = 68；宽 1440−56−340−48 = 996） |
 | 真机画面能通过我们的管线渲染进画布 | `results/canvas-device.png`（从 FBO 读回，1280×720，内容是**手机设置页**） |
 | HTML 叠加层与原生画布共存（B2 的结论在产品布局里成立） | 十字线/边框/标签都画在 WebView 层 |
-| **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备像素**（`toDevice()`），拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
+| **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备像素**，拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
+| **滑动 / 长按（⌥ 手势）** | `⌥+拖拽` = 滑动（时长 = 真实按住时长）· `⌥+按住` = 长按（同点 600ms，走同一条 `input swipe`）；**普通拖拽仍是平移**，两条路不抢手势（判据 ㊱） |
 
 | 没做 | 原因 |
 |---|---|

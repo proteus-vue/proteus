@@ -102,6 +102,12 @@ export function stubTauri(payload) {
             throw new Error('设备屏幕没亮（Dozing）：这次点击大概率没效果 —— 先把设备屏幕点亮')
           return `${args?.x},${args?.y}`
         }
+        // 滑动 / 长按（决策 #1255）：与 tap 同一套闸门（源不支持 / 熄屏）
+        if (cmd === 'device_swipe') {
+          if (window.localStorage.getItem('__TAP_UNSUPPORTED__') === '1')
+            throw new Error('当前画面源不支持触控回传（只有 Android / adb 实时投屏能注入）')
+          return `${args?.x1},${args?.y1}→${args?.x2},${args?.y2} @${args?.ms}ms`
+        }
         // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭
         if (cmd === 'set_dirty_count') return null
         if (cmd === 'close_now') return null

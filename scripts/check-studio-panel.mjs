@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
-import { probeCodeExtras, probeMenu, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
+import { probeCodeExtras, probeGesture, probeMenu, probePan, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
@@ -401,48 +401,13 @@ const zoomState = await page.evaluate(() => localStorage.getItem('__saved_state_
 const zoomLabel = await page.evaluate(() => document.getElementById('zoomLabel')?.textContent?.trim() ?? '')
 await page.screenshot({ path: outPath.replace(/\.png$/, '-zoom.png') })
 
-// ── ⑯ 拖拽平移（放大后必须能看别处，否则 4× 只能看中间那一点）──────────────────
-//  真实 mouse 事件序列（down → 多步 move → up），走浏览器命中测试 ⇒ 验的是真手势。
-//  ★只往左拖：1280x720 在 125% 下高 726 < 舞台 796 ⇒ **纵向本来就被夹紧到 0**，
-//    用纵向断言会红，而那不是 bug（正是"屏幕比舞台小就不该能拖"的正确行为）。
-const panBefore = await page.evaluate(() => {
-  const r = document.querySelector('.screen').getBoundingClientRect()
-  return { x: r.x, y: r.y }
-})
-const cb = await page.evaluate(() => {
-  const r = document.getElementById('canvas').getBoundingClientRect()
-  return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-})
-await page.mouse.move(cb.x, cb.y)
-await page.mouse.down()
-await page.mouse.move(cb.x - 40, cb.y, { steps: 3 })
-await page.mouse.move(cb.x - 100, cb.y, { steps: 3 })
-await page.mouse.up()
-await page.waitForTimeout(300)
-const panSeen = await page.evaluate(() => {
-  const r = document.querySelector('.screen').getBoundingClientRect()
-  const all = window.__STUB_CALLS__ || []
-  const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
-  const last = rects[rects.length - 1]
-  return {
-    x: r.x,
-    y: r.y,
-    status: document.getElementById('span')?.textContent?.trim() ?? '',
-    ipcX: Number(last?.args?.x ?? 0),
-  }
-})
-await page.screenshot({ path: outPath.replace(/\.png$/, '-pan.png') })
-
-// ⑯b：回到「适应」后平移必须归零 —— 否则缩小后画面会孤零零站在角落外
-await page.click('.zoom button[aria-label="适应窗口"]')
-await page.waitForTimeout(400)
-const panReset = await page.evaluate(() => ({
-  status: document.getElementById('span')?.textContent?.trim() ?? '',
-  x: document.querySelector('.screen').getBoundingClientRect().x,
-}))
+// ── ⑯ 拖拽平移：采集段在 probePan()（决策 #1255 拆出；逻辑一字未改）
+const { panBefore, panSeen, panReset } = await probePan(page, { outPath })
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
+// ── ㊱ ⌥ 手势（滑动 / 长按）：采集段在 probeGesture()（决策 #1255）
+const g = await probeGesture(page)
 
 // 模拟"上次关在代码视图、在看 main.rs" ⇒ reload 应直接进代码视图
 await page.evaluate(() =>
@@ -661,6 +626,21 @@ const checks = [
       afterTree.headOn &&
       afterTree.marker.includes('packages/studio/ui/src/App.vue') &&
       !afterTree.marker.includes('src/main.rs'),
+  ],
+  // ㊱ ⌥ 手势：拖动 = 滑动、按住不动 = 长按；普通拖拽仍然只平移
+  [
+    `㊱ ⌥手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByAltDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · 普通拖拽后累计 ${g.swipeCountAfterPlainDrag} 条（应 2）`,
+    g.swipeCountAfterDrag === 1 &&
+      Number(g.swipeOfDrag?.x1) === Number(g.swipeOfDrag?.x2) &&
+      Number(g.swipeOfDrag?.y2) < Number(g.swipeOfDrag?.y1) - 50 &&
+      Number(g.swipeOfDrag?.ms) > 0 &&
+      g.panMovedByAltDrag === false &&
+      g.swipeCountAfterHold === 2 &&
+      // 长按 = 同点 + 600ms（★别写成 x1===y1：那是在比两个轴，640≠360 永远假）
+      Number(g.swipeOfHold?.x1) === Number(g.swipeOfHold?.x2) &&
+      Number(g.swipeOfHold?.y1) === Number(g.swipeOfHold?.y2) &&
+      Number(g.swipeOfHold?.ms) === 600 &&
+      g.swipeCountAfterPlainDrag === 2,
   ],
   // ⑱h Git 只读：分支/改动数 + 改动清单可点开 + Diff 可切 HEAD
   [

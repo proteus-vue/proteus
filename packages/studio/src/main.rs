@@ -300,36 +300,62 @@ fn screen_awake(serial: Option<&str>) -> Option<bool> {
     Some(v)
 }
 
-#[tauri::command]
-async fn device_tap(x: u32, y: u32) -> Result<String, String> {
+/// 注入一条 `adb shell input ...`。tap / swipe 共用**同一套闸门**：
+/// ① 源不支持（iOS / 录制流）② 熄屏 ③ 串号。三道闸门只写一次，避免两条命令漂移。
+///
+/// ★`adb` 是**阻塞子进程**（真机 60~120ms）：必须放阻塞线程池，不能占住 IPC/主线程，
+///   否则连续点两下就会卡住整个界面（与 search.rs 里 rg 的处理同理）。
+async fn inject_input(args: Vec<String>) -> Result<(), String> {
     if !TOUCH_ANDROID.load(std::sync::atomic::Ordering::Relaxed) {
         return Err("当前画面源不支持触控回传（只有 Android / adb 实时投屏能注入）".into());
     }
     let serial = ADB_SERIAL.lock().ok().and_then(|g| g.clone());
     // ★熄屏时注入**不会报错也不会生效**（真机实测）⇒ 提前说清楚，别让人以为点歪了
     if let Some(false) = screen_awake(serial.as_deref()) {
-        return Err("设备屏幕没亮（Dozing）：这次点击大概率没效果 —— 先把设备屏幕点亮".into());
+        return Err("设备屏幕没亮（Dozing）：这次操作大概率没效果 —— 先把设备屏幕点亮".into());
     }
-    // ★`adb` 是**阻塞子进程**（真机 60~120ms）：必须放阻塞线程池，不能占住 IPC/主线程，
-    //   否则连续点两下就会卡住整个界面（与 search.rs 里 rg 的处理同理）。
     let out = tauri::async_runtime::spawn_blocking(move || {
         let mut c = std::process::Command::new("adb");
         if let Some(s) = serial.as_deref() {
             c.args(["-s", s]);
         }
-        c.args(["shell", "input", "tap", &x.to_string(), &y.to_string()]);
-        c.output()
+        c.args(["shell", "input"]).args(&args).output()
     })
     .await
     .map_err(|e| format!("注入线程失败：{e}"))?;
     match out {
-        Ok(o) if o.status.success() => Ok(format!("{x},{y}")),
+        Ok(o) if o.status.success() => Ok(()),
         Ok(o) => Err(format!(
-            "adb input tap 失败：{}",
+            "adb input 失败：{}",
             String::from_utf8_lossy(&o.stderr).trim()
         )),
         Err(e) => Err(format!("调不起 adb：{e}")),
     }
+}
+
+#[tauri::command]
+async fn device_tap(x: u32, y: u32) -> Result<String, String> {
+    inject_input(vec!["tap".into(), x.to_string(), y.to_string()]).await?;
+    Ok(format!("{x},{y}"))
+}
+
+/// 滑动 / 长按（决策 #1255）。★长按不单独做一个命令：Android 的语义就是
+/// `input swipe x y x y <ms>`（同点 + 持续时间）—— 两个命令会是同一件事的两种说法，
+/// 迟早漂移（一个改了闸门另一个没改，就是 #1254 里"看着 A 的屏点在 B 上"的同族风险）。
+#[tauri::command]
+async fn device_swipe(x1: u32, y1: u32, x2: u32, y2: u32, ms: u32) -> Result<String, String> {
+    // 夹住时长：太短设备侧可能判成 tap（`input swipe` 对 0ms 的行为不保证），太长会卡住输入队列
+    let d = ms.clamp(50, 3000);
+    inject_input(vec![
+        "swipe".into(),
+        x1.to_string(),
+        y1.to_string(),
+        x2.to_string(),
+        y2.to_string(),
+        d.to_string(),
+    ])
+    .await?;
+    Ok(format!("{x1},{y1}→{x2},{y2} @{d}ms"))
 }
 
 #[tauri::command]
@@ -711,6 +737,7 @@ fn main() {
             set_dirty_count,
             close_now,
             device_tap,
+            device_swipe,
             search_text
         ])
         .setup(|app| {

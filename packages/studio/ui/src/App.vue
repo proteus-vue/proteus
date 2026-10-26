@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { deviceTap, setCanvasRect } from './bridge'
+import { deviceSwipe, deviceTap, setCanvasRect } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -216,26 +216,55 @@ watch(pan, scheduleSync)
  *  这是设备检查器真正关心的量（"我点的这个点在设备上是第几个像素"），
  *  而不是 CSS px（同一台设备在 100% / 200% 缩放下 CSS 值会变，设备值不会）。 */
 const pick = ref<{ x: number; y: number } | null>(null)
-let drag: { id: number; x0: number; y0: number; px: number; py: number; moved: boolean } | null = null
+/** `device` = 这一次按下带 ⌥（手势注入而非平移）；`t0` 按下时刻（算滑动/长按时长）。 */
+let drag: {
+  id: number
+  x0: number
+  y0: number
+  px: number
+  py: number
+  moved: boolean
+  device: boolean
+  t0: number
+  lx: number
+  ly: number
+} | null = null
 
-function toDevice(e: PointerEvent): { x: number; y: number } | null {
+/** 视口坐标 → 设备像素。★单独一个函数：滑动的**起点**要能随时折算（不能只靠事件对象）。 */
+function clientToDevice(clientX: number, clientY: number): { x: number; y: number } | null {
   const el = canvasEl.value
   const d = stats.value
   if (!el || !d || d.width <= 0 || d.height <= 0) return null
   const r = el.getBoundingClientRect()
   if (r.width <= 0 || r.height <= 0) return null
   return {
-    x: Math.round(((e.clientX - r.left) / r.width) * d.width),
-    y: Math.round(((e.clientY - r.top) / r.height) * d.height),
+    x: Math.round(((clientX - r.left) / r.width) * d.width),
+    y: Math.round(((clientY - r.top) / r.height) * d.height),
   }
 }
+
+const toDevice = (e: PointerEvent) => clientToDevice(e.clientX, e.clientY)
 
 function onPointerDown(e: PointerEvent) {
   const p = toDevice(e)
   if (p) pick.value = p
   // ★`moved` 用来区分"点一下"和"拖着看别处"（决策 #1254）：拖拽是**看**，不该在设备上留下点击。
   //   阈值 4 CSS px：手抖/触控板微动不算拖，而真正的平移手势早就超过这个量。
-  drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, px: pan.value.x, py: pan.value.y, moved: false }
+  // ★`device` = 按住 ⌥：这一次拖拽**注入到设备**（滑动），而不是平移画布（决策 #1255）。
+  //   为什么用修饰键而不是"拖拽即滑动"：平移是已有的、被判据 ⑯ 钉住的手势，
+  //   直接改成滑动会把"看别处"变成"在手机上乱划"。
+  drag = {
+    id: e.pointerId,
+    x0: e.clientX,
+    y0: e.clientY,
+    px: pan.value.x,
+    py: pan.value.y,
+    moved: false,
+    device: e.altKey && touchOn.value,
+    t0: performance.now(),
+    lx: e.clientX,
+    ly: e.clientY,
+  }
   try {
     e.currentTarget instanceof HTMLElement && e.currentTarget.setPointerCapture(e.pointerId)
   } catch {
@@ -246,6 +275,9 @@ function onPointerDown(e: PointerEvent) {
 function onPointerMove(e: PointerEvent) {
   if (!drag || drag.id !== e.pointerId) return
   if (Math.abs(e.clientX - drag.x0) > 4 || Math.abs(e.clientY - drag.y0) > 4) drag.moved = true
+  drag.lx = e.clientX
+  drag.ly = e.clientY
+  if (drag.device) return // ⌥ 手势：不移动画布，只等 up 时把整段位移注入设备
   pan.value = clampPan({
     x: drag.px + (e.clientX - drag.x0),
     y: drag.py + (e.clientY - drag.y0),
@@ -254,15 +286,19 @@ function onPointerMove(e: PointerEvent) {
 
 function onPointerUp(e: PointerEvent) {
   if (!drag || drag.id !== e.pointerId) return
-  const wasDrag = drag.moved
+  const { moved, device, t0, x0, y0 } = drag
   drag = null
   try {
     e.currentTarget instanceof HTMLElement && e.currentTarget.releasePointerCapture(e.pointerId)
   } catch {
     /* 同上 */
   }
-  // 只有"没拖动过的一次点击"才回传到设备（拖拽平移 → 手指在设备上应该是 drag，不在本批范围）
-  if (!wasDrag) void injectTap(e)
+  if (device) {
+    void injectGesture(e, x0, y0, t0, moved)
+    return
+  }
+  // 只有"没拖动过的一次点击"才回传到设备（普通拖拽 = 平移，不上设备）
+  if (!moved) void injectTap(e)
 }
 
 /* ─── 触摸回传（决策 #1254 · G4 第三项）：画布点一下 ⇒ 真机上也点一下 ─────────────
@@ -278,6 +314,25 @@ const touchOn = ref(true)
 let touchWarned = false
 let touchBusy = false
 
+/** ⌥ 手势里"按住多久算长按"（Android 默认 long press ≈500ms，取 600ms 更稳） */
+const HOLD_MS = 600
+
+/** 注入失败的统一处理：**两类失败必须分开**——
+ *  「源不支持」⇒ 提示一次 + 自动关开关（否则每次点击都弹，用户以为是自己点错）；
+ *  「这次没成功」（熄屏 / adb 报错）⇒ 每次都提示（真故障不能吞）。 */
+function onTouchError(err: unknown) {
+  const msg = String((err as Error)?.message ?? err)
+  if (msg.includes('不支持触控回传')) {
+    touchOn.value = false
+    if (!touchWarned) {
+      touchWarned = true
+      pushToast(`${msg}（已关闭触控回传）`, 'info')
+    }
+  } else {
+    pushToast(msg, 'err')
+  }
+}
+
 async function injectTap(e: PointerEvent) {
   if (!touchOn.value || touchBusy) return
   const p = toDevice(e)
@@ -286,17 +341,34 @@ async function injectTap(e: PointerEvent) {
   try {
     await deviceTap(p.x, p.y)
   } catch (err) {
-    const msg = String((err as Error)?.message ?? err)
-    const unsupported = msg.includes('不支持触控回传')
-    if (unsupported) {
-      touchOn.value = false
-      if (!touchWarned) {
-        touchWarned = true
-        pushToast(`${msg}（已关闭触控回传）`, 'info')
-      }
-    } else {
-      pushToast(msg, 'err')
-    }
+    onTouchError(err)
+  } finally {
+    touchBusy = false
+  }
+}
+
+/**
+ * ⌥ 手势（决策 #1255）：按下到松开的整段位移注入到设备。
+ * 三种落点：**拖动 ⇒ 滑动**（时长 = 真实按住时长）· **不动且 ≥600ms ⇒ 长按** · 其余 ⇒ 普通点击。
+ *
+ * ★长按没有单独的命令/手势：Android 的语义就是 `input swipe x y x y <ms>`，
+ *   另立一套只会让两条路各写一遍闸门（源不支持 / 熄屏 / 串号），迟早漂移。
+ * ★时长用**真实按住时长**而不是写死：用户在画布上慢慢拖，设备上也该慢慢滑——
+ *   写死 300ms 会把"慢慢挪到某个按钮"变成"甩一下"，端点就飞了。
+ */
+async function injectGesture(e: PointerEvent, x0: number, y0: number, t0: number, moved: boolean) {
+  if (!touchOn.value || touchBusy) return
+  const a = clientToDevice(x0, y0)
+  const b = clientToDevice(e.clientX, e.clientY)
+  if (!a || !b) return
+  const elapsed = Math.round(performance.now() - t0)
+  touchBusy = true
+  try {
+    if (moved) await deviceSwipe(a.x, a.y, b.x, b.y, elapsed)
+    else if (elapsed >= HOLD_MS) await deviceSwipe(a.x, a.y, a.x, a.y, HOLD_MS)
+    else await deviceTap(a.x, a.y)
+  } catch (err) {
+    onTouchError(err)
   } finally {
     touchBusy = false
   }
@@ -368,8 +440,8 @@ const hud = computed(() => {
         :aria-pressed="touchOn"
         :title="
           touchOn
-            ? '触控回传：开着 —— 点画布会在真机上点同一个位置（仅 Android 实时投屏）'
-            : '触控回传：关着 —— 点画布只标记设备坐标，不注入'
+            ? '触控回传：开 —— 点画布 = 点真机；⌥+拖拽 = 滑动；⌥+按住 = 长按（仅 Android 实时投屏）'
+            : '触控回传：关 —— 点画布只标记设备坐标，不注入'
         "
         @click="touchOn = !touchOn"
       >

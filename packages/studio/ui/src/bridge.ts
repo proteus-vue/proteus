@@ -99,6 +99,11 @@ export const copyText = (text: string): Promise<void> => invoke<void>('copy_text
  *    本函数是**出向**（前端算好设备像素 → Rust → adb input tap），方向相反。 */
 export const deviceTap = (x: number, y: number): Promise<string> => invoke<string>('device_tap', { x, y })
 
+/** 滑动 / 长按（决策 #1255）：`input swipe x1 y1 x2 y2 <ms>`。
+ *  ★长按 = 同点 + 时长（`deviceSwipe(x,y,x,y,600)`）——不在协议层再造一个概念。 */
+export const deviceSwipe = (x1: number, y1: number, x2: number, y2: number, ms: number): Promise<string> =>
+  invoke<string>('device_swipe', { x1, y1, x2, y2, ms })
+
 /** 工作区状态（G5）：落在 `~/Library/Application Support/dev.proteus.studio/state.json`。 */
 export const loadState = (): Promise<string> => invoke<string>('load_state')
 export const saveState = (json: string): Promise<void> => invoke<void>('save_state', { json })

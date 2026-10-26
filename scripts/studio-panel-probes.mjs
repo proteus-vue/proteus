@@ -717,3 +717,113 @@ await page.evaluate(() => localStorage.removeItem('__TAP_SLEEPING__'))
     sleepingToast,
   }
 }
+
+/**
+ * ㊱ ⌥ 手势（决策 #1255）：拖动 = 滑动、按住不动 ≥600ms = 长按。
+ * 【为什么用 ⌥ 而不是"拖拽即滑动"】平移是既有手势且被判据 ⑯ 钉住；直接把拖拽改成滑动，
+ *   "看别处"就会变成"在手机上乱划"。⇒ 修饰键分流：**无 ⌥ = 平移画布，有 ⌥ = 注入设备**。
+ * 【钉三件事】① ⌥ 拖拽产生 swipe（端点不同、时长 > 0）且**画布没被平移**
+ *   ② ⌥ 按住不动产生**同点 + 600ms**（长按）③ 普通拖拽仍然只平移（不产生 swipe）。
+ */
+export async function probeGesture(page) {
+  const swipes = () =>
+    page.evaluate(() =>
+      (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'device_swipe').map((c) => c.args),
+    )
+  const screenX = () => page.evaluate(() => document.querySelector('.screen').getBoundingClientRect().x)
+  const center = await page.evaluate(() => {
+    const r = document.getElementById('canvas').getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+  })
+
+  // ① ⌥ + 拖拽（向上 200 CSS px）
+  const xBefore = await screenX()
+  await page.keyboard.down('Alt')
+  await page.mouse.move(center.x, center.y)
+  await page.mouse.down()
+  await page.mouse.move(center.x, center.y - 100, { steps: 3 })
+  await page.mouse.move(center.x, center.y - 200, { steps: 3 })
+  await page.mouse.up()
+  await page.keyboard.up('Alt')
+  await page.waitForTimeout(320)
+  const afterSwipe = await swipes()
+  const xAfter = await screenX()
+
+  // ② ⌥ + 按住不动 700ms ⇒ 长按（同点 + 600ms）
+  await page.keyboard.down('Alt')
+  await page.mouse.move(center.x, center.y)
+  await page.mouse.down()
+  await page.waitForTimeout(700)
+  await page.mouse.up()
+  await page.keyboard.up('Alt')
+  await page.waitForTimeout(320)
+  const afterHold = await swipes()
+
+  // ③ 普通拖拽（无 ⌥）仍然只平移：不该多出 swipe
+  await page.mouse.move(center.x, center.y)
+  await page.mouse.down()
+  await page.mouse.move(center.x + 60, center.y, { steps: 3 })
+  await page.mouse.up()
+  await page.waitForTimeout(280)
+  const afterPlainDrag = await swipes()
+  // 复位平移，别把状态留给后面
+  await page.click('.zoom button[aria-label="适应窗口"]')
+  await page.waitForTimeout(300)
+
+  return {
+    swipeOfDrag: afterSwipe[0] ?? null,
+    swipeCountAfterDrag: afterSwipe.length,
+    panMovedByAltDrag: Math.abs(xAfter - xBefore) > 1,
+    swipeOfHold: afterHold[1] ?? null,
+    swipeCountAfterHold: afterHold.length,
+    swipeCountAfterPlainDrag: afterPlainDrag.length,
+  }
+}
+
+/**
+ * ⑯ 拖拽平移（放大后必须能看别处，否则 4× 只能看中间那一点）。
+ *  真实 mouse 事件序列（down → 多步 move → up），走浏览器命中测试 ⇒ 验的是真手势。
+ *  ★只往左拖：1280x720 在 125% 下高 726 < 舞台 796 ⇒ **纵向本来就被夹紧到 0**，
+ *    用纵向断言会红，而那不是 bug（正是"屏幕比舞台小就不该能拖"的正确行为）。
+ */
+export async function probePan(page, { outPath } = {}) {
+//  真实 mouse 事件序列（down → 多步 move → up），走浏览器命中测试 ⇒ 验的是真手势。
+//  ★只往左拖：1280x720 在 125% 下高 726 < 舞台 796 ⇒ **纵向本来就被夹紧到 0**，
+//    用纵向断言会红，而那不是 bug（正是"屏幕比舞台小就不该能拖"的正确行为）。
+const panBefore = await page.evaluate(() => {
+  const r = document.querySelector('.screen').getBoundingClientRect()
+  return { x: r.x, y: r.y }
+})
+const cb = await page.evaluate(() => {
+  const r = document.getElementById('canvas').getBoundingClientRect()
+  return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+})
+await page.mouse.move(cb.x, cb.y)
+await page.mouse.down()
+await page.mouse.move(cb.x - 40, cb.y, { steps: 3 })
+await page.mouse.move(cb.x - 100, cb.y, { steps: 3 })
+await page.mouse.up()
+await page.waitForTimeout(300)
+const panSeen = await page.evaluate(() => {
+  const r = document.querySelector('.screen').getBoundingClientRect()
+  const all = window.__STUB_CALLS__ || []
+  const rects = all.filter((c) => c.cmd === 'set_canvas_rect')
+  const last = rects[rects.length - 1]
+  return {
+    x: r.x,
+    y: r.y,
+    status: document.getElementById('span')?.textContent?.trim() ?? '',
+    ipcX: Number(last?.args?.x ?? 0),
+  }
+})
+if (outPath) await page.screenshot({ path: outPath.replace(/\.png$/, '-pan.png') })
+
+// ⑯b：回到「适应」后平移必须归零 —— 否则缩小后画面会孤零零站在角落外
+await page.click('.zoom button[aria-label="适应窗口"]')
+await page.waitForTimeout(400)
+const panReset = await page.evaluate(() => ({
+  status: document.getElementById('span')?.textContent?.trim() ?? '',
+  x: document.querySelector('.screen').getBoundingClientRect().x,
+}))
+  return { panBefore, panSeen, panReset }
+}
