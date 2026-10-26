@@ -14857,3 +14857,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     **测数据流就用 DOM 点击，测命中才用鼠标点击**——两件事别混。
   - **下一步（已具备条件）**：iOS 设备列表可以按 `xcrun xctrace list devices`（用配置的 DEVELOPER_DIR）
     拿 UDID/机型/在线状态，把 iOS 放进设备面板并标"离线/等待推流"。
+
+1267. **设置改成独立窗口（左侧分类 / 右侧内容），并修正"白窗"隐患 · 判据 61 重写**（2026-10-26 · 用户「不是这种，是单独的设置窗口面板，类似于 zed、jetbrains 的那种」）:
+  - **用户纠正**：#1266 我做的是**右栏里的一块面板**（和工作区抢位置），而 IDE 的惯例是 ⌘, 打开
+    **独立窗口**：左侧分类、右侧内容，打开即"进入设置模式"，关掉回到工作区。
+  - **改造**：
+    · `src/settings.rs::open_window()` 用 `WebviewWindowBuilder` 建 `settings` 窗口（860×600，可缩放，
+      已存在则聚焦，不重复建窗）；`main.rs` 只留薄命令 `open_settings`（顺手把 main.rs 从 1005 行降回 991）。
+    · 前端**同一份 dist**：`main.ts` 按标识挂 `SettingsApp.vue`（左导航 + 右内容）；
+      删掉 `panels/SettingsPanel.vue`（留着就是第二份实现）。
+    · 入口三条：rail 底部**设置图标**（新增 `settings` 滑杆图标，16px 下比齿轮清楚）、菜单 `app.settings`
+      （⌘,，已在 `menu.rs` 的 `ACTIONS` 登记，判据 ㉕ 确认有人接）。
+    · 分类三类：**开发环境**（唯一可写）/ **设备**（只读，切换只在主窗口——两处可写必然漂移）/
+      **关于**（只放常量事实：应用标识、设置文件位置、快捷键，不摆假版本号）。
+  - ★★**白窗隐患（差点交付一个空白窗口）**：
+    ① 窗口 URL 原本用 `?view=settings`，而 `WebviewUrl::App` 对 query 的归一化依赖版本 ⇒
+       一旦被吞掉就是"界面看着正常、其实什么都没渲染" ⇒ 改用 **`initialization_script`
+       注入 `window.__PROTEUS_VIEW__`**（在页面脚本之前执行，零歧义）；`main.ts` 两个来源都认。
+    ② **判据跑的是 http 页面，天生看不到 Tauri 建窗这一层** ⇒ 加回归钩子
+       `STUDIO_OPEN_SETTINGS_MS=<ms>`：无头跑一次自动开窗，日志出现
+       `设置窗口已打开（860x600 · 左侧分类）`；再用截图确认**不是白窗**（曾经的怀疑是用
+       注入一条可见标记 `VIEW=settings · root=yes` 定位的，验证完已删除）。
+  - **判据侧**：`browser.newPage()` 建的是单页 context，再开第二页会抛 "Please use browser.newContext()"，
+    且 `context.addInitScript` 才能让新页面拿到桩 ⇒ `studio-panel-boot.mjs` 改用
+    **`browser.newContext()` + `context.addInitScript()`**，设置窗口在判据里就是同 context 的第二个页面。
+  - **判据 61 重写**：① 主窗口点设置按钮 ⇒ `open_settings` 恰好 1 次 ② 分类导航 3 项且默认「开发环境」
+    ③「设备」页只读表格 3 行 ④「关于」页含设置文件位置 ⑤ 检测原样送路径、失败不许显示成功
+    ⑥ 保存原样提交 ⑦ 子页零 JS 错误。

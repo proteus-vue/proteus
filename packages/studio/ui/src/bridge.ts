@@ -103,6 +103,8 @@ export interface StudioSettings {
 }
 export const getSettings = (): Promise<StudioSettings> => invoke<StudioSettings>('get_settings')
 export const saveSettings = (s: StudioSettings): Promise<void> => invoke<void>('save_settings', { s })
+/** 打开**独立设置窗口**（决策 #1267）：已开就聚焦，不重复建窗 */
+export const openSettings = (): Promise<void> => invoke<void>('open_settings')
 /** 真跑一次命令验证路径（"检测"按钮）：返回 ok + 命令输出 */
 export const probeTool = (kind: 'xcode' | 'adb', path: string): Promise<{ ok: boolean; detail: string }> =>
   invoke<{ ok: boolean; detail: string }>('probe_tool', { kind, path })

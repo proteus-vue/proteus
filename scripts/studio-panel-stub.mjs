@@ -29,6 +29,7 @@ export function stubTauri(payload) {
         }
         if (cmd === 'set_canvas_rect') return null
         // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
+        if (cmd === 'open_settings') return null
         if (cmd === 'get_settings') return { xcode: null, adb: null, ios_port: 9001 }
         if (cmd === 'save_settings') {
           window.__STUB_SETTINGS__ = args?.s

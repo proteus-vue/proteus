@@ -137,6 +137,28 @@ pub fn probe_adb(adb: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).lines().next().unwrap_or("").trim().to_string())
 }
 
+/// 打开**独立设置窗口**（决策 #1267）。已存在则聚焦，不重复建窗。
+/// ★URL 带 `?view=settings`：前端 `main.ts` 按这个参数挂 `SettingsApp`（同一份 dist）。
+pub fn open_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("index.html".into()))
+        /* ★用**初始化脚本**告诉前端"这是设置窗口"，而不是靠 URL query（决策 #1267）：
+           `WebviewUrl::App` 对 `?view=` 的处理依赖版本归一化，一旦被吞掉就是**白窗**
+           （界面看起来正常、实际什么都没渲染）。初始化脚本在页面脚本之前执行，零歧义。 */
+        .initialization_script("window.__PROTEUS_VIEW__ = 'settings'")
+        .title("设置")
+        .inner_size(860.0, 600.0)
+        .min_inner_size(680.0, 460.0)
+        .resizable(true)
+        .build()
+        .map(|_| eprintln!("[studio] 设置窗口已打开（860x600 · 左侧分类）"))
+        .map_err(|e| format!("打开设置窗口失败：{e}"))
+}
+
 #[derive(Serialize)]
 pub struct ProbeResult {
     pub ok: bool,

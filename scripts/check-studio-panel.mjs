@@ -96,7 +96,7 @@ const stats = {
 }
 
 // 起浏览器环境（静态服务 + chromium + 桩注入 + 首屏截图 + 收集 JS 错误）在 studio-panel-boot.mjs
-const { page, errors, close: closeAll } = await openPanel({ dist: DIST, payload: stats, outPath })
+const { page, errors, close: closeAll, url: panelUrl } = await openPanel({ dist: DIST, payload: stats, outPath })
 
 // ── 判据（不是"看着像"就算过）────────────────────────────────────
 const seen = await page.evaluate(() => {
@@ -387,7 +387,7 @@ const cap = await probeCapPreset(page)
 // ── ㊵ 设备管理：采集段在 probeDeviceSwitch()（决策 #1265）
 const dev = await probeDeviceSwitch(page)
 // ── ㊶ 开发环境设置：采集段在 probeSettings()（决策 #1266）
-const set = await probeSettings(page)
+const set = await probeSettings(page, panelUrl)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
@@ -889,11 +889,15 @@ const checks = [
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
   ],
-  // ㊶ 开发环境设置：路径由人填、检测真的跑、失败不许显示成功、保存原样提交
+  // ㊶ 设置窗口（独立窗口 + 左侧分类）：入口、导航、检测、保存
   [
-    `㊶ 开发环境设置：初始 xcode=「${set.init.xcode}」端口=${set.init.port} · 检测 → ${set.probeOk.arg?.kind}/「${String(set.probeOk.arg?.path).split('/').pop()}」结果「${set.probeOk.msg?.text}」· 路径不存在时 ok=${set.probeBad?.ok}（应 false）· 保存 xcode=「${String(set.saved?.xcode).split('/').pop()}」端口=${set.saved?.ios_port}`,
-    set.init.exists &&
-      (set.init.xcode ?? '') === '' &&
+    `㊶ 设置窗口：主窗口点设置 ⇒ open_settings×${set.openCalls} · 分类 ${set.nav0.map((n) => n.label).join('/')}（当前 ${set.nav0.find((n) => n.on)?.label ?? '—'}）· 设备只读 ${set.devRows} 行 · 关于含设置路径=${set.aboutText.includes('settings.json')} · 检测 → ${set.probeOk.arg?.kind}/「${String(set.probeOk.arg?.path).split('/').pop()}」⇒「${set.probeOk.msg?.text}」· 路径不存在时 ok=${set.probeBad?.ok}（应 false）· 保存 xcode=「${String(set.saved?.xcode).split('/').pop()}」端口=${set.saved?.ios_port} · 子页 JS 错误 ${set.winErrors}`,
+    set.openCalls === 1 &&
+      set.nav0.length === 3 &&
+      set.nav0.map((n) => n.label).join('/') === '开发环境/设备/关于' &&
+      set.nav0.find((n) => n.on)?.id === 'env' &&
+      set.devRows === 3 &&
+      set.aboutText.includes('settings.json') &&
       set.probeOk.arg?.kind === 'xcode' &&
       set.probeOk.arg?.path === '/Volumes/data1/work/office-applications/Xcode.app' &&
       set.probeOk.msg?.ok === true &&
@@ -901,7 +905,8 @@ const checks = [
       set.probeBad?.ok === false &&
       set.probeBad?.text.includes('不存在') &&
       set.saved?.xcode === '/Volumes/data1/work/office-applications/Xcode.app' &&
-      Number(set.saved?.ios_port) === 9001,
+      Number(set.saved?.ios_port) === 9001 &&
+      set.winErrors === 0,
   ],
   // ㊵ 设备管理：列表 + 切换（含"未授权不许点"和"失败不改状态"）
   [

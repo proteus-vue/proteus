@@ -237,3 +237,45 @@ code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:
 .setmsg{margin:2px 0 0;font-size:var(--fs-xs);line-height:1.5;word-break:break-all}
 .okmsg{color:var(--ok)}
 .errmsg{color:var(--danger, #e5484d)}
+
+/* ── 独立设置窗口（决策 #1267）：左侧分类 + 右侧内容，像 IDE 的偏好设置 ────── */
+.setwin{display:grid;grid-template-columns:184px 1fr;height:100vh;background:var(--bg-canvas)}
+.setnav{background:var(--bg-surface);border-right:1px solid var(--border-subtle);
+        padding:var(--sp4) var(--sp2);display:flex;flex-direction:column;gap:2px}
+.setnav-title{padding:0 var(--sp2) var(--sp3);font-size:var(--fs-xs);font-weight:600;
+              letter-spacing:.04em;color:var(--fg-muted)}
+.setnav-item{display:block;width:100%;text-align:left;padding:6px var(--sp2);border:0;border-radius:var(--r-sm);
+             background:transparent;color:var(--fg-muted);font:inherit;font-size:var(--fs-sm);cursor:pointer}
+.setnav-item:hover{background:var(--bg-overlay);color:var(--fg)}
+.setnav-item.on{background:var(--bg-elevated);color:var(--fg);font-weight:500;
+                box-shadow:inset 2px 0 0 var(--accent)}
+.setbody{padding:var(--sp5) var(--sp6);overflow:auto;position:relative}
+.sethead{margin:0 0 var(--sp2);font-size:var(--fs-lg);font-weight:600;color:var(--fg)}
+.setlead{margin:0 0 var(--sp4);font-size:var(--fs-sm);color:var(--fg-subtle);line-height:1.65}
+.setfield{margin-bottom:var(--sp4);max-width:560px}
+.setfield label{display:block;font-size:var(--fs-xs);color:var(--fg-muted);margin-bottom:var(--sp1)}
+.setrow{display:grid;grid-template-columns:1fr auto;gap:var(--sp2);align-items:center}
+.setrow.narrow{max-width:240px}
+.setrow input{padding:5px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+              background:var(--bg-elevated);color:var(--fg);font:var(--fs-sm) / 1.5 ui-monospace, Menlo, monospace}
+.setrow input:focus{outline:none;border-color:var(--accent)}
+.setbtn{padding:4px var(--sp3);border:1px solid var(--border);border-radius:var(--r-sm);
+        background:transparent;color:var(--fg-muted);font-size:var(--fs-sm);cursor:pointer}
+.setbtn:hover:not(:disabled){background:var(--bg-overlay);color:var(--fg)}
+.setbtn.primary{border-color:var(--accent);color:var(--fg)}
+.setbtn:disabled{opacity:.5;cursor:progress}
+.setmsg{margin:var(--sp1) 0 0;font-size:var(--fs-xs);line-height:1.6;word-break:break-all}
+.okmsg{color:var(--ok)}
+.errmsg{color:var(--danger, #e5484d)}
+.settable{display:flex;flex-direction:column;gap:1px;max-width:720px}
+.settr{display:grid;grid-template-columns:1fr 120px 90px 1fr;gap:var(--sp2);padding:6px var(--sp2);
+       font-size:var(--fs-sm);color:var(--fg)}
+.settr.setth{font-size:var(--fs-xs);color:var(--fg-subtle);border-bottom:1px solid var(--border-subtle)}
+.settr .dead{color:var(--fg-subtle)}
+.settr .mono,.setkv .mono{font-family:ui-monospace, Menlo, monospace;font-size:var(--fs-xs);color:var(--fg-muted)}
+.setkv{display:grid;grid-template-columns:120px 1fr;gap:var(--sp2) var(--sp3);font-size:var(--fs-sm)}
+.setkv b{font-weight:500;color:var(--fg-muted);font-size:var(--fs-xs)}
+.setfoot{position:sticky;bottom:0;margin-top:var(--sp5);padding-top:var(--sp3);
+         border-top:1px solid var(--border-subtle);font-size:var(--fs-xs);color:var(--fg-subtle)}
+kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg-elevated);
+    font:var(--fs-xs) / 1.4 ui-monospace, Menlo, monospace;color:var(--fg-muted)}

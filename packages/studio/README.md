@@ -28,7 +28,7 @@
 | HTML 叠加层与原生画布共存（B2 的结论在产品布局里成立） | 十字线/边框/标签都画在 WebView 层 |
 | **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备物理像素**（`dev_w/h`，不是码流尺寸——码流按长边≤1920 缩过，两者差 ~0.74 倍），拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
 | **画质档位（两档）** | 顶栏 `画质·省流/标准`（4 / 13 Mbps）——**分辨率不变，只改码率**（20 Mbps 因肉眼无差异已撤）；切换 = **重启采集会话**（停旧 → 起新 → 重建解码器）。停会话靠 `kill(-pid)` 杀进程组 + 设备侧 `pkill`；重启请求由渲染线程在 tick 开头执行（避免与解码器 UAF）（判据 ㊴） |
-| **开发环境设置** | 右栏「开发环境」：**Xcode 路径 / adb 路径 / iOS 推流端口**。★路径**不猜默认值**（Xcode 可装在任意磁盘）；「检测」真的跑 `xcodebuild -version` / `adb version` 并显示输出；保存立即生效（设 `DEVELOPER_DIR`、换 adb 二进制），落盘 `~/Library/Application Support/dev.proteus.studio.shell/settings.json`（判据 ㊶） |
+| **设置窗口（独立窗口）** | ⌘, 或 rail 底部设置图标打开**独立窗口**（左导航：开发环境 / 设备 / 关于）：**Xcode 路径 / adb 路径 / iOS 推流端口**。★路径**不猜默认值**（Xcode 可装在任意磁盘）；「检测」真的跑 `xcodebuild -version` / `adb version` 并显示输出；保存立即生效（设 `DEVELOPER_DIR`、换 adb 二进制），落盘 `~/Library/Application Support/dev.proteus.studio.shell/settings.json`（判据 ㊶）★**窗口靠 `initialization_script` 注入 `__PROTEUS_VIEW__` 分流**，不靠 URL query——query 被吞就是白窗 |
 | **设备管理（列表 + 切换）** | 右栏顶部「设备」：一行一台（机型 · 物理尺寸 · 串号尾），当前项强调条；未授权行**点不动**；切换 = 改串号/尺寸 → 用当前画质档重建命令 → **重启采集会话**（黑几百毫秒）。所有 adb 调用统一带 `-s`（判据 ㊵） |
 | **画布洞必须是通的** | 原生 GL 垫在 WKWebView **下面**，所以从 `#canvas` 到 `html` 的**每层都不许有不透明背景**；舞台底色由 `.screen` 的 4000px spread 阴影补（只填屏幕**之外**）。`live` 未加时反过来给实心底色（"关着的屏"）（判据 ㊲） |
 | **滑动 / 长按** | **直接拖拽 = 滑动**（时长 = 真实按住时长）· **按住不动** = 长按（同点 600ms，走同一条 `input swipe`）· **⌥+拖拽 = 平移画布**（不注入）；触控关掉时拖拽退回平移（判据 ⑯ / ㊱） |

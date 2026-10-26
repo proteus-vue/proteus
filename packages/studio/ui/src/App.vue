@@ -2,12 +2,11 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { capturePreset, deviceSwipe, deviceTap, setCanvasRect } from './bridge'
+import { capturePreset, deviceSwipe, deviceTap, openSettings, setCanvasRect } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
 import DeviceSwitcher from './panels/DeviceSwitcher.vue'
-import SettingsPanel from './panels/SettingsPanel.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
@@ -134,6 +133,8 @@ const menuOffs = [
   onMenuAction('view.zoomReset', () => setZoom(1)),
   onMenuAction('view.zoomIn', () => setZoom(ws.zoom + 0.25)),
   onMenuAction('view.zoomOut', () => setZoom(ws.zoom - 0.25)),
+  // ★设置是**独立窗口**（决策 #1267）：菜单/按钮只负责把它叫出来
+  onMenuAction('app.settings', () => void openSettings()),
 ]
 
 /** 画布矩形：HTML 定布局，原生跟随（#1173 的接线，这里只是搬到 Vue 里） */
@@ -533,6 +534,11 @@ const hud = computed(() => {
       <div class="sep" />
       <button aria-label="断言（未实现）" title="断言（未实现）" disabled><StudioIcon name="assert" :size="18" /></button>
       <button aria-label="录制（未实现）" title="录制（未实现）" disabled><StudioIcon name="record" :size="18" /></button>
+      <div class="sep" />
+      <!-- 设置（决策 #1267）：开**独立窗口**，不是右栏小面板 -->
+      <button id="openSettings" aria-label="设置" title="设置（⌘,）" @click="openSettings">
+        <StudioIcon name="settings" :size="18" />
+      </button>
     </div>
 
     <div class="main">
@@ -611,7 +617,6 @@ const hud = computed(() => {
       <PipelinePanel :s="stats" />
       <RuntimePanel :s="stats" />
       <InspectorPanel />
-      <SettingsPanel />
     </div>
 
     <div class="status">

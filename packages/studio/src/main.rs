@@ -745,6 +745,12 @@ fn default_live_source() {
 /// 设置面板的三个命令（决策 #1266）：读 / 写 / 探测。
 /// ★路径**不猜**：Xcode 可装在任意磁盘（本机就在 /Volumes/data1/...），
 ///   默认路径只能作为界面上的提示，不能作为唯一来源。
+/// 设置窗口的入口（实现见 `settings::open_window`）。
+#[tauri::command]
+fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
+    settings::open_window(&app)
+}
+
 #[tauri::command]
 fn get_settings() -> settings::Settings {
     settings::current()
@@ -795,6 +801,7 @@ fn main() {
             capture_preset,
             list_devices,
             select_device,
+            open_settings,
             get_settings,
             save_settings,
             probe_tool,
@@ -807,6 +814,17 @@ fn main() {
                 std::thread::sleep(Duration::from_millis(300));
                 poll_window(h, 100);
             });
+            /* 回归钩子（决策 #1267）：`STUDIO_OPEN_SETTINGS_MS=<毫秒>` ⇒ 到点自动开设置窗口。
+               用来在**无头**模式下验证"独立窗口真能建起来"——窗建不出来的表现是白窗，
+               而判据跑的是 http 页面，天生看不到 Tauri 那一层。 */
+            if let Ok(ms) = std::env::var("STUDIO_OPEN_SETTINGS_MS") {
+                let h2 = app.handle().clone();
+                let delay = ms.parse::<u64>().unwrap_or(1500);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(delay));
+                    let _ = settings::open_window(&h2);
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

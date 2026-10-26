@@ -34,6 +34,8 @@ pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("view.zoomReset", "设备画面实际大小", "CmdOrCtrl+0"),
     ("view.zoomIn", "放大设备画面", "CmdOrCtrl+="),
     ("view.zoomOut", "缩小设备画面", "CmdOrCtrl+-"),
+    // 设置（决策 #1267）：⌘, 是 macOS 偏好设置的通用手势
+    ("app.settings", "设置…", "CmdOrCtrl+,"),
 ];
 
 fn action<R: Runtime>(app: &AppHandle<R>, id: &str) -> tauri::Result<MenuItem<R>> {
@@ -63,6 +65,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &about,
+            &PredefinedMenuItem::separator(app)?,
+            &action(app, "app.settings")?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, Some("服务"))?,
             &PredefinedMenuItem::separator(app)?,

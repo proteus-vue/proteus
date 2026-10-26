@@ -335,51 +335,87 @@ export async function probeDeviceSwitch(page) {
 }
 
 /**
- * ㊶ 开发环境设置（决策 #1266）：路径由人填 + 检测真的跑命令 + 保存立即生效。
+ * ㊶ 设置窗口（决策 #1266 / #1267）：**独立窗口** + 左侧分类 + 路径由人填。
  *
- * 【为什么这条必须有】Xcode 可以装在任意磁盘。任何"按默认路径猜"的实现都会在真实机器上翻车，
- *   而且**翻车时界面看起来是对的**（输入框里有值、按钮能点）。所以判据要钉住：
- *   ① 初始值是**桩里的设置**（不是前端硬编码的默认路径）
- *   ② 点「检测」把**用户填的那串路径**原样送去 probe_tool（不是替换成默认值）
- *   ③ 检测成功/失败分别显示"命令输出"和"错误"，**不能都显示成功**
- *   ④ 点「保存」把填的值原样交给 save_settings
+ * 【为什么两段】设置已经不是右栏面板，而是 `?view=settings` 的独立窗口：
+ *   ① 主窗口：点 rail 里的设置按钮 ⇒ 必须调 `open_settings`（入口通不通）
+ *   ② 子页面（同一份 dist）：分类导航能切、表单能改、检测真的跑、保存原样提交
+ * 【钉住的作弊点】初始值来自**设置**（不是前端硬编码默认路径）；检测把**用户填的串**原样送出；
+ *   路径不存在时**不许显示成功**；保存把填的值原样交出去。
  */
-export async function probeSettings(page) {
+export async function probeSettings(page, baseUrl) {
+  // ① 主窗口入口
+  const mainCalls = () =>
+    page.evaluate(() => (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'open_settings').length)
+  const beforeOpen = await mainCalls()
+  await page.evaluate(() => document.getElementById('openSettings').click())
+  await page.waitForTimeout(250)
+  const openCalls = (await mainCalls()) - beforeOpen
+
+  // ② 独立窗口（新页面 = 新 WebviewWindow 的替身）
+  const win = await page.context().newPage()
+  const errs = []
+  win.on('pageerror', (e) => errs.push(String(e)))
+  await win.goto(`${baseUrl}?view=settings`)
+  await win.waitForTimeout(600)
+
+  const nav = () =>
+    win.evaluate(() =>
+      [...document.querySelectorAll('#setNav .setnav-item')].map((n) => ({
+        id: n.getAttribute('data-cat'),
+        label: n.textContent?.trim() ?? '',
+        on: n.getAttribute('aria-pressed') === 'true',
+      })),
+    )
+  const nav0 = await nav()
+
+  // 切到「设备」：只读表格里应有桩给的那几台
+  await win.evaluate(() => document.querySelector('#setNav [data-cat="device"]').click())
+  await win.waitForTimeout(250)
+  const devRows = await win.evaluate(() => document.querySelectorAll('.settable .settr[data-dev]').length)
+  // 切到「关于」：应当出现设置文件位置这条**常量事实**
+  await win.evaluate(() => document.querySelector('#setNav [data-cat="about"]').click())
+  await win.waitForTimeout(200)
+  const aboutText = await win.evaluate(() => document.querySelector('.setkv')?.textContent ?? '')
+  // 回到「开发环境」做表单断言
+  await win.evaluate(() => document.querySelector('#setNav [data-cat="env"]').click())
+  await win.waitForTimeout(250)
+
   const calls = () =>
-    page.evaluate(() =>
+    win.evaluate(() =>
       (window.__STUB_CALLS__ || []).filter((c) => ['probe_tool', 'save_settings'].includes(c.cmd)),
     )
   const msg = () =>
-    page.evaluate(() => {
+    win.evaluate(() => {
       const n = document.getElementById('xcodeMsg')
       return n ? { text: n.textContent?.trim() ?? '', ok: n.classList.contains('okmsg') } : null
     })
 
-  const init = await page.evaluate(() => ({
+  const init = await win.evaluate(() => ({
     xcode: document.getElementById('setXcode')?.value ?? null,
     port: document.getElementById('setPort')?.value ?? null,
     exists: !!document.getElementById('setXcode'),
   }))
 
   const PATH = '/Volumes/data1/work/office-applications/Xcode.app'
-  await page.fill('#setXcode', PATH)
-  // ★用 DOM 级点击而不是鼠标事件：toast 是 fixed 浮层，会**挡住**右下角面板里的按钮
-  //   （`force:true` 也没用——它只跳过检查，事件仍落在最上层元素上）。
-  //   这里测的是**数据流**（路径原样送出、结果如实显示），命中测试由 ㉕ 菜单那条覆盖。
-  await page.evaluate(() => document.getElementById('probeXcode').click())
-  await page.waitForTimeout(350)
+  await win.fill('#setXcode', PATH)
+  // ★DOM 级点击：独立窗口没有 toast 遮挡，但保持与另一条一致的"测数据流"手法
+  await win.evaluate(() => document.getElementById('probeXcode').click())
+  await win.waitForTimeout(350)
   const probeOk = { arg: (await calls()).find((c) => c.cmd === 'probe_tool')?.args ?? null, msg: await msg() }
 
-  // 失败路径：同一个按钮，桩改成"路径不存在"⇒ 必须显示错误、不能显示成功
-  await page.evaluate(() => localStorage.setItem('__PROBE_FAIL__', '1'))
-  await page.evaluate(() => document.getElementById('probeXcode').click())
-  await page.waitForTimeout(350)
+  await win.evaluate(() => localStorage.setItem('__PROBE_FAIL__', '1'))
+  await win.evaluate(() => document.getElementById('probeXcode').click())
+  await win.waitForTimeout(350)
   const probeBad = await msg()
-  await page.evaluate(() => localStorage.removeItem('__PROBE_FAIL__'))
+  await win.evaluate(() => localStorage.removeItem('__PROBE_FAIL__'))
 
-  await page.evaluate(() => document.getElementById('setSave').click())
-  await page.waitForTimeout(350)
+  await win.evaluate(() => document.getElementById('setSave').click())
+  await win.waitForTimeout(350)
   const saved = (await calls()).filter((c) => c.cmd === 'save_settings').pop()?.args?.s ?? null
 
-  return { init, probeOk, probeBad, saved }
+  const winErrors = errs.length
+  await win.close()
+
+  return { openCalls, nav0, devRows, aboutText, init, probeOk, probeBad, saved, winErrors }
 }

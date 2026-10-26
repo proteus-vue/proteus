@@ -17,7 +17,12 @@ import { stubTauri } from './studio-panel-stub.mjs'
 export async function openPanel({ dist, payload, outPath }) {
   const { port, close: closeServer } = await serveDist(dist)
   const browser = await chromium.launch()
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
+  /* ★用 context 而不是 browser.newPage()（决策 #1267）：独立设置窗口在判据里是
+     **同一 context 里的第二个页面**。`browser.newPage()` 建的是单页 context，再 `newPage()`
+     会直接抛 "Please use browser.newContext()"；而且 `context.addInitScript` 才能让新页面
+     也拿到桩（否则设置窗口里没有 `__TAURI__`，一片空白）。 */
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
+  const page = await context.newPage()
 
   // ㉑ 用的大文件（4000 次循环 = 8000 行）：只在 localStorage.__BIG__=1 时返回
   const BIG_DOC = Array.from(
@@ -28,7 +33,7 @@ export async function openPanel({ dist, payload, outPath }) {
   // 桩：只替换"值怎么送到页面"，其余与真机一致（含 set_canvas_rect 的调用）
   // ★`read_text` 也在这里桩掉：代码视图（G4 第一块砖）启动时会读文件，不桩就会抛"未实现"
   //   ⇒ 被判据 ⑧（无 JS 错误）判红。桩内容故意含 `const`，供判据 ⑪ 断言"面板真的渲染了内容"。
-  await page.addInitScript(stubTauri, { ...payload, big: BIG_DOC })
+  await context.addInitScript(stubTauri, { ...payload, big: BIG_DOC })
 
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
@@ -47,5 +52,5 @@ export async function openPanel({ dist, payload, outPath }) {
     await browser.close()
     closeServer()
   }
-  return { page, errors, close }
+  return { page, errors, close, url: `http://127.0.0.1:${port}/index.html` }
 }
