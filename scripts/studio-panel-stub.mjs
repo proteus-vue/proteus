@@ -32,7 +32,9 @@ export function stubTauri(payload) {
         if (cmd === 'capture_preset') {
           if (window.localStorage.getItem('__CAP_FAIL__') === '1')
             throw new Error('当前画面源不支持切换分辨率（只有 Android / adb 实时投屏可以）')
-          return { preset: args?.preset, width: 1200, height: 2608, mbps: 16 }
+          const mbps = { low: 4, high: 20 }[String(args?.preset)] ?? 13
+          // 分辨率**不变**：这正是 #1264 的重点（改的是码率，不是几何）
+          return { preset: args?.preset, width: 884, height: 1920, mbps }
         }
         // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
         // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn / CSS 的

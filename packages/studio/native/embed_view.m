@@ -170,6 +170,8 @@ static double g_last_t_first = 0;  /* 当前渲染帧的首字节时刻 */
  *   **失败包数显著多于成功解出的帧**（>2 倍且 ≥4 个）⇒ 判硬解这条路走不通。
  * 【动作】用同一份 extradata 重开一个**不带 hw_device_ctx** 的解码器并 flush；
  *   g_hw 置 false ⇒ `out[17]` 跟着变 ⇒ 面板如实显示"软解"（不再是假读数）。 */
+static int g_force_sw = 0;       /* 一旦判定"这台机器硬解跑不动"就置 1，后续会话直接软解 */
+static int poc_live_restart(const char *cmd);   /* 定义在后面（降级要用它重启会话） */
 static long g_dec_fail = 0;      /* send_packet 失败的包数（原先被静默丢掉） */
 static long g_hw_frames = 0;     /* 真正由 VT 解出的帧（format == VIDEOTOOLBOX） */
 static long g_sw_frames = 0;     /* 硬解会话里**回退成软解**解出的帧（format 是 YUV 平面） */
@@ -182,32 +184,23 @@ static void maybe_degrade_to_sw(void) {
   if (!g_hw || g_dec_sw) return;
   if (now_ms() - g_dec_t0 < 1200) return;
   /* ★判据用**实际出帧率**（用户看到的就是这个）：
-     · 第一版用 send_packet 返回值 —— VT 逐帧失败时 ffmpeg 内部回退软解并返回成功，
-       失败计数恒为 0 ⇒ 永远不触发；
-     · 第二版用帧格式（VT vs YUV）—— 仍然不触发，因为 VT 确实**出了一部分**帧；
-     · 现在：1.5 秒后实测出帧率 < 30fps 就判定"硬解这条路在这份参数集上跑不动"。
-       实测对照：720p 硬解 42fps（不该降）· 884×1920 硬解 8fps（该降）· 同流软解 36fps（降完就够用）。 */
+     · 第一版用 send_packet 返回值 —— VT 逐帧失败时 ffmpeg 内部回退软解并返回成功，失败计数恒 0；
+     · 第二版用帧格式（VT vs YUV）—— VT 确实出了一部分帧，仍不触发；
+     · 现在：1.5 秒后实测出帧率 < 30fps 就判定"硬解这条路在这份参数集上跑不动"。 */
   double el = now_ms() - g_dec_t0;
   if (el < 1500) return;
   double fps = (double)g_frames / (el / 1000.0);
   if (fps >= 30.0) return;
-  const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
-  AVCodecContext *nc = avcodec_alloc_context3(dec);
-  if (!nc) return;
-  nc->flags |= AV_CODEC_FLAG_LOW_DELAY;
-  if (g_dec_plen > 0) {
-    nc->extradata = (uint8_t *)av_mallocz((size_t)g_dec_plen + AV_INPUT_BUFFER_PADDING_SIZE);
-    memcpy(nc->extradata, g_dec_params, (size_t)g_dec_plen);
-    nc->extradata_size = g_dec_plen;
-  }
-  if (avcodec_open2(nc, dec, NULL) < 0) { avcodec_free_context(&nc); return; }
-  avcodec_free_context(&g_cc);
-  g_cc = nc;
-  avcodec_flush_buffers(g_cc);
   g_dec_sw = 1;
-  g_hw = false;
-  fprintf(stderr, "实时：硬解只有 %.1ffps（VT 出 %ld 帧 / 回退 %ld 帧）⇒ 已自动切软解\n",
+  g_force_sw = 1;
+  /* ★★降级 = **重启采集会话**，不是"原地换一个软解解码器"（决策 #1264 实测修正）。
+     原地换解码器的坑：新解码器没有参考帧，必须等到**下一个 IDR** 才能出画；
+     而静止画面（桌面/文档）很久才有一个 IDR ⇒ 表现为"本该降级救场，结果黑屏更久"。
+     重启会话则必然从 SPS/PPS + IDR 开始，一次到位。
+     代价：一次重启（几百毫秒黑一下），但比"黑到下一次关键帧"好得多。 */
+  fprintf(stderr, "实时：硬解只有 %.1ffps（VT 出 %ld 帧 / 回退 %ld 帧）⇒ 重启会话并强制软解\n",
           fps, g_hw_frames, g_sw_frames);
+  poc_live_restart(g_live_cmd);
 }
 
 /* ── 实时直方图（面板用）：固定窗口的环形缓冲，取值时排序求分位 ──
@@ -296,7 +289,7 @@ static int live_open_decoder(void) {
     g_cc->extradata_size = plen;
   }
   g_hw = false;
-  if (getenv("POC_LIVE_SW") == NULL &&
+  if (!g_force_sw && getenv("POC_LIVE_SW") == NULL &&
       av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
     g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
     g_hw = true;

@@ -907,15 +907,21 @@ const checks = [
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
   ],
-  // ㊴ 采集档位：点一下切 sharp（IPC + 标签同步），再点回 standard；失败时标签不许变
+  // ㊴ 画质档位：分辨率不变、只改码率；三档循环；失败时标签不许变
   [
-    `㊴ 采集档位：初始「${cap.before}」→ 点一次 ${cap.toSharp.arg} / 标签「${cap.toSharp.label}」/ 提示「${cap.toSharp.toast.slice(0, 26)}」→ 再点 ${cap.toStd.arg} / 标签「${cap.toStd.label}」· 失败时标签 ${cap.labelBeforeFail}→${cap.failLabel}（应不变）提示「${cap.failToast.slice(0, 22)}」`,
-    cap.before === '标准 1920' &&
-      cap.toSharp.arg === 'sharp' &&
-      cap.toSharp.label === '原生清晰' &&
-      cap.toSharp.toast.includes('1200×2608') &&
-      cap.toStd.arg === 'standard' &&
-      cap.toStd.label === '标准 1920' &&
+    `㊴ 画质档位：初始「${cap.before}」→ ${cap.steps.map((x) => `${x.arg}/「${x.label}」`).join(' → ')} · 失败时标签 ${cap.labelBeforeFail}→${cap.failLabel}（应不变）提示「${cap.failToast.slice(0, 20)}」`,
+    cap.before === '画质·标准' &&
+      cap.steps.length === 3 &&
+      cap.steps[0].arg === 'high' &&
+      cap.steps[0].label === '画质·高清' &&
+      cap.steps[0].toast.includes('20 Mbps') &&
+      cap.steps[1].arg === 'low' &&
+      cap.steps[1].label === '画质·省流' &&
+      cap.steps[1].toast.includes('4 Mbps') &&
+      cap.steps[2].arg === 'standard' &&
+      cap.steps[2].label === '画质·标准' &&
+      // 三档**分辨率不变**（用户要的就是这个）
+      cap.steps[0].toast.includes('884×1920') &&
       cap.failLabel === cap.labelBeforeFail &&
       cap.failToast.includes('不支持'),
   ],

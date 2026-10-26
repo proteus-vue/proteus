@@ -226,13 +226,14 @@ export async function probeTapSpace(page) {
 }
 
 /**
- * ㊴ 采集档位（决策 #1263）：标准 1920 ↔ 原生清晰。
+ * ㊴ 画质档位（决策 #1264）：**分辨率不变，只改码率**——省流 4 / 标准 13 / 高清 20 Mbps。
  *
- * 【钉三件事】① 点一次 → 调 `capture_preset('sharp')` 且**标签跟着变**（IPC 与界面必须同步）
- *   ② 再点 → 回到 standard ③ **失败时标签不许变**——乐观更新会让界面说谎：
- *      用户以为已经切成清晰了，其实那边报错没切。
+ * 【钉四件事】① 点一下 → 调 `capture_preset('high')` 且**标签跟着变**（IPC 与界面必须同步）
+ *   ② 再点 → 省流 ③ 再点 → 回到标准（三档循环，不是两态开关）
+ *   ④ **失败时标签不许变**——乐观更新会让界面说谎：用户以为切了，其实那边报错没切。
+ * 【为什么还要断分辨率不变】用户的诉求就是"同分辨率下的清晰度"；如果哪天有人把它改成
+ *   顺带切分辨率，这条会立刻红。
  */
-
 export async function probeCapPreset(page) {
   const calls = () =>
     page.evaluate(() =>
@@ -246,14 +247,16 @@ export async function probeCapPreset(page) {
 
   const base = (await calls()).length
   const before = await label()
-
-  await page.click('#capChip')
-  await page.waitForTimeout(400)
-  const toSharp = { arg: (await calls())[base]?.preset ?? null, label: await label(), toast: await toast() }
-
-  await page.click('#capChip')
-  await page.waitForTimeout(400)
-  const toStd = { arg: (await calls())[base + 1]?.preset ?? null, label: await label() }
+  const steps = []
+  for (let i = 0; i < 3; i++) {
+    await page.click('#capChip')
+    await page.waitForTimeout(400)
+    steps.push({
+      arg: (await calls())[base + i]?.preset ?? null,
+      label: await label(),
+      toast: await toast(),
+    })
+  }
 
   // 失败路径：桩抛错（源不支持）⇒ 标签**必须**原地不动
   await page.evaluate(() => localStorage.setItem('__CAP_FAIL__', '1'))
@@ -264,5 +267,5 @@ export async function probeCapPreset(page) {
   const failToast = await toast()
   await page.evaluate(() => localStorage.removeItem('__CAP_FAIL__'))
 
-  return { before, toSharp, toStd, labelBeforeFail, failLabel, failToast }
+  return { before, steps, labelBeforeFail, failLabel, failToast }
 }

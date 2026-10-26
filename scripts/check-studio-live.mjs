@@ -64,6 +64,9 @@ async function runOnce({ seconds, env = {} }) {
   } catch {
     /* 没有残留时 pkill 返回 1 */
   }
+  /* ★设备侧释放采集权**不是瞬时**的（实测：pkill 后立刻新开会话，偶尔 0 帧但 0 错误）。
+     等 350ms 再起，否则门禁会偶发假红，把环境问题当成代码坏。 */
+  await new Promise((r) => setTimeout(r, 350))
   const fd = fs.openSync(lg, 'w')
   const child = spawn(BIN, {
     env: { ...process.env, ...env, POC_SECONDS: String(seconds), POC_JSON: j },
@@ -77,7 +80,12 @@ async function runOnce({ seconds, env = {} }) {
   }
 }
 
-const { rep, text } = await runOnce({ seconds: SECONDS })
+let { rep, text } = await runOnce({ seconds: SECONDS })
+if ((rep?.frames_presented ?? 0) === 0) {
+  /* 零帧且零错误 = 没拿到流（环境抢占），重试一次并**明确说出来**，不静默吞掉 */
+  console.log('… 首次运行没拿到帧（0 帧 / 0 错误）⇒ 设备采集权未释放，重试一次')
+  ;({ rep, text } = await runOnce({ seconds: SECONDS }))
+}
 
 // 判据（三条，全部来自"用户真正看到什么"）
 const hwErr = (text.match(/^\[h264 @/gm) || []).length          // 解码器内部错误（含 Invalid NAL / concealing）
@@ -93,21 +101,24 @@ const checks = [
   [`AU 结构零脏帧（${dirtyAu} 脏 / ${hardCut} 次硬切）`, dirtyAu === 0 && hardCut === 0],
 ]
 
-/* ── 第二段：切换采集档位（决策 #1263）──────────────────────────────────────
- * 这条覆盖"停旧会话 → 起新会话 → 重建解码器"整条路——切分辨率按钮背后就这一条。
- * 判据：切换后尺寸**真的变了**、仍有帧、零解码错误。 */
-const SWITCH_TO = process.env.STUDIO_LIVE_SWITCH_TO || '1280x720'
+/* ── 第二段：切画质档位（决策 #1263 / #1264）────────────────────────────────
+ * 这条覆盖"停旧会话 → 起新会话 → 重建解码器"整条路——画质档位按钮背后就这一条。
+ * ★判据按**画质档位**的真实语义断：**分辨率不变**、码率真的降了、仍有帧、零解码错误。
+ *   （如果谁把它改成顺带切分辨率，这条会立刻红。） */
+const baseSize = rep?.size ?? ''
+const swSize = process.env.STUDIO_LIVE_SWITCH_SIZE || baseSize
 const sw = await runOnce({
   seconds: 9,
   env: {
     POC_SWITCH_AFTER_MS: '2500',
-    POC_SWITCH_CMD: `adb exec-out screenrecord --output-format=h264 --size ${SWITCH_TO} --bit-rate 6000000 --time-limit 180 -`,
+    POC_SWITCH_CMD: `adb exec-out screenrecord --output-format=h264 --size ${swSize || '884x1920'} --bit-rate 4000000 --time-limit 180 -`,
   },
 })
 const swErr = (sw.text.match(/^\[h264 @/gm) || []).length
+const swMbps = Number(sw.rep?.mbps ?? 99)
 checks.push([
-  `切档位后仍在出帧（${sw.rep?.frames_presented ?? 0} 帧 · 尺寸 ${sw.rep?.size ?? '?'} → 目标 ${SWITCH_TO}）· 零解码错误（${swErr}）`,
-  (sw.rep?.frames_presented ?? 0) > 0 && sw.rep?.size === SWITCH_TO && swErr === 0,
+  `切画质（省流 4M）后仍在出帧（${sw.rep?.frames_presented ?? 0} 帧 · ${sw.rep?.size ?? '?'} · 实测 ${swMbps} Mbps）· 分辨率不变=${sw.rep?.size === baseSize} · 零解码错误（${swErr}）`,
+  (sw.rep?.frames_presented ?? 0) > 0 && sw.rep?.size === baseSize && swMbps <= 8 && swErr === 0,
 ])
 
 let bad = 0

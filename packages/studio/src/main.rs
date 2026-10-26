@@ -20,6 +20,7 @@ mod capture;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
+mod capture_preset;
 mod search;
 
 extern "C" {
@@ -49,7 +50,7 @@ extern "C" {
 }
 
 /// 设备物理尺寸（启动探测一次；`stats` 轮询读缓存，不再跑 adb）。
-static DEVICE_PX: std::sync::Mutex<Option<(u32, u32)>> = std::sync::Mutex::new(None);
+pub(crate) static DEVICE_PX: std::sync::Mutex<Option<(u32, u32)>> = std::sync::Mutex::new(None);
 
 /// 面板读数。字段名就是 HTML 侧读的名字 —— 少一层映射少一处漂移。
 #[derive(Serialize)]
@@ -83,57 +84,10 @@ struct Stats {
     dev_h: i64,
 }
 
-/// 采集档位（决策 #1263）。**两档就够**——不做滑块：档位越少，"现在是什么"越清楚。
-/// - `standard`：长边 ≤1920（默认，等比）
-/// - `sharp`：**设备原生分辨率**，码率按像素数给（`bitrate_for` 夹在 16 Mbps 内）
-#[derive(Serialize)]
-struct CaptureInfo {
-    preset: String,
-    width: u32,
-    height: u32,
-    mbps: u32,
-}
-
-fn live_capture_cmd(serial: Option<&str>, preset: &str) -> Result<(String, u32, u32, u32), String> {
-    let (dw, dh) = DEVICE_PX
-        .lock()
-        .ok()
-        .and_then(|g| *g)
-        .ok_or("设备尺寸未知（没探测到 adb 设备？）")?;
-    let (w, h) = if preset == "sharp" {
-        /* 原生：不缩放，只把两轴取偶（H.264 4:2:0 要求，见 capture.rs 的注释） */
-        (capture::round_even(dw as f64), capture::round_even(dh as f64))
-    } else {
-        capture::pick_capture_size(dw, dh).ok_or("设备尺寸过小，无法等比取尺寸")?
-    };
-    let br = capture::bitrate_for(w, h);
-    let prefix = match serial {
-        Some(s) => format!("adb -s {s} "),
-        None => "adb ".to_string(),
-    };
-    Ok((
-        format!("{prefix}exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"),
-        w,
-        h,
-        br / 1_000_000,
-    ))
-}
-
-/// 切换采集档位：**重启采集会话**（停旧 → 起新 → 重建解码器，全在原生侧一次做完）。
-/// ★为什么要重启而不是"改个参数"：`screenrecord --size` 只在会话开始时生效，
-///   换尺寸只能新开一条；而旧会话必须**立刻**停掉（`live_stop` 现在会杀进程组 + 设备侧 pkill）。
+/// 画质档位（决策 #1264）：逻辑在 `capture_preset.rs`，这里只做 IPC 接线。
 #[tauri::command]
-fn capture_preset(preset: String) -> Result<CaptureInfo, String> {
-    let serial = ADB_SERIAL.lock().ok().and_then(|g| g.clone());
-    if serial.is_none() {
-        return Err("当前画面源不支持切换分辨率（只有 Android / adb 实时投屏可以）".into());
-    }
-    let (cmd, w, h, mbps) = live_capture_cmd(serial.as_deref(), &preset)?;
-    let c = std::ffi::CString::new(cmd.clone()).map_err(|e| e.to_string())?;
-    /* ★只登记，真正的重启在渲染线程下一拍做（不能在这里 free 解码器：poc_tick 正在用它） */
-    unsafe { poc_live_request_restart(c.as_ptr()) };
-    eprintln!("[studio]   采档位请求 → {preset}（{w}x{h} · {mbps} Mbps）");
-    Ok(CaptureInfo { preset, width: w, height: h, mbps })
+fn capture_preset(preset: String) -> Result<capture_preset::CaptureInfo, String> {
+    capture_preset::capture_preset(preset)
 }
 
 #[tauri::command]
@@ -322,7 +276,7 @@ fn close_now(window: tauri::Window) {
  *   对一个"调试时点几下"的场景不划算。拖动/多指等复杂手势另议（见 #1254 的边界）。
  */
 static TOUCH_ANDROID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static ADB_SERIAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+pub(crate) static ADB_SERIAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// 第一台处于 `device` 状态的 adb 设备（没有就 None）。
 /// ★不能用 `adb shell` 不带 `-s` 去试：多设备时它的报错是"more than one device"，

@@ -330,28 +330,37 @@ const touchOn = ref(true)
 let touchWarned = false
 let touchBusy = false
 
-/* ─── 采集档位（决策 #1263）：标准 1920 / 原生清晰 ───────────────────────────
- * 【为什么只有两档】档位越多，"我现在是哪档 / 代价多少"越说不清。两档 + 面板上的实测
- *   帧率与解码耗时，用户自己能看出代价。
- * 【为什么切换要重启会话】`screenrecord --size` 只在会话开始时生效；换尺寸必须新开一条，
- *   旧会话由原生侧**立刻**停掉（杀进程组 + 设备侧 pkill，见 live_stop）。 */
-const preset = ref<'standard' | 'sharp'>('standard')
+/* ─── 画质档位（决策 #1264）：**分辨率不变，只改码率** ──────────────────────
+ * 【用户纠正】原来我做的是"切分辨率"（标准 1920 / 原生清晰），而他要的是
+ *   **同分辨率下的清晰度档**——降画质换流畅。这两个轴不是一回事：
+ *   · 改分辨率：改几何（1.36× 下采样），字变清楚但编码/解码成本 ×1.84
+ *   · 改码率：几何不变，只改量化与链路占用 ⇒ 影响的是"压缩痕迹多少"与"抗抖动能力"
+ * 【实测（真机 USB）】4/8/13/20 Mbps 四档跑下来 **迟到帧恒为 0**，空转全在设备端
+ *   ⇒ USB 链路下低码率**换不到帧率**；它换的是抗抖动与省带宽（Wi-Fi adb 才有意义）。
+ * 【为什么还是做】① 无线 adb / 带宽紧张时有用 ② 高码率确实能减少密集细节的压缩痕迹
+ *   ③ 切换成本已经被 #1263 的"干净重启会话"付掉了，多一个维度是几十行。
+ * 【为什么切换要重启会话】`--bit-rate` 只在会话开始时生效（和 `--size` 一样）。 */
+const QUALITY = [
+  { id: 'low', label: '省流', hint: '4 Mbps —— 带宽紧张/链路抖动时才值得（USB 下换不到帧率）' },
+  { id: 'standard', label: '标准', hint: '13 Mbps —— 默认' },
+  { id: 'high', label: '高清', hint: '20 Mbps —— 细节多（照片/视频/密集小字）时压缩痕迹更少' },
+]
+const qIndex = ref(1)
 const capBusy = ref(false)
-const capLabel = computed(() => (preset.value === 'sharp' ? '原生清晰' : '标准 1920'))
-const capTitle = computed(() =>
-  preset.value === 'sharp'
-    ? '采集档位：原生清晰 —— 用设备物理分辨率录屏（字更清楚，带宽/解码更贵）。点击切回标准'
-    : '采集档位：标准 —— 长边 ≤1920 等比（默认）。点击切到原生清晰',
+const qNow = computed(() => QUALITY[qIndex.value])
+const capLabel = computed(() => `画质·${qNow.value.label}`)
+const capTitle = computed(
+  () => `画质：${qNow.value.label}（${qNow.value.hint}）· 分辨率不变。点击切到「${QUALITY[(qIndex.value + 1) % QUALITY.length].label}」`,
 )
 
-async function togglePreset() {
+async function cycleQuality() {
   if (capBusy.value) return
-  const next = preset.value === 'sharp' ? 'standard' : 'sharp'
+  const next = QUALITY[(qIndex.value + 1) % QUALITY.length]
   capBusy.value = true
   try {
-    const info = await capturePreset(next)
-    preset.value = next
-    pushToast(`采集档位：${info.width}×${info.height} · ${info.mbps} Mbps`, 'info')
+    const info = await capturePreset(next.id)
+    qIndex.value = (qIndex.value + 1) % QUALITY.length
+    pushToast(`画质：${next.label} · ${info.width}×${info.height} · ${info.mbps} Mbps`, 'info')
   } catch (err) {
     pushToast(String((err as Error)?.message ?? err), 'err')
   } finally {
@@ -493,7 +502,7 @@ const hud = computed(() => {
         <span class="dot" :class="{ off: !touchOn }" />触控{{ touchOn ? '·开' : '·关' }}
       </button>
       <!-- 采集档位（决策 #1263）：点击切换，会重启采集会话 -->
-      <button class="chip btn" id="capChip" :title="capTitle" :aria-busy="capBusy" @click="togglePreset">
+      <button class="chip btn" id="capChip" :title="capTitle" :aria-busy="capBusy" @click="cycleQuality">
         <span class="dot" :class="{ off: !hasBridge }" /><span id="capLabel">{{ capLabel }}</span>
       </button>
       <div class="chip">镜像 60fps 上限</div>
