@@ -270,6 +270,86 @@ static const char *video_path(void) {
   return p ? p : "/tmp/proteus-poc/720p30.mp4";
 }
 
+/* ── 打开实时流解码器（决策 #1263：从 poc_attach 抽出来，切换分辨率要能重入）──
+ * 为什么必须抽：切分辨率 = 重启采集会话 = 重建解码器（旧 extradata 对应旧 SPS）。
+ * 抽成一个函数，attach 与 restart 走**同一条**初始化路径——两条必然漂移。 */
+static int live_open_decoder(void) {
+  static unsigned char params[4096];
+  int plen = 0, waited = 0;
+  /* ★顺序很关键：**先起读取线程，等 SPS/PPS 到齐，再开解码器**。
+     VideoToolbox 硬解必须有 extradata（参数集），而裸流里 SPS/PPS 随第一个 IDR 才出现；
+     第一版是"先开解码器后读流"，VT 拿不到参数集 ⇒ 直接拒绝解码（只能退回软解）。
+     live_peek_params 只窥探不取走，首个 IDR 仍在队列里，解出来就是完整一帧。 */
+  while (!live_peek_params(params, (int)sizeof(params), &plen)) {
+    if (waited >= 5000) break;
+    usleep(10000);
+    waited += 10;
+  }
+
+  if (g_cc) avcodec_free_context(&g_cc);
+  const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
+  g_cc = avcodec_alloc_context3(dec);
+  g_cc->flags |= AV_CODEC_FLAG_LOW_DELAY;
+  if (plen > 0) {
+    g_cc->extradata = (uint8_t *)av_mallocz((size_t)plen + AV_INPUT_BUFFER_PADDING_SIZE);
+    memcpy(g_cc->extradata, params, (size_t)plen);
+    g_cc->extradata_size = plen;
+  }
+  g_hw = false;
+  if (getenv("POC_LIVE_SW") == NULL &&
+      av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
+    g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
+    g_hw = true;
+  }
+  int open_rc = avcodec_open2(g_cc, dec, NULL);
+  /* 留一份参数集：硬解失败后要用它重开软解解码器（决策 #1256） */
+  g_dec_plen = plen < (int)sizeof(g_dec_params) ? plen : (int)sizeof(g_dec_params);
+  if (g_dec_plen > 0) memcpy(g_dec_params, params, (size_t)g_dec_plen);
+  g_dec_t0 = now_ms();
+  { /* 取证钩子：POC_DUMP_PARAMS=<path> 把抽出的参数集落盘（决策 #1256 就是靠它抓到
+       "设备日志文本被当成 SPS" 的）。默认不写，零开销。 */
+    const char *dp = getenv("POC_DUMP_PARAMS");
+    if (dp) { FILE *f = fopen(dp, "wb"); if (f) { fwrite(params, 1, (size_t)plen, f); fclose(f); } }
+  }
+  fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
+  if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return -1; }
+
+  /* 尺寸：SPS 里已经解析出来了，优先用它（screenrecord --size 只是请求值，设备可能改） */
+  g_W = getenv("POC_LIVE_W") ? atoi(getenv("POC_LIVE_W")) : 1280;
+  g_H = getenv("POC_LIVE_H") ? atoi(getenv("POC_LIVE_H")) : 720;
+  if (g_cc->width > 0 && g_cc->height > 0) { g_W = g_cc->width; g_H = g_cc->height; }
+  g_fps = 60.0; g_budget = 1000.0 / g_fps;
+  fprintf(stderr, "实时投屏：%s（%dx%d）\n", g_live_cmd, g_W, g_H);
+  return 0;
+}
+
+/* ── 重启请求（决策 #1263）────────────────────────────────────────────────────
+ * ★为什么不在 IPC 线程直接重启：`poc_tick` 正在用 g_cc 解码，那边若 free 掉就是 UAF。
+ *   这里只落一个"待办"，真正的重启由**渲染线程**在 tick 开头（还没碰解码器时）执行。
+ *   代价：切换瞬间主线程会阻塞几百毫秒（等新会话的 SPS/PPS），窗口会顿一下——这是诚实的代价，
+ *   比"偶尔崩"好。 */
+static char g_pending_cmd[1024];
+static volatile int g_pending = 0;
+
+void poc_live_request_restart(const char *cmd) {
+  if (!cmd || !*cmd) return;
+  snprintf(g_pending_cmd, sizeof(g_pending_cmd), "%s", cmd);
+  g_pending = 1;
+}
+
+/* 切换采集参数（决策 #1263）：停旧会话 → 清软解上下文 → 起新会话 → 重建解码器。
+ * 纹理不用管：首帧尺寸与 `g_W/g_H` 不一致时，poc_tick 里已有"就地重建纹理"的分支。 */
+int poc_live_restart(const char *cmd) {
+  if (!g_live || !cmd || !*cmd) return 1;
+  fprintf(stderr, "实时：切换采集 ⇒ %s\n", cmd);
+  live_stop();                                   /* 杀进程组 + 设备侧 pkill + join */
+  if (g_sws) { sws_freeContext(g_sws); g_sws = NULL; }
+  if (g_nv12) av_frame_unref(g_nv12);
+  g_dec_sw = 0; g_dec_fail = 0; g_hw_frames = 0; g_sw_frames = 0;
+  if (live_start(cmd) != 0) { fprintf(stderr, "实时：重启读取线程失败\n"); return 2; }
+  return live_open_decoder() == 0 ? 0 : 3;
+}
+
 static int poc_attach_impl(void *parent_nsview) {
   @autoreleasepool {
     // ★tauri 的 `ns_window()` 给的是 **NSWindow**（TaoWindow），不是 NSView。
@@ -293,46 +373,7 @@ static int poc_attach_impl(void *parent_nsview) {
          第一版是"先开解码器后读流"，VT 拿不到参数集 ⇒ 直接拒绝解码（只能退回软解）。
          live_peek_params 只窥探不取走，首个 IDR 仍在队列里，解出来就是完整一帧。 */
       if (live_start(live_cmd) != 0) { fprintf(stderr, "实时：起读取线程失败\n"); return 2; }
-      static unsigned char params[4096];
-      int plen = 0, waited = 0;
-      while (!live_peek_params(params, (int)sizeof(params), &plen)) {
-        if (waited >= 5000) break;
-        usleep(10000);
-        waited += 10;
-      }
-
-      const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
-      g_cc = avcodec_alloc_context3(dec);
-      g_cc->flags |= AV_CODEC_FLAG_LOW_DELAY;
-      if (plen > 0) {
-        g_cc->extradata = (uint8_t *)av_mallocz((size_t)plen + AV_INPUT_BUFFER_PADDING_SIZE);
-        memcpy(g_cc->extradata, params, (size_t)plen);
-        g_cc->extradata_size = plen;
-      }
-      if (getenv("POC_LIVE_SW") == NULL &&
-          av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
-        g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
-        g_hw = true;
-      }
-      int open_rc = avcodec_open2(g_cc, dec, NULL);
-      /* 留一份参数集：硬解失败后要用它重开软解解码器（决策 #1256） */
-      g_dec_plen = plen < (int)sizeof(g_dec_params) ? plen : (int)sizeof(g_dec_params);
-      if (g_dec_plen > 0) memcpy(g_dec_params, params, (size_t)g_dec_plen);
-      g_dec_t0 = now_ms();
-      { /* 取证钩子：POC_DUMP_PARAMS=<path> 把抽出的参数集落盘（决策 #1256 就是靠它抓到
-           "设备日志文本被当成 SPS" 的）。默认不写，零开销。 */
-        const char *dp = getenv("POC_DUMP_PARAMS");
-        if (dp) { FILE *f = fopen(dp, "wb"); if (f) { fwrite(params, 1, (size_t)plen, f); fclose(f); } }
-      }
-      fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
-      if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return 2; }
-
-      /* 尺寸：SPS 里已经解析出来了，优先用它（screenrecord --size 只是请求值，设备可能改） */
-      g_W = getenv("POC_LIVE_W") ? atoi(getenv("POC_LIVE_W")) : 1280;
-      g_H = getenv("POC_LIVE_H") ? atoi(getenv("POC_LIVE_H")) : 720;
-      if (g_cc->width > 0 && g_cc->height > 0) { g_W = g_cc->width; g_H = g_cc->height; }
-      g_fps = 60.0; g_budget = 1000.0 / g_fps;
-      fprintf(stderr, "实时投屏：%s（%dx%d）\n", live_cmd, g_W, g_H);
+      if (live_open_decoder() != 0) return 2;
       goto gl_init;   /* 跳过后面的文件打开/流信息 */
     }
     const char *file = video_path();
@@ -549,6 +590,22 @@ static void upload_plane(GLuint tex, int w, int h, GLenum fmt, const unsigned ch
 
 static int poc_tick_impl(void) {
   if (!g_inited || g_eof) return g_eof ? 1 : 2;
+  /* 取证/回归钩子（决策 #1263）：POC_SWITCH_AFTER_MS + POC_SWITCH_CMD ⇒ 到点自动切一档。
+     用来在**无头**模式验证"重启采集会话"这条路（切档位按钮背后就这一条路）。 */
+  {
+    static int fired = 0;
+    const char *at = getenv("POC_SWITCH_AFTER_MS");
+    if (!fired && at && now_ms() - g_t_start > atof(at)) {
+      fired = 1;
+      const char *c = getenv("POC_SWITCH_CMD");
+      if (c) poc_live_request_restart(c);
+    }
+  }
+  /* 切换采集档位的待办（决策 #1263）：必须在碰解码器**之前**做 */
+  if (g_pending) {
+    g_pending = 0;
+    poc_live_restart(g_pending_cmd);
+  }
   g_ticks++;
   @autoreleasepool {
     [g_ctx makeCurrentContext];

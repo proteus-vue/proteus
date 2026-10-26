@@ -95,6 +95,17 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 
+/** 采集档位（决策 #1263）：切换会**重启采集会话**（停旧 → 起新 → 重建解码器）。
+ *  `standard` = 长边 ≤1920 等比；`sharp` = 设备原生分辨率。 */
+export interface CaptureInfo {
+  preset: string
+  width: number
+  height: number
+  mbps: number
+}
+export const capturePreset = (preset: string): Promise<CaptureInfo> =>
+  invoke<CaptureInfo>('capture_preset', { preset })
+
 /** 触摸回传（决策 #1254）：把画布上的一次点击**注入到真机**（只有 Android 实时投屏支持）。
  *  返回 `"x,y"` = adb 侧确认已注入；抛错时分两类原因（源不支持 / adb 失败），
  *  界面据此区分"这种源做不了"和"这次没成功"——两者都不能静默。

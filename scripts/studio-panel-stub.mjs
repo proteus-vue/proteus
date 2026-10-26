@@ -28,6 +28,12 @@ export function stubTauri(payload) {
           return payload
         }
         if (cmd === 'set_canvas_rect') return null
+        // 采集档位（决策 #1263）：桩返回"切成了什么"，判据据此断言 IPC 与界面同步
+        if (cmd === 'capture_preset') {
+          if (window.localStorage.getItem('__CAP_FAIL__') === '1')
+            throw new Error('当前画面源不支持切换分辨率（只有 Android / adb 实时投屏可以）')
+          return { preset: args?.preset, width: 1200, height: 2608, mbps: 16 }
+        }
         // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
         // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn / CSS 的
         //   `color:` / ObjC 的 `static`），把一段 JavaScript 塞给 .vue 解析器只会得到"整篇一个颜色"，

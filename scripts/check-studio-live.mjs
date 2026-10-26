@@ -54,13 +54,30 @@ try {
   /* 没有残留时 pkill 返回 1，正常 */
 }
 
-const log = fs.openSync(logPath, 'w')
-const child = spawn(BIN, { env: { ...process.env, POC_SECONDS: String(SECONDS), POC_JSON: json }, stdio: ['ignore', log, log] })
-await new Promise((res) => child.on('exit', res))
-fs.closeSync(log)
+/** 跑一次无头采集，返回 { rep, text } */
+async function runOnce({ seconds, env = {} }) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-live-run-'))
+  const j = path.join(dir, 'report.json')
+  const lg = path.join(dir, 'stderr.log')
+  try {
+    execFileSync('adb', ['shell', 'pkill -x screenrecord'], { stdio: 'ignore' })
+  } catch {
+    /* 没有残留时 pkill 返回 1 */
+  }
+  const fd = fs.openSync(lg, 'w')
+  const child = spawn(BIN, {
+    env: { ...process.env, ...env, POC_SECONDS: String(seconds), POC_JSON: j },
+    stdio: ['ignore', fd, fd],
+  })
+  await new Promise((res) => child.on('exit', res))
+  fs.closeSync(fd)
+  return {
+    rep: fs.existsSync(j) ? JSON.parse(fs.readFileSync(j, 'utf8')) : null,
+    text: fs.readFileSync(lg, 'utf8'),
+  }
+}
 
-const text = fs.readFileSync(logPath, 'utf8')
-const rep = fs.existsSync(json) ? JSON.parse(fs.readFileSync(json, 'utf8')) : null
+const { rep, text } = await runOnce({ seconds: SECONDS })
 
 // 判据（三条，全部来自"用户真正看到什么"）
 const hwErr = (text.match(/^\[h264 @/gm) || []).length          // 解码器内部错误（含 Invalid NAL / concealing）
@@ -75,6 +92,23 @@ const checks = [
   [`解码器零错误（${hwErr} 条 h264 错误）`, hwErr === 0],
   [`AU 结构零脏帧（${dirtyAu} 脏 / ${hardCut} 次硬切）`, dirtyAu === 0 && hardCut === 0],
 ]
+
+/* ── 第二段：切换采集档位（决策 #1263）──────────────────────────────────────
+ * 这条覆盖"停旧会话 → 起新会话 → 重建解码器"整条路——切分辨率按钮背后就这一条。
+ * 判据：切换后尺寸**真的变了**、仍有帧、零解码错误。 */
+const SWITCH_TO = process.env.STUDIO_LIVE_SWITCH_TO || '1280x720'
+const sw = await runOnce({
+  seconds: 9,
+  env: {
+    POC_SWITCH_AFTER_MS: '2500',
+    POC_SWITCH_CMD: `adb exec-out screenrecord --output-format=h264 --size ${SWITCH_TO} --bit-rate 6000000 --time-limit 180 -`,
+  },
+})
+const swErr = (sw.text.match(/^\[h264 @/gm) || []).length
+checks.push([
+  `切档位后仍在出帧（${sw.rep?.frames_presented ?? 0} 帧 · 尺寸 ${sw.rep?.size ?? '?'} → 目标 ${SWITCH_TO}）· 零解码错误（${swErr}）`,
+  (sw.rep?.frames_presented ?? 0) > 0 && sw.rep?.size === SWITCH_TO && swErr === 0,
+])
 
 let bad = 0
 for (const [label, ok] of checks) {

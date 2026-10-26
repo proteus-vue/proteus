@@ -42,6 +42,10 @@ extern "C" {
     fn poc_use_bundle_icon();
     /// 写系统剪贴板（NSPasteboard，决策 #1234）
     fn poc_copy_text(s: *const c_char);
+    /// 重启采集会话（决策 #1263：切分辨率）。返回 0 成功 / 1 非实时源 / 2 起线程失败 / 3 解码器打开失败
+    fn poc_live_restart(cmd: *const c_char) -> c_int;
+    /// 只**登记**重启请求，由渲染线程在下一拍执行（避免与解码器竞争，决策 #1263）
+    fn poc_live_request_restart(cmd: *const c_char);
 }
 
 /// 设备物理尺寸（启动探测一次；`stats` 轮询读缓存，不再跑 adb）。
@@ -77,6 +81,59 @@ struct Stats {
     ///   拿码流尺寸去点会整体缩到 884/1200 = 0.737（实测：点"设置"落到它上面的 App，决策 #1260）。
     dev_w: i64,
     dev_h: i64,
+}
+
+/// 采集档位（决策 #1263）。**两档就够**——不做滑块：档位越少，"现在是什么"越清楚。
+/// - `standard`：长边 ≤1920（默认，等比）
+/// - `sharp`：**设备原生分辨率**，码率按像素数给（`bitrate_for` 夹在 16 Mbps 内）
+#[derive(Serialize)]
+struct CaptureInfo {
+    preset: String,
+    width: u32,
+    height: u32,
+    mbps: u32,
+}
+
+fn live_capture_cmd(serial: Option<&str>, preset: &str) -> Result<(String, u32, u32, u32), String> {
+    let (dw, dh) = DEVICE_PX
+        .lock()
+        .ok()
+        .and_then(|g| *g)
+        .ok_or("设备尺寸未知（没探测到 adb 设备？）")?;
+    let (w, h) = if preset == "sharp" {
+        /* 原生：不缩放，只把两轴取偶（H.264 4:2:0 要求，见 capture.rs 的注释） */
+        (capture::round_even(dw as f64), capture::round_even(dh as f64))
+    } else {
+        capture::pick_capture_size(dw, dh).ok_or("设备尺寸过小，无法等比取尺寸")?
+    };
+    let br = capture::bitrate_for(w, h);
+    let prefix = match serial {
+        Some(s) => format!("adb -s {s} "),
+        None => "adb ".to_string(),
+    };
+    Ok((
+        format!("{prefix}exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"),
+        w,
+        h,
+        br / 1_000_000,
+    ))
+}
+
+/// 切换采集档位：**重启采集会话**（停旧 → 起新 → 重建解码器，全在原生侧一次做完）。
+/// ★为什么要重启而不是"改个参数"：`screenrecord --size` 只在会话开始时生效，
+///   换尺寸只能新开一条；而旧会话必须**立刻**停掉（`live_stop` 现在会杀进程组 + 设备侧 pkill）。
+#[tauri::command]
+fn capture_preset(preset: String) -> Result<CaptureInfo, String> {
+    let serial = ADB_SERIAL.lock().ok().and_then(|g| g.clone());
+    if serial.is_none() {
+        return Err("当前画面源不支持切换分辨率（只有 Android / adb 实时投屏可以）".into());
+    }
+    let (cmd, w, h, mbps) = live_capture_cmd(serial.as_deref(), &preset)?;
+    let c = std::ffi::CString::new(cmd.clone()).map_err(|e| e.to_string())?;
+    /* ★只登记，真正的重启在渲染线程下一拍做（不能在这里 free 解码器：poc_tick 正在用它） */
+    unsafe { poc_live_request_restart(c.as_ptr()) };
+    eprintln!("[studio]   采档位请求 → {preset}（{w}x{h} · {mbps} Mbps）");
+    Ok(CaptureInfo { preset, width: w, height: h, mbps })
 }
 
 #[tauri::command]
@@ -751,6 +808,7 @@ fn main() {
             close_now,
             device_tap,
             device_swipe,
+            capture_preset,
             search_text
         ])
         .setup(|app| {

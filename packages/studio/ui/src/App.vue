@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { deviceSwipe, deviceTap, setCanvasRect } from './bridge'
+import { capturePreset, deviceSwipe, deviceTap, setCanvasRect } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -330,6 +330,35 @@ const touchOn = ref(true)
 let touchWarned = false
 let touchBusy = false
 
+/* ─── 采集档位（决策 #1263）：标准 1920 / 原生清晰 ───────────────────────────
+ * 【为什么只有两档】档位越多，"我现在是哪档 / 代价多少"越说不清。两档 + 面板上的实测
+ *   帧率与解码耗时，用户自己能看出代价。
+ * 【为什么切换要重启会话】`screenrecord --size` 只在会话开始时生效；换尺寸必须新开一条，
+ *   旧会话由原生侧**立刻**停掉（杀进程组 + 设备侧 pkill，见 live_stop）。 */
+const preset = ref<'standard' | 'sharp'>('standard')
+const capBusy = ref(false)
+const capLabel = computed(() => (preset.value === 'sharp' ? '原生清晰' : '标准 1920'))
+const capTitle = computed(() =>
+  preset.value === 'sharp'
+    ? '采集档位：原生清晰 —— 用设备物理分辨率录屏（字更清楚，带宽/解码更贵）。点击切回标准'
+    : '采集档位：标准 —— 长边 ≤1920 等比（默认）。点击切到原生清晰',
+)
+
+async function togglePreset() {
+  if (capBusy.value) return
+  const next = preset.value === 'sharp' ? 'standard' : 'sharp'
+  capBusy.value = true
+  try {
+    const info = await capturePreset(next)
+    preset.value = next
+    pushToast(`采集档位：${info.width}×${info.height} · ${info.mbps} Mbps`, 'info')
+  } catch (err) {
+    pushToast(String((err as Error)?.message ?? err), 'err')
+  } finally {
+    capBusy.value = false
+  }
+}
+
 /** ⌥ 手势里"按住多久算长按"（Android 默认 long press ≈500ms，取 600ms 更稳） */
 const HOLD_MS = 600
 
@@ -462,6 +491,10 @@ const hud = computed(() => {
         @click="touchOn = !touchOn"
       >
         <span class="dot" :class="{ off: !touchOn }" />触控{{ touchOn ? '·开' : '·关' }}
+      </button>
+      <!-- 采集档位（决策 #1263）：点击切换，会重启采集会话 -->
+      <button class="chip btn" id="capChip" :title="capTitle" :aria-busy="capBusy" @click="togglePreset">
+        <span class="dot" :class="{ off: !hasBridge }" /><span id="capLabel">{{ capLabel }}</span>
       </button>
       <div class="chip">镜像 60fps 上限</div>
       <div style="flex:1" />

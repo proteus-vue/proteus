@@ -27,11 +27,12 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
-import { probeCodeExtras, probeGesture, probeHole, probeMenu, probePan, probeSearch, probeTapSpace, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
+import { probeCodeExtras, probeHole, probeMenu, probePan, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
+import { probeCapPreset, probeGesture, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
-import { serveDist } from './studio-panel-serve.mjs'
+import { openPanel } from './studio-panel-boot.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -93,33 +94,8 @@ const stats = {
   device: deviceValue,
 }
 
-// 静态服务在 studio-panel-serve.mjs（http 而非 file://：ES module 在 file:// 下被 CORS 挡掉）
-const { port, close: closeServer } = await serveDist(DIST)
-
-const browser = await chromium.launch()
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
-
-// ㉑ 用的大文件（4000 次循环 = 8000 行）：只在 localStorage.__BIG__=1 时返回
-const BIG_DOC = Array.from(
-  { length: 4000 },
-  (_, i) => `export const v${i + 1} = ${i + 1} // line ${i + 1}\nconst s${i + 1} = 'text-${i + 1}'`,
-).join('\n')
-
-// 桩：只替换"值怎么送到页面"，其余与真机一致（含 set_canvas_rect 的调用）
-// ★`read_text` 也在这里桩掉：代码视图（G4 第一块砖）启动时会读文件，不桩就会抛"未实现"
-//   ⇒ 被判据 ⑧（无 JS 错误）判红。桩内容故意含 `const`，供判据 ⑪ 断言"面板真的渲染了内容"。
-await page.addInitScript(stubTauri, { ...stats, big: BIG_DOC })
-
-const errors = []
-page.on('pageerror', (e) => errors.push(String(e)))
-page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text())
-})
-
-await page.goto(`http://127.0.0.1:${port}/index.html`)
-await page.waitForTimeout(1200) // 轮询 500ms，等两拍
-fs.mkdirSync(path.dirname(outPath), { recursive: true })
-await page.screenshot({ path: outPath })
+// 起浏览器环境（静态服务 + chromium + 桩注入 + 首屏截图 + 收集 JS 错误）在 studio-panel-boot.mjs
+const { page, errors, close: closeAll } = await openPanel({ dist: DIST, payload: stats, outPath })
 
 // ── 判据（不是"看着像"就算过）────────────────────────────────────
 const seen = await page.evaluate(() => {
@@ -405,6 +381,8 @@ await page.screenshot({ path: outPath.replace(/\.png$/, '-zoom.png') })
 const { panBefore, panSeen, panReset } = await probePan(page, { outPath })
 // ── ㊲ 画布洞：采集段在 probeHole()（决策 #1257：GL 垫在 webview 下面，HTML 不许盖它）
 const hole = await probeHole(page)
+// ── ㊴ 采集档位：采集段在 probeCapPreset()（决策 #1263）
+const cap = await probeCapPreset(page)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
@@ -456,8 +434,7 @@ await page.reload()
 const perf = await measureBigFile(page)
 const parseFull = perf.parseFull
 
-await browser.close()
-closeServer()
+await closeAll()
 // ⑩ fixture 与原始采集输出必须数值一致（采集段在 studio-panel-fixture.mjs）
 const { ok: fixtureInSync, why: fixtureWhy } = checkFixture({ fixture: r, root: ROOT, studio: STUDIO })
 
@@ -929,6 +906,18 @@ const checks = [
       box3.w > box1.w * 1.15 &&
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
+  ],
+  // ㊴ 采集档位：点一下切 sharp（IPC + 标签同步），再点回 standard；失败时标签不许变
+  [
+    `㊴ 采集档位：初始「${cap.before}」→ 点一次 ${cap.toSharp.arg} / 标签「${cap.toSharp.label}」/ 提示「${cap.toSharp.toast.slice(0, 26)}」→ 再点 ${cap.toStd.arg} / 标签「${cap.toStd.label}」· 失败时标签 ${cap.labelBeforeFail}→${cap.failLabel}（应不变）提示「${cap.failToast.slice(0, 22)}」`,
+    cap.before === '标准 1920' &&
+      cap.toSharp.arg === 'sharp' &&
+      cap.toSharp.label === '原生清晰' &&
+      cap.toSharp.toast.includes('1200×2608') &&
+      cap.toStd.arg === 'standard' &&
+      cap.toStd.label === '标准 1920' &&
+      cap.failLabel === cap.labelBeforeFail &&
+      cap.failToast.includes('不支持'),
   ],
   // ㊲ 画布洞：祖先链必须全透明（GL 在 webview 下面）+ 舞台底色必须由阴影补上
   [

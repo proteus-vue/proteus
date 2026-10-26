@@ -50,7 +50,7 @@ pub fn pick_capture_size(dev_w: u32, dev_h: u32) -> Option<(u32, u32)> {
 
 /// 四舍五入到**最近的偶数**（下限 2）。
 /// ★不能用 `x as u32 & !1`：那是"向下取偶"，883 会变 882 而不是 884 —— 长边就永远到不了 1920。
-fn round_even(x: f64) -> u32 {
+pub fn round_even(x: f64) -> u32 {
     (((x / 2.0).round() as u32) * 2).max(2)
 }
 

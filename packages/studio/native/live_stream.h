@@ -307,6 +307,36 @@ static int live_peek_params(unsigned char *out, int cap, int *out_len) {
   return found;
 }
 
+/* ── 起采集子进程（决策 #1263）：为什么要自己 fork/exec，而不是 popen ──────────
+ * popen 只给 FILE*，**拿不到 pid** ⇒ `live_stop()` 只能等管道 EOF，而 screenrecord
+ * 不到 `--time-limit` 不会结束 ⇒ join 卡死。这就是"切分辨率按钮做不出来"的真正原因：
+ * 切分辨率 = 重启采集 = 必须能**立刻**停掉旧会话。
+ * ★setpgid(0,0) + kill(-pid)：`/bin/sh -c` 会再 fork 出 adb，只杀 sh 会留下 adb
+ *   继续占着管道；杀**整个进程组**才干净。
+ * ★设备侧那条 screenrecord 更不会跟着死（#1258）⇒ 停的时候再补一枪 pkill。 */
+static pid_t g_live_pid = 0;
+
+static pid_t live_spawn(const char *cmd, int *out_fd) {
+  int fds[2];
+  if (pipe(fds) != 0) return -1;
+  pid_t pid = fork();
+  if (pid < 0) { close(fds[0]); close(fds[1]); return -1; }
+  if (pid == 0) {
+    setpgid(0, 0);
+    close(fds[0]);
+    dup2(fds[1], 1);            /* 只接 stdout：H.264 裸流 */
+    int nul = open("/dev/null", O_WRONLY);
+    if (nul >= 0) { dup2(nul, 2); close(nul); }
+    close(fds[1]);
+    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+    _exit(127);
+  }
+  setpgid(pid, pid);
+  close(fds[1]);
+  *out_fd = fds[0];
+  return pid;
+}
+
 static void *live_reader(void *arg) {
   (void)arg;
 /* ★★读缓冲必须装得下**一个完整 NAL**（决策 #1259）。
@@ -319,8 +349,10 @@ static void *live_reader(void *arg) {
   static unsigned char pre_buf[LIVE_PRE_MAX];
 
   while (g_live_run) {
-    FILE *p = popen(g_live_cmd, "r");
-    if (!p) { usleep(300000); continue; }
+    int fd = -1;
+    pid_t pid = live_spawn(g_live_cmd, &fd);
+    if (pid <= 0) { usleep(300000); continue; }
+    g_live_pid = pid;
     g_live_restarts++;
     LiveAsm a = {au_buf, 0, pre_buf, 0, 0, 0, 0};
     int carry = 0;
@@ -330,7 +362,7 @@ static void *live_reader(void *arg) {
       //   64KB 缓冲在 8Mbps 下要攒 ~64ms ⇒ AU 变成"一坨一坨"到达：
       //   一半以上的渲染拍空转，投屏端到端延迟还平白多出最多 64ms（实测 ticks=309 里 empty=228）。
       //   read() 对管道是"当前有多少给多少"，延迟与到达抖动都小一个量级。
-      ssize_t got = read(fileno(p), chunk + carry, sizeof(chunk) - carry);
+      ssize_t got = read(fd, chunk + carry, sizeof(chunk) - carry);
       if (got <= 0) break;
       { /* 取证钩子：POC_DUMP_STREAM=<path> 把**管道原始字节**落盘（分析脏数据用，决策 #1259） */
         static FILE *dfs = NULL; static int dinit = 0;
@@ -364,7 +396,10 @@ static void *live_reader(void *arg) {
         carry = 0;
       }
     }
-    pclose(p);
+    close(fd);
+    int st = 0;
+    waitpid(pid, &st, 0);
+    if (g_live_pid == pid) g_live_pid = 0;
     if (g_live_run) usleep(200000);
   }
   return NULL;
@@ -404,6 +439,12 @@ static int live_start(const char *cmd) {
 
 static void live_stop(void) {
   g_live_run = 0;
+  /* ① 杀**本机**进程组（sh + adb）—— 管道随即 EOF，阻塞中的 read() 会醒来 */
+  pid_t pid = g_live_pid;
+  if (pid > 0) kill(-pid, SIGTERM);
+  /* ② 设备侧那条 screenrecord 不会跟着死（#1258 实测），这里补一枪，否则下次启动
+        抢不到采集权 ⇒ "运行中但零帧"。 */
+  live_kill_stale_capture(g_live_cmd);
   pthread_join(g_live_thread, NULL);
   pthread_mutex_lock(&g_live_lock);
   while (g_live_count) {
