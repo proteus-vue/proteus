@@ -128,6 +128,10 @@ export const probeTool = (key: string, path: string): Promise<{ ok: boolean; det
 
 /** 设备管理（决策 #1265）：列出所有 adb 设备（`size` 是**物理**像素） */
 export interface DeviceInfo {
+  /** `android` / `ios`（列表按平台分组） */
+  platform: string
+  /** 界面提示（iOS：要手机端跑 ProteusHost 才有画面；离线时说明原因） */
+  note: string
   serial: string
   state: string
   model: string

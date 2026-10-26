@@ -306,3 +306,8 @@ kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:
         color:var(--fg-muted);font-size:var(--fs-sm);cursor:pointer}
 .settab:hover{background:var(--bg-overlay);color:var(--fg)}
 .settab.on{background:var(--bg-elevated);border-color:var(--border);color:var(--fg);font-weight:500}
+
+/* 设备列表的平台分组小标题（决策 #1274）：Android / iOS 的接法不同，必须分开看 */
+.devgroup{margin:var(--sp2) 0 2px;padding-left:var(--sp2);font-size:var(--fs-xs);color:var(--fg-subtle);
+          letter-spacing:.04em;text-transform:none}
+.devgroup:first-child{margin-top:0}

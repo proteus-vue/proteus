@@ -103,8 +103,14 @@ async fn list_devices() -> Vec<device::DeviceInfo> {
 #[tauri::command]
 async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        device::select(&serial)?;
-        capture_preset::request_for_serial(device::current_serial().as_deref())
+        /* ★先切"当前设备"，再**按平台**决定采集源（决策 #1274）：
+           Android 走 adb 拉流；iOS 走 `nc -l` 收手机推流。 */
+        let platform = device::select(&serial)?;
+        if platform == "ios" {
+            capture_preset::request_ios()
+        } else {
+            capture_preset::request_for_serial(device::current_serial().as_deref())
+        }
     })
     .await
     .map_err(|e| format!("切换线程失败：{e}"))?

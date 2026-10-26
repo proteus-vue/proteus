@@ -16,6 +16,10 @@ use crate::{capture, ADB_SERIAL, DEVICE_PX, TOUCH_ANDROID};
 /// 一台设备在界面上的全部信息。`size` 是**物理**像素（`wm size`），不是码流尺寸。
 #[derive(Serialize, Clone)]
 pub struct DeviceInfo {
+    /// `android` / `ios` —— 列表按平台分组渲染（决策 #1274）
+    pub platform: String,
+    /// 界面上的一行提示（iOS：要手机端跑 ProteusHost 才有画面）
+    pub note: String,
     pub serial: String,
     /// `device` / `offline` / `unauthorized` ……（adb 原样上报，不翻译）
     pub state: String,
@@ -93,46 +97,125 @@ fn parse_devices(raw: &str) -> Vec<(String, String, String)> {
     out
 }
 
+/// 枚举 iOS 设备。
+/// 【为什么用 `xcrun xctrace list devices`】它和 Xcode 的 Devices 窗口**同源**，
+///   能看到**已配对但离线**的设备（`== Devices Offline ==`）——那正是"我明明连着"的错觉来源。
+///   `idevice_id -l` 只列当前 USB 在线的，看不到离线。
+/// 【必须带 DEVELOPER_DIR】用配置里的 Xcode（决策 #1266/#1268），否则 xcrun 找不到工具。
+fn ios_devices() -> Vec<(String, String, String, bool)> {
+    let dev_dir = crate::settings::current()
+        .path("ios.xcode")
+        .map(crate::settings::developer_dir);
+    let mut c = Command::new("/usr/bin/xcrun");
+    c.args(["xctrace", "list", "devices"]);
+    if let Some(d) = dev_dir {
+        c.env("DEVELOPER_DIR", d);
+    }
+    let Ok(out) = c.output() else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let mut online = false;
+    let mut seen_sim = false;
+    let mut v = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let l = line.trim();
+        if l.starts_with("==") {
+            online = l.contains("== Devices ==");
+            seen_sim = l.contains("Simulators");
+            continue;
+        }
+        if l.is_empty() || seen_sim || !online && !l.contains('(') {
+            continue;
+        }
+        if l.contains("Simulator") {
+            continue;
+        }
+        // `名字 (版本) (UDID)`；名字里也可能带括号 ⇒ 从右往左取两段
+        let Some(close) = l.rfind(')') else { continue };
+        let Some(open) = l[..close].rfind('(') else { continue };
+        let udid = l[open + 1..close].trim().to_string();
+        let head = l[..open].trim();
+        let Some(close2) = head.rfind(')') else { continue };
+        let Some(open2) = head[..close2].rfind('(') else { continue };
+        let version = head[open2 + 1..close2].trim().to_string();
+        let name = head[..open2].trim().to_string();
+        // ★跳过本机 Mac：它的"UDID"是标准 UUID（8-4-4-4-12，4 个连字符）；
+        //   iPhone 的新格式是 `00008101-001938AC1A68801E`（只有 1 个连字符）。
+        if udid.matches('-').count() == 4 {
+            continue;
+        }
+        v.push((name, version, udid, online));
+    }
+    v
+}
+
 /// 列设备。`size` 只对 `state == device` 的查（离线/未授权的 adb shell 会挂）。
 /// ★这是阻塞调用（每台 1~2 次 adb），必须从 `spawn_blocking` 里进。
 pub fn list() -> Vec<DeviceInfo> {
-    let Some(raw) = adb(None, &["devices", "-l"]) else {
-        return Vec::new();
-    };
     let cur = current_serial();
-    parse_devices(&raw)
-        .into_iter()
-        .map(|(serial, state, model)| {
+    let mut out: Vec<DeviceInfo> = Vec::new();
+
+    // ── Android（adb）──
+    if let Some(raw) = adb(None, &["devices", "-l"]) {
+        out.extend(parse_devices(&raw).into_iter().map(|(serial, state, model)| {
             let size = if state == "device" {
                 probe_size(Some(&serial)).map(|(w, h)| format!("{w}x{h}"))
             } else {
                 None
             };
             DeviceInfo {
+                platform: "android".into(),
+                note: String::new(),
                 current: cur.as_deref() == Some(serial.as_str()),
                 serial,
                 state,
                 model: if model.is_empty() { "—".into() } else { model },
                 size,
             }
-        })
-        .collect()
+        }));
+    }
+
+    // ── iOS（xctrace；能列到"已配对但离线"的设备）──
+    for (name, version, udid, online) in ios_devices() {
+        out.push(DeviceInfo {
+            platform: "ios".into(),
+            note: if online {
+                "在手机上运行 ProteusHost 并开始直播后出画面（触控回传暂不支持）".into()
+            } else {
+                "离线：用 USB 连接并在手机上点「信任此电脑」".into()
+            },
+            current: cur.as_deref() == Some(udid.as_str()),
+            serial: udid,
+            state: if online { "device".into() } else { "offline".into() },
+            model: format!("{name} · iOS {version}"),
+            size: None,
+        });
+    }
+    out
 }
 
-/// 切换当前设备：改三处全局状态（串号 / 物理尺寸 / 可否注入）。
-/// ★机型缓存**按串号**存，切过去自然 miss ⇒ 不需要显式清（原来 `OnceLock` 才需要，那是它的错）。
-/// ★采集会话的重启由调用方（`capture_preset::request_for_serial`）负责——
-///   本模块只管"当前是哪台"，不管"画面怎么来"。
-pub fn select(serial: &str) -> Result<(), String> {
-    let raw = adb(None, &["devices", "-l"]).ok_or("adb devices 失败")?;
-    let found = parse_devices(&raw)
-        .into_iter()
-        .find(|(s, _, _)| s == serial);
-    let Some((_, state, _)) = found else {
-        return Err(format!("设备 {serial} 不在列表里（插好了？）"));
-    };
-    if state != "device" {
-        return Err(format!("设备 {serial} 当前状态是 {state}，不能投屏（要先授权/唤醒）"));
+/// 切换当前设备：返回平台名（`android` / `ios`），调用方据此决定**采集源**。
+/// ★iOS 这条腿没有 adb 串号：采集是手机推流（`nc -l`），注入本版不支持 ⇒ 关掉触控。
+pub fn select(serial: &str) -> Result<String, String> {
+    let devs = list();
+    let d = devs
+        .iter()
+        .find(|d| d.serial == serial)
+        .ok_or_else(|| format!("设备 {serial} 不在列表里（插好了？）"))?;
+    if d.state != "device" {
+        return Err(format!("{} 当前是 {}，不能投屏：{}", d.model, d.state, d.note));
+    }
+    if d.platform == "ios" {
+        if let Ok(mut g) = ADB_SERIAL.lock() {
+            *g = None;
+        }
+        if let Ok(mut g) = DEVICE_PX.lock() {
+            *g = None;
+        }
+        TOUCH_ANDROID.store(false, std::sync::atomic::Ordering::Relaxed);
+        eprintln!("[studio] 切换设备 → iOS {}（采集改为 nc 收推流）", d.model);
+        return Ok("ios".into());
     }
     let (w, h) = probe_size(Some(serial)).ok_or_else(|| format!("设备 {serial} 拿不到尺寸（wm size 失败）"))?;
     if let Ok(mut g) = ADB_SERIAL.lock() {
@@ -143,5 +226,5 @@ pub fn select(serial: &str) -> Result<(), String> {
     }
     TOUCH_ANDROID.store(true, std::sync::atomic::Ordering::Relaxed);
     eprintln!("[studio] 切换设备 → {serial}（{w}x{h}）");
-    Ok(())
+    Ok("android".into())
 }

@@ -77,17 +77,23 @@ export function stubTauri(payload) {
         // 采集档位（决策 #1263）：桩返回"切成了什么"，判据据此断言 IPC 与界面同步
         // 设备管理（决策 #1265）：两台设备，第二台可切；__DEV_FAIL__ 模拟切换失败
         if (cmd === 'list_devices') {
+          // 两台 Android（1 台未授权）+ 两台 iOS（1 台在线、1 台离线）——按平台分组的关键样本
           const cur = window.__STUB_DEV_CUR__ || 'd1aaaaaaaa'
           return [
-            { serial: 'd1aaaaaaaa', state: 'device', model: 'M098FE', size: '1200x2608', current: cur === 'd1aaaaaaaa' },
-            { serial: 'd2bbbbbbbb', state: 'device', model: 'Pixel 9', size: '1080x2424', current: cur === 'd2bbbbbbbb' },
-            { serial: 'd3cccccccc', state: 'unauthorized', model: '—', size: null, current: false },
+            { platform: 'android', note: '', serial: 'd1aaaaaaaa', state: 'device', model: 'M098FE', size: '1200x2608', current: cur === 'd1aaaaaaaa' },
+            { platform: 'android', note: '', serial: 'd2bbbbbbbb', state: 'device', model: 'Pixel 9', size: '1080x2424', current: cur === 'd2bbbbbbbb' },
+            { platform: 'android', note: '', serial: 'd3cccccccc', state: 'unauthorized', model: '—', size: null, current: false },
+            { platform: 'ios', note: '在手机上运行 ProteusHost 并开始直播后出画面（触控回传暂不支持）', serial: 'IOS-00008101', state: 'device', model: 'yunlai的iPhone · iOS 26.7.2', size: null, current: cur === 'IOS-00008101' },
+            { platform: 'ios', note: '离线：用 USB 连接并在手机上点「信任此电脑」', serial: 'IOS-OFFLINE-02', state: 'offline', model: '旧 iPhone · iOS 17.0', size: null, current: false },
           ]
         }
         if (cmd === 'select_device') {
           if (window.localStorage.getItem('__DEV_FAIL__') === '1')
             throw new Error('设备 d2bbbbbbbb 当前状态是 unauthorized，不能投屏（要先授权/唤醒）')
           window.__STUB_DEV_CUR__ = args?.serial
+          // iOS 此刻没有尺寸（要等第一帧 SPS）⇒ 返回 0，界面显示「等待推流」
+          if (String(args?.serial || '').startsWith('IOS-'))
+            return { preset: 'ios', width: 0, height: 0, mbps: 0 }
           return { preset: 'standard', width: 1080, height: 2424, mbps: 13 }
         }
         if (cmd === 'capture_preset') {

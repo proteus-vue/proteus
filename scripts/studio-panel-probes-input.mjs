@@ -322,7 +322,44 @@ export async function probeDeviceSwitch(page) {
     window.__STUB_DEV_CUR__ = 'd1aaaaaaaa' // 复位，别把状态留给后面的判据
   })
 
+  /* ── 平台分组（决策 #1274）──────────────────────────────────────────────── */
+  const groups = await page.evaluate(() =>
+    [...document.querySelectorAll('#devList .devgroup')].map((n) => n.getAttribute('data-group')),
+  )
+  const perPlatform = await page.evaluate(() => {
+    const out = {}
+    for (const n of document.querySelectorAll('#devList .devrow'))
+      out[n.getAttribute('data-platform')] = (out[n.getAttribute('data-platform')] ?? 0) + 1
+    return out
+  })
+
+  // 点 iOS 在线那台 ⇒ 调 select_device(该 UDID)，当前项切过去
+  const baseIos = (await calls()).length
+  await page.evaluate(() => document.querySelector('#devList .devrow[data-dev="IOS-00008101"]').click())
+  await page.waitForTimeout(450)
+  const iosPick = {
+    arg: (await calls())[baseIos] ?? null,
+    current: currentOf(await rows()),
+  }
+
+  // iOS 离线那台 ⇒ **不发 IPC**（离线不能投）
+  const baseOff = (await calls()).length
+  await page.evaluate(() => document.querySelector('#devList .devrow[data-dev="IOS-OFFLINE-02"]').click())
+  await page.waitForTimeout(300)
+  const offlineCalls = (await calls()).length - baseOff
+
+  // 复位到 Android，别把状态留给后面的判据
+  await page.evaluate(() => {
+    window.__STUB_DEV_CUR__ = 'd1aaaaaaaa'
+  })
+  await page.evaluate(() => document.getElementById('devRefresh')?.click())
+  await page.waitForTimeout(400)
+
   return {
+    groups,
+    perPlatform,
+    iosPick,
+    offlineCalls,
     count: list0.length,
     current0: currentOf(list0),
     pickedArg: afterPick.arg,

@@ -936,14 +936,24 @@ const checks = [
       set.nav0.length === 3 &&
       set.nav0.map((n) => n.label).join('/') === '开发环境/设备/关于' &&
       set.nav0.find((n) => n.on)?.id === 'env' &&
-      set.devRows === 3 &&
+      set.devRows === 5 &&
       set.aboutText.includes('settings.json') &&
       set.winErrors === 0,
+  ],
+  // ㊺ 设备列表按平台分组（decision #1274）：Android / iOS 分开；iOS 离线不可投
+  [
+    `㊺ 设备按平台分组：分组 ${dev.groups.join('/')} · 各平台行数 ${JSON.stringify(dev.perPlatform)} · 点 iOS 在线 ⇒ ${JSON.stringify(dev.iosPick.arg)} 后当前=${dev.iosPick.current} · 点 iOS 离线发 IPC ${dev.offlineCalls} 次（应 0）`,
+    dev.groups.join('/') === 'android/ios' &&
+      dev.perPlatform.android === 3 &&
+      dev.perPlatform.ios === 2 &&
+      dev.iosPick.arg === 'IOS-00008101' &&
+      dev.iosPick.current === 'IOS-00008101' &&
+      dev.offlineCalls === 0,
   ],
   // ㊵ 设备管理：列表 + 切换（含"未授权不许点"和"失败不改状态"）
   [
     `㊵ 设备管理：列表 ${dev.count} 台（当前 ${dev.current0}）→ 点第二台 ${dev.pickedArg} 后当前 ${dev.currentAfter} · 点未授权发 IPC ${dev.deadCalls} 次（应 0）· 失败时当前 ${dev.beforeFail}→${dev.afterFail}（应不变）`,
-    dev.count === 3 &&
+    dev.count === 5 &&
       dev.current0 === 'd1aaaaaaaa' &&
       dev.pickedArg === 'd2bbbbbbbb' &&
       dev.currentAfter === 'd2bbbbbbbb' &&

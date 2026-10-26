@@ -14990,3 +14990,28 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     分隔符移到 span **外面**（`<template v-if> · <span id="saveNote">…`）。
   - **边界**：这是"设置"的即时生效；**代码编辑器里的文件保存仍然要 ⌘S**（那是文件不是设置，
     两者语义不同，不能混为一谈）。
+
+1274. **iOS 实时投屏接通 + 设备列表按平台分组 · 判据 65（㊺）**（2026-10-26 · 用户「现在可以做 iOS 的实时投屏了吗？设备列表肯定也要按平台分类」）:
+  - **iOS 这条腿本来就存在**（决策 #1190）：手机端 `ProteusHost`（ReplayKit + VT 硬编）把裸 Annex-B
+    推到本机，我们这边 `/usr/bin/nc -l <端口>` 收，解码/渲染与 Android 完全同一条链。
+    缺的只是**入口**：以前只能启动时用环境变量 `PROTEUS_IOS_STREAM_PORT` 指定，运行中切不过去。
+  - **接法**：`device::select()` 现在返回**平台名**，`select_device` 据此分派采集源：
+    Android → adb 拉流；**iOS → `capture_preset::request_ios()` 把会话切成 `/usr/bin/nc -l <settings.ios_port>`**。
+    复用 #1263 的"重启采集会话"，所以运行中切换不需要重启应用。
+  - **iOS 没有 adb 串号**：切换时把 `ADB_SERIAL`/`DEVICE_PX` 清空、`TOUCH_ANDROID=false`
+    （本版 iOS **没有触控回传**，只有下行推流）。尺寸/码率此刻未知 ⇒ `request_ios` 返回 width/height = 0，
+    界面显示「—」并提示"等手机端开始直播"，**不摆一个 0×0 像真值**。
+  - **设备枚举**：用 `xcrun xctrace list devices`（与 Xcode 的 Devices 窗口同源）——
+    它能列到**已配对但离线**的设备，正是"我明明连着"的错觉来源；`idevice_id -l` 只能看到 USB 在线。
+    必须带 `DEVELOPER_DIR`（取设置里的 Xcode 路径）。解析时跳过 `== Simulators ==` 段，
+    并**用 UDID 形状区分本机 Mac**（标准 UUID 有 4 个连字符；iPhone 新格式只有 1 个）。
+  - **界面按平台分组**：`Android` / `iOS` 两个分组标题，iOS 行带说明（在线→"运行 ProteusHost 后出画面"；
+    离线→"用 USB 连接并信任此电脑"），离线行**点不动**（不发 IPC）。
+  - **判据 65（㊺）**：分组 `android/ios` · 各平台行数 3/2 · 点 iOS 在线行 ⇒ `select_device(该 UDID)` 且当前项切过去 ·
+    点 iOS 离线行 ⇒ **不发 IPC**。
+  - **踩坑**：分组 computed 里 `{...p}` 只带 `id/label`，模板却用 `g.platform` ⇒ `data-group` 是 undefined ⇒
+    表头渲染出来但**属性没了**，判据读到空数组。字段名要在 computed 里**显式产出**，别指望"模板和源同名"。
+  - **诚实边界（这条最重要）**：**"代码通" ≠ "现在能看到 iPhone 画面"**。要真出画面还差两步：
+    ① iPhone 用 USB 连接并在手机上点"信任此电脑"（当前 `xctrace` 显示它 **Offline**）；
+    ② 把 `hosts/ios/ProteusHost` 装上手机、从控制中心开始直播。
+    另外 iOS **没有触控回传**（只有下行），滑动/点击这一版做不到。

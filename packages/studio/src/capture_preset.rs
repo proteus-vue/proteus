@@ -75,6 +75,25 @@ fn request(preset: &str, serial: Option<&str>) -> Result<CaptureInfo, String> {
     })
 }
 
+/// 切到 iOS 采集源（决策 #1274）：手机端 ProteusHost 推流 → 本机 `nc -l <端口>` 收。
+/// ★尺寸/码率此刻未知（要等第一帧的 SPS），所以 width/height 返回 0，界面显示「—」。
+pub fn request_ios() -> Result<CaptureInfo, String> {
+    let port = crate::settings::current().ios_port.unwrap_or(9001);
+    let cmd = format!("/usr/bin/nc -l {port}");
+    let c = std::ffi::CString::new(cmd.clone()).map_err(|e| e.to_string())?;
+    unsafe { poc_live_request_restart(c.as_ptr()) };
+    if let Ok(mut g) = PRESET.lock() {
+        *g = Some("ios".into());
+    }
+    eprintln!("[studio]   采集源 → iOS 推流（{cmd}）");
+    Ok(CaptureInfo {
+        preset: "ios".into(),
+        width: 0,
+        height: 0,
+        mbps: 0,
+    })
+}
+
 pub fn capture_preset(preset: String) -> Result<CaptureInfo, String> {
     let serial = ADB_SERIAL.lock().ok().and_then(|g| g.clone());
     if serial.is_none() {
