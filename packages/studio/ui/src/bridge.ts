@@ -95,10 +95,9 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 
-/** 开发环境设置（决策 #1266）：路径由人填，不猜默认值 */
+/** 开发环境设置（决策 #1270）：按**端**分组的工具路径，`目标.工具 → 路径` */
 export interface StudioSettings {
-  xcode: string | null
-  adb: string | null
+  paths: Record<string, string>
   ios_port: number | null
 }
 export const getSettings = (): Promise<StudioSettings> => invoke<StudioSettings>('get_settings')
@@ -108,17 +107,17 @@ export interface ToolCandidate {
   path: string
   version: string | null
 }
-export const detectTools = (): Promise<{ xcode: ToolCandidate[]; adb: ToolCandidate[] }> =>
-  invoke<{ xcode: ToolCandidate[]; adb: ToolCandidate[] }>('detect_tools')
+export const detectTools = (): Promise<{ by_key: Record<string, ToolCandidate[]> }> =>
+  invoke<{ by_key: Record<string, ToolCandidate[]> }>('detect_tools')
 /** 打开系统面板选路径；返回 null = 用户取消 */
-export const pickTool = (kind: 'xcode' | 'adb'): Promise<string | null> =>
-  invoke<string | null>('pick_tool', { kind })
+export const pickTool = (key: string): Promise<string | null> =>
+  invoke<string | null>('pick_tool', { key })
 
 /** 打开**独立设置窗口**（决策 #1267）：已开就聚焦，不重复建窗 */
 export const openSettings = (): Promise<void> => invoke<void>('open_settings')
 /** 真跑一次命令验证路径（"检测"按钮）：返回 ok + 命令输出 */
-export const probeTool = (kind: 'xcode' | 'adb', path: string): Promise<{ ok: boolean; detail: string }> =>
-  invoke<{ ok: boolean; detail: string }>('probe_tool', { kind, path })
+export const probeTool = (key: string, path: string): Promise<{ ok: boolean; detail: string }> =>
+  invoke<{ ok: boolean; detail: string }>('probe_tool', { key, path })
 
 /** 设备管理（决策 #1265）：列出所有 adb 设备（`size` 是**物理**像素） */
 export interface DeviceInfo {

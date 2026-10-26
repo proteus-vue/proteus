@@ -335,13 +335,12 @@ export async function probeDeviceSwitch(page) {
 }
 
 /**
- * ㊶ 设置窗口（决策 #1266 / #1267）：**独立窗口** + 左侧分类 + 路径由人填。
+ * ㊶/㊷ 设置窗口（决策 #1266–#1270）：独立窗口 + 左侧分类 + **按端分组** + 点选路径。
  *
- * 【为什么两段】设置已经不是右栏面板，而是 `?view=settings` 的独立窗口：
- *   ① 主窗口：点 rail 里的设置按钮 ⇒ 必须调 `open_settings`（入口通不通）
- *   ② 子页面（同一份 dist）：分类导航能切、表单能改、检测真的跑、保存原样提交
- * 【钉住的作弊点】初始值来自**设置**（不是前端硬编码默认路径）；检测把**用户填的串**原样送出；
- *   路径不存在时**不许显示成功**；保存把填的值原样交出去。
+ * 【两段】① 主窗口点设置按钮 ⇒ 必须调 `open_settings`（入口通不通）
+ *   ② 子页面（同一份 dist，`?view=settings`）：分类导航、端页签、候选点选、浏览、取消。
+ * 【钉住的作弊点】初始值来自**设置**（不是前端硬编码）；点候选把**该候选的路径**填进去且不再额外探测；
+ *   浏览把 `key` 原样送出；**取消 ⇒ 值不变**；切换端只显示该端的工具。
  */
 export async function probeSettings(page, baseUrl) {
   // ① 主窗口入口
@@ -352,12 +351,12 @@ export async function probeSettings(page, baseUrl) {
   await page.waitForTimeout(250)
   const openCalls = (await mainCalls()) - beforeOpen
 
-  // ② 独立窗口（新页面 = 新 WebviewWindow 的替身）
+  // ② 独立窗口（同 context 的第二个页面）
   const win = await page.context().newPage()
   const errs = []
   win.on('pageerror', (e) => errs.push(String(e)))
   await win.goto(`${baseUrl}?view=settings`)
-  await win.waitForTimeout(600)
+  await win.waitForTimeout(700)
 
   const nav = () =>
     win.evaluate(() =>
@@ -369,92 +368,83 @@ export async function probeSettings(page, baseUrl) {
     )
   const nav0 = await nav()
 
-  // 切到「设备」：只读表格里应有桩给的那几台
-  await win.evaluate(() => document.querySelector('#setNav [data-cat="device"]').click())
-  await win.waitForTimeout(250)
-  const devRows = await win.evaluate(() => document.querySelectorAll('.settable .settr[data-dev]').length)
-  // 切到「关于」：应当出现设置文件位置这条**常量事实**
-  await win.evaluate(() => document.querySelector('#setNav [data-cat="about"]').click())
-  await win.waitForTimeout(200)
-  const aboutText = await win.evaluate(() => document.querySelector('.setkv')?.textContent ?? '')
-  // 回到「开发环境」做表单断言
-  await win.evaluate(() => document.querySelector('#setNav [data-cat="env"]').click())
-  await win.waitForTimeout(250)
-
-  const calls = () =>
+  const tabs = () =>
     win.evaluate(() =>
-      (window.__STUB_CALLS__ || []).filter((c) => ['probe_tool', 'save_settings'].includes(c.cmd)),
+      [...document.querySelectorAll('#targetTabs .settab')].map((n) => ({
+        id: n.getAttribute('data-target'),
+        label: n.textContent?.trim() ?? '',
+        on: n.getAttribute('aria-pressed') === 'true',
+      })),
     )
-  const msg = () =>
-    win.evaluate(() => {
-      const n = document.getElementById('xcodeMsg')
-      return n ? { text: n.textContent?.trim() ?? '', ok: n.classList.contains('okmsg') } : null
-    })
+  const tabs0 = await tabs()
 
-  const init = await win.evaluate(() => ({
-    xcode: document.getElementById('setXcode')?.value ?? null,
-    adb: document.getElementById('setAdb')?.value ?? null,
-    port: document.getElementById('setPort')?.value ?? null,
-    exists: !!document.getElementById('setXcode'),
-    xCands: [...document.querySelectorAll('#xCands .setcand')].map((n) => ({
+  // 默认端 = Web：node 只有 1 个候选 ⇒ 应已自动填入；浏览器有 2 个候选 ⇒ 不自动选
+  const webNode = await win.evaluate(() => ({
+    value: document.getElementById('set-web.node')?.value ?? '',
+    msg: document.getElementById('msg-web.node')?.textContent?.trim() ?? '',
+    placeholderShown: !document.getElementById('set-web.browser')?.value,
+  }))
+
+  // 切到 iOS：只应出现 Xcode 那一个字段（按端分组的关键断言）
+  await win.evaluate(() => document.querySelector('#targetTabs [data-target="ios"]').click())
+  await win.waitForTimeout(250)
+  const iosFields = await win.evaluate(() => ({
+    hasXcode: !!document.getElementById('set-ios.xcode'),
+    leakedWebNode: !!document.getElementById('set-web.node'),
+    /* ★用属性选择器：id 里带点，`#cands-ios\.xcode` 在 JS 字符串里会退化成 `.`（转义被吃掉），
+       匹配不到元素 ⇒ 断言假红。`[id="cands-ios.xcode"]` 与转义规则无关。 */
+    cands: [...document.querySelectorAll('[id="cands-ios.xcode"] .setcand')].map((n) => ({
       path: n.getAttribute('data-cand'),
       ver: (n.querySelector('.cver')?.textContent ?? '').trim(),
     })),
-    aCands: document.querySelectorAll('#aCands .setcand').length,
   }))
 
-  /* ── 低门槛路径（决策 #1268）：点候选 / 浏览… / 取消不改 ────────────────── */
+  const calls = () =>
+    win.evaluate(() =>
+      (window.__STUB_CALLS__ || []).filter((c) => ['probe_tool', 'save_settings', 'pick_tool'].includes(c.cmd)),
+    )
+  const msgOf = (key) =>
+    win.evaluate((k) => {
+      const n = document.getElementById(`msg-${k}`)
+      return n ? { text: n.textContent?.trim() ?? '', ok: n.classList.contains('okmsg') } : null
+    }, key)
 
-  // ① 点第一条候选 ⇒ 输入框被填上、版本直接可见（不需要再点"检测"）
-  const probesBefore = (await calls()).length
-  await win.evaluate(() => document.querySelector('#xCands .setcand').click())
+  // ③ 点第一条候选 ⇒ 填上、版本直接可见（不再额外探测）
+  const probesBefore = (await calls()).filter((c) => c.cmd === 'probe_tool').length
+  await win.evaluate(() => document.querySelector('[id="cands-ios.xcode"] .setcand').click())
   await win.waitForTimeout(250)
   const picked = {
-    value: await win.evaluate(() => document.getElementById('setXcode')?.value ?? ''),
-    msg: await msg(),
-    extraProbes: (await calls()).length - probesBefore,
+    value: await win.evaluate(() => document.getElementById('set-ios.xcode')?.value ?? ''),
+    msg: await msgOf('ios.xcode'),
+    extraProbes: (await calls()).filter((c) => c.cmd === 'probe_tool').length - probesBefore,
   }
 
-  // ② 浏览… ⇒ 调 pick_tool，回来后填入并自动检测
-  const pickArgs = []
-  await win.evaluate(() => document.getElementById('browseXcode').click())
-  await win.waitForTimeout(400)
-  pickArgs.push(
-    await win.evaluate(
-      () => (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'pick_tool').pop()?.args ?? null,
-    ),
-  )
-  const browsed = await win.evaluate(() => document.getElementById('setXcode')?.value ?? '')
+  // ④ 浏览… ⇒ pick_tool(key)，回来后填入并自动检测
+  await win.evaluate(() => document.getElementById('browse-ios.xcode').click())
+  await win.waitForTimeout(450)
+  const pickArg = (await calls()).filter((c) => c.cmd === 'pick_tool').pop()?.args ?? null
+  const browsed = await win.evaluate(() => document.getElementById('set-ios.xcode')?.value ?? '')
 
-  // ③ 取消 ⇒ **什么都不改**（最容易写错的一条：乐观地先填值）
-  const beforeCancel = await win.evaluate(() => document.getElementById('setXcode')?.value ?? '')
+  // ⑤ 取消 ⇒ 值不变
+  const beforeCancel = browsed
   await win.evaluate(() => localStorage.setItem('__PICK_CANCEL__', '1'))
-  await win.evaluate(() => document.getElementById('browseXcode').click())
+  await win.evaluate(() => document.getElementById('browse-ios.xcode').click())
   await win.waitForTimeout(350)
-  const afterCancel = await win.evaluate(() => document.getElementById('setXcode')?.value ?? '')
+  const afterCancel = await win.evaluate(() => document.getElementById('set-ios.xcode')?.value ?? '')
   await win.evaluate(() => localStorage.removeItem('__PICK_CANCEL__'))
 
-  const PATH = '/Volumes/data1/work/office-applications/Xcode.app'
-  await win.fill('#setXcode', PATH)
-  // ★DOM 级点击：独立窗口没有 toast 遮挡，但保持与另一条一致的"测数据流"手法
-  await win.evaluate(() => document.getElementById('probeXcode').click())
-  await win.waitForTimeout(350)
-  /* ★取**最后一条** probe_tool：上面的"浏览…"也会探一次（那条是 Xcode-browse.app）。
-     用 find() 会拿到更早的那次，断言就成了"在测别人的调用"。 */
-  const probeOk = {
-    arg: (await calls()).filter((c) => c.cmd === 'probe_tool').pop()?.args ?? null,
-    msg: await msg(),
-  }
-
-  await win.evaluate(() => localStorage.setItem('__PROBE_FAIL__', '1'))
-  await win.evaluate(() => document.getElementById('probeXcode').click())
-  await win.waitForTimeout(350)
-  const probeBad = await msg()
-  await win.evaluate(() => localStorage.removeItem('__PROBE_FAIL__'))
-
+  // ⑥ 保存：paths 里应带上点选的路径
   await win.evaluate(() => document.getElementById('setSave').click())
   await win.waitForTimeout(350)
   const saved = (await calls()).filter((c) => c.cmd === 'save_settings').pop()?.args?.s ?? null
+
+  // ⑦ 设备页只读 / 关于页常量
+  await win.evaluate(() => document.querySelector('#setNav [data-cat="device"]').click())
+  await win.waitForTimeout(250)
+  const devRows = await win.evaluate(() => document.querySelectorAll('.settable .settr[data-dev]').length)
+  await win.evaluate(() => document.querySelector('#setNav [data-cat="about"]').click())
+  await win.waitForTimeout(200)
+  const aboutText = await win.evaluate(() => document.querySelector('.setkv')?.textContent ?? '')
 
   const winErrors = errs.length
   await win.close()
@@ -462,17 +452,17 @@ export async function probeSettings(page, baseUrl) {
   return {
     openCalls,
     nav0,
-    devRows,
-    aboutText,
-    init,
+    tabs0,
+    webNode,
+    iosFields,
     picked,
-    pickArgs,
+    pickArg,
     browsed,
     beforeCancel,
     afterCancel,
-    probeOk,
-    probeBad,
     saved,
+    devRows,
+    aboutText,
     winErrors,
   }
 }

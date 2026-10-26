@@ -33,18 +33,30 @@ export function stubTauri(payload) {
         // 自动检测（决策 #1268）：两台 Xcode + 一个 adb，正好用来测"点选"与"取消不改"
         if (cmd === 'detect_tools')
           return {
-            xcode: [
-              { path: '/Volumes/data1/work/office-applications/Xcode.app', version: 'Xcode 14.2' },
-              { path: '/Applications/Xcode.app', version: 'Xcode 16.0' },
-            ],
-            adb: [{ path: '/opt/homebrew/bin/adb', version: 'Android Debug Bridge version 1.0.41' }],
+            by_key: {
+              'web.node': [{ path: '/opt/homebrew/bin/node', version: 'v22.22.2' }],
+              'web.browser': [
+                { path: '/Applications/Google Chrome.app', version: null },
+                { path: '/Applications/Microsoft Edge.app', version: null },
+              ],
+              'android.studio': [{ path: '/Applications/Android Studio.app', version: null }],
+              'android.adb': [
+                { path: '/opt/homebrew/bin/adb', version: 'Android Debug Bridge version 1.0.41' },
+              ],
+              'ios.xcode': [
+                { path: '/Volumes/data1/work/office-applications/Xcode.app', version: 'Xcode 26.5' },
+                { path: '/Volumes/data1/applications/Xcode.app', version: 'Xcode 14.2' },
+              ],
+              'harmony.deveco': [],
+              'mp.devtools': [],
+            },
           }
         if (cmd === 'pick_tool') {
           // __PICK_CANCEL__=1 模拟"用户点了取消"
           if (window.localStorage.getItem('__PICK_CANCEL__') === '1') return null
-          return args?.kind === 'xcode' ? '/Applications/Xcode-browse.app' : '/usr/local/bin/adb'
+          return args?.key === 'ios.xcode' ? '/Applications/Xcode-browse.app' : '/usr/local/bin/tool'
         }
-        if (cmd === 'get_settings') return { xcode: null, adb: null, ios_port: 9001 }
+        if (cmd === 'get_settings') return { paths: {}, ios_port: 9001 }
         if (cmd === 'save_settings') {
           window.__STUB_SETTINGS__ = args?.s
           return null

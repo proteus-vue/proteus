@@ -14906,3 +14906,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     （版本来自候选）· 「浏览…」⇒ 调 `pick_tool('xcode')` 并回填 · **取消 ⇒ 值不变**（乐观更新会说谎）。
   - **边界**：检测只认标准 bundle id 的 Xcode（命令行工具装的 `/Library/Developer` 不会被当成 Xcode.app，
     但它本来也不是）；Windows/Linux 走不到这条（Studio 目前只有 macOS 宿主）。
+
+1269. **统一的窗口工厂：新窗口不再丢沉浸式标题栏**（2026-10-26 · 用户「每次创建新窗口都会附带默认标题栏，丢失我们的自定义沉浸式标题栏」）:
+  - **问题**：主窗口的沉浸式标题栏是在 `tauri.conf.json` 里配的（`titleBarStyle=Overlay` +
+    `hiddenTitle` + `trafficLightPosition`）。而**代码里新建的窗口**（设置窗口）用的是裸
+    `WebviewWindowBuilder` ⇒ 头上长出一条系统标题栏，与主窗口割裂。
+  - **根因**：窗口创建没有统一入口 —— 样式靠"每个人记得写三行"，必然有人漏。
+  - **修**：`src/window.rs::studio_window(app, label, url, title, size, min, init_script)`：
+    唯一建窗入口，内置三件套（Overlay / hiddenTitle / 红绿灯 14,22）与"已存在则聚焦"。
+    设置窗口改走它；`init_script` 也在**构建前**挂（构建后 `eval` 会与页面加载竞态 ⇒ 偶发白窗）。
+  - **配套**：设置页顶部加 44px **自绘标题栏**（`data-tauri-drag-region="deep"`，左内边距 84 给红绿灯），
+    这才叫"我们的标题栏"——否则隐藏系统标题栏后窗口就没法拖了。
+  - **边界**：以后再加窗口（日志窗口/检查器）必须走这个工厂；门禁暂不强制（靠代码评审 + 注释）。
+
+1270. **开发环境按端分组（Web/Android/iOS/鸿蒙/小程序）· 设置模型改成 `目标.工具 → 路径`**（2026-10-26 · 用户「开发环境设置太粗糙了，应该按端环境区分」）:
+  - **用户指出的问题**：上一版只有 Xcode + adb 两个平铺输入框。而 Studio 面向五种端，
+    每端要的工具不同：Web→node/浏览器；Android→Android Studio/adb；iOS→Xcode；
+    鸿蒙→DevEco Studio；小程序→微信开发者工具。
+  - **模型**：`Settings.paths: BTreeMap<"端.工具", 路径>`（扁平表，**加一端只加数据不动类型**）；
+    v1 的 `xcode`/`adb` 字段保留为**只读迁移入口**（load 时折进 paths，写盘不再输出）。
+  - **检测**：`settings::TOOLS` 一张表（key/端/标签），`detect_tools()` 一次探所有工具：
+    App 用 Spotlight（bundle id 跨卷；国产工具用 `-name` 兜底），二进制用 `which -a` + homebrew 前缀；
+    版本只对能给的工具探（xcodebuild / adb version / node -v），其余如实显示"已安装"。
+  - **界面**：一级分类（开发环境/设备/关于）+ **二级端页签**（Web/Android/iOS/鸿蒙/微信小程序），
+    每端只渲染自己那几个字段——避免 7 个框平铺。
+  - **判据 62（㊷）改断"按端"**：端页签 5 个且默认 Web · Web 的 node 单候选**自动填入** ·
+    切到 iOS 后**只剩 Xcode 字段**（`set-web.node` 必须消失）且候选 2 条 · 点候选填值并显示版本 ·
+    浏览送 `key=ios.xcode` · 取消不改值。
+  - **踩坑**：`#cands-ios\.xcode` 这种选择器在 JS 字符串里 `\.` 会退化成 `.`（转义被吃掉），
+    匹配不到元素导致**假红** ⇒ 改用属性选择器 `[id="cands-ios.xcode"]`。
+  - **另一处 UI 事故**：`.setfoot{position:sticky}` 在 620 高的窗口里**压住**了"iOS 推流端口"
+    ⇒ 改回普通流；候选列表加 `max-height:190px` 限高滚动，别把输入框顶出屏幕。

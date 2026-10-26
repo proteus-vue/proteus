@@ -23,6 +23,7 @@ mod menu;
 mod capture_preset;
 mod device;
 mod settings;
+mod window;
 mod search;
 
 extern "C" {
