@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
-import { probeCodeExtras, probeGesture, probeMenu, probePan, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
+import { probeCodeExtras, probeGesture, probeHole, probeMenu, probePan, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
@@ -403,6 +403,8 @@ await page.screenshot({ path: outPath.replace(/\.png$/, '-zoom.png') })
 
 // ── ⑯ 拖拽平移：采集段在 probePan()（决策 #1255 拆出；逻辑一字未改）
 const { panBefore, panSeen, panReset } = await probePan(page, { outPath })
+// ── ㊲ 画布洞：采集段在 probeHole()（决策 #1257：GL 垫在 webview 下面，HTML 不许盖它）
+const hole = await probeHole(page)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
@@ -913,6 +915,11 @@ const checks = [
       box3.w > box1.w * 1.15 &&
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
+  ],
+  // ㊲ 画布洞：祖先链必须全透明（GL 在 webview 下面）+ 舞台底色必须由阴影补上
+  [
+    `㊲ 画布洞：不透明祖先 ${hole.holeBad.length} 层${hole.holeBad.length ? '（' + hole.holeBad.join(' / ') + '）' : ''} · 舞台底色阴影 spread=${hole.fillSpread}px`,
+    hole.holeOk && hole.fillSpread >= 1000,
   ],
   // ⑯ 拖拽平移：真实鼠标手势（down → 多步 move → up），平移量、原生矩形都要跟着走
   //   ★只往左拖：125% 下屏幕高 726 < 舞台 796 ⇒ 纵向被正确夹紧到 0，

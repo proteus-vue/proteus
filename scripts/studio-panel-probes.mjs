@@ -827,3 +827,55 @@ const panReset = await page.evaluate(() => ({
 }))
   return { panBefore, panSeen, panReset }
 }
+
+/**
+ * ㊲ 画布洞（决策 #1257）：从 `#canvas` 一路向上到 `html`，**每一层都不许有不透明背景**。
+ *
+ * 【为什么必须有这条】原生 GL 画面垫在 WKWebView **下面**，所以"画布那块能不能看见"
+ *   完全取决于 HTML 在上面有没有涂东西。实测踩到：`.main{background:var(--bg-canvas)}`
+ *   把洞整块糊死 ⇒ 表现是"启动瞬间能看到投屏、页面一画上去就黑"，而面板读数
+ *   （出帧 / 帧率 / 解码 / 原生矩形）**全部正常**——没有任何一条既有判据会红。
+ * 【两半都要断】① 洞是通的（祖先链透明）；② 底色没被删掉而是**搬到了 `.screen` 的
+ *   超大 spread 阴影上**（否则洞通了，舞台却也变成透明白/黑，视觉上一样是坏的）。
+ */
+export async function probeHole(page) {
+  const rep = await page.evaluate(() => {
+    const el = document.getElementById('canvas')
+    if (!el) return { err: 'no #canvas' }
+    const alpha = (c) => {
+      const m = String(c).match(/rgba?\(([^)]+)\)/)
+      if (!m) return c === 'transparent' ? 0 : 1
+      const p = m[1].split(',').map((x) => parseFloat(x))
+      return p.length < 4 ? 1 : p[3]
+    }
+    const bad = []
+    for (let n = el; n && n !== document.documentElement.parentNode; n = n.parentElement) {
+      const cs = getComputedStyle(n)
+      const a = alpha(cs.backgroundColor)
+      const img = cs.backgroundImage
+      if (a > 0.001 || (img && img !== 'none')) {
+        const id = n.id ? '#' + n.id : ''
+        const cls = typeof n.className === 'string' && n.className ? '.' + n.className.split(/\s+/)[0] : ''
+        bad.push(`${n.tagName.toLowerCase()}${id}${cls}`)
+      }
+    }
+    const scr = document.querySelector('.screen')
+    const shadow = scr ? getComputedStyle(scr).boxShadow : ''
+    // 取"最大 spread 的那一层"：底色必须是**不透明**且铺得足够大
+    let fillSpread = 0
+    for (const layer of String(shadow).split(/,(?![^(]*\))/)) {
+      const m = layer.match(/rgba?\(([^)]*)\)\s+0px\s+0px\s+0px\s+(\d+)px/)
+      if (!m) continue
+      const p = m[1].split(',').map((x) => parseFloat(x))
+      const a = p.length < 4 ? 1 : p[3]
+      if (a > 0.9) fillSpread = Math.max(fillSpread, Number(m[2]))
+    }
+    return { bad, fillSpread, shadow: String(shadow).slice(0, 120) }
+  })
+  return {
+    holeBad: rep.bad ?? [],
+    holeOk: (rep.bad ?? []).length === 0,
+    fillSpread: rep.fillSpread ?? 0,
+    shadow: rep.shadow ?? '',
+  }
+}

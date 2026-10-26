@@ -100,7 +100,10 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .rail button[disabled]{opacity:.4;cursor:not-allowed}
 .rail .sep{width:24px;height:1px;background:var(--border-subtle);margin:var(--sp1) 0}
 
-.main{grid-area:main;position:relative;background:var(--bg-canvas);overflow:hidden}
+/* ★★★`.main` **不能有背景色**（决策 #1257）：原生 GL 视图垫在 webview **下面**，
+   这一层只要不透明，画布洞就被它整块糊掉——表现是"启动瞬间能看到投屏、页面一画上去就变黑"，
+   而面板读数一切正常（出帧/帧率/解码都对）。底色改由 `.screen` 的超大 spread 阴影补（见下）。 */
+.main{grid-area:main;position:relative;background:transparent;overflow:hidden}
 
 /* ── 设备舞台（2026-10-23 等比适配）────────────────────────────────────────
    舞台只管"居中 + 留白"；真正决定画面形状的是 .screen（宽高比 = 设备宽高比）。
@@ -111,11 +114,23 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 /* ★`flex:0 0 auto` 不能省：flex item 默认 `flex-shrink:1`，放大时**宽度**会被压回舞台宽、
    而高度不会 ⇒ 画面被横向压扁（判据 ⑮ 实测误差 20%）。缩放必须两轴同步生效。 */
 .screen{position:relative;flex:0 0 auto;background:transparent;cursor:grab;
-        box-shadow:0 0 0 1px var(--border-strong),0 24px 64px -24px rgba(0,0,0,.85)}
+        /* ★三层阴影（顺序 = 从下往上叠，写在前面的在上）：
+           ① 1px 描边  ② 落影  ③ **超大 spread 的舞台底色**——它在屏幕矩形**之外**铺满。
+           ★为什么用 shadow 补底色而不是给 `.main` 上背景：`.main` 在上游（祖先盒），
+             它的背景会连屏幕矩形一起涂掉，把垫在下面的原生 GL 视图整个盖住（#1257）。
+             shadow 只画在边框盒**外面**，天然就是那个"洞"的补集；
+             而且它跟着 `.screen` 的 transform 一起平移，不用再同步一份几何。 */
+        box-shadow:0 0 0 1px var(--border-strong),
+                   0 24px 64px -24px rgba(0,0,0,.85),
+                   0 0 0 4000px var(--bg-canvas)}
 /* 拖拽中：手型闭合（IDE/图像查看器的通用语汇，表示"正在移动画布"） */
 .screen:active{cursor:grabbing}
 /* ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 */
 #canvas{position:absolute;inset:0;background:transparent}
+/* 没画面时（`live` 未加）这块不是洞，而是"关着的屏"：给实心底色。
+   ★反过来也重要：一旦有首帧，`.screen` 必须重新变透明——所以只在 `:not(.live)` 上给色，
+     不能用一条常驻的背景（那会把 GL 又糊掉，就是 #1257 那个 bug）。 */
+.screen:not(.live){background:var(--bg-canvas)}
 
 /* 画面角标（左上）：一眼知道"这是什么流" */
 .hud{position:absolute;left:var(--sp6);top:var(--sp6);height:22px;display:inline-flex;align-items:center;

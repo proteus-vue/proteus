@@ -480,7 +480,10 @@ const hud = computed(() => {
       <template v-if="view === 'device'">
         <!-- 舞台：只负责居中与留白；设备屏幕（#canvas）是它的等比子元素 -->
         <div class="stage" ref="stageEl">
-          <div class="screen" :style="screenStyle">
+          <!-- ★`live` 决定这块是"洞"还是"关着的屏"（决策 #1257）：
+               有画面时祖先链全透明，露出垫在下面的原生 GL；没画面时给一块实心底色，
+               否则洞会露出窗口背景（浅色系统下是一块灰白，比黑更难看）。 -->
+          <div class="screen" :class="{ live: running }" :style="screenStyle">
             <!-- ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面。
                  ★指针事件在这里收（不是原生侧）：GL 视图挂在 webview **下面**，
                    真实点击永远先到 webview ⇒ 前端才是唯一有效的输入源。 -->

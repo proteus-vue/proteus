@@ -299,7 +299,29 @@ static void *live_reader(void *arg) {
   return NULL;
 }
 
+/* 启动前清掉**上一次**留下的设备侧采集（决策 #1257 附带修的）。
+ * 【为什么必须有】Android 同时只允许**一个** screenrecord 会话。app 被 kill/crash 后
+ *   设备上那条 `screenrecord` 仍然活着（实测：杀掉 Studio 后 `adb shell ps -A` 里还在），
+ *   于是下次启动的那条**抢不到采集权** ⇒ 现象是"运行中 / 入队 AU 一直在涨 / 出帧 0 / 画面全黑"，
+ *   而且**不报错**（又是本仓最讨厌的静默无操作）。
+ * 【只对 adb 命令做】iOS 那条腿是 `nc -l`（下行推流），被杀进程不会残留在设备上。
+ * 【为什么用 `pkill -x`】按**进程名精确匹配**：`-f` 会匹配命令行，会把执行这条 pkill 的
+ *   shell 自己也匹配上（命令行里含 "screenrecord"），出现自己杀自己的怪状。 */
+static void live_kill_stale_capture(const char *cmd) {
+  const char *at = strstr(cmd, "exec-out");
+  if (!at) return;                       /* 不是 adb 采集命令 */
+  char prefix[256], kill[512];
+  size_t n = (size_t)(at - cmd);
+  if (n >= sizeof(prefix)) n = sizeof(prefix) - 1;
+  memcpy(prefix, cmd, n);
+  prefix[n] = 0;
+  snprintf(kill, sizeof(kill), "%s shell pkill -x screenrecord 2>/dev/null", prefix);
+  int rc = system(kill);
+  if (rc == 0) fprintf(stderr, "实时：已清理上一次残留的 screenrecord（新会话才有采集权）\n");
+}
+
 static int live_start(const char *cmd) {
+  live_kill_stale_capture(cmd);
   snprintf(g_live_cmd, sizeof(g_live_cmd), "%s", cmd);
   g_live_run = 1;
   if (pthread_create(&g_live_thread, NULL, live_reader, NULL) != 0) {
