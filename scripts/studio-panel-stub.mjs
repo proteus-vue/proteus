@@ -21,11 +21,14 @@ export function stubTauri(payload) {
         if (cmd === 'stats') {
           // ★设备物理尺寸可覆盖（判据 ㊳）：localStorage.__DEV_SIZE__ = "1200x2608"
           const dv = window.localStorage.getItem('__DEV_SIZE__')
+          // ★"没有画面"可覆盖（判据 ㊻）：iOS 引导卡只在 frames==0 时出现，
+          //   而 fixture 是**有画面**的真实读数 ⇒ 必须能临时把 frames 归零。
+          const noFrames = window.localStorage.getItem('__NO_FRAMES__') === '1'
           if (dv) {
             const [w, h] = dv.split('x').map(Number)
-            return { ...payload, dev_w: w, dev_h: h }
+            return { ...payload, dev_w: w, dev_h: h, ...(noFrames ? { frames: 0 } : {}) }
           }
-          return payload
+          return noFrames ? { ...payload, frames: 0 } : payload
         }
         if (cmd === 'set_canvas_rect') return null
         // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
@@ -204,6 +207,16 @@ export function stubTauri(payload) {
         if (cmd === 'close_now') return null
         // 剪贴板（决策 #1234）：右键菜单「复制相对路径」
         if (cmd === 'copy_text') return null
+        /* iOS 接法提示（决策 #1277）：真实实现要 `route`+`ifconfig`+`lsof`，桩里给一组定值。
+           ★`active` 由 `__IOS_ACTIVE__` 控制——判据要能分别验"该显示"和"不该显示"两态。 */
+        if (cmd === 'ios_stream_hint')
+          return {
+            ip: '192.168.1.24',
+            port: 9001,
+            cmd: 'bash hosts/ios/run-selfdraw.sh --stream=192.168.1.24:9001',
+            listening: window.localStorage.getItem('__IOS_LISTEN__') !== '0',
+            active: window.localStorage.getItem('__IOS_ACTIVE__') === '1',
+          }
         if (cmd === 'list_files')
           return window.localStorage.getItem('__BIG__') === '1'
             ? ['packages/studio/big.ts']

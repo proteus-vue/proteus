@@ -164,6 +164,30 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .empty p{margin:0;font-size:var(--fs-sm);font-weight:500;color:var(--fg-muted)}
 .empty span{font-size:var(--fs-xs);color:var(--fg-subtle)}
 
+/* iOS 接法引导卡（决策 #1277）：空状态的**可执行版**。
+   和 .empty 的区别就是"要能点"——所以它自己收指针（.empty 是 pointer-events:none）。
+   ★宽度上限 520px：一行命令是可变长文本，撑满舞台会难读；限宽后命令自然折行。 */
+.iosguide{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,calc(100% - 48px));
+          box-sizing:border-box;padding:var(--sp4);border:1px solid var(--border);border-radius:var(--r-lg);
+          background:var(--bg-elevated);box-shadow:0 8px 28px rgba(0,0,0,.28);color:var(--fg-muted)}
+.iosguide .ig-head{display:flex;align-items:center;gap:var(--sp2);color:var(--fg);
+                   font-size:var(--fs-md);margin-bottom:var(--sp2)}
+.iosguide .ig-head svg{opacity:.75}
+.iosguide .ig-lead{margin:0 0 var(--sp3);font-size:var(--fs-sm);line-height:1.55;color:var(--fg-subtle)}
+.iosguide b{color:var(--fg);font-weight:600}
+/* 命令条：等宽 + 可横向滚动（命令很长，折行会读错空格位置） */
+.iosguide .ig-cmd{display:flex;align-items:center;gap:var(--sp2);padding:var(--sp2) var(--sp2) var(--sp2) var(--sp3);
+                  border:1px solid var(--border-subtle);border-radius:var(--r-md);background:var(--bg-surface)}
+.iosguide .ig-cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:var(--fs-xs) / 1.5 ui-monospace, Menlo, monospace;
+                       color:var(--fg);user-select:text;-webkit-user-select:text}
+.iosguide .ig-cmd code::-webkit-scrollbar{height:0}
+.iosguide .ig-copy{flex:none;padding:3px 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+                   background:var(--bg-elevated);color:var(--fg-muted);font-size:var(--fs-xs);cursor:pointer}
+.iosguide .ig-copy:hover{background:var(--bg-overlay);color:var(--fg)}
+.iosguide .ig-steps{margin:var(--sp3) 0 0;padding-left:18px;font-size:var(--fs-sm);line-height:1.7;color:var(--fg-subtle)}
+.iosguide .ig-state{margin:var(--sp3) 0 0;font-size:var(--fs-xs);color:var(--bad)}
+.iosguide .ig-state.ok{color:var(--ok)}
+
 /* B1：原生点击的落点标记（圆圈 + 十字）。它同时是「事件通路已通」的可见证据。
    ★坐标系是**设备屏幕**（.screen 内 inset:0），不是整个舞台。 */
 .picks{position:absolute;inset:0;pointer-events:none}

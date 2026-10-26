@@ -446,6 +446,24 @@ bash hosts/ios/run-screen-stream.sh
 PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 ```
 
+### 界面上怎么走完这一步（决策 #1277）
+
+**装到真机要 `codesign` 访问 login 钥匙串，Studio 代跑不了**（沙箱环境实测被拦：
+`[sandbox] 命令被沙箱拦截：login.keychain-db (file-write)`）。所以界面做的是
+「把该跑什么摆到你面前」，而不是假装一键：
+
+1. 左栏「设备」面板点那台 iPhone ⇒ 采集源切成 `/usr/bin/nc -l <端口>`；
+2. 画布上直接出现 **iPhone 投屏引导卡**（`#iosGuide`），里面有
+   本机 IP（跟着**默认路由**那块网卡走，不是猜）、端口、以及**整行命令**＋「复制」；
+3. 在仓库根目录粘上跑：`bash hosts/ios/run-selfdraw.sh --stream=<IP>:<端口>`
+   （编译 + 安装 + 启动 ProteusHost，手机上点「允许」录制屏幕）；
+4. 手机一推上来卡片自己消失（判据 ㊻ 钉的是"三态"：有画面不显示 / 无画面且源是 iOS 才显示 /
+   源不是 iOS 不显示，以及端口没人听时状态必须是红的）。
+
+★**先清场再收流**：macOS 允许多个 `nc -l` 同时 LISTEN 同一端口，残留的旧监听会让手机的
+连接落到"没人读管道"的那个上 ⇒ **推流在跑、画面永远黑、零报错**。所以切到 iOS（以及启动时）
+都会先按 lsof 的 `COMMAND == nc` 清掉同端口残留（`live_source::kill_stale_listeners`）。
+
 **已验 / 未验（别混）**：
 - ✅ Swift 类型检查（`check:ios-selfdraw-compile`）、Rust 编译、接收端（假源 `ffprobe` 认 640×360/120 帧）、
   `nc -l` 与接收器两条接收路径；

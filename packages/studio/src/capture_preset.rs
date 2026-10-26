@@ -49,6 +49,14 @@ fn live_capture_cmd(serial: Option<&str>, preset: &str) -> Result<(String, u32, 
 /// 当前档位（切换设备时要用**同一档**重建命令，不能悄悄回到默认）
 static PRESET: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
+/// 当前采集源类别（`ios` / `low` / `standard`；None = 还没切过，走启动时定下的那条）。
+///
+/// ★给界面判断"要不要显示 iPhone 引导卡"用（决策 #1277）。为什么不用 `POC_LIVE` 环境变量：
+///   `request_ios()` **不写回环境变量**（只登记重启），所以切到 iPhone 之后 env 还是旧的 adb 命令。
+pub fn current_kind() -> Option<String> {
+    PRESET.lock().ok().and_then(|g| g.clone())
+}
+
 pub fn request_for_serial(serial: Option<&str>) -> Result<CaptureInfo, String> {
     let preset = PRESET
         .lock()
@@ -79,6 +87,9 @@ fn request(preset: &str, serial: Option<&str>) -> Result<CaptureInfo, String> {
 /// ★尺寸/码率此刻未知（要等第一帧的 SPS），所以 width/height 返回 0，界面显示「—」。
 pub fn request_ios() -> Result<CaptureInfo, String> {
     let port = crate::settings::current().ios_port.unwrap_or(9001);
+    /* ★先清场再重启（决策 #1277）：macOS 允许多个 `nc -l` 同时 LISTEN 同一端口，
+       残留的旧监听会让手机的连接落到"没人读管道"的那个上 ⇒ 永远黑屏且零报错。 */
+    crate::live_source::kill_stale_listeners(port);
     let cmd = format!("/usr/bin/nc -l {port}");
     let c = std::ffi::CString::new(cmd.clone()).map_err(|e| e.to_string())?;
     unsafe { poc_live_request_restart(c.as_ptr()) };

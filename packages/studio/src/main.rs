@@ -25,6 +25,8 @@ mod device;
 mod settings;
 mod window;
 mod search;
+/// 「画面从哪来」+ iOS 接法提示（决策 #1277，从本文件拆出）
+mod live_source;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -304,17 +306,7 @@ fn close_now(window: tauri::Window) {
 static TOUCH_ANDROID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 pub(crate) static ADB_SERIAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
-/// 第一台处于 `device` 状态的 adb 设备（没有就 None）。
-/// ★不能用 `adb shell` 不带 `-s` 去试：多设备时它的报错是"more than one device"，
-///   看起来像设备坏了，其实是**没指定是哪台**。
-fn first_adb_serial() -> Option<String> {
-    let out = std::process::Command::new("adb").arg("devices").output().ok()?;
-    String::from_utf8_lossy(&out.stdout).lines().skip(1).find_map(|l| {
-        let mut it = l.split_whitespace();
-        let serial = it.next()?;
-        (it.next() == Some("device")).then(|| serial.to_string())
-    })
-}
+/// 第一台处于 `device` 状态的 adb 设备（见 `live_source::first_adb_serial`）。
 
 /// 设备屏幕是否亮着。缓存 1.5s：连点时不必每次多问一遍（一次 adb 往返 ≈ 30~60ms）。
 /// ★这是 2026-10-26 真机实测换来的：**熄屏时 `input tap` 返回 0，但状态不变**
@@ -617,147 +609,19 @@ fn device_label() -> Option<String> {
     device::label(device::current_serial().as_deref())
 }
 
-/// 双击启动时 LaunchServices 只给 `/usr/bin:/bin:/usr/sbin:/sbin`，
-/// 而 `adb` 通常在 `/opt/homebrew/bin` 或 `/usr/local/bin` ⇒ 显式补进 PATH。
-/// ★不补的话"双击就能用"是假的：面板能开，但一台设备都连不上（同一类坑：GUI 不继承 shell 环境）。
-fn ensure_tool_path() {
-    const EXTRA: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
-    let cur = std::env::var("PATH").unwrap_or_default();
-    let missing: Vec<&str> = EXTRA.iter().copied().filter(|p| !cur.split(':').any(|x| x == *p)).collect();
-    if missing.is_empty() {
-        return;
-    }
-    let mut merged = missing.join(":");
-    if !cur.is_empty() {
-        merged.push(':');
-        merged.push_str(&cur);
-    }
-    std::env::set_var("PATH", &merged);
-    eprintln!("[studio] PATH 补充：{}", missing.join(":"));
-}
-
-/// 问设备当前显示尺寸（`adb shell wm size`）。
-/// 失败（无设备 / adb 不在 / 输出格式变了）一律返回 `None` —— 调用方据此**不带 `--size`**，
-/// 而不是退回一个写死值：写死值会让竖屏被塞进 16:9 而补出 74% 的黑边。
-fn adb_screen_size() -> Option<(u32, u32)> {
-    /* ★带上当前串号（决策 #1265）：不带 `-s` 时多设备会量到**另一台**的尺寸 ⇒ 画面比例错 */
-    device::probe_size(device::current_serial().as_deref())
-}
-
-/// 没有显式指定输入时**默认接真机**——双击启动不可能带环境变量，
-/// 否则用户看到的是一个永远空白的画布，还以为坏了。
-///
-/// ★★两条腿（决策 #1190 · G3）：
-///   · **Android**：`adb exec-out screenrecord`（整机录屏，裸 Annex-B）
-///   · **iOS**：宿主把画面（ReplayKit + VT 硬编）推 TCP 裸 Annex-B ⇒ 本侧 `/usr/bin/nc -l <port>` 收。
-///     用 `nc` 而不是自己写监听器：`live_stream.h` 只认「管道里的字节」，而 `nc` 系统自带、
-///     `.app` 里也在；断线由 native 侧的「子进程退出自动重连」兜底（与 adb 那条腿同款）。
-///     ★iPhone 侧：`bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:9001`
-///   · 想关掉 iOS 等待：`PROTEUS_IOS_STREAM=0`（否则没有 Android 设备时会一直挂着 nc）
-fn default_live_source() {
-    if std::env::var("POC_LIVE").is_ok() || std::env::var("POC_VIDEO").is_ok() {
-        return;
-    }
-    // ★★显式点名 iOS 端口 ⇒ **优先于 adb 探测**（2026-10-23 实测踩到）：
-    //   本机同时连着 Android 和 iPhone 时，若先查 adb，用户按 README 跑
-    //   `PROTEUS_IOS_STREAM_PORT=9001 …` 会**静默拿到 Android 画面**（没有任何报错，只有一行 eprintln）
-    //   ⇒ 显式意图必须压过自动探测。
-    if let Ok(port) = std::env::var("PROTEUS_IOS_STREAM_PORT") {
-        std::env::set_var("POC_LIVE", format!("/usr/bin/nc -l {port}"));
-        eprintln!("[studio] PROTEUS_IOS_STREAM_PORT={port} ⇒ 等 iOS 推流（/usr/bin/nc -l {port}）");
-        eprintln!("[studio]   iPhone 侧：bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:{port}");
-        return;
-    }
-    let connected = std::process::Command::new("adb")
-        .arg("devices")
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .skip(1)
-                .any(|l| l.trim_end().ends_with("device"))
-        })
-        .unwrap_or(false);
-    if connected {
-        // 触控回传的前提（决策 #1254）：注入与录屏必须打**同一台**设备。
-        // 多设备时 `adb shell` 会以 "more than one device" 失败——记下第一台可用的。
-        let serial = first_adb_serial();
-        TOUCH_ANDROID.store(serial.is_some(), std::sync::atomic::Ordering::Relaxed);
-        if let Ok(mut g) = ADB_SERIAL.lock() {
-            *g = serial.clone();   /* 后面拼采集命令还要用（决策 #1265 带 -s） */
-        }
-        // ★★抓屏尺寸必须**按设备比例**（2026-10-23 实测）：`screenrecord --size` 是把整屏塞进给定尺寸，
-        //   不足处**补黑边**。写死 1280x720 时，1200x2608 的竖屏只剩 330x720 有效画面
-        //   —— `cropdetect` 实测 **74.2% 的像素是黑边**，带宽/解码/FBO 全在搬运和放大一块黑。
-        //   现在按 `wm size` 等比取（长边 ≤1920），实测 `crop=882:1920:0:0`（黑边消失）。
-        let dev = adb_screen_size();
-        if let Ok(mut g) = DEVICE_PX.lock() {
-            *g = dev;   /* ★触摸回传要用物理坐标（决策 #1260） */
-        }
-        let cmd = match dev.and_then(|(w, h)| capture::pick_capture_size(w, h).map(|s| (w, h, s))) {
-            Some((dw, dh, (w, h))) => {
-                let br = capture::bitrate_for(w, h);
-                eprintln!(
-                    "[studio]   录屏 {w}x{h}（设备 {dw}x{dh} · 等比 · 长边≤1920）· {} Mbps",
-                    br / 1_000_000
-                );
-                // ★把预分配尺寸也告诉原生侧（它按 POC_LIVE_W/H 先建纹理）。
-                //   不设的话它按默认 1280x720 建，首帧到达再重建一次 —— 一次无谓的
-                //   纹理重分配 + 一行"首帧尺寸 ≠ 预设"的告警，看起来像出了问题。
-                //   尊重用户显式设置：只在这两个变量为空时才写。
-                if std::env::var("POC_LIVE_W").is_err() {
-                    std::env::set_var("POC_LIVE_W", w.to_string());
-                }
-                if std::env::var("POC_LIVE_H").is_err() {
-                    std::env::set_var("POC_LIVE_H", h.to_string());
-                }
-                /* ★必须带 `-s <串号>`（决策 #1265）：不带的话多设备直接
-                   "more than one device" —— 而触摸注入一直是带串号的，两条路会打不同设备。 */
-                match serial.as_deref() {
-                    Some(sn) => format!(
-                        "adb -s {sn} exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
-                    ),
-                    None => format!(
-                        "adb exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
-                    ),
-                }
-            }
-            // ★查不到尺寸时**不带 `--size`**（用设备原生分辨率），而不是退回某个写死的值
-            //   —— 写死值正是这次要修的 bug；宁可多花点带宽，也不要一小块画面加一圈黑边。
-            None => {
-                eprintln!("[studio]   查不到设备尺寸（wm size 失败）⇒ 用设备原生分辨率录屏");
-                "adb exec-out screenrecord --output-format=h264 --bit-rate 12000000 --time-limit 180 -"
-                    .to_string()
-            }
-        };
-        std::env::set_var("POC_LIVE", cmd);
-        eprintln!("[studio] 未指定输入，默认接真机（Android / adb screenrecord）");
-        eprintln!("[studio]   想看 iPhone：PROTEUS_IOS_STREAM_PORT=9001 再启动本程序（显式指定优先于本探测）");
-        return;
-    }
-    if std::env::var("PROTEUS_IOS_STREAM").ok().as_deref() == Some("0") {
-        eprintln!("[studio] 未检测到 Android 设备；PROTEUS_IOS_STREAM=0 ⇒ 不等待 iOS 推流，画布保持空白");
-        return;
-    }
-    let port = std::env::var("PROTEUS_IOS_STREAM_PORT").unwrap_or_else(|_| "9001".to_string());
-    std::env::set_var("POC_LIVE", format!("/usr/bin/nc -l {port}"));
-    eprintln!("[studio] 未检测到 Android 设备 ⇒ 改等 iOS 推流（/usr/bin/nc -l {port}）");
-    eprintln!("[studio]   iPhone 侧：bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:{port}");
-    eprintln!("[studio]   不想等：PROTEUS_IOS_STREAM=0");
-}
-
 /// 设置窗口入口（实现见 `settings::open_window`）
 #[tauri::command]
 fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
     settings::open_window(&app)
 }
 
+/// PATH 补齐 / 设备尺寸 / 默认采集源：见 `live_source.rs`（决策 #1277 拆出，本文件只留调用）
 fn main() {
-    ensure_tool_path();
+    live_source::ensure_tool_path();
     /* ★读设置要在**所有子进程之前**（决策 #1266）：DEVELOPER_DIR 决定 xcrun 用哪个 Xcode，
        而 adb 路径决定设备探测能不能跑。放后面就晚了——那正是"默认路径"假设的来源。 */
     settings::load_and_apply();
-    default_live_source();
+    live_source::default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
         // 自有菜单栏（决策 #1221）。★必须在 setup 里 `set_menu` 之外另走这条：
@@ -785,6 +649,8 @@ fn main() {
             list_devices,
             select_device,
             open_settings,
+            /* iOS 接法提示（决策 #1277）：界面靠它拿到「本机 IP + 端口 + 该跑的命令」 */
+            live_source::ios_stream_hint,
             settings::get_settings_cmd,
             settings::save_settings_cmd,
             settings::probe_tool,

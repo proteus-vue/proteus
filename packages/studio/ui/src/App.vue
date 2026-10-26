@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { capturePreset, deviceSwipe, deviceTap, openSettings, setCanvasRect } from './bridge'
+import { capturePreset, copyText, deviceSwipe, deviceTap, iosStreamHint, openSettings, setCanvasRect, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -443,9 +443,13 @@ onMounted(async () => {
   // 接上原生菜单（#1221）。★放在最后：处理器在上面的模块作用域已注册完，
   //   此刻起用户点菜单才有东西可接。
   nativeMenu = wireMenu().native
+  // iOS 接法提示（#1277）：先取一次（首帧可能还没来），之后低频轮询
+  void refreshIosHint()
+  iosTimer = setInterval(refreshIosHint, 2000)
 })
 onBeforeUnmount(() => {
   if (rectTimer) clearInterval(rectTimer)
+  if (iosTimer) clearInterval(iosTimer)
   if (rafId) cancelAnimationFrame(rafId)
   removeEventListener('resize', syncRect)
   removeEventListener('keydown', onKey)
@@ -473,6 +477,43 @@ const hud = computed(() => {
   if (!s || s.width <= 0 || s.height <= 0) return '无画面'
   return `${s.width}×${s.height} · ${s.hwdec ? '硬解' : '软解'}`
 })
+
+/* ─── iOS 投屏引导（决策 #1277）─────────────────────────────────────────────
+ *
+ * 【为什么必须做在界面上】iOS 那条腿的最后一公里**只能用户自己走**：
+ *   装 ProteusHost 到真机要 `codesign` 访问 login 钥匙串，沙箱环境实测被拦
+ *   （`[sandbox] 命令被沙箱拦截：login.keychain-db (file-write)`）。
+ *   而"该跑哪条命令"以前只写在 stderr 里 —— 用户点了 iPhone 行，看到的只是黑屏。
+ *   ⇒ 界面唯一做对的事：把 IP / 端口 / 整行命令**摆到能复制的地方**，并说清现在卡在哪一步。
+ *
+ * 【为什么轮询而不是"切设备时算一次"】采集源有三种入口（启动自动探测 / 环境变量 /
+ *   设备列表点选），只有 Rust 侧知道此刻到底是不是 nc 在听。轮询 2s 一次足够，成本是
+ *   两次 `lsof`（微秒级）；而这个提示的存在时长本来就很短（手机一推上来就消失）。
+ */
+const iosHint = ref<IosHint | null>(null)
+let iosTimer: ReturnType<typeof setInterval> | null = null
+/** 只在"没画面 + 采集源是 iOS"时才显示，避免 Android 投屏时弹一段无关说明 */
+const iosGuide = computed(() => (!running.value && iosHint.value?.active ? iosHint.value : null))
+
+async function refreshIosHint() {
+  if (!hasBridge) return
+  try {
+    iosHint.value = await iosStreamHint()
+  } catch {
+    iosHint.value = null // 提示是**附加信息**：拿不到就安静地不显示，不弹错
+  }
+}
+
+async function copyIosCmd() {
+  const c = iosHint.value?.cmd
+  if (!c) return
+  try {
+    await copyText(c)
+    pushToast('命令已复制，粘到终端里跑（要在仓库根目录）', 'info')
+  } catch (e) {
+    pushToast(String((e as Error)?.message ?? e), 'err')
+  }
+}
 </script>
 
 <template>
@@ -566,12 +607,40 @@ const hud = computed(() => {
             </div>
           </div>
           <!-- 空状态：生产 IDE 必须有——不然用户看到纯黑会以为坏了 -->
-          <div v-if="!running" class="empty">
+          <div v-if="!running && !iosGuide" class="empty">
             <!-- 产品标记（立方体 + 取景框）：只在尺寸够大的地方用 —— 空状态正是这种地方 -->
             <StudioMark :size="62" class="mark" />
             <p>等待首帧</p>
             <span v-if="!hasBridge">无 Tauri 桥（浏览器直开时属正常）</span>
             <span v-else>没有输入源：接 Android（adb）或 iPhone（--stream）</span>
+          </div>
+          <!-- iOS：空状态换成**可执行的接法**（#1277）。
+               这一块必须能收指针（复制按钮），所以不能塞进 .empty（那是 pointer-events:none）。 -->
+          <div v-if="iosGuide" class="iosguide" id="iosGuide">
+            <div class="ig-head">
+              <StudioIcon name="device" :size="15" />
+              <b>iPhone 投屏：还差手机端那一步</b>
+            </div>
+            <p class="ig-lead">
+              装到真机要动钥匙串签名，Studio 代跑不了 —— 这条命令得在<b>你自己的终端</b>里跑。
+            </p>
+            <div class="ig-cmd">
+              <code id="iosCmd">{{ iosGuide.cmd }}</code>
+              <button class="ig-copy" id="iosCopy" @click="copyIosCmd">复制</button>
+            </div>
+            <ol class="ig-steps">
+              <li>上面这条在<b>仓库根目录</b>执行（会编译 + 安装 + 启动 ProteusHost）</li>
+              <li>手机上弹「录制屏幕」时点<b>允许</b>（不点就一帧都没有）</li>
+              <li>画面会自己出现在这里，不用再点任何按钮</li>
+            </ol>
+            <p class="ig-state" :class="{ ok: iosGuide.listening }" id="iosState">
+              <template v-if="iosGuide.listening">
+                本机已在 {{ iosGuide.port }} 端口等待推流（{{ iosGuide.ip ?? 'IP 未知' }}）
+              </template>
+              <template v-else>
+                端口 {{ iosGuide.port }} 现在没人监听 —— 采集会话可能没起来
+              </template>
+            </p>
           </div>
         </div>
 

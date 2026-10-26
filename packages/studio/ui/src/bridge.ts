@@ -145,6 +145,22 @@ export const listDevices = (force = false): Promise<DeviceInfo[]> =>
 export const selectDevice = (serial: string): Promise<CaptureInfo> =>
   invoke<CaptureInfo>('select_device', { serial })
 
+/** iOS 接法提示（决策 #1277）。★这不是"锦上添花的提示"：
+ *  装到真机要 `codesign` 访问 login 钥匙串，Studio **代跑不了**（沙箱被拦），
+ *  所以界面唯一能做对的事是**把那行命令摆到用户能复制的地方**（以前只写在 stderr 里）。 */
+export interface IosHint {
+  /** 本机默认路由那块网卡的 IP（手机要连的就是它）；拿不到是 null */
+  ip: string | null
+  port: number
+  /** 终端里要跑的整行命令（含 IP:端口） */
+  cmd: string
+  /** `nc -l` 是否真的在听：false 就说明"手机上推过来也没人接" */
+  listening: boolean
+  /** 采集源此刻就是 iOS 推流 —— 只有 true 才值得显示引导卡 */
+  active: boolean
+}
+export const iosStreamHint = (): Promise<IosHint> => invoke<IosHint>('ios_stream_hint')
+
 /** 采集档位（决策 #1263）：切换会**重启采集会话**（停旧 → 起新 → 重建解码器）。
  *  `standard` = 长边 ≤1920 等比；`sharp` = 设备原生分辨率。 */
 export interface CaptureInfo {
