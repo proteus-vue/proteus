@@ -257,9 +257,10 @@ function onPointerDown(e: PointerEvent) {
   if (p) pick.value = p
   // ★`moved` 用来区分"点一下"和"拖着看别处"（决策 #1254）：拖拽是**看**，不该在设备上留下点击。
   //   阈值 4 CSS px：手抖/触控板微动不算拖，而真正的平移手势早就超过这个量。
-  // ★`device` = 按住 ⌥：这一次拖拽**注入到设备**（滑动），而不是平移画布（决策 #1255）。
-  //   为什么用修饰键而不是"拖拽即滑动"：平移是已有的、被判据 ⑯ 钉住的手势，
-  //   直接改成滑动会把"看别处"变成"在手机上乱划"。
+  // ★`device` = 这次拖拽**注入到设备**（滑动/长按）。★★2026-10-26 反转默认（决策 #1261）：
+  //   原来要求按住 ⌥ 才注入（怕抢走"平移画布"），结果用户第一反应就是"直接拖"⇒ 拖不动手机。
+  //   **镜像工具的心智模型里，拖拽本来就该操作手机**；平移是次要动作 ⇒ 挪到 ⌥ 上。
+  //   触控关掉时（`touchOn=false`）退化成纯看图：拖拽仍然是平移。
   drag = {
     id: e.pointerId,
     x0: e.clientX,
@@ -267,7 +268,7 @@ function onPointerDown(e: PointerEvent) {
     px: pan.value.x,
     py: pan.value.y,
     moved: false,
-    device: e.altKey && touchOn.value,
+    device: touchOn.value && !e.altKey,
     t0: performance.now(),
     lx: e.clientX,
     ly: e.clientY,
@@ -447,8 +448,8 @@ const hud = computed(() => {
         :aria-pressed="touchOn"
         :title="
           touchOn
-            ? '触控回传：开 —— 点画布 = 点真机；⌥+拖拽 = 滑动；⌥+按住 = 长按（仅 Android 实时投屏）'
-            : '触控回传：关 —— 点画布只标记设备坐标，不注入'
+            ? '触控回传：开 —— 单击 = 点；拖拽 = 滑动；按住不动 = 长按；⌥+拖拽 = 平移画布（仅 Android 实时投屏）'
+            : '触控回传：关 —— 画布只标记设备坐标，拖拽 = 平移画布，不注入'
         "
         @click="touchOn = !touchOn"
       >

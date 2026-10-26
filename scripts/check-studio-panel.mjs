@@ -639,20 +639,21 @@ const checks = [
       Math.abs(Number(tapSpace.at3q?.x) - 600) <= 4 &&
       Math.abs(Number(tapSpace.at3q?.y) - 1956) <= 4,
   ],
-  // ㊱ ⌥ 手势：拖动 = 滑动、按住不动 = 长按；普通拖拽仍然只平移
+  // ㊱ 手势：**直接拖拽 = 滑动**、按住不动 = 长按；⌥+拖拽 = 平移（决策 #1261 反转过默认）
   [
-    `㊱ ⌥手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByAltDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · 普通拖拽后累计 ${g.swipeCountAfterPlainDrag} 条（应 2）`,
+    `㊱ 手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByPlainDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · ⌥拖后累计 ${g.swipeCountAfterAltDrag} 条（应 2）、画布被平移=${g.panMovedByAltDrag}（应 true）`,
     g.swipeCountAfterDrag === 1 &&
       Number(g.swipeOfDrag?.x1) === Number(g.swipeOfDrag?.x2) &&
       Number(g.swipeOfDrag?.y2) < Number(g.swipeOfDrag?.y1) - 50 &&
       Number(g.swipeOfDrag?.ms) > 0 &&
-      g.panMovedByAltDrag === false &&
+      g.panMovedByPlainDrag === false &&
       g.swipeCountAfterHold === 2 &&
       // 长按 = 同点 + 600ms（★别写成 x1===y1：那是在比两个轴，640≠360 永远假）
       Number(g.swipeOfHold?.x1) === Number(g.swipeOfHold?.x2) &&
       Number(g.swipeOfHold?.y1) === Number(g.swipeOfHold?.y2) &&
       Number(g.swipeOfHold?.ms) === 600 &&
-      g.swipeCountAfterPlainDrag === 2,
+      g.swipeCountAfterAltDrag === 2 &&
+      g.panMovedByAltDrag === true,
   ],
   // ⑱h Git 只读：分支/改动数 + 改动清单可点开 + Diff 可切 HEAD
   [
@@ -935,7 +936,7 @@ const checks = [
   //   ★只往左拖：125% 下屏幕高 726 < 舞台 796 ⇒ 纵向被正确夹紧到 0，
   //     拿纵向做断言会红，但那是正确行为（屏幕比舞台小就不该能拖动）。
   [
-    `⑯ 拖拽平移：状态 ${panSeen.status} · 屏幕 x ${panBefore.x.toFixed(0)}→${panSeen.x.toFixed(0)}（原生收到 ${panSeen.ipcX.toFixed(0)}）`,
+    `⑯ ⌥拖拽平移：状态 ${panSeen.status} · 屏幕 x ${panBefore.x.toFixed(0)}→${panSeen.x.toFixed(0)}（原生收到 ${panSeen.ipcX.toFixed(0)}）`,
     !!panXY &&
       Math.abs(panXY.x + 100) <= 3 &&
       panXY.y === 0 &&
@@ -943,7 +944,7 @@ const checks = [
       Math.abs(panSeen.ipcX - panSeen.x) < 1.5,
   ],
   [
-    `⑯b 回到「适应」后平移归零：${panReset.status} · 屏幕 x 回到 ${panReset.x.toFixed(0)}（适应位置 ${box1.x.toFixed(0)}）`,
+    `⑯b ⌥拖拽后「适应」平移归零：${panReset.status} · 屏幕 x 回到 ${panReset.x.toFixed(0)}（适应位置 ${box1.x.toFixed(0)}）`,
     !!panResetXY &&
       panResetXY.x === 0 &&
       panResetXY.y === 0 &&

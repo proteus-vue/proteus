@@ -736,47 +736,57 @@ export async function probeGesture(page) {
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
   })
 
-  // ① ⌥ + 拖拽（向上 200 CSS px）
+  // ★**先取基线**：前面的触摸探针（㉟）为了证明"拖拽不产生点击"也做过一次拖拽，
+  //   而现在"拖拽 = 滑动" ⇒ 那次也会产生 swipe。用累计条数当期望值必然红（第一版就这么红的）。
+  const swipeBase = (await swipes()).length
+
+  // ① 普通拖拽（向上 200 CSS px）⇒ 注入一条 swipe，且画布**不动**
   const xBefore = await screenX()
-  await page.keyboard.down('Alt')
   await page.mouse.move(center.x, center.y)
   await page.mouse.down()
   await page.mouse.move(center.x, center.y - 100, { steps: 3 })
   await page.mouse.move(center.x, center.y - 200, { steps: 3 })
   await page.mouse.up()
-  await page.keyboard.up('Alt')
   await page.waitForTimeout(320)
-  const afterSwipe = await swipes()
-  const xAfter = await screenX()
+  const afterDrag = (await swipes()).slice(swipeBase)
+  const xAfterDrag = await screenX()
 
-  // ② ⌥ + 按住不动 700ms ⇒ 长按（同点 + 600ms）
-  await page.keyboard.down('Alt')
+  // ② 普通按住不动 700ms ⇒ 长按（同点 + 600ms），不带动画布
   await page.mouse.move(center.x, center.y)
   await page.mouse.down()
   await page.waitForTimeout(700)
   await page.mouse.up()
-  await page.keyboard.up('Alt')
   await page.waitForTimeout(320)
-  const afterHold = await swipes()
+  const afterHold = (await swipes()).slice(swipeBase)
 
-  // ③ 普通拖拽（无 ⌥）仍然只平移：不该多出 swipe
+  // ③ ⌥ + 拖拽 ⇒ **只平移**，不多出 swipe
+  //   ★必须先放大：1× 时画面比舞台小，平移被夹在 0，往哪拖都不动 ⇒ 断言"平移了"会假红。
+  await page.click('.zoom button[aria-label="放大"]')
+  await page.click('.zoom button[aria-label="放大"]')
+  await page.waitForTimeout(500)
+  const xBeforeAlt = await screenX()
+  await page.keyboard.down('Alt')
   await page.mouse.move(center.x, center.y)
   await page.mouse.down()
-  await page.mouse.move(center.x + 60, center.y, { steps: 3 })
+  // ★往**左**拖：画面在「适应」档本就贴着左边（平移被夹到 0），往右拖永远动不了 ⇒ 断言会假红
+  await page.mouse.move(center.x - 60, center.y, { steps: 3 })
   await page.mouse.up()
-  await page.waitForTimeout(280)
-  const afterPlainDrag = await swipes()
+  await page.keyboard.up('Alt')
+  await page.waitForTimeout(300)
+  const afterAltDrag = (await swipes()).slice(swipeBase)
+  const xAfterAlt = await screenX()
   // 复位平移，别把状态留给后面
   await page.click('.zoom button[aria-label="适应窗口"]')
   await page.waitForTimeout(300)
 
   return {
-    swipeOfDrag: afterSwipe[0] ?? null,
-    swipeCountAfterDrag: afterSwipe.length,
-    panMovedByAltDrag: Math.abs(xAfter - xBefore) > 1,
+    swipeOfDrag: afterDrag[0] ?? null,
+    swipeCountAfterDrag: afterDrag.length,
+    panMovedByPlainDrag: Math.abs(xAfterDrag - xBefore) > 1,
     swipeOfHold: afterHold[1] ?? null,
     swipeCountAfterHold: afterHold.length,
-    swipeCountAfterPlainDrag: afterPlainDrag.length,
+    swipeCountAfterAltDrag: afterAltDrag.length,
+    panMovedByAltDrag: Math.abs(xAfterAlt - xBeforeAlt) > 1,
   }
 }
 
@@ -798,11 +808,14 @@ const cb = await page.evaluate(() => {
   const r = document.getElementById('canvas').getBoundingClientRect()
   return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
 })
+// ★平移现在是 **⌥ + 拖拽**（决策 #1261 反转过默认手势：无修饰键的拖拽 = 注入滑动）
+await page.keyboard.down('Alt')
 await page.mouse.move(cb.x, cb.y)
 await page.mouse.down()
 await page.mouse.move(cb.x - 40, cb.y, { steps: 3 })
 await page.mouse.move(cb.x - 100, cb.y, { steps: 3 })
 await page.mouse.up()
+await page.keyboard.up('Alt')
 await page.waitForTimeout(300)
 const panSeen = await page.evaluate(() => {
   const r = document.querySelector('.screen').getBoundingClientRect()
