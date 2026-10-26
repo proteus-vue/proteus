@@ -5,7 +5,9 @@
 //   （JS 量 getBoundingClientRect → 传到原生侧设 frame），而不是写死一个全屏 GL 视图。
 //
 // 【与前几个 PoC 的关系】A/B1/B2 证明性能；本单是把它们**装进产品形态**的第一步。
-//   仍然不做：编辑器内核、终端、真实设备连线（画面来自录制流，见 README 边界）。
+//   仍然不做：终端（pty）· 调试器（DAP）· 元素拾取（G-54 无数据源）。
+//   ★编辑器（CodeMirror）、真实设备实时投屏（adb / iOS nc）、触摸回传均**已落地**——
+//     2026-10-26 更正：这段注释曾长期写着"不做编辑器、不做真实设备连线"，与实际相反（决策 #1254）。
 
 use serde::Serialize;
 use std::ffi::{c_char, c_int, c_void, CString};
@@ -236,6 +238,98 @@ fn set_dirty_count(n: usize) {
 fn close_now(window: tauri::Window) {
     ALLOW_CLOSE.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = window.close();
+}
+
+/* ── 触摸回传（决策 #1254 · G4 第三项）：画布上点一下 ⇒ 注入到真机 ───────────────
+ *
+ * 【为什么只做 Android】iOS 那条腿是「宿主 ReplayKit 推流 → 本机 `nc -l` 收」，**只有下行**；
+ *   反向注入要 iPhone 侧另开一条控制通道（G3 二阶段）。这里**如实报不支持**而不是静默丢弃——
+ *   "点了没反应"和"这种源不支持"必须能分清，否则用户会以为是自己点歪了。
+ *
+ * 【为什么记 serial】本机常同时连着多台设备，而 `adb shell` 在**多设备时直接失败**
+ *   （`more than one device/emulator`）。更重要的是：注入和录屏必须打**同一台**，
+ *   否则会出现"看着 A 的屏、点在 B 上"——这种错很难从界面上看出来。
+ *
+ * 【为什么用 `input tap` 而不是 sendevent】`input` 是设备上的系统命令（无需权限），
+ *   一次点击 ≈ 一次进程启动（真机实测 60~120ms）；sendevent 要走 root 且要自己算坐标变换，
+ *   对一个"调试时点几下"的场景不划算。拖动/多指等复杂手势另议（见 #1254 的边界）。
+ */
+static TOUCH_ANDROID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static ADB_SERIAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// 第一台处于 `device` 状态的 adb 设备（没有就 None）。
+/// ★不能用 `adb shell` 不带 `-s` 去试：多设备时它的报错是"more than one device"，
+///   看起来像设备坏了，其实是**没指定是哪台**。
+fn first_adb_serial() -> Option<String> {
+    let out = std::process::Command::new("adb").arg("devices").output().ok()?;
+    String::from_utf8_lossy(&out.stdout).lines().skip(1).find_map(|l| {
+        let mut it = l.split_whitespace();
+        let serial = it.next()?;
+        (it.next() == Some("device")).then(|| serial.to_string())
+    })
+}
+
+/// 设备屏幕是否亮着。缓存 1.5s：连点时不必每次多问一遍（一次 adb 往返 ≈ 30~60ms）。
+/// ★这是 2026-10-26 真机实测换来的：**熄屏时 `input tap` 返回 0，但状态不变**
+///   （`mWakefulness=Dozing` 前后一致）——即"点了等于没点"，而且**永远不会报错**。
+///   本仓对"静默无效"有明确态度：要么做到，要么说出来。这里选后者（不擅自点亮用户设备）。
+static SCREEN_STATE: std::sync::Mutex<Option<(Instant, bool)>> = std::sync::Mutex::new(None);
+
+fn screen_awake(serial: Option<&str>) -> Option<bool> {
+    if let Ok(g) = SCREEN_STATE.lock() {
+        if let Some((t, v)) = *g {
+            if t.elapsed() < Duration::from_millis(1500) {
+                return Some(v);
+            }
+        }
+    }
+    let mut c = std::process::Command::new("adb");
+    if let Some(s) = serial {
+        c.args(["-s", s]);
+    }
+    c.args(["shell", "dumpsys", "power"]);
+    let out = c.output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let v = text
+        .lines()
+        .find(|l| l.contains("mWakefulness="))
+        .map(|l| l.split('=').nth(1).unwrap_or("").trim() == "Awake")?;
+    if let Ok(mut g) = SCREEN_STATE.lock() {
+        *g = Some((Instant::now(), v));
+    }
+    Some(v)
+}
+
+#[tauri::command]
+async fn device_tap(x: u32, y: u32) -> Result<String, String> {
+    if !TOUCH_ANDROID.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err("当前画面源不支持触控回传（只有 Android / adb 实时投屏能注入）".into());
+    }
+    let serial = ADB_SERIAL.lock().ok().and_then(|g| g.clone());
+    // ★熄屏时注入**不会报错也不会生效**（真机实测）⇒ 提前说清楚，别让人以为点歪了
+    if let Some(false) = screen_awake(serial.as_deref()) {
+        return Err("设备屏幕没亮（Dozing）：这次点击大概率没效果 —— 先把设备屏幕点亮".into());
+    }
+    // ★`adb` 是**阻塞子进程**（真机 60~120ms）：必须放阻塞线程池，不能占住 IPC/主线程，
+    //   否则连续点两下就会卡住整个界面（与 search.rs 里 rg 的处理同理）。
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let mut c = std::process::Command::new("adb");
+        if let Some(s) = serial.as_deref() {
+            c.args(["-s", s]);
+        }
+        c.args(["shell", "input", "tap", &x.to_string(), &y.to_string()]);
+        c.output()
+    })
+    .await
+    .map_err(|e| format!("注入线程失败：{e}"))?;
+    match out {
+        Ok(o) if o.status.success() => Ok(format!("{x},{y}")),
+        Ok(o) => Err(format!(
+            "adb input tap 失败：{}",
+            String::from_utf8_lossy(&o.stderr).trim()
+        )),
+        Err(e) => Err(format!("调不起 adb：{e}")),
+    }
 }
 
 #[tauri::command]
@@ -535,6 +629,13 @@ fn default_live_source() {
         })
         .unwrap_or(false);
     if connected {
+        // 触控回传的前提（决策 #1254）：注入与录屏必须打**同一台**设备。
+        // 多设备时 `adb shell` 会以 "more than one device" 失败——记下第一台可用的。
+        let serial = first_adb_serial();
+        TOUCH_ANDROID.store(serial.is_some(), std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut g) = ADB_SERIAL.lock() {
+            *g = serial;
+        }
         // ★★抓屏尺寸必须**按设备比例**（2026-10-23 实测）：`screenrecord --size` 是把整屏塞进给定尺寸，
         //   不足处**补黑边**。写死 1280x720 时，1200x2608 的竖屏只剩 330x720 有效画面
         //   —— `cropdetect` 实测 **74.2% 的像素是黑边**，带宽/解码/FBO 全在搬运和放大一块黑。
@@ -609,6 +710,7 @@ fn main() {
             git_head,
             set_dirty_count,
             close_now,
+            device_tap,
             search_text
         ])
         .setup(|app| {

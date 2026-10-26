@@ -27,11 +27,12 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
-import { probeCodeExtras, probeMenu, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
+import { probeCodeExtras, probeMenu, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
 import { serveDist } from './studio-panel-serve.mjs'
+import { checkFixture } from './studio-panel-fixture.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDIO = path.join(ROOT, 'packages', 'studio')
@@ -440,6 +441,9 @@ const panReset = await page.evaluate(() => ({
   x: document.querySelector('.screen').getBoundingClientRect().x,
 }))
 
+// ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
+const touch = await probeTouch(page)
+
 // 模拟"上次关在代码视图、在看 main.rs" ⇒ reload 应直接进代码视图
 await page.evaluate(() =>
   localStorage.setItem(
@@ -485,26 +489,8 @@ const parseFull = perf.parseFull
 
 await browser.close()
 closeServer()
-// ⑩ fixture 与原始采集输出必须数值一致（防"改 fixture 让判据变绿"这类静默漂移）
-const rawPath = path.join(STUDIO, 'results', 'panel-source.json')
-let fixtureInSync = true
-let fixtureWhy = ''
-if (!fs.existsSync(rawPath)) {
-  fixtureInSync = false
-  fixtureWhy = `缺原始采集输出 ${path.relative(ROOT, rawPath)}`
-} else {
-  const raw = JSON.parse(fs.readFileSync(rawPath, 'utf8'))
-  const diffs = []
-  if (r.frames_presented !== raw.frames_presented) diffs.push('frames_presented')
-  if (r.measured_fps !== raw.measured_fps) diffs.push('measured_fps')
-  if (r.latency_ms?.p50 !== raw.latency_ms?.p50) diffs.push('latency_ms.p50')
-  if (r.cpu?.single_core_pct !== raw.cpu?.single_core_pct) diffs.push('cpu.single_core_pct')
-  if (r.aus !== raw.aus) diffs.push('aus')
-  if (diffs.length) {
-    fixtureInSync = false
-    fixtureWhy = `与 results/panel-source.json 不一致：${diffs.join(', ')}`
-  }
-}
+// ⑩ fixture 与原始采集输出必须数值一致（采集段在 studio-panel-fixture.mjs）
+const { ok: fixtureInSync, why: fixtureWhy } = checkFixture({ fixture: r, root: ROOT, studio: STUDIO })
 
 /** 解析状态栏里的 "x,y"（设备像素） */
 const parseXY = (s) => {
@@ -965,6 +951,22 @@ const checks = [
       panResetXY.x === 0 &&
       panResetXY.y === 0 &&
       Math.abs(panReset.x - box1.x) < 1.5,
+  ],
+  // ㉟ 触摸回传（决策 #1254）：设备像素坐标 + 拖拽不注入 + 开关生效 + 源不支持时如实降级
+  [
+    `㉟ 触控回传（增量）：拖拽 +${touch.tapsAddedByPan}（应 0）· 点中心 +${touch.tapsAddedByClick} → ${JSON.stringify(touch.tapAtCenter)}（设备 ${stats.width}×${stats.height}）· 开关默认=${touch.chipOn.label || '—'} · 关掉后 +${touch.tapsAddedWhileOff}（应 0）· 源不支持 ⇒ 开关${touch.chipUnsupported.on ? '仍开' : '自动关'} 提示=「${touch.tapToast.slice(0, 46)}」· 熄屏 ⇒ 开关${touch.chipSleeping.on ? '仍开（对）' : '被误关'}`,
+    touch.tapsAddedByPan === 0 &&
+      touch.tapsAddedByClick === 1 &&
+      Math.abs(Number(touch.tapAtCenter?.x ?? -1) - stats.width / 2) <= 3 &&
+      Math.abs(Number(touch.tapAtCenter?.y ?? -1) - stats.height / 2) <= 3 &&
+      touch.chipOn.on &&
+      touch.tapsAddedWhileOff === 0 &&
+      !touch.chipOff.on &&
+      !touch.chipUnsupported.on &&
+      touch.tapToast.includes('不支持触控回传') &&
+      // 熄屏不像"源不支持"：**不能**自动关开关，只要如实提示
+      touch.chipSleeping.on &&
+      touch.sleepingToast.includes('屏幕没亮'),
   ],
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
   // ㉑ 大文件冷跳着色（见脚本里的长注释：这条钉的是 warmParse 不能掉）

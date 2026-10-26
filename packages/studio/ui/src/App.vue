@@ -2,7 +2,8 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { setCanvasRect } from './bridge'
+import { deviceTap, setCanvasRect } from './bridge'
+import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
@@ -215,7 +216,7 @@ watch(pan, scheduleSync)
  *  这是设备检查器真正关心的量（"我点的这个点在设备上是第几个像素"），
  *  而不是 CSS px（同一台设备在 100% / 200% 缩放下 CSS 值会变，设备值不会）。 */
 const pick = ref<{ x: number; y: number } | null>(null)
-let drag: { id: number; x0: number; y0: number; px: number; py: number } | null = null
+let drag: { id: number; x0: number; y0: number; px: number; py: number; moved: boolean } | null = null
 
 function toDevice(e: PointerEvent): { x: number; y: number } | null {
   const el = canvasEl.value
@@ -232,7 +233,9 @@ function toDevice(e: PointerEvent): { x: number; y: number } | null {
 function onPointerDown(e: PointerEvent) {
   const p = toDevice(e)
   if (p) pick.value = p
-  drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, px: pan.value.x, py: pan.value.y }
+  // ★`moved` 用来区分"点一下"和"拖着看别处"（决策 #1254）：拖拽是**看**，不该在设备上留下点击。
+  //   阈值 4 CSS px：手抖/触控板微动不算拖，而真正的平移手势早就超过这个量。
+  drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, px: pan.value.x, py: pan.value.y, moved: false }
   try {
     e.currentTarget instanceof HTMLElement && e.currentTarget.setPointerCapture(e.pointerId)
   } catch {
@@ -242,6 +245,7 @@ function onPointerDown(e: PointerEvent) {
 
 function onPointerMove(e: PointerEvent) {
   if (!drag || drag.id !== e.pointerId) return
+  if (Math.abs(e.clientX - drag.x0) > 4 || Math.abs(e.clientY - drag.y0) > 4) drag.moved = true
   pan.value = clampPan({
     x: drag.px + (e.clientX - drag.x0),
     y: drag.py + (e.clientY - drag.y0),
@@ -250,11 +254,51 @@ function onPointerMove(e: PointerEvent) {
 
 function onPointerUp(e: PointerEvent) {
   if (!drag || drag.id !== e.pointerId) return
+  const wasDrag = drag.moved
   drag = null
   try {
     e.currentTarget instanceof HTMLElement && e.currentTarget.releasePointerCapture(e.pointerId)
   } catch {
     /* 同上 */
+  }
+  // 只有"没拖动过的一次点击"才回传到设备（拖拽平移 → 手指在设备上应该是 drag，不在本批范围）
+  if (!wasDrag) void injectTap(e)
+}
+
+/* ─── 触摸回传（决策 #1254 · G4 第三项）：画布点一下 ⇒ 真机上也点一下 ─────────────
+ * 【为什么值得做】投屏只解决"看得见"，而调试 90% 的动作是"点一下这一步"。没有回传，
+ *   每次验证都要放下鼠标去拿手机——这就是"能看不能用"。
+ * 【坐标】用 `toDevice()` 的**设备像素**（不是 CSS px）：同一台设备在 100%/200% 缩放下
+ *   CSS 值会变、设备值不会；注入必须用设备值，否则放大后就点偏。
+ * 【失败怎么表现】`device_tap` 的 Err 分两类：源不支持（iOS/录制流）与 adb 失败。
+ *   前者只提示一次并**自动关掉**开关（否则每次点击都弹一次、用户以为是自己点错）；
+ *   后者每次都提示（那是真故障，不能吞）。
+ */
+const touchOn = ref(true)
+let touchWarned = false
+let touchBusy = false
+
+async function injectTap(e: PointerEvent) {
+  if (!touchOn.value || touchBusy) return
+  const p = toDevice(e)
+  if (!p) return
+  touchBusy = true
+  try {
+    await deviceTap(p.x, p.y)
+  } catch (err) {
+    const msg = String((err as Error)?.message ?? err)
+    const unsupported = msg.includes('不支持触控回传')
+    if (unsupported) {
+      touchOn.value = false
+      if (!touchWarned) {
+        touchWarned = true
+        pushToast(`${msg}（已关闭触控回传）`, 'info')
+      }
+    } else {
+      pushToast(msg, 'err')
+    }
+  } finally {
+    touchBusy = false
   }
 }
 
@@ -316,6 +360,21 @@ const hud = computed(() => {
          重复一遍只会挤占拖拽区（用户 2026-10-25 指出"冗余"）。 -->
     <div class="top" data-tauri-drag-region="deep">
       <div class="chip"><span class="dot" :class="{ off: !running }" /><span id="linkChip">{{ linkText }}</span></div>
+      <!-- 触摸回传开关（决策 #1254）：开 = 点画布会注入到真机；关 = 只标记坐标（纯看） -->
+      <button
+        class="chip btn"
+        id="touchChip"
+        :class="{ on: touchOn }"
+        :aria-pressed="touchOn"
+        :title="
+          touchOn
+            ? '触控回传：开着 —— 点画布会在真机上点同一个位置（仅 Android 实时投屏）'
+            : '触控回传：关着 —— 点画布只标记设备坐标，不注入'
+        "
+        @click="touchOn = !touchOn"
+      >
+        <span class="dot" :class="{ off: !touchOn }" />触控{{ touchOn ? '·开' : '·关' }}
+      </button>
       <div class="chip">镜像 60fps 上限</div>
       <div style="flex:1" />
       <div class="chip">画布由 HTML 布局驱动 · 等比适配</div>

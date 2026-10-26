@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **54 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **55 判据**；已接 CI 与 `pnpm verify`） |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -25,13 +25,20 @@
 | 原生 GL 画布能挂进 Tauri 窗口，且**位置由 HTML 布局决定**（不是写死全屏） | 日志 `canvas rect = 80.0,68.0 996.0x748.0` 与 CSS 网格算出来的完全一致（左栏 56 + 内边距 24 = 80；顶栏 44 + 24 = 68；宽 1440−56−340−48 = 996） |
 | 真机画面能通过我们的管线渲染进画布 | `results/canvas-device.png`（从 FBO 读回，1280×720，内容是**手机设置页**） |
 | HTML 叠加层与原生画布共存（B2 的结论在产品布局里成立） | 十字线/边框/标签都画在 WebView 层 |
+| **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备像素**（`toDevice()`），拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
 
 | 没做 | 原因 |
 |---|---|
-| 编辑器内核 | **G-56.1 红线：绝不自研**（xi-editor 已死 / Lapce 至今 pre-alpha / Floem 两年未发版） |
-| 终端 / pty | 不在这一版范围 |
-| 真实设备连线 | 画布用的是**录制流**（`device-720p.mp4`），不是实时投屏（C 的边界已写明） |
+| 终端 / pty | 未做（下一刀候选） |
+| 调试器 / DAP | 未做 |
 | 元素拾取 / 检查器数据 | 依赖 G-54 的 `locateAssertion` / `affectedDevices`，那两个方法仍是 0 行 |
+| iOS 触摸回传 | iOS 那条腿**只有下行**（ReplayKit 推流 → `nc -l`）；反向注入要 G3 二阶段另开控制通道 |
+
+★**已落地、不再列"没做"的两项**（本表此前长期写反，把已完成的当成未做——2026-10-26 更正）：
+- **编辑器**：CodeMirror 6 容器（不自研内核，守 G-56.1 红线），多标签 + 每文件缓冲 + 语法着色 + Diff + Git 只读；
+- **真实设备连线**：**默认就接真机**，不是录制流 —— 未指定输入时 `default_live_source()` 自动选
+  Android（`adb exec-out screenrecord`，按设备宽高比取尺寸）或 iOS（`/usr/bin/nc -l 9001` 收宿主推流）。
+  实测：硬解 **59.5fps / CPU 20.5% / 迟到 0**（`results/live-hw-{1,2,3}.json`）。
 
 ## 结构
 

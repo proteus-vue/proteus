@@ -77,6 +77,11 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);
      box-shadow:0 0 0 3px var(--ok-weak)}
 .dot.off{background:var(--fg-subtle);box-shadow:0 0 0 3px rgba(109,116,128,.14)}
+/* chip 形态的按钮（决策 #1254 起：触控回传开关）。★按钮默认外观要清掉，
+   但**不能**改成 cursor:default —— 可点的地方必须是手指（判据 ㉜ 对菜单有同款要求） */
+.chip.btn{cursor:pointer;font:inherit;-webkit-appearance:none;appearance:none}
+.chip.btn:hover{color:var(--fg);border-color:var(--fg-subtle)}
+.chip.btn.on{color:var(--fg);border-color:var(--accent)}
 
 /* 活动栏（左）——48px 与 VS Code 同基线；图标按钮 36px 落在 4px 网格上 */
 .rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:var(--sp1);

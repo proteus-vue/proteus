@@ -90,6 +90,18 @@ export function stubTauri(payload) {
           const p = String(args?.path ?? '')
           return `// HEAD-VERSION-MARKER ${p}\nconst baseline = 1\n`
         }
+        // 触摸回传（决策 #1254）：只**记录**，不真去调 adb（判据验的是"前端算的设备像素对不对"）。
+        // ★`__TAP_UNSUPPORTED__=1` 模拟"当前源不支持"（iOS 推流 / 录制流），
+        //   用来钉住"提示一次并自动关开关"这条行为——那是用户最常撞到的情形。
+        if (cmd === 'device_tap') {
+          window.__LAST_TAP__ = args
+          if (window.localStorage.getItem('__TAP_UNSUPPORTED__') === '1')
+            throw new Error('当前画面源不支持触控回传（只有 Android / adb 实时投屏能注入）')
+          // 熄屏：真机实测 input tap 返回 0 但**不生效**（2026-10-26）⇒ Rust 侧提前报错
+          if (window.localStorage.getItem('__TAP_SLEEPING__') === '1')
+            throw new Error('设备屏幕没亮（Dozing）：这次点击大概率没效果 —— 先把设备屏幕点亮')
+          return `${args?.x},${args?.y}`
+        }
         // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭
         if (cmd === 'set_dirty_count') return null
         if (cmd === 'close_now') return null

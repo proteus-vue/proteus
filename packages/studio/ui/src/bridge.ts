@@ -92,6 +92,13 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 
+/** 触摸回传（决策 #1254）：把画布上的一次点击**注入到真机**（只有 Android 实时投屏支持）。
+ *  返回 `"x,y"` = adb 侧确认已注入；抛错时分两类原因（源不支持 / adb 失败），
+ *  界面据此区分"这种源做不了"和"这次没成功"——两者都不能静默。
+ *  ★不违反下面那条"指针输入不走 IPC"：那条说的是**入向**（原生点画布 → 前端），
+ *    本函数是**出向**（前端算好设备像素 → Rust → adb input tap），方向相反。 */
+export const deviceTap = (x: number, y: number): Promise<string> => invoke<string>('device_tap', { x, y })
+
 /** 工作区状态（G5）：落在 `~/Library/Application Support/dev.proteus.studio/state.json`。 */
 export const loadState = (): Promise<string> => invoke<string>('load_state')
 export const saveState = (json: string): Promise<void> => invoke<void>('save_state', { json })
