@@ -30,6 +30,20 @@ export function stubTauri(payload) {
         if (cmd === 'set_canvas_rect') return null
         // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
         if (cmd === 'open_settings') return null
+        // 自动检测（决策 #1268）：两台 Xcode + 一个 adb，正好用来测"点选"与"取消不改"
+        if (cmd === 'detect_tools')
+          return {
+            xcode: [
+              { path: '/Volumes/data1/work/office-applications/Xcode.app', version: 'Xcode 14.2' },
+              { path: '/Applications/Xcode.app', version: 'Xcode 16.0' },
+            ],
+            adb: [{ path: '/opt/homebrew/bin/adb', version: 'Android Debug Bridge version 1.0.41' }],
+          }
+        if (cmd === 'pick_tool') {
+          // __PICK_CANCEL__=1 模拟"用户点了取消"
+          if (window.localStorage.getItem('__PICK_CANCEL__') === '1') return null
+          return args?.kind === 'xcode' ? '/Applications/Xcode-browse.app' : '/usr/local/bin/adb'
+        }
         if (cmd === 'get_settings') return { xcode: null, adb: null, ios_port: 9001 }
         if (cmd === 'save_settings') {
           window.__STUB_SETTINGS__ = args?.s

@@ -14884,3 +14884,25 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **判据 61 重写**：① 主窗口点设置按钮 ⇒ `open_settings` 恰好 1 次 ② 分类导航 3 项且默认「开发环境」
     ③「设备」页只读表格 3 行 ④「关于」页含设置文件位置 ⑤ 检测原样送路径、失败不许显示成功
     ⑥ 保存原样提交 ⑦ 子页零 JS 错误。
+
+1268. **设置页降到"点两下"的路径选择：自动检测 + 浏览…（原生面板）· 判据 62（㊷）**（2026-10-26 · 用户「应该让开发者操作门槛降到最低，鼠标点几下就搞定」）:
+  - **用户指出的门槛**：让开发者手打 `/Volumes/…/Xcode.app` 是错误的——路径长、易错、且 Xcode 可装在任意盘。
+  - **交付（三条，按"点几下"排序）**：
+    ① **自动检测**：`mdfind "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"`（Spotlight，**跨所有卷**）
+       再补 `xcode-select -p` 推导的那个；adb 用 `which -a adb` + homebrew 两个前缀。
+       每个候选**顺带探出真实版本**（`xcodebuild -version` / `adb version`），列成一行一行 ⇒ 点一下即选中。
+       ★本机实测检出 **两个** Xcode（`/Volumes/data1/applications` 的 14.2 与
+         `/Volumes/data1/work/office-applications` 的 26.5）⇒ 正好说明"默认路径"思路必然错。
+    ② **只有一个候选时自动填入**（零输入即可用）——例如 adb 只有 `/opt/homebrew/bin/adb`。
+    ③ **「浏览…」调原生 NSOpenPanel**：自己写进 `native/embed_view.m`（`poc_pick_path`），
+       **不加 tauri-plugin-dialog**（本仓装依赖的历史教训）。模态面板必须在主线程 ⇒
+       `dispatch_async(dispatch_get_main_queue())` + 信号量等待；`treatsFilePackagesAsDirectories = NO`
+       才能选中 `.app`（置 YES 会让 Xcode.app 变成"可进入的目录"）。
+  - **踩坑**：
+    · `__block char buf[4096]` **编译不过**（C 不允许 block 引用数组类型自动变量）⇒ 改堆指针 `calloc`。
+    · 设置页模板里写了 `**不用手输**`，Vue 不解析 Markdown ⇒ 界面出现字面星号 ⇒ 改 `<b>`。
+    · 判据里"取第一条 `probe_tool`"错了——「浏览…」现在会先探一次 ⇒ 断言在测别人的调用 ⇒ 改取**最后一条**。
+  - **判据 62（㊷）**：候选 2 条且首条带真实版本 · adb 单候选**自动填入** · 点候选 ⇒ 输入框被填且**不再额外探测**
+    （版本来自候选）· 「浏览…」⇒ 调 `pick_tool('xcode')` 并回填 · **取消 ⇒ 值不变**（乐观更新会说谎）。
+  - **边界**：检测只认标准 bundle id 的 Xcode（命令行工具装的 `/Library/Developer` 不会被当成 Xcode.app，
+    但它本来也不是）；Windows/Linux 走不到这条（Studio 目前只有 macOS 宿主）。

@@ -324,6 +324,44 @@ static int live_open_decoder(void) {
 static char g_pending_cmd[1024];
 static volatile int g_pending = 0;
 
+/* ── 原生"选路径"对话框（决策 #1268）──────────────────────────────────────────
+ * 【为什么要它】让开发者手打 `/Volumes/…/Xcode.app` 是错误的门槛：路径长、易错、
+ *   而且 Xcode 可以装在任意磁盘。IDE 的做法是「浏览…」→ 系统面板点两下。
+ * 【为什么自己写而不加 tauri-plugin-dialog】本仓刻意不加依赖（装依赖要改根 lockfile，
+ *   历史上两次都失败）；而 AppKit 的 NSOpenPanel 就够，且我们已经有 ObjC 桥。
+ * 【线程】AppKit 的模态面板必须在**主线程**开；调用方在 worker 线程 ⇒ 投递到主队列再等信号量。
+ * 【返回】写进调用方给的缓冲区（1 = 选中，0 = 取消），避免跨语言传字符串所有权。 */
+int poc_pick_path(const char *message, char *out, int cap) {
+  /* ★不能用 `__block char buf[4096]`：C 不允许在 block 里引用**数组**类型的自动变量
+     （clang 直接报 "cannot refer to declaration with an array type inside block"）。
+     改成堆上的指针，block 里只捕获指针。 */
+  char *buf = calloc(1, 4096);
+  if (!buf) return 0;
+  dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    @autoreleasepool {
+      NSOpenPanel *p = [NSOpenPanel openPanel];
+      p.canChooseFiles = YES;
+      p.canChooseDirectories = YES;
+      p.allowsMultipleSelection = NO;
+      /* ★`treatsFilePackagesAsDirectories = NO`：`.app` 是"包"，当成对象才选得中；
+         置 YES 会让 Xcode.app 退化成可进入的目录，用户只能选到 Contents 里面去。 */
+      p.treatsFilePackagesAsDirectories = NO;
+      p.prompt = @"选择";
+      if (message) p.message = [NSString stringWithUTF8String:message];
+      if ([p runModal] == NSModalResponseOK && p.URL.path.length > 0) {
+        snprintf(buf, 4096, "%s", p.URL.path.UTF8String);
+      }
+    }
+    dispatch_semaphore_signal(sem);
+  });
+  dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+  int ok = (buf[0] != 0);
+  if (ok) snprintf(out, (size_t)cap, "%s", buf);
+  free(buf);
+  return ok;
+}
+
 void poc_live_request_restart(const char *cmd) {
   if (!cmd || !*cmd) return;
   snprintf(g_pending_cmd, sizeof(g_pending_cmd), "%s", cmd);

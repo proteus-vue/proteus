@@ -12,7 +12,17 @@
 //   两处都能改状态必然漂移）；「关于」只放**常量事实**（应用标识 / 设置文件位置 / 快捷键），
 //   不摆假的运行时版本号。
 import { computed, onMounted, ref } from 'vue'
-import { getSettings, hasBridge, listDevices, probeTool, saveSettings, type DeviceInfo } from './bridge'
+import {
+  detectTools,
+  getSettings,
+  hasBridge,
+  listDevices,
+  pickTool,
+  probeTool,
+  saveSettings,
+  type DeviceInfo,
+  type ToolCandidate,
+} from './bridge'
 import { pushToast } from './toast'
 
 type Cat = 'env' | 'device' | 'about'
@@ -30,6 +40,8 @@ const xcodeMsg = ref<{ ok: boolean; text: string } | null>(null)
 const adbMsg = ref<{ ok: boolean; text: string } | null>(null)
 const busy = ref(false)
 const devices = ref<DeviceInfo[]>([])
+const xcands = ref<ToolCandidate[]>([])
+const acands = ref<ToolCandidate[]>([])
 
 const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '')
 
@@ -41,10 +53,49 @@ onMounted(async () => {
     adb.value = s.adb ?? ''
     port.value = s.ios_port ?? 9001
     devices.value = await listDevices()
+    /* 自动检测（决策 #1268）：先摆出"点一下就用"的候选，手输只是兜底 */
+    const det = await detectTools()
+    xcands.value = det.xcode
+    acands.value = det.adb
+    // 当前设置为空时，直接把唯一候选填进去——"零输入"也能用
+    if (!xcode.value && det.xcode.length === 1) useCandidate('xcode', det.xcode[0])
+    if (!adb.value && det.adb.length === 1) useCandidate('adb', det.adb[0])
   } catch (e) {
     pushToast(String((e as Error)?.message ?? e), 'err')
   }
 })
+
+/** 点候选：填进输入框 + 版本立刻可见（不用再点"检测"） */
+function useCandidate(kind: 'xcode' | 'adb', c: ToolCandidate) {
+  const box = kind === 'xcode' ? xcodeMsg : adbMsg
+  if (kind === 'xcode') xcode.value = c.path
+  else adb.value = c.path
+  box.value = c.version
+    ? { ok: true, text: c.version }
+    : { ok: false, text: '这个路径存在，但版本探测失败（可能不是完整的 Xcode.app）' }
+}
+
+/** 打开系统面板选路径（决策 #1268：不让人手打长路径） */
+async function browse(kind: 'xcode' | 'adb') {
+  busy.value = true
+  try {
+    const p = await pickTool(kind)
+    if (!p) return // 取消：**什么都不改**
+    if (kind === 'xcode') xcode.value = p
+    else adb.value = p
+    await check(kind)
+  } catch (e) {
+    pushToast(String((e as Error)?.message ?? e), 'err')
+  } finally {
+    busy.value = false
+  }
+}
+
+/** 路径太长时只显示尾部两段（一眼能认出是哪个卷的哪个 Xcode） */
+function shortPath(p: string) {
+  const parts = p.split('/').filter(Boolean)
+  return parts.slice(-2).join('/')
+}
 
 async function check(kind: 'xcode' | 'adb') {
   const p = kind === 'xcode' ? xcode.value : adb.value
@@ -100,18 +151,39 @@ async function save() {
       <section v-if="cat === 'env'">
         <h2 class="sethead">开发环境</h2>
         <p class="setlead">
-          路径**不猜默认值**——Xcode 可以装在任意磁盘。留空则用系统默认（<code>xcode-select</code> / PATH）。
+          一般<b>不用手输</b>：下面自动列出这台机器上找到的 Xcode / adb，点一下即可；找不到再点「浏览…」。
+          留空则用系统默认（<code>xcode-select</code> / PATH）。
         </p>
 
         <div class="setfield">
+          <label>已检测到</label>
+          <div class="setcands" id="xCands">
+            <button
+              v-for="c in xcands"
+              :key="c.path"
+              class="setcand"
+              :class="{ on: xcode === c.path }"
+              :data-cand="c.path"
+              :title="c.path"
+              @click="useCandidate('xcode', c)"
+            >
+              <span class="cpath">{{ shortPath(c.path) }}</span>
+              <span class="cver">{{ c.version ?? '版本未知' }}</span>
+            </button>
+            <p v-if="!xcands.length" class="setlead">没找到 Xcode —— 点下面的「浏览…」选一个</p>
+          </div>
+        </div>
+
+        <div class="setfield">
           <label for="setXcode">Xcode 路径</label>
-          <div class="setrow">
+          <div class="setrow three">
             <input
               id="setXcode"
               v-model="xcode"
               spellcheck="false"
               placeholder="/Volumes/…/Xcode.app（本体，不是 Contents/Developer）"
             />
+            <button class="setbtn" id="browseXcode" :disabled="busy" @click="browse('xcode')">浏览…</button>
             <button class="setbtn" id="probeXcode" :disabled="busy" @click="check('xcode')">检测</button>
           </div>
           <p v-if="xcodeMsg" class="setmsg" :class="xcodeMsg.ok ? 'okmsg' : 'errmsg'" id="xcodeMsg">
@@ -120,9 +192,29 @@ async function save() {
         </div>
 
         <div class="setfield">
+          <label>已检测到（adb）</label>
+          <div class="setcands" id="aCands">
+            <button
+              v-for="c in acands"
+              :key="c.path"
+              class="setcand"
+              :class="{ on: adb === c.path }"
+              :data-cand="c.path"
+              :title="c.path"
+              @click="useCandidate('adb', c)"
+            >
+              <span class="cpath">{{ c.path }}</span>
+              <span class="cver">{{ c.version ?? '版本未知' }}</span>
+            </button>
+            <p v-if="!acands.length" class="setlead">PATH 里没找到 adb —— 点「浏览…」选一个</p>
+          </div>
+        </div>
+
+        <div class="setfield">
           <label for="setAdb">adb 路径</label>
-          <div class="setrow">
+          <div class="setrow three">
             <input id="setAdb" v-model="adb" spellcheck="false" placeholder="留空 = 走 PATH（/opt/homebrew/bin 等）" />
+            <button class="setbtn" id="browseAdb" :disabled="busy" @click="browse('adb')">浏览…</button>
             <button class="setbtn" id="probeAdb" :disabled="busy" @click="check('adb')">检测</button>
           </div>
           <p v-if="adbMsg" class="setmsg" :class="adbMsg.ok ? 'okmsg' : 'errmsg'" id="adbMsg">

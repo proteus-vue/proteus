@@ -9,6 +9,7 @@
 //   （identifier 与 tauri.conf 一致；不往仓库里写，避免不同开发者互相覆盖）。
 // 【怎么用】启动时 `load_and_apply()`：设 `DEVELOPER_DIR`（给 xcrun/xcodebuild 用）、缓存 adb 路径；
 //   保存后立即生效（下一次 spawn 就用新值），不需要重启应用。
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
@@ -26,6 +27,100 @@ pub struct Settings {
 }
 
 static CURRENT: Mutex<Option<Settings>> = Mutex::new(None);
+
+extern "C" {
+    /// 原生选路径面板（实现见 native/embed_view.m）；1 = 选中
+    fn poc_pick_path(message: *const c_char, out: *mut c_char, cap: c_int) -> c_int;
+}
+
+/// 一个候选（路径 + 版本）；版本 `None` = 路径存在但探测失败
+#[derive(Serialize, Clone)]
+pub struct Candidate {
+    pub path: String,
+    pub version: Option<String>,
+}
+
+/// 自动找 Xcode：Spotlight（`mdfind`）能跨**所有卷**，再补 `xcode-select -p` 推导的那一个。
+/// ★不写死 `/Applications`：本机 Xcode 就在 `/Volumes/data1/...`，写死等于没有。
+pub fn detect_xcodes() -> Vec<Candidate> {
+    let mut paths: Vec<String> = Vec::new();
+    if let Ok(out) = Command::new("mdfind")
+        .arg("kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'")
+        .output()
+    {
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            let p = line.trim();
+            // Spotlight 会给到 `.app` 与内部 bundle；只留 .app 本身
+            if p.ends_with(".app") {
+                paths.push(p.to_string());
+            }
+        }
+    }
+    if let Ok(out) = Command::new("xcode-select").arg("-p").output() {
+        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if let Some(app) = p.strip_suffix("/Contents/Developer") {
+            paths.push(app.to_string());
+        }
+    }
+    dedupe_existing(paths)
+        .into_iter()
+        .map(|path| {
+            let version = probe_xcode(&path).ok();
+            Candidate { path, version }
+        })
+        .collect()
+}
+
+/// 自动找 adb：PATH 里所有 + homebrew 两个常见前缀。
+pub fn detect_adbs() -> Vec<Candidate> {
+    let mut paths: Vec<String> = Vec::new();
+    if let Ok(out) = Command::new("which").arg("-a").arg("adb").output() {
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            paths.push(line.trim().to_string());
+        }
+    }
+    paths.push("/opt/homebrew/bin/adb".into());
+    paths.push("/usr/local/bin/adb".into());
+    dedupe_existing(paths)
+        .into_iter()
+        .map(|path| {
+            let version = probe_adb(&path).ok();
+            Candidate { path, version }
+        })
+        .collect()
+}
+
+fn dedupe_existing(paths: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in paths {
+        let p = p.trim().to_string();
+        if p.is_empty() || !std::path::Path::new(&p).exists() {
+            continue;
+        }
+        if !out.iter().any(|x| *x == p) {
+            out.push(p);
+        }
+    }
+    out.sort();
+    out
+}
+
+/// 打开系统面板选一个路径（`.app` 或可执行文件）。返回 None = 用户取消。
+pub fn pick_path(message: &str) -> Option<String> {
+    let msg = CString::new(message).ok()?;
+    let mut buf = [0i8; 4096];
+    let ok = unsafe { poc_pick_path(msg.as_ptr(), buf.as_mut_ptr(), buf.len() as c_int) };
+    if ok == 0 {
+        return None;
+    }
+    let s = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().to_string();
+    let s = s.trim_end_matches('/').to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
 
 fn path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
@@ -176,4 +271,52 @@ pub fn probe(kind: &str, path_or_empty: &str) -> ProbeResult {
         Ok(detail) => ProbeResult { ok: true, detail },
         Err(detail) => ProbeResult { ok: false, detail },
     }
+}
+
+/// 一次探测返回两边的候选（给设置页顶部那排"点一下就用"的按钮）。
+#[derive(Serialize)]
+pub struct Detected {
+    pub xcode: Vec<Candidate>,
+    pub adb: Vec<Candidate>,
+}
+
+/// 自动检测（决策 #1268）：让开发者**不用手打路径**。
+/// ★阻塞（mdfind / which / 每个候选跑一次 version）⇒ 必须下到 blocking 线程池。
+#[tauri::command]
+pub async fn detect_tools() -> Detected {
+    tauri::async_runtime::spawn_blocking(|| Detected {
+        xcode: detect_xcodes(),
+        adb: detect_adbs(),
+    })
+    .await
+    .unwrap_or(Detected { xcode: vec![], adb: vec![] })
+}
+
+/// 打开系统面板选路径（决策 #1268）。返回 `None` = 用户取消。
+/// ★`runModal` 会一直阻塞到用户操作 ⇒ 同样下 blocking 线程，别占 IPC 线程。
+#[tauri::command]
+pub async fn pick_tool(kind: String) -> Result<Option<String>, String> {
+    let msg = if kind == "xcode" { "选择 Xcode.app" } else { "选择 adb 可执行文件" };
+    tauri::async_runtime::spawn_blocking(move || pick_path(msg))
+        .await
+        .map_err(|e| format!("选择面板异常：{e}"))
+}
+
+/* ── 三个设置命令（决策 #1268：从 main.rs 收进来，main.rs 只留注册）─────── */
+#[tauri::command(rename = "get_settings")]
+pub fn get_settings_cmd() -> Settings {
+    current()
+}
+
+#[tauri::command(rename = "save_settings")]
+pub fn save_settings_cmd(s: Settings) -> Result<(), String> {
+    save(s)
+}
+
+/// 探测某个路径是否可用（"检测"按钮）：返回 {ok, detail}
+#[tauri::command]
+pub async fn probe_tool(kind: String, path: String) -> ProbeResult {
+    tauri::async_runtime::spawn_blocking(move || probe(&kind, &path))
+        .await
+        .unwrap_or(ProbeResult { ok: false, detail: "探测线程异常".into() })
 }

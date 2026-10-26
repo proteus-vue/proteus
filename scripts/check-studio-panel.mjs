@@ -889,6 +889,21 @@ const checks = [
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
   ],
+  // ㊷ 低门槛：点候选即用 / 浏览… 走系统面板 / 取消不改（决策 #1268）
+  [
+    `㊷ 路径点选：候选 Xcode ${set.init.xCands.length} 条（首条「${set.init.xCands[0]?.ver ?? '—'}」）· adb ${set.init.aCands} 条（自动填 ${set.init.adb ? '是' : '否'}）· 点首条 ⇒ 值=「${set.picked.value.split('/').pop()}」版本=「${set.picked.msg?.text ?? '—'}」额外探测 ${set.picked.extraProbes} 次（应 0）· 浏览 ⇒ ${JSON.stringify(set.pickArgs[0])} 值=「${String(set.browsed).split('/').pop()}」· 取消后 ${String(set.afterCancel).split('/').pop()}（应不变）`,
+    set.init.xCands.length === 2 &&
+      String(set.init.xCands[0]?.ver ?? '').includes('Xcode') &&
+      set.init.aCands === 1 &&
+      set.init.adb === '/opt/homebrew/bin/adb' &&
+      set.picked.value === '/Volumes/data1/work/office-applications/Xcode.app' &&
+      set.picked.msg?.ok === true &&
+      String(set.picked.msg?.text ?? '').includes('Xcode') &&
+      set.picked.extraProbes === 0 &&
+      set.pickArgs[0]?.kind === 'xcode' &&
+      set.browsed === '/Applications/Xcode-browse.app' &&
+      set.afterCancel === set.beforeCancel,
+  ],
   // ㊶ 设置窗口（独立窗口 + 左侧分类）：入口、导航、检测、保存
   [
     `㊶ 设置窗口：主窗口点设置 ⇒ open_settings×${set.openCalls} · 分类 ${set.nav0.map((n) => n.label).join('/')}（当前 ${set.nav0.find((n) => n.on)?.label ?? '—'}）· 设备只读 ${set.devRows} 行 · 关于含设置路径=${set.aboutText.includes('settings.json')} · 检测 → ${set.probeOk.arg?.kind}/「${String(set.probeOk.arg?.path).split('/').pop()}」⇒「${set.probeOk.msg?.text}」· 路径不存在时 ok=${set.probeBad?.ok}（应 false）· 保存 xcode=「${String(set.saved?.xcode).split('/').pop()}」端口=${set.saved?.ios_port} · 子页 JS 错误 ${set.winErrors}`,

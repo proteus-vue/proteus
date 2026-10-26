@@ -279,3 +279,14 @@ code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:
          border-top:1px solid var(--border-subtle);font-size:var(--fs-xs);color:var(--fg-subtle)}
 kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg-elevated);
     font:var(--fs-xs) / 1.4 ui-monospace, Menlo, monospace;color:var(--fg-muted)}
+
+/* ── 自动检测的候选行（决策 #1268）：一行一个，点一下就用，不用手打路径 ─────── */
+.setcands{display:flex;flex-direction:column;gap:2px;margin-bottom:var(--sp3);max-width:560px}
+.setcand{display:grid;grid-template-columns:1fr auto;gap:var(--sp2);align-items:center;
+         padding:6px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+         background:transparent;color:var(--fg);text-align:left;cursor:pointer;font:inherit}
+.setcand:hover{background:var(--bg-overlay)}
+.setcand.on{border-color:var(--accent);background:var(--bg-elevated)}
+.cpath{font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cver{font-size:var(--fs-xs);color:var(--fg-subtle);font-variant-numeric:tabular-nums}
+.setrow.three{grid-template-columns:1fr auto auto}

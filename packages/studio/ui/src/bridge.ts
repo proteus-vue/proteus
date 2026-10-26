@@ -103,6 +103,17 @@ export interface StudioSettings {
 }
 export const getSettings = (): Promise<StudioSettings> => invoke<StudioSettings>('get_settings')
 export const saveSettings = (s: StudioSettings): Promise<void> => invoke<void>('save_settings', { s })
+/** 自动检测到的候选（决策 #1268）：路径 + 版本，点一下就能用 */
+export interface ToolCandidate {
+  path: string
+  version: string | null
+}
+export const detectTools = (): Promise<{ xcode: ToolCandidate[]; adb: ToolCandidate[] }> =>
+  invoke<{ xcode: ToolCandidate[]; adb: ToolCandidate[] }>('detect_tools')
+/** 打开系统面板选路径；返回 null = 用户取消 */
+export const pickTool = (kind: 'xcode' | 'adb'): Promise<string | null> =>
+  invoke<string | null>('pick_tool', { kind })
+
 /** 打开**独立设置窗口**（决策 #1267）：已开就聚焦，不重复建窗 */
 export const openSettings = (): Promise<void> => invoke<void>('open_settings')
 /** 真跑一次命令验证路径（"检测"按钮）：返回 ok + 命令输出 */

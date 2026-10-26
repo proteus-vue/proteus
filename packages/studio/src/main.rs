@@ -30,7 +30,6 @@ extern "C" {
     fn poc_tick() -> c_int;
     fn poc_set_frame(x: f64, y: f64, w: f64, h: f64);
     fn poc_frames() -> i64;
-    fn poc_late() -> i64;
     fn poc_cpu_pct() -> f64;
     fn poc_dump(path: *const c_char) -> c_int;
     fn poc_live_aus() -> i64;
@@ -45,8 +44,6 @@ extern "C" {
     fn poc_use_bundle_icon();
     /// 写系统剪贴板（NSPasteboard，决策 #1234）
     fn poc_copy_text(s: *const c_char);
-    /// 重启采集会话（决策 #1263：切分辨率）。返回 0 成功 / 1 非实时源 / 2 起线程失败 / 3 解码器打开失败
-    fn poc_live_restart(cmd: *const c_char) -> c_int;
     /// 只**登记**重启请求，由渲染线程在下一拍执行（避免与解码器竞争，决策 #1263）
     fn poc_live_request_restart(cmd: *const c_char);
 }
@@ -742,31 +739,10 @@ fn default_live_source() {
     eprintln!("[studio]   不想等：PROTEUS_IOS_STREAM=0");
 }
 
-/// 设置面板的三个命令（决策 #1266）：读 / 写 / 探测。
-/// ★路径**不猜**：Xcode 可装在任意磁盘（本机就在 /Volumes/data1/...），
-///   默认路径只能作为界面上的提示，不能作为唯一来源。
-/// 设置窗口的入口（实现见 `settings::open_window`）。
+/// 设置窗口入口（实现见 `settings::open_window`）
 #[tauri::command]
 fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
     settings::open_window(&app)
-}
-
-#[tauri::command]
-fn get_settings() -> settings::Settings {
-    settings::current()
-}
-
-#[tauri::command]
-fn save_settings(s: settings::Settings) -> Result<(), String> {
-    settings::save(s)
-}
-
-/// 探测某个路径是否可用（"检测"按钮）：返回 {ok, detail}
-#[tauri::command]
-async fn probe_tool(kind: String, path: String) -> settings::ProbeResult {
-    tauri::async_runtime::spawn_blocking(move || settings::probe(&kind, &path))
-        .await
-        .unwrap_or(settings::ProbeResult { ok: false, detail: "探测线程异常".into() })
 }
 
 fn main() {
@@ -802,9 +778,11 @@ fn main() {
             list_devices,
             select_device,
             open_settings,
-            get_settings,
-            save_settings,
-            probe_tool,
+            settings::get_settings_cmd,
+            settings::save_settings_cmd,
+            settings::probe_tool,
+            settings::detect_tools,
+            settings::pick_tool,
             search_text
         ])
         .setup(|app| {

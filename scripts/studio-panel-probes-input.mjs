@@ -393,16 +393,58 @@ export async function probeSettings(page, baseUrl) {
 
   const init = await win.evaluate(() => ({
     xcode: document.getElementById('setXcode')?.value ?? null,
+    adb: document.getElementById('setAdb')?.value ?? null,
     port: document.getElementById('setPort')?.value ?? null,
     exists: !!document.getElementById('setXcode'),
+    xCands: [...document.querySelectorAll('#xCands .setcand')].map((n) => ({
+      path: n.getAttribute('data-cand'),
+      ver: (n.querySelector('.cver')?.textContent ?? '').trim(),
+    })),
+    aCands: document.querySelectorAll('#aCands .setcand').length,
   }))
+
+  /* ── 低门槛路径（决策 #1268）：点候选 / 浏览… / 取消不改 ────────────────── */
+
+  // ① 点第一条候选 ⇒ 输入框被填上、版本直接可见（不需要再点"检测"）
+  const probesBefore = (await calls()).length
+  await win.evaluate(() => document.querySelector('#xCands .setcand').click())
+  await win.waitForTimeout(250)
+  const picked = {
+    value: await win.evaluate(() => document.getElementById('setXcode')?.value ?? ''),
+    msg: await msg(),
+    extraProbes: (await calls()).length - probesBefore,
+  }
+
+  // ② 浏览… ⇒ 调 pick_tool，回来后填入并自动检测
+  const pickArgs = []
+  await win.evaluate(() => document.getElementById('browseXcode').click())
+  await win.waitForTimeout(400)
+  pickArgs.push(
+    await win.evaluate(
+      () => (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'pick_tool').pop()?.args ?? null,
+    ),
+  )
+  const browsed = await win.evaluate(() => document.getElementById('setXcode')?.value ?? '')
+
+  // ③ 取消 ⇒ **什么都不改**（最容易写错的一条：乐观地先填值）
+  const beforeCancel = await win.evaluate(() => document.getElementById('setXcode')?.value ?? '')
+  await win.evaluate(() => localStorage.setItem('__PICK_CANCEL__', '1'))
+  await win.evaluate(() => document.getElementById('browseXcode').click())
+  await win.waitForTimeout(350)
+  const afterCancel = await win.evaluate(() => document.getElementById('setXcode')?.value ?? '')
+  await win.evaluate(() => localStorage.removeItem('__PICK_CANCEL__'))
 
   const PATH = '/Volumes/data1/work/office-applications/Xcode.app'
   await win.fill('#setXcode', PATH)
   // ★DOM 级点击：独立窗口没有 toast 遮挡，但保持与另一条一致的"测数据流"手法
   await win.evaluate(() => document.getElementById('probeXcode').click())
   await win.waitForTimeout(350)
-  const probeOk = { arg: (await calls()).find((c) => c.cmd === 'probe_tool')?.args ?? null, msg: await msg() }
+  /* ★取**最后一条** probe_tool：上面的"浏览…"也会探一次（那条是 Xcode-browse.app）。
+     用 find() 会拿到更早的那次，断言就成了"在测别人的调用"。 */
+  const probeOk = {
+    arg: (await calls()).filter((c) => c.cmd === 'probe_tool').pop()?.args ?? null,
+    msg: await msg(),
+  }
 
   await win.evaluate(() => localStorage.setItem('__PROBE_FAIL__', '1'))
   await win.evaluate(() => document.getElementById('probeXcode').click())
@@ -417,5 +459,20 @@ export async function probeSettings(page, baseUrl) {
   const winErrors = errs.length
   await win.close()
 
-  return { openCalls, nav0, devRows, aboutText, init, probeOk, probeBad, saved, winErrors }
+  return {
+    openCalls,
+    nav0,
+    devRows,
+    aboutText,
+    init,
+    picked,
+    pickArgs,
+    browsed,
+    beforeCancel,
+    afterCancel,
+    probeOk,
+    probeBad,
+    saved,
+    winErrors,
+  }
 }
