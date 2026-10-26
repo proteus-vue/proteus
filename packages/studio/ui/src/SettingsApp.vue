@@ -8,7 +8,7 @@
 //    而不是把 7 个输入框平铺（上一版就是那样，用户说"太粗糙"）。
 // ③ **点两下就完成**：每组自动列出检测到的候选（带真实版本），点一下即选中；只有一个候选时自动填；
 //    找不到才让用户点「浏览…」（原生 NSOpenPanel）。
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   detectTools,
   getSettings,
@@ -65,6 +65,9 @@ const msgs = ref<Record<string, Msg>>({})
 const port = ref(9001)
 const busy = ref(false)
 const devices = ref<DeviceInfo[]>([])
+/** 首次渲染完成前不落盘：否则"自动填入唯一候选"会被当成用户改动写进设置 */
+const hydrated = ref(false)
+const savedNote = ref('')
 
 onMounted(async () => {
   if (!hasBridge()) return
@@ -84,8 +87,36 @@ onMounted(async () => {
     }
   } catch (e) {
     pushToast(String((e as Error)?.message ?? e), 'err')
+  } finally {
+    await nextTick()
+    hydrated.value = true
   }
 })
+
+/* ── 即时生效（决策 #1273）：**没有"保存"按钮** ─────────────────────────────
+ * Zed / VSCode / JetBrains 的设置页都是"改完就生效"，没有保存按钮 ——
+ * 一个显式的「保存全部改动」既多一次点击，也会让人怀疑"我没点是不是没生效"。
+ * ⇒ 改动后 350ms 防抖落盘；底部只留一行状态提示（保存中/已保存/失败原因）。
+ * ★`hydrated` 守卫：首屏"自动填入唯一候选"不算用户改动，不该顺手写盘。 */
+let saveTimer: number | undefined
+function scheduleSave() {
+  if (!hydrated.value) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = window.setTimeout(() => void commit(), 350)
+}
+
+watch([paths, port], scheduleSave, { deep: true })
+
+async function commit() {
+  try {
+    await saveSettings({ paths: paths.value, ios_port: Number(port.value) || 9001 })
+    savedNote.value = '已保存'
+  } catch (e) {
+    // ★失败必须说出来：静默失败比不保存更糟（用户以为已落盘）
+    savedNote.value = `保存失败：${String((e as Error)?.message ?? e)}`
+    pushToast(savedNote.value, 'err')
+  }
+}
 
 function useCandidate(key: string, c: ToolCandidate) {
   paths.value[key] = c.path
@@ -120,17 +151,6 @@ async function browse(key: string) {
   }
 }
 
-async function save() {
-  busy.value = true
-  try {
-    await saveSettings({ paths: paths.value, ios_port: Number(port.value) || 9001 })
-    pushToast('已保存（立即生效）', 'info')
-  } catch (e) {
-    pushToast(String((e as Error)?.message ?? e), 'err')
-  } finally {
-    busy.value = false
-  }
-}
 
 /* ── 自绘标题栏的拖拽 / 双击缩放（决策 #1271）──────────────────────────────
  * ★不依赖 `data-tauri-drag-region`：那是 window 插件初始化脚本注入的行为，
@@ -249,12 +269,6 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
             </div>
           </div>
 
-          <!-- 保存按钮是**全局**的：任何端的改动都靠它落盘 -->
-          <div class="setfield">
-            <div class="setrow narrow">
-              <button class="setbtn primary" id="setSave" :disabled="busy" @click="save">保存全部改动</button>
-            </div>
-          </div>
         </section>
 
         <!-- ── 设备（只读：切换只在主窗口做）──────────────────────────── -->
@@ -284,7 +298,10 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
           </div>
         </section>
 
-        <footer class="setfoot">{{ category }} · 改动点「保存」后立即生效，不需要重启</footer>
+        <footer class="setfoot">
+          {{ category }} · 改动<b>立即生效</b>，无需保存、无需重启
+          <template v-if="savedNote"> · <span :class="savedNote === '已保存' ? 'okmsg' : 'errmsg'" id="saveNote">{{ savedNote }}</span></template>
+        </footer>
       </main>
     </div>
   </div>

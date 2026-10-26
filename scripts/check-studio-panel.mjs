@@ -908,7 +908,7 @@ const checks = [
   ],
   // ㊷ 设置页：按端分组（每端只显示自己那几个工具）+ 点选路径（决策 #1270）
   [
-    `㊷ 按端分组：端页签 ${set.tabs0.map((t) => t.label).join('/')}（当前 ${set.tabs0.find((t) => t.on)?.label ?? '—'}）· Web 的 node 自动填=${set.webNode.value ? '是' : '否'}（版本「${set.webNode.msg}」）· 切到 iOS 后只剩 Xcode 字段=${set.iosFields.hasXcode && !set.iosFields.leakedWebNode}、候选 ${set.iosFields.cands.length} 条 · 点首条 ⇒ 「${String(set.picked.value).split('/').pop()}」版本「${set.picked.msg?.text ?? '—'}」额外探测 ${set.picked.extraProbes} 次（应 0）· 浏览 key=${set.pickArg?.key} · 取消后不变=${set.afterCancel === set.beforeCancel}`,
+    `㊷ 按端分组：端页签 ${set.tabs0.map((t) => t.label).join('/')}（当前 ${set.tabs0.find((t) => t.on)?.label ?? '—'}）· Web 的 node 自动填=${set.webNode.value ? '是' : '否'}（版本「${set.webNode.msg}」）· 切到 iOS 后只剩 Xcode 字段=${set.iosFields.hasXcode && !set.iosFields.leakedWebNode}、候选 ${set.iosFields.cands.length} 条 · 点首条 ⇒ 「${String(set.picked.value).split('/').pop()}」版本「${set.picked.msg?.text ?? '—'}」额外探测 ${set.picked.extraProbes} 次（应 0）· 浏览 key=${set.pickArg?.key} · 取消后不变=${set.afterCancel === set.beforeCancel} · 无保存按钮=${set.noSaveBtn} · 改端口后自动落盘=${set.saved?.ios_port}（提示「${set.saveNote}」）`,
     set.tabs0.length === 5 &&
       set.tabs0.map((t) => t.id).join('/') === 'web/android/ios/harmony/mp' &&
       set.tabs0.find((t) => t.on)?.id === 'web' &&
@@ -923,18 +923,21 @@ const checks = [
       set.picked.extraProbes === 0 &&
       set.pickArg?.key === 'ios.xcode' &&
       set.afterCancel === set.beforeCancel &&
-      String(set.saved?.paths?.['ios.xcode'] ?? '').includes('Xcode-browse.app'),
+      // ★即时生效（决策 #1273）：没有保存按钮，改端口 350ms 后自动落盘
+      set.noSaveBtn === true &&
+      Number(set.saved?.ios_port) === 9100 &&
+      String(set.saved?.paths?.['ios.xcode'] ?? '').includes('Xcode-browse.app') &&
+      set.saveNote === '已保存',
   ],
   // ㊶ 设置窗口：独立窗口入口 + 分类导航 + 设备只读 + 关于
   [
-    `㊶ 设置窗口：主窗口点设置 ⇒ open_settings×${set.openCalls} · 分类 ${set.nav0.map((n) => n.label).join('/')}（当前 ${set.nav0.find((n) => n.on)?.label ?? '—'}）· 设备只读 ${set.devRows} 行 · 关于含设置路径=${set.aboutText.includes('settings.json')} · 保存端口=${set.saved?.ios_port} · 子页 JS 错误 ${set.winErrors}`,
+    `㊶ 设置窗口：主窗口点设置 ⇒ open_settings×${set.openCalls} · 分类 ${set.nav0.map((n) => n.label).join('/')}（当前 ${set.nav0.find((n) => n.on)?.label ?? '—'}）· 设备只读 ${set.devRows} 行 · 关于含设置路径=${set.aboutText.includes('settings.json')} · 子页 JS 错误 ${set.winErrors}`,
     set.openCalls === 1 &&
       set.nav0.length === 3 &&
       set.nav0.map((n) => n.label).join('/') === '开发环境/设备/关于' &&
       set.nav0.find((n) => n.on)?.id === 'env' &&
       set.devRows === 3 &&
       set.aboutText.includes('settings.json') &&
-      Number(set.saved?.ios_port) === 9001 &&
       set.winErrors === 0,
   ],
   // ㊵ 设备管理：列表 + 切换（含"未授权不许点"和"失败不改状态"）

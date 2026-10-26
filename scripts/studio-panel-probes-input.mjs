@@ -471,10 +471,17 @@ export async function probeSettings(page, baseUrl) {
   const afterCancel = await win.evaluate(() => document.getElementById('set-ios.xcode')?.value ?? '')
   await win.evaluate(() => localStorage.removeItem('__PICK_CANCEL__'))
 
-  // ⑥ 保存：paths 里应带上点选的路径
-  await win.evaluate(() => document.getElementById('setSave').click())
-  await win.waitForTimeout(350)
+  // ⑥ **没有保存按钮**（决策 #1273）：改完 350ms 防抖自动落盘。
+  //   这里改端口，然后等防抖，断言 save_settings 收到新端口 + 前面点选的路径。
+  const noSaveBtn = await win.evaluate(() => !document.getElementById('setSave'))
+  await win.evaluate(() => {
+    const el = document.getElementById('setPort')
+    el.value = '9100'
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await win.waitForTimeout(650)
   const saved = (await calls()).filter((c) => c.cmd === 'save_settings').pop()?.args?.s ?? null
+  const saveNote = await win.evaluate(() => document.getElementById('saveNote')?.textContent?.trim() ?? '')
 
   // ⑦ 设备页只读 / 关于页常量
   await win.evaluate(() => document.querySelector('#setNav [data-cat="device"]').click())
@@ -488,6 +495,8 @@ export async function probeSettings(page, baseUrl) {
   await win.close()
 
   return {
+    noSaveBtn,
+    saveNote,
     portOnIos,
     portOnWeb,
     dragCmd,
