@@ -103,9 +103,10 @@ fn parse_devices(raw: &str) -> Vec<(String, String, String)> {
 ///   `idevice_id -l` 只列当前 USB 在线的，看不到离线。
 /// 【必须带 DEVELOPER_DIR】用配置里的 Xcode（决策 #1266/#1268），否则 xcrun 找不到工具。
 fn ios_devices() -> Vec<(String, String, String, bool)> {
-    let dev_dir = crate::settings::current()
-        .path("ios.xcode")
-        .map(crate::settings::developer_dir);
+    /* ★Xcode 路径按三级回落（决策 #1275）：设置里填的 → `xcode-select -p` → 自动探测。
+       只认设置的话，**没配过的人会永远看不到 iOS 设备**（而这正是"我明明连着"的另一半原因：
+       `xcrun` 找不到 xctrace 时是**静默失败**的，不是报错）。 */
+    let dev_dir = xcode_developer_dir();
     let mut c = Command::new("/usr/bin/xcrun");
     c.args(["xctrace", "list", "devices"]);
     if let Some(d) = dev_dir {
@@ -148,6 +149,57 @@ fn ios_devices() -> Vec<(String, String, String, bool)> {
         v.push((name, version, udid, online));
     }
     v
+}
+
+/// 这个 `DEVELOPER_DIR` 到底能不能列 iOS 设备？
+/// ★不能只看"路径存在"：本机有两套 Xcode，其中 14.2 那套跑 `xctrace list devices` **输出为空**，
+///   而 26.5 那套正常。按"第一个候选"取会稳定挑到坏的那套 ⇒ **必须真跑一次看结果**。
+fn xctrace_works(dev: &str) -> bool {
+    Command::new("/usr/bin/xcrun")
+        .args(["xctrace", "list", "devices"])
+        .env("DEVELOPER_DIR", dev)
+        .output()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+/// 解析可用的 `DEVELOPER_DIR`：设置 → `xcode-select -p` → 自动探测（逐个验，取第一个真的能用的）。
+/// 结果**缓存**：每次 `list()` 都跑 xcrun 太贵（一次 ~1s）。
+fn xcode_developer_dir() -> Option<String> {
+    if let Some(p) = crate::settings::current().path("ios.xcode") {
+        let d = crate::settings::developer_dir(p);
+        if xctrace_works(&d) {
+            return Some(d);
+        }
+        // 设置里填的那套不能用 ⇒ 继续往下找，但要在界面上说得清（见 DeviceSwitcher 的提示）
+        eprintln!("[studio] 设置里的 Xcode 无法列设备：{d} ⇒ 回落到自动探测");
+    }
+    static CACHE: std::sync::Mutex<Option<Option<String>>> = std::sync::Mutex::new(None);
+    if let Ok(g) = CACHE.lock() {
+        if let Some(v) = g.as_ref() {
+            return v.clone();
+        }
+    }
+    let mut found: Option<String> = None;
+    if let Ok(out) = Command::new("xcode-select").arg("-p").output() {
+        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if p.contains(".app/Contents/Developer") && xctrace_works(&p) {
+            found = Some(p);
+        }
+    }
+    if found.is_none() {
+        for c in crate::settings::detect("ios.xcode") {
+            let d = crate::settings::developer_dir(&c.path);
+            if xctrace_works(&d) {
+                found = Some(d);
+                break;
+            }
+        }
+    }
+    if let Ok(mut g) = CACHE.lock() {
+        *g = Some(found.clone());
+    }
+    found
 }
 
 /// 列设备。`size` 只对 `state == device` 的查（离线/未授权的 adb shell 会挂）。

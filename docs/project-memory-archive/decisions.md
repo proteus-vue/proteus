@@ -15015,3 +15015,19 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ① iPhone 用 USB 连接并在手机上点"信任此电脑"（当前 `xctrace` 显示它 **Offline**）；
     ② 把 `hosts/ios/ProteusHost` 装上手机、从控制中心开始直播。
     另外 iOS **没有触控回传**（只有下行），滑动/点击这一版做不到。
+
+1275. **iOS 枚举的 Xcode 必须"验证后使用"（本机两套 Xcode，其中一套跑 xctrace 是空输出）**（2026-10-26 · 修 #1274 的回落逻辑）:
+  - **现象**：#1274 之后设备面板仍只有 `Android` 一组，iOS 一台都没列出来。
+  - **取证**：`xcrun xctrace list devices` 依赖 `DEVELOPER_DIR`。未配置时会走 `xcode-select -p`（指向
+    **CommandLineTools**，没有 xctrace）⇒ 命令失败、`ios_devices()` **静默返回空**。
+  - **第二个坑（更隐蔽）**：改成"回落到自动探测的第一个 Xcode"后仍然空——本机有两套 Xcode：
+    `/Volumes/data1/applications/Xcode.app`（14.2）跑 `xctrace list devices` **输出为空**；
+    `/Volumes/data1/work/office-applications/Xcode.app`（26.5）正常。按排序取第一个**稳定挑到坏的那套**。
+  - **修**：`xcode_developer_dir()` 按 设置 → `xcode-select -p` → 自动探测 **逐个真跑一次 `xctrace list devices`**，
+    取第一个"有输出"的；结果**缓存**（一次探测 ~1s，不能每次 `list()` 都跑）。
+    设置里填的 Xcode 若不可用**不静默忽略**，打一行日志并继续回落。
+  - **界面兜底**：iOS 一台都没列到时，设备面板显示一行
+    「iOS：没列出设备 —— 检查设置里的 Xcode 路径，以及手机是否已信任此电脑」。
+    ★这条很重要：`xcrun` 找不到工具时是**静默失败**的（退出码非零但不报错给人看）。
+  - **教训**："路径存在" ≠ "工具可用"。凡是要靠外部工具产出的数据，**必须真跑一次看输出**，
+    否则挑选逻辑会在"有多个版本、其中一个是坏的"这种真实环境里稳定选错。

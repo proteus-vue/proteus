@@ -84,6 +84,10 @@ onMounted(refresh)
         </button>
       </template>
       <div v-if="!devices.length" class="dnone">没有检测到设备（插上 USB 并允许「USB 调试」）</div>
+      <!-- iOS 一台都没列到 ⇒ 大概率是 xcrun 找不到 Xcode（它是**静默失败**的），把线索说出来 -->
+      <div v-else-if="!groups.some((g) => g.platform === 'ios')" class="dnone">
+        iOS：没列出设备 —— 检查「设置 → 开发环境 → iOS」的 Xcode 路径，以及手机是否已信任此电脑
+      </div>
       <button class="drefresh" id="devRefresh" @click="refresh">刷新设备列表</button>
     </div>
     <template #note>
