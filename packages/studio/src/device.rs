@@ -26,7 +26,8 @@ pub struct DeviceInfo {
 
 /// 带串号的 adb 调用。**串号为 None 只在"列出设备"这种全局命令上允许**。
 pub fn adb(serial: Option<&str>, args: &[&str]) -> Option<String> {
-    let mut c = Command::new("adb");
+    /* ★二进制路径来自设置（决策 #1266）：不写死 "adb"，也不假设它在哪个 PATH 里 */
+    let mut c = Command::new(crate::settings::adb_bin());
     if let Some(s) = serial {
         c.args(["-s", s]);
     }

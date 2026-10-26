@@ -7,6 +7,7 @@ import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
 import DeviceSwitcher from './panels/DeviceSwitcher.vue'
+import SettingsPanel from './panels/SettingsPanel.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
@@ -610,6 +611,7 @@ const hud = computed(() => {
       <PipelinePanel :s="stats" />
       <RuntimePanel :s="stats" />
       <InspectorPanel />
+      <SettingsPanel />
     </div>
 
     <div class="status">

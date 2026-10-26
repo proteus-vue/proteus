@@ -14834,3 +14834,26 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **拆文件（又一次触线）**：`check-studio-panel.mjs` 1000 行 → 抽出 `studio-panel-langext.mjs`（语言覆盖表 ⑳）。
   - **诚实边界**：不做手动重连、不做 Wi-Fi `adb connect` 配对、不记忆"每台设备各自的画质档"；
     切设备会黑几百毫秒（重启会话的代价）；设备列表不自动轮询（要按"刷新"）。
+
+1266. **开发环境设置面板：IDE 路径由人填，不猜默认安装路径 · 判据 61（㊶）**（2026-10-26 · 用户「你按默认 Xcode 路径了，我的在 /Volumes/data1/…，要做设置面板」）:
+  - **用户指出的错**：我探 iOS 设备时用 `xcode-select -p`（指到 **CommandLineTools**）+ 扫 `/Applications/Xcode*.app`
+    （不存在）⇒ 结论"这台机器没有 Xcode"。而它其实在 `/Volumes/data1/work/office-applications/Xcode.app`。
+    **根因是"按默认路径猜"**，不是环境缺东西。
+  - **修**：新增 `src/settings.rs` + 右栏「开发环境」面板：
+    · 可配 **Xcode 路径 / adb 路径 / iOS 推流端口**；
+    · 存 `~/Library/Application Support/dev.proteus.studio.shell/settings.json`（不写仓库）；
+    · 启动时 `load_and_apply()`（**必须在所有子进程之前**）设 `DEVELOPER_DIR` 并缓存 adb 路径；
+    · 保存**立即生效**（下一次 spawn 就用新值），不需要重启；
+    · 留空 = 走系统默认（`xcode-select` / PATH）——不是"必须填"。
+  - **"检测"必须真的跑命令**：`<Xcode>/Contents/Developer/usr/bin/xcodebuild -version` 与 `adb version`，
+    把**输出**显示出来（不是"看起来像对的"）。路径不存在时显示"…/xcodebuild 不存在 —— 请选 Xcode.app 本体"。
+  - **验证（假 HOME，不碰真实配置）**：写 settings.json ⇒ 启动日志 `DEVELOPER_DIR = /Volumes/data1/…/Xcode.app/Contents/Developer`。
+    再用该 Xcode 跑 `xcrun xctrace list devices` ⇒ 列出 **`yunlai的iPhone (26.7.2)`（Devices Offline）**。
+    ⇒ **这台机器确实认识那台 iPhone，只是当前离线**；上次说"没有 iOS 设备"是被默认路径骗了。
+  - **判据 61（㊶）**：初始值来自桩（不是前端硬编码）· 点检测把**用户填的那串路径原样**送 `probe_tool` ·
+    失败时 `ok=false` 且文案含"不存在"（**不能都显示成功**）· 保存把填的值原样交 `save_settings`。
+  - **测试侧踩坑**：toast 是 `fixed` 浮层，会**挡住**右栏底部面板里的按钮；`click({force:true})` 也没用
+    （只跳检查，事件仍落在最上层元素）⇒ 改用 `page.evaluate(() => el.click())` 走 DOM 级点击。
+    **测数据流就用 DOM 点击，测命中才用鼠标点击**——两件事别混。
+  - **下一步（已具备条件）**：iOS 设备列表可以按 `xcrun xctrace list devices`（用配置的 DEVELOPER_DIR）
+    拿 UDID/机型/在线状态，把 iOS 放进设备面板并标"离线/等待推流"。

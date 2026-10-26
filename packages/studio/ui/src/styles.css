@@ -222,3 +222,18 @@ code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:
           border-radius:var(--r-sm);background:transparent;color:var(--fg-muted);
           font-size:var(--fs-xs);cursor:pointer}
 .drefresh:hover{background:var(--bg-overlay);color:var(--fg)}
+
+/* ── 设置面板（决策 #1266）：label 一行、input+按钮一行、结果一行 ───────────── */
+.setgrid{display:grid;grid-template-columns:1fr;gap:2px}
+.setgrid label{font-size:var(--fs-xs);color:var(--fg-subtle);margin-top:var(--sp2)}
+.setrow{display:grid;grid-template-columns:1fr auto;gap:var(--sp2);align-items:center}
+.setrow input{min-width:0;padding:4px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+              background:var(--bg-elevated);color:var(--fg);font:var(--fs-xs) / 1.5 ui-monospace, Menlo, monospace}
+.setrow input:focus{outline:none;border-color:var(--accent)}
+.setbtn{padding:3px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+        background:transparent;color:var(--fg-muted);font-size:var(--fs-xs);cursor:pointer}
+.setbtn:hover:not(:disabled){background:var(--bg-overlay);color:var(--fg)}
+.setbtn:disabled{opacity:.5;cursor:progress}
+.setmsg{margin:2px 0 0;font-size:var(--fs-xs);line-height:1.5;word-break:break-all}
+.okmsg{color:var(--ok)}
+.errmsg{color:var(--danger, #e5484d)}

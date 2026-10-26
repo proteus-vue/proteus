@@ -333,3 +333,53 @@ export async function probeDeviceSwitch(page) {
     failToast,
   }
 }
+
+/**
+ * ㊶ 开发环境设置（决策 #1266）：路径由人填 + 检测真的跑命令 + 保存立即生效。
+ *
+ * 【为什么这条必须有】Xcode 可以装在任意磁盘。任何"按默认路径猜"的实现都会在真实机器上翻车，
+ *   而且**翻车时界面看起来是对的**（输入框里有值、按钮能点）。所以判据要钉住：
+ *   ① 初始值是**桩里的设置**（不是前端硬编码的默认路径）
+ *   ② 点「检测」把**用户填的那串路径**原样送去 probe_tool（不是替换成默认值）
+ *   ③ 检测成功/失败分别显示"命令输出"和"错误"，**不能都显示成功**
+ *   ④ 点「保存」把填的值原样交给 save_settings
+ */
+export async function probeSettings(page) {
+  const calls = () =>
+    page.evaluate(() =>
+      (window.__STUB_CALLS__ || []).filter((c) => ['probe_tool', 'save_settings'].includes(c.cmd)),
+    )
+  const msg = () =>
+    page.evaluate(() => {
+      const n = document.getElementById('xcodeMsg')
+      return n ? { text: n.textContent?.trim() ?? '', ok: n.classList.contains('okmsg') } : null
+    })
+
+  const init = await page.evaluate(() => ({
+    xcode: document.getElementById('setXcode')?.value ?? null,
+    port: document.getElementById('setPort')?.value ?? null,
+    exists: !!document.getElementById('setXcode'),
+  }))
+
+  const PATH = '/Volumes/data1/work/office-applications/Xcode.app'
+  await page.fill('#setXcode', PATH)
+  // ★用 DOM 级点击而不是鼠标事件：toast 是 fixed 浮层，会**挡住**右下角面板里的按钮
+  //   （`force:true` 也没用——它只跳过检查，事件仍落在最上层元素上）。
+  //   这里测的是**数据流**（路径原样送出、结果如实显示），命中测试由 ㉕ 菜单那条覆盖。
+  await page.evaluate(() => document.getElementById('probeXcode').click())
+  await page.waitForTimeout(350)
+  const probeOk = { arg: (await calls()).find((c) => c.cmd === 'probe_tool')?.args ?? null, msg: await msg() }
+
+  // 失败路径：同一个按钮，桩改成"路径不存在"⇒ 必须显示错误、不能显示成功
+  await page.evaluate(() => localStorage.setItem('__PROBE_FAIL__', '1'))
+  await page.evaluate(() => document.getElementById('probeXcode').click())
+  await page.waitForTimeout(350)
+  const probeBad = await msg()
+  await page.evaluate(() => localStorage.removeItem('__PROBE_FAIL__'))
+
+  await page.evaluate(() => document.getElementById('setSave').click())
+  await page.waitForTimeout(350)
+  const saved = (await calls()).filter((c) => c.cmd === 'save_settings').pop()?.args?.s ?? null
+
+  return { init, probeOk, probeBad, saved }
+}

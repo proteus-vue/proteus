@@ -95,6 +95,18 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 
+/** 开发环境设置（决策 #1266）：路径由人填，不猜默认值 */
+export interface StudioSettings {
+  xcode: string | null
+  adb: string | null
+  ios_port: number | null
+}
+export const getSettings = (): Promise<StudioSettings> => invoke<StudioSettings>('get_settings')
+export const saveSettings = (s: StudioSettings): Promise<void> => invoke<void>('save_settings', { s })
+/** 真跑一次命令验证路径（"检测"按钮）：返回 ok + 命令输出 */
+export const probeTool = (kind: 'xcode' | 'adb', path: string): Promise<{ ok: boolean; detail: string }> =>
+  invoke<{ ok: boolean; detail: string }>('probe_tool', { kind, path })
+
 /** 设备管理（决策 #1265）：列出所有 adb 设备（`size` 是**物理**像素） */
 export interface DeviceInfo {
   serial: string

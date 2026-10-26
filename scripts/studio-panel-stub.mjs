@@ -28,6 +28,23 @@ export function stubTauri(payload) {
           return payload
         }
         if (cmd === 'set_canvas_rect') return null
+        // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
+        if (cmd === 'get_settings') return { xcode: null, adb: null, ios_port: 9001 }
+        if (cmd === 'save_settings') {
+          window.__STUB_SETTINGS__ = args?.s
+          return null
+        }
+        if (cmd === 'probe_tool') {
+          if (window.localStorage.getItem('__PROBE_FAIL__') === '1')
+            return {
+              ok: false,
+              detail: `${String(args?.path ?? '')}/Contents/Developer/usr/bin/xcodebuild 不存在 —— 请选 Xcode.app 本体的路径`,
+            }
+          return {
+            ok: true,
+            detail: args?.kind === 'xcode' ? 'Xcode 14.2' : 'Android Debug Bridge version 1.0.41',
+          }
+        }
         // 采集档位（决策 #1263）：桩返回"切成了什么"，判据据此断言 IPC 与界面同步
         // 设备管理（决策 #1265）：两台设备，第二台可切；__DEV_FAIL__ 模拟切换失败
         if (cmd === 'list_devices') {

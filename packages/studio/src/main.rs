@@ -22,6 +22,7 @@ mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
 mod capture_preset;
 mod device;
+mod settings;
 mod search;
 
 extern "C" {
@@ -741,8 +742,32 @@ fn default_live_source() {
     eprintln!("[studio]   不想等：PROTEUS_IOS_STREAM=0");
 }
 
+/// 设置面板的三个命令（决策 #1266）：读 / 写 / 探测。
+/// ★路径**不猜**：Xcode 可装在任意磁盘（本机就在 /Volumes/data1/...），
+///   默认路径只能作为界面上的提示，不能作为唯一来源。
+#[tauri::command]
+fn get_settings() -> settings::Settings {
+    settings::current()
+}
+
+#[tauri::command]
+fn save_settings(s: settings::Settings) -> Result<(), String> {
+    settings::save(s)
+}
+
+/// 探测某个路径是否可用（"检测"按钮）：返回 {ok, detail}
+#[tauri::command]
+async fn probe_tool(kind: String, path: String) -> settings::ProbeResult {
+    tauri::async_runtime::spawn_blocking(move || settings::probe(&kind, &path))
+        .await
+        .unwrap_or(settings::ProbeResult { ok: false, detail: "探测线程异常".into() })
+}
+
 fn main() {
     ensure_tool_path();
+    /* ★读设置要在**所有子进程之前**（决策 #1266）：DEVELOPER_DIR 决定 xcrun 用哪个 Xcode，
+       而 adb 路径决定设备探测能不能跑。放后面就晚了——那正是"默认路径"假设的来源。 */
+    settings::load_and_apply();
     default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
@@ -770,6 +795,9 @@ fn main() {
             capture_preset,
             list_devices,
             select_device,
+            get_settings,
+            save_settings,
+            probe_tool,
             search_text
         ])
         .setup(|app| {

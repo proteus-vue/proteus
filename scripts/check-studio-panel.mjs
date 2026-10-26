@@ -28,7 +28,7 @@ import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
 import { probeCodeExtras, probeHole, probeMenu, probePan, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
-import { probeCapPreset, probeDeviceSwitch, probeGesture, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
+import { probeCapPreset, probeDeviceSwitch, probeGesture, probeSettings, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
@@ -386,6 +386,8 @@ const hole = await probeHole(page)
 const cap = await probeCapPreset(page)
 // ── ㊵ 设备管理：采集段在 probeDeviceSwitch()（决策 #1265）
 const dev = await probeDeviceSwitch(page)
+// ── ㊶ 开发环境设置：采集段在 probeSettings()（决策 #1266）
+const set = await probeSettings(page)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
@@ -886,6 +888,20 @@ const checks = [
       box3.w > box1.w * 1.15 &&
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
+  ],
+  // ㊶ 开发环境设置：路径由人填、检测真的跑、失败不许显示成功、保存原样提交
+  [
+    `㊶ 开发环境设置：初始 xcode=「${set.init.xcode}」端口=${set.init.port} · 检测 → ${set.probeOk.arg?.kind}/「${String(set.probeOk.arg?.path).split('/').pop()}」结果「${set.probeOk.msg?.text}」· 路径不存在时 ok=${set.probeBad?.ok}（应 false）· 保存 xcode=「${String(set.saved?.xcode).split('/').pop()}」端口=${set.saved?.ios_port}`,
+    set.init.exists &&
+      (set.init.xcode ?? '') === '' &&
+      set.probeOk.arg?.kind === 'xcode' &&
+      set.probeOk.arg?.path === '/Volumes/data1/work/office-applications/Xcode.app' &&
+      set.probeOk.msg?.ok === true &&
+      set.probeOk.msg?.text.includes('Xcode') &&
+      set.probeBad?.ok === false &&
+      set.probeBad?.text.includes('不存在') &&
+      set.saved?.xcode === '/Volumes/data1/work/office-applications/Xcode.app' &&
+      Number(set.saved?.ios_port) === 9001,
   ],
   // ㊵ 设备管理：列表 + 切换（含"未授权不许点"和"失败不改状态"）
   [
