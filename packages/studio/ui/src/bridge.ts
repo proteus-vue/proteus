@@ -95,6 +95,20 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 
+/** 设备管理（决策 #1265）：列出所有 adb 设备（`size` 是**物理**像素） */
+export interface DeviceInfo {
+  serial: string
+  state: string
+  model: string
+  size: string | null
+  current: boolean
+}
+export const listDevices = (): Promise<DeviceInfo[]> => invoke<DeviceInfo[]>('list_devices')
+
+/** 切换当前设备：改串号/尺寸 → 用**当前画质档**重建采集命令 → 重启会话 */
+export const selectDevice = (serial: string): Promise<CaptureInfo> =>
+  invoke<CaptureInfo>('select_device', { serial })
+
 /** 采集档位（决策 #1263）：切换会**重启采集会话**（停旧 → 起新 → 重建解码器）。
  *  `standard` = 长边 ≤1920 等比；`sharp` = 设备原生分辨率。 */
 export interface CaptureInfo {

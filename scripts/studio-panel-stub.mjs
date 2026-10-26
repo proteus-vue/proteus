@@ -29,10 +29,25 @@ export function stubTauri(payload) {
         }
         if (cmd === 'set_canvas_rect') return null
         // 采集档位（决策 #1263）：桩返回"切成了什么"，判据据此断言 IPC 与界面同步
+        // 设备管理（决策 #1265）：两台设备，第二台可切；__DEV_FAIL__ 模拟切换失败
+        if (cmd === 'list_devices') {
+          const cur = window.__STUB_DEV_CUR__ || 'd1aaaaaaaa'
+          return [
+            { serial: 'd1aaaaaaaa', state: 'device', model: 'M098FE', size: '1200x2608', current: cur === 'd1aaaaaaaa' },
+            { serial: 'd2bbbbbbbb', state: 'device', model: 'Pixel 9', size: '1080x2424', current: cur === 'd2bbbbbbbb' },
+            { serial: 'd3cccccccc', state: 'unauthorized', model: '—', size: null, current: false },
+          ]
+        }
+        if (cmd === 'select_device') {
+          if (window.localStorage.getItem('__DEV_FAIL__') === '1')
+            throw new Error('设备 d2bbbbbbbb 当前状态是 unauthorized，不能投屏（要先授权/唤醒）')
+          window.__STUB_DEV_CUR__ = args?.serial
+          return { preset: 'standard', width: 1080, height: 2424, mbps: 13 }
+        }
         if (cmd === 'capture_preset') {
           if (window.localStorage.getItem('__CAP_FAIL__') === '1')
             throw new Error('当前画面源不支持切换分辨率（只有 Android / adb 实时投屏可以）')
-          const mbps = { low: 4, high: 20 }[String(args?.preset)] ?? 13
+          const mbps = args?.preset === 'low' ? 4 : 13
           // 分辨率**不变**：这正是 #1264 的重点（改的是码率，不是几何）
           return { preset: args?.preset, width: 884, height: 1920, mbps }
         }

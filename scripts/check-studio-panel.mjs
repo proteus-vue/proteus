@@ -28,11 +28,12 @@ import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
 import { probeCodeExtras, probeHole, probeMenu, probePan, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
-import { probeCapPreset, probeGesture, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
+import { probeCapPreset, probeDeviceSwitch, probeGesture, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
 import { openPanel } from './studio-panel-boot.mjs'
+import { langExtCoverage } from './studio-panel-langext.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -383,6 +384,8 @@ const { panBefore, panSeen, panReset } = await probePan(page, { outPath })
 const hole = await probeHole(page)
 // ── ㊴ 采集档位：采集段在 probeCapPreset()（决策 #1263）
 const cap = await probeCapPreset(page)
+// ── ㊵ 设备管理：采集段在 probeDeviceSwitch()（决策 #1265）
+const dev = await probeDeviceSwitch(page)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
@@ -471,29 +474,8 @@ const objcNum = colOf(tokensObjc, (t) => t === '1')
 const objcComment = colOf(tokensObjc, (t) => t.includes('// note'))
 const objcColors = [objcKw, objcNum, objcComment]
 
-/* ── ⑳ 覆盖表：树里出现的每个扩展名都必须有归属（语言包 or 显式登记为纯文本）──
-   ★这是"防静默掉队"的判据：新增一个 .tsx 文件却没人接语言包时，⑲ 系列不会红
-     （它只测已打开的那几个文件），但 ⑳ 会。基准取 languages.json（与 UI 同一份数据）。 */
-const langMapPath = path.join(STUDIO, 'ui', 'src', 'languages.json')
-const langMap = JSON.parse(fs.readFileSync(langMapPath, 'utf8'))
-const knownExt = new Set([
-  ...Object.keys(langMap.languages ?? {}),
-  ...Object.keys(langMap.plain ?? {}),
-])
-const COVER_ROOTS = ['ui/src', 'src', 'native'] // ★必须与 CodePanel 的 ROOTS 一致
-const seenExt = new Set()
-const walkExt = (dir) => {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, e.name)
-    if (e.isDirectory()) walkExt(full)
-    else {
-      const dot = e.name.lastIndexOf('.')
-      if (dot > 0) seenExt.add(e.name.slice(dot).toLowerCase())
-    }
-  }
-}
-for (const r of COVER_ROOTS) walkExt(path.join(STUDIO, r))
-const missingExt = [...seenExt].filter((e) => !knownExt.has(e)).sort()
+/* ── ⑳ 覆盖表：树里出现的每个扩展名都必须有归属（采集段在 studio-panel-langext.mjs）── */
+const { missing: missingExt, seen: seenExtCount } = langExtCoverage(STUDIO)
 
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
@@ -563,9 +545,7 @@ const checks = [
   ],
   // ⑳ 覆盖表：树里每种扩展名都要有归属，否则新类型会静默掉队
   [
-    `⑳ 覆盖表：树里 ${seenExt.size} 种扩展名（${[...seenExt].sort().join(' ')}）${
-      missingExt.length ? `· 缺登记 ${missingExt.join(' ')}` : '· 全部有归属'
-    }`,
+    `⑳ 覆盖表：树里 ${seenExtCount} 种扩展名 · ${missingExt.length ? '缺失：' + missingExt.join(' ') : '全部有归属'}`,
     missingExt.length === 0,
   ],
   // ⑰ 目录可折叠：收起后里面的文件从可见行里消失（目录行本身还在，才能再展开）
@@ -907,20 +887,28 @@ const checks = [
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
   ],
-  // ㊴ 画质档位：分辨率不变、只改码率；三档循环；失败时标签不许变
+  // ㊵ 设备管理：列表 + 切换（含"未授权不许点"和"失败不改状态"）
+  [
+    `㊵ 设备管理：列表 ${dev.count} 台（当前 ${dev.current0}）→ 点第二台 ${dev.pickedArg} 后当前 ${dev.currentAfter} · 点未授权发 IPC ${dev.deadCalls} 次（应 0）· 失败时当前 ${dev.beforeFail}→${dev.afterFail}（应不变）`,
+    dev.count === 3 &&
+      dev.current0 === 'd1aaaaaaaa' &&
+      dev.pickedArg === 'd2bbbbbbbb' &&
+      dev.currentAfter === 'd2bbbbbbbb' &&
+      dev.deadCalls === 0 &&
+      dev.afterFail === dev.beforeFail &&
+      dev.failToast.includes('unauthorized'),
+  ],
+  // ㊴ 画质档位：分辨率不变、只改码率；两档循环；失败时标签不许变
   [
     `㊴ 画质档位：初始「${cap.before}」→ ${cap.steps.map((x) => `${x.arg}/「${x.label}」`).join(' → ')} · 失败时标签 ${cap.labelBeforeFail}→${cap.failLabel}（应不变）提示「${cap.failToast.slice(0, 20)}」`,
     cap.before === '画质·标准' &&
-      cap.steps.length === 3 &&
-      cap.steps[0].arg === 'high' &&
-      cap.steps[0].label === '画质·高清' &&
-      cap.steps[0].toast.includes('20 Mbps') &&
-      cap.steps[1].arg === 'low' &&
-      cap.steps[1].label === '画质·省流' &&
-      cap.steps[1].toast.includes('4 Mbps') &&
-      cap.steps[2].arg === 'standard' &&
-      cap.steps[2].label === '画质·标准' &&
-      // 三档**分辨率不变**（用户要的就是这个）
+      cap.steps.length === 2 &&
+      cap.steps[0].arg === 'low' &&
+      cap.steps[0].label === '画质·省流' &&
+      cap.steps[0].toast.includes('4 Mbps') &&
+      cap.steps[1].arg === 'standard' &&
+      cap.steps[1].label === '画质·标准' &&
+      // 两档**分辨率不变**（用户要的就是这个）
       cap.steps[0].toast.includes('884×1920') &&
       cap.failLabel === cap.labelBeforeFail &&
       cap.failToast.includes('不支持'),

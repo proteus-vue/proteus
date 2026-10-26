@@ -1,0 +1,73 @@
+<script setup lang="ts">
+// DeviceSwitcher.vue —— 设备管理：列表 + 切换（决策 #1265）
+//
+// 【为什么加在画布边上】"现在投的是哪台"是看画面时最先要确认的事，藏在设置里等于没有。
+// 【为什么点一下会黑一下】切设备 = 换串号 + **重启采集会话**（`screenrecord` 的 `-s`/`--size`
+//   都只在会话开始时生效）。这是诚实的代价：几百毫秒黑屏，换来"真的切过去了"。
+import { onMounted, ref } from 'vue'
+import PanelShell from './PanelShell.vue'
+import { listDevices, selectDevice, hasBridge, type DeviceInfo } from '../bridge'
+import { pushToast } from '../toast'
+
+const devices = ref<DeviceInfo[]>([])
+const busy = ref<string | null>(null)
+
+async function refresh() {
+  if (!hasBridge()) return
+  try {
+    devices.value = await listDevices()
+  } catch (e) {
+    pushToast(String((e as Error)?.message ?? e), 'err')
+  }
+}
+
+async function pick(d: DeviceInfo) {
+  if (d.current || busy.value || d.state !== 'device') return
+  busy.value = d.serial
+  try {
+    const info = await selectDevice(d.serial)
+    await refresh()
+    pushToast(`已切到 ${d.model} · ${info.width}×${info.height} · ${info.mbps} Mbps`, 'info')
+  } catch (e) {
+    // ★失败**不改**当前项：乐观更新会让界面说谎（和画质档位同一条纪律）
+    pushToast(String((e as Error)?.message ?? e), 'err')
+  } finally {
+    busy.value = null
+  }
+}
+
+/** 串号太长：保留头尾，中间省略（同 IDE 的路径省略语汇） */
+function shortSerial(s: string) {
+  return s.length > 16 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s
+}
+
+onMounted(refresh)
+</script>
+
+<template>
+  <PanelShell title="设备">
+    <div class="devlist" id="devList">
+      <button
+        v-for="d in devices"
+        :key="d.serial"
+        class="devrow"
+        :class="{ on: d.current, dead: d.state !== 'device' }"
+        :data-dev="d.serial"
+        :title="`${d.model} · ${d.serial} · ${d.state}${d.size ? ' · ' + d.size : ''}`"
+        :aria-pressed="d.current"
+        @click="pick(d)"
+      >
+        <span class="dot" :class="{ off: d.state !== 'device' }" />
+        <span class="dmodel">{{ d.model }}</span>
+        <span class="dmeta">{{ d.size ?? d.state }} · {{ shortSerial(d.serial) }}</span>
+      </button>
+      <div v-if="!devices.length" class="dnone">没有检测到设备（插上 USB 并允许「USB 调试」）</div>
+      <button class="drefresh" id="devRefresh" @click="refresh">刷新设备列表</button>
+    </div>
+    <template #note>
+      <span>切换设备会重启采集会话（画面黑一下）。机型/尺寸按串号缓存，不会串台。</span>
+    </template>
+  </PanelShell>
+</template>
+
+<!-- 样式在全局 styles.css（.devlist/.devrow）：与 .kv 同理，避免每个面板各写一套 -->

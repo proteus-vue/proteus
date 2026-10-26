@@ -6,6 +6,7 @@ import { capturePreset, deviceSwipe, deviceTap, setCanvasRect } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
+import DeviceSwitcher from './panels/DeviceSwitcher.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
@@ -343,7 +344,6 @@ let touchBusy = false
 const QUALITY = [
   { id: 'low', label: '省流', hint: '4 Mbps —— 带宽紧张/链路抖动时才值得（USB 下换不到帧率）' },
   { id: 'standard', label: '标准', hint: '13 Mbps —— 默认' },
-  { id: 'high', label: '高清', hint: '20 Mbps —— 细节多（照片/视频/密集小字）时压缩痕迹更少' },
 ]
 const qIndex = ref(1)
 const capBusy = ref(false)
@@ -605,6 +605,7 @@ const hud = computed(() => {
     </div>
 
     <div class="side">
+      <DeviceSwitcher />
       <DevicePanel :s="stats" />
       <PipelinePanel :s="stats" />
       <RuntimePanel :s="stats" />

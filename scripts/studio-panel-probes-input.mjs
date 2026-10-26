@@ -226,11 +226,10 @@ export async function probeTapSpace(page) {
 }
 
 /**
- * ㊴ 画质档位（决策 #1264）：**分辨率不变，只改码率**——省流 4 / 标准 13 / 高清 20 Mbps。
+ * ㊴ 画质档位（决策 #1264 / #1265）：**分辨率不变，只改码率**——省流 4 / 标准 13 Mbps。
  *
- * 【钉四件事】① 点一下 → 调 `capture_preset('high')` 且**标签跟着变**（IPC 与界面必须同步）
- *   ② 再点 → 省流 ③ 再点 → 回到标准（三档循环，不是两态开关）
- *   ④ **失败时标签不许变**——乐观更新会让界面说谎：用户以为切了，其实那边报错没切。
+ * 【钉三件事】① 点一下 → 调 `capture_preset('low')` 且**标签跟着变**（IPC 与界面必须同步）
+ *   ② 再点 → 回到标准（两档循环）③ **失败时标签不许变**——乐观更新会让界面说谎。
  * 【为什么还要断分辨率不变】用户的诉求就是"同分辨率下的清晰度"；如果哪天有人把它改成
  *   顺带切分辨率，这条会立刻红。
  */
@@ -248,7 +247,7 @@ export async function probeCapPreset(page) {
   const base = (await calls()).length
   const before = await label()
   const steps = []
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     await page.click('#capChip')
     await page.waitForTimeout(400)
     steps.push({
@@ -268,4 +267,69 @@ export async function probeCapPreset(page) {
   await page.evaluate(() => localStorage.removeItem('__CAP_FAIL__'))
 
   return { before, steps, labelBeforeFail, failLabel, failToast }
+}
+
+/**
+ * ㊵ 设备管理（决策 #1265）：列表 + 切换。
+ *
+ * 【为什么这条重要】切设备牵动三处全局状态（串号 / 物理尺寸 / 是否可注入）并**重启采集会话**。
+ *   桩里放两台可投屏 + 一台未授权，钉四件事：
+ *   ① 列表渲染出三台，当前项只有一台（`aria-pressed=true`）
+ *   ② 点第二台 → 调 `select_device(serial2)`，完成后**当前项换过去**
+ *   ③ 点"未授权"那台 → **不发** IPC（不能对不能投屏的设备发命令）
+ *   ④ 切换失败 → 当前项**不变**（乐观更新会让界面说谎）
+ */
+export async function probeDeviceSwitch(page) {
+  const rows = () => page.evaluate(() =>
+    [...document.querySelectorAll('#devList .devrow')].map((n) => ({
+      serial: n.getAttribute('data-dev'),
+      current: n.getAttribute('aria-pressed') === 'true',
+      dead: n.classList.contains('dead'),
+    })),
+  )
+  const calls = () =>
+    page.evaluate(() =>
+      (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'select_device').map((c) => c.args?.serial),
+    )
+
+  await page.waitForTimeout(400) // 面板 onMounted 拉列表
+  const list0 = await rows()
+  const currentOf = (l) => l.find((r) => r.current)?.serial ?? null
+
+  // ② 切到第二台
+  const base = (await calls()).length
+  await page.click('#devList .devrow[data-dev="d2bbbbbbbb"]')
+  await page.waitForTimeout(500)
+  const afterPick = { arg: (await calls())[base] ?? null, list: await rows() }
+
+  // ③ 点未授权那台：不该发 IPC
+  const base2 = (await calls()).length
+  await page.click('#devList .devrow[data-dev="d3cccccccc"]')
+  await page.waitForTimeout(350)
+  const deadCalls = (await calls()).length - base2
+
+  // ④ 失败路径：当前项必须留在原地
+  await page.evaluate(() => localStorage.setItem('__DEV_FAIL__', '1'))
+  const beforeFail = currentOf(await rows())
+  await page.click('#devList .devrow[data-dev="d1aaaaaaaa"]')
+  await page.waitForTimeout(450)
+  const afterFail = currentOf(await rows())
+  const failToast = await page.evaluate(() =>
+    [...document.querySelectorAll('#toasts .toast')].map((n) => n.textContent?.trim() ?? '').join(' | '),
+  )
+  await page.evaluate(() => {
+    localStorage.removeItem('__DEV_FAIL__')
+    window.__STUB_DEV_CUR__ = 'd1aaaaaaaa' // 复位，别把状态留给后面的判据
+  })
+
+  return {
+    count: list0.length,
+    current0: currentOf(list0),
+    pickedArg: afterPick.arg,
+    currentAfter: currentOf(afterPick.list),
+    deadCalls,
+    beforeFail,
+    afterFail,
+    failToast,
+  }
 }

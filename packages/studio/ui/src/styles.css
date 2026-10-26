@@ -205,3 +205,20 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .sub::before{content:"└ ";color:var(--fg-subtle)}
 code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-sm);
      padding:0 4px;font-size:var(--fs-xs);color:var(--fg-muted)}
+
+/* ── 设备列表（决策 #1265）：一行一台，当前项用强调条标记 ───────────────── */
+.devlist{display:flex;flex-direction:column;gap:2px}
+.devrow{display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:var(--sp2);
+        width:100%;padding:6px var(--sp2);border:0;border-radius:var(--r-sm);background:transparent;
+        color:var(--fg);font:inherit;text-align:left;cursor:pointer;position:relative}
+.devrow:hover{background:var(--bg-overlay)}
+.devrow.on{background:var(--bg-elevated)}
+.devrow.on::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;border-radius:0 2px 2px 0;background:var(--accent)}
+.devrow.dead{opacity:.55;cursor:not-allowed}
+.dmodel{font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dmeta{font-size:var(--fs-xs);color:var(--fg-subtle);font-variant-numeric:tabular-nums}
+.dnone{font-size:var(--fs-xs);color:var(--fg-subtle);padding:4px var(--sp2);line-height:1.6}
+.drefresh{margin-top:var(--sp2);align-self:flex-start;padding:2px var(--sp2);border:1px solid var(--border);
+          border-radius:var(--r-sm);background:transparent;color:var(--fg-muted);
+          font-size:var(--fs-xs);cursor:pointer}
+.drefresh:hover{background:var(--bg-overlay);color:var(--fg)}

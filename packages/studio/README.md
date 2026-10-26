@@ -11,7 +11,7 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **59 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **60 判据**；已接 CI 与 `pnpm verify`） |
 | **真机门禁** | `pnpm run check:studio-live`（真跑 6 秒投屏，断言**出帧>0 且解码器零错误、AU 零脏帧**；再跑一段"中途切档位"验证重启采集。无设备/无打包产物时说明原因并跳过）★**它跑的是 `build-app` 里的二进制 ⇒ 改完代码必须先打包再跑**，否则测的是旧包 |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
@@ -27,7 +27,8 @@
 | 真机画面能通过我们的管线渲染进画布 | `results/canvas-device.png`（从 FBO 读回，1280×720，内容是**手机设置页**） |
 | HTML 叠加层与原生画布共存（B2 的结论在产品布局里成立） | 十字线/边框/标签都画在 WebView 层 |
 | **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备物理像素**（`dev_w/h`，不是码流尺寸——码流按长边≤1920 缩过，两者差 ~0.74 倍），拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
-| **画质档位（三档）** | 顶栏 `画质·省流/标准/高清`（4 / 13 / 20 Mbps）——**分辨率不变，只改码率**；切换 = **重启采集会话**（停旧 → 起新 → 重建解码器）。停会话靠 `kill(-pid)` 杀进程组 + 设备侧 `pkill`；重启请求由渲染线程在 tick 开头执行（避免与解码器 UAF）（判据 ㊴） |
+| **画质档位（两档）** | 顶栏 `画质·省流/标准`（4 / 13 Mbps）——**分辨率不变，只改码率**（20 Mbps 因肉眼无差异已撤）；切换 = **重启采集会话**（停旧 → 起新 → 重建解码器）。停会话靠 `kill(-pid)` 杀进程组 + 设备侧 `pkill`；重启请求由渲染线程在 tick 开头执行（避免与解码器 UAF）（判据 ㊴） |
+| **设备管理（列表 + 切换）** | 右栏顶部「设备」：一行一台（机型 · 物理尺寸 · 串号尾），当前项强调条；未授权行**点不动**；切换 = 改串号/尺寸 → 用当前画质档重建命令 → **重启采集会话**（黑几百毫秒）。所有 adb 调用统一带 `-s`（判据 ㊵） |
 | **画布洞必须是通的** | 原生 GL 垫在 WKWebView **下面**，所以从 `#canvas` 到 `html` 的**每层都不许有不透明背景**；舞台底色由 `.screen` 的 4000px spread 阴影补（只填屏幕**之外**）。`live` 未加时反过来给实心底色（"关着的屏"）（判据 ㊲） |
 | **滑动 / 长按** | **直接拖拽 = 滑动**（时长 = 真实按住时长）· **按住不动** = 长按（同点 600ms，走同一条 `input swipe`）· **⌥+拖拽 = 平移画布**（不注入）；触控关掉时拖拽退回平移（判据 ⑯ / ㊱） |
 

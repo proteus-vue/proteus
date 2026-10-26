@@ -21,6 +21,7 @@ mod capture;
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
 mod capture_preset;
+mod device;
 mod search;
 
 extern "C" {
@@ -88,6 +89,26 @@ struct Stats {
 #[tauri::command]
 fn capture_preset(preset: String) -> Result<capture_preset::CaptureInfo, String> {
     capture_preset::capture_preset(preset)
+}
+
+/// 列出设备（异步 + 阻塞线程池：每台要跑 1~2 次 adb，不能占 IPC 线程）
+#[tauri::command]
+async fn list_devices() -> Vec<device::DeviceInfo> {
+    tauri::async_runtime::spawn_blocking(device::list)
+        .await
+        .unwrap_or_default()
+}
+
+/// 切换当前设备：改全局串号/尺寸 → 用**当前画质档**重建采集命令 → 让渲染线程重启会话。
+/// ★顺序不能反：先改状态再重建命令，否则新命令还是旧串号。
+#[tauri::command]
+async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        device::select(&serial)?;
+        capture_preset::request_for_serial(device::current_serial().as_deref())
+    })
+    .await
+    .map_err(|e| format!("切换线程失败：{e}"))?
 }
 
 #[tauri::command]
@@ -586,29 +607,9 @@ fn save_state(json: String) -> Result<(), String> {
 /// 机型探测：一次 adb 查询，缓存住。
 /// ★探测不到就返回 None —— **不拿"Android"这种占位串冒充机型**（面板上"未知"比一个假型号有用）。
 fn device_label() -> Option<String> {
-    use std::sync::OnceLock;
-    static CACHE: OnceLock<Option<String>> = OnceLock::new();
-    CACHE
-        .get_or_init(|| {
-            let get = |args: &[&str]| -> Option<String> {
-                let out = std::process::Command::new("adb").args(args).output().ok()?;
-                if !out.status.success() {
-                    return None;
-                }
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
-            };
-            let model = get(&["shell", "getprop", "ro.product.model"])?;
-            // `wm size` 输出形如 "Physical size: 1080x2400"
-            let size = get(&["shell", "wm", "size"]).and_then(|s| {
-                s.split("Physical size:").nth(1).map(|x| x.trim().to_string())
-            });
-            Some(match size {
-                Some(sz) => format!("{model} · {sz}"),
-                None => model,
-            })
-        })
-        .clone()
+    /* 机型按**串号**缓存（决策 #1265）：原来用 `OnceLock` 全局缓存一次，
+       切换设备后侧栏永远显示上一台的型号。 */
+    device::label(device::current_serial().as_deref())
 }
 
 /// 双击启动时 LaunchServices 只给 `/usr/bin:/bin:/usr/sbin:/sbin`，
@@ -634,11 +635,8 @@ fn ensure_tool_path() {
 /// 失败（无设备 / adb 不在 / 输出格式变了）一律返回 `None` —— 调用方据此**不带 `--size`**，
 /// 而不是退回一个写死值：写死值会让竖屏被塞进 16:9 而补出 74% 的黑边。
 fn adb_screen_size() -> Option<(u32, u32)> {
-    let out = std::process::Command::new("adb")
-        .args(["shell", "wm", "size"])
-        .output()
-        .ok()?;
-    capture::parse_wm_size(&String::from_utf8_lossy(&out.stdout))
+    /* ★带上当前串号（决策 #1265）：不带 `-s` 时多设备会量到**另一台**的尺寸 ⇒ 画面比例错 */
+    device::probe_size(device::current_serial().as_deref())
 }
 
 /// 没有显式指定输入时**默认接真机**——双击启动不可能带环境变量，
@@ -681,7 +679,7 @@ fn default_live_source() {
         let serial = first_adb_serial();
         TOUCH_ANDROID.store(serial.is_some(), std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut g) = ADB_SERIAL.lock() {
-            *g = serial;
+            *g = serial.clone();   /* 后面拼采集命令还要用（决策 #1265 带 -s） */
         }
         // ★★抓屏尺寸必须**按设备比例**（2026-10-23 实测）：`screenrecord --size` 是把整屏塞进给定尺寸，
         //   不足处**补黑边**。写死 1280x720 时，1200x2608 的竖屏只剩 330x720 有效画面
@@ -708,9 +706,16 @@ fn default_live_source() {
                 if std::env::var("POC_LIVE_H").is_err() {
                     std::env::set_var("POC_LIVE_H", h.to_string());
                 }
-                format!(
-                    "adb exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
-                )
+                /* ★必须带 `-s <串号>`（决策 #1265）：不带的话多设备直接
+                   "more than one device" —— 而触摸注入一直是带串号的，两条路会打不同设备。 */
+                match serial.as_deref() {
+                    Some(sn) => format!(
+                        "adb -s {sn} exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
+                    ),
+                    None => format!(
+                        "adb exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
+                    ),
+                }
             }
             // ★查不到尺寸时**不带 `--size`**（用设备原生分辨率），而不是退回某个写死的值
             //   —— 写死值正是这次要修的 bug；宁可多花点带宽，也不要一小块画面加一圈黑边。
@@ -763,6 +768,8 @@ fn main() {
             device_tap,
             device_swipe,
             capture_preset,
+            list_devices,
+            select_device,
             search_text
         ])
         .setup(|app| {
