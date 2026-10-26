@@ -879,3 +879,43 @@ export async function probeHole(page) {
     shadow: rep.shadow ?? '',
   }
 }
+
+/**
+ * ㊳ 触摸坐标空间（决策 #1260）：画布坐标必须换算成**设备物理像素**。
+ *
+ * 【为什么必须有】码流是等比缩过的（1200×2608 的设备给 884×1920 的流，差 0.737 倍）。
+ *   拿**码流尺寸**去 `input tap`，点屏幕下方的"设置"会落到它上面那个 App 上——
+ *   而中心点仍然对得上（缩放以中心为基准时中心是不动的），所以既有的 ㉟ 中心点断言
+ *   **永远测不出这个错**。⇒ 这里专门换一台"物理尺寸 ≠ 码流尺寸"的桩，断中心点必须是
+ *   物理中心 (600,1304)，而不是码流中心 (442,960)。
+ */
+export async function probeTapSpace(page) {
+  const taps = () =>
+    page.evaluate(() =>
+      (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'device_tap').map((c) => c.args),
+    )
+  const center = await page.evaluate(() => {
+    const r = document.getElementById('canvas').getBoundingClientRect()
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2, h: r.height }
+  })
+  // 让桩把"设备物理尺寸"报成 1200×2608（码流仍是 fixture 的 1280×720 —— 故意不一致）
+  await page.evaluate(() => localStorage.setItem('__DEV_SIZE__', '1200x2608'))
+  // ★等**一整轮** stats 轮询（500ms 间隔 + IPC），否则第一下点击还在用旧的 dev_w=0
+  //   —— 第一版等 420ms，结果"点中心"那次读到的还是码流中心 (640,360)，判据红得莫名其妙。
+  await page.waitForTimeout(800)
+
+  const before = (await taps()).length
+  await page.mouse.click(center.x, center.y)
+  await page.waitForTimeout(300)
+  const atCenter = (await taps()).slice(before)[0] ?? null
+
+  // 再点画布 3/4 高度处：物理空间下应是 1956（码流空间会是 540）
+  const before2 = (await taps()).length
+  await page.mouse.click(center.x, center.y + center.h / 4)
+  await page.waitForTimeout(300)
+  const at3q = (await taps()).slice(before2)[0] ?? null
+
+  await page.evaluate(() => localStorage.removeItem('__DEV_SIZE__'))
+  await page.waitForTimeout(200)
+  return { atCenter, at3q }
+}

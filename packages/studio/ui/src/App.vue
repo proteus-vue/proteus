@@ -237,9 +237,16 @@ function clientToDevice(clientX: number, clientY: number): { x: number; y: numbe
   if (!el || !d || d.width <= 0 || d.height <= 0) return null
   const r = el.getBoundingClientRect()
   if (r.width <= 0 || r.height <= 0) return null
+  /* ★★映射到**设备物理像素**，不是码流像素（决策 #1260）。
+     码流是按长边≤1920 等比缩过的（1200×2608 ⇒ 884×1920，差 0.737 倍）；
+     拿码流尺寸去 `input tap`，点屏幕下方的"设置"就会落到它上面那个 App
+     （实测：PICK 621,1746，而设置图标实际在 y≈2450）。
+     `dev_w/h` 未知时（iOS 那条腿 / 探测失败）才回落到码流尺寸。 */
+  const dw = d.dev_w > 0 ? d.dev_w : d.width
+  const dh = d.dev_h > 0 ? d.dev_h : d.height
   return {
-    x: Math.round(((clientX - r.left) / r.width) * d.width),
-    y: Math.round(((clientY - r.top) / r.height) * d.height),
+    x: Math.round(((clientX - r.left) / r.width) * dw),
+    y: Math.round(((clientY - r.top) / r.height) * dh),
   }
 }
 

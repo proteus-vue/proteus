@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
-import { probeCodeExtras, probeGesture, probeHole, probeMenu, probePan, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
+import { probeCodeExtras, probeGesture, probeHole, probeMenu, probePan, probeSearch, probeTapSpace, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
@@ -408,6 +408,8 @@ const hole = await probeHole(page)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
+// ── ㊳ 触摸坐标空间：采集段在 probeTapSpace()（决策 #1260：设备物理像素 ≠ 码流像素）
+const tapSpace = await probeTapSpace(page)
 // ── ㊱ ⌥ 手势（滑动 / 长按）：采集段在 probeGesture()（决策 #1255）
 const g = await probeGesture(page)
 
@@ -628,6 +630,14 @@ const checks = [
       afterTree.headOn &&
       afterTree.marker.includes('packages/studio/ui/src/App.vue') &&
       !afterTree.marker.includes('src/main.rs'),
+  ],
+  // ㊳ 触摸坐标空间：桩报"设备 1200×2608 / 码流 1280×720" ⇒ 必须按**物理**尺寸换算
+  [
+    `㊳ 触控坐标：点画布中心 → ${JSON.stringify(tapSpace.atCenter)}（物理应为 600,1304；码流会是 442,960）· 点 3/4 高度 → ${JSON.stringify(tapSpace.at3q)}（物理应为 600,1956）`,
+    Math.abs(Number(tapSpace.atCenter?.x) - 600) <= 4 &&
+      Math.abs(Number(tapSpace.atCenter?.y) - 1304) <= 4 &&
+      Math.abs(Number(tapSpace.at3q?.x) - 600) <= 4 &&
+      Math.abs(Number(tapSpace.at3q?.y) - 1956) <= 4,
   ],
   // ㊱ ⌥ 手势：拖动 = 滑动、按住不动 = 长按；普通拖拽仍然只平移
   [

@@ -27,6 +27,9 @@ export interface Stats {
   height: number
   hwdec: boolean
   device: string | null
+  /** 设备**物理**像素（`wm size`；0 = 未知）。触摸回传必须用它，不能用码流尺寸（决策 #1260） */
+  dev_w: number
+  dev_h: number
 }
 
 type Invoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>

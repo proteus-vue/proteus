@@ -18,7 +18,15 @@ export function stubTauri(payload) {
     core: {
       invoke: async (cmd, args) => {
         calls.push({ cmd, args })
-        if (cmd === 'stats') return payload
+        if (cmd === 'stats') {
+          // ★设备物理尺寸可覆盖（判据 ㊳）：localStorage.__DEV_SIZE__ = "1200x2608"
+          const dv = window.localStorage.getItem('__DEV_SIZE__')
+          if (dv) {
+            const [w, h] = dv.split('x').map(Number)
+            return { ...payload, dev_w: w, dev_h: h }
+          }
+          return payload
+        }
         if (cmd === 'set_canvas_rect') return null
         // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
         // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn / CSS 的

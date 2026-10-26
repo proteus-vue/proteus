@@ -44,6 +44,9 @@ extern "C" {
     fn poc_copy_text(s: *const c_char);
 }
 
+/// 设备物理尺寸（启动探测一次；`stats` 轮询读缓存，不再跑 adb）。
+static DEVICE_PX: std::sync::Mutex<Option<(u32, u32)>> = std::sync::Mutex::new(None);
+
 /// 面板读数。字段名就是 HTML 侧读的名字 —— 少一层映射少一处漂移。
 #[derive(Serialize)]
 struct Stats {
@@ -69,6 +72,11 @@ struct Stats {
     hwdec: bool,
     /// 机型（adb 探测；没探测到就是 null —— 不编一个）
     device: Option<String>,
+    /// 设备**物理**像素（`wm size`；0 = 未知）。
+    /// ★和 `width/height`（**码流**尺寸）不是一回事：触摸回传必须注入物理坐标，
+    ///   拿码流尺寸去点会整体缩到 884/1200 = 0.737（实测：点"设置"落到它上面的 App，决策 #1260）。
+    dev_w: i64,
+    dev_h: i64,
 }
 
 #[tauri::command]
@@ -105,6 +113,8 @@ fn stats() -> Stats {
         height: a[16] as i64,
         hwdec: a[17] > 0.5,
         device: device_label(),
+        dev_w: DEVICE_PX.lock().ok().and_then(|g| *g).map(|(w, _)| w as i64).unwrap_or(0),
+        dev_h: DEVICE_PX.lock().ok().and_then(|g| *g).map(|(_, h)| h as i64).unwrap_or(0),
     }
 }
 
@@ -667,6 +677,9 @@ fn default_live_source() {
         //   —— `cropdetect` 实测 **74.2% 的像素是黑边**，带宽/解码/FBO 全在搬运和放大一块黑。
         //   现在按 `wm size` 等比取（长边 ≤1920），实测 `crop=882:1920:0:0`（黑边消失）。
         let dev = adb_screen_size();
+        if let Ok(mut g) = DEVICE_PX.lock() {
+            *g = dev;   /* ★触摸回传要用物理坐标（决策 #1260） */
+        }
         let cmd = match dev.and_then(|(w, h)| capture::pick_capture_size(w, h).map(|s| (w, h, s))) {
             Some((dw, dh, (w, h))) => {
                 let br = capture::bitrate_for(w, h);
