@@ -146,14 +146,16 @@ function onTitleDown(e: MouseEvent) {
     dblAt = { x: e.clientX, y: e.clientY }
     return
   }
-  void tauriWindowCommand('start_dragging').catch(() => {})
+  // ★失败**不要静默**：ACL 拒绝（新窗口不在 capability 里）时表现就是"拖不动"，
+  //   而 catch 吞掉错误让人查半天（决策 #1272 就是这么踩的）⇒ 至少留一条 console 警告。
+  void tauriWindowCommand('start_dragging').catch((e) => console.warn('[studio] 拖拽失败：', e))
 }
 
 function onTitleUp(e: MouseEvent) {
   if (e.button !== 0 || e.detail !== 2 || !dblAt) return
   if (e.clientX !== dblAt.x || e.clientY !== dblAt.y) return // 动了就不算双击
   dblAt = null
-  void tauriWindowCommand('internal_toggle_maximize').catch(() => {})
+  void tauriWindowCommand('internal_toggle_maximize').catch((e) => console.warn('[studio] 缩放失败：', e))
 }
 
 /** 路径太长只显示后两段 */

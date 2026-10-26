@@ -34,6 +34,7 @@ import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
 import { openPanel } from './studio-panel-boot.mjs'
 import { langExtCoverage } from './studio-panel-langext.mjs'
+import { checkCapability } from './studio-panel-capability.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -479,6 +480,8 @@ const objcColors = [objcKw, objcNum, objcComment]
 /* ── ⑳ 覆盖表：树里出现的每个扩展名都必须有归属（采集段在 studio-panel-langext.mjs）── */
 const { missing: missingExt, seen: seenExtCount } = langExtCoverage(STUDIO)
 
+const capability = checkCapability(STUDIO)
+
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
   ['② 画布矩形也被同步（HTML 驱动原生）', seen.calls.some((c) => c === 'set_canvas_rect')],
@@ -888,6 +891,11 @@ const checks = [
       box3.w > box1.w * 1.15 &&
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
+  ],
+  // ㊹ 窗口权限：capability 必须覆盖所有窗口（否则插件命令被 ACL 拒绝，拖拽静默失效）
+  [
+    `㊹ 窗口权限：${capability.detail}`,
+    capability.ok,
   ],
   // ㊸ 端口归属 + 自绘标题栏拖拽/双击（决策 #1271）
   [

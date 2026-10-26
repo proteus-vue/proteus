@@ -14956,3 +14956,21 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     双击（同点）⇒ `internal_toggle_maximize` 恰 1 次 · 双击但抬起点移动 ⇒ **不**最大化。
   - **诚实边界**：判据断言的是"发出了正确的窗口命令"，**不是"窗口真的动了"**——后者只能人眼/手拖验证
     （合成鼠标事件无法驱动原生拖拽循环）。
+
+1272. **新窗口拖不动 = Tauri 2 的 ACL（capability 只列了 main）· 判据 64（㊹）**（2026-10-26 · 用户「测试拖拽没效果，设置窗口没移动」）:
+  - **真因**：`capabilities/default.json` 里 `"windows": ["main"]` —— **代码新建的窗口不在 ACL 名单里**，
+    所以 `plugin:window|start_dragging` 被**拒绝**。而前端 `.catch(() => {})` 把错误吞了 ⇒
+    表现就是"拖拽没反应"，代码看起来完全正确。
+    ★**这也解释了 #1271 之前的怪现象**：内置的 `data-tauri-drag-region`（同样走 `plugin:window|start_dragging`）
+      在设置窗口里也不生效——不是"脚本没注入"，是**没权限**。我当时把它归因为"初始化脚本没生效"，
+      方向错了（结论错了但修法歪打正着：改成显式调用，正好让错误暴露在同一个命令上）。
+  - **修**：`capability.windows` 改成 `["*"]` —— 以后新建任何窗口（日志/检查器）自动继承，
+    不用再"记得把 label 加进去"（这正是 #1269 想消灭的那类"每个人记得"）。
+  - **不再吞错**：`start_dragging` / `internal_toggle_maximize` 的 catch 改成 `console.warn`，
+    至少留一条可查的痕迹。
+  - **判据 64（㊹）静态检查**：`capability.windows` 必须含 `"*"`，且
+    `core:window:allow-start-dragging` / `core:window:allow-internal-toggle-maximize` 必须在权限列表里。
+    ★**为什么是静态检查**：Playwright 那边是桩、没有 ACL，这类缺陷**永远抓不到**；
+      而它恰恰会让用户看到"点了没反应"。
+  - **教训（第三次同族）**：**"命令被拒绝"和"代码没写对"看起来一模一样**（都是没反应）⇒
+    凡是"发出去的命令"，catch 里必须留痕，否则排查时间全花在错误的方向上。
