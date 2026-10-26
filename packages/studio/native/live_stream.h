@@ -50,6 +50,7 @@ static volatile long long g_live_bytes = 0;   /* 累加入队 AU 的字节数（
 static char g_live_cmd[512];
 
 static int live_nal_ok(const unsigned char *p, int len);   /* 定义在下方：文本垃圾过滤器 */
+static int live_nal_hdr_ok(const unsigned char *p);        /* 定义在下方：NAL 头合法性 */
 
 static double live_now_ms(void) {
   struct timespec ts;
@@ -57,8 +58,46 @@ static double live_now_ms(void) {
   return ts.tv_sec * 1e3 + ts.tv_nsec / 1e6;
 }
 
+/* 自检（决策 #1259）：一帧 AU 内部的 NAL 之间只该有**我们写进去的**起始码。
+ *   如果 payload 里又出现 `00 00 01`，说明输入流被脏数据拼接坏了 —— 这种包喂给解码器
+ *   就会报 `Invalid NAL unit 0` 并把整段画面糊掉。命中时（POC_DUMP_BAD_AU 设置）落盘取证。 */
+static void live_check_au(const unsigned char *buf, int n, long idx) {
+  const char *dp = getenv("POC_DUMP_BAD_AU");
+  { /* 逐帧落盘（取证）：POC_DUMP_AU_DIR=<dir> 前 200 帧各存一个文件 */
+    const char *dd = getenv("POC_DUMP_AU_DIR");
+    if (dd && idx < 200) {
+      char path[512];
+      snprintf(path, sizeof(path), "%s/au-%04ld.h264", dd, idx);
+      FILE *f = fopen(path, "wb");
+      if (f) { fwrite(buf, 1, (size_t)n, f); fclose(f); }
+    }
+  }
+  const char *bad = NULL;
+  int badtype = -1, at = -1, nals = 0;
+  for (int i = 0; i + 3 < n; i++) {
+    if (!(buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 1)) continue;
+    int h = buf[i + 3];
+    int t = h & 0x1f;
+    nals++;
+    /* 只认我们真的会写进去的类型；出现别的 ⇒ 有脏数据被拼进了这一帧 */
+    if (!(t == 1 || t == 5 || t == 6 || t == 7 || t == 8 || t == 9)) {
+      bad = "非法 NAL 类型"; badtype = t; at = i; break;
+    }
+    if (h & 0x80) { bad = "forbidden_zero_bit=1"; badtype = t; at = i; break; }
+    i += 2;
+  }
+  if (!bad) return;
+  fprintf(stderr, "AU#%ld 脏（%s=%d @%d，共 %d 个 NAL，%d 字节）⇒ 这帧必然花\n", idx, bad, badtype, at, nals, n);
+  if (!dp) return;
+  char path[512];
+  snprintf(path, sizeof(path), "%s.%ld.h264", dp, idx);
+  FILE *f = fopen(path, "wb");
+  if (f) { fwrite(buf, 1, (size_t)n, f); fclose(f); }
+}
+
 static void live_push(const unsigned char *buf, int n, double t_first) {
   if (n <= 0) return;
+  live_check_au(buf, n, g_live_aus);
   pthread_mutex_lock(&g_live_lock);
   if (g_live_count == LIVE_MAX_AU) { /* 实时优先：积压就丢最旧的 */
     free(g_live_q[g_live_head].data);
@@ -162,7 +201,9 @@ static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
   int *dst_len = &a->au_len;
   if (type == 6 || type == 7 || type == 8 || type == 9) { dst = a->pre; dst_len = &a->pre_len; }
   int cap = (dst == a->au) ? LIVE_AU_MAX : LIVE_PRE_MAX;
-  if (*dst_len + len + 4 < cap) {
+  if (*dst_len + len + 4 >= cap) {
+    fprintf(stderr, "⚠︎ AU 缓冲满，丢弃一个 NAL（type=%d len=%d 已用=%d/%d）——这帧将缺片\n", type, len, *dst_len, cap);
+  } else {
     memcpy(dst + *dst_len, sc4, 4);
     *dst_len += 4;
     memcpy(dst + *dst_len, nal, (size_t)len);
@@ -192,8 +233,26 @@ static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
  *   `Error decoding the extradata`，接下来逐帧硬解被拒、画面只剩零星几帧。
  * 【判据】真实 SPS/PPS/VCL 是二进制，且为防竞争字节会插入 0x03 —— **绝不会出现
  *   连续 ≥8 个可打印 ASCII**；再夹一个长度上限。两条都过才认为是真 NAL。 */
+/* NAL **头字节**合法性（决策 #1259）：只认我们真的会处理的那几种。
+ * 【为什么必须有】设备往 stdout 里混的日志文本可能自带 `00 00 01`，于是紧跟的那个字节
+ *   被当成 NAL 头——常见是 0x00（type 0，**合法类型里没有 0**）。这类假 NAL 会让解码器
+ *   报 `Invalid NAL unit 0`，更糟的是它一旦落在参数集位置，就把 PPS 污染成
+ *   "data partitioning" 之类，之后整段画面糊成竖条（实测第 150 帧：上面正常、下面全花）。
+ * 【只放行】1 非IDR片 / 5 IDR / 6 SEI / 7 SPS / 8 PPS / 9 AUD；且 forbidden_zero_bit 必须为 0。
+ *   其余（0、2~4、10~31）一律丢弃——本工具不需要它们，而放进来就是给解码器投毒。 */
+static int live_nal_hdr_ok(const unsigned char *p) {
+  if (p[0] & 0x80) return 0;              /* forbidden_zero_bit 必须 0 */
+  int t = p[0] & 0x1f;
+  return t == 1 || t == 5 || t == 6 || t == 7 || t == 8 || t == 9;
+}
+
 static int live_nal_ok(const unsigned char *p, int len) {
   if (len <= 0 || len > LIVE_AU_MAX) return 0;
+  /* ★长度上限（决策 #1259）：真 SPS ≤64B、PPS ≤32B（本机实测 19B / 5B）。
+     设备日志那行是 73B —— 单靠这条就能挡住它，ASCII 那条是第二道锁。 */
+  int t = p[0] & 0x1f;
+  if (t == 7 && len > 64) return 0;
+  if (t == 8 && len > 32) return 0;
   int run = 0;
   for (int i = 0; i < len; i++) {
     unsigned char c = p[i];
@@ -250,7 +309,12 @@ static int live_peek_params(unsigned char *out, int cap, int *out_len) {
 
 static void *live_reader(void *arg) {
   (void)arg;
-  static unsigned char chunk[1 << 16];
+/* ★★读缓冲必须装得下**一个完整 NAL**（决策 #1259）。
+     原来是 64KB，而 884x1920 @13Mbps 的**关键帧 NAL 实测 18 万字节** ⇒ 超缓冲后走"硬切"分支，
+     一帧 IDR 被切成两截、当两个 NAL 拼进 AU（自检日志：非法 NAL 类型=4 @65541，正是 64K+5）
+     ⇒ 关键帧作废，之后所有 P 帧都参考一帧不存在的图像 ⇒ **画面糊成竖条、内容错位**。
+     ⇒ 放到 4MB：常见分辨率的关键帧都能整装；真超过时仍有"硬切"兜底（并打日志）。 */
+  static unsigned char chunk[4 << 20];
   static unsigned char au_buf[LIVE_AU_MAX];
   static unsigned char pre_buf[LIVE_PRE_MAX];
 
@@ -268,6 +332,11 @@ static void *live_reader(void *arg) {
       //   read() 对管道是"当前有多少给多少"，延迟与到达抖动都小一个量级。
       ssize_t got = read(fileno(p), chunk + carry, sizeof(chunk) - carry);
       if (got <= 0) break;
+      { /* 取证钩子：POC_DUMP_STREAM=<path> 把**管道原始字节**落盘（分析脏数据用，决策 #1259） */
+        static FILE *dfs = NULL; static int dinit = 0;
+        if (!dinit) { dinit = 1; const char *dp = getenv("POC_DUMP_STREAM"); if (dp) dfs = fopen(dp, "wb"); }
+        if (dfs) { fwrite(chunk + carry, 1, (size_t)got, dfs); fflush(dfs); }
+      }
       int n = carry + (int)got;
       int pos = 0;
       for (;;) {
@@ -281,7 +350,9 @@ static void *live_reader(void *arg) {
       }
       int rest = n - pos;
       if (rest >= (int)sizeof(chunk) - 4) {
-        // 缓冲塞满仍等不到起始码 ⇒ 单 NAL 超过 64KB，只能硬切（否则这里会卡死）
+        /* 走到这里说明**单个 NAL 比 4MB 还大**（正常码流不该发生）⇒ 只能硬切，并喊出来：
+           切开的 NAL 一定解不出正确画面，静默切就是在制造"读数正常、画面很花"。 */
+        fprintf(stderr, "⚠︎ 单个 NAL 超过读缓冲（%d 字节）⇒ 硬切，这一段画面必然坏\n", rest);
         live_asm_nal(&a, chunk + pos, rest);
         rest = 0;
         pos = n;

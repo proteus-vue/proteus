@@ -57,6 +57,16 @@ static const char *VS =
     //   直接用 p 会让画面上下颠倒（实测：手机状态栏跑到画布底部）。
     "  vUV = vec2(p.x, 1.0 - p.y);\n"
     "  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }\n";
+/* ★上屏这趟的顶点着色器：**不再翻 v**（决策 #1259）。
+ *   合成 pass 已经把"纹理首行是画面顶部"这件事翻正并写进 FBO；FBO 的行序和 GL 一致
+ *   （第 0 行 = 底部），所以上屏时再翻一次 = **整幅画面上下颠倒**（实测：手机桌面 Dock 跑到窗口顶部）。
+ *   这个 bug 从 B2 就在——因为 `poc_dump` 读的是 **FBO**（永远是对的），没人把"窗口里看到的"
+ *   和"dump 出来的"做 1:1 对比。 */
+static const char *VS_BLIT =
+    "#version 150\nout vec2 vUV;\n"
+    "void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);\n"
+    "  vUV = p;\n"
+    "  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }\n";
 static const char *FS_YUV =
     "#version 150\nin vec2 vUV;\nout vec4 o;\n"
     "uniform sampler2D texY; uniform sampler2D texUV;\n"
@@ -379,7 +389,7 @@ gl_init:
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { fprintf(stderr, "FBO 不完整\n"); return 2; }
 
     g_progComp = link_prog(VS, FS_YUV);
-    g_progBlit = link_prog(VS, FS_BLIT);
+    g_progBlit = link_prog(VS_BLIT, FS_BLIT);
     glGenVertexArrays(1, &g_vao);
     glBindVertexArray(g_vao);
     glGenTextures(1, &g_ty); glBindTexture(GL_TEXTURE_2D, g_ty);
@@ -663,6 +673,31 @@ use_last:
       if (!g_nv12->data[0]) av_frame_get_buffer(g_nv12, 32);
       sws_scale(g_sws, (const uint8_t *const *)src->data, src->linesize, 0, g_H, g_nv12->data, g_nv12->linesize);
       src = g_nv12;
+    }
+
+    /* 取证钩子：POC_DUMP_FRAME=<path.ppm> 把**解码后（GL 之前）**的一帧落成 PPM（决策 #1259）。
+       用来把"解码出来的帧就花了"和"上传/着色器解释错了"这两件事分开——否则只能猜。 */
+    {
+      static int dumped = 0, want = -2;
+      if (want == -2) { const char *a = getenv("POC_DUMP_FRAME_AT"); want = a ? atoi(a) : 0; }
+      const char *dp = (dumped || (long)want != g_frames) ? NULL : getenv("POC_DUMP_FRAME");
+      if (dp) {
+        struct SwsContext *c2 = sws_getContext(g_W, g_H, AV_PIX_FMT_NV12, g_W, g_H, AV_PIX_FMT_RGB24,
+                                              SWS_POINT, NULL, NULL, NULL);
+        if (c2) {
+          int stride = g_W * 3;
+          unsigned char *rgb = malloc((size_t)stride * g_H);
+          uint8_t *dstp[4] = {rgb, NULL, NULL, NULL};
+          int dsts[4] = {stride, 0, 0, 0};
+          sws_scale(c2, (const uint8_t *const *)src->data, src->linesize, 0, g_H, dstp, dsts);
+          FILE *f = fopen(dp, "wb");
+          if (f) { fprintf(f, "P6\n%d %d\n255\n", g_W, g_H); fwrite(rgb, 1, (size_t)stride * g_H, f); fclose(f); }
+          free(rgb);
+          sws_freeContext(c2);
+          dumped = 1;
+          fprintf(stderr, "已落盘解码帧 %s（%dx%d）\n", dp, g_W, g_H);
+        }
+      }
     }
 
     // ★实时投屏：**到帧即出**（不按 PTS 等）——g_fmt 在 live 模式是 NULL，绝不能碰
