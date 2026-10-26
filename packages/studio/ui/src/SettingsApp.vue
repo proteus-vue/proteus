@@ -17,6 +17,7 @@ import {
   pickTool,
   probeTool,
   saveSettings,
+  tauriWindowCommand,
   type DeviceInfo,
   type ToolCandidate,
 } from './bridge'
@@ -131,6 +132,30 @@ async function save() {
   }
 }
 
+/* ── 自绘标题栏的拖拽 / 双击缩放（决策 #1271）──────────────────────────────
+ * ★不依赖 `data-tauri-drag-region`：那是 window 插件初始化脚本注入的行为，
+ *   在**代码里新建的窗口**上实测不生效（主窗口可以）。⇒ 自己接 mousedown/mouseup，
+ *   直接调插件命令。macOS 的惯例是：拖动在按下时开始，最大化在**抬起**且未移动时触发
+ *   （这样双击时手一抖就不会误最大化）。
+ */
+let dblAt: { x: number; y: number } | null = null
+
+function onTitleDown(e: MouseEvent) {
+  if (e.button !== 0) return
+  if (e.detail === 2) {
+    dblAt = { x: e.clientX, y: e.clientY }
+    return
+  }
+  void tauriWindowCommand('start_dragging').catch(() => {})
+}
+
+function onTitleUp(e: MouseEvent) {
+  if (e.button !== 0 || e.detail !== 2 || !dblAt) return
+  if (e.clientX !== dblAt.x || e.clientY !== dblAt.y) return // 动了就不算双击
+  dblAt = null
+  void tauriWindowCommand('internal_toggle_maximize').catch(() => {})
+}
+
 /** 路径太长只显示后两段 */
 function shortPath(p: string) {
   return p.split('/').filter(Boolean).slice(-2).join('/')
@@ -143,7 +168,7 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
   <div class="setwin">
     <!-- ★沉浸式标题栏（决策 #1269）：系统标题栏已隐藏，这条由我们自己画；
          左内边距 84px 给红绿灯让位，`deep` 让整条（含子元素）都能拖窗口。 -->
-    <header class="settitle" data-tauri-drag-region="deep">
+    <header class="settitle" id="setTitle" @mousedown="onTitleDown" @mouseup="onTitleUp">
       <span class="settitle-text">设置</span>
     </header>
 
@@ -214,11 +239,18 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
             </p>
           </div>
 
-          <div class="setfield">
-            <label for="setPort">iOS 推流端口</label>
+          <!-- ★推流端口是 **iOS 专属**（决策 #1271）：放在 v-for 外面会让每个端页签底部都出现一遍 -->
+          <div v-if="target === 'ios'" class="setfield">
+            <label for="setPort">iOS 推流端口（ReplayKit 助手推到本机这个端口）</label>
             <div class="setrow narrow">
               <input id="setPort" v-model.number="port" type="number" min="1024" max="65535" />
-              <button class="setbtn primary" id="setSave" :disabled="busy" @click="save">保存</button>
+            </div>
+          </div>
+
+          <!-- 保存按钮是**全局**的：任何端的改动都靠它落盘 -->
+          <div class="setfield">
+            <div class="setrow narrow">
+              <button class="setbtn primary" id="setSave" :disabled="busy" @click="save">保存全部改动</button>
             </div>
           </div>
         </section>

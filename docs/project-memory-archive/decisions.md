@@ -14937,3 +14937,22 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     匹配不到元素导致**假红** ⇒ 改用属性选择器 `[id="cands-ios.xcode"]`。
   - **另一处 UI 事故**：`.setfoot{position:sticky}` 在 620 高的窗口里**压住**了"iOS 推流端口"
     ⇒ 改回普通流；候选列表加 `max-height:190px` 限高滚动，别把输入框顶出屏幕。
+
+1271. **自绘标题栏自己接拖拽/双击（不靠 `data-tauri-drag-region`）+ 推流端口归 iOS**（2026-10-26 · 用户两条反馈）:
+  - **问题一：新窗口标题栏拖不动、双击不缩放**。主窗口靠 `data-tauri-drag-region="deep"` 可以，
+    代码新建的窗口同样写了这个属性却不行。
+  - **取证**：Tauri 的拖拽行为不是"属性被引擎识别"，而是 **window 插件注入的一段初始化脚本**
+    （`src/window/scripts/drag.js`，在 `mousedown` 里 `invoke('plugin:window|start_dragging')`，
+    macOS 上双击的 maximize 放在 `mouseup` 且要求未移动）。**代码新建窗口上这段脚本没有生效**
+    （具体注入时机与主窗口不同，未深究——不再依赖它）。
+  - **修**：设置页自己接 `mousedown`/`mouseup`，直接调插件命令：
+    detail=1 ⇒ `plugin:window|start_dragging`；detail=2 且**抬起点与按下点相同** ⇒
+    `plugin:window|internal_toggle_maximize`（移动了就取消，符合 macOS 语义）。
+    同时**去掉** header 上的 `data-tauri-drag-region`，保证只有一条通路在跑。
+  - **问题二：「iOS 推流端口」在每个端页签下面都出现**。根因：那段字段写在 `v-for` **外面**，
+    自然跟着每个端渲染。它本来就是 **iOS 专属** ⇒ 改成 `v-if="target === 'ios'"`；
+    「保存」是全局限定的动作，单独拎出来叫「保存全部改动」。
+  - **判据 63（㊸）**：iOS 端**有** `#setPort`、Web 端**没有** · 标题栏按下 ⇒ `start_dragging` 恰 1 次 ·
+    双击（同点）⇒ `internal_toggle_maximize` 恰 1 次 · 双击但抬起点移动 ⇒ **不**最大化。
+  - **诚实边界**：判据断言的是"发出了正确的窗口命令"，**不是"窗口真的动了"**——后者只能人眼/手拖验证
+    （合成鼠标事件无法驱动原生拖拽循环）。

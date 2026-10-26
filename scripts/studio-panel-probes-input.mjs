@@ -399,6 +399,44 @@ export async function probeSettings(page, baseUrl) {
     })),
   }))
 
+  /* ── 端口归属 + 自绘标题栏（决策 #1271）────────────────────────────────── */
+  const portOnIos = await win.evaluate(() => !!document.getElementById('setPort'))
+  await win.evaluate(() => document.querySelector('#targetTabs [data-target="web"]').click())
+  await win.waitForTimeout(250)
+  const portOnWeb = await win.evaluate(() => !!document.getElementById('setPort'))
+  await win.evaluate(() => document.querySelector('#targetTabs [data-target="ios"]').click())
+  await win.waitForTimeout(250)
+
+  const winCmds = () =>
+    win.evaluate(() =>
+      (window.__STUB_CALLS__ || []).filter((c) => c.cmd.startsWith('plugin:window|')).map((c) => c.cmd),
+    )
+  const clickTitle = (detail, down, up) =>
+    win.evaluate(
+      ({ detail, down, up }) => {
+        const el = document.getElementById('setTitle')
+        el.dispatchEvent(new MouseEvent('mousedown', { button: 0, detail, clientX: down.x, clientY: down.y, bubbles: true }))
+        if (up) el.dispatchEvent(new MouseEvent('mouseup', { button: 0, detail, clientX: up.x, clientY: up.y, bubbles: true }))
+      },
+      { detail, down, up },
+    )
+
+  const c0 = (await winCmds()).length
+  await clickTitle(1, { x: 30, y: 12 }, null)
+  await win.waitForTimeout(150)
+  const dragCmd = (await winCmds())[c0] ?? null
+
+  const c1 = (await winCmds()).length
+  await clickTitle(2, { x: 30, y: 12 }, { x: 30, y: 12 })
+  await win.waitForTimeout(150)
+  const dblCmd = (await winCmds())[c1] ?? null
+
+  // 双击但抬起点移动了 ⇒ 不该最大化（macOS 的取消语义）
+  const c2 = (await winCmds()).length
+  await clickTitle(2, { x: 30, y: 12 }, { x: 96, y: 12 })
+  await win.waitForTimeout(150)
+  const dblMoved = (await winCmds()).length - c2
+
   const calls = () =>
     win.evaluate(() =>
       (window.__STUB_CALLS__ || []).filter((c) => ['probe_tool', 'save_settings', 'pick_tool'].includes(c.cmd)),
@@ -450,6 +488,11 @@ export async function probeSettings(page, baseUrl) {
   await win.close()
 
   return {
+    portOnIos,
+    portOnWeb,
+    dragCmd,
+    dblCmd,
+    dblMoved,
     openCalls,
     nav0,
     tabs0,

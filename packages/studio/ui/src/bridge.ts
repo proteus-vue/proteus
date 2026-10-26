@@ -115,6 +115,13 @@ export const pickTool = (key: string): Promise<string | null> =>
 
 /** 打开**独立设置窗口**（决策 #1267）：已开就聚焦，不重复建窗 */
 export const openSettings = (): Promise<void> => invoke<void>('open_settings')
+
+/** 窗口级命令（决策 #1271）：`start_dragging` / `internal_toggle_maximize`。
+ *  ★为什么不靠 `data-tauri-drag-region`：那是 window 插件**初始化脚本**注入的行为，
+ *    在代码里新建的窗口上实测不生效（主窗口可以、新窗口不行）。
+ *    直接调插件命令就绕开"脚本到底注没注入"这个不确定性。 */
+export const tauriWindowCommand = (cmd: 'start_dragging' | 'internal_toggle_maximize'): Promise<void> =>
+  invoke<void>(`plugin:window|${cmd}`)
 /** 真跑一次命令验证路径（"检测"按钮）：返回 ok + 命令输出 */
 export const probeTool = (key: string, path: string): Promise<{ ok: boolean; detail: string }> =>
   invoke<{ ok: boolean; detail: string }>('probe_tool', { key, path })

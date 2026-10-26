@@ -30,6 +30,8 @@ export function stubTauri(payload) {
         if (cmd === 'set_canvas_rect') return null
         // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
         if (cmd === 'open_settings') return null
+        // 窗口级命令（决策 #1271）：拖拽 / 最大化。只记录，不需要真行为
+        if (cmd === 'plugin:window|start_dragging' || cmd === 'plugin:window|internal_toggle_maximize') return null
         // 自动检测（决策 #1268）：两台 Xcode + 一个 adb，正好用来测"点选"与"取消不改"
         if (cmd === 'detect_tools')
           return {

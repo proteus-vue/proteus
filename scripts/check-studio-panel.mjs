@@ -889,6 +889,15 @@ const checks = [
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
   ],
+  // ㊸ 端口归属 + 自绘标题栏拖拽/双击（决策 #1271）
+  [
+    `㊸ 标题栏与端口：iOS 端有端口=${set.portOnIos}（应 true）· Web 端有端口=${set.portOnWeb}（应 false）· 按下标题栏 ⇒ ${set.dragCmd} · 双击(未移动) ⇒ ${set.dblCmd} · 双击后拖动 ⇒ 额外 ${set.dblMoved} 次（应 0）`,
+    set.portOnIos === true &&
+      set.portOnWeb === false &&
+      set.dragCmd === 'plugin:window|start_dragging' &&
+      set.dblCmd === 'plugin:window|internal_toggle_maximize' &&
+      set.dblMoved === 0,
+  ],
   // ㊷ 设置页：按端分组（每端只显示自己那几个工具）+ 点选路径（决策 #1270）
   [
     `㊷ 按端分组：端页签 ${set.tabs0.map((t) => t.label).join('/')}（当前 ${set.tabs0.find((t) => t.on)?.label ?? '—'}）· Web 的 node 自动填=${set.webNode.value ? '是' : '否'}（版本「${set.webNode.msg}」）· 切到 iOS 后只剩 Xcode 字段=${set.iosFields.hasXcode && !set.iosFields.leakedWebNode}、候选 ${set.iosFields.cands.length} 条 · 点首条 ⇒ 「${String(set.picked.value).split('/').pop()}」版本「${set.picked.msg?.text ?? '—'}」额外探测 ${set.picked.extraProbes} 次（应 0）· 浏览 key=${set.pickArg?.key} · 取消后不变=${set.afterCancel === set.beforeCancel}`,
