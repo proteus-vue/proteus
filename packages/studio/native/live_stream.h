@@ -49,6 +49,8 @@ static volatile long long g_live_bytes = 0;   /* 累加入队 AU 的字节数（
 
 static char g_live_cmd[512];
 
+static int live_nal_ok(const unsigned char *p, int len);   /* 定义在下方：文本垃圾过滤器 */
+
 static double live_now_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -132,6 +134,13 @@ typedef struct {
 
 static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
   if (len <= 0) return;
+  /* 设备日志文本混进 stdout 时会被误认成 **SPS**（实测小米那行 "getCotaRegion..." 首字节 0x67
+     ⇒ 0x67 & 0x1f == 7）⇒ **只对参数集**用这条判据，别对 VCL 用。
+     ★第一版把所有 NAL 都过 ASCII 判据 —— 整屏都是文字时真 IDR（26KB）也被当垃圾丢掉，frames 直接归零。
+       教训：启发式只能用在"本该很短很干净"的东西上（决策 #1256）。 */
+  if ((nal[0] & 0x1f) == 7 || (nal[0] & 0x1f) == 8) {
+    if (!live_nal_ok(nal, len)) return;
+  }
   static const unsigned char sc4[4] = {0, 0, 0, 1};
   // ★延迟统计的起点 = 这一帧**第一个 NAL 的到达时刻**，不是"凑齐一整帧"的时刻。
   //   凑齐时刻会把"等下一帧第一个 VCL 才知道上帧结束"的那一帧时间算进延迟（虚高 ~8ms@120fps）。
@@ -175,6 +184,28 @@ static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
 /* ── 参数集取证（给 VideoToolbox 的 extradata） ── */
 
 /** 从一段 Annex-B 里抠出 SPS(7)+PPS(8)，拼成 extradata 形态；没凑齐返回 0 */
+/* NAL 合法性快速判定（决策 #1256）。
+ * 【为什么必须有】`adb exec-out screenrecord` 的输出里会**混进设备侧的日志文本**
+ *   （实测小米：`getCotaRegionCustIntFeature do not exist with the carrier or region : 0`）。
+ *   那行字首字节是 0x67 ⇒ `& 0x1f == 7` ⇒ **被当成 SPS**，73 字节 ASCII 进了 extradata，
+ *   于是 VideoToolbox 拿到一份坏参数集：`Clipping illegal num_reorder_frames` /
+ *   `Error decoding the extradata`，接下来逐帧硬解被拒、画面只剩零星几帧。
+ * 【判据】真实 SPS/PPS/VCL 是二进制，且为防竞争字节会插入 0x03 —— **绝不会出现
+ *   连续 ≥8 个可打印 ASCII**；再夹一个长度上限。两条都过才认为是真 NAL。 */
+static int live_nal_ok(const unsigned char *p, int len) {
+  if (len <= 0 || len > LIVE_AU_MAX) return 0;
+  int run = 0;
+  for (int i = 0; i < len; i++) {
+    unsigned char c = p[i];
+    if (c >= 0x20 && c <= 0x7e) {
+      if (++run >= 8) return 0;   /* 连续 8 个可打印字符 ⇒ 这是文本，不是码流 */
+    } else {
+      run = 0;
+    }
+  }
+  return 1;
+}
+
 static int live_find_params(const unsigned char *au, int n, unsigned char *out, int cap) {
   static const unsigned char sc4[4] = {0, 0, 0, 1};
   int out_len = 0, sps = 0, pps = 0, pos = 0;
@@ -186,7 +217,7 @@ static int live_find_params(const unsigned char *au, int n, unsigned char *out, 
     int len = ((e < 0) ? n : e) - body;
     if (len > 0) {
       int type = au[body] & 0x1f;
-      if ((type == 7 || type == 8) && out_len + len + 4 < cap) {
+      if ((type == 7 || type == 8) && live_nal_ok(au + body, len) && out_len + len + 4 < cap) {
         memcpy(out + out_len, sc4, 4);
         out_len += 4;
         memcpy(out + out_len, au + body, (size_t)len);

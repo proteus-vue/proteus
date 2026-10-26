@@ -14625,3 +14625,26 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **诚实边界**：判据用 `keyboard.down('Alt')` 模拟；“窗口里按 ⌥ 拖一下、手机跟着滑”仍欠人眼；
     多指/双指缩放/惯性甩动没做（`input` 只能合成单指线性手势，双指要 sendevent 拼多点）；
     手势提示只放在 chip tooltip（不加常驻说明条，避免顶栏变说明栏）。
+
+1256. **投屏黑屏的真因：设备日志文本被当成 SPS（坏 extradata）+ 硬解自动降级 + GL 视图零尺寸起步**（2026-10-26 · 用户「看不到投屏内容，只有一块黑布」）:
+  - **症状**：入队 AU 6089 / **出帧 1** / 空转 3359·3403 / 解码"—" ⇒ 码流在进、解码不出帧。
+    用户补的线索是关键：「先出现投屏，然后被黑屏覆盖；那个投屏不是在我们窗口里，是一个单独的窗口」。
+  - **取证链（每步排一个猜测）**：① ffmpeg CLI 硬解同尺寸裸流 **0 错正常出帧** ⇒ 码流没问题；
+    ② 同一份 AU 走软解 **291 帧/8s、0 错、1.1ms/帧** ⇒ 拆包没问题；③ 硬解路径日志刷
+    `hardware accelerator failed to decode picture` **且开头有 `Error decoding the extradata`**
+    ⇒ extradata 坏了；④ 新增取证钩子 `POC_DUMP_PARAMS` 落盘 ⇒ **109 字节里混着一行设备日志文本**
+    （`getCotaRegionCustIntFeature do not exist...`），首字节 `0x67 & 0x1f == 7` ⇒ **被当成 SPS**。
+  - **根因**：`adb exec-out screenrecord` 的 **stdout 里混进了小米 ROM 的日志文本**，我们的拆包把它当 NAL。
+  - **修 1 · NAL 合法性过滤**：真实参数集不会出现连续 ≥8 个可打印 ASCII ⇒ 用这条判据挡掉文本。
+    ★**只对 type 7/8 生效**：第一版对所有 NAL 都用，结果整屏是文字时**真 IDR（26KB）被误删、frames 归零**
+    ⇒ **启发式只能用在"本该很短很干净"的东西上**。修后 extradata **109→32B**、`Error decoding the extradata` 归零。
+  - **修 2 · 硬解自动降级**：VT 在这份参数集上"解码成功却上不了屏"（VT 出 114 帧 / presented 0）⇒
+    1.5s 后实测出帧率 <30fps 就用同一份 extradata 重开**不带 hw_device_ctx** 的解码器，`g_hw=false`
+    ⇒ 面板如实显示"软解"。**判据迭代三次**：send_packet 返回值（内部回退 ⇒ 恒 0）→ 帧格式（VT 确出部分帧）
+    → **实际出帧率**（用户看到的就是这个）。最终 **235 帧/8s · 解码 1.16ms · VT 失败 0**。
+  - **修 3 · GL 视图初始零尺寸**：原来一出生就铺满 contentView ⇒ 用户看到"投屏先在大窗口闪一下"（他说的"单独窗口"）；
+    改成 `NSMakeRect(0,0,0,0)`，等 `set_canvas_rect` 到了再长。
+  - **诚实边界**：VT 上屏为零的**根因没查到**（怀疑 hw→CPU 传输/纹理重建），当前靠自动降级兜住；
+    **门禁抓不到这类**（Playwright 桩不解码真流）⇒ 下一步补 `check:studio-live`（真机跑 POC_SECONDS 断出帧率，CI 跳过）。
+  - **教训**：**"设备往我们的通道里塞了别的东西"是这类黑屏的常见根因**——拆包要有合法性判据，
+    而不是"看见起始码就当 NAL"。

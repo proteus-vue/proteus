@@ -151,6 +151,55 @@ static double g_lat[MAX_SAMPLES], g_qw[MAX_SAMPLES], g_dec[MAX_SAMPLES];
 static int g_n_lat = 0, g_n_qw = 0, g_n_dec = 0;
 static double g_last_t_first = 0;  /* 当前渲染帧的首字节时刻 */
 
+/* ── 硬解健康度（决策 #1256）────────────────────────────────────────────────
+ * 【为什么需要】VideoToolbox 在**某些参数集**上会逐帧拒绝（实测：小米竖屏 884×1920 / High@5.1，
+ *   8 秒 411 次 `hardware accelerator failed to decode picture`），而被拒的包在
+ *   `avcodec_send_packet` 返回错之后被**静默丢弃** ⇒ 画面全黑，面板却仍显示"运行中 + 硬解"。
+ *   同一份码流软解 0 错、1.1ms/帧 ⇒ 不是"流坏了"，是"这台机器硬解吃不了这份参数集"。
+ * 【判据】不按"失败数 > 0"判（纯 SPS/PPS 的 AU、重复 IDR 本来就会失败），而是
+ *   **失败包数显著多于成功解出的帧**（>2 倍且 ≥4 个）⇒ 判硬解这条路走不通。
+ * 【动作】用同一份 extradata 重开一个**不带 hw_device_ctx** 的解码器并 flush；
+ *   g_hw 置 false ⇒ `out[17]` 跟着变 ⇒ 面板如实显示"软解"（不再是假读数）。 */
+static long g_dec_fail = 0;      /* send_packet 失败的包数（原先被静默丢掉） */
+static long g_hw_frames = 0;     /* 真正由 VT 解出的帧（format == VIDEOTOOLBOX） */
+static long g_sw_frames = 0;     /* 硬解会话里**回退成软解**解出的帧（format 是 YUV 平面） */
+static int g_dec_sw = 0;         /* 已从硬解切到软解 */
+static double g_dec_t0 = 0;      /* 本次解码会话的起点（给首个 IDR 留时间） */
+static unsigned char g_dec_params[4096];
+static int g_dec_plen = 0;
+
+static void maybe_degrade_to_sw(void) {
+  if (!g_hw || g_dec_sw) return;
+  if (now_ms() - g_dec_t0 < 1200) return;
+  /* ★判据用**实际出帧率**（用户看到的就是这个）：
+     · 第一版用 send_packet 返回值 —— VT 逐帧失败时 ffmpeg 内部回退软解并返回成功，
+       失败计数恒为 0 ⇒ 永远不触发；
+     · 第二版用帧格式（VT vs YUV）—— 仍然不触发，因为 VT 确实**出了一部分**帧；
+     · 现在：1.5 秒后实测出帧率 < 30fps 就判定"硬解这条路在这份参数集上跑不动"。
+       实测对照：720p 硬解 42fps（不该降）· 884×1920 硬解 8fps（该降）· 同流软解 36fps（降完就够用）。 */
+  double el = now_ms() - g_dec_t0;
+  if (el < 1500) return;
+  double fps = (double)g_frames / (el / 1000.0);
+  if (fps >= 30.0) return;
+  const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
+  AVCodecContext *nc = avcodec_alloc_context3(dec);
+  if (!nc) return;
+  nc->flags |= AV_CODEC_FLAG_LOW_DELAY;
+  if (g_dec_plen > 0) {
+    nc->extradata = (uint8_t *)av_mallocz((size_t)g_dec_plen + AV_INPUT_BUFFER_PADDING_SIZE);
+    memcpy(nc->extradata, g_dec_params, (size_t)g_dec_plen);
+    nc->extradata_size = g_dec_plen;
+  }
+  if (avcodec_open2(nc, dec, NULL) < 0) { avcodec_free_context(&nc); return; }
+  avcodec_free_context(&g_cc);
+  g_cc = nc;
+  avcodec_flush_buffers(g_cc);
+  g_dec_sw = 1;
+  g_hw = false;
+  fprintf(stderr, "实时：硬解只有 %.1ffps（VT 出 %ld 帧 / 回退 %ld 帧）⇒ 已自动切软解\n",
+          fps, g_hw_frames, g_sw_frames);
+}
+
 /* ── 实时直方图（面板用）：固定窗口的环形缓冲，取值时排序求分位 ──
    为什么不用 g_iv/g_lat 那批：那些是"给最终报告用"的一次性全量数组，只增不滑；
    面板要的是**最近**表现，所以这里单独一套滑动窗口（240 帧 ≈ 4s@60fps）。 */
@@ -256,6 +305,15 @@ static int poc_attach_impl(void *parent_nsview) {
         g_hw = true;
       }
       int open_rc = avcodec_open2(g_cc, dec, NULL);
+      /* 留一份参数集：硬解失败后要用它重开软解解码器（决策 #1256） */
+      g_dec_plen = plen < (int)sizeof(g_dec_params) ? plen : (int)sizeof(g_dec_params);
+      if (g_dec_plen > 0) memcpy(g_dec_params, params, (size_t)g_dec_plen);
+      g_dec_t0 = now_ms();
+      { /* 取证钩子：POC_DUMP_PARAMS=<path> 把抽出的参数集落盘（决策 #1256 就是靠它抓到
+           "设备日志文本被当成 SPS" 的）。默认不写，零开销。 */
+        const char *dp = getenv("POC_DUMP_PARAMS");
+        if (dp) { FILE *f = fopen(dp, "wb"); if (f) { fwrite(params, 1, (size_t)plen, f); fclose(f); } }
+      }
       fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
       if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return 2; }
 
@@ -293,7 +351,10 @@ gl_init:
     };
     NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
     if (!pf) { fprintf(stderr, "像素格式失败\n"); return 2; }
-    g_view = [[PocGLView alloc] initWithFrame:[g_parent bounds] pixelFormat:pf];
+    /* ★初始 frame 用**零尺寸**而不是 [g_parent bounds]（决策 #1256）：
+       以前它一出生就铺满整个 contentView ⇒ 用户会看到投屏"先在一个大窗口里闪一下"，
+       等前端 `set_canvas_rect` 到了才收进设备框。零尺寸起步 = 第一帧就在正确的框里出现。 */
+    g_view = [[PocGLView alloc] initWithFrame:NSMakeRect(0, 0, 0, 0) pixelFormat:pf];
     [g_view setWantsBestResolutionOpenGLSurface:YES];
     [g_parent addSubview:g_view positioned:NSWindowBelow relativeTo:nil];
 
@@ -498,9 +559,16 @@ static int poc_tick_impl(void) {
         double t_dec0 = now_ms();
         int sret = avcodec_send_packet(g_cc, g_pkt);
         if (sret >= 0) g_send_ok++;
+        else g_dec_fail++;   /* 原先静默丢掉 ⇒ 全黑但没人知道（决策 #1256） */
         av_packet_unref(g_pkt);
         if (sret < 0) continue;
         while (avcodec_receive_frame(g_cc, g_frm) == 0) {
+          /* 硬解会话里数一下"到底谁解的"（#1256）：
+             VT 成功 ⇒ format=VIDEOTOOLBOX；VT 被拒后 ffmpeg 回退 ⇒ 普通 YUV 平面。 */
+          if (g_hw && !g_dec_sw) {
+            if (g_frm->format == AV_PIX_FMT_VIDEOTOOLBOX) g_hw_frames++;
+            else g_sw_frames++;
+          }
           if (!g_last) g_last = av_frame_alloc();
           av_frame_unref(g_last);
           av_frame_move_ref(g_last, g_frm);
@@ -512,6 +580,7 @@ static int poc_tick_impl(void) {
         if (g_rec) hist_add(&h_dec, dec_ms);
         g_last_t_first = au.t_ms;
       }
+      maybe_degrade_to_sw();   /* 硬解逐帧被拒时切软解（#1256） */
       if (!got) { g_empty++; return 0; }
       goto use_last;
     }
