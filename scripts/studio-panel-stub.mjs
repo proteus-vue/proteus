@@ -82,7 +82,14 @@ export function stubTauri(payload) {
               { path: 'packages/studio/src/main.rs', status: 'M' },
             ],
           }
-        if (cmd === 'git_head') return '// HEAD-VERSION-MARKER\nconst baseline = 1\n'
+        // ★按 path 返回（决策 #1247）：原来不管哪个文件都回同一段文本 ⇒
+        //   "把 A 的 HEAD 内容拿去和 B 的缓冲做 diff"这类**串文件**缺陷在判据里永远看不出来
+        //   （桩自己把两个文件变成同一份内容，等于替被测物把 bug 掩盖了）。
+        //   真实现是 `git show HEAD:<path>`，当然一个文件一份。
+        if (cmd === 'git_head') {
+          const p = String(args?.path ?? '')
+          return `// HEAD-VERSION-MARKER ${p}\nconst baseline = 1\n`
+        }
         // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭
         if (cmd === 'set_dirty_count') return null
         if (cmd === 'close_now') return null

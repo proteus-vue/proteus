@@ -560,11 +560,17 @@ await page.waitForTimeout(150)
   await page.click('#gitList .gitem[data-git="packages/studio/src/main.rs"]')
   await page.waitForTimeout(400)
   const gitOpened = await page.evaluate(() => (document.getElementById('codePath')?.textContent ?? '').trim())
-  // 回到 App.vue，验证 Diff 能切到 HEAD
+  // 回到 App.vue，验证 Diff 能**手动**切到 HEAD（判据 ⑱h 的老职责，别被 #1247 的自动联动顶掉）
   await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
   await page.waitForTimeout(350)
-  await page.click('#diffToggle')
-  await page.waitForTimeout(250)
+  // ★#1247 起：点清单项本身就会进 Diff(head)，这里再点 #diffToggle 会把它**关掉** ⇒ 按需打开
+  const diffWasOpen = await page.evaluate(() => !!document.getElementById('diffView'))
+  if (!diffWasOpen) {
+    await page.click('#diffToggle')
+    await page.waitForTimeout(250)
+  }
+  await page.click('#diffView [data-src="disk"]')
+  await page.waitForTimeout(200)
   await page.click('#diffView [data-src="head"]')
   await page.waitForTimeout(350)
   const headDiff = await page.evaluate(() => {
@@ -580,5 +586,41 @@ await page.waitForTimeout(150)
   await page.click('#diffToggle')
   await page.waitForTimeout(200)
 
-  return { gitBar, gitList, gitOpened, headDiff, diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
+  // ── ㉞ 改动清单 ↔ Diff 联动（决策 #1247）：点清单项 = 打开 + 直接看它相对 HEAD 的改动 ──
+  //   ★这条判据真正钉的是「**当前这个文件**的 HEAD」：桩按 path 返回不同标记，所以
+  //     只要 `headText` 还是上一个文件的（串文件），删除行里就会冒出 App.vue 的标记 ⇒ 当场红。
+  //     （原桩不分 path，这条缺陷根本测不出来 —— 桩替被测物把 bug 藏了。）
+  await page.click('#gitList .gitem[data-git="packages/studio/src/main.rs"]')
+  await page.waitForTimeout(520)
+  const linked = await page.evaluate(() => {
+    const v = document.getElementById('diffView')
+    const dels = v ? [...v.querySelectorAll('.row.del .txt')].map((n) => n.textContent ?? '') : []
+    return {
+      path: (document.getElementById('codePath')?.textContent ?? '').trim(),
+      open: !!v,
+      headOn: document.querySelector('#diffView [data-src="head"]')?.classList.contains('on') ?? false,
+      marker: dels.find((x) => x.includes('HEAD-VERSION-MARKER')) ?? '',
+      highlighted: document.querySelector('#gitList .gitem.cur')?.getAttribute('data-git') ?? '',
+    }
+  })
+  // 反向联动：从**文件树**打开另一个文件，清单高亮要跟着走，**Diff 的 HEAD 内容也必须跟着换**
+  //   ★这一半是"串文件"缺陷的唯一出口：来源仍是 head、Diff 还开着，用户只是点了另一个文件。
+  //     若此时 `headText` 没重取，屏幕上就是「A 的 HEAD vs B 的缓冲」——行号连续、增减数合理，
+  //     内容全错。第一版判据只断言了高亮，变异（把重取换成 refreshDiff）照样绿 ⇒ 才补上内容断言。
+  await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
+  await page.waitForTimeout(420)
+  const afterTree = await page.evaluate(() => {
+    const v = document.getElementById('diffView')
+    const dels = v ? [...v.querySelectorAll('.row.del .txt')].map((n) => n.textContent ?? '') : []
+    return {
+      highlighted: document.querySelector('#gitList .gitem.cur')?.getAttribute('data-git') ?? '',
+      marker: dels.find((x) => x.includes('HEAD-VERSION-MARKER')) ?? '',
+      headOn: document.querySelector('#diffView [data-src="head"]')?.classList.contains('on') ?? false,
+    }
+  })
+  // 收起 Diff，别把界面状态留给后面（本组是最后一步，留干净便于截图取证）
+  await page.click('#diffToggle')
+  await page.waitForTimeout(200)
+
+  return { gitBar, gitList, gitOpened, headDiff, linked, afterTree, diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone }
 }

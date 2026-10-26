@@ -14534,3 +14534,35 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     → Diff 切 HEAD 后**删除行里出现 HEAD 专属标记**。**破坏性验证**：让 `git_head` 返回 null ⇒ 立刻红。
   - **下一步**：第一刀四件（多标签 / 搜索 / Diff / Git 只读）**全部完成**。接下来可选：
     改动文件与 Diff 联动（点清单项直接看 HEAD diff）、提交能力（需要先明确"谁能提交"）。
+
+1253. **改动清单 ↔ Diff 联动（第一刀收口）+ 把两个越线文件拆回 1000 行内 · 判据 ㉞**（2026-10-26 · 用户「好的继续」）:
+  - **开单先修红（不是本单造成）**：`check:file-size` 当时 **rc=1**——`CodePanel.vue` 1182 行、
+    `check-studio-panel.mjs` 1063 行，都在 10-25 期间越了 1000 行硬上限却**没进基线**。
+    ⇒ **「门禁全绿」必须按"跑过哪些门禁"说话**：10-25 收尾的"53/53 全绿"只覆盖 `check:studio-panel`
+    一条，`check:file-size` 从 #1234 之后一直是红的。**只跑一条门禁就说全绿 = 报告口径假绿**。
+  - **拆法（按职责，不按行数）**：`CodePanel.vue` 1182→**922**（`GitBar.vue` / `TabBar.vue` / `FileTree.vue`
+    + 纯逻辑 `git.ts` / `fileTree.ts`）；`check-studio-panel.mjs` 1077→**987**
+    （`studio-panel-icons.mjs` / `-stale.mjs` / `-device.mjs` / `-serve.mjs`）。
+    ★树菜单的「复制路径」用 emit 回 CodePanel 走**同一份** `copyPath`——两个实现必然漂移，
+      而判据 ㉛ 断言的正是那句文案。
+  - **联动语义（跟 VS Code 的 SCM 对齐）**：点改动清单项 = **打开该文件 + 进 Diff 且来源 HEAD**；
+    清单里属于当前文件的那一行亮左侧强调条（与文件树同一套选中语汇）。
+    ★走 `open(path, { diff })` 而不是另写 `openAndDiff()`：**"打开哪个文件"与"看哪个文件的差异"必须
+      同一条状态更新路径**，两条路径必然在 `cur`/`recs`/`states` 上漂移。
+  - **顺手修真缺陷**：`headText` 装的是**上一个文件**的 HEAD。原"读盘分支"只调 `refreshDiff()`
+    ⇒「来源=HEAD 时切文件」会把 **A 的 HEAD 与 B 的缓冲**做 diff（行号连续、增减数合理、**内容全错且不报错**）。
+    现 `syncDiffAfterOpen()`：来源是 head 就为当前文件重取。
+  - **桩必须先改**：`git_head` 原来**不分 path**、永远回同一段文本 ⇒ 串文件缺陷在判据里**永远测不出来**
+    （桩替被测物把 bug 藏了）。改成按 path 返回后，⑱h 也收紧为"删除行必须带**这个**文件的标记"。
+  - **判据 53→54（㉞）**：点清单项 ⇒ 文件换了 + Diff 自动开 + 来源 HEAD + 删除行是该文件自己的标记
+    + 从树上打开另一个文件后**高亮跟随且 HEAD 内容重取**。
+  - **破坏性验证三条全红**：M1 不进 Diff（打开=false）/ M2 不重取 HEAD（App.vue 的删除行里是 main.rs 的标记）/
+    M3 不高亮（高亮=—）。★**M2 第一次是绿的**：第一版 ㉞ 只断言高亮，而带 `{diff:'head'}` 走的是 `enterDiff`
+    分支、压根不经过被变异的代码 ⇒ **补上内容断言才红**。教训：**变异不是为了证明判据对，是为了找出它没覆盖的操作序列**。
+  - **环境**：本会话在隔离 worktree（无 node_modules），**没有**动主目录，而是 `ln -s` 复用其 `node_modules`
+    并写进 `.git/info/exclude`；门禁 44~50s/次可直接跑。`check:script-compile` 在该 worktree 跑不起来
+    （依赖 `packages/compiler/dist`）⇒ 逐文件 `node --check` 替代（7 个脚本全过）。
+  - **诚实边界**：判据仍是 Playwright 桩 + chromium，真实 Tauri 窗口未人眼验；`.app` 未重打包；
+    提交/推送能力**依然刻意没有**（push 必须人工）。
+  - **下一步**：①提交能力需先定规则（谁能提交、push 是否永远人工）；②下一刀方向待定
+    （终端 pty / 真实设备投屏 / 调试器）——**投屏是 Studio 相对 VS Code 的唯一存在理由**（画布现在还是录制流）。

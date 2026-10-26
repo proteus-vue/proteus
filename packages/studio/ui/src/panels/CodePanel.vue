@@ -23,7 +23,7 @@
 //     否则"红=错误"和"红=字符串"会在同一屏上互相误导。
 //   ★仍然不自己写分词器（G-56.1 红线：编辑器内核只用现成的）。
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorState, type Extension } from '@codemirror/state'
 import {
   EditorView,
@@ -50,27 +50,27 @@ import { editorLang, effectiveLangId, langOverrides, trackEditorFile } from '../
 import {
   copyText,
   gitHead,
-  gitStatus,
   hasBridge,
   invoke,
   listFiles,
   onCloseBlocked,
   readText,
   writeText,
-  type GitStatusInfo,
   type SearchHit,
 } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
 import SearchBox from './SearchBox.vue'
-import FileIcon from '../icons/FileIcon.vue'
-import FolderIcon from '../icons/FolderIcon.vue'
+import FileTree from './FileTree.vue'
+import TabBar from './TabBar.vue'
+import GitBar from './GitBar.vue'
+import { revealPath } from '../fileTree'
+import { refreshGit } from '../git'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
 import DiffView from '../DiffView.vue'
-import { fileTypeIcon } from '../fileIcons'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
 const ws = useWorkspaceState()
@@ -142,66 +142,9 @@ async function jumpTo(h: SearchHit) {
 }
 
 
-/* ─── 目录树（扁平化渲染：一次 v-for + 缩进，比递归组件少一层抽象）───────────── */
-interface TreeNode {
-  name: string
-  path: string
-  dir: boolean
-  children: TreeNode[]
-}
-
-function buildTree(paths: string[]): TreeNode[] {
-  const root: TreeNode = { name: '', path: '', dir: true, children: [] }
-  for (const p of paths) {
-    const parts = p.split('/')
-    let node = root
-    for (let i = 0; i < parts.length; i++) {
-      const name = parts[i]!
-      const isLeaf = i === parts.length - 1
-      let next = node.children.find((c) => c.name === name)
-      if (!next) {
-        next = { name, path: parts.slice(0, i + 1).join('/'), dir: !isLeaf, children: [] }
-        node.children.push(next)
-      }
-      node = next
-    }
-  }
-  // 目录在前、文件在后，同级按名字（不区分大小写）——IDE 的通用排序
-  const sort = (ns: TreeNode[]) => {
-    ns.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1))
-    ns.forEach((n) => sort(n.children))
-  }
-  sort(root.children)
-  return root.children
-}
-
-const tree = computed(() => buildTree(files.value))
-const rows = computed<{ node: TreeNode; depth: number }[]>(() => {
-  const out: { node: TreeNode; depth: number }[] = []
-  const walk = (ns: TreeNode[], depth: number) => {
-    for (const n of ns) {
-      out.push({ node: n, depth })
-      if (n.dir && !ws.codeCollapsed.includes(n.path)) walk(n.children, depth + 1)
-    }
-  }
-  walk(tree.value, 0)
-  return out
-})
-
-function toggle(dir: string) {
-  const i = ws.codeCollapsed.indexOf(dir)
-  if (i >= 0) ws.codeCollapsed.splice(i, 1)
-  else ws.codeCollapsed.push(dir)
-}
-
-/** 打开文件时把它所在的所有目录展开（否则文件被折叠在看不见的地方） */
-function revealPath(path: string) {
-  const parts = path.split('/')
-  for (let i = 1; i < parts.length; i++) {
-    const j = ws.codeCollapsed.indexOf(parts.slice(0, i).join('/'))
-    if (j >= 0) ws.codeCollapsed.splice(j, 1)
-  }
-}
+/* ─── 目录树（决策 #1247 已拆到 `FileTree.vue` + `fileTree.ts`）─────────────────
+ * 这里只剩一件与编辑器耦合的事：打开文件时把它的祖先目录展开（否则文件被折叠在看不见的地方）。
+ * 建树/展平/折叠状态操作都是纯逻辑，已移出组件——它们是 1182 行的主要来源之一。 */
 
 /* ─── 编辑器 ────────────────────────────────────────────────────────────── */
 /** ★语言扩展放 **Compartment**（决策 #1241）：用户在状态栏手选语言时**就地重配**，
@@ -360,13 +303,25 @@ function warmParse(v: EditorView) {
   idle(step)
 }
 
-async function open(path: string) {
+/**
+ * 打开一个文件。
+ *
+ * `opts.diff` = 打开后**顺带**把 Diff 打开到指定来源（决策 #1247：Git 清单点一下就回答
+ * "这个文件相对 HEAD 改了什么"）。放在 opts 里而不是再写一个 `openAndDiff()`，
+ * 是因为"打开哪个文件"与"看完哪个文件的差异"必须走**同一条**状态更新路径——
+ * 两条路径必然在 `cur` / `recs` / `states` 上漂移（这正是标签跨界那次缺陷的同族原因）。
+ */
+async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
   if (!path) return
-  // ★点同一个标签 = 什么都不做：重新读盘会把未保存内容与 undo 历史一起冲掉
-  if (path === cur.value && states.has(path)) return
+  // ★点同一个标签 = 不重新读盘：重新读盘会把未保存内容与 undo 历史一起冲掉。
+  //   但"看它的 diff"这半件事仍要做（同一文件再点一次清单项就是这种情形）。
+  if (path === cur.value && states.has(path)) {
+    if (opts.diff) await enterDiff(opts.diff)
+    return
+  }
   cur.value = path
   ws.codeFile = path
-  revealPath(path)
+  revealPath(path, ws.codeCollapsed)
   if (!tabs.value.includes(path)) tabs.value.push(path)
   ws.openFiles = [...tabs.value]
   err.value = ''
@@ -381,10 +336,7 @@ async function open(path: string) {
     // ★这条分支也必须登记：文件已在内存时走这里，漏了状态栏就会停在上一个文件的类型上（实测踩到）
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
-    if (showDiff.value) {
-      if (diffSource.value === 'head') void switchDiffSource('head')
-      else refreshDiff()
-    }
+    await syncDiffAfterOpen(opts.diff)
     dirty.value = cached.doc.toString() !== rec0.base
     setTabDirty(path, dirty.value)
     lineCount.value = cached.doc.lines
@@ -403,7 +355,7 @@ async function open(path: string) {
     view?.setState(st)
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
-    if (showDiff.value) refreshDiff()
+    await syncDiffAfterOpen(opts.diff)
     dirty.value = false
     setTabDirty(path, false)
     lineCount.value = st.doc.lines
@@ -512,27 +464,6 @@ async function refreshFiles() {
   }
 }
 
-function onNodeMenu(e: MouseEvent, node: { path: string; dir: boolean }) {
-  const collapsed = ws.codeCollapsed.includes(node.path)
-  openMenu(
-    e,
-    [
-      node.dir
-        ? { id: 'toggle', label: collapsed ? '展开目录' : '折叠目录' }
-        : { id: 'open', label: '打开' },
-      { id: 's1', label: '', sep: true },
-      { id: 'copyPath', label: '复制相对路径' },
-      { id: 'refresh', label: '刷新文件树' },
-    ],
-    (id) => {
-      if (id === 'toggle') toggle(node.path)
-      else if (id === 'open') void open(node.path)
-      else if (id === 'copyPath') void copyPath(node.path)
-      else if (id === 'refresh') void refreshFiles()
-    },
-  )
-}
-
 function onEditorMenu(e: MouseEvent) {
   if (!cur.value) return
   openMenu(
@@ -572,13 +503,6 @@ watch(
   },
 )
 
-/** 树行图标：目录分展开/折叠；文件按扩展名取类型图标与类型色 */
-function nodeIcon(node: { path: string; dir: boolean }): { name: string; color?: string } {
-  if (node.dir) return { name: ws.codeCollapsed.includes(node.path) ? 'folder' : 'folderOpen' }
-  const t = fileTypeIcon(node.path)
-  return t ? { name: t.icon, color: t.color } : { name: 'file' }
-}
-
 /**
  * 保存**指定文件**（不一定是当前标签）——关闭其他标签时要能把它们一起存掉。
  * 返回是否成功（失败会自己弹错误 toast，调用方据此决定要不要继续关闭）。
@@ -616,18 +540,8 @@ async function save() {
   }
 }
 
-/* ── Git 只读（决策 #1246）：分支 + 改动清单。**不做任何写操作** ─────────────── */
-const git = ref<GitStatusInfo | null>(null)
-const gitOpen = ref(false)
-
-async function refreshGit() {
-  if (!hasBridge()) return
-  try {
-    git.value = await gitStatus()
-  } catch {
-    git.value = null
-  }
-}
+/* ── Git 只读（决策 #1246）：状态与拉取都在 `ui/src/git.ts`（#1247 拆出，GitBar.vue 渲染）
+ *    —— 这里只负责"保存后刷新一下"，因为那件事发生时用户在编辑器里。 ─────────── */
 
 /* ── Diff 视图（决策 #1245）：比"磁盘基线 vs 当前缓冲" ───────────────────── */
 const showDiff = ref(false)
@@ -656,6 +570,38 @@ async function switchDiffSource(src: 'disk' | 'head') {
     }
   }
   refreshDiff()
+}
+
+/** 进入 Diff 并切到指定来源（`open(path, { diff })` 走这里，决策 #1247） */
+async function enterDiff(src: 'disk' | 'head') {
+  showDiff.value = true
+  await switchDiffSource(src)
+}
+
+/**
+ * 打开文件后把 Diff 对齐到**当前这个文件**（决策 #1247 修的一个真缺陷）。
+ * ★`headText` 是**上一个文件**的 HEAD 内容。原来读盘分支只调了 `refreshDiff()`，
+ *   于是"来源=HEAD 时切到另一个文件"会把 A 的 HEAD 与 B 的缓冲做 diff ——
+ *   行号连续、增减数看着合理，**内容完全串了**，而且不会报错。
+ *   来源是 head 就必须为当前文件重取；不能指望"上次抓的那份还能用"。
+ */
+async function syncDiffAfterOpen(src?: 'disk' | 'head') {
+  if (src) {
+    await enterDiff(src)
+    return
+  }
+  if (!showDiff.value) return
+  if (diffSource.value === 'head') await switchDiffSource('head')
+  else refreshDiff()
+}
+
+/**
+ * Git 清单项 → "打开 + 直接看相对 HEAD 的改动"（决策 #1247 的联动）。
+ * ★未跟踪文件（`?`）的 HEAD 版本不存在，仍进 Diff：头部会写"HEAD 里没有这个文件"，
+ *   这是**事实**不是错误——比"点了没反应"好得多。
+ */
+function openChanged(path: string) {
+  void open(path, { diff: 'head' })
 }
 
 function toggleDiff() {
@@ -816,51 +762,17 @@ onBeforeUnmount(() => {
       <div class="side">
         <!-- 搜索框常驻顶部；一旦有查询，结果列表**替换**目录树（VS Code 同款：同一时刻一个列表） -->
         <SearchBox ref="searchBox" @jump="jumpTo" @active="searchActive = $event" />
-        <!-- Git 只读条（决策 #1246）：分支 + 改动数；点开是改动清单，点文件直接打开 -->
-        <div v-if="git?.isRepo" class="gitbar" id="gitBar">
-          <button class="gbranch" @click="gitOpen = !gitOpen" :title="`分支：${git.branch}（只读）`">
-            <span class="bmark">⎇</span><span class="bname" id="gitBranch">{{ git.branch }}</span>
-            <span v-if="git.ahead || git.behind" class="ab">↑{{ git.ahead }} ↓{{ git.behind }}</span>
-          </button>
-          <button class="gcount" id="gitCount" :class="{ clean: !git.files.length }" @click="gitOpen = !gitOpen">
-            {{ git.files.length ? `${git.files.length} 处改动` : '干净' }}
-          </button>
-        </div>
-        <div v-if="git?.isRepo && gitOpen && git.files.length" class="gitlist" id="gitList">
-          <button
-            v-for="f in git.files"
-            :key="f.path"
-            class="gitem"
-            :data-git="f.path"
-            :title="f.path"
-            @click="open(f.path)"
-          >
-            <span class="gst" :data-st="f.status">{{ f.status }}</span>
-            <span class="gpath">{{ f.path.split('/').pop() }}</span>
-          </button>
-        </div>
-        <nav v-if="!searchActive" class="files" id="codeFiles">
-        <button
-          v-for="r in rows"
-          :key="r.node.path"
-          :class="{ on: r.node.path === cur, dir: r.node.dir }"
-          :style="{ paddingLeft: `${8 + r.depth * 14}px` }"
-          :title="r.node.path"
-          :data-dir="r.node.dir ? r.node.path : undefined"
-          :data-file="r.node.dir ? undefined : r.node.path"
-          :aria-expanded="r.node.dir ? !ws.codeCollapsed.includes(r.node.path) : undefined"
-          :data-icon="nodeIcon(r.node).name"
-          @click="r.node.dir ? toggle(r.node.path) : open(r.node.path)"
-          @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
-        >
-          <!-- ★不再画折叠箭头（决策 #1238）：目录**图标本身**就是展开/折叠的开关——
-               闭合与展开是两套形状，点行即切；层级改由缩进表达。
-               少一个 12px 箭头，名字整体左移，和同级文件名的左边界才真正对齐。 -->
-          <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
-          <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
-          <span class="name">{{ r.node.name }}</span>
-        </button>
-        </nav>
+        <!-- Git 只读条（决策 #1246 · #1247 拆成组件）：分支 + 改动数；点清单项 = 打开 + 看 HEAD diff -->
+        <GitBar :cur="cur" @open="openChanged" />
+        <!-- 文件树（#1247 拆成组件）：只在没有搜索查询时显示（同一时刻只有一个列表） -->
+        <FileTree
+          v-if="!searchActive"
+          :files="files"
+          :cur="cur"
+          @open="open"
+          @copy="copyPath"
+          @refresh="refreshFiles"
+        />
       </div>
       <!-- ★右栏 = 编辑器自己的区域（决策 #1218）：文件信息条 + 标签栏 + 编辑器**都在这里**。
            原先它们是 `.codepane` 的直接子元素 ⇒ 横跨整页、压在左栏树上面（用户截图指出）。
@@ -875,30 +787,16 @@ onBeforeUnmount(() => {
           </button>
           <span v-else-if="saving" class="meta">保存中…</span>
           <button class="dtoggle" id="diffToggle" :class="{ on: showDiff }" :aria-pressed="showDiff"
-                  title="对比磁盘上的版本（看未保存的改动）" @click="toggleDiff">
+                  :title="showDiff ? (diffSource === 'head' ? '当前对比 git HEAD（只读）' : '当前对比磁盘上的版本') : '对比磁盘上的版本（看未保存的改动）'"
+                  @click="toggleDiff">
             Diff
           </button>
           <span style="flex: 1" />
           <span class="note" id="codeNote">⌘S 保存 · 底部可切语言模式（28 种）</span>
         </div>
-        <!-- 标签栏（2026-10-25 · 决策 #1217）：点=切换，×=关闭，小圆点=未保存。
+        <!-- 标签栏（2026-10-25 · 决策 #1217 · #1247 拆成组件）：点=切换，×=关闭，小圆点=未保存。
              ★标签只负责"切换文件"，缓冲与 undo 历史在 states 池里，切标签不重建 state。 -->
-        <div v-if="tabs.length" class="tabs" id="codeTabs">
-          <button
-            v-for="p in tabs"
-            :key="p"
-            class="tab"
-            :class="{ on: p === cur }"
-            :title="p"
-            :data-tab="p"
-            @click="open(p)"
-            @contextmenu.prevent.stop="onTabMenu($event, p)"
-          >
-            <span class="tname">{{ p.split('/').pop() }}</span>
-            <span v-if="dirtySet.includes(p)" class="tdot" aria-label="未保存" />
-            <span class="tclose" role="button" aria-label="关闭" @click.stop="close(p)">×</span>
-          </button>
-        </div>
+        <TabBar :tabs="tabs" :cur="cur" :dirty="dirtySet" @open="open" @close="close" @menu="onTabMenu" />
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
         <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
         <div v-show="!err && !showDiff" class="host" id="codeHost" ref="host" @contextmenu.prevent="onEditorMenu" />
@@ -988,89 +886,12 @@ onBeforeUnmount(() => {
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
 }
-/* 目录树（次级侧栏）：行高 24px，落在 4px 网格上 */
-.files {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--sp1) 0;
-}
-.files button {
-  display: flex;
-  align-items: center;
-  gap: var(--sp1);
-  width: 100%;
-  height: 24px;
-  padding-right: var(--sp2);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  font: var(--fs-xs) / 24px ui-monospace, SFMono-Regular, Menlo, monospace;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background var(--dur) var(--ease),
-    color var(--dur) var(--ease);
-}
-.files button:hover {
-  background: var(--bg-overlay);
-  color: var(--fg);
-}
-.files button.on {
-  background: var(--bg-elevated);
-  color: var(--fg);
-  /* 选中态：左侧 2px 强调条（与活动栏同一套语汇，不靠"变亮"单维度区分） */
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.files button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.files button.dir {
-  color: var(--fg);
-}
-/* Git 只读条：一条 22px 的细带，放在文件树上方。不抢注意力，但一眼能看到分支与改动数 */
-.gitbar{display:flex;align-items:center;gap:6px;height:24px;padding:0 var(--sp2);
-  border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);font:11px/1 -apple-system,'PingFang SC',sans-serif}
-.gitbar button{border:0;background:transparent;color:var(--fg-muted);cursor:pointer;font:inherit;
-  padding:2px 4px;border-radius:var(--r-sm)}
-.gitbar button:hover{background:var(--bg-overlay);color:var(--fg)}
-.gbranch{display:flex;align-items:center;gap:4px;min-width:0}
-.bmark{opacity:.6}
-.bname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
-.ab{color:var(--fg-subtle)}
-.gcount{margin-left:auto;flex:none}
-.gcount.clean{color:var(--fg-subtle)}
-.gitlist{max-height:180px;overflow:auto;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface)}
-.gitem{display:flex;align-items:center;gap:6px;width:100%;height:22px;padding:0 var(--sp2);border:0;
-  background:transparent;color:var(--fg-muted);font:11.5px/22px -apple-system,'PingFang SC',sans-serif;
-  text-align:left;cursor:pointer}
-.gitem:hover{background:var(--bg-overlay);color:var(--fg)}
-.gst{flex:none;width:12px;text-align:center;font-weight:600}
-.gst[data-st="M"]{color:var(--syn-number)}
-.gst[data-st="A"]{color:var(--syn-string)}
-.gst[data-st="D"]{color:var(--bad)}
-.gst[data-st="?"]{color:var(--fg-subtle)}
-.gst[data-st="R"]{color:var(--syn-type)}
-.gst[data-st="U"]{color:var(--warn)}
-.gpath{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Diff 开关：低存在感的文字按钮，开了才亮（和"未保存"chip 区分开，别抢注意力） */
 .dtoggle{flex:none;height:18px;padding:0 6px;border:1px solid transparent;border-radius:var(--r-sm);
   background:transparent;color:var(--fg-subtle);font:11px/16px -apple-system,'PingFang SC',sans-serif;
   cursor:pointer}
 .dtoggle:hover{background:var(--bg-overlay);border-color:var(--border-subtle);color:var(--fg)}
 .dtoggle.on{background:rgba(255,255,255,.08);border-color:var(--border);color:var(--fg)}
-.ico {
-  flex: none;
-  opacity: 0.8;
-}
-.name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .pane {
   flex: 1;
   min-width: 0;
@@ -1085,87 +906,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   user-select: text;
-}
-/* 标签栏：行高 28px（4px 网格）；活动标签用底部 2px 强调条，不靠"变亮"单维度 */
-.tabs {
-  flex: none;
-  display: flex;
-  align-items: stretch;
-  height: 28px;
-  padding: 0 var(--sp1);
-  gap: 2px;
-  overflow-x: auto;
-  background: var(--bg-canvas);
-  border-bottom: 1px solid var(--border-subtle);
-  scrollbar-width: none;
-}
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp1);
-  max-width: 220px;
-  padding: 0 var(--sp2);
-  border: 0;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
-  background: transparent;
-  color: var(--fg-muted);
-  font: var(--fs-xs) / 28px ui-monospace, SFMono-Regular, Menlo, monospace;
-  cursor: pointer;
-  box-shadow: inset 0 -2px 0 transparent;
-  transition:
-    background var(--dur) var(--ease),
-    color var(--dur) var(--ease);
-}
-.tab:hover {
-  background: var(--bg-surface);
-  color: var(--fg);
-}
-.tab.on {
-  background: var(--bg-surface);
-  color: var(--fg);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-.tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.tname {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 未保存：一个 5px 圆点（与顶栏 chip 用同一语汇），不抢文字宽度 */
-.tdot {
-  flex: none;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--warn);
-}
-/* 关闭：hover 才显形，常驻会显得很吵（IDE 的通用做法） */
-.tclose {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  border-radius: var(--r-sm);
-  color: var(--fg-subtle);
-  font-size: 13px;
-  line-height: 13px;
-  text-align: center;
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease);
-}
-.tab:hover .tclose,
-.tab.on .tclose,
-.tclose:focus-visible {
-  opacity: 1;
-}
-.tclose:hover {
-  background: var(--bg-overlay);
-  color: var(--fg);
 }
 .err {
   margin: var(--sp4);

@@ -22,13 +22,16 @@
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
-import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
 import { probeCodeExtras, probeMenu, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
+import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
+import { warnIfAppStale } from './studio-panel-stale.mjs'
+import { resolveDevice } from './studio-panel-device.mjs'
+import { serveDist } from './studio-panel-serve.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDIO = path.join(ROOT, 'packages', 'studio')
@@ -62,25 +65,8 @@ if (!fs.existsSync(path.join(DIST, 'index.html'))) {
   process.exit(2)
 }
 
-/** 真实机型（与应用内同一条 adb 命令）；无 adb（如 CI）⇒ 回落 fixture 记录的采集机型 */
-function probeDevice() {
-  const get = (args) => {
-    try {
-      const s = execFileSync('adb', args, { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-      return s || null
-    } catch {
-      return null
-    }
-  }
-  const model = get(['shell', 'getprop', 'ro.product.model'])
-  if (!model) return null
-  const wm = get(['shell', 'wm', 'size'])
-  const size = wm?.split('Physical size:')[1]?.trim()
-  return size ? `${model} · ${size}` : model
-}
-const probed = probeDevice()
-const deviceValue = probed ?? r.device ?? null
-const deviceFrom = probed ? 'adb' : r.device ? 'fixture（采集时机型）' : '无'
+// 机型：真实 adb 优先，回落 fixture（采集时机型）—— 采集段在 studio-panel-device.mjs
+const { device: deviceValue, from: deviceFrom } = resolveDevice(r.device)
 
 const [w, h] = String(r.size ?? '1280x720').split('x').map(Number)
 const stats = {
@@ -106,21 +92,8 @@ const stats = {
   device: deviceValue,
 }
 
-// ★必须走 http：Vite 产物是 ES module，`file://` 下会被 CORS 挡掉（origin=null）。
-//   这也更接近真实运行（Tauri 用 tauri:// 自定义协议，同样是"有 origin"的环境）。
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' }
-const server = http.createServer((req, res) => {
-  const rel = decodeURIComponent((req.url || '/').split('?')[0])
-  const file = path.join(DIST, rel === '/' ? 'index.html' : rel)
-  if (!file.startsWith(DIST) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
-    res.writeHead(404).end('not found')
-    return
-  }
-  res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' })
-  fs.createReadStream(file).pipe(res)
-})
-await new Promise((r) => server.listen(0, '127.0.0.1', r))
-const port = server.address().port
+// 静态服务在 studio-panel-serve.mjs（http 而非 file://：ES module 在 file:// 下被 CORS 挡掉）
+const { port, close: closeServer } = await serveDist(DIST)
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
@@ -480,59 +453,16 @@ const restored = await page.evaluate(() => ({
   path: document.getElementById('codePath')?.textContent?.trim() ?? '',
   files: document.querySelectorAll('#codeFiles button[data-file]').length,
 }))
-// ── ㉗ 图标：改了 SVG 必须重生成，十档尺寸要对（决策 #1224）──────────────────
-// 【为什么这条值得进判据】图标是"外面看不出来"的典型：改了 icon.svg 却把旧 icns 打进包，
-//   跑起来一切正常，只有 Dock 里那个图标是旧的 —— 和"包里是三天前的 UI"同一类假象。
-//   ⇒ 两条：① icns 必须比任一份源 SVG 新；② iconset 十档的像素尺寸必须与 Apple 规定一致。
-const iconsDir = path.join(STUDIO, 'icons')
-// 两个通道各一套：正式（紫/蓝）与预览（绿/青）——通道靠色相，判据要同时盯住两套。
-const ICON_CHANNELS = [
-  { name: 'release', icns: 'icon.icns', src: ['icon.svg', 'icon-small.svg'], png: 'icon.png' },
-  { name: 'preview', icns: 'icon-preview.icns', src: ['icon-preview.svg', 'icon-preview-small.svg'], png: 'icon-preview.png' },
-]
-const ICNS_TYPE = {
-  ic04: 16, ic05: 32, icp4: 16, icp5: 32, icp6: 64,
-  ic07: 128, ic08: 256, ic09: 512, ic10: 1024,
-  ic11: 32, ic12: 64, ic13: 256, ic14: 512,
-}
-const NEED_SIZES = [16, 32, 64, 128, 256, 512, 1024]
-
-/** 解析 icns 的分块（★16/32 在真文件里是 ic04/ic05 的 ARGB，不是 PNG） */
-function readIcns(file) {
-  const b = fs.readFileSync(file)
-  const out = []
-  let off = 8
-  while (off + 8 <= b.length) {
-    const type = b.toString('ascii', off, off + 4)
-    const len = b.readUInt32BE(off + 4)
-    if (len < 8 || off + len > b.length) break
-    const isPng = b.toString('hex', off + 8, off + 12) === '89504e47'
-    if (ICNS_TYPE[type]) out.push([type, isPng ? b.readUInt32BE(off + 8 + 16) : ICNS_TYPE[type]])
-    off += len
-  }
-  return out
-}
-// ★查**产物**（icns 分块），不查 `AppIcon.iconset/`——那是 gitignore 的中间物，CI 里不存在。
-const iconReport = ICON_CHANNELS.map((c) => {
-  const icnsPath = path.join(iconsDir, c.icns)
-  const exists = fs.existsSync(icnsPath)
-  const srcNewest = Math.max(...c.src.map((f) => fs.statSync(path.join(iconsDir, f)).mtimeMs))
-  const ageMin = exists ? Math.round((srcNewest - fs.statSync(icnsPath).mtimeMs) / 60000) : NaN
-  const slices = exists ? readIcns(icnsPath) : []
-  const missing = NEED_SIZES.filter((n) => !slices.some(([, w]) => w === n))
-  const pngOk = fs.existsSync(path.join(iconsDir, c.png))
-    ? fs.readFileSync(path.join(iconsDir, c.png)).readUInt32BE(16) === 1024
-    : false
-  return { ...c, exists, ageMin, slices: slices.length, missing, pngOk }
-})
-const iconOk = iconReport.every((r) => r.exists && r.ageMin <= 0 && r.missing.length === 0 && r.pngOk)
+// ── ㉗ 图标（决策 #1224 · #1247 采集段拆到 studio-panel-icons.mjs）
+//   判据仍是两条：① icns 必须比源 SVG 新；② 各档像素尺寸要对；两套通道都要过。
+const { report: iconReport, ok: iconOk } = iconReportOf(STUDIO)
 
 // ── ㉕ 菜单：每个动作项都必须有人接、而且真的做事（决策 #1221）
 const { menuActs, menuDead, notBuilt, menuDevice, menuCode, menuZoomIn, menuZoomReset, menuZoomOut, menuFind, menuSaved, tabsBeforeMenu, tabsAfterMenu } = await probeMenu(page, STUDIO)
 
 const { searchState, jumped, treeBack, engineShown } = await probeSearch(page, STUDIO)
 
-const { gitBar, gitList, gitOpened, headDiff, diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
+const { gitBar, gitList, gitOpened, headDiff, linked, afterTree, diffState, diffClosed, dirtySynced, winDlg, closeNowAfterCancel, closeNowAfterSave, dirtyBeforeClose, tabCountBefore, dlgShown, afterCancel, afterDiscard, langChip, langMenu, langPlain, langRust, langAuto, iconSamples, dirOpen, dirClosed, markOpen, markClosed, tabMenu, pickedCloseOthers, afterCloseOthers, nodeMenu, pickedCopyPath, copiedPath, editorMenu, escClosed, edgeMenu, anchorX, anchorY, toastAtCopy, toastStack, toastGone } =
   await probeCodeExtras(page, STUDIO)
 
 // 留一张代码视图快照（人眼可核）
@@ -554,7 +484,7 @@ const perf = await measureBigFile(page)
 const parseFull = perf.parseFull
 
 await browser.close()
-server.close()
+closeServer()
 // ⑩ fixture 与原始采集输出必须数值一致（防"改 fixture 让判据变绿"这类静默漂移）
 const rawPath = path.join(STUDIO, 'results', 'panel-source.json')
 let fixtureInSync = true
@@ -728,6 +658,24 @@ const checks = [
     `⑱b 保存被拒时如实报错且仍标记未保存：${failedSave.notice.slice(0, 24) || '（无提示）'}…`,
     failedSave.notice.includes('拒绝覆盖') && failedSave.stillDirty,
   ],
+  // ㉞ 改动清单 ↔ Diff 联动（决策 #1247）：点清单 → 打开 + 直接看**这个文件**相对 HEAD 的改动
+  //   ★断言里同时要「含当前文件的标记」且「不含上一个文件的标记」——只断言"有标记"的话，
+  //     串文件（拿 A 的 HEAD 比 B 的缓冲）照样能过。
+  [
+    `㉞ 清单↔Diff：点 main.rs → ${linked.path.split('/').pop() || '—'} · Diff 打开=${linked.open} 来源HEAD=${linked.headOn} · 删除行标记=「${linked.marker.replace('// ', '')}」· 高亮=${linked.highlighted.split('/').pop() || '—'} · 从树开 App.vue 后 高亮=${afterTree.highlighted.split('/').pop() || '—'} 标记=「${afterTree.marker.replace('// ', '')}」`,
+    linked.path.endsWith('main.rs') &&
+      linked.open &&
+      linked.headOn &&
+      // ① 删除行必须带**当前文件自己**的 HEAD 标记（不是别处的）
+      linked.marker.includes('packages/studio/src/main.rs') &&
+      !linked.marker.includes('ui/src/App.vue') &&
+      linked.highlighted === 'packages/studio/src/main.rs' &&
+      // ② 换成从树上打开另一个文件：高亮跟随 + HEAD 内容**重取**（不重取 ⇒ A 的 HEAD 配 B 的缓冲）
+      afterTree.highlighted === 'packages/studio/ui/src/App.vue' &&
+      afterTree.headOn &&
+      afterTree.marker.includes('packages/studio/ui/src/App.vue') &&
+      !afterTree.marker.includes('src/main.rs'),
+  ],
   // ⑱h Git 只读：分支/改动数 + 改动清单可点开 + Diff 可切 HEAD
   [
     `⑱h Git：分支=${gitBar?.branch ?? '—'} · ${gitBar?.count ?? '—'} · 清单 ${gitList.items.length} 项(${gitList.sts.join('')}) · 点开→${gitOpened.split('/').pop() || '—'} · HEAD diff 命中标记=${(headDiff?.dels ?? []).some((x) => x.includes('HEAD-VERSION-MARKER'))}`,
@@ -739,7 +687,9 @@ const checks = [
       gitOpened.endsWith('main.rs') &&
       !!headDiff &&
       headDiff.headOn &&
-      headDiff.dels.some((x) => x.includes('HEAD-VERSION-MARKER')),
+      headDiff.dels.some((x) => x.includes('HEAD-VERSION-MARKER')) &&
+      // ★桩现在按 path 返回（#1247），所以这里能要求"标记属于**这个**文件"
+      headDiff.dels.some((x) => x.includes('packages/studio/ui/src/App.vue')),
   ],
   // ⑱g Diff 视图：改一行 → 有增有删；开关来回切时编辑器与 Diff 互斥
   [
@@ -1036,27 +986,6 @@ if (errors.length) console.log('  JS 错误：\n' + errors.map((e) => '   ' + e)
 console.log(`\n面板快照：${path.relative(ROOT, outPath)}`)
 console.log(`数据来源：${path.relative(ROOT, dataPath)}（真实跑机读数）· 机型来源：${deviceFrom}`)
 
-// ── ★陈旧 .app 提醒（不是判据，不改变退出码；2026-10-25 用户实测踩到）──────────────
-// 【为什么需要】Tauri 把 `web-dist/` **编进二进制**，而本门禁只重建 `web-dist`、**不打包**。
-//   于是"门禁全绿 = 你看的那个 .app 是新的"是**错的**：用户双击打开的还是三天前的骨架。
-//   而且外面看不出来（资源压缩进二进制，strings grep 不到、.app 的 mtime 只反映链接时间）。
-// ⇒ 在这里说一句人话。比较基准取**UI 源码的最新 mtime**（不是 web-dist）：
-//   本门禁每次都会重建 web-dist，拿它比会导致"每次跑完都报警"——那样提醒很快就被无视了。
-const appBin = path.join(STUDIO, 'build-app', 'Proteus Studio.app', 'Contents', 'MacOS', 'proteus-studio-shell')
-const uiSrc = path.join(STUDIO, 'ui', 'src')
-if (fs.existsSync(appBin) && fs.existsSync(uiSrc)) {
-  const newest = (dir) =>
-    fs
-      .readdirSync(dir, { recursive: true, withFileTypes: true })
-      .filter((d) => d.isFile())
-      .reduce((mx, d) => Math.max(mx, fs.statSync(path.join(d.parentPath ?? d.path, d.name)).mtimeMs), 0)
-  const srcAt = Math.max(newest(uiSrc), fs.statSync(path.join(STUDIO, 'ui', 'index.html')).mtimeMs)
-  const ageMin = (srcAt - fs.statSync(appBin).mtimeMs) / 60000
-  if (ageMin > 1) {
-    console.log(
-      `\n⚠ build-app 里的 .app 比 UI 源码旧 ${Math.round(ageMin)} 分钟 —— 它嵌的是旧前端。` +
-        `\n  要双击看到最新界面请重打包：pnpm run build:studio-app（或 bash packages/studio/package-app.sh）`,
-    )
-  }
-}
+// ── ★陈旧 .app 提醒（不是判据，不改变退出码；2026-10-25 用户实测踩到 · #1247 拆出）
+warnIfAppStale(STUDIO)
 process.exit(bad ? 1 : 0)
