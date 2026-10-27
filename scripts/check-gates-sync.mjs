@@ -60,6 +60,10 @@ const LOCAL_ONLY = {
   // ★★鸿蒙玻璃像素等价门禁（决策 #841）：需**真机**（鸿蒙无本机 Vulkan ⇒ 只能真机渲染后拉回比对）；
   //   无设备时脚本自身**跳过并退出 0**（不假红）——与 check:harmony-host-compile 同策略。
   'check:glass-parity-harmony': '需鸿蒙真机（离屏 Vulkan 渲染生成物 SPIR-V 与 Rust CPU oracle 逐像素比对）；CI/无设备自动跳过',
+  // ★Studio 投屏解码门禁（决策 #1284 登记）：要**真 Android 设备 + 已打包的 .app**，
+  //   判的是"真机跑几秒、零解码错误、出帧数是正数"——CI 没有设备，接了只会得到 skip。
+  //   ★它在无设备时自己打一行原因并 rc=0（不造假红），所以本地/CI 都能安全调用。
+  'check:studio-live': '需真 Android 设备 + 已打包 .app（真机解码健康度）；无设备自动跳过',
   // ★CLI iOS 宿主模板编译检查（2026-10-08，check:ios-selfdraw-compile 的姊妹盲区）：
   //   它检查**框架参考宿主**；CLI 生成宿主的**壳模板**（templates-host/ios/shell/*.swift）此前无任何本地判据
   //   ⇒ 改模板只能等真机打包才发现编译错。同样需 macOS + Xcode。
@@ -304,6 +308,8 @@ const LOCAL_ONLY_META = {
   'check:cross-end-geometry': { cat: 'device', run: 'manual' },
   'check:host-runtime': { cat: 'device', run: 'verify' },
   'check:embed-demo': { cat: 'device', run: 'verify' },
+  // 决策 #1284：真机解码健康度（活体取证，无 results/*.json ⇒ evidence: live）
+  'check:studio-live': { cat: 'device', run: 'on-device', evidence: 'live' },
   // ── macos（需 Xcode / Swift / Metal / JSC）───────────────────────────
   'check:ios-host': { cat: 'macos', run: 'manual' },
   'check:ios-perf': { cat: 'macos', run: 'on-device' },
@@ -372,7 +378,14 @@ const LOCAL_ONLY_META = {
 //   跑它只会得到"未找到可用 Xcode"这种与结论无关的失败，属真·不可接（不是懒得接）。
 //   ★这条门禁本身就是"文档拦不住、必须工具化"的产物：我手写了 `/Volumes/data1/applications`
 //   （14.2，无 devicectl）并据此说"本机没 devicectl"，而 26.5 一直在线。
-const LOCAL_ONLY_MAX = 56
+// ★2026-10-27 抬 56 → 57（决策 #1284）：新增 `check:studio-live`（Studio 投屏解码健康度）。
+//   理由（为什么不能接 CI）：判据是"**真机**跑几秒、零解码错误、出帧数是正数"，前置是
+//   （a）插着的 Android 设备 + 屏幕在动，（b）本机已打包的 `build-app/Proteus Studio.app`。
+//   CI 两样都没有；且脚本在 `process.platform !== 'darwin'` 与"没有设备/没有产物"时
+//   **自己打原因并 rc=0**（设计如此，不造假红）⇒ 接进 workflow 只会永远 skip，
+//   那正是本仓最讨厌的"假接线"（给人"CI 在管这件事"的错觉）。
+//   ★它放在 `run: 'on-device'`：由开发机在 `pnpm run check:studio-live` 手动跑。
+const LOCAL_ONLY_MAX = 57
 
 /** 读取所有 workflow 文本（含 pages.yml / consistency.yml 等） */
 function workflowFiles() {
