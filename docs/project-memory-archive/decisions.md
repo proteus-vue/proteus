@@ -15188,6 +15188,21 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **★机器读数**：App 桥 49→**50** 方法 · 真缺口 52→**51** · 可接线 41→**42**（`makePhoneCall` 从缺口消失）。
     ★抽取器契约同步：`website/scripts/lib/app-bridge-keys.mjs` 登记 `capability-app-phone.ts::createAppPhone`
     ——不登记就会判"桥未接线"（与 #1207/#1225/#1226 同一形态，这文件头就是为此而写）。
+  - **★★补验鸿蒙（当天稍后 · 用户指出「鸿蒙设备一直在线的啊」）**：我上一轮写「本机无 hdc 设备」是**错的**——
+    只查了 `PATH`，而 hdc 在 DevEco 里（`Contents/sdk/default/openharmony/toolchains/hdc`），
+    项目自带 `hosts/harmony/hdc.sh` 就是干这个的。实测设备 **`69F9K26126005311` USB Connected**。
+    ⇒ **同族第三次**：下否定结论前必须跑取证命令（本仓纪律「先取证，再断言」里记过「误判本机无可用 Xcode ≈1 小时绕路」）。
+    **补跑 `build-host-app.sh` 剖出两个真实的链接缺陷**（都不在语法检查的覆盖面里）：
+    `proteus_host` 与 `proteus_bench` **都没有链接 libz**，而 `fs.inflateRaw`（#1232 ZIP 裸解压）用 zlib
+    ⇒ 链接期 `undefined symbol: proteus::fs::inflateRaw`。★`check:harmony-host-compile` 只做
+    `-fsyntax-only`（**不链接**）⇒ **这道门禁结构上看不见该缺陷**，只有真机构建才暴露
+    （#1232 当时只验了 Android，鸿蒙从未真正构建过）。两处 CMakeLists 均已补 `find_library(ZLIB_LIB z)`。
+    补后**编译 + 链接全通**（`PackageHap` 完成），产物 `entry-default-unsigned.hap` 14 MB，
+    并核实：`libproteus_host.so` 的 21 个 `inflate*` 符号已解析、`ets/modules.abc` 里含 `phone.call`。
+    **仍卡在签名**：`build-profile.json5` 的 p12 口令由**另一台机器**（`/Users/yunlailuo`）加密，
+    本机解不开（试过常见口令均失败）⇒ 装机未完成。这是记忆里登记的**已知环境阻塞**，
+    需在 DevEco 里对 `hosts/harmony/host-app` 重新自动签名一次（Project Structure → Signing Configs）。
+    ⇒ 所以官网能力页鸿蒙仍标 🟡，但**原因已从"未验证"更正为"证据到链接级 + 签名环境阻塞"**。
   - **诚实边界**：① iOS 只有 `swiftc -typecheck` + JVM 同判据，**真机未跑**（模拟器无拨号盘，
     会走 unsupported 分支，属如实降级而非缺陷）；② 鸿蒙走**设备动作队列**（同步 napi 里不能 await
     `startAbility`）⇒ 回执是 `{accepted:true}` 已入队、不是已拉起；本机无 hdc 设备 ⇒ **未真机验**，

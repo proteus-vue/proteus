@@ -48,4 +48,14 @@ if(HAVE_RUST_CORE)
   target_link_libraries(proteus_bench PUBLIC libnative_drawing.so)
   # ★JSVM（V8 封装，矩阵 #13/#14）：设备端 JS 引擎——SDK sysroot 提供 libjsvm.so
   target_link_libraries(proteus_bench PUBLIC libjsvm.so)
+  # ★★★#1285 链接期取证：`proteus_bench` 也 include 了 `proteus_fs.h`（经 capture.h 转出），
+  #   而 `fs.inflateRaw`（#1232 ZIP 裸解压）用 zlib ⇒ **不链 libz 就 undefined symbol**
+  #   （实测报错点：`CMakeFiles/proteus_bench.dir/dev/proteus_bench.cpp.o:(proteus::fs::inflateRaw)`）。
+  #   ★`check:harmony-host-compile` 只做 `-fsyntax-only`（**不链接**）⇒ 这道门禁结构上看不见该缺陷，
+  #     只有真机构建才暴露。同族的 `proteus_host` 已在 HAR 的 CMakeLists 里同步补上。
+  find_library(ZLIB_LIB z)
+  if(ZLIB_LIB)
+    target_link_libraries(proteus_bench PUBLIC ${ZLIB_LIB})
+    message(STATUS "proteus: zlib 已接线（bench · ${ZLIB_LIB}）")
+  endif()
 endif()

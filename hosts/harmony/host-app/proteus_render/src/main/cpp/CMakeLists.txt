@@ -92,6 +92,18 @@ add_library(proteus_host SHARED proteus_host.cpp)
 target_link_libraries(proteus_host PUBLIC libace_napi.z.so libace_ndk.z.so libhilog_ndk.z.so)
 target_link_libraries(proteus_host PUBLIC libnative_drawing.so)
 target_link_libraries(proteus_host PUBLIC libjsvm.so)
+# ★★★#1285 链接期取证：`fs.inflateRaw`（#1232，ZIP 条目裸解压）用 zlib，但 `proteus_host` 从未链过 libz
+#   ⇒ **鸿蒙 HAP 在链接期报 undefined symbol**（`proteus::fs::inflateRaw`）。而
+#     `check:harmony-host-compile` 只做 `-fsyntax-only`（不链接）⇒ **这道门禁结构上看不见该缺陷**。
+#   实测触发：本轮为验 `phone.call` 首次真机构建鸿蒙 HAP 就撞上（#1232 当时只验了 Android）。
+#   ★sysroot 里三种 ABI 的 `libz.so` 都在（`find_library` 能找到），链上即可。
+find_library(ZLIB_LIB z)
+if(ZLIB_LIB)
+  target_link_libraries(proteus_host PUBLIC ${ZLIB_LIB})
+  message(STATUS "proteus: zlib 已接线（${ZLIB_LIB}）——fs.inflateRaw 可用")
+else()
+  message(WARNING "proteus: 缺 libz —— fs.inflateRaw 会链接失败（unzip 不可用）")
+endif()
 if(HAVE_RUST_CORE)
   target_link_libraries(proteus_host PUBLIC proteus_rust_layout)
 endif()
