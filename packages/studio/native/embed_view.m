@@ -881,7 +881,14 @@ static double mbps_of(double wall_ms) {
 
 void poc_report(const char *path) {
   @autoreleasepool {
-    double wall = (g_last_out > 0 && g_wall0 > 0) ? (g_last_out - g_wall0) : 1;
+    /* ★★跨度可能是 **0**（决策 #1278）：`g_last_out` 与 `g_wall0` 相等 = **本次只出了一帧**
+       （设备刚释放采集权、断流边缘最常见）。原来这里兜底成 1，随后 `g_frames/(wall/1000)`
+       直接用 0 做除数 ⇒ 报告里写出 `"measured_fps": inf` —— 而 **JSON 没有 inf**，
+       `JSON.parse` 当场抛 SyntaxError ⇒ `check:studio-live` 崩在解析上，
+       而不是给出"只出了 1 帧"这个**可读结论**。判据崩掉比判据变红更糟：它什么都说明不了。
+       ⇒ 跨度 <=0 一律按"未知"处理（-1），与 mbps/cpu 那几处口径一致。 */
+    double wall = (g_last_out > 0 && g_wall0 > 0) ? (g_last_out - g_wall0) : 0;
+    double fps = wall > 0 ? (double)g_frames / (wall / 1000.0) : -1;
     struct rusage ru1;
     getrusage(RUSAGE_SELF, &ru1);
     double cpu = (ru1.ru_utime.tv_sec - g_ru0.ru_utime.tv_sec) + (ru1.ru_utime.tv_usec - g_ru0.ru_utime.tv_usec) / 1e6 +
@@ -912,7 +919,7 @@ void poc_report(const char *path) {
              "  \"cpu\": {\"self_seconds\": %.2f, \"wall_seconds\": %.2f, \"single_core_pct\": %.1f}\n}\n",
              g_live ? "(live pipe)" : video_path(), g_W, g_H, g_hw ? "videotoolbox" : "software",
              (g_probe_bits & 1) ? "true" : "false", (g_probe_bits & 2) ? "true" : "false",
-             g_frames, g_frames / (wall / 1000.0),
+             g_frames, fps,
              pct(g_iv, g_n_iv, 0.50), pct(g_iv, g_n_iv, 0.95), pct(g_iv, g_n_iv, 0.99), g_n_iv ? g_iv[g_n_iv - 1] : -1,
              pct(g_rc, g_n_rc, 0.50), pct(g_rc, g_n_rc, 0.95), pct(g_rc, g_n_rc, 0.99), g_n_rc ? g_rc[g_n_rc - 1] : -1,
              pct(g_pr, g_n_pr, 0.50), pct(g_pr, g_n_pr, 0.95), pct(g_pr, g_n_pr, 0.99), g_n_pr ? g_pr[g_n_pr - 1] : -1,

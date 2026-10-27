@@ -75,8 +75,26 @@ async function runOnce({ seconds, env = {} }) {
   await new Promise((res) => child.on('exit', res))
   fs.closeSync(fd)
   return {
-    rep: fs.existsSync(j) ? JSON.parse(fs.readFileSync(j, 'utf8')) : null,
+    rep: readReport(j),
     text: fs.readFileSync(lg, 'utf8'),
+  }
+}
+
+/** 读报告（★报告不是合法 JSON 时**不许把门禁崩掉**，要说清楚哪一行坏了）
+ *
+ *  事故形态（2026-10-27 实测）：只出 1 帧 ⇒ 跨度算成 0 ⇒ 报告写出 `"measured_fps": inf`，
+ *  而 JSON 没有 inf ⇒ `JSON.parse` 抛 SyntaxError ⇒ 整个门禁以 uncaught exception 结束。
+ *  **判据崩掉比判据变红更糟**：它不告诉你"只出了 1 帧"，只丢一堆栈。
+ *  （生产侧已修：embed_view.m 的 wall<=0 ⇒ fps=-1；这里是**消费侧**的兜底。） */
+function readReport(file) {
+  if (!fs.existsSync(file)) return null
+  const raw = fs.readFileSync(file, 'utf8')
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    console.log(`✗ 报告不是合法 JSON：${path.relative(ROOT, file)} — ${e.message}`)
+    console.log('  原文片段：' + raw.slice(0, 240).replace(/\s+/g, ' '))
+    return null
   }
 }
 
@@ -126,7 +144,7 @@ for (const [label, ok] of checks) {
   console.log(`${ok ? '✓' : '✗'} ${label}`)
   if (!ok) bad++
 }
-console.log(`  （${SECONDS}s · ${rep?.size ?? '?'} · ${fps} fps · 解码 ${rep?.decode_ms?.p50 ?? '—'}ms · ${rep?.hwdec ?? '?'}）`)
+console.log(`  （${SECONDS}s · ${rep?.size ?? '?'} · ${fps > 0 ? fps : '—'} fps · 解码 ${rep?.decode_ms?.p50 ?? '—'}ms · ${rep?.hwdec ?? '?'}）`)
 if (bad) {
   console.log(`  stderr: ${logPath}`)
   for (const l of text.split('\n').filter((x) => /\[h264 @|必然花|硬切/.test(x)).slice(0, 6)) {
