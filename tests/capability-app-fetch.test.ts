@@ -124,7 +124,13 @@ describe('③ 桥 + Hook 端到端（取数语义与 wx 桥逐字段对齐）', 
     expect(typeof bridge.request).toBe('function')
 
     const p = bridge.request!({ url: 'https://api.example.com/user', method: 'GET' })
-    expect(shell.methods).toEqual([APP_NATIVE_METHODS.httpRequest])
+    // ★#1238 修断言：`createCapabilityBridge()` 装配时会**探测** `fs.*` / `log` 等能力
+    //   （`appFileSystemAvailable()` 逐个 `invokeHost(..., {probe:true})`）⇒ 宿主方法列表
+    //   不可能"恰好只有 http.request"。#1226 加探针后这条断言就假红了，只是没人在全量里发现。
+    //   ★改断言比改实现正确：本用例要证明的是"**取数走能力通道**"，不是"装配过程零探测"。
+    expect(shell.methods.filter((m) => m.startsWith("http.")), "取数必须走 http.request 能力通道").toEqual([
+      APP_NATIVE_METHODS.httpRequest,
+    ])
     resolveFromHost(
       shell.reqIds[0],
       JSON.stringify({ ok: true, data: { data: { name: 'kags' }, status: 200, headers: { 'x-trace': 't1' } } }),

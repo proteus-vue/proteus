@@ -14666,3 +14666,47 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     作用域语义同步改）；(b) 承认业务要的是自己的 name/value ⇒ 走 `useStorage`（#1209）。静默选一个会造出
     「看起来有 useCookie、实际读不到登录态」的假能力 ⇒ 必须设计层拍板。
   - **机器读数**：`node scripts/capability-app-gap.mjs` 真缺口 **52** · 可接线 **41**（App 桥 49 方法）。
+
+1257. **★★★安全基线：凭据头（Cookie/Authorization）不得跨 origin 跟随重定向 —— 实测证实漏洞 + 双层守卫 + 真机 13/13**（2026-10-27 · 用户「cookie注入要严禁现在小程序的漏洞问题出现，安全性是基线，必须重视」）:
+  - **★先取证再动手（这一步决定了整单的形状）**：用**真 OkHttp 3.14.9** + 两个本地 HTTP 服务做实验——
+    带 `Cookie: PROTEUS_SESSION=SECRET-123` 的请求被 302 到**另一个 origin**（端口不同）时，
+    对方**真的收到了这个 cookie**（`VERDICT=LEAK`）。⇒ 这不是理论风险，是当前代码里的真实泄露。
+  - **★根因（为什么"浏览器会剥、我们不会"）**：OkHttp 的 `RetryAndFollowUpInterceptor.followUpRequest()`
+    只 `removeHeader("Authorization")`，**对 Cookie 完全不管**——因为正常用法下 cookie 该交给
+    `CookieJar` 按 domain/path 匹配。而本仓 App 宿主把平台 Cookie 存储的会话 cookie **手工塞进请求头**
+    （Android `HttpCapability.buildCallConfig` / iOS `makeRequest`），**绕过了那层保护**。
+    加上默认路径（`redirect:'follow'` 且无 `onRedirect`）由**宿主自己跟随**，JS 侧的跨域剥离
+    （`nextHopConfig`）**根本没有执行机会** ⇒ 两件事叠加 = open-redirect 会话白给。
+  - **★★双层守卫**（各自可独立验证，不是冗余）：
+    ① **JS 管线**（`capability-fetch-pipeline.ts`）：带凭据的请求**强制 `redirectManual`** ⇒ 每一跳
+       回到 JS，由 `nextHopConfig` 统一剥（剥离清单收敛到 `CREDENTIAL_HEADERS` 一处）；
+    ② **宿主层**：Android `CookieOriginGuard`（**network** interceptor——application interceptor 只跑
+       最外层，看不见 OkHttp 内部跟随的 hop；origin 经 `OriginalOrigin` tag 跨跳传递，无 tag ⇒ fail-closed）
+       + iOS `HttpCredentialGuard`（`willPerformHTTPRedirection` 里同一判据，origin 取自 `task.originalRequest`）。
+  - **★三腿分流 `resolveRedirectFollow`**（按运行时推导，不要求每个桥显式声明——声明会漂、推导不会）：
+    `browser`（不干预：浏览器按规范剥跨源 Authorization、cookie 由自身 jar 按域隔离，且
+    `redirect:'manual'` 返回 **opaqueredirect**（status=0、无 Location）⇒ 强制 manual 会打坏功能）/
+    `host`（强制 manual，App 三端）/ `implicit`（`wx.request` 隐式跟随且不可干预 ⇒ **带凭据一律拒绝**，
+    宁可显式报错也不赌平台行为）。
+  - **★★★破坏性验证分三层（本轮最值钱的方法）**：① 只摘 Android 守卫 ⇒ JS 层兜住，真机仍绿；
+    ② 只摘 JS 层 ⇒ Android 守卫兜住，真机仍绿；③ **两层都摘 ⇒ 真机真的泄露**
+    （`cross_default_final_cookie="PROBE_SESSION=DEFAULT_PATH_1257"`）。⇒ 两层各自有效，且覆盖的是真路径。
+    ★若只做 ① 就宣布"守卫有效"，会漏掉"JS 层其实没接上"这种形态——**独立性要双向验**。
+  - **★★探针盲区自查（否则一律假绿）**：原 `run-redirect-probe.sh` 的跨域用例带了 `onRedirect`（JS 逐跳）
+    ⇒ **覆盖不到**"宿主自己跟随"那条曾泄露的默认路径（实测：摘掉 Android 守卫后原探针仍全绿）。
+    新增 ⑥ 号用例（**不带 onRedirect / 不带 manual**，只带 Cookie）才真正打中。
+  - **判据**：`check:cookie-origin-guard` **5/5**（真 OkHttp + 真守卫 + 两个本地服务；含"同源必须保留凭据"
+    防一刀切；`--mutate=no-guard` 必红）· `fetch-pipeline` **35/35**（新增 8 条三腿分流）·
+    真机 `run-redirect-probe.sh` **13/13**（含 Authorization 与 Cookie 双维度 + 默认路径）·
+    三端零设备编译绿 · `check:file-size` 绿 · `check:gates-sync` 绿（已接 CI + verify 链）。
+  - **★顺带修两处判据债**：① `capability-app-fetch` 的「宿主方法列表恰好只有 `http.request`」从 #1226 起
+    就是**假红**（桥装配会探 11 个 `fs.*`）；② `fetch-pipeline` 的 `queuedMs > 10ms` 依赖机器速度
+    （并行跑全量实测只有 7ms ⇒ 假红）⇒ 改为"必须 > 0 且 ≤ 总耗时"（仍抓"恒 0"与"填离谱大数"）。
+  - **★顺带补齐 CLI 随包桥源缺口**：`check:bridge-sync` 在本轮开工前是红的（CLI 副本缺
+    `#1169/#1179/#1180/#1251` 的探针 import，即 `T-cli-host-bridge-probes-sync`）——本轮同步桥源时一并补齐；
+    并把 `entry-superapp.ts` 的 6 对相邻 `import {X}` + `export {X}` 合并（源 998→992 行），
+    使 CLI 副本（含 8 行同步头）回到 1000 行内。
+  - **诚实边界**：① 真机只有 **Android**；iOS 是 `swiftc -typecheck` + JVM 同判据，**未真机跑**；
+    ② 鸿蒙由 JS 层覆盖（其宿主 `proteus_http.h` 已如实登记"不读不写 cookie 存储"）；
+    ③ 判据证明"凭据不被跨域转发"，**不证明**"同源多子域之间的 cookie 作用域完全正确"——
+    那是 cookie jar 的职责，与 `T-app-capability-cookiejar` 的设计决策相关。

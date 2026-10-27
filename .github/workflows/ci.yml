@@ -307,6 +307,15 @@ jobs:
       - name: Android runtime AAR 新鲜度（runtime 源哈希 ↔ 入库 AAR，防"源改了 AAR 没重建"）
         run: pnpm run check:android-runtime-aar-fresh
 
+      # ★★★#1257 安全基线：**凭据头不得跨 origin 跟随重定向**。
+      #   实测（本门禁就是那次实验的固化）：OkHttp 3.14.9 带 `Cookie` 头被 302 到第三方域时
+      #   **原样转发**（其 followUpRequest 只 removeHeader("Authorization")），而 App 宿主会把
+      #   平台 CookieManager 的会话 cookie 手工塞进请求头 ⇒ open-redirect = 会话白给。
+      #   ★跑真 OkHttp + 真 CookieOriginGuard + 两个本地 HTTP 服务；只需 JDK（ubuntu-latest 自带）
+      #     + hosts/android/thirdparty 里两个入库 jar ⇒ CI 可跑。
+      - name: 凭据跨域门禁（带 Cookie/Authorization 的请求不得跨 origin 跟随重定向）
+        run: pnpm run check:cookie-origin-guard
+
       # ★★★决策 #725：鸿蒙 runtime HAR 随包副本新鲜度（prebuilt ⇄ 真源 逐字节哈希）。
       #   改了 hosts/harmony/.../proteus_render 却没同步 prebuilt/harmony ⇒ **外部用户（无框架 checkout）
       #   跑旧运行时**（本地全绿、外部错——同 #666/#721）。★纯 Node 内容哈希 ⇒ CI 可跑（不需 DevEco）。

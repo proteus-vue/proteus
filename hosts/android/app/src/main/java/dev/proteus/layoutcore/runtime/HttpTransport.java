@@ -246,6 +246,11 @@ public final class HttpTransport {
         //     正是这条路径要防的（#1134 的立单理由）。
         OkHttpClient callClient = client.newBuilder()
                 .followRedirects(!cfg.redirectManual)
+                // ★★★#1257 安全基线：**每一跳**都校验 origin，跨源就剥凭据头。
+                //   ★必须是 **network** interceptor：application interceptor 只在最外层跑一次，
+                //     看不见 OkHttp 内部跟随的那些 hop（实测 OkHttp 的 followUpRequest 只
+                //     removeHeader("Authorization")，**对 Cookie 完全不管**）。
+                .addNetworkInterceptor(new CookieOriginGuard())
                 .connectTimeout(cfg.timeoutMs, TimeUnit.MILLISECONDS)
                 .readTimeout(cfg.timeoutMs, TimeUnit.MILLISECONDS)
                 .writeTimeout(cfg.timeoutMs, TimeUnit.MILLISECONDS)
@@ -388,7 +393,13 @@ public final class HttpTransport {
         if (m != null) m.dnsSource = source;
     }
 
-    private static Request buildRequest(CallConfig cfg) {        Request.Builder b = new Request.Builder().url(cfg.url).tag(String.class, cfg.tag == null ? "" : cfg.tag);
+    private static Request buildRequest(CallConfig cfg) {
+        Request.Builder b = new Request.Builder().url(cfg.url).tag(String.class, cfg.tag == null ? "" : cfg.tag);
+        // ★★★#1257 安全基线：把**原始 origin** 挂成 tag —— 重定向守卫要在每一跳判断
+        //   "这一跳还是不是同一个源"。★用 OkHttp 解析后的 HttpUrl 取（不是原始字符串），
+        //   否则 `http://a.cn` 与 `http://a.cn:80` 会被误判成跨源（首跳就把自己的 cookie 剥了）。
+        b.tag(CookieOriginGuard.OriginalOrigin.class,
+                new CookieOriginGuard.OriginalOrigin(CookieOriginGuard.originOf(b.build().url())));
         for (Map.Entry<String, String> e : cfg.headers.entrySet()) {
             if (e.getKey() == null || e.getValue() == null) continue;
             b.header(e.getKey(), e.getValue());

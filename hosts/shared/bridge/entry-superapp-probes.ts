@@ -556,7 +556,9 @@ export function appRedirectProbe(base: string, crossBase: string, maxRedirects =
     const crossTo = `${crossBase}/final`
     try {
       await hooks.useFetch(`${base}/cross?to=${encodeURIComponent(crossTo)}`, {
-        headers: { Authorization: 'Bearer PROBE_SECRET', 'X-Trace': 'redirect-probe' },
+        // ★★★#1257：Cookie 一起带上——只测 Authorization 是**假绿**（实测 OkHttp 的
+        //   followUpRequest 只 removeHeader("Authorization")，**对 Cookie 完全不管**）。
+        headers: { Authorization: 'Bearer PROBE_SECRET', Cookie: 'PROBE_SESSION=SECRET_1257', 'X-Trace': 'redirect-probe' },
         onRedirect: () => ({ action: 'follow', }),
         timeout: 30000,
       })
@@ -569,13 +571,35 @@ export function appRedirectProbe(base: string, crossBase: string, maxRedirects =
       const seen = seenRes.ok && Array.isArray(seenRes.data) ? seenRes.data : []
       const finals = seen.filter((s) => s['path'] === '/final')
       const lastAuth = finals.length ? String(finals[finals.length - 1]!['auth'] ?? '') : ''
+      const lastCookie = finals.length ? String(finals[finals.length - 1]!['cookie'] ?? '') : ''
       out['cross_final_auth'] = lastAuth
+      out['cross_final_cookie'] = lastCookie
       out['cross_stripped'] = finals.length > 0 && lastAuth === ''
+      out['cross_cookie_stripped'] = finals.length > 0 && !lastCookie.includes('SECRET_1257')
       out['cross_seen_count'] = finals.length
     } catch (e) {
       out['cross_error'] = String((e as Error)?.message ?? e)
     }
 
+    // ── ⑥ ★★★#1257 默认路径（无 onRedirect / 无 manual）带 Cookie 跨域 ──
+    //   ★这是**修复前真正泄露的那条路**：默认让宿主自己跟随，JS 的跨域剥离没有执行机会。
+    try {
+      await hooks.useFetch(`${base}/cross?to=${encodeURIComponent(crossTo)}`, {
+        headers: { Cookie: 'PROBE_SESSION=DEFAULT_PATH_1257' },
+        timeout: 30000,
+      })
+      const seenRes2 = await hooks.useFetch<Array<Record<string, unknown>>>(`${crossBase}/__seen`, {
+        responseType: 'json',
+        timeout: 15000,
+      })
+      const seen2 = seenRes2.ok && Array.isArray(seenRes2.data) ? seenRes2.data : []
+      const finals2 = seen2.filter((s) => s['path'] === '/final')
+      const lastCookie2 = finals2.length ? String(finals2[finals2.length - 1]!['cookie'] ?? '') : ''
+      out['cross_default_final_cookie'] = lastCookie2
+      out['cross_default_cookie_stripped'] = finals2.length > 0 && !lastCookie2.includes('DEFAULT_PATH_1257')
+    } catch (e) {
+      out['cross_default_error'] = String((e as Error)?.message ?? e)
+    }
     out['ok'] = out['manual_ok'] === true
       && out['manual_has_location'] === true
       && out['hop_count'] === 2
@@ -584,6 +608,8 @@ export function appRedirectProbe(base: string, crossBase: string, maxRedirects =
       && out['stop_single_call'] === true
       && out['limit_ok'] === true
       && out['cross_stripped'] === true
+      && out['cross_cookie_stripped'] === true   // ★#1257：Cookie 也必须跨域消失
+      && out['cross_default_cookie_stripped'] === true   // ★#1257：默认跟随路径同样不得泄露
     g['__proteusHostRedirectProbeResult'] = JSON.stringify(out)
   }
   void run().catch((e: unknown) => {

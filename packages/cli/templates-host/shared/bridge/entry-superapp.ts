@@ -18,24 +18,27 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
-import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'
-export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'
+import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'; export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'
 // ★★★#1150：RFC 5861 扩展指令探针**单列**（entry-superapp-probes.ts 已到 file-size 上限；
 //   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
-import { appStaleProbe } from './entry-superapp-probes-stale'
-export { appStaleProbe } from './entry-superapp-probes-stale'
+import { appStaleProbe } from './entry-superapp-probes-stale'; export { appStaleProbe } from './entry-superapp-probes-stale'
 // ★★★#1151：缓存持久层（L2）探针**单列**（两阶段跨进程；与基础的缓存探针职责不同）
-import { appPersistProbe } from './entry-superapp-probes-persist'
-export { appPersistProbe } from './entry-superapp-probes-persist'
+import { appPersistProbe } from './entry-superapp-probes-persist'; export { appPersistProbe } from './entry-superapp-probes-persist'
 // ★★★#1153：TLS pinning 探针**单列**（需要自签 HTTPS 服务 + 两套证书，装置形态与前几批不同）
-import { appTlsProbe } from './entry-superapp-probes-tls'
-export { appTlsProbe } from './entry-superapp-probes-tls'
+import { appTlsProbe } from './entry-superapp-probes-tls'; export { appTlsProbe } from './entry-superapp-probes-tls'
 // ★★★#1155：传输层事实取证探针（HTTP/2 与连接复用**是否已在工作**——决定 P1 要不要引 OkHttp）
-import { appTransportProbe } from './entry-superapp-probes-transport'
-export { appTransportProbe } from './entry-superapp-probes-transport'
+import { appTransportProbe } from './entry-superapp-probes-transport'; export { appTransportProbe } from './entry-superapp-probes-transport'
+// ★★★#1251 worker 上界探针（单列见该文件头；import+export 并一行以守 1000 行上限）
+import { appWorkerBoundProbe, installWorkerProbe } from './entry-superapp-probes-worker'; export { appWorkerBoundProbe, installWorkerProbe } from './entry-superapp-probes-worker'
 // ★★★#1160：POST 带请求体探针（补"整包路径 + 请求体"的用例空白）
-import { appBodyProbe } from './entry-superapp-probes-body'
-export { appBodyProbe } from './entry-superapp-probes-body'
+import { appBodyProbe } from './entry-superapp-probes-body'; export { appBodyProbe } from './entry-superapp-probes-body'
+// ★★★#1169：HTTPDNS 端到端探针（表生效 / 基线对照 / iOS unsupported）
+import { appHttpDnsProbe } from './entry-superapp-probes-httpdns'; export { appHttpDnsProbe } from './entry-superapp-probes-httpdns'
+// ★★★#1179：iOS B 路线（本地 CONNECT 代理）真机探针——把 #1178 的模拟器结论升到真机
+import { appHttpDnsBProbe } from './entry-superapp-probes-httpdns-b'; export { appHttpDnsBProbe } from './entry-superapp-probes-httpdns-b'
+// ★★★#1180：HTTPDNS 三条探针的注册集中到该模块（主文件只留一行安装）
+import { installHttpDnsProbes } from './entry-superapp-probes-httpdns-prod'
+export { appHttpDnsProdProbe, installHttpDnsProbes } from './entry-superapp-probes-httpdns-prod'
 
 import type { AppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { createRouter, type RouterInstance } from '@proteus-vue/router'
@@ -945,6 +948,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppCancelProbe?: (b: string, c?: number, s?: number, d?: number) => string
 }).__proteusHostAppCancelProbe = (b: string, c?: number, s?: number, d?: number) => appCancelProbe(b, c, s, d)
+// ★★★#1251：worker 上界探针的安装收在它自己的模块里（主文件已到 1000 行上限，
+//   照 #1180 的 installHttpDnsProbes 先例——把"安装"和"实现"放一处，主文件只留一行调用）
 // ★★★#1122：**走 useFetch 门面**的探针（验证门面真的透传 S3 字段）
 ;(globalThis as unknown as {
   __proteusHostAppUseFetchProbe?: (b: string, c?: number, s?: number, d?: number) => string
@@ -988,5 +993,6 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as {
   __proteusHostAppBodyProbe?: (b: string) => string
 }).__proteusHostAppBodyProbe = (b: string) => appBodyProbe(b)
-
-
+// ★★★#1169/#1179/#1180：HTTPDNS 三条探针统一安装（实现见 entry-superapp-probes-httpdns-prod）
+installHttpDnsProbes(appHttpDnsProbe, appHttpDnsBProbe)
+installWorkerProbe(appWorkerBoundProbe)   // ★#1251 worker 上界探针（安装与实现同处，见该文件）

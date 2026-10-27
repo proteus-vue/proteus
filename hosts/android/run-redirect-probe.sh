@@ -92,6 +92,8 @@ add(p.stop_ok === true, `★stop ⇒ fetch.redirectStopped（实得 ${p.stop_cod
 add(p.stop_single_call === true, `★stop 后不再调回调（实得 ${p.stop_calls} 次）`)
 add(p.limit_ok === true, `★限额拦住环 ⇒ fetch.tooManyRedirects（实得 ${p.limit_code}）`)
 add(p.cross_stripped === true, `★★跨域剥离 Authorization（服务端终点收到 "${p.cross_final_auth ?? ''}"）`)
+add(p.cross_cookie_stripped === true, `★★跨域剥离 Cookie（服务端终点收到 "${p.cross_final_cookie ?? ''}"）—— #1257`)
+add(p.cross_default_cookie_stripped === true, `★★默认跟随路径也不泄露 Cookie（终点收到 "${p.cross_default_final_cookie ?? ''}"）—— 修复前正是这条路泄露`)
 
 let bad = 0
 for (const [ok, msg] of chk) { console.log(`  ${ok ? '✅' : '✗'} ${msg}`); if (!ok) bad++ }
@@ -105,6 +107,7 @@ console.log(`\n  读数：${JSON.stringify({
 if (bad) {
   console.log('\n  ★诊断：manual_status=200 ⇒ 宿主仍在跟随（setInstanceFollowRedirects 没生效）；')
   console.log('          cross_final_auth 非空 ⇒ ★凭据泄露到第三方域（安全缺陷，必修）')
+  console.log('          cross_final_cookie 含 SECRET_1257 ⇒ ★★会话 cookie 泄露（#1257 守卫失效）')
   console.log('  报告原文：' + JSON.stringify(r).slice(0, 1600))
   process.exit(1)
 }

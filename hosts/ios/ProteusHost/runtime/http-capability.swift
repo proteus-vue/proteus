@@ -772,10 +772,19 @@ final class BodyLimitDelegate: NSObject, URLSessionDataDelegate {
             // ★不跟随：把当前 3xx 当成最终响应（status/Location 会进 `didReceive response` 与 `didComplete`）
             NSLog("[proteus] REDIRECT_STOP status=%d to=%@", response.statusCode, request.url?.absoluteString ?? "<nil>")
             completionHandler(nil)
-        } else {
-            completionHandler(request)
+            return
         }
+        // ★★★#1257 安全基线：跨 origin 跳转必须剥掉凭据头（实现见 `http-credential-guard.swift`）。
+        //   ★为什么必须有：本宿主在 `makeRequest` 里把平台 Cookie **手工塞进 Cookie 头**，
+        //     而 URLSession 跟随重定向时会把上一跳的头带进新请求 ⇒ 302 到第三方域就白给。
+        //     ★原始 origin 取自 `task.originalRequest`（系统记的首跳），不必在 4 个 register
+        //       方法里各传一遍——少一条会漂的路。
+        if !HttpCredentialGuard.sameOrigin(HttpCredentialGuard.origin(of: task.originalRequest?.url), request.url) {
+            NSLog("[proteus] REDIRECT_CRED_STRIP to=%@", request.url?.absoluteString ?? "<nil>")
+        }
+        completionHandler(HttpCredentialGuard.sanitize(request, originalUrl: task.originalRequest?.url))
     }
+
 
     /**
      * ★★★#1158：`URLSessionTaskMetrics` → 传输读数（**iOS 是全字段可得的一端**）。

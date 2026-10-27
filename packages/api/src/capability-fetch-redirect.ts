@@ -114,10 +114,29 @@ export function headerOf(headers: Record<string, string> | undefined, name: stri
 }
 
 /**
+ * 凭据类请求头（**唯一定义处**）。
+ *
+ * ★★★#1257 安全基线：这张清单有两个消费方，必须是同一份：
+ *   ① 跨源跳转时**剥掉**（{@link nextHopConfig}）；
+ *   ② 判断"本次请求带凭据 ⇒ **必须由 JS 逐跳跟随**"（{@link hasCredentialHeaders}）。
+ *   两处各写一份的后果是"剥的名字与判的名字不一致"——那种分叉没有判据能发现。
+ */
+export const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'cookie2', 'proxy-authorization'] as const
+
+/** 请求头里是否带凭据（大小写不敏感）。 */
+export function hasCredentialHeaders(headers: Record<string, string> | undefined): boolean {
+  if (!headers) return false
+  for (const k of Object.keys(headers)) {
+    if ((CREDENTIAL_HEADERS as readonly string[]).includes(k.toLowerCase())) return true
+  }
+  return false
+}
+
+/**
  * 计算下一跳的配置（保留 headers 与超时；按 RFC 决定方法/body）。
  *
  * ★★**跨域时剥离凭据相关头**（安全底线，不是可选优化）：跳转到**不同 origin** 时，
- *   必须去掉 `Authorization` / `Cookie` / `Cookie2`（浏览器与 fetch 标准同样处理）。
+ *   必须去掉 `Authorization` / `Cookie` / `Cookie2` / `Proxy-Authorization`（浏览器与 fetch 标准同样处理）。
  *   若保留，就等于把凭据送给重定向目标——open-redirect 危害的**核心**。
  */
 export function nextHopConfig(
@@ -129,8 +148,7 @@ export function nextHopConfig(
   const headers: Record<string, string> = { ...(config.headers ?? {}) }
   if (stripCreds) {
     for (const k of Object.keys(headers)) {
-      const lk = k.toLowerCase()
-      if (lk === 'authorization' || lk === 'cookie' || lk === 'cookie2' || lk === 'proxy-authorization') {
+      if ((CREDENTIAL_HEADERS as readonly string[]).includes(k.toLowerCase())) {
         delete headers[k]
       }
     }

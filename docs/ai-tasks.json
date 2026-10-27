@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-27T00:58:42.174Z",
+  "updated_at": "2026-10-27T01:28:04.446Z",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -3641,7 +3641,7 @@
         "docs/project-memory-archive/decisions.md",
         "docs/ai-tasks.json",
         "hosts/android/run-fs-append-probe.sh",
-        "hosts/android/results/fs-append-probe.log",
+        "hosts/android/results/fs-append-probe.txt",
         "packages/cli/templates-host/prebuilt/android/proteus-runtime.aar",
         "packages/cli/templates-host/prebuilt/android/proteus-runtime.sources.sha256",
         "packages/cli/templates-host/prebuilt/harmony/proteus_render/src/main/cpp/proteus_fs.h"
@@ -3670,6 +3670,37 @@
         "T-app-capability-batch1"
       ],
       "note": "【blocked · 设计决策 · 2026-10-27】取证：契约 `CookieJar` 是**按 name**（get/set/remove/list），\n而三端平台存储都是**按 URL**：Android `CookieManager.getCookie(url)`（**没有枚举全部 cookie 的公开 API**）、\niOS `HTTPCookieStorage.cookies(for: url)`、鸿蒙 `WebCookieManager` 同族。\n⇒ 两条路：(a) **改契约按 url 取**（映射平台真值，但 Web/MP 双桥要跟着改，且要与 document.cookie 的「当前文档作用域」语义对齐）；\n(b) **业务 name/value 自建**（那其实是 `useStorage` 已有的能力，不必另建 cookie jar，且避免两份 cookie 存储漂移 #1154）。\n★不适合 AI 自选默认：选错会变成\"看起来有 useCookie、实际读不到登录态\"的假能力。\n\n【Handoff】\n- 做到哪：仅取证，未改任何代码（不占位、不返假数据）。\n- 已改：无。\n- 未做：契约方向未定 ⇒ 三端实现、双桥、官网能力页全未动。\n- 下一步：① 设计层回答「useCookie 要平台登录态还是业务 name/value」；② 若 (a) 则改 `CookieJar` 契约为按 url 取，\n  同步 `capability-bridges.ts` 的两份实现与 `website/content/capabilities/cookie.md`；③ 若 (b) 则关掉本单（用 useStorage 覆盖）。\n- 坑：Android `CookieManager.getCookie(url)` 无全量枚举；`HttpOnly` cookie 本就不可见（G-46 CMP089 的既定语义）。\n- 判据状态：无可跑判据（尚未实现）。"
+    },
+    {
+      "id": "T-security-credential-redirect",
+      "title": "安全基线：凭据头（Cookie/Authorization）不得跨 origin 跟随重定向 —— 双层守卫 + 真机 13/13",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:zcode-main-20261027",
+      "scope": [
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/CookieOriginGuard.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HttpTransport.java",
+        "hosts/ios/ProteusHost/runtime/http-credential-guard.swift",
+        "hosts/ios/ProteusHost/runtime/http-capability.swift",
+        "packages/api/src/capability-fetch-pipeline.ts",
+        "packages/api/src/capability-fetch-redirect.ts",
+        "scripts/check-cookie-origin-guard.mjs",
+        "hosts/android/run-redirect-probe.sh",
+        "hosts/shared/bridge/entry-superapp-probes.ts",
+        "tests/fetch-pipeline.test.ts",
+        "package.json",
+        ".github/workflows/ci.yml",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1257,
+      "branch": null,
+      "verification": "node scripts/check-cookie-origin-guard.mjs（5/5，含变异 no-guard 必红）+ npx vitest run tests/fetch-pipeline.test.ts（35/35）+ bash hosts/android/check-host-compile.sh + bash hosts/ios/check-selfdraw-compile.sh + bash hosts/android/run-redirect-probe.sh（真机 13/13）+ node scripts/check-gates-sync.mjs",
+      "related": [
+        "T-app-capability-cookiejar",
+        "T-cli-host-bridge-probes-sync"
+      ],
+      "note": "【done · 决策 #1257】用户「cookie注入要严禁现在小程序的漏洞问题出现，安全性是基线，必须重视」。\n★**先取证再动手**：用真 OkHttp 3.14.9 + 两个本地 HTTP 服务做实验，确认**这不是理论风险**——\n  带 `Cookie: PROTEUS_SESSION=SECRET-123` 的请求被 302 到另一个 origin（端口不同）时，\n  **对方真的收到了这个 cookie**（VERDICT=LEAK）。根因：OkHttp 的 `followUpRequest()` 只\n  `removeHeader(\"Authorization\")`，**对 Cookie 完全不管**（正常用法下 cookie 该由 CookieJar\n  按 domain/path 匹配）；而本仓 App 宿主把平台 Cookie 存储的会话 cookie **手工塞进请求头**\n  （Android `buildCallConfig` / iOS `makeRequest`）⇒ 绕过了那层保护。\n★**双层守卫**（不是冗余，是各自可独立验证）：\n  ① JS 管线 `capability-fetch-pipeline.ts`：带凭据的请求**强制 redirectManual** ⇒ 每跳回 JS，\n     由 `nextHopConfig` 统一剥；② 宿主层 Android `CookieOriginGuard`（network interceptor，\n     每跳校验 origin）+ iOS `HttpCredentialGuard`（`willPerformHTTPRedirection` 里同一判据）。\n★**三腿分流** `resolveRedirectFollow`：browser（不干预——浏览器 manual 返回 opaqueredirect 会打坏功能）\n  / host（强制 manual）/ implicit（wx.request 隐式跟随 ⇒ **带凭据一律拒绝**）。\n★**判据**：JVM 门禁 5/5（真 OkHttp；含\"同源必须保留凭据\"防一刀切）+ 管线单测 8 条 + 真机 13/13。\n★★**破坏性验证分三层**（这是本轮最值钱的方法）：① 只摘 Android 守卫 ⇒ JS 层兜住，仍绿；\n  ② 只摘 JS 层 ⇒ Android 守卫兜住，仍绿；③ **两层都摘 ⇒ 真机真的泄露**\n  （`cross_default_final_cookie=\"PROBE_SESSION=DEFAULT_PATH_1257\"`）⇒ 证明两层各自有效、且覆盖的是真路径。\n  ★若只做第 ① 步就宣布\"守卫有效\"，会漏掉\"JS 层其实没接上\"这种形态。\n★**探针盲区自查**：原 `run-redirect-probe.sh` 的跨域用例带了 `onRedirect`（JS 逐跳）⇒ **覆盖不到**\n  \"宿主自己跟随\"那条曾泄露的默认路径。新增 ⑥ 号用例（不带 onRedirect/manual）才真正打中。\n★顺带修两处判据债：`capability-app-fetch` 的\"宿主方法列表恰好只有 http.request\"从 #1226 起就是假红\n  （桥装配会探 11 个 fs.*）；`fetch-pipeline` 的 queuedMs `>10ms` 依赖机器速度（并行跑实测 7ms）。\n★顺带把 CLI 随包桥源副本的 #1169/#1179/#1180/#1251 探针 import 缺口补齐（`check:bridge-sync` 绿），\n  并把 `entry-superapp.ts` 的 6 对 import/export 合并回 992 行（CLI 副本含 8 行同步头 ⇒ 1000 行内）。\n★**诚实边界**：① 真机只有 Android；iOS 是 `swiftc -typecheck` + JVM 层同判据，未真机跑；\n  ② 鸿蒙 RCP 由 JS 层覆盖（且鸿蒙宿主不读不写 cookie 存储，见 `proteus_http.h` 的登记）；\n  ③ 判据证明\"凭据不被跨域转发\"，不证明\"同源多子域之间的 cookie 作用域完全正确\"（那是 cookie jar 的事）。"
     }
   ]
 }

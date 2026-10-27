@@ -364,7 +364,12 @@ describe('★#1133 请求管线 · 观测（meta）', () => {
     const second = run(p, '/second')
     const [, r2] = await Promise.all([first, second])
     const queuedMs = (r2 as { meta?: { queuedMs: number } }).meta?.queuedMs ?? 0
-    expect(queuedMs, `★排队 ${queuedMs}ms 未记录（"慢在排队"就查不出来）`).toBeGreaterThan(10)
+    const totalMs = (r2 as { meta?: { totalMs: number } }).meta?.totalMs ?? 0
+    // ★★★#1257 修判据：原断言 `> 10ms` 依赖"前一个请求占住 ≥25ms"，但排队时长受事件循环
+    //   调度影响（并行跑全量时实测只有 7ms ⇒ 假红）。口径改为**不依赖绝对时长**：
+    //   排队必须被记录（>0）且不得超过总耗时（抓"恒 0"与"填离谱大数"两种失真）。
+    expect(queuedMs, `★排队 ${queuedMs}ms 未记录（"慢在排队"就查不出来）`).toBeGreaterThan(0)
+    expect(queuedMs, `★排队 ${queuedMs}ms > 总耗时 ${totalMs}ms（数字不可信）`).toBeLessThanOrEqual(totalMs + 1)
   })
 
   /**
@@ -406,5 +411,120 @@ describe('★#1133 请求管线 · 观测（meta）', () => {
     const meta = (res as { meta?: Record<string, unknown> }).meta
     expect(meta).toBeTruthy()
     expect(Object.prototype.hasOwnProperty.call(meta, 'transport')).toBe(false)
+  })
+})
+
+
+describe('★★★#1257 凭据头 × 重定向 · 三腿分流（安全基线）', () => {
+  /** 桥 + 可切换的 redirectFollow；记录每次调用看到的 redirectManual。 */
+  function credBridge(follow: "browser" | "host" | "implicit" | undefined, hops = 1) {
+    const seen: Array<{ redirectManual?: boolean; headers?: Record<string, string> }> = []
+    let n = 0
+    const bridge = {
+      ...(follow === undefined ? {} : { redirectFollow: follow }),
+      request: async (config: RequestConfig): Promise<RequestResponse<unknown>> => {
+        const idx = n++
+        seen.push({ redirectManual: config.redirectManual, headers: config.headers })
+        // 前 hops 次回 302（跳到另一个 origin），之后 200
+        if (idx < hops) {
+          return {
+            data: null,
+            status: 302,
+            headers: { location: "https://evil.example.com/next" },
+            config,
+          }
+        }
+        return { data: { ok: 1 }, status: 200, headers: {}, config }
+      },
+    }
+    return { bridge, seen }
+  }
+
+  it('★host 腿：带 Cookie ⇒ 强制 redirectManual（宿主不跟，交 JS 逐跳剥）', async () => {
+    const { bridge, seen } = credBridge("host")
+    const p = createFetchPipeline(bridge, {})
+    await run(p, "https://api.example.cn/x", { headers: { Cookie: "sid=SECRET" } })
+    expect(seen[0]?.redirectManual, "★宿主腿带凭据却没强制 manual ⇒ 宿主会自己跟，跨域时 Cookie 白给").toBe(true)
+  })
+
+  it("★host 腿：不带凭据 ⇒ 不强制 manual（保持原有性能路径）", async () => {
+    const { bridge, seen } = credBridge("host")
+    const p = createFetchPipeline(bridge, {})
+    await run(p, "https://api.example.cn/x", { headers: { "X-T": "1" } })
+    expect(seen[0]?.redirectManual).not.toBe(true)
+  })
+
+  it("★host 腿：Authorization 也算凭据", async () => {
+    const { bridge, seen } = credBridge("host")
+    const p = createFetchPipeline(bridge, {})
+    await run(p, "https://api.example.cn/x", { headers: { Authorization: "Bearer T" } })
+    expect(seen[0]?.redirectManual).toBe(true)
+  })
+
+  it("★host 腿：跨源跳转后凭据头真的被剥（逐跳执行到第二次请求）", async () => {
+    const { bridge, seen } = credBridge("host", 1)
+    const p = createFetchPipeline(bridge, {})
+    await run(p, "https://api.example.cn/x", { headers: { Cookie: "sid=SECRET", "X-T": "keep" } })
+    expect(seen.length, "应发生两跳（原请求 + 跟随一跳）").toBe(2)
+    expect(seen[1]?.headers?.Cookie, "★第二跳是跨源 ⇒ Cookie 必须消失").toBeUndefined()
+    expect(seen[1]?.headers?.["X-T"], "非凭据头应保留").toBe("keep")
+  })
+
+  it("★★browser 腿：带凭据也**不**强制 manual（浏览器 manual 返回 opaqueredirect，会打坏功能）", async () => {
+    const { bridge, seen } = credBridge("browser")
+    const p = createFetchPipeline(bridge, {})
+    await run(p, "https://api.example.cn/x", { headers: { Cookie: "sid=SECRET" } })
+    expect(seen[0]?.redirectManual, "★浏览器腿被强制 manual ⇒ 拿不到 Location（status=0）").not.toBe(true)
+  })
+
+  it("★★implicit 腿（wx.request）：带凭据必须**拒绝**，且不发出请求", async () => {
+    const { bridge, seen } = credBridge("implicit")
+    const p = createFetchPipeline(bridge, {})
+    const res = await run(p, "https://api.example.cn/x", { headers: { Authorization: "Bearer T" } })
+    expect(res.ok, "★隐式跟随端的带凭据请求必须报错（不能赌平台行为）").toBe(false)
+    expect(!res.ok && res.error.code).toBe("fetch.unsupported")
+    expect(seen.length, "★拒绝必须发生在发请求**之前**（否则凭据已经出去了）").toBe(0)
+  })
+
+  it("implicit 腿：不带凭据 ⇒ 正常放行", async () => {
+    const { bridge, seen } = credBridge("implicit")
+    const p = createFetchPipeline(bridge, {})
+    const res = await run(p, "https://api.example.cn/x", { headers: { "X-T": "1" } })
+    expect(res.ok).toBe(true)
+    expect(seen.length).toBe(1)
+  })
+
+  it("★缺省（未声明 redirectFollow）⇒ 按运行时推导：壳注入宿主标识 ⇒ host", async () => {
+    const g = globalThis as Record<string, unknown>
+    g.__PROTEUS_HOST_ID__ = "android"
+    try {
+      const { bridge, seen } = credBridge(undefined)
+      const p = createFetchPipeline(bridge, {})
+      await run(p, "https://api.example.cn/x", { headers: { Cookie: "sid=1" } })
+      expect(seen[0]?.redirectManual, "App 宿主下带凭据必须强制 manual").toBe(true)
+    } finally {
+      delete g.__PROTEUS_HOST_ID__
+    }
+  })
+
+  it("★★缺省 + 无宿主标识也无 wx ⇒ browser（不干预，浏览器自己按规范剥）", async () => {
+    const { bridge, seen } = credBridge(undefined)
+    const p = createFetchPipeline(bridge, {})
+    await run(p, "https://api.example.cn/x", { headers: { Cookie: "sid=1" } })
+    expect(seen[0]?.redirectManual, "浏览器腿被强制 manual ⇒ opaqueredirect 打坏功能").not.toBe(true)
+  })
+
+  it("★★缺省 + 有 wx 全局 ⇒ implicit（带凭据拒绝）", async () => {
+    const g = globalThis as Record<string, unknown>
+    g.wx = {}
+    try {
+      const { bridge, seen } = credBridge(undefined)
+      const p = createFetchPipeline(bridge, {})
+      const res = await run(p, "https://api.example.cn/x", { headers: { Authorization: "Bearer T" } })
+      expect(res.ok).toBe(false)
+      expect(seen.length, "拒绝必须在发请求前").toBe(0)
+    } finally {
+      delete g.wx
+    }
   })
 })

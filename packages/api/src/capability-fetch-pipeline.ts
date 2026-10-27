@@ -27,7 +27,7 @@ import { runFetch } from './capability-fetch'
 import type { AbortSignalLike, FetchConfig, FetchMeta, FetchResult, RetryPolicy, TransportMeta } from './capability-fetch-types'
 import { parseTransportReadout } from './capability-fetch-types'
 // ★#1134 重定向策略（跟随循环 / RFC 规则 / 跨域剥离凭据）——与宿主解耦，跨端同一份
-import { headerOf, isRedirectStatus, methodAfterRedirect, nextHopConfig, resolveLocation } from './capability-fetch-redirect'
+import { hasCredentialHeaders, headerOf, isRedirectStatus, methodAfterRedirect, nextHopConfig, resolveLocation } from './capability-fetch-redirect'
 import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
 // ★★★#1149 HTTP 条件请求缓存（P2）——App 端字节腿不会自动做 304，必须在框架层收口
 import { cacheMissError, cachedResponseOf, createFetchCache, entryAgeMs } from './capability-fetch-cache'
@@ -38,6 +38,38 @@ import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-type
 /** 桥的最小面（与 `runFetch` 一致）。 */
 export interface PipelineBridge {
   request?(config: RequestConfig): Promise<RequestResponse<unknown>>
+  /**
+   * ★★★#1257 安全基线：**这条腿的重定向跟随由谁负责**——决定"带凭据的请求能不能让它自己跟"。
+   *
+   * - `'browser'`：运行时自带（浏览器 / Node fetch）。跨源跳转时运行时**按规范剥 Authorization**，
+   *   cookie 由运行时自己的 jar 按域隔离 ⇒ 我们不需要额外干预（而且浏览器 `redirect:'manual'`
+   *   返回的是 `opaqueredirect`（status=0、无 Location）⇒ 强制 manual 反而会把功能打坏）。
+   * - `'host'`：**宿主自己跟随**（App 三端：OkHttp / URLSession / RCP）。
+   *   宿主**不会**替我们剥 Cookie（实测 OkHttp 的 followUpRequest 只 removeHeader("Authorization")），
+   *   而宿主还会把平台 cookie 手工注入请求头 ⇒ 带凭据时必须强制 `redirectManual`，由 JS 逐跳剥。
+   * - `'implicit'`：平台**隐式跟随且不可干预**（`wx.request`）⇒ 带凭据的请求**一律拒绝**：
+   *   既看不见中间跳、也没有中断点，无法保证剥离。宁可显式报错，也不赌平台行为。
+   *
+   * **不传时按运行时推导**（见 `resolveRedirectFollow`）：壳注入 `__PROTEUS_HOST_ID__` ⇒ `'host'`；
+   * 两端全局里只有 `wx.request` ⇒ `'implicit'`；否则 `'browser'`。
+   * ★为什么用推导而不要求每个桥显式声明：桥只活在该端的 globals 里，声明与运行时必然一致，
+   *   而**声明会漂**（新增一端忘了填 ⇒ 静默落到默认值）；推导不会。
+   */
+  redirectFollow?: 'browser' | 'host' | 'implicit'
+}
+
+/**
+ * 推导"这条腿谁在跟随重定向"。
+ *
+ * ★与 `detectAppHost()`（`capability-app.ts`）同一判据，但**不 import 那个模块**——
+ *   管线是底层策略层，引上层模块会成环；这里只读同一个约定全局键。
+ */
+export function resolveRedirectFollow(bridge: PipelineBridge): 'browser' | 'host' | 'implicit' {
+  if (bridge.redirectFollow) return bridge.redirectFollow
+  const g = globalThis as Record<string, unknown>
+  if (typeof g.__PROTEUS_HOST_ID__ === 'string' && (g.__PROTEUS_HOST_ID__ as string).length > 0) return 'host'
+  if (typeof g.wx === 'object' && g.wx !== null) return 'implicit'
+  return 'browser'
 }
 
 /** 单次请求的上下文（拦截器可改它）。 */
@@ -466,7 +498,36 @@ export function createFetchPipeline(
       let url = url0
       let cfg = config0
       // 只有"要能拦截"或"显式 manual"时，才让宿主不跟随
-      const wantManual = cfg.redirect === 'manual' || typeof cfg.onRedirect === 'function'
+      //
+      // ★★★#1257 安全基线：带凭据头的请求，是否强制 JS 逐跳**取决于这条腿谁在跟随重定向**。
+      //   ① `'host'`（App 三端）——宿主自己跟随，且**不会**替我们剥 Cookie：
+      //      OkHttp 的 followUpRequest 只 removeHeader("Authorization")、URLSession 同理；
+      //      而宿主还会把平台 cookie **手工注入** Cookie 头（Android `buildCallConfig` /
+      //      iOS `makeRequest`）⇒ 实测：带 Cookie 的请求被 302 到第三方域，cookie 原样送到对方。
+      //      ⇒ **必须强制 redirectManual**，让每一跳回到 JS，由 `nextHopConfig` 统一剥。
+      //   ② `'browser'`（Web / Node fetch）——运行时按规范剥跨源 Authorization、cookie 由运行时
+      //      自己的 jar 按域隔离；而且浏览器 `redirect:'manual'` 返回 **opaqueredirect**
+      //      （status=0、拿不到 Location）⇒ 强制 manual 会把功能直接打坏。⇒ 不干预。
+      //   ③ `'implicit'`（`wx.request`）——隐式跟随**且不可干预**，看不见中间跳也无中断点
+      //      ⇒ 带凭据的请求必须**拒绝**（见下方 guard），不能赌平台行为。
+      const followMode = resolveRedirectFollow(bridge)
+      const carriesCreds = hasCredentialHeaders(cfg.headers)
+      if (carriesCreds && followMode === 'implicit') {
+        return {
+          ok: false,
+          error: {
+            code: 'fetch.unsupported',
+            message:
+              '带凭据头（Authorization/Cookie）的请求在本端不安全：平台隐式跟随重定向且不可干预，' +
+              '无法保证跨源跳转时剥离凭据。请改用 App/Web 端，或自行去掉凭据头后重试。',
+          } as never,
+          meta: { redirects: trace } as never,
+        }
+      }
+      const wantManual =
+        cfg.redirect === 'manual' ||
+        typeof cfg.onRedirect === 'function' ||
+        (carriesCreds && followMode === 'host')
       const max = cfg.maxRedirects ?? 5
       for (;;) {
         // ★#1135：**每一跳都消耗 deadline 预算**（多跳重定向同样受总时限约束）
