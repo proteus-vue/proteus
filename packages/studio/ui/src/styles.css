@@ -100,7 +100,10 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .rail button[disabled]{opacity:.4;cursor:not-allowed}
 .rail .sep{width:24px;height:1px;background:var(--border-subtle);margin:var(--sp1) 0}
 
-.main{grid-area:main;position:relative;background:var(--bg-canvas);overflow:hidden}
+/* ★★★`.main` **不能有背景色**（决策 #1257）：原生 GL 视图垫在 webview **下面**，
+   这一层只要不透明，画布洞就被它整块糊掉——表现是"启动瞬间能看到投屏、页面一画上去就变黑"，
+   而面板读数一切正常（出帧/帧率/解码都对）。底色改由 `.screen` 的超大 spread 阴影补（见下）。 */
+.main{grid-area:main;position:relative;background:transparent;overflow:hidden}
 
 /* ── 设备舞台（2026-10-23 等比适配）────────────────────────────────────────
    舞台只管"居中 + 留白"；真正决定画面形状的是 .screen（宽高比 = 设备宽高比）。
@@ -111,11 +114,23 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 /* ★`flex:0 0 auto` 不能省：flex item 默认 `flex-shrink:1`，放大时**宽度**会被压回舞台宽、
    而高度不会 ⇒ 画面被横向压扁（判据 ⑮ 实测误差 20%）。缩放必须两轴同步生效。 */
 .screen{position:relative;flex:0 0 auto;background:transparent;cursor:grab;
-        box-shadow:0 0 0 1px var(--border-strong),0 24px 64px -24px rgba(0,0,0,.85)}
+        /* ★三层阴影（顺序 = 从下往上叠，写在前面的在上）：
+           ① 1px 描边  ② 落影  ③ **超大 spread 的舞台底色**——它在屏幕矩形**之外**铺满。
+           ★为什么用 shadow 补底色而不是给 `.main` 上背景：`.main` 在上游（祖先盒），
+             它的背景会连屏幕矩形一起涂掉，把垫在下面的原生 GL 视图整个盖住（#1257）。
+             shadow 只画在边框盒**外面**，天然就是那个"洞"的补集；
+             而且它跟着 `.screen` 的 transform 一起平移，不用再同步一份几何。 */
+        box-shadow:0 0 0 1px var(--border-strong),
+                   0 24px 64px -24px rgba(0,0,0,.85),
+                   0 0 0 4000px var(--bg-canvas)}
 /* 拖拽中：手型闭合（IDE/图像查看器的通用语汇，表示"正在移动画布"） */
 .screen:active{cursor:grabbing}
 /* ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面 */
 #canvas{position:absolute;inset:0;background:transparent}
+/* 没画面时（`live` 未加）这块不是洞，而是"关着的屏"：给实心底色。
+   ★反过来也重要：一旦有首帧，`.screen` 必须重新变透明——所以只在 `:not(.live)` 上给色，
+     不能用一条常驻的背景（那会把 GL 又糊掉，就是 #1257 那个 bug）。 */
+.screen:not(.live){background:var(--bg-canvas)}
 
 /* 画面角标（左上）：一眼知道"这是什么流" */
 .hud{position:absolute;left:var(--sp6);top:var(--sp6);height:22px;display:inline-flex;align-items:center;
@@ -148,6 +163,30 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .empty .mark{opacity:.92;margin-bottom:var(--sp1)}
 .empty p{margin:0;font-size:var(--fs-sm);font-weight:500;color:var(--fg-muted)}
 .empty span{font-size:var(--fs-xs);color:var(--fg-subtle)}
+
+/* iOS 接法引导卡（决策 #1277）：空状态的**可执行版**。
+   和 .empty 的区别就是"要能点"——所以它自己收指针（.empty 是 pointer-events:none）。
+   ★宽度上限 520px：一行命令是可变长文本，撑满舞台会难读；限宽后命令自然折行。 */
+.iosguide{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,calc(100% - 48px));
+          box-sizing:border-box;padding:var(--sp4);border:1px solid var(--border);border-radius:var(--r-lg);
+          background:var(--bg-elevated);box-shadow:0 8px 28px rgba(0,0,0,.28);color:var(--fg-muted)}
+.iosguide .ig-head{display:flex;align-items:center;gap:var(--sp2);color:var(--fg);
+                   font-size:var(--fs-md);margin-bottom:var(--sp2)}
+.iosguide .ig-head svg{opacity:.75}
+.iosguide .ig-lead{margin:0 0 var(--sp3);font-size:var(--fs-sm);line-height:1.55;color:var(--fg-subtle)}
+.iosguide b{color:var(--fg);font-weight:600}
+/* 命令条：等宽 + 可横向滚动（命令很长，折行会读错空格位置） */
+.iosguide .ig-cmd{display:flex;align-items:center;gap:var(--sp2);padding:var(--sp2) var(--sp2) var(--sp2) var(--sp3);
+                  border:1px solid var(--border-subtle);border-radius:var(--r-md);background:var(--bg-surface)}
+.iosguide .ig-cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:var(--fs-xs) / 1.5 ui-monospace, Menlo, monospace;
+                       color:var(--fg);user-select:text;-webkit-user-select:text}
+.iosguide .ig-cmd code::-webkit-scrollbar{height:0}
+.iosguide .ig-copy{flex:none;padding:3px 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+                   background:var(--bg-elevated);color:var(--fg-muted);font-size:var(--fs-xs);cursor:pointer}
+.iosguide .ig-copy:hover{background:var(--bg-overlay);color:var(--fg)}
+.iosguide .ig-steps{margin:var(--sp3) 0 0;padding-left:18px;font-size:var(--fs-sm);line-height:1.7;color:var(--fg-subtle)}
+.iosguide .ig-state{margin:var(--sp3) 0 0;font-size:var(--fs-xs);color:var(--bad)}
+.iosguide .ig-state.ok{color:var(--ok)}
 
 /* B1：原生点击的落点标记（圆圈 + 十字）。它同时是「事件通路已通」的可见证据。
    ★坐标系是**设备屏幕**（.screen 内 inset:0），不是整个舞台。 */
@@ -190,3 +229,111 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .sub::before{content:"└ ";color:var(--fg-subtle)}
 code{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-sm);
      padding:0 4px;font-size:var(--fs-xs);color:var(--fg-muted)}
+
+/* ── 设备列表（决策 #1265）：一行一台，当前项用强调条标记 ───────────────── */
+.devlist{display:flex;flex-direction:column;gap:2px}
+.devrow{display:grid;grid-template-columns:8px 1fr auto;align-items:center;gap:var(--sp2);
+        width:100%;padding:6px var(--sp2);border:0;border-radius:var(--r-sm);background:transparent;
+        color:var(--fg);font:inherit;text-align:left;cursor:pointer;position:relative}
+.devrow:hover{background:var(--bg-overlay)}
+.devrow.on{background:var(--bg-elevated)}
+.devrow.on::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;border-radius:0 2px 2px 0;background:var(--accent)}
+.devrow.dead{opacity:.55;cursor:not-allowed}
+.dmodel{font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dmeta{font-size:var(--fs-xs);color:var(--fg-subtle);font-variant-numeric:tabular-nums}
+/* 不可用的原因（行内第二行）：比 tooltip 更容易被发现 */
+.dnote{grid-column:2 / -1;font-size:var(--fs-xs);color:var(--fg-subtle);line-height:1.5;white-space:normal;text-align:left}
+.dnone{font-size:var(--fs-xs);color:var(--fg-subtle);padding:4px var(--sp2);line-height:1.6}
+.drefresh{margin-top:var(--sp2);align-self:flex-start;padding:2px var(--sp2);border:1px solid var(--border);
+          border-radius:var(--r-sm);background:transparent;color:var(--fg-muted);
+          font-size:var(--fs-xs);cursor:pointer}
+.drefresh:hover{background:var(--bg-overlay);color:var(--fg)}
+
+/* ── 设置面板（决策 #1266）：label 一行、input+按钮一行、结果一行 ───────────── */
+.setgrid{display:grid;grid-template-columns:1fr;gap:2px}
+.setgrid label{font-size:var(--fs-xs);color:var(--fg-subtle);margin-top:var(--sp2)}
+.setrow{display:grid;grid-template-columns:1fr auto;gap:var(--sp2);align-items:center}
+.setrow input{min-width:0;padding:4px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+              background:var(--bg-elevated);color:var(--fg);font:var(--fs-xs) / 1.5 ui-monospace, Menlo, monospace}
+.setrow input:focus{outline:none;border-color:var(--accent)}
+.setbtn{padding:3px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+        background:transparent;color:var(--fg-muted);font-size:var(--fs-xs);cursor:pointer}
+.setbtn:hover:not(:disabled){background:var(--bg-overlay);color:var(--fg)}
+.setbtn:disabled{opacity:.5;cursor:progress}
+.setmsg{margin:2px 0 0;font-size:var(--fs-xs);line-height:1.5;word-break:break-all}
+.okmsg{color:var(--ok)}
+.errmsg{color:var(--danger, #e5484d)}
+
+/* ── 独立设置窗口（决策 #1267）：左侧分类 + 右侧内容，像 IDE 的偏好设置 ────── */
+/* 三层：自绘标题栏（44px，红绿灯浮在上面）/ 左导航 / 内容 */
+.setwin{display:grid;grid-template-rows:44px 1fr;height:100vh;background:var(--bg-canvas)}
+.settitle{display:flex;align-items:center;padding-left:84px;background:var(--bg-surface);
+          border-bottom:1px solid var(--border-subtle);-webkit-app-region:drag}
+.settitle-text{font-size:var(--fs-xs);font-weight:600;letter-spacing:.04em;color:var(--fg-muted)}
+.setmain{display:grid;grid-template-columns:184px 1fr;min-height:0}
+.setnav{background:var(--bg-surface);border-right:1px solid var(--border-subtle);
+        padding:var(--sp4) var(--sp2);display:flex;flex-direction:column;gap:2px}
+.setnav-title{padding:0 var(--sp2) var(--sp3);font-size:var(--fs-xs);font-weight:600;
+              letter-spacing:.04em;color:var(--fg-muted)}
+.setnav-item{display:block;width:100%;text-align:left;padding:6px var(--sp2);border:0;border-radius:var(--r-sm);
+             background:transparent;color:var(--fg-muted);font:inherit;font-size:var(--fs-sm);cursor:pointer}
+.setnav-item:hover{background:var(--bg-overlay);color:var(--fg)}
+.setnav-item.on{background:var(--bg-elevated);color:var(--fg);font-weight:500;
+                box-shadow:inset 2px 0 0 var(--accent)}
+.setbody{padding:var(--sp5) var(--sp6);overflow:auto;position:relative}
+.sethead{margin:0 0 var(--sp2);font-size:var(--fs-lg);font-weight:600;color:var(--fg)}
+.setlead{margin:0 0 var(--sp4);font-size:var(--fs-sm);color:var(--fg-subtle);line-height:1.65}
+.setfield{margin-bottom:var(--sp4);max-width:560px}
+.setfield label{display:block;font-size:var(--fs-xs);color:var(--fg-muted);margin-bottom:var(--sp1)}
+.setrow{display:grid;grid-template-columns:1fr auto;gap:var(--sp2);align-items:center}
+.setrow.narrow{max-width:240px}
+.setrow input{padding:5px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+              background:var(--bg-elevated);color:var(--fg);font:var(--fs-sm) / 1.5 ui-monospace, Menlo, monospace}
+.setrow input:focus{outline:none;border-color:var(--accent)}
+.setbtn{padding:4px var(--sp3);border:1px solid var(--border);border-radius:var(--r-sm);
+        background:transparent;color:var(--fg-muted);font-size:var(--fs-sm);cursor:pointer}
+.setbtn:hover:not(:disabled){background:var(--bg-overlay);color:var(--fg)}
+.setbtn.primary{border-color:var(--accent);color:var(--fg)}
+.setbtn:disabled{opacity:.5;cursor:progress}
+.setmsg{margin:var(--sp1) 0 0;font-size:var(--fs-xs);line-height:1.6;word-break:break-all}
+.okmsg{color:var(--ok)}
+.errmsg{color:var(--danger, #e5484d)}
+.settable{display:flex;flex-direction:column;gap:1px;max-width:720px}
+.settr{display:grid;grid-template-columns:1fr 120px 90px 1fr;gap:var(--sp2);padding:6px var(--sp2);
+       font-size:var(--fs-sm);color:var(--fg)}
+.settr.setth{font-size:var(--fs-xs);color:var(--fg-subtle);border-bottom:1px solid var(--border-subtle)}
+.settr .dead{color:var(--fg-subtle)}
+.settr .mono,.setkv .mono{font-family:ui-monospace, Menlo, monospace;font-size:var(--fs-xs);color:var(--fg-muted)}
+.setkv{display:grid;grid-template-columns:120px 1fr;gap:var(--sp2) var(--sp3);font-size:var(--fs-sm)}
+.setkv b{font-weight:500;color:var(--fg-muted);font-size:var(--fs-xs)}
+/* ★不要 sticky：footer 会**压在**表单上（实测 620 高的窗口里盖住了"iOS 推流端口"）。
+   放在内容流末尾，滚动到底才看到。 */
+.setfoot{margin-top:var(--sp5);padding-top:var(--sp3);
+         border-top:1px solid var(--border-subtle);font-size:var(--fs-xs);color:var(--fg-subtle)}
+kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:var(--bg-elevated);
+    font:var(--fs-xs) / 1.4 ui-monospace, Menlo, monospace;color:var(--fg-muted)}
+
+/* ── 自动检测的候选行（决策 #1268）：一行一个，点一下就用，不用手打路径 ─────── */
+/* 候选多时（例如浏览器 5 个）限高滚动，别把下面的输入框顶出屏幕 */
+.setcands{display:flex;flex-direction:column;gap:2px;margin-bottom:var(--sp3);max-width:560px;
+          max-height:190px;overflow:auto}
+.setcand{display:grid;grid-template-columns:1fr auto;gap:var(--sp2);align-items:center;
+         padding:6px var(--sp2);border:1px solid var(--border);border-radius:var(--r-sm);
+         background:transparent;color:var(--fg);text-align:left;cursor:pointer;font:inherit}
+.setcand:hover{background:var(--bg-overlay)}
+.setcand.on{border-color:var(--accent);background:var(--bg-elevated)}
+.cpath{font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cver{font-size:var(--fs-xs);color:var(--fg-subtle);font-variant-numeric:tabular-nums}
+.setrow.three{grid-template-columns:1fr auto auto}
+
+/* ── 设置页的"端"页签（决策 #1270）：一级是分类，二级是端 ─────────────────── */
+.settabs{display:flex;gap:2px;margin-bottom:var(--sp4);border-bottom:1px solid var(--border-subtle);padding-bottom:var(--sp2)}
+.settab{padding:4px var(--sp3);border:1px solid transparent;border-radius:var(--r-sm);background:transparent;
+        color:var(--fg-muted);font-size:var(--fs-sm);cursor:pointer}
+.settab:hover{background:var(--bg-overlay);color:var(--fg)}
+.settab.on{background:var(--bg-elevated);border-color:var(--border);color:var(--fg);font-weight:500}
+
+/* 设备列表的平台分组小标题（决策 #1274）：Android / iOS 的接法不同，必须分开看 */
+.devgroup{margin:var(--sp2) 0 2px;padding-left:var(--sp2);font-size:var(--fs-xs);color:var(--fg-subtle);
+          letter-spacing:.04em;text-transform:none}
+.devgroup:first-child{margin-top:0}

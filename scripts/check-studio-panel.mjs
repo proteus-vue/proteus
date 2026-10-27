@@ -27,12 +27,19 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
-import { probeCodeExtras, probeGesture, probeMenu, probePan, probeSearch, probeTitlebar, probeTouch } from './studio-panel-probes.mjs'
+import { probeCodeExtras, probeHole, probeMenu, probePan, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
+import { probeCapPreset, probeDeviceSwitch, probeGesture, probeSettings, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
-import { serveDist } from './studio-panel-serve.mjs'
+import { openPanel } from './studio-panel-boot.mjs'
+import { langExtCoverage } from './studio-panel-langext.mjs'
+import { checkCapability } from './studio-panel-capability.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
+import { checksConfig } from './studio-panel-checks-config.mjs'
+import { checksUiGuides } from './studio-panel-checks-ui.mjs'
+import { probeIosGuide } from './studio-panel-probes-ios.mjs'
+import { probeTerminal } from './studio-panel-probes-term.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDIO = path.join(ROOT, 'packages', 'studio')
@@ -93,33 +100,8 @@ const stats = {
   device: deviceValue,
 }
 
-// 静态服务在 studio-panel-serve.mjs（http 而非 file://：ES module 在 file:// 下被 CORS 挡掉）
-const { port, close: closeServer } = await serveDist(DIST)
-
-const browser = await chromium.launch()
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
-
-// ㉑ 用的大文件（4000 次循环 = 8000 行）：只在 localStorage.__BIG__=1 时返回
-const BIG_DOC = Array.from(
-  { length: 4000 },
-  (_, i) => `export const v${i + 1} = ${i + 1} // line ${i + 1}\nconst s${i + 1} = 'text-${i + 1}'`,
-).join('\n')
-
-// 桩：只替换"值怎么送到页面"，其余与真机一致（含 set_canvas_rect 的调用）
-// ★`read_text` 也在这里桩掉：代码视图（G4 第一块砖）启动时会读文件，不桩就会抛"未实现"
-//   ⇒ 被判据 ⑧（无 JS 错误）判红。桩内容故意含 `const`，供判据 ⑪ 断言"面板真的渲染了内容"。
-await page.addInitScript(stubTauri, { ...stats, big: BIG_DOC })
-
-const errors = []
-page.on('pageerror', (e) => errors.push(String(e)))
-page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text())
-})
-
-await page.goto(`http://127.0.0.1:${port}/index.html`)
-await page.waitForTimeout(1200) // 轮询 500ms，等两拍
-fs.mkdirSync(path.dirname(outPath), { recursive: true })
-await page.screenshot({ path: outPath })
+// 起浏览器环境（静态服务 + chromium + 桩注入 + 首屏截图 + 收集 JS 错误）在 studio-panel-boot.mjs
+const { page, errors, close: closeAll, url: panelUrl } = await openPanel({ dist: DIST, payload: stats, outPath })
 
 // ── 判据（不是"看着像"就算过）────────────────────────────────────
 const seen = await page.evaluate(() => {
@@ -403,9 +385,19 @@ await page.screenshot({ path: outPath.replace(/\.png$/, '-zoom.png') })
 
 // ── ⑯ 拖拽平移：采集段在 probePan()（决策 #1255 拆出；逻辑一字未改）
 const { panBefore, panSeen, panReset } = await probePan(page, { outPath })
+// ── ㊲ 画布洞：采集段在 probeHole()（决策 #1257：GL 垫在 webview 下面，HTML 不许盖它）
+const hole = await probeHole(page)
+// ── ㊴ 采集档位：采集段在 probeCapPreset()（决策 #1263）
+const cap = await probeCapPreset(page)
+// ── ㊵ 设备管理：采集段在 probeDeviceSwitch()（决策 #1265）
+const dev = await probeDeviceSwitch(page)
+// ── ㊶ 开发环境设置：采集段在 probeSettings()（决策 #1266）
+const set = await probeSettings(page, panelUrl)
 
 // ── ㉟ 触摸回传：采集段在 studio-panel-probes.mjs 的 probeTouch()（决策 #1254）
 const touch = await probeTouch(page)
+// ── ㊳ 触摸坐标空间：采集段在 probeTapSpace()（决策 #1260：设备物理像素 ≠ 码流像素）
+const tapSpace = await probeTapSpace(page)
 // ── ㊱ ⌥ 手势（滑动 / 长按）：采集段在 probeGesture()（决策 #1255）
 const g = await probeGesture(page)
 
@@ -437,6 +429,16 @@ const { gitBar, gitList, gitOpened, headDiff, linked, afterTree, diffState, diff
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
 
+/* ── ㊻ iOS 接法引导卡（采集段在 studio-panel-probes-ios.mjs，决策 #1277）──
+   ★位置很关键：它会临时把 frames 归零（造"没画面"），跑完自己恢复。
+     必须排在 pan/touch/hole 这些**依赖"有画面"**的采集之后，且必须在 `closeAll()` 之前
+     （那个函数会关掉浏览器，之后任何 page.evaluate 都是 "Target page has been closed"）。 */
+const ios = await probeIosGuide(page)
+
+/* ── ㊼ 内置终端（采集段在 studio-panel-probes-term.mjs，决策 #1279）──
+   ★放这里：它会点 rail 切到终端视图（之后 perf 段自己 reload 回 code 视图，互不影响）。 */
+const termProbe = await probeTerminal(page, STUDIO)
+
 // ── ㉑ 大文件着色性能（决策 #1216）────────────────────────────────────────────
 // 【为什么要有这条】用户实测："两百多行的文件，滚动到哪才开始着色"。
 //   根因不是语言包慢，而是 **CM 只解析视口附近**：跳到没解析的区域时，它在那一帧同步补解析
@@ -452,8 +454,7 @@ await page.reload()
 const perf = await measureBigFile(page)
 const parseFull = perf.parseFull
 
-await browser.close()
-closeServer()
+await closeAll()
 // ⑩ fixture 与原始采集输出必须数值一致（采集段在 studio-panel-fixture.mjs）
 const { ok: fixtureInSync, why: fixtureWhy } = checkFixture({ fixture: r, root: ROOT, studio: STUDIO })
 
@@ -490,29 +491,10 @@ const objcNum = colOf(tokensObjc, (t) => t === '1')
 const objcComment = colOf(tokensObjc, (t) => t.includes('// note'))
 const objcColors = [objcKw, objcNum, objcComment]
 
-/* ── ⑳ 覆盖表：树里出现的每个扩展名都必须有归属（语言包 or 显式登记为纯文本）──
-   ★这是"防静默掉队"的判据：新增一个 .tsx 文件却没人接语言包时，⑲ 系列不会红
-     （它只测已打开的那几个文件），但 ⑳ 会。基准取 languages.json（与 UI 同一份数据）。 */
-const langMapPath = path.join(STUDIO, 'ui', 'src', 'languages.json')
-const langMap = JSON.parse(fs.readFileSync(langMapPath, 'utf8'))
-const knownExt = new Set([
-  ...Object.keys(langMap.languages ?? {}),
-  ...Object.keys(langMap.plain ?? {}),
-])
-const COVER_ROOTS = ['ui/src', 'src', 'native'] // ★必须与 CodePanel 的 ROOTS 一致
-const seenExt = new Set()
-const walkExt = (dir) => {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, e.name)
-    if (e.isDirectory()) walkExt(full)
-    else {
-      const dot = e.name.lastIndexOf('.')
-      if (dot > 0) seenExt.add(e.name.slice(dot).toLowerCase())
-    }
-  }
-}
-for (const r of COVER_ROOTS) walkExt(path.join(STUDIO, r))
-const missingExt = [...seenExt].filter((e) => !knownExt.has(e)).sort()
+/* ── ⑳ 覆盖表：树里出现的每个扩展名都必须有归属（采集段在 studio-panel-langext.mjs）── */
+const { missing: missingExt, seen: seenExtCount } = langExtCoverage(STUDIO)
+
+const capability = checkCapability(STUDIO)
 
 const checks = [
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
@@ -582,9 +564,7 @@ const checks = [
   ],
   // ⑳ 覆盖表：树里每种扩展名都要有归属，否则新类型会静默掉队
   [
-    `⑳ 覆盖表：树里 ${seenExt.size} 种扩展名（${[...seenExt].sort().join(' ')}）${
-      missingExt.length ? `· 缺登记 ${missingExt.join(' ')}` : '· 全部有归属'
-    }`,
+    `⑳ 覆盖表：树里 ${seenExtCount} 种扩展名 · ${missingExt.length ? '缺失：' + missingExt.join(' ') : '全部有归属'}`,
     missingExt.length === 0,
   ],
   // ⑰ 目录可折叠：收起后里面的文件从可见行里消失（目录行本身还在，才能再展开）
@@ -627,20 +607,32 @@ const checks = [
       afterTree.marker.includes('packages/studio/ui/src/App.vue') &&
       !afterTree.marker.includes('src/main.rs'),
   ],
-  // ㊱ ⌥ 手势：拖动 = 滑动、按住不动 = 长按；普通拖拽仍然只平移
+  // ㊳ 触摸坐标空间：桩报"设备 1200×2608 / 码流 1280×720" ⇒ 必须按**物理**尺寸换算
   [
-    `㊱ ⌥手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByAltDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · 普通拖拽后累计 ${g.swipeCountAfterPlainDrag} 条（应 2）`,
+    `㊳ 触控坐标：点画布中心 → ${JSON.stringify(tapSpace.atCenter)}（物理应为 600,1304；码流会是 442,960）· 点 3/4 高度 → ${JSON.stringify(tapSpace.at3q)}（物理应为 600,1956）`,
+    Math.abs(Number(tapSpace.atCenter?.x) - 600) <= 4 &&
+      Math.abs(Number(tapSpace.atCenter?.y) - 1304) <= 4 &&
+      Math.abs(Number(tapSpace.at3q?.x) - 600) <= 4 &&
+      Math.abs(Number(tapSpace.at3q?.y) - 1956) <= 4,
+  ],
+  // ㊱ 手势：**直接拖拽 = 滑动**、按住不动 = 长按；⌥+拖拽 = 平移（决策 #1261 反转过默认）
+  [
+    `㊱ 手势：拖拽 → ${JSON.stringify(g.swipeOfDrag)}（画布被平移=${g.panMovedByPlainDrag}，应 false）· 按住 700ms → ${JSON.stringify(g.swipeOfHold)} · ⌥拖后累计 ${g.swipeCountAfterAltDrag} 条（应 2）、画布被平移=${g.panMovedByAltDrag}（应 true）· 拖出画布 → ${JSON.stringify(g.swipeOut)}（坐标非负=${g.outInBounds}，报错提示=「${g.errToast.slice(0, 30)}」应空）`,
     g.swipeCountAfterDrag === 1 &&
       Number(g.swipeOfDrag?.x1) === Number(g.swipeOfDrag?.x2) &&
       Number(g.swipeOfDrag?.y2) < Number(g.swipeOfDrag?.y1) - 50 &&
       Number(g.swipeOfDrag?.ms) > 0 &&
-      g.panMovedByAltDrag === false &&
+      g.panMovedByPlainDrag === false &&
       g.swipeCountAfterHold === 2 &&
       // 长按 = 同点 + 600ms（★别写成 x1===y1：那是在比两个轴，640≠360 永远假）
       Number(g.swipeOfHold?.x1) === Number(g.swipeOfHold?.x2) &&
       Number(g.swipeOfHold?.y1) === Number(g.swipeOfHold?.y2) &&
       Number(g.swipeOfHold?.ms) === 600 &&
-      g.swipeCountAfterPlainDrag === 2,
+      g.swipeCountAfterAltDrag === 2 &&
+      g.panMovedByAltDrag === true &&
+      // ④ 拖出画布：坐标被夹住（不能是负数，否则 u32 直接拒绝）
+      g.outInBounds &&
+      !g.errToast.includes('invalid args'),
   ],
   // ⑱h Git 只读：分支/改动数 + 改动清单可点开 + Diff 可切 HEAD
   [
@@ -914,11 +906,18 @@ const checks = [
       zoomLabel === '125%' &&
       zoomState.includes('"zoom":1.25'),
   ],
+  // ㊹㊸㊷㊶㊺㊵㊴ 五组判据在 studio-panel-checks-config.mjs（决策 #1277 拆出，断言一字未改）
+  ...checksConfig({ capability, set, dev, cap }),
+  // ㊲ 画布洞：祖先链必须全透明（GL 在 webview 下面）+ 舞台底色必须由阴影补上
+  [
+    `㊲ 画布洞：不透明祖先 ${hole.holeBad.length} 层${hole.holeBad.length ? '（' + hole.holeBad.join(' / ') + '）' : ''} · 舞台底色阴影 spread=${hole.fillSpread}px`,
+    hole.holeOk && hole.fillSpread >= 1000,
+  ],
   // ⑯ 拖拽平移：真实鼠标手势（down → 多步 move → up），平移量、原生矩形都要跟着走
   //   ★只往左拖：125% 下屏幕高 726 < 舞台 796 ⇒ 纵向被正确夹紧到 0，
   //     拿纵向做断言会红，但那是正确行为（屏幕比舞台小就不该能拖动）。
   [
-    `⑯ 拖拽平移：状态 ${panSeen.status} · 屏幕 x ${panBefore.x.toFixed(0)}→${panSeen.x.toFixed(0)}（原生收到 ${panSeen.ipcX.toFixed(0)}）`,
+    `⑯ ⌥拖拽平移：状态 ${panSeen.status} · 屏幕 x ${panBefore.x.toFixed(0)}→${panSeen.x.toFixed(0)}（原生收到 ${panSeen.ipcX.toFixed(0)}）`,
     !!panXY &&
       Math.abs(panXY.x + 100) <= 3 &&
       panXY.y === 0 &&
@@ -926,7 +925,7 @@ const checks = [
       Math.abs(panSeen.ipcX - panSeen.x) < 1.5,
   ],
   [
-    `⑯b 回到「适应」后平移归零：${panReset.status} · 屏幕 x 回到 ${panReset.x.toFixed(0)}（适应位置 ${box1.x.toFixed(0)}）`,
+    `⑯b ⌥拖拽后「适应」平移归零：${panReset.status} · 屏幕 x 回到 ${panReset.x.toFixed(0)}（适应位置 ${box1.x.toFixed(0)}）`,
     !!panResetXY &&
       panResetXY.x === 0 &&
       panResetXY.y === 0 &&
@@ -948,6 +947,8 @@ const checks = [
       touch.chipSleeping.on &&
       touch.sleepingToast.includes('屏幕没亮'),
   ],
+  // ㊻㊼ 两块"引导/输入类"判据在 studio-panel-checks-ui.mjs（决策 #1279 拆出，断言一字未改）
+  ...checksUiGuides({ ios, term: termProbe }),
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
   // ㉑ 大文件冷跳着色（见脚本里的长注释：这条钉的是 warmParse 不能掉）
   [

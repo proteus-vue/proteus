@@ -57,6 +57,16 @@ static const char *VS =
     //   直接用 p 会让画面上下颠倒（实测：手机状态栏跑到画布底部）。
     "  vUV = vec2(p.x, 1.0 - p.y);\n"
     "  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }\n";
+/* ★上屏这趟的顶点着色器：**不再翻 v**（决策 #1259）。
+ *   合成 pass 已经把"纹理首行是画面顶部"这件事翻正并写进 FBO；FBO 的行序和 GL 一致
+ *   （第 0 行 = 底部），所以上屏时再翻一次 = **整幅画面上下颠倒**（实测：手机桌面 Dock 跑到窗口顶部）。
+ *   这个 bug 从 B2 就在——因为 `poc_dump` 读的是 **FBO**（永远是对的），没人把"窗口里看到的"
+ *   和"dump 出来的"做 1:1 对比。 */
+static const char *VS_BLIT =
+    "#version 150\nout vec2 vUV;\n"
+    "void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);\n"
+    "  vUV = p;\n"
+    "  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }\n";
 static const char *FS_YUV =
     "#version 150\nin vec2 vUV;\nout vec4 o;\n"
     "uniform sampler2D texY; uniform sampler2D texUV;\n"
@@ -151,6 +161,48 @@ static double g_lat[MAX_SAMPLES], g_qw[MAX_SAMPLES], g_dec[MAX_SAMPLES];
 static int g_n_lat = 0, g_n_qw = 0, g_n_dec = 0;
 static double g_last_t_first = 0;  /* 当前渲染帧的首字节时刻 */
 
+/* ── 硬解健康度（决策 #1256）────────────────────────────────────────────────
+ * 【为什么需要】VideoToolbox 在**某些参数集**上会逐帧拒绝（实测：小米竖屏 884×1920 / High@5.1，
+ *   8 秒 411 次 `hardware accelerator failed to decode picture`），而被拒的包在
+ *   `avcodec_send_packet` 返回错之后被**静默丢弃** ⇒ 画面全黑，面板却仍显示"运行中 + 硬解"。
+ *   同一份码流软解 0 错、1.1ms/帧 ⇒ 不是"流坏了"，是"这台机器硬解吃不了这份参数集"。
+ * 【判据】不按"失败数 > 0"判（纯 SPS/PPS 的 AU、重复 IDR 本来就会失败），而是
+ *   **失败包数显著多于成功解出的帧**（>2 倍且 ≥4 个）⇒ 判硬解这条路走不通。
+ * 【动作】用同一份 extradata 重开一个**不带 hw_device_ctx** 的解码器并 flush；
+ *   g_hw 置 false ⇒ `out[17]` 跟着变 ⇒ 面板如实显示"软解"（不再是假读数）。 */
+static int g_force_sw = 0;       /* 一旦判定"这台机器硬解跑不动"就置 1，后续会话直接软解 */
+static int poc_live_restart(const char *cmd);   /* 定义在后面（降级要用它重启会话） */
+static long g_dec_fail = 0;      /* send_packet 失败的包数（原先被静默丢掉） */
+static long g_hw_frames = 0;     /* 真正由 VT 解出的帧（format == VIDEOTOOLBOX） */
+static long g_sw_frames = 0;     /* 硬解会话里**回退成软解**解出的帧（format 是 YUV 平面） */
+static int g_dec_sw = 0;         /* 已从硬解切到软解 */
+static double g_dec_t0 = 0;      /* 本次解码会话的起点（给首个 IDR 留时间） */
+static unsigned char g_dec_params[4096];
+static int g_dec_plen = 0;
+
+static void maybe_degrade_to_sw(void) {
+  if (!g_hw || g_dec_sw) return;
+  if (now_ms() - g_dec_t0 < 1200) return;
+  /* ★判据用**实际出帧率**（用户看到的就是这个）：
+     · 第一版用 send_packet 返回值 —— VT 逐帧失败时 ffmpeg 内部回退软解并返回成功，失败计数恒 0；
+     · 第二版用帧格式（VT vs YUV）—— VT 确实出了一部分帧，仍不触发；
+     · 现在：1.5 秒后实测出帧率 < 30fps 就判定"硬解这条路在这份参数集上跑不动"。 */
+  double el = now_ms() - g_dec_t0;
+  if (el < 1500) return;
+  double fps = (double)g_frames / (el / 1000.0);
+  if (fps >= 30.0) return;
+  g_dec_sw = 1;
+  g_force_sw = 1;
+  /* ★★降级 = **重启采集会话**，不是"原地换一个软解解码器"（决策 #1264 实测修正）。
+     原地换解码器的坑：新解码器没有参考帧，必须等到**下一个 IDR** 才能出画；
+     而静止画面（桌面/文档）很久才有一个 IDR ⇒ 表现为"本该降级救场，结果黑屏更久"。
+     重启会话则必然从 SPS/PPS + IDR 开始，一次到位。
+     代价：一次重启（几百毫秒黑一下），但比"黑到下一次关键帧"好得多。 */
+  fprintf(stderr, "实时：硬解只有 %.1ffps（VT 出 %ld 帧 / 回退 %ld 帧）⇒ 重启会话并强制软解\n",
+          fps, g_hw_frames, g_sw_frames);
+  poc_live_restart(g_live_cmd);
+}
+
 /* ── 实时直方图（面板用）：固定窗口的环形缓冲，取值时排序求分位 ──
    为什么不用 g_iv/g_lat 那批：那些是"给最终报告用"的一次性全量数组，只增不滑；
    面板要的是**最近**表现，所以这里单独一套滑动窗口（240 帧 ≈ 4s@60fps）。 */
@@ -211,6 +263,124 @@ static const char *video_path(void) {
   return p ? p : "/tmp/proteus-poc/720p30.mp4";
 }
 
+/* ── 打开实时流解码器（决策 #1263：从 poc_attach 抽出来，切换分辨率要能重入）──
+ * 为什么必须抽：切分辨率 = 重启采集会话 = 重建解码器（旧 extradata 对应旧 SPS）。
+ * 抽成一个函数，attach 与 restart 走**同一条**初始化路径——两条必然漂移。 */
+static int live_open_decoder(void) {
+  static unsigned char params[4096];
+  int plen = 0, waited = 0;
+  /* ★顺序很关键：**先起读取线程，等 SPS/PPS 到齐，再开解码器**。
+     VideoToolbox 硬解必须有 extradata（参数集），而裸流里 SPS/PPS 随第一个 IDR 才出现；
+     第一版是"先开解码器后读流"，VT 拿不到参数集 ⇒ 直接拒绝解码（只能退回软解）。
+     live_peek_params 只窥探不取走，首个 IDR 仍在队列里，解出来就是完整一帧。 */
+  while (!live_peek_params(params, (int)sizeof(params), &plen)) {
+    if (waited >= 5000) break;
+    usleep(10000);
+    waited += 10;
+  }
+
+  if (g_cc) avcodec_free_context(&g_cc);
+  const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
+  g_cc = avcodec_alloc_context3(dec);
+  g_cc->flags |= AV_CODEC_FLAG_LOW_DELAY;
+  if (plen > 0) {
+    g_cc->extradata = (uint8_t *)av_mallocz((size_t)plen + AV_INPUT_BUFFER_PADDING_SIZE);
+    memcpy(g_cc->extradata, params, (size_t)plen);
+    g_cc->extradata_size = plen;
+  }
+  g_hw = false;
+  if (!g_force_sw && getenv("POC_LIVE_SW") == NULL &&
+      av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
+    g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
+    g_hw = true;
+  }
+  int open_rc = avcodec_open2(g_cc, dec, NULL);
+  /* 留一份参数集：硬解失败后要用它重开软解解码器（决策 #1256） */
+  g_dec_plen = plen < (int)sizeof(g_dec_params) ? plen : (int)sizeof(g_dec_params);
+  if (g_dec_plen > 0) memcpy(g_dec_params, params, (size_t)g_dec_plen);
+  g_dec_t0 = now_ms();
+  { /* 取证钩子：POC_DUMP_PARAMS=<path> 把抽出的参数集落盘（决策 #1256 就是靠它抓到
+       "设备日志文本被当成 SPS" 的）。默认不写，零开销。 */
+    const char *dp = getenv("POC_DUMP_PARAMS");
+    if (dp) { FILE *f = fopen(dp, "wb"); if (f) { fwrite(params, 1, (size_t)plen, f); fclose(f); } }
+  }
+  fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
+  if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return -1; }
+
+  /* 尺寸：SPS 里已经解析出来了，优先用它（screenrecord --size 只是请求值，设备可能改） */
+  g_W = getenv("POC_LIVE_W") ? atoi(getenv("POC_LIVE_W")) : 1280;
+  g_H = getenv("POC_LIVE_H") ? atoi(getenv("POC_LIVE_H")) : 720;
+  if (g_cc->width > 0 && g_cc->height > 0) { g_W = g_cc->width; g_H = g_cc->height; }
+  g_fps = 60.0; g_budget = 1000.0 / g_fps;
+  fprintf(stderr, "实时投屏：%s（%dx%d）\n", g_live_cmd, g_W, g_H);
+  return 0;
+}
+
+/* ── 重启请求（决策 #1263）────────────────────────────────────────────────────
+ * ★为什么不在 IPC 线程直接重启：`poc_tick` 正在用 g_cc 解码，那边若 free 掉就是 UAF。
+ *   这里只落一个"待办"，真正的重启由**渲染线程**在 tick 开头（还没碰解码器时）执行。
+ *   代价：切换瞬间主线程会阻塞几百毫秒（等新会话的 SPS/PPS），窗口会顿一下——这是诚实的代价，
+ *   比"偶尔崩"好。 */
+static char g_pending_cmd[1024];
+static volatile int g_pending = 0;
+
+/* ── 原生"选路径"对话框（决策 #1268）──────────────────────────────────────────
+ * 【为什么要它】让开发者手打 `/Volumes/…/Xcode.app` 是错误的门槛：路径长、易错、
+ *   而且 Xcode 可以装在任意磁盘。IDE 的做法是「浏览…」→ 系统面板点两下。
+ * 【为什么自己写而不加 tauri-plugin-dialog】本仓刻意不加依赖（装依赖要改根 lockfile，
+ *   历史上两次都失败）；而 AppKit 的 NSOpenPanel 就够，且我们已经有 ObjC 桥。
+ * 【线程】AppKit 的模态面板必须在**主线程**开；调用方在 worker 线程 ⇒ 投递到主队列再等信号量。
+ * 【返回】写进调用方给的缓冲区（1 = 选中，0 = 取消），避免跨语言传字符串所有权。 */
+int poc_pick_path(const char *message, char *out, int cap) {
+  /* ★不能用 `__block char buf[4096]`：C 不允许在 block 里引用**数组**类型的自动变量
+     （clang 直接报 "cannot refer to declaration with an array type inside block"）。
+     改成堆上的指针，block 里只捕获指针。 */
+  char *buf = calloc(1, 4096);
+  if (!buf) return 0;
+  dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    @autoreleasepool {
+      NSOpenPanel *p = [NSOpenPanel openPanel];
+      p.canChooseFiles = YES;
+      p.canChooseDirectories = YES;
+      p.allowsMultipleSelection = NO;
+      /* ★`treatsFilePackagesAsDirectories = NO`：`.app` 是"包"，当成对象才选得中；
+         置 YES 会让 Xcode.app 退化成可进入的目录，用户只能选到 Contents 里面去。 */
+      p.treatsFilePackagesAsDirectories = NO;
+      p.prompt = @"选择";
+      if (message) p.message = [NSString stringWithUTF8String:message];
+      if ([p runModal] == NSModalResponseOK && p.URL.path.length > 0) {
+        snprintf(buf, 4096, "%s", p.URL.path.UTF8String);
+      }
+    }
+    dispatch_semaphore_signal(sem);
+  });
+  dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+  int ok = (buf[0] != 0);
+  if (ok) snprintf(out, (size_t)cap, "%s", buf);
+  free(buf);
+  return ok;
+}
+
+void poc_live_request_restart(const char *cmd) {
+  if (!cmd || !*cmd) return;
+  snprintf(g_pending_cmd, sizeof(g_pending_cmd), "%s", cmd);
+  g_pending = 1;
+}
+
+/* 切换采集参数（决策 #1263）：停旧会话 → 清软解上下文 → 起新会话 → 重建解码器。
+ * 纹理不用管：首帧尺寸与 `g_W/g_H` 不一致时，poc_tick 里已有"就地重建纹理"的分支。 */
+int poc_live_restart(const char *cmd) {
+  if (!g_live || !cmd || !*cmd) return 1;
+  fprintf(stderr, "实时：切换采集 ⇒ %s\n", cmd);
+  live_stop();                                   /* 杀进程组 + 设备侧 pkill + join */
+  if (g_sws) { sws_freeContext(g_sws); g_sws = NULL; }
+  if (g_nv12) av_frame_unref(g_nv12);
+  g_dec_sw = 0; g_dec_fail = 0; g_hw_frames = 0; g_sw_frames = 0;
+  if (live_start(cmd) != 0) { fprintf(stderr, "实时：重启读取线程失败\n"); return 2; }
+  return live_open_decoder() == 0 ? 0 : 3;
+}
+
 static int poc_attach_impl(void *parent_nsview) {
   @autoreleasepool {
     // ★tauri 的 `ns_window()` 给的是 **NSWindow**（TaoWindow），不是 NSView。
@@ -234,37 +404,7 @@ static int poc_attach_impl(void *parent_nsview) {
          第一版是"先开解码器后读流"，VT 拿不到参数集 ⇒ 直接拒绝解码（只能退回软解）。
          live_peek_params 只窥探不取走，首个 IDR 仍在队列里，解出来就是完整一帧。 */
       if (live_start(live_cmd) != 0) { fprintf(stderr, "实时：起读取线程失败\n"); return 2; }
-      static unsigned char params[4096];
-      int plen = 0, waited = 0;
-      while (!live_peek_params(params, (int)sizeof(params), &plen)) {
-        if (waited >= 5000) break;
-        usleep(10000);
-        waited += 10;
-      }
-
-      const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_H264);
-      g_cc = avcodec_alloc_context3(dec);
-      g_cc->flags |= AV_CODEC_FLAG_LOW_DELAY;
-      if (plen > 0) {
-        g_cc->extradata = (uint8_t *)av_mallocz((size_t)plen + AV_INPUT_BUFFER_PADDING_SIZE);
-        memcpy(g_cc->extradata, params, (size_t)plen);
-        g_cc->extradata_size = plen;
-      }
-      if (getenv("POC_LIVE_SW") == NULL &&
-          av_hwdevice_ctx_create(&g_hwdev, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) >= 0) {
-        g_cc->hw_device_ctx = av_buffer_ref(g_hwdev);
-        g_hw = true;
-      }
-      int open_rc = avcodec_open2(g_cc, dec, NULL);
-      fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
-      if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return 2; }
-
-      /* 尺寸：SPS 里已经解析出来了，优先用它（screenrecord --size 只是请求值，设备可能改） */
-      g_W = getenv("POC_LIVE_W") ? atoi(getenv("POC_LIVE_W")) : 1280;
-      g_H = getenv("POC_LIVE_H") ? atoi(getenv("POC_LIVE_H")) : 720;
-      if (g_cc->width > 0 && g_cc->height > 0) { g_W = g_cc->width; g_H = g_cc->height; }
-      g_fps = 60.0; g_budget = 1000.0 / g_fps;
-      fprintf(stderr, "实时投屏：%s（%dx%d）\n", live_cmd, g_W, g_H);
+      if (live_open_decoder() != 0) return 2;
       goto gl_init;   /* 跳过后面的文件打开/流信息 */
     }
     const char *file = video_path();
@@ -293,7 +433,10 @@ gl_init:
     };
     NSOpenGLPixelFormat *pf = [[NSOpenGLPixelFormat alloc] initWithAttributes:attrs];
     if (!pf) { fprintf(stderr, "像素格式失败\n"); return 2; }
-    g_view = [[PocGLView alloc] initWithFrame:[g_parent bounds] pixelFormat:pf];
+    /* ★初始 frame 用**零尺寸**而不是 [g_parent bounds]（决策 #1256）：
+       以前它一出生就铺满整个 contentView ⇒ 用户会看到投屏"先在一个大窗口里闪一下"，
+       等前端 `set_canvas_rect` 到了才收进设备框。零尺寸起步 = 第一帧就在正确的框里出现。 */
+    g_view = [[PocGLView alloc] initWithFrame:NSMakeRect(0, 0, 0, 0) pixelFormat:pf];
     [g_view setWantsBestResolutionOpenGLSurface:YES];
     [g_parent addSubview:g_view positioned:NSWindowBelow relativeTo:nil];
 
@@ -318,7 +461,7 @@ gl_init:
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { fprintf(stderr, "FBO 不完整\n"); return 2; }
 
     g_progComp = link_prog(VS, FS_YUV);
-    g_progBlit = link_prog(VS, FS_BLIT);
+    g_progBlit = link_prog(VS_BLIT, FS_BLIT);
     glGenVertexArrays(1, &g_vao);
     glBindVertexArray(g_vao);
     glGenTextures(1, &g_ty); glBindTexture(GL_TEXTURE_2D, g_ty);
@@ -478,6 +621,22 @@ static void upload_plane(GLuint tex, int w, int h, GLenum fmt, const unsigned ch
 
 static int poc_tick_impl(void) {
   if (!g_inited || g_eof) return g_eof ? 1 : 2;
+  /* 取证/回归钩子（决策 #1263）：POC_SWITCH_AFTER_MS + POC_SWITCH_CMD ⇒ 到点自动切一档。
+     用来在**无头**模式验证"重启采集会话"这条路（切档位按钮背后就这一条路）。 */
+  {
+    static int fired = 0;
+    const char *at = getenv("POC_SWITCH_AFTER_MS");
+    if (!fired && at && now_ms() - g_t_start > atof(at)) {
+      fired = 1;
+      const char *c = getenv("POC_SWITCH_CMD");
+      if (c) poc_live_request_restart(c);
+    }
+  }
+  /* 切换采集档位的待办（决策 #1263）：必须在碰解码器**之前**做 */
+  if (g_pending) {
+    g_pending = 0;
+    poc_live_restart(g_pending_cmd);
+  }
   g_ticks++;
   @autoreleasepool {
     [g_ctx makeCurrentContext];
@@ -498,9 +657,16 @@ static int poc_tick_impl(void) {
         double t_dec0 = now_ms();
         int sret = avcodec_send_packet(g_cc, g_pkt);
         if (sret >= 0) g_send_ok++;
+        else g_dec_fail++;   /* 原先静默丢掉 ⇒ 全黑但没人知道（决策 #1256） */
         av_packet_unref(g_pkt);
         if (sret < 0) continue;
         while (avcodec_receive_frame(g_cc, g_frm) == 0) {
+          /* 硬解会话里数一下"到底谁解的"（#1256）：
+             VT 成功 ⇒ format=VIDEOTOOLBOX；VT 被拒后 ffmpeg 回退 ⇒ 普通 YUV 平面。 */
+          if (g_hw && !g_dec_sw) {
+            if (g_frm->format == AV_PIX_FMT_VIDEOTOOLBOX) g_hw_frames++;
+            else g_sw_frames++;
+          }
           if (!g_last) g_last = av_frame_alloc();
           av_frame_unref(g_last);
           av_frame_move_ref(g_last, g_frm);
@@ -512,6 +678,7 @@ static int poc_tick_impl(void) {
         if (g_rec) hist_add(&h_dec, dec_ms);
         g_last_t_first = au.t_ms;
       }
+      maybe_degrade_to_sw();   /* 硬解逐帧被拒时切软解（#1256） */
       if (!got) { g_empty++; return 0; }
       goto use_last;
     }
@@ -594,6 +761,31 @@ use_last:
       if (!g_nv12->data[0]) av_frame_get_buffer(g_nv12, 32);
       sws_scale(g_sws, (const uint8_t *const *)src->data, src->linesize, 0, g_H, g_nv12->data, g_nv12->linesize);
       src = g_nv12;
+    }
+
+    /* 取证钩子：POC_DUMP_FRAME=<path.ppm> 把**解码后（GL 之前）**的一帧落成 PPM（决策 #1259）。
+       用来把"解码出来的帧就花了"和"上传/着色器解释错了"这两件事分开——否则只能猜。 */
+    {
+      static int dumped = 0, want = -2;
+      if (want == -2) { const char *a = getenv("POC_DUMP_FRAME_AT"); want = a ? atoi(a) : 0; }
+      const char *dp = (dumped || (long)want != g_frames) ? NULL : getenv("POC_DUMP_FRAME");
+      if (dp) {
+        struct SwsContext *c2 = sws_getContext(g_W, g_H, AV_PIX_FMT_NV12, g_W, g_H, AV_PIX_FMT_RGB24,
+                                              SWS_POINT, NULL, NULL, NULL);
+        if (c2) {
+          int stride = g_W * 3;
+          unsigned char *rgb = malloc((size_t)stride * g_H);
+          uint8_t *dstp[4] = {rgb, NULL, NULL, NULL};
+          int dsts[4] = {stride, 0, 0, 0};
+          sws_scale(c2, (const uint8_t *const *)src->data, src->linesize, 0, g_H, dstp, dsts);
+          FILE *f = fopen(dp, "wb");
+          if (f) { fprintf(f, "P6\n%d %d\n255\n", g_W, g_H); fwrite(rgb, 1, (size_t)stride * g_H, f); fclose(f); }
+          free(rgb);
+          sws_freeContext(c2);
+          dumped = 1;
+          fprintf(stderr, "已落盘解码帧 %s（%dx%d）\n", dp, g_W, g_H);
+        }
+      }
     }
 
     // ★实时投屏：**到帧即出**（不按 PTS 等）——g_fmt 在 live 模式是 NULL，绝不能碰
@@ -689,7 +881,14 @@ static double mbps_of(double wall_ms) {
 
 void poc_report(const char *path) {
   @autoreleasepool {
-    double wall = (g_last_out > 0 && g_wall0 > 0) ? (g_last_out - g_wall0) : 1;
+    /* ★★跨度可能是 **0**（决策 #1278）：`g_last_out` 与 `g_wall0` 相等 = **本次只出了一帧**
+       （设备刚释放采集权、断流边缘最常见）。原来这里兜底成 1，随后 `g_frames/(wall/1000)`
+       直接用 0 做除数 ⇒ 报告里写出 `"measured_fps": inf` —— 而 **JSON 没有 inf**，
+       `JSON.parse` 当场抛 SyntaxError ⇒ `check:studio-live` 崩在解析上，
+       而不是给出"只出了 1 帧"这个**可读结论**。判据崩掉比判据变红更糟：它什么都说明不了。
+       ⇒ 跨度 <=0 一律按"未知"处理（-1），与 mbps/cpu 那几处口径一致。 */
+    double wall = (g_last_out > 0 && g_wall0 > 0) ? (g_last_out - g_wall0) : 0;
+    double fps = wall > 0 ? (double)g_frames / (wall / 1000.0) : -1;
     struct rusage ru1;
     getrusage(RUSAGE_SELF, &ru1);
     double cpu = (ru1.ru_utime.tv_sec - g_ru0.ru_utime.tv_sec) + (ru1.ru_utime.tv_usec - g_ru0.ru_utime.tv_usec) / 1e6 +
@@ -720,7 +919,7 @@ void poc_report(const char *path) {
              "  \"cpu\": {\"self_seconds\": %.2f, \"wall_seconds\": %.2f, \"single_core_pct\": %.1f}\n}\n",
              g_live ? "(live pipe)" : video_path(), g_W, g_H, g_hw ? "videotoolbox" : "software",
              (g_probe_bits & 1) ? "true" : "false", (g_probe_bits & 2) ? "true" : "false",
-             g_frames, g_frames / (wall / 1000.0),
+             g_frames, fps,
              pct(g_iv, g_n_iv, 0.50), pct(g_iv, g_n_iv, 0.95), pct(g_iv, g_n_iv, 0.99), g_n_iv ? g_iv[g_n_iv - 1] : -1,
              pct(g_rc, g_n_rc, 0.50), pct(g_rc, g_n_rc, 0.95), pct(g_rc, g_n_rc, 0.99), g_n_rc ? g_rc[g_n_rc - 1] : -1,
              pct(g_pr, g_n_pr, 0.50), pct(g_pr, g_n_pr, 0.95), pct(g_pr, g_n_pr, 0.99), g_n_pr ? g_pr[g_n_pr - 1] : -1,

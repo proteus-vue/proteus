@@ -27,6 +27,9 @@ export interface Stats {
   height: number
   hwdec: boolean
   device: string | null
+  /** 设备**物理**像素（`wm size`；0 = 未知）。触摸回传必须用它，不能用码流尺寸（决策 #1260） */
+  dev_w: number
+  dev_h: number
 }
 
 type Invoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
@@ -91,6 +94,83 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
+
+/** 开发环境设置（决策 #1270）：按**端**分组的工具路径，`目标.工具 → 路径` */
+export interface StudioSettings {
+  paths: Record<string, string>
+  ios_port: number | null
+}
+export const getSettings = (): Promise<StudioSettings> => invoke<StudioSettings>('get_settings')
+export const saveSettings = (s: StudioSettings): Promise<void> => invoke<void>('save_settings', { s })
+/** 自动检测到的候选（决策 #1268）：路径 + 版本，点一下就能用 */
+export interface ToolCandidate {
+  path: string
+  version: string | null
+}
+export const detectTools = (): Promise<{ by_key: Record<string, ToolCandidate[]> }> =>
+  invoke<{ by_key: Record<string, ToolCandidate[]> }>('detect_tools')
+/** 打开系统面板选路径；返回 null = 用户取消 */
+export const pickTool = (key: string): Promise<string | null> =>
+  invoke<string | null>('pick_tool', { key })
+
+/** 打开**独立设置窗口**（决策 #1267）：已开就聚焦，不重复建窗 */
+export const openSettings = (): Promise<void> => invoke<void>('open_settings')
+
+/** 窗口级命令（决策 #1271）：`start_dragging` / `internal_toggle_maximize`。
+ *  ★为什么不靠 `data-tauri-drag-region`：那是 window 插件**初始化脚本**注入的行为，
+ *    在代码里新建的窗口上实测不生效（主窗口可以、新窗口不行）。
+ *    直接调插件命令就绕开"脚本到底注没注入"这个不确定性。 */
+export const tauriWindowCommand = (cmd: 'start_dragging' | 'internal_toggle_maximize'): Promise<void> =>
+  invoke<void>(`plugin:window|${cmd}`)
+/** 真跑一次命令验证路径（"检测"按钮）：返回 ok + 命令输出 */
+export const probeTool = (key: string, path: string): Promise<{ ok: boolean; detail: string }> =>
+  invoke<{ ok: boolean; detail: string }>('probe_tool', { key, path })
+
+/** 设备管理（决策 #1265）：列出所有 adb 设备（`size` 是**物理**像素） */
+export interface DeviceInfo {
+  /** `android` / `ios`（列表按平台分组） */
+  platform: string
+  /** 界面提示（iOS：要手机端跑 ProteusHost 才有画面；离线时说明原因） */
+  note: string
+  serial: string
+  state: string
+  model: string
+  size: string | null
+  current: boolean
+}
+export const listDevices = (force = false): Promise<DeviceInfo[]> =>
+  invoke<DeviceInfo[]>('list_devices', { force })
+
+/** 切换当前设备：改串号/尺寸 → 用**当前画质档**重建采集命令 → 重启会话 */
+export const selectDevice = (serial: string): Promise<CaptureInfo> =>
+  invoke<CaptureInfo>('select_device', { serial })
+
+/** iOS 接法提示（决策 #1277）。★这不是"锦上添花的提示"：
+ *  装到真机要 `codesign` 访问 login 钥匙串，Studio **代跑不了**（沙箱被拦），
+ *  所以界面唯一能做对的事是**把那行命令摆到用户能复制的地方**（以前只写在 stderr 里）。 */
+export interface IosHint {
+  /** 本机默认路由那块网卡的 IP（手机要连的就是它）；拿不到是 null */
+  ip: string | null
+  port: number
+  /** 终端里要跑的整行命令（含 IP:端口） */
+  cmd: string
+  /** `nc -l` 是否真的在听：false 就说明"手机上推过来也没人接" */
+  listening: boolean
+  /** 采集源此刻就是 iOS 推流 —— 只有 true 才值得显示引导卡 */
+  active: boolean
+}
+export const iosStreamHint = (): Promise<IosHint> => invoke<IosHint>('ios_stream_hint')
+
+/** 采集档位（决策 #1263）：切换会**重启采集会话**（停旧 → 起新 → 重建解码器）。
+ *  `standard` = 长边 ≤1920 等比；`sharp` = 设备原生分辨率。 */
+export interface CaptureInfo {
+  preset: string
+  width: number
+  height: number
+  mbps: number
+}
+export const capturePreset = (preset: string): Promise<CaptureInfo> =>
+  invoke<CaptureInfo>('capture_preset', { preset })
 
 /** 触摸回传（决策 #1254）：把画布上的一次点击**注入到真机**（只有 Android 实时投屏支持）。
  *  返回 `"x,y"` = adb 侧确认已注入；抛错时分两类原因（源不支持 / adb 失败），
@@ -184,4 +264,51 @@ export function onMenu(cb: (id: string) => void): MenuBridge {
   const h = (e: Event) => cb(String((e as CustomEvent).detail ?? ''))
   addEventListener('studio:menu', h)
   return { native: false, off: () => removeEventListener('studio:menu', h) }
+}
+
+// ── 内置终端（决策 #1279）─────────────────────────────────────────────────
+/* 【为什么数据走事件、按键走命令】pty 的输出是**流**（Rust 读线程持续推），
+   而按键是一次次离散动作。Tauri 的 invoke 是一问一答，做流要么长轮询要么事件
+   ⇒ 输出用 `emit("term:data")`，按键用 `term_write`。 */
+
+/** 打开会话。`cols/rows` 是字符格子数（前端按字宽量出来的，不是像素） */
+export const termOpen = (cols: number, rows: number): Promise<void> => invoke<void>('term_open', { cols, rows })
+/** 送键盘输入（字节语义由前端生成：`\r` / `\x1b[A` / `\x03` …） */
+export const termWrite = (data: string): Promise<void> => invoke<void>('term_write', { data })
+/** 面板尺寸变了：告诉 pty，让 `ls`/`vim` 之类按新宽度排版 */
+export const termResize = (cols: number, rows: number): Promise<void> => invoke<void>('term_resize', { cols, rows })
+export const termClose = (): Promise<void> => invoke<void>('term_close')
+export interface TermInfo {
+  open: boolean
+  pid: number
+}
+export const termInfo = (): Promise<TermInfo> => invoke<TermInfo>('term_info')
+
+/** 订阅终端输出。
+ *  ★浏览器/门禁兜底走 `studio:term-data` 自定义事件 —— 与 `onMenu` 同一套路子，
+ *    这样 Playwright 能驱动"字节进来 → 屏幕画对"这整段（但**证明不了** pty 真的产出了字节，
+ *    那一段由 Rust 侧单测 `pty_runs_echo_and_reads_back` 兜住）。 */
+export function onTermData(cb: (data: string) => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('term:data', (e) => cb(String(e.payload ?? ''))).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = (e: Event) => cb(String((e as CustomEvent).detail ?? ''))
+  addEventListener('studio:term-data', h)
+  return () => removeEventListener('studio:term-data', h)
+}
+
+/** 订阅"shell 退出"（子进程结束）。界面据此显示"会话已结束，按回车重开"。 */
+export function onTermExit(cb: () => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('term:exit', () => cb()).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = () => cb()
+  addEventListener('studio:term-exit', h)
+  return () => removeEventListener('studio:term-exit', h)
 }

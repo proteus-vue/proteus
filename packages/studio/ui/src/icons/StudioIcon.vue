@@ -34,6 +34,9 @@ const ICONS: Record<string, string> = {
   folderOpen: '<path d="M3.5 9.5h16.8l-2.1 8.2a1.4 1.4 0 0 1-1.36 1.05H5.2a1.4 1.4 0 0 1-1.36-1.1z"/><path d="M3.5 9.5V6.4A1.4 1.4 0 0 1 4.9 5h3.9l1.7 2h5.9a1.4 1.4 0 0 1 1.4 1.4v1.1"/>',
   // ★文件类型记号已搬到 ui/src/fileIcons.ts（类型图标的唯一真源，配类型色徽章）。
   file: '<path d="M6 3.5h7l5 5v12H6z"/><path d="M13 3.5v5h5"/>',
+  // 设置（决策 #1267）：滑杆式而不是齿轮——16px 下齿轮的齿会糊成一团，滑杆两行仍然清楚
+  settings:
+    '<path d="M4 8h9M17 8h3M4 16h3M11 16h5"/><circle cx="15" cy="8" r="2"/><circle cx="8.5" cy="16" r="2"/>',
 }
 
 const props = withDefaults(defineProps<{ name: string; size?: number }>(), { size: 16 })

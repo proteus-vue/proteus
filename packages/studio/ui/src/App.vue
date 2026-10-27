@@ -2,14 +2,16 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { deviceSwipe, deviceTap, setCanvasRect } from './bridge'
+import { capturePreset, copyText, deviceSwipe, deviceTap, iosStreamHint, openSettings, setCanvasRect, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
+import DeviceSwitcher from './panels/DeviceSwitcher.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
+import TerminalPanel from './panels/TerminalPanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
 import StudioMark from './icons/StudioMark.vue'
 import ContextMenu from './ContextMenu.vue'
@@ -129,9 +131,11 @@ let nativeMenu = false
 const menuOffs = [
   onMenuAction('view.device', () => void switchView('device')),
   onMenuAction('view.code', () => void switchView('code')),
-  onMenuAction('view.zoomReset', () => setZoom(1)),
+  onMenuAction('view.term', () => void switchView('term')),  onMenuAction('view.zoomReset', () => setZoom(1)),
   onMenuAction('view.zoomIn', () => setZoom(ws.zoom + 0.25)),
   onMenuAction('view.zoomOut', () => setZoom(ws.zoom - 0.25)),
+  // ★设置是**独立窗口**（决策 #1267）：菜单/按钮只负责把它叫出来
+  onMenuAction('app.settings', () => void openSettings()),
 ]
 
 /** 画布矩形：HTML 定布局，原生跟随（#1173 的接线，这里只是搬到 Vue 里） */
@@ -159,7 +163,10 @@ async function syncRect() {
 
 async function switchView(v: ViewName) {
   ws.view = v
-  if (v === 'code') {
+  /* ★不是 device 就必须把原生画布收成 0×0（决策 #1279 把 code 那条判断泛化了）：
+     原来只判 `code`，加终端视图后如果漏了，GL 画面会**浮在终端上面**——
+     终端看起来"打不出字"，其实是原生视图盖着（与 #1257 同一类故障）。 */
+  if (v !== 'device') {
     rect.value = '—'
     try {
       await setCanvasRect({ x: 0, y: 0, w: 0, h: 0 })
@@ -237,9 +244,24 @@ function clientToDevice(clientX: number, clientY: number): { x: number; y: numbe
   if (!el || !d || d.width <= 0 || d.height <= 0) return null
   const r = el.getBoundingClientRect()
   if (r.width <= 0 || r.height <= 0) return null
+  /* ★★映射到**设备物理像素**，不是码流像素（决策 #1260）。
+     码流是按长边≤1920 等比缩过的（1200×2608 ⇒ 884×1920，差 0.737 倍）；
+     拿码流尺寸去 `input tap`，点屏幕下方的"设置"就会落到它上面那个 App
+     （实测：PICK 621,1746，而设置图标实际在 y≈2450）。
+     `dev_w/h` 未知时（iOS 那条腿 / 探测失败）才回落到码流尺寸。 */
+  const dw = d.dev_w > 0 ? d.dev_w : d.width
+  const dh = d.dev_h > 0 ? d.dev_h : d.height
+  const x = Math.round(((clientX - r.left) / r.width) * dw)
+  const y = Math.round(((clientY - r.top) / r.height) * dh)
+  /* ★★夹进屏幕范围（决策 #1262）：指针捕获会让拖拽在画布外继续产生 pointermove
+     （拖到窗口外也照样来）⇒ 不夹会算出**负坐标**，而 `device_tap/swipe` 的参数是 `u32`，
+     Tauri 直接拒绝并弹「invalid value: integer -220, expected u32」——用户只看到一条莫名其妙的红条，
+     而该发生的是"手指顶到屏幕边上"。
+     ★为什么只夹这一次：在**映射之后**夹，就等于同时处理了左下越界与右上越界；
+       再在映射前夹一遍只是重复（第一版就写了两道，破坏性验证因此测不出差别）。 */
   return {
-    x: Math.round(((clientX - r.left) / r.width) * d.width),
-    y: Math.round(((clientY - r.top) / r.height) * d.height),
+    x: Math.min(Math.max(x, 0), dw - 1),
+    y: Math.min(Math.max(y, 0), dh - 1),
   }
 }
 
@@ -250,9 +272,10 @@ function onPointerDown(e: PointerEvent) {
   if (p) pick.value = p
   // ★`moved` 用来区分"点一下"和"拖着看别处"（决策 #1254）：拖拽是**看**，不该在设备上留下点击。
   //   阈值 4 CSS px：手抖/触控板微动不算拖，而真正的平移手势早就超过这个量。
-  // ★`device` = 按住 ⌥：这一次拖拽**注入到设备**（滑动），而不是平移画布（决策 #1255）。
-  //   为什么用修饰键而不是"拖拽即滑动"：平移是已有的、被判据 ⑯ 钉住的手势，
-  //   直接改成滑动会把"看别处"变成"在手机上乱划"。
+  // ★`device` = 这次拖拽**注入到设备**（滑动/长按）。★★2026-10-26 反转默认（决策 #1261）：
+  //   原来要求按住 ⌥ 才注入（怕抢走"平移画布"），结果用户第一反应就是"直接拖"⇒ 拖不动手机。
+  //   **镜像工具的心智模型里，拖拽本来就该操作手机**；平移是次要动作 ⇒ 挪到 ⌥ 上。
+  //   触控关掉时（`touchOn=false`）退化成纯看图：拖拽仍然是平移。
   drag = {
     id: e.pointerId,
     x0: e.clientX,
@@ -260,7 +283,7 @@ function onPointerDown(e: PointerEvent) {
     px: pan.value.x,
     py: pan.value.y,
     moved: false,
-    device: e.altKey && touchOn.value,
+    device: touchOn.value && !e.altKey,
     t0: performance.now(),
     lx: e.clientX,
     ly: e.clientY,
@@ -313,6 +336,43 @@ function onPointerUp(e: PointerEvent) {
 const touchOn = ref(true)
 let touchWarned = false
 let touchBusy = false
+
+/* ─── 画质档位（决策 #1264）：**分辨率不变，只改码率** ──────────────────────
+ * 【用户纠正】原来我做的是"切分辨率"（标准 1920 / 原生清晰），而他要的是
+ *   **同分辨率下的清晰度档**——降画质换流畅。这两个轴不是一回事：
+ *   · 改分辨率：改几何（1.36× 下采样），字变清楚但编码/解码成本 ×1.84
+ *   · 改码率：几何不变，只改量化与链路占用 ⇒ 影响的是"压缩痕迹多少"与"抗抖动能力"
+ * 【实测（真机 USB）】4/8/13/20 Mbps 四档跑下来 **迟到帧恒为 0**，空转全在设备端
+ *   ⇒ USB 链路下低码率**换不到帧率**；它换的是抗抖动与省带宽（Wi-Fi adb 才有意义）。
+ * 【为什么还是做】① 无线 adb / 带宽紧张时有用 ② 高码率确实能减少密集细节的压缩痕迹
+ *   ③ 切换成本已经被 #1263 的"干净重启会话"付掉了，多一个维度是几十行。
+ * 【为什么切换要重启会话】`--bit-rate` 只在会话开始时生效（和 `--size` 一样）。 */
+const QUALITY = [
+  { id: 'low', label: '省流', hint: '4 Mbps —— 带宽紧张/链路抖动时才值得（USB 下换不到帧率）' },
+  { id: 'standard', label: '标准', hint: '13 Mbps —— 默认' },
+]
+const qIndex = ref(1)
+const capBusy = ref(false)
+const qNow = computed(() => QUALITY[qIndex.value])
+const capLabel = computed(() => `画质·${qNow.value.label}`)
+const capTitle = computed(
+  () => `画质：${qNow.value.label}（${qNow.value.hint}）· 分辨率不变。点击切到「${QUALITY[(qIndex.value + 1) % QUALITY.length].label}」`,
+)
+
+async function cycleQuality() {
+  if (capBusy.value) return
+  const next = QUALITY[(qIndex.value + 1) % QUALITY.length]
+  capBusy.value = true
+  try {
+    const info = await capturePreset(next.id)
+    qIndex.value = (qIndex.value + 1) % QUALITY.length
+    pushToast(`画质：${next.label} · ${info.width}×${info.height} · ${info.mbps} Mbps`, 'info')
+  } catch (err) {
+    pushToast(String((err as Error)?.message ?? err), 'err')
+  } finally {
+    capBusy.value = false
+  }
+}
 
 /** ⌥ 手势里"按住多久算长按"（Android 默认 long press ≈500ms，取 600ms 更稳） */
 const HOLD_MS = 600
@@ -387,9 +447,13 @@ onMounted(async () => {
   // 接上原生菜单（#1221）。★放在最后：处理器在上面的模块作用域已注册完，
   //   此刻起用户点菜单才有东西可接。
   nativeMenu = wireMenu().native
+  // iOS 接法提示（#1277）：先取一次（首帧可能还没来），之后低频轮询
+  void refreshIosHint()
+  iosTimer = setInterval(refreshIosHint, 2000)
 })
 onBeforeUnmount(() => {
   if (rectTimer) clearInterval(rectTimer)
+  if (iosTimer) clearInterval(iosTimer)
   if (rafId) cancelAnimationFrame(rafId)
   removeEventListener('resize', syncRect)
   removeEventListener('keydown', onKey)
@@ -417,6 +481,43 @@ const hud = computed(() => {
   if (!s || s.width <= 0 || s.height <= 0) return '无画面'
   return `${s.width}×${s.height} · ${s.hwdec ? '硬解' : '软解'}`
 })
+
+/* ─── iOS 投屏引导（决策 #1277）─────────────────────────────────────────────
+ *
+ * 【为什么必须做在界面上】iOS 那条腿的最后一公里**只能用户自己走**：
+ *   装 ProteusHost 到真机要 `codesign` 访问 login 钥匙串，沙箱环境实测被拦
+ *   （`[sandbox] 命令被沙箱拦截：login.keychain-db (file-write)`）。
+ *   而"该跑哪条命令"以前只写在 stderr 里 —— 用户点了 iPhone 行，看到的只是黑屏。
+ *   ⇒ 界面唯一做对的事：把 IP / 端口 / 整行命令**摆到能复制的地方**，并说清现在卡在哪一步。
+ *
+ * 【为什么轮询而不是"切设备时算一次"】采集源有三种入口（启动自动探测 / 环境变量 /
+ *   设备列表点选），只有 Rust 侧知道此刻到底是不是 nc 在听。轮询 2s 一次足够，成本是
+ *   两次 `lsof`（微秒级）；而这个提示的存在时长本来就很短（手机一推上来就消失）。
+ */
+const iosHint = ref<IosHint | null>(null)
+let iosTimer: ReturnType<typeof setInterval> | null = null
+/** 只在"没画面 + 采集源是 iOS"时才显示，避免 Android 投屏时弹一段无关说明 */
+const iosGuide = computed(() => (!running.value && iosHint.value?.active ? iosHint.value : null))
+
+async function refreshIosHint() {
+  if (!hasBridge) return
+  try {
+    iosHint.value = await iosStreamHint()
+  } catch {
+    iosHint.value = null // 提示是**附加信息**：拿不到就安静地不显示，不弹错
+  }
+}
+
+async function copyIosCmd() {
+  const c = iosHint.value?.cmd
+  if (!c) return
+  try {
+    await copyText(c)
+    pushToast('命令已复制，粘到终端里跑（要在仓库根目录）', 'info')
+  } catch (e) {
+    pushToast(String((e as Error)?.message ?? e), 'err')
+  }
+}
 </script>
 
 <template>
@@ -440,12 +541,16 @@ const hud = computed(() => {
         :aria-pressed="touchOn"
         :title="
           touchOn
-            ? '触控回传：开 —— 点画布 = 点真机；⌥+拖拽 = 滑动；⌥+按住 = 长按（仅 Android 实时投屏）'
-            : '触控回传：关 —— 点画布只标记设备坐标，不注入'
+            ? '触控回传：开 —— 单击 = 点；拖拽 = 滑动；按住不动 = 长按；⌥+拖拽 = 平移画布（仅 Android 实时投屏）'
+            : '触控回传：关 —— 画布只标记设备坐标，拖拽 = 平移画布，不注入'
         "
         @click="touchOn = !touchOn"
       >
         <span class="dot" :class="{ off: !touchOn }" />触控{{ touchOn ? '·开' : '·关' }}
+      </button>
+      <!-- 采集档位（决策 #1263）：点击切换，会重启采集会话 -->
+      <button class="chip btn" id="capChip" :title="capTitle" :aria-busy="capBusy" @click="cycleQuality">
+        <span class="dot" :class="{ off: !hasBridge }" /><span id="capLabel">{{ capLabel }}</span>
       </button>
       <div class="chip">镜像 60fps 上限</div>
       <div style="flex:1" />
@@ -471,16 +576,34 @@ const hud = computed(() => {
       >
         <StudioIcon name="code" :size="18" />
       </button>
+      <button
+        :class="{ on: view === 'term' }"
+        :aria-pressed="view === 'term'"
+        aria-label="终端"
+        title="终端（⌘`）"
+        id="railTerm"
+        @click="switchView('term')"
+      >
+        <StudioIcon name="terminal" :size="18" />
+      </button>
       <div class="sep" />
       <button aria-label="断言（未实现）" title="断言（未实现）" disabled><StudioIcon name="assert" :size="18" /></button>
       <button aria-label="录制（未实现）" title="录制（未实现）" disabled><StudioIcon name="record" :size="18" /></button>
+      <div class="sep" />
+      <!-- 设置（决策 #1267）：开**独立窗口**，不是右栏小面板 -->
+      <button id="openSettings" aria-label="设置" title="设置（⌘,）" @click="openSettings">
+        <StudioIcon name="settings" :size="18" />
+      </button>
     </div>
 
     <div class="main">
       <template v-if="view === 'device'">
         <!-- 舞台：只负责居中与留白；设备屏幕（#canvas）是它的等比子元素 -->
         <div class="stage" ref="stageEl">
-          <div class="screen" :style="screenStyle">
+          <!-- ★`live` 决定这块是"洞"还是"关着的屏"（决策 #1257）：
+               有画面时祖先链全透明，露出垫在下面的原生 GL；没画面时给一块实心底色，
+               否则洞会露出窗口背景（浅色系统下是一块灰白，比黑更难看）。 -->
+          <div class="screen" :class="{ live: running }" :style="screenStyle">
             <!-- ★画布洞：这块必须保持透明——原生 GL 视图就垫在它后面。
                  ★指针事件在这里收（不是原生侧）：GL 视图挂在 webview **下面**，
                    真实点击永远先到 webview ⇒ 前端才是唯一有效的输入源。 -->
@@ -498,12 +621,40 @@ const hud = computed(() => {
             </div>
           </div>
           <!-- 空状态：生产 IDE 必须有——不然用户看到纯黑会以为坏了 -->
-          <div v-if="!running" class="empty">
+          <div v-if="!running && !iosGuide" class="empty">
             <!-- 产品标记（立方体 + 取景框）：只在尺寸够大的地方用 —— 空状态正是这种地方 -->
             <StudioMark :size="62" class="mark" />
             <p>等待首帧</p>
             <span v-if="!hasBridge">无 Tauri 桥（浏览器直开时属正常）</span>
             <span v-else>没有输入源：接 Android（adb）或 iPhone（--stream）</span>
+          </div>
+          <!-- iOS：空状态换成**可执行的接法**（#1277）。
+               这一块必须能收指针（复制按钮），所以不能塞进 .empty（那是 pointer-events:none）。 -->
+          <div v-if="iosGuide" class="iosguide" id="iosGuide">
+            <div class="ig-head">
+              <StudioIcon name="device" :size="15" />
+              <b>iPhone 投屏：还差手机端那一步</b>
+            </div>
+            <p class="ig-lead">
+              装到真机要动钥匙串签名，Studio 代跑不了 —— 这条命令得在<b>你自己的终端</b>里跑。
+            </p>
+            <div class="ig-cmd">
+              <code id="iosCmd">{{ iosGuide.cmd }}</code>
+              <button class="ig-copy" id="iosCopy" @click="copyIosCmd">复制</button>
+            </div>
+            <ol class="ig-steps">
+              <li>上面这条在<b>仓库根目录</b>执行（会编译 + 安装 + 启动 ProteusHost）</li>
+              <li>手机上弹「录制屏幕」时点<b>允许</b>（不点就一帧都没有）</li>
+              <li>画面会自己出现在这里，不用再点任何按钮</li>
+            </ol>
+            <p class="ig-state" :class="{ ok: iosGuide.listening }" id="iosState">
+              <template v-if="iosGuide.listening">
+                本机已在 {{ iosGuide.port }} 端口等待推流（{{ iosGuide.ip ?? 'IP 未知' }}）
+              </template>
+              <template v-else>
+                端口 {{ iosGuide.port }} 现在没人监听 —— 采集会话可能没起来
+              </template>
+            </p>
           </div>
         </div>
 
@@ -541,9 +692,12 @@ const hud = computed(() => {
            代价：代码面板在设备视图下也保持挂载（display:none），CM 自己的 ResizeObserver
            会在重新可见时重新测量，不需要额外通知。 -->
       <CodePanel v-show="view === 'code'" />
+      <!-- 终端：v-show 而不是 v-if —— 会话状态在组件里，卸载即丢（决策 #1279） -->
+      <TerminalPanel v-show="view === 'term'" :active="view === 'term'" />
     </div>
 
     <div class="side">
+      <DeviceSwitcher />
       <DevicePanel :s="stats" />
       <PipelinePanel :s="stats" />
       <RuntimePanel :s="stats" />

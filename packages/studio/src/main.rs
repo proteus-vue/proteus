@@ -20,14 +20,21 @@ mod capture;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
+mod capture_preset;
+mod device;
+mod settings;
+mod window;
 mod search;
+/// 「画面从哪来」+ iOS 接法提示（决策 #1277，从本文件拆出）
+mod live_source;
+/// 内置终端（pty）：openpty + fork + execve（决策 #1279）
+mod term;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
     fn poc_tick() -> c_int;
     fn poc_set_frame(x: f64, y: f64, w: f64, h: f64);
     fn poc_frames() -> i64;
-    fn poc_late() -> i64;
     fn poc_cpu_pct() -> f64;
     fn poc_dump(path: *const c_char) -> c_int;
     fn poc_live_aus() -> i64;
@@ -42,7 +49,12 @@ extern "C" {
     fn poc_use_bundle_icon();
     /// 写系统剪贴板（NSPasteboard，决策 #1234）
     fn poc_copy_text(s: *const c_char);
+    /// 只**登记**重启请求，由渲染线程在下一拍执行（避免与解码器竞争，决策 #1263）
+    fn poc_live_request_restart(cmd: *const c_char);
 }
+
+/// 设备物理尺寸（启动探测一次；`stats` 轮询读缓存，不再跑 adb）。
+pub(crate) static DEVICE_PX: std::sync::Mutex<Option<(u32, u32)>> = std::sync::Mutex::new(None);
 
 /// 面板读数。字段名就是 HTML 侧读的名字 —— 少一层映射少一处漂移。
 #[derive(Serialize)]
@@ -69,6 +81,43 @@ struct Stats {
     hwdec: bool,
     /// 机型（adb 探测；没探测到就是 null —— 不编一个）
     device: Option<String>,
+    /// 设备**物理**像素（`wm size`；0 = 未知）。
+    /// ★和 `width/height`（**码流**尺寸）不是一回事：触摸回传必须注入物理坐标，
+    ///   拿码流尺寸去点会整体缩到 884/1200 = 0.737（实测：点"设置"落到它上面的 App，决策 #1260）。
+    dev_w: i64,
+    dev_h: i64,
+}
+
+/// 画质档位（决策 #1264）：逻辑在 `capture_preset.rs`，这里只做 IPC 接线。
+#[tauri::command]
+fn capture_preset(preset: String) -> Result<capture_preset::CaptureInfo, String> {
+    capture_preset::capture_preset(preset)
+}
+
+/// 列出设备（异步 + 阻塞线程池：每台要跑 1~2 次 adb，不能占 IPC 线程）
+#[tauri::command]
+async fn list_devices(force: Option<bool>) -> Vec<device::DeviceInfo> {
+    tauri::async_runtime::spawn_blocking(move || device::list(force.unwrap_or(false)))
+        .await
+        .unwrap_or_default()
+}
+
+/// 切换当前设备：改全局串号/尺寸 → 用**当前画质档**重建采集命令 → 让渲染线程重启会话。
+/// ★顺序不能反：先改状态再重建命令，否则新命令还是旧串号。
+#[tauri::command]
+async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        /* ★先切"当前设备"，再**按平台**决定采集源（决策 #1274）：
+           Android 走 adb 拉流；iOS 走 `nc -l` 收手机推流。 */
+        let platform = device::select(&serial)?;
+        if platform == "ios" {
+            capture_preset::request_ios()
+        } else {
+            capture_preset::request_for_serial(device::current_serial().as_deref())
+        }
+    })
+    .await
+    .map_err(|e| format!("切换线程失败：{e}"))?
 }
 
 #[tauri::command]
@@ -105,6 +154,8 @@ fn stats() -> Stats {
         height: a[16] as i64,
         hwdec: a[17] > 0.5,
         device: device_label(),
+        dev_w: DEVICE_PX.lock().ok().and_then(|g| *g).map(|(w, _)| w as i64).unwrap_or(0),
+        dev_h: DEVICE_PX.lock().ok().and_then(|g| *g).map(|(_, h)| h as i64).unwrap_or(0),
     }
 }
 
@@ -255,19 +306,9 @@ fn close_now(window: tauri::Window) {
  *   对一个"调试时点几下"的场景不划算。拖动/多指等复杂手势另议（见 #1254 的边界）。
  */
 static TOUCH_ANDROID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static ADB_SERIAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+pub(crate) static ADB_SERIAL: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
-/// 第一台处于 `device` 状态的 adb 设备（没有就 None）。
-/// ★不能用 `adb shell` 不带 `-s` 去试：多设备时它的报错是"more than one device"，
-///   看起来像设备坏了，其实是**没指定是哪台**。
-fn first_adb_serial() -> Option<String> {
-    let out = std::process::Command::new("adb").arg("devices").output().ok()?;
-    String::from_utf8_lossy(&out.stdout).lines().skip(1).find_map(|l| {
-        let mut it = l.split_whitespace();
-        let serial = it.next()?;
-        (it.next() == Some("device")).then(|| serial.to_string())
-    })
-}
+/// 第一台处于 `device` 状态的 adb 设备（见 `live_source::first_adb_serial`）。
 
 /// 设备屏幕是否亮着。缓存 1.5s：连点时不必每次多问一遍（一次 adb 往返 ≈ 30~60ms）。
 /// ★这是 2026-10-26 真机实测换来的：**熄屏时 `input tap` 返回 0，但状态不变**
@@ -565,156 +606,24 @@ fn save_state(json: String) -> Result<(), String> {
 /// 机型探测：一次 adb 查询，缓存住。
 /// ★探测不到就返回 None —— **不拿"Android"这种占位串冒充机型**（面板上"未知"比一个假型号有用）。
 fn device_label() -> Option<String> {
-    use std::sync::OnceLock;
-    static CACHE: OnceLock<Option<String>> = OnceLock::new();
-    CACHE
-        .get_or_init(|| {
-            let get = |args: &[&str]| -> Option<String> {
-                let out = std::process::Command::new("adb").args(args).output().ok()?;
-                if !out.status.success() {
-                    return None;
-                }
-                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
-            };
-            let model = get(&["shell", "getprop", "ro.product.model"])?;
-            // `wm size` 输出形如 "Physical size: 1080x2400"
-            let size = get(&["shell", "wm", "size"]).and_then(|s| {
-                s.split("Physical size:").nth(1).map(|x| x.trim().to_string())
-            });
-            Some(match size {
-                Some(sz) => format!("{model} · {sz}"),
-                None => model,
-            })
-        })
-        .clone()
+    /* 机型按**串号**缓存（决策 #1265）：原来用 `OnceLock` 全局缓存一次，
+       切换设备后侧栏永远显示上一台的型号。 */
+    device::label(device::current_serial().as_deref())
 }
 
-/// 双击启动时 LaunchServices 只给 `/usr/bin:/bin:/usr/sbin:/sbin`，
-/// 而 `adb` 通常在 `/opt/homebrew/bin` 或 `/usr/local/bin` ⇒ 显式补进 PATH。
-/// ★不补的话"双击就能用"是假的：面板能开，但一台设备都连不上（同一类坑：GUI 不继承 shell 环境）。
-fn ensure_tool_path() {
-    const EXTRA: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
-    let cur = std::env::var("PATH").unwrap_or_default();
-    let missing: Vec<&str> = EXTRA.iter().copied().filter(|p| !cur.split(':').any(|x| x == *p)).collect();
-    if missing.is_empty() {
-        return;
-    }
-    let mut merged = missing.join(":");
-    if !cur.is_empty() {
-        merged.push(':');
-        merged.push_str(&cur);
-    }
-    std::env::set_var("PATH", &merged);
-    eprintln!("[studio] PATH 补充：{}", missing.join(":"));
+/// 设置窗口入口（实现见 `settings::open_window`）
+#[tauri::command]
+fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
+    settings::open_window(&app)
 }
 
-/// 问设备当前显示尺寸（`adb shell wm size`）。
-/// 失败（无设备 / adb 不在 / 输出格式变了）一律返回 `None` —— 调用方据此**不带 `--size`**，
-/// 而不是退回一个写死值：写死值会让竖屏被塞进 16:9 而补出 74% 的黑边。
-fn adb_screen_size() -> Option<(u32, u32)> {
-    let out = std::process::Command::new("adb")
-        .args(["shell", "wm", "size"])
-        .output()
-        .ok()?;
-    capture::parse_wm_size(&String::from_utf8_lossy(&out.stdout))
-}
-
-/// 没有显式指定输入时**默认接真机**——双击启动不可能带环境变量，
-/// 否则用户看到的是一个永远空白的画布，还以为坏了。
-///
-/// ★★两条腿（决策 #1190 · G3）：
-///   · **Android**：`adb exec-out screenrecord`（整机录屏，裸 Annex-B）
-///   · **iOS**：宿主把画面（ReplayKit + VT 硬编）推 TCP 裸 Annex-B ⇒ 本侧 `/usr/bin/nc -l <port>` 收。
-///     用 `nc` 而不是自己写监听器：`live_stream.h` 只认「管道里的字节」，而 `nc` 系统自带、
-///     `.app` 里也在；断线由 native 侧的「子进程退出自动重连」兜底（与 adb 那条腿同款）。
-///     ★iPhone 侧：`bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:9001`
-///   · 想关掉 iOS 等待：`PROTEUS_IOS_STREAM=0`（否则没有 Android 设备时会一直挂着 nc）
-fn default_live_source() {
-    if std::env::var("POC_LIVE").is_ok() || std::env::var("POC_VIDEO").is_ok() {
-        return;
-    }
-    // ★★显式点名 iOS 端口 ⇒ **优先于 adb 探测**（2026-10-23 实测踩到）：
-    //   本机同时连着 Android 和 iPhone 时，若先查 adb，用户按 README 跑
-    //   `PROTEUS_IOS_STREAM_PORT=9001 …` 会**静默拿到 Android 画面**（没有任何报错，只有一行 eprintln）
-    //   ⇒ 显式意图必须压过自动探测。
-    if let Ok(port) = std::env::var("PROTEUS_IOS_STREAM_PORT") {
-        std::env::set_var("POC_LIVE", format!("/usr/bin/nc -l {port}"));
-        eprintln!("[studio] PROTEUS_IOS_STREAM_PORT={port} ⇒ 等 iOS 推流（/usr/bin/nc -l {port}）");
-        eprintln!("[studio]   iPhone 侧：bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:{port}");
-        return;
-    }
-    let connected = std::process::Command::new("adb")
-        .arg("devices")
-        .output()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .skip(1)
-                .any(|l| l.trim_end().ends_with("device"))
-        })
-        .unwrap_or(false);
-    if connected {
-        // 触控回传的前提（决策 #1254）：注入与录屏必须打**同一台**设备。
-        // 多设备时 `adb shell` 会以 "more than one device" 失败——记下第一台可用的。
-        let serial = first_adb_serial();
-        TOUCH_ANDROID.store(serial.is_some(), std::sync::atomic::Ordering::Relaxed);
-        if let Ok(mut g) = ADB_SERIAL.lock() {
-            *g = serial;
-        }
-        // ★★抓屏尺寸必须**按设备比例**（2026-10-23 实测）：`screenrecord --size` 是把整屏塞进给定尺寸，
-        //   不足处**补黑边**。写死 1280x720 时，1200x2608 的竖屏只剩 330x720 有效画面
-        //   —— `cropdetect` 实测 **74.2% 的像素是黑边**，带宽/解码/FBO 全在搬运和放大一块黑。
-        //   现在按 `wm size` 等比取（长边 ≤1920），实测 `crop=882:1920:0:0`（黑边消失）。
-        let dev = adb_screen_size();
-        let cmd = match dev.and_then(|(w, h)| capture::pick_capture_size(w, h).map(|s| (w, h, s))) {
-            Some((dw, dh, (w, h))) => {
-                let br = capture::bitrate_for(w, h);
-                eprintln!(
-                    "[studio]   录屏 {w}x{h}（设备 {dw}x{dh} · 等比 · 长边≤1920）· {} Mbps",
-                    br / 1_000_000
-                );
-                // ★把预分配尺寸也告诉原生侧（它按 POC_LIVE_W/H 先建纹理）。
-                //   不设的话它按默认 1280x720 建，首帧到达再重建一次 —— 一次无谓的
-                //   纹理重分配 + 一行"首帧尺寸 ≠ 预设"的告警，看起来像出了问题。
-                //   尊重用户显式设置：只在这两个变量为空时才写。
-                if std::env::var("POC_LIVE_W").is_err() {
-                    std::env::set_var("POC_LIVE_W", w.to_string());
-                }
-                if std::env::var("POC_LIVE_H").is_err() {
-                    std::env::set_var("POC_LIVE_H", h.to_string());
-                }
-                format!(
-                    "adb exec-out screenrecord --output-format=h264 --size {w}x{h} --bit-rate {br} --time-limit 180 -"
-                )
-            }
-            // ★查不到尺寸时**不带 `--size`**（用设备原生分辨率），而不是退回某个写死的值
-            //   —— 写死值正是这次要修的 bug；宁可多花点带宽，也不要一小块画面加一圈黑边。
-            None => {
-                eprintln!("[studio]   查不到设备尺寸（wm size 失败）⇒ 用设备原生分辨率录屏");
-                "adb exec-out screenrecord --output-format=h264 --bit-rate 12000000 --time-limit 180 -"
-                    .to_string()
-            }
-        };
-        std::env::set_var("POC_LIVE", cmd);
-        eprintln!("[studio] 未指定输入，默认接真机（Android / adb screenrecord）");
-        eprintln!("[studio]   想看 iPhone：PROTEUS_IOS_STREAM_PORT=9001 再启动本程序（显式指定优先于本探测）");
-        return;
-    }
-    if std::env::var("PROTEUS_IOS_STREAM").ok().as_deref() == Some("0") {
-        eprintln!("[studio] 未检测到 Android 设备；PROTEUS_IOS_STREAM=0 ⇒ 不等待 iOS 推流，画布保持空白");
-        return;
-    }
-    let port = std::env::var("PROTEUS_IOS_STREAM_PORT").unwrap_or_else(|_| "9001".to_string());
-    std::env::set_var("POC_LIVE", format!("/usr/bin/nc -l {port}"));
-    eprintln!("[studio] 未检测到 Android 设备 ⇒ 改等 iOS 推流（/usr/bin/nc -l {port}）");
-    eprintln!("[studio]   iPhone 侧：bash hosts/ios/run-selfdraw.sh --stream=<本机IP>:{port}");
-    eprintln!("[studio]   不想等：PROTEUS_IOS_STREAM=0");
-}
-
+/// PATH 补齐 / 设备尺寸 / 默认采集源：见 `live_source.rs`（决策 #1277 拆出，本文件只留调用）
 fn main() {
-    ensure_tool_path();
-    default_live_source();
+    live_source::ensure_tool_path();
+    /* ★读设置要在**所有子进程之前**（决策 #1266）：DEVELOPER_DIR 决定 xcrun 用哪个 Xcode，
+       而 adb 路径决定设备探测能不能跑。放后面就晚了——那正是"默认路径"假设的来源。 */
+    settings::load_and_apply();
+    live_source::default_live_source();
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
         // 自有菜单栏（决策 #1221）。★必须在 setup 里 `set_menu` 之外另走这条：
@@ -738,6 +647,23 @@ fn main() {
             close_now,
             device_tap,
             device_swipe,
+            capture_preset,
+            list_devices,
+            select_device,
+            open_settings,
+            /* iOS 接法提示（决策 #1277）：界面靠它拿到「本机 IP + 端口 + 该跑的命令」 */
+            live_source::ios_stream_hint,
+            /* 内置终端（决策 #1279） */
+            term::term_open,
+            term::term_write,
+            term::term_resize,
+            term::term_close,
+            term::term_info,
+            settings::get_settings_cmd,
+            settings::save_settings_cmd,
+            settings::probe_tool,
+            settings::detect_tools,
+            settings::pick_tool,
             search_text
         ])
         .setup(|app| {
@@ -747,6 +673,58 @@ fn main() {
                 std::thread::sleep(Duration::from_millis(300));
                 poll_window(h, 100);
             });
+            /* 启动时把**设备枚举结果**打一行日志（决策 #1276）：
+               "列表为空"是最难自查的故障（xcrun/adb 都可能静默失败）。这条日志让人一眼看到
+               各平台列到几台、以及 iOS 用的是哪套 Xcode。 */
+            {
+                let h3 = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(1200));
+                    let list = device::list(false);
+                    let android = list.iter().filter(|d| d.platform == "android").count();
+                    let ios = list.iter().filter(|d| d.platform == "ios").count();
+                    eprintln!("[studio] 设备枚举：Android {android} 台 · iOS {ios} 台");
+                    for d in &list {
+                        eprintln!(
+                            "[studio]   {} {} · {} · {}{}",
+                            d.platform,
+                            d.model,
+                            d.state,
+                            d.serial,
+                            if d.note.is_empty() { String::new() } else { format!(" · {}", d.note) }
+                        );
+                    }
+                    drop(h3);
+                });
+            }
+            /* 回归钩子（决策 #1267）：`STUDIO_OPEN_SETTINGS_MS=<毫秒>` ⇒ 到点自动开设置窗口。
+               用来在**无头**模式下验证"独立窗口真能建起来"——窗建不出来的表现是白窗，
+               而判据跑的是 http 页面，天生看不到 Tauri 那一层。 */
+            /* 回归钩子（决策 #1279）：`STUDIO_OPEN_TERM_MS=<毫秒>` ⇒ 到点替用户点一下"终端"。
+               存在的理由和上面那条一样：pty 开没开、shell 有没有起来，**只有真窗口能证**——
+               判据跑的是 http 页面（桩），天生看不到 Tauri 那一层。证法看 stderr 里的
+               `[term] 会话就绪 pid=…`（那条日志只在 open() 成功后才打）。
+
+               ★**它是 best-effort，不是判据**：实测 webview 未挂载/正忙时 `emit("menu", …)`
+                 会直接丢（2500ms 命中过一次、8000ms 反而没命中）——与"投屏解码占着渲染线程"同源。
+                 所以真窗口那一步（点 rail 图标 / ⌘\` 能开出终端）**只能人眼验**，
+                 别拿这条钩子当"功能已通"的证据。 */
+            if let Ok(ms) = std::env::var("STUDIO_OPEN_TERM_MS") {
+                let h2 = app.handle().clone();
+                let delay = ms.parse::<u64>().unwrap_or(1500);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(delay));
+                    let _ = h2.emit("menu", "view.term");
+                });
+            }
+            if let Ok(ms) = std::env::var("STUDIO_OPEN_SETTINGS_MS") {
+                let h2 = app.handle().clone();
+                let delay = ms.parse::<u64>().unwrap_or(1500);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(delay));
+                    let _ = settings::open_window(&h2);
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

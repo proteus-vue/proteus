@@ -49,14 +49,55 @@ static volatile long long g_live_bytes = 0;   /* 累加入队 AU 的字节数（
 
 static char g_live_cmd[512];
 
+static int live_nal_ok(const unsigned char *p, int len);   /* 定义在下方：文本垃圾过滤器 */
+static int live_nal_hdr_ok(const unsigned char *p);        /* 定义在下方：NAL 头合法性 */
+
 static double live_now_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return ts.tv_sec * 1e3 + ts.tv_nsec / 1e6;
 }
 
+/* 自检（决策 #1259）：一帧 AU 内部的 NAL 之间只该有**我们写进去的**起始码。
+ *   如果 payload 里又出现 `00 00 01`，说明输入流被脏数据拼接坏了 —— 这种包喂给解码器
+ *   就会报 `Invalid NAL unit 0` 并把整段画面糊掉。命中时（POC_DUMP_BAD_AU 设置）落盘取证。 */
+static void live_check_au(const unsigned char *buf, int n, long idx) {
+  const char *dp = getenv("POC_DUMP_BAD_AU");
+  { /* 逐帧落盘（取证）：POC_DUMP_AU_DIR=<dir> 前 200 帧各存一个文件 */
+    const char *dd = getenv("POC_DUMP_AU_DIR");
+    if (dd && idx < 200) {
+      char path[512];
+      snprintf(path, sizeof(path), "%s/au-%04ld.h264", dd, idx);
+      FILE *f = fopen(path, "wb");
+      if (f) { fwrite(buf, 1, (size_t)n, f); fclose(f); }
+    }
+  }
+  const char *bad = NULL;
+  int badtype = -1, at = -1, nals = 0;
+  for (int i = 0; i + 3 < n; i++) {
+    if (!(buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 1)) continue;
+    int h = buf[i + 3];
+    int t = h & 0x1f;
+    nals++;
+    /* 只认我们真的会写进去的类型；出现别的 ⇒ 有脏数据被拼进了这一帧 */
+    if (!(t == 1 || t == 5 || t == 6 || t == 7 || t == 8 || t == 9)) {
+      bad = "非法 NAL 类型"; badtype = t; at = i; break;
+    }
+    if (h & 0x80) { bad = "forbidden_zero_bit=1"; badtype = t; at = i; break; }
+    i += 2;
+  }
+  if (!bad) return;
+  fprintf(stderr, "AU#%ld 脏（%s=%d @%d，共 %d 个 NAL，%d 字节）⇒ 这帧必然花\n", idx, bad, badtype, at, nals, n);
+  if (!dp) return;
+  char path[512];
+  snprintf(path, sizeof(path), "%s.%ld.h264", dp, idx);
+  FILE *f = fopen(path, "wb");
+  if (f) { fwrite(buf, 1, (size_t)n, f); fclose(f); }
+}
+
 static void live_push(const unsigned char *buf, int n, double t_first) {
   if (n <= 0) return;
+  live_check_au(buf, n, g_live_aus);
   pthread_mutex_lock(&g_live_lock);
   if (g_live_count == LIVE_MAX_AU) { /* 实时优先：积压就丢最旧的 */
     free(g_live_q[g_live_head].data);
@@ -132,6 +173,13 @@ typedef struct {
 
 static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
   if (len <= 0) return;
+  /* 设备日志文本混进 stdout 时会被误认成 **SPS**（实测小米那行 "getCotaRegion..." 首字节 0x67
+     ⇒ 0x67 & 0x1f == 7）⇒ **只对参数集**用这条判据，别对 VCL 用。
+     ★第一版把所有 NAL 都过 ASCII 判据 —— 整屏都是文字时真 IDR（26KB）也被当垃圾丢掉，frames 直接归零。
+       教训：启发式只能用在"本该很短很干净"的东西上（决策 #1256）。 */
+  if ((nal[0] & 0x1f) == 7 || (nal[0] & 0x1f) == 8) {
+    if (!live_nal_ok(nal, len)) return;
+  }
   static const unsigned char sc4[4] = {0, 0, 0, 1};
   // ★延迟统计的起点 = 这一帧**第一个 NAL 的到达时刻**，不是"凑齐一整帧"的时刻。
   //   凑齐时刻会把"等下一帧第一个 VCL 才知道上帧结束"的那一帧时间算进延迟（虚高 ~8ms@120fps）。
@@ -153,7 +201,9 @@ static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
   int *dst_len = &a->au_len;
   if (type == 6 || type == 7 || type == 8 || type == 9) { dst = a->pre; dst_len = &a->pre_len; }
   int cap = (dst == a->au) ? LIVE_AU_MAX : LIVE_PRE_MAX;
-  if (*dst_len + len + 4 < cap) {
+  if (*dst_len + len + 4 >= cap) {
+    fprintf(stderr, "⚠︎ AU 缓冲满，丢弃一个 NAL（type=%d len=%d 已用=%d/%d）——这帧将缺片\n", type, len, *dst_len, cap);
+  } else {
     memcpy(dst + *dst_len, sc4, 4);
     *dst_len += 4;
     memcpy(dst + *dst_len, nal, (size_t)len);
@@ -175,6 +225,46 @@ static void live_asm_nal(LiveAsm *a, const unsigned char *nal, int len) {
 /* ── 参数集取证（给 VideoToolbox 的 extradata） ── */
 
 /** 从一段 Annex-B 里抠出 SPS(7)+PPS(8)，拼成 extradata 形态；没凑齐返回 0 */
+/* NAL 合法性快速判定（决策 #1256）。
+ * 【为什么必须有】`adb exec-out screenrecord` 的输出里会**混进设备侧的日志文本**
+ *   （实测小米：`getCotaRegionCustIntFeature do not exist with the carrier or region : 0`）。
+ *   那行字首字节是 0x67 ⇒ `& 0x1f == 7` ⇒ **被当成 SPS**，73 字节 ASCII 进了 extradata，
+ *   于是 VideoToolbox 拿到一份坏参数集：`Clipping illegal num_reorder_frames` /
+ *   `Error decoding the extradata`，接下来逐帧硬解被拒、画面只剩零星几帧。
+ * 【判据】真实 SPS/PPS/VCL 是二进制，且为防竞争字节会插入 0x03 —— **绝不会出现
+ *   连续 ≥8 个可打印 ASCII**；再夹一个长度上限。两条都过才认为是真 NAL。 */
+/* NAL **头字节**合法性（决策 #1259）：只认我们真的会处理的那几种。
+ * 【为什么必须有】设备往 stdout 里混的日志文本可能自带 `00 00 01`，于是紧跟的那个字节
+ *   被当成 NAL 头——常见是 0x00（type 0，**合法类型里没有 0**）。这类假 NAL 会让解码器
+ *   报 `Invalid NAL unit 0`，更糟的是它一旦落在参数集位置，就把 PPS 污染成
+ *   "data partitioning" 之类，之后整段画面糊成竖条（实测第 150 帧：上面正常、下面全花）。
+ * 【只放行】1 非IDR片 / 5 IDR / 6 SEI / 7 SPS / 8 PPS / 9 AUD；且 forbidden_zero_bit 必须为 0。
+ *   其余（0、2~4、10~31）一律丢弃——本工具不需要它们，而放进来就是给解码器投毒。 */
+static int live_nal_hdr_ok(const unsigned char *p) {
+  if (p[0] & 0x80) return 0;              /* forbidden_zero_bit 必须 0 */
+  int t = p[0] & 0x1f;
+  return t == 1 || t == 5 || t == 6 || t == 7 || t == 8 || t == 9;
+}
+
+static int live_nal_ok(const unsigned char *p, int len) {
+  if (len <= 0 || len > LIVE_AU_MAX) return 0;
+  /* ★长度上限（决策 #1259）：真 SPS ≤64B、PPS ≤32B（本机实测 19B / 5B）。
+     设备日志那行是 73B —— 单靠这条就能挡住它，ASCII 那条是第二道锁。 */
+  int t = p[0] & 0x1f;
+  if (t == 7 && len > 64) return 0;
+  if (t == 8 && len > 32) return 0;
+  int run = 0;
+  for (int i = 0; i < len; i++) {
+    unsigned char c = p[i];
+    if (c >= 0x20 && c <= 0x7e) {
+      if (++run >= 8) return 0;   /* 连续 8 个可打印字符 ⇒ 这是文本，不是码流 */
+    } else {
+      run = 0;
+    }
+  }
+  return 1;
+}
+
 static int live_find_params(const unsigned char *au, int n, unsigned char *out, int cap) {
   static const unsigned char sc4[4] = {0, 0, 0, 1};
   int out_len = 0, sps = 0, pps = 0, pos = 0;
@@ -186,7 +276,7 @@ static int live_find_params(const unsigned char *au, int n, unsigned char *out, 
     int len = ((e < 0) ? n : e) - body;
     if (len > 0) {
       int type = au[body] & 0x1f;
-      if ((type == 7 || type == 8) && out_len + len + 4 < cap) {
+      if ((type == 7 || type == 8) && live_nal_ok(au + body, len) && out_len + len + 4 < cap) {
         memcpy(out + out_len, sc4, 4);
         out_len += 4;
         memcpy(out + out_len, au + body, (size_t)len);
@@ -217,15 +307,52 @@ static int live_peek_params(unsigned char *out, int cap, int *out_len) {
   return found;
 }
 
+/* ── 起采集子进程（决策 #1263）：为什么要自己 fork/exec，而不是 popen ──────────
+ * popen 只给 FILE*，**拿不到 pid** ⇒ `live_stop()` 只能等管道 EOF，而 screenrecord
+ * 不到 `--time-limit` 不会结束 ⇒ join 卡死。这就是"切分辨率按钮做不出来"的真正原因：
+ * 切分辨率 = 重启采集 = 必须能**立刻**停掉旧会话。
+ * ★setpgid(0,0) + kill(-pid)：`/bin/sh -c` 会再 fork 出 adb，只杀 sh 会留下 adb
+ *   继续占着管道；杀**整个进程组**才干净。
+ * ★设备侧那条 screenrecord 更不会跟着死（#1258）⇒ 停的时候再补一枪 pkill。 */
+static pid_t g_live_pid = 0;
+
+static pid_t live_spawn(const char *cmd, int *out_fd) {
+  int fds[2];
+  if (pipe(fds) != 0) return -1;
+  pid_t pid = fork();
+  if (pid < 0) { close(fds[0]); close(fds[1]); return -1; }
+  if (pid == 0) {
+    setpgid(0, 0);
+    close(fds[0]);
+    dup2(fds[1], 1);            /* 只接 stdout：H.264 裸流 */
+    int nul = open("/dev/null", O_WRONLY);
+    if (nul >= 0) { dup2(nul, 2); close(nul); }
+    close(fds[1]);
+    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+    _exit(127);
+  }
+  setpgid(pid, pid);
+  close(fds[1]);
+  *out_fd = fds[0];
+  return pid;
+}
+
 static void *live_reader(void *arg) {
   (void)arg;
-  static unsigned char chunk[1 << 16];
+/* ★★读缓冲必须装得下**一个完整 NAL**（决策 #1259）。
+     原来是 64KB，而 884x1920 @13Mbps 的**关键帧 NAL 实测 18 万字节** ⇒ 超缓冲后走"硬切"分支，
+     一帧 IDR 被切成两截、当两个 NAL 拼进 AU（自检日志：非法 NAL 类型=4 @65541，正是 64K+5）
+     ⇒ 关键帧作废，之后所有 P 帧都参考一帧不存在的图像 ⇒ **画面糊成竖条、内容错位**。
+     ⇒ 放到 4MB：常见分辨率的关键帧都能整装；真超过时仍有"硬切"兜底（并打日志）。 */
+  static unsigned char chunk[4 << 20];
   static unsigned char au_buf[LIVE_AU_MAX];
   static unsigned char pre_buf[LIVE_PRE_MAX];
 
   while (g_live_run) {
-    FILE *p = popen(g_live_cmd, "r");
-    if (!p) { usleep(300000); continue; }
+    int fd = -1;
+    pid_t pid = live_spawn(g_live_cmd, &fd);
+    if (pid <= 0) { usleep(300000); continue; }
+    g_live_pid = pid;
     g_live_restarts++;
     LiveAsm a = {au_buf, 0, pre_buf, 0, 0, 0, 0};
     int carry = 0;
@@ -235,8 +362,13 @@ static void *live_reader(void *arg) {
       //   64KB 缓冲在 8Mbps 下要攒 ~64ms ⇒ AU 变成"一坨一坨"到达：
       //   一半以上的渲染拍空转，投屏端到端延迟还平白多出最多 64ms（实测 ticks=309 里 empty=228）。
       //   read() 对管道是"当前有多少给多少"，延迟与到达抖动都小一个量级。
-      ssize_t got = read(fileno(p), chunk + carry, sizeof(chunk) - carry);
+      ssize_t got = read(fd, chunk + carry, sizeof(chunk) - carry);
       if (got <= 0) break;
+      { /* 取证钩子：POC_DUMP_STREAM=<path> 把**管道原始字节**落盘（分析脏数据用，决策 #1259） */
+        static FILE *dfs = NULL; static int dinit = 0;
+        if (!dinit) { dinit = 1; const char *dp = getenv("POC_DUMP_STREAM"); if (dp) dfs = fopen(dp, "wb"); }
+        if (dfs) { fwrite(chunk + carry, 1, (size_t)got, dfs); fflush(dfs); }
+      }
       int n = carry + (int)got;
       int pos = 0;
       for (;;) {
@@ -250,7 +382,9 @@ static void *live_reader(void *arg) {
       }
       int rest = n - pos;
       if (rest >= (int)sizeof(chunk) - 4) {
-        // 缓冲塞满仍等不到起始码 ⇒ 单 NAL 超过 64KB，只能硬切（否则这里会卡死）
+        /* 走到这里说明**单个 NAL 比 4MB 还大**（正常码流不该发生）⇒ 只能硬切，并喊出来：
+           切开的 NAL 一定解不出正确画面，静默切就是在制造"读数正常、画面很花"。 */
+        fprintf(stderr, "⚠︎ 单个 NAL 超过读缓冲（%d 字节）⇒ 硬切，这一段画面必然坏\n", rest);
         live_asm_nal(&a, chunk + pos, rest);
         rest = 0;
         pos = n;
@@ -262,13 +396,38 @@ static void *live_reader(void *arg) {
         carry = 0;
       }
     }
-    pclose(p);
+    close(fd);
+    int st = 0;
+    waitpid(pid, &st, 0);
+    if (g_live_pid == pid) g_live_pid = 0;
     if (g_live_run) usleep(200000);
   }
   return NULL;
 }
 
+/* 启动前清掉**上一次**留下的设备侧采集（决策 #1257 附带修的）。
+ * 【为什么必须有】Android 同时只允许**一个** screenrecord 会话。app 被 kill/crash 后
+ *   设备上那条 `screenrecord` 仍然活着（实测：杀掉 Studio 后 `adb shell ps -A` 里还在），
+ *   于是下次启动的那条**抢不到采集权** ⇒ 现象是"运行中 / 入队 AU 一直在涨 / 出帧 0 / 画面全黑"，
+ *   而且**不报错**（又是本仓最讨厌的静默无操作）。
+ * 【只对 adb 命令做】iOS 那条腿是 `nc -l`（下行推流），被杀进程不会残留在设备上。
+ * 【为什么用 `pkill -x`】按**进程名精确匹配**：`-f` 会匹配命令行，会把执行这条 pkill 的
+ *   shell 自己也匹配上（命令行里含 "screenrecord"），出现自己杀自己的怪状。 */
+static void live_kill_stale_capture(const char *cmd) {
+  const char *at = strstr(cmd, "exec-out");
+  if (!at) return;                       /* 不是 adb 采集命令 */
+  char prefix[256], kill[512];
+  size_t n = (size_t)(at - cmd);
+  if (n >= sizeof(prefix)) n = sizeof(prefix) - 1;
+  memcpy(prefix, cmd, n);
+  prefix[n] = 0;
+  snprintf(kill, sizeof(kill), "%s shell pkill -x screenrecord 2>/dev/null", prefix);
+  int rc = system(kill);
+  if (rc == 0) fprintf(stderr, "实时：已清理上一次残留的 screenrecord（新会话才有采集权）\n");
+}
+
 static int live_start(const char *cmd) {
+  live_kill_stale_capture(cmd);
   snprintf(g_live_cmd, sizeof(g_live_cmd), "%s", cmd);
   g_live_run = 1;
   if (pthread_create(&g_live_thread, NULL, live_reader, NULL) != 0) {
@@ -280,6 +439,12 @@ static int live_start(const char *cmd) {
 
 static void live_stop(void) {
   g_live_run = 0;
+  /* ① 杀**本机**进程组（sh + adb）—— 管道随即 EOF，阻塞中的 read() 会醒来 */
+  pid_t pid = g_live_pid;
+  if (pid > 0) kill(-pid, SIGTERM);
+  /* ② 设备侧那条 screenrecord 不会跟着死（#1258 实测），这里补一枪，否则下次启动
+        抢不到采集权 ⇒ "运行中但零帧"。 */
+  live_kill_stale_capture(g_live_cmd);
   pthread_join(g_live_thread, NULL);
   pthread_mutex_lock(&g_live_lock);
   while (g_live_count) {

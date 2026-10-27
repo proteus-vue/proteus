@@ -157,8 +157,24 @@ PLIST
 #     ★不做这步，.app 只在"装了 Homebrew ffmpeg 且路径相同"的机器上能跑
 python3 "$HERE/bundle-dylibs.py" "$APP"
 
+# ④c 写**构建身份证**（决策 #1281）：这一个文件回答"我打开的到底是哪次构建"。
+#   ★为什么非要有它：本机有**两个 checkout**（主仓 /Volumes/data1/work/office/debug/proteus 与
+#     WorkBuddy worktree），两边各有一份 `build-app/Proteus Studio.app`，bundle id 还相同。
+#     2026-10-27 用户从 Finder 打开的是**主仓那份 10-25 的旧包**，看到的自然是没有终端的界面，
+#     而我在 worktree 里刚打的包好好的 —— 光看"build-app"这四个字分不出是哪一份。
+#   ⇒ 把 分支/提交/工作区/UI chunk 写进包内，打开包就能对账（Finder 里按空格也能预览到）。
+{
+  printf 'Proteus Studio · 构建身份证\n'
+  printf '构建时间：%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+  printf '工作区：%s\n' "$ROOT"
+  printf '分支：%s\n' "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  printf '提交：%s\n' "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  printf 'UI chunk：%s\n' "$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$HERE/web-dist/index.html" | head -1)"
+} > "$APP/Contents/Resources/BUILD_INFO.txt" 2>/dev/null || true
+
 # ⑤ 签名：ad-hoc（`-`）。★这只是让本机能跑，**不能**消除 Gatekeeper 在别人机器上的拦截
-codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || echo "⚠ ad-hoc 签名失败（应用通常仍可本机运行）"
+#    ★BUILD_INFO.txt 必须在**签名之前**写：签名后再往包里加文件会破坏 ad-hoc 封印。
+codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || echo "⚠ ad-hoc 签名失败（应用仍可本机运行）"
 
 # ⑥ 自检
 echo "▸ 校验"
@@ -173,6 +189,35 @@ printf '  ✓ 新鲜度：UI %s · 二进制 %s · 包内 %s\n' \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$HERE/web-dist/index.html")" \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$BIN")" \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP/Contents/MacOS/$EXE_NAME")"
+# ★★把 `.app` **目录本身**的 mtime 也刷成现在（决策 #1280）。
+#   为什么必须显式 touch：我们是把二进制/界面**原地替换**进已有的 bundle，
+#   目录项本身没被改写 ⇒ Finder 里 "Proteus Studio.app" 的修改时间一直停在**第一次**打包那天。
+#   2026-10-27 用户就是据此判断"好像没重新打包"（实际二进制已经是新的、内嵌资源哈希都对）。
+#   ★这条不是"让时间好看"，而是让"到底打没打包"这个问题**不用问 AI**：Finder 一眼可查。
+touch "$APP"
+printf '  ✓ bundle 时间（Finder 显示的）：%s\n' "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP")"
+# ★★这一行是给"两个 checkout"准备的（决策 #1281）：把**工作区绝对路径**打出来。
+#   否则两台/两仓的 build-app 长得一模一样，谁也说不清刚才打开的是哪一份。
+printf '  ✓ 本次产物来源：%s · %s@%s\n' "$ROOT" \
+  "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')" \
+  "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '?')"
+printf '  ✓ 构建身份证：%s/Contents/Resources/BUILD_INFO.txt\n' "$APP"
+# 内嵌资源自证：二进制里应该能找到 web-dist/index.html 引用的那个 chunk 名。
+# ★只比时间不够——"时间新 + 内容旧"是本仓真实发生过的组合（决策 #1247 陈旧 .app）。
+CHUNK="$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$HERE/web-dist/index.html" | head -1)"
+if [ -n "$CHUNK" ]; then
+  # ★这里必须用 `grep -c`（读完所有输入）而不是 `grep -q`（命中即退出）：
+  #   本脚本是 `set -o pipefail`，`grep -q` 提前退出会给 `strings` 一个 SIGPIPE，
+  #   strings 于是打印 "failed to flush output" 并以非 0 退出 ⇒ **整条管道判假红**。
+  #   （2026-10-27 第一次加这条自检时就是这么翻车的：包明明是新的，自检说不是。）
+  HIT=$(strings "$APP/Contents/MacOS/$EXE_NAME" 2>/dev/null | grep -c -F "$(basename "$CHUNK")" || true)
+  if [ "${HIT:-0}" -gt 0 ]; then
+    echo "  ✓ 内嵌前端自证：二进制里含 $(basename "$CHUNK")（与 web-dist/index.html 一致）"
+  else
+    echo "  ✗ 内嵌前端对不上：二进制里找不到 $(basename "$CHUNK") ⇒ 这次打包没吃到最新 UI" >&2
+    exit 4
+  fi
+fi
 
 # ★图标变了就必须提醒：macOS 的 Dock/Finder 图标是**按 bundle 路径+签名**缓存的，
 #   而我们的 ad-hoc 签名是确定性的（`--timestamp=none`）⇒ 内容没变时签名也一样 ⇒ 缓存不会自动失效。

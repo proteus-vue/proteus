@@ -11,7 +11,8 @@
 | 源码（唯一真源） | `packages/studio/` —— 原生层 `native/`、Rust 壳 `src/main.rs`、Vue 壳 `ui/` |
 | 构建 UI | `./build-ui.sh`（或仓库根 `pnpm run build:studio-ui`）→ `web-dist/` |
 | 构建应用 | **`./package-app.sh`**（或 `pnpm run build:studio-app`）→ `build-app/Proteus Studio.app`。★**改了 UI 就必须重跑它**——Tauri 把前端资源**嵌进二进制**，只跑 `check:studio-panel`（它只重建 `web-dist`）**不会**更新 `.app` |
-| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **56 判据**；已接 CI 与 `pnpm verify`） |
+| **门禁** | 仓库根 `pnpm run check:studio-panel`（Vite 构建 + Playwright 渲染 + **61 判据**；已接 CI 与 `pnpm verify`） |
+| **真机门禁** | `pnpm run check:studio-live`（真跑 6 秒投屏，断言**出帧>0 且解码器零错误、AU 零脏帧**；再跑一段"中途切档位"验证重启采集。无设备/无打包产物时说明原因并跳过）★**它跑的是 `build-app` 里的二进制 ⇒ 改完代码必须先打包再跑**，否则测的是旧包 |
 | 判据输入 | `fixtures/panel-source.json`（真实跑机读数 + 采集机型；`results/panel-source.json` 是原始采集输出） |
 | 为什么**没有** `package.json` | 它不是可发布的 npm 包：Cargo + Vite 项目。放进 workspace 会让 `build-packages`/`check:deps`/`check:pkg`/`docs-stats` 的包数口径一起漂 —— 详见 `.gitignore` 顶部注释 |
 
@@ -25,15 +26,21 @@
 | 原生 GL 画布能挂进 Tauri 窗口，且**位置由 HTML 布局决定**（不是写死全屏） | 日志 `canvas rect = 80.0,68.0 996.0x748.0` 与 CSS 网格算出来的完全一致（左栏 56 + 内边距 24 = 80；顶栏 44 + 24 = 68；宽 1440−56−340−48 = 996） |
 | 真机画面能通过我们的管线渲染进画布 | `results/canvas-device.png`（从 FBO 读回，1280×720，内容是**手机设置页**） |
 | HTML 叠加层与原生画布共存（B2 的结论在产品布局里成立） | 十字线/边框/标签都画在 WebView 层 |
-| **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备像素**，拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
-| **滑动 / 长按（⌥ 手势）** | `⌥+拖拽` = 滑动（时长 = 真实按住时长）· `⌥+按住` = 长按（同点 600ms，走同一条 `input swipe`）；**普通拖拽仍是平移**，两条路不抢手势（判据 ㊱） |
+| **点画布会点到真机上（触摸回传）** | `device_tap` → `adb shell input tap`；坐标用**设备物理像素**（`dev_w/h`，不是码流尺寸——码流按长边≤1920 缩过，两者差 ~0.74 倍），拖拽平移不注入、开关可关；源不支持时（iOS/录制流）提示一次并自动关开关（判据 ㉟） |
+| **画质档位（两档）** | 顶栏 `画质·省流/标准`（4 / 13 Mbps）——**分辨率不变，只改码率**（20 Mbps 因肉眼无差异已撤）；切换 = **重启采集会话**（停旧 → 起新 → 重建解码器）。停会话靠 `kill(-pid)` 杀进程组 + 设备侧 `pkill`；重启请求由渲染线程在 tick 开头执行（避免与解码器 UAF）（判据 ㊴） |
+| **设置窗口（独立窗口）** | ⌘, 或 rail 底部设置图标打开**独立窗口**（自绘沉浸式标题栏；左导航：开发环境 / 设备 / 关于；★所有新窗口必须走 `window::studio_window`，否则会长出系统标题栏）：**Xcode 路径 / adb 路径 / iOS 推流端口**。★路径**不猜默认值**（Xcode 可装在任意磁盘）；「检测」真的跑 `xcodebuild -version` / `adb version` 并显示输出；保存立即生效（设 `DEVELOPER_DIR`、换 adb 二进制），落盘 `~/Library/Application Support/dev.proteus.studio.shell/settings.json`（判据 ㊶）★**窗口靠 `initialization_script` 注入 `__PROTEUS_VIEW__` 分流**，不靠 URL query——query 被吞就是白窗 |
+| **设备管理（列表 + 切换）** | 右栏顶部「设备」：一行一台（机型 · 物理尺寸 · 串号尾），当前项强调条；未授权行**点不动**；切换 = 改串号/尺寸 → 用当前画质档重建命令 → **重启采集会话**（黑几百毫秒）。所有 adb 调用统一带 `-s`（判据 ㊵） |
+| **画布洞必须是通的** | 原生 GL 垫在 WKWebView **下面**，所以从 `#canvas` 到 `html` 的**每层都不许有不透明背景**；舞台底色由 `.screen` 的 4000px spread 阴影补（只填屏幕**之外**）。`live` 未加时反过来给实心底色（"关着的屏"）（判据 ㊲） |
+| **滑动 / 长按** | **直接拖拽 = 滑动**（时长 = 真实按住时长）· **按住不动** = 长按（同点 600ms，走同一条 `input swipe`）· **⌥+拖拽 = 平移画布**（不注入）；触控关掉时拖拽退回平移（判据 ⑯ / ㊱） |
+| **内置终端（pty）** | rail 第 3 个按钮（⌘\`）打开真终端：Rust 侧 `openpty + fork + execve`（不引 `libc`/`portable-pty`，见 `src/term.rs` 文件头），子进程 `setsid + TIOCSCTTY` ⇒ Ctrl-C 只打给 shell，不伤 Studio；前端零依赖自研 ANSI（`ui/src/terminal.ts`：光标移动/滚动/擦除/SGR 16+256+真彩/备用屏），键盘翻成**字节语义**（Enter=`\r`、Ctrl-C=`\x03`、方向键=`ESC[A`、Backspace=`\x7f`），尺寸按等宽标尺量出 cols/rows 再喂 pty（resize 会重排）（判据 ㊼） |
 
 | 没做 | 原因 |
 |---|---|
-| 终端 / pty | 未做（下一刀候选） |
 | 调试器 / DAP | 未做 |
 | 元素拾取 / 检查器数据 | 依赖 G-54 的 `locateAssertion` / `affectedDevices`，那两个方法仍是 0 行 |
 | iOS 触摸回传 | iOS 那条腿**只有下行**（ReplayKit 推流 → `nc -l`）；反向注入要 G3 二阶段另开控制通道 |
+
+★**终端已落地（决策 #1279）**，但它的边界要写清：不是完整 VT 解析器 —— 鼠标事件、超链接、Sixel/Kitty 图片一律不做；遇到不认识的序列**吞掉**而不是打到屏幕上。真 pty 那条路由 Rust 单测 `pty_runs_echo_and_reads_back`（真跑 `/bin/echo` 读回输出）兜住；界面到 IPC 那条路由判据 ㊼ 兜住（命令名三方对齐 + 真点真敲 + 上色 + resize）。
 
 ★**已落地、不再列"没做"的两项**（本表此前长期写反，把已完成的当成未做——2026-10-26 更正）：
 - **编辑器**：CodeMirror 6 容器（不自研内核，守 G-56.1 红线），多标签 + 每文件缓冲 + 语法着色 + Diff + Git 只读；
@@ -440,6 +447,24 @@ bash hosts/ios/run-screen-stream.sh
 #   优先于 adb 探测——本机同时连着 Android 时不会被静默劫持到 Android 画面
 PROTEUS_IOS_STREAM_PORT=9001 ./target/release/proteus-studio-shell
 ```
+
+### 界面上怎么走完这一步（决策 #1277）
+
+**装到真机要 `codesign` 访问 login 钥匙串，Studio 代跑不了**（沙箱环境实测被拦：
+`[sandbox] 命令被沙箱拦截：login.keychain-db (file-write)`）。所以界面做的是
+「把该跑什么摆到你面前」，而不是假装一键：
+
+1. 左栏「设备」面板点那台 iPhone ⇒ 采集源切成 `/usr/bin/nc -l <端口>`；
+2. 画布上直接出现 **iPhone 投屏引导卡**（`#iosGuide`），里面有
+   本机 IP（跟着**默认路由**那块网卡走，不是猜）、端口、以及**整行命令**＋「复制」；
+3. 在仓库根目录粘上跑：`bash hosts/ios/run-selfdraw.sh --stream=<IP>:<端口>`
+   （编译 + 安装 + 启动 ProteusHost，手机上点「允许」录制屏幕）；
+4. 手机一推上来卡片自己消失（判据 ㊻ 钉的是"三态"：有画面不显示 / 无画面且源是 iOS 才显示 /
+   源不是 iOS 不显示，以及端口没人听时状态必须是红的）。
+
+★**先清场再收流**：macOS 允许多个 `nc -l` 同时 LISTEN 同一端口，残留的旧监听会让手机的
+连接落到"没人读管道"的那个上 ⇒ **推流在跑、画面永远黑、零报错**。所以切到 iOS（以及启动时）
+都会先按 lsof 的 `COMMAND == nc` 清掉同端口残留（`live_source::kill_stale_listeners`）。
 
 **已验 / 未验（别混）**：
 - ✅ Swift 类型检查（`check:ios-selfdraw-compile`）、Rust 编译、接收端（假源 `ffprobe` 认 640×360/120 帧）、

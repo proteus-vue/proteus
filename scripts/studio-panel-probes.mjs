@@ -633,159 +633,6 @@ await page.waitForTimeout(150)
  * ★必须在"设备视图 + 适应档 + 平移归零"之后调用（依赖画布中心 == 设备中心），
  *   并且要能看见上面刚做过的那次拖拽 ⇒ 调用点紧跟在 ⑯b 之后。
  */
-export async function probeTouch(page) {
-// 【这条判据钉什么】① 坐标是**设备像素**（不是 CSS px）② 拖拽平移**不**注入
-//   ③ 关掉开关不注入 ④ 源不支持时**提示一次并自动关开关**（不是每次都弹、也不是静默）。
-const tapArgs = async () =>
-  (await page.evaluate(() =>
-    (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'device_tap').map((c) => c.args),
-  ))
-// ★一律用**增量**断言：⑬ 早就做过一次真实点击（那次就该注入一次），
-//   拿"累计条数 == 0/1"当期望值会红，而红的不是功能（第一版就是这么错的）。
-const tapsStart = await tapArgs()
-const touchState = () =>
-  page.evaluate(() => ({
-    on: document.getElementById('touchChip')?.getAttribute('aria-pressed') === 'true',
-    label: document.getElementById('touchChip')?.textContent?.trim() ?? '',
-  }))
-// ★**本探针自己拖一次**，不能用上面 ⑯ 那次：⑯ 发生在 `tapsStart` 之前，
-//   它的注入早已落在窗口外 ⇒ "拖拽 +0" 会变成空断言（实测：把 moved 阈值删掉，判据照样绿）。
-const centerAt = () =>
-  page.evaluate(() => {
-    const r = document.getElementById('canvas').getBoundingClientRect()
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-  })
-let center = await centerAt()
-await page.mouse.move(center.x, center.y)
-await page.mouse.down()
-await page.mouse.move(center.x - 40, center.y - 16, { steps: 3 })
-await page.mouse.move(center.x - 80, center.y - 30, { steps: 3 })
-await page.mouse.up()
-await page.waitForTimeout(320)
-const tapsAfterPan = await tapArgs()
-const tapsAddedByPan = tapsAfterPan.length - tapsStart.length
-// 拖拽把画面拖偏了 ⇒ 回「适应」再取中心（否则后面"点中心"就不再是设备中心）
-await page.click('.zoom button[aria-label="适应窗口"]')
-await page.waitForTimeout(380)
-center = await centerAt()
-await page.mouse.click(center.x, center.y)
-await page.waitForTimeout(320)
-const tapsAfterClick = await tapArgs()
-const chipOn = await touchState()
-// 关掉开关 ⇒ 再点一次也不注入
-await page.click('#touchChip')
-await page.waitForTimeout(160)
-await page.mouse.click(center.x + 24, center.y + 12)
-await page.waitForTimeout(320)
-const tapsAfterOff = await tapArgs()
-const chipOff = await touchState()
-// 源不支持（iPhone 推流 / 录制流就是这样）⇒ 提示一次 + 自动关开关
-await page.evaluate(() => localStorage.setItem('__TAP_UNSUPPORTED__', '1'))
-await page.click('#touchChip')
-await page.waitForTimeout(120)
-await page.mouse.click(center.x, center.y)
-await page.waitForTimeout(420)
-const chipUnsupported = await touchState()
-const tapToast = await page.evaluate(
-  () => [...document.querySelectorAll('#toasts .toast')].map((n) => n.textContent?.trim() ?? '').join(' | '),
-)
-await page.evaluate(() => localStorage.removeItem('__TAP_UNSUPPORTED__'))
-// 熄屏（真机实测：input tap 返回 0 但不生效）⇒ 必须**说出来**，而且开关不该被关掉
-//   （这不是"源不支持"，是"这次没成功"——两者混淆会让用户以为功能坏了）
-await page.evaluate(() => localStorage.setItem('__TAP_SLEEPING__', '1'))
-await page.click('#touchChip')
-await page.waitForTimeout(120)
-await page.mouse.click(center.x, center.y)
-await page.waitForTimeout(420)
-const chipSleeping = await touchState()
-const sleepingToast = await page.evaluate(
-  () => [...document.querySelectorAll('#toasts .toast')].map((n) => n.textContent?.trim() ?? '').join(' | '),
-)
-await page.evaluate(() => localStorage.removeItem('__TAP_SLEEPING__'))
-
-  return {
-    tapsStart: tapsStart.length,
-    tapsAddedByPan,
-    tapsAddedByClick: tapsAfterClick.length - tapsAfterPan.length,
-    tapAtCenter: tapsAfterClick[tapsAfterClick.length - 1] ?? null,
-    tapsAddedWhileOff: tapsAfterOff.length - tapsAfterClick.length,
-    chipOn,
-    chipOff,
-    chipUnsupported,
-    tapToast,
-    chipSleeping,
-    sleepingToast,
-  }
-}
-
-/**
- * ㊱ ⌥ 手势（决策 #1255）：拖动 = 滑动、按住不动 ≥600ms = 长按。
- * 【为什么用 ⌥ 而不是"拖拽即滑动"】平移是既有手势且被判据 ⑯ 钉住；直接把拖拽改成滑动，
- *   "看别处"就会变成"在手机上乱划"。⇒ 修饰键分流：**无 ⌥ = 平移画布，有 ⌥ = 注入设备**。
- * 【钉三件事】① ⌥ 拖拽产生 swipe（端点不同、时长 > 0）且**画布没被平移**
- *   ② ⌥ 按住不动产生**同点 + 600ms**（长按）③ 普通拖拽仍然只平移（不产生 swipe）。
- */
-export async function probeGesture(page) {
-  const swipes = () =>
-    page.evaluate(() =>
-      (window.__STUB_CALLS__ || []).filter((c) => c.cmd === 'device_swipe').map((c) => c.args),
-    )
-  const screenX = () => page.evaluate(() => document.querySelector('.screen').getBoundingClientRect().x)
-  const center = await page.evaluate(() => {
-    const r = document.getElementById('canvas').getBoundingClientRect()
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
-  })
-
-  // ① ⌥ + 拖拽（向上 200 CSS px）
-  const xBefore = await screenX()
-  await page.keyboard.down('Alt')
-  await page.mouse.move(center.x, center.y)
-  await page.mouse.down()
-  await page.mouse.move(center.x, center.y - 100, { steps: 3 })
-  await page.mouse.move(center.x, center.y - 200, { steps: 3 })
-  await page.mouse.up()
-  await page.keyboard.up('Alt')
-  await page.waitForTimeout(320)
-  const afterSwipe = await swipes()
-  const xAfter = await screenX()
-
-  // ② ⌥ + 按住不动 700ms ⇒ 长按（同点 + 600ms）
-  await page.keyboard.down('Alt')
-  await page.mouse.move(center.x, center.y)
-  await page.mouse.down()
-  await page.waitForTimeout(700)
-  await page.mouse.up()
-  await page.keyboard.up('Alt')
-  await page.waitForTimeout(320)
-  const afterHold = await swipes()
-
-  // ③ 普通拖拽（无 ⌥）仍然只平移：不该多出 swipe
-  await page.mouse.move(center.x, center.y)
-  await page.mouse.down()
-  await page.mouse.move(center.x + 60, center.y, { steps: 3 })
-  await page.mouse.up()
-  await page.waitForTimeout(280)
-  const afterPlainDrag = await swipes()
-  // 复位平移，别把状态留给后面
-  await page.click('.zoom button[aria-label="适应窗口"]')
-  await page.waitForTimeout(300)
-
-  return {
-    swipeOfDrag: afterSwipe[0] ?? null,
-    swipeCountAfterDrag: afterSwipe.length,
-    panMovedByAltDrag: Math.abs(xAfter - xBefore) > 1,
-    swipeOfHold: afterHold[1] ?? null,
-    swipeCountAfterHold: afterHold.length,
-    swipeCountAfterPlainDrag: afterPlainDrag.length,
-  }
-}
-
-/**
- * ⑯ 拖拽平移（放大后必须能看别处，否则 4× 只能看中间那一点）。
- *  真实 mouse 事件序列（down → 多步 move → up），走浏览器命中测试 ⇒ 验的是真手势。
- *  ★只往左拖：1280x720 在 125% 下高 726 < 舞台 796 ⇒ **纵向本来就被夹紧到 0**，
- *    用纵向断言会红，而那不是 bug（正是"屏幕比舞台小就不该能拖"的正确行为）。
- */
 export async function probePan(page, { outPath } = {}) {
 //  真实 mouse 事件序列（down → 多步 move → up），走浏览器命中测试 ⇒ 验的是真手势。
 //  ★只往左拖：1280x720 在 125% 下高 726 < 舞台 796 ⇒ **纵向本来就被夹紧到 0**，
@@ -798,11 +645,14 @@ const cb = await page.evaluate(() => {
   const r = document.getElementById('canvas').getBoundingClientRect()
   return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
 })
+// ★平移现在是 **⌥ + 拖拽**（决策 #1261 反转过默认手势：无修饰键的拖拽 = 注入滑动）
+await page.keyboard.down('Alt')
 await page.mouse.move(cb.x, cb.y)
 await page.mouse.down()
 await page.mouse.move(cb.x - 40, cb.y, { steps: 3 })
 await page.mouse.move(cb.x - 100, cb.y, { steps: 3 })
 await page.mouse.up()
+await page.keyboard.up('Alt')
 await page.waitForTimeout(300)
 const panSeen = await page.evaluate(() => {
   const r = document.querySelector('.screen').getBoundingClientRect()
@@ -827,3 +677,65 @@ const panReset = await page.evaluate(() => ({
 }))
   return { panBefore, panSeen, panReset }
 }
+
+/**
+ * ㊲ 画布洞（决策 #1257）：从 `#canvas` 一路向上到 `html`，**每一层都不许有不透明背景**。
+ *
+ * 【为什么必须有这条】原生 GL 画面垫在 WKWebView **下面**，所以"画布那块能不能看见"
+ *   完全取决于 HTML 在上面有没有涂东西。实测踩到：`.main{background:var(--bg-canvas)}`
+ *   把洞整块糊死 ⇒ 表现是"启动瞬间能看到投屏、页面一画上去就黑"，而面板读数
+ *   （出帧 / 帧率 / 解码 / 原生矩形）**全部正常**——没有任何一条既有判据会红。
+ * 【两半都要断】① 洞是通的（祖先链透明）；② 底色没被删掉而是**搬到了 `.screen` 的
+ *   超大 spread 阴影上**（否则洞通了，舞台却也变成透明白/黑，视觉上一样是坏的）。
+ */
+export async function probeHole(page) {
+  const rep = await page.evaluate(() => {
+    const el = document.getElementById('canvas')
+    if (!el) return { err: 'no #canvas' }
+    const alpha = (c) => {
+      const m = String(c).match(/rgba?\(([^)]+)\)/)
+      if (!m) return c === 'transparent' ? 0 : 1
+      const p = m[1].split(',').map((x) => parseFloat(x))
+      return p.length < 4 ? 1 : p[3]
+    }
+    const bad = []
+    for (let n = el; n && n !== document.documentElement.parentNode; n = n.parentElement) {
+      const cs = getComputedStyle(n)
+      const a = alpha(cs.backgroundColor)
+      const img = cs.backgroundImage
+      if (a > 0.001 || (img && img !== 'none')) {
+        const id = n.id ? '#' + n.id : ''
+        const cls = typeof n.className === 'string' && n.className ? '.' + n.className.split(/\s+/)[0] : ''
+        bad.push(`${n.tagName.toLowerCase()}${id}${cls}`)
+      }
+    }
+    const scr = document.querySelector('.screen')
+    const shadow = scr ? getComputedStyle(scr).boxShadow : ''
+    // 取"最大 spread 的那一层"：底色必须是**不透明**且铺得足够大
+    let fillSpread = 0
+    for (const layer of String(shadow).split(/,(?![^(]*\))/)) {
+      const m = layer.match(/rgba?\(([^)]*)\)\s+0px\s+0px\s+0px\s+(\d+)px/)
+      if (!m) continue
+      const p = m[1].split(',').map((x) => parseFloat(x))
+      const a = p.length < 4 ? 1 : p[3]
+      if (a > 0.9) fillSpread = Math.max(fillSpread, Number(m[2]))
+    }
+    return { bad, fillSpread, shadow: String(shadow).slice(0, 120) }
+  })
+  return {
+    holeBad: rep.bad ?? [],
+    holeOk: (rep.bad ?? []).length === 0,
+    fillSpread: rep.fillSpread ?? 0,
+    shadow: rep.shadow ?? '',
+  }
+}
+
+/**
+ * ㊳ 触摸坐标空间（决策 #1260）：画布坐标必须换算成**设备物理像素**。
+ *
+ * 【为什么必须有】码流是等比缩过的（1200×2608 的设备给 884×1920 的流，差 0.737 倍）。
+ *   拿**码流尺寸**去 `input tap`，点屏幕下方的"设置"会落到它上面那个 App 上——
+ *   而中心点仍然对得上（缩放以中心为基准时中心是不动的），所以既有的 ㉟ 中心点断言
+ *   **永远测不出这个错**。⇒ 这里专门换一台"物理尺寸 ≠ 码流尺寸"的桩，断中心点必须是
+ *   物理中心 (600,1304)，而不是码流中心 (442,960)。
+ */

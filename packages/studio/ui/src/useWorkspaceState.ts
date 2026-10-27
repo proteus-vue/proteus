@@ -14,7 +14,7 @@
 import { reactive, watch } from 'vue'
 import { hasBridge, loadState, saveState } from './bridge'
 
-export type ViewName = 'device' | 'code'
+export type ViewName = 'device' | 'code' | 'term'
 
 export interface WorkspaceState {
   view: ViewName

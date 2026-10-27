@@ -18,8 +18,94 @@ export function stubTauri(payload) {
     core: {
       invoke: async (cmd, args) => {
         calls.push({ cmd, args })
-        if (cmd === 'stats') return payload
+        if (cmd === 'stats') {
+          // ★设备物理尺寸可覆盖（判据 ㊳）：localStorage.__DEV_SIZE__ = "1200x2608"
+          const dv = window.localStorage.getItem('__DEV_SIZE__')
+          // ★"没有画面"可覆盖（判据 ㊻）：iOS 引导卡只在 frames==0 时出现，
+          //   而 fixture 是**有画面**的真实读数 ⇒ 必须能临时把 frames 归零。
+          const noFrames = window.localStorage.getItem('__NO_FRAMES__') === '1'
+          if (dv) {
+            const [w, h] = dv.split('x').map(Number)
+            return { ...payload, dev_w: w, dev_h: h, ...(noFrames ? { frames: 0 } : {}) }
+          }
+          return noFrames ? { ...payload, frames: 0 } : payload
+        }
         if (cmd === 'set_canvas_rect') return null
+        // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
+        if (cmd === 'open_settings') return null
+        // 窗口级命令（决策 #1271）：拖拽 / 最大化。只记录，不需要真行为
+        if (cmd === 'plugin:window|start_dragging' || cmd === 'plugin:window|internal_toggle_maximize') return null
+        // 自动检测（决策 #1268）：两台 Xcode + 一个 adb，正好用来测"点选"与"取消不改"
+        if (cmd === 'detect_tools')
+          return {
+            by_key: {
+              'web.node': [{ path: '/opt/homebrew/bin/node', version: 'v22.22.2' }],
+              'web.browser': [
+                { path: '/Applications/Google Chrome.app', version: null },
+                { path: '/Applications/Microsoft Edge.app', version: null },
+              ],
+              'android.studio': [{ path: '/Applications/Android Studio.app', version: null }],
+              'android.adb': [
+                { path: '/opt/homebrew/bin/adb', version: 'Android Debug Bridge version 1.0.41' },
+              ],
+              'ios.xcode': [
+                { path: '/Volumes/data1/work/office-applications/Xcode.app', version: 'Xcode 26.5' },
+                { path: '/Volumes/data1/applications/Xcode.app', version: 'Xcode 14.2' },
+              ],
+              'harmony.deveco': [],
+              'mp.devtools': [],
+            },
+          }
+        if (cmd === 'pick_tool') {
+          // __PICK_CANCEL__=1 模拟"用户点了取消"
+          if (window.localStorage.getItem('__PICK_CANCEL__') === '1') return null
+          return args?.key === 'ios.xcode' ? '/Applications/Xcode-browse.app' : '/usr/local/bin/tool'
+        }
+        if (cmd === 'get_settings') return { paths: {}, ios_port: 9001 }
+        if (cmd === 'save_settings') {
+          window.__STUB_SETTINGS__ = args?.s
+          return null
+        }
+        if (cmd === 'probe_tool') {
+          if (window.localStorage.getItem('__PROBE_FAIL__') === '1')
+            return {
+              ok: false,
+              detail: `${String(args?.path ?? '')}/Contents/Developer/usr/bin/xcodebuild 不存在 —— 请选 Xcode.app 本体的路径`,
+            }
+          return {
+            ok: true,
+            detail: args?.kind === 'xcode' ? 'Xcode 14.2' : 'Android Debug Bridge version 1.0.41',
+          }
+        }
+        // 采集档位（决策 #1263）：桩返回"切成了什么"，判据据此断言 IPC 与界面同步
+        // 设备管理（决策 #1265）：两台设备，第二台可切；__DEV_FAIL__ 模拟切换失败
+        if (cmd === 'list_devices') {
+          // 两台 Android（1 台未授权）+ 两台 iOS（1 台在线、1 台离线）——按平台分组的关键样本
+          const cur = window.__STUB_DEV_CUR__ || 'd1aaaaaaaa'
+          return [
+            { platform: 'android', note: '', serial: 'd1aaaaaaaa', state: 'device', model: 'M098FE', size: '1200x2608', current: cur === 'd1aaaaaaaa' },
+            { platform: 'android', note: '', serial: 'd2bbbbbbbb', state: 'device', model: 'Pixel 9', size: '1080x2424', current: cur === 'd2bbbbbbbb' },
+            { platform: 'android', note: '', serial: 'd3cccccccc', state: 'unauthorized', model: '—', size: null, current: false },
+            { platform: 'ios', note: '在手机上运行 ProteusHost 并开始直播后出画面（触控回传暂不支持）', serial: 'IOS-00008101', state: 'device', model: 'yunlai的iPhone · iOS 26.7.2', size: null, current: cur === 'IOS-00008101' },
+            { platform: 'ios', note: '离线：用 USB 连接并在手机上点「信任此电脑」', serial: 'IOS-OFFLINE-02', state: 'offline', model: '旧 iPhone · iOS 17.0', size: null, current: false },
+          ]
+        }
+        if (cmd === 'select_device') {
+          if (window.localStorage.getItem('__DEV_FAIL__') === '1')
+            throw new Error('设备 d2bbbbbbbb 当前状态是 unauthorized，不能投屏（要先授权/唤醒）')
+          window.__STUB_DEV_CUR__ = args?.serial
+          // iOS 此刻没有尺寸（要等第一帧 SPS）⇒ 返回 0，界面显示「等待推流」
+          if (String(args?.serial || '').startsWith('IOS-'))
+            return { preset: 'ios', width: 0, height: 0, mbps: 0 }
+          return { preset: 'standard', width: 1080, height: 2424, mbps: 13 }
+        }
+        if (cmd === 'capture_preset') {
+          if (window.localStorage.getItem('__CAP_FAIL__') === '1')
+            throw new Error('当前画面源不支持切换分辨率（只有 Android / adb 实时投屏可以）')
+          const mbps = args?.preset === 'low' ? 4 : 13
+          // 分辨率**不变**：这正是 #1264 的重点（改的是码率，不是几何）
+          return { preset: args?.preset, width: 884, height: 1920, mbps }
+        }
         // ★read_text 现在返回 {text, mtime_ms}：mtime 是"保存时冲突检测"的输入
         // ★桩内容**按文件类型**给：语法着色判据要真解析（Vue 的 <template> / Rust 的 fn / CSS 的
         //   `color:` / ObjC 的 `static`），把一段 JavaScript 塞给 .vue 解析器只会得到"整篇一个颜色"，
@@ -106,6 +192,14 @@ export function stubTauri(payload) {
         if (cmd === 'device_swipe') {
           if (window.localStorage.getItem('__TAP_UNSUPPORTED__') === '1')
             throw new Error('当前画面源不支持触控回传（只有 Android / adb 实时投屏能注入）')
+          // ★照 Rust 的类型规则校验（决策 #1262）：真实命令的参数是 u32，
+          //   负数/非整数会被 Tauri 挡在门外并弹红条。桩不照做的话，
+          //   "拖出画布算出负坐标"这类缺陷在判据里永远是绿的。
+          for (const k of ['x1', 'y1', 'x2', 'y2']) {
+            const v = args?.[k]
+            if (!Number.isInteger(v) || v < 0)
+              throw new Error(`invalid args \`${k}\` for command \`device_swipe\`: invalid value: integer \`${v}\`, expected u32`)
+          }
           return `${args?.x1},${args?.y1}→${args?.x2},${args?.y2} @${args?.ms}ms`
         }
         // 关闭拦截（决策 #1244）：前端同步脏数量 / 放行关闭
@@ -113,6 +207,20 @@ export function stubTauri(payload) {
         if (cmd === 'close_now') return null
         // 剪贴板（决策 #1234）：右键菜单「复制相对路径」
         if (cmd === 'copy_text') return null
+        /* 内置终端（决策 #1279）：桩只记录调用与参数——真实 pty 由 Rust 单测
+           `pty_runs_echo_and_reads_back` 覆盖；这里测的是"界面到 IPC 这一层"有没有接对。 */
+        if (cmd === 'term_open' || cmd === 'term_resize' || cmd === 'term_write' || cmd === 'term_close') return null
+        if (cmd === 'term_info') return { open: true, pid: 4242 }
+        /* iOS 接法提示（决策 #1277）：真实实现要 `route`+`ifconfig`+`lsof`，桩里给一组定值。
+           ★`active` 由 `__IOS_ACTIVE__` 控制——判据要能分别验"该显示"和"不该显示"两态。 */
+        if (cmd === 'ios_stream_hint')
+          return {
+            ip: '192.168.1.24',
+            port: 9001,
+            cmd: 'bash hosts/ios/run-selfdraw.sh --stream=192.168.1.24:9001',
+            listening: window.localStorage.getItem('__IOS_LISTEN__') !== '0',
+            active: window.localStorage.getItem('__IOS_ACTIVE__') === '1',
+          }
         if (cmd === 'list_files')
           return window.localStorage.getItem('__BIG__') === '1'
             ? ['packages/studio/big.ts']
