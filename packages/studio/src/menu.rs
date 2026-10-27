@@ -31,6 +31,8 @@ pub const ACTIONS: &[(&str, &str, &str)] = &[
     ("edit.find", "查找…", "CmdOrCtrl+F"),
     ("view.device", "设备画面", "CmdOrCtrl+1"),
     ("view.code", "代码", "CmdOrCtrl+2"),
+    // 终端（决策 #1279）：⌘` 是 VS Code / iTerm 一类工具里"开终端"的通用手势
+    ("view.term", "终端", "CmdOrCtrl+`"),
     ("view.zoomReset", "设备画面实际大小", "CmdOrCtrl+0"),
     ("view.zoomIn", "放大设备画面", "CmdOrCtrl+="),
     ("view.zoomOut", "缩小设备画面", "CmdOrCtrl+-"),
@@ -123,6 +125,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &[
             &action(app, "view.device")?,
             &action(app, "view.code")?,
+            &action(app, "view.term")?,
             &PredefinedMenuItem::separator(app)?,
             &action(app, "view.zoomReset")?,
             &action(app, "view.zoomIn")?,

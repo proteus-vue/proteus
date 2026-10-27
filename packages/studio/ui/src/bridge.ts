@@ -265,3 +265,50 @@ export function onMenu(cb: (id: string) => void): MenuBridge {
   addEventListener('studio:menu', h)
   return { native: false, off: () => removeEventListener('studio:menu', h) }
 }
+
+// ── 内置终端（决策 #1279）─────────────────────────────────────────────────
+/* 【为什么数据走事件、按键走命令】pty 的输出是**流**（Rust 读线程持续推），
+   而按键是一次次离散动作。Tauri 的 invoke 是一问一答，做流要么长轮询要么事件
+   ⇒ 输出用 `emit("term:data")`，按键用 `term_write`。 */
+
+/** 打开会话。`cols/rows` 是字符格子数（前端按字宽量出来的，不是像素） */
+export const termOpen = (cols: number, rows: number): Promise<void> => invoke<void>('term_open', { cols, rows })
+/** 送键盘输入（字节语义由前端生成：`\r` / `\x1b[A` / `\x03` …） */
+export const termWrite = (data: string): Promise<void> => invoke<void>('term_write', { data })
+/** 面板尺寸变了：告诉 pty，让 `ls`/`vim` 之类按新宽度排版 */
+export const termResize = (cols: number, rows: number): Promise<void> => invoke<void>('term_resize', { cols, rows })
+export const termClose = (): Promise<void> => invoke<void>('term_close')
+export interface TermInfo {
+  open: boolean
+  pid: number
+}
+export const termInfo = (): Promise<TermInfo> => invoke<TermInfo>('term_info')
+
+/** 订阅终端输出。
+ *  ★浏览器/门禁兜底走 `studio:term-data` 自定义事件 —— 与 `onMenu` 同一套路子，
+ *    这样 Playwright 能驱动"字节进来 → 屏幕画对"这整段（但**证明不了** pty 真的产出了字节，
+ *    那一段由 Rust 侧单测 `pty_runs_echo_and_reads_back` 兜住）。 */
+export function onTermData(cb: (data: string) => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('term:data', (e) => cb(String(e.payload ?? ''))).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = (e: Event) => cb(String((e as CustomEvent).detail ?? ''))
+  addEventListener('studio:term-data', h)
+  return () => removeEventListener('studio:term-data', h)
+}
+
+/** 订阅"shell 退出"（子进程结束）。界面据此显示"会话已结束，按回车重开"。 */
+export function onTermExit(cb: () => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('term:exit', () => cb()).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = () => cb()
+  addEventListener('studio:term-exit', h)
+  return () => removeEventListener('studio:term-exit', h)
+}

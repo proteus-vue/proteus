@@ -207,6 +207,10 @@ export function stubTauri(payload) {
         if (cmd === 'close_now') return null
         // 剪贴板（决策 #1234）：右键菜单「复制相对路径」
         if (cmd === 'copy_text') return null
+        /* 内置终端（决策 #1279）：桩只记录调用与参数——真实 pty 由 Rust 单测
+           `pty_runs_echo_and_reads_back` 覆盖；这里测的是"界面到 IPC 这一层"有没有接对。 */
+        if (cmd === 'term_open' || cmd === 'term_resize' || cmd === 'term_write' || cmd === 'term_close') return null
+        if (cmd === 'term_info') return { open: true, pid: 4242 }
         /* iOS 接法提示（决策 #1277）：真实实现要 `route`+`ifconfig`+`lsof`，桩里给一组定值。
            ★`active` 由 `__IOS_ACTIVE__` 控制——判据要能分别验"该显示"和"不该显示"两态。 */
         if (cmd === 'ios_stream_hint')

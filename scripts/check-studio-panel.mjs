@@ -37,7 +37,9 @@ import { langExtCoverage } from './studio-panel-langext.mjs'
 import { checkCapability } from './studio-panel-capability.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
 import { checksConfig } from './studio-panel-checks-config.mjs'
+import { checksUiGuides } from './studio-panel-checks-ui.mjs'
 import { probeIosGuide } from './studio-panel-probes-ios.mjs'
+import { probeTerminal } from './studio-panel-probes-term.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDIO = path.join(ROOT, 'packages', 'studio')
@@ -432,6 +434,10 @@ await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
      必须排在 pan/touch/hole 这些**依赖"有画面"**的采集之后，且必须在 `closeAll()` 之前
      （那个函数会关掉浏览器，之后任何 page.evaluate 都是 "Target page has been closed"）。 */
 const ios = await probeIosGuide(page)
+
+/* ── ㊼ 内置终端（采集段在 studio-panel-probes-term.mjs，决策 #1279）──
+   ★放这里：它会点 rail 切到终端视图（之后 perf 段自己 reload 回 code 视图，互不影响）。 */
+const termProbe = await probeTerminal(page, STUDIO)
 
 // ── ㉑ 大文件着色性能（决策 #1216）────────────────────────────────────────────
 // 【为什么要有这条】用户实测："两百多行的文件，滚动到哪才开始着色"。
@@ -941,24 +947,8 @@ const checks = [
       touch.chipSleeping.on &&
       touch.sleepingToast.includes('屏幕没亮'),
   ],
-  // ㊻ iOS 接法引导卡（决策 #1277）：只在「没画面 + 采集源是 iOS」出现；
-  //   命令要含 IP:端口、复制要真发 copy_text、端口没人听时状态必须是红的
-  [
-    `㊻ iOS 引导：有画面时显示=${ios.withFrames}（应 false）· 无画面+iOS ⇒ ${ios.shown.has}（空状态让位=${ios.shown.emptyHidden}）命令「${ios.shown.cmd}」· 状态「${ios.shown.state}」ok=${ios.shown.stateOk} · 复制按钮「${ios.shown.copyLabel}」⇒ copy_text +${ios.copyAdded}（收到「${ios.copyText}」）· 无画面+非 iOS ⇒ 卡片=${ios.androidEmpty.guide}（应 false）空状态回来=${ios.androidEmpty.empty} · 端口没人听 ⇒ ok=${ios.noListen.ok}（应 false）「${ios.noListen.text}」`,
-    ios.withFrames === false &&
-      ios.shown.has === true &&
-      ios.shown.emptyHidden === true &&
-      ios.shown.cmd === 'bash hosts/ios/run-selfdraw.sh --stream=192.168.1.24:9001' &&
-      ios.shown.state.includes('192.168.1.24') &&
-      ios.shown.state.includes('9001') &&
-      ios.shown.stateOk === true &&
-      ios.copyAdded === 1 &&
-      ios.copyText === ios.shown.cmd &&
-      ios.androidEmpty.guide === false &&
-      ios.androidEmpty.empty === true &&
-      ios.noListen.ok === false &&
-      ios.noListen.text.includes('没人监听'),
-  ],
+  // ㊻㊼ 两块"引导/输入类"判据在 studio-panel-checks-ui.mjs（决策 #1279 拆出，断言一字未改）
+  ...checksUiGuides({ ios, term: termProbe }),
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
   // ㉑ 大文件冷跳着色（见脚本里的长注释：这条钉的是 warmParse 不能掉）
   [

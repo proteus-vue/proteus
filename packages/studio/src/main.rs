@@ -27,6 +27,8 @@ mod window;
 mod search;
 /// 「画面从哪来」+ iOS 接法提示（决策 #1277，从本文件拆出）
 mod live_source;
+/// 内置终端（pty）：openpty + fork + execve（决策 #1279）
+mod term;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -651,6 +653,12 @@ fn main() {
             open_settings,
             /* iOS 接法提示（决策 #1277）：界面靠它拿到「本机 IP + 端口 + 该跑的命令」 */
             live_source::ios_stream_hint,
+            /* 内置终端（决策 #1279） */
+            term::term_open,
+            term::term_write,
+            term::term_resize,
+            term::term_close,
+            term::term_info,
             settings::get_settings_cmd,
             settings::save_settings_cmd,
             settings::probe_tool,
@@ -692,6 +700,23 @@ fn main() {
             /* 回归钩子（决策 #1267）：`STUDIO_OPEN_SETTINGS_MS=<毫秒>` ⇒ 到点自动开设置窗口。
                用来在**无头**模式下验证"独立窗口真能建起来"——窗建不出来的表现是白窗，
                而判据跑的是 http 页面，天生看不到 Tauri 那一层。 */
+            /* 回归钩子（决策 #1279）：`STUDIO_OPEN_TERM_MS=<毫秒>` ⇒ 到点替用户点一下"终端"。
+               存在的理由和上面那条一样：pty 开没开、shell 有没有起来，**只有真窗口能证**——
+               判据跑的是 http 页面（桩），天生看不到 Tauri 那一层。证法看 stderr 里的
+               `[term] 会话就绪 pid=…`（那条日志只在 open() 成功后才打）。
+
+               ★**它是 best-effort，不是判据**：实测 webview 未挂载/正忙时 `emit("menu", …)`
+                 会直接丢（2500ms 命中过一次、8000ms 反而没命中）——与"投屏解码占着渲染线程"同源。
+                 所以真窗口那一步（点 rail 图标 / ⌘\` 能开出终端）**只能人眼验**，
+                 别拿这条钩子当"功能已通"的证据。 */
+            if let Ok(ms) = std::env::var("STUDIO_OPEN_TERM_MS") {
+                let h2 = app.handle().clone();
+                let delay = ms.parse::<u64>().unwrap_or(1500);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(delay));
+                    let _ = h2.emit("menu", "view.term");
+                });
+            }
             if let Ok(ms) = std::env::var("STUDIO_OPEN_SETTINGS_MS") {
                 let h2 = app.handle().clone();
                 let delay = ms.parse::<u64>().unwrap_or(1500);

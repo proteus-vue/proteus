@@ -11,6 +11,7 @@ import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
+import TerminalPanel from './panels/TerminalPanel.vue'
 import StudioIcon from './icons/StudioIcon.vue'
 import StudioMark from './icons/StudioMark.vue'
 import ContextMenu from './ContextMenu.vue'
@@ -130,7 +131,7 @@ let nativeMenu = false
 const menuOffs = [
   onMenuAction('view.device', () => void switchView('device')),
   onMenuAction('view.code', () => void switchView('code')),
-  onMenuAction('view.zoomReset', () => setZoom(1)),
+  onMenuAction('view.term', () => void switchView('term')),  onMenuAction('view.zoomReset', () => setZoom(1)),
   onMenuAction('view.zoomIn', () => setZoom(ws.zoom + 0.25)),
   onMenuAction('view.zoomOut', () => setZoom(ws.zoom - 0.25)),
   // ★设置是**独立窗口**（决策 #1267）：菜单/按钮只负责把它叫出来
@@ -162,7 +163,10 @@ async function syncRect() {
 
 async function switchView(v: ViewName) {
   ws.view = v
-  if (v === 'code') {
+  /* ★不是 device 就必须把原生画布收成 0×0（决策 #1279 把 code 那条判断泛化了）：
+     原来只判 `code`，加终端视图后如果漏了，GL 画面会**浮在终端上面**——
+     终端看起来"打不出字"，其实是原生视图盖着（与 #1257 同一类故障）。 */
+  if (v !== 'device') {
     rect.value = '—'
     try {
       await setCanvasRect({ x: 0, y: 0, w: 0, h: 0 })
@@ -572,6 +576,16 @@ async function copyIosCmd() {
       >
         <StudioIcon name="code" :size="18" />
       </button>
+      <button
+        :class="{ on: view === 'term' }"
+        :aria-pressed="view === 'term'"
+        aria-label="终端"
+        title="终端（⌘`）"
+        id="railTerm"
+        @click="switchView('term')"
+      >
+        <StudioIcon name="terminal" :size="18" />
+      </button>
       <div class="sep" />
       <button aria-label="断言（未实现）" title="断言（未实现）" disabled><StudioIcon name="assert" :size="18" /></button>
       <button aria-label="录制（未实现）" title="录制（未实现）" disabled><StudioIcon name="record" :size="18" /></button>
@@ -678,6 +692,8 @@ async function copyIosCmd() {
            代价：代码面板在设备视图下也保持挂载（display:none），CM 自己的 ResizeObserver
            会在重新可见时重新测量，不需要额外通知。 -->
       <CodePanel v-show="view === 'code'" />
+      <!-- 终端：v-show 而不是 v-if —— 会话状态在组件里，卸载即丢（决策 #1279） -->
+      <TerminalPanel v-show="view === 'term'" :active="view === 'term'" />
     </div>
 
     <div class="side">
