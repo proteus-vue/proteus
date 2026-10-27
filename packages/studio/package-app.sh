@@ -173,6 +173,29 @@ printf '  ✓ 新鲜度：UI %s · 二进制 %s · 包内 %s\n' \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$HERE/web-dist/index.html")" \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$BIN")" \
   "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP/Contents/MacOS/$EXE_NAME")"
+# ★★把 `.app` **目录本身**的 mtime 也刷成现在（决策 #1280）。
+#   为什么必须显式 touch：我们是把二进制/界面**原地替换**进已有的 bundle，
+#   目录项本身没被改写 ⇒ Finder 里 "Proteus Studio.app" 的修改时间一直停在**第一次**打包那天。
+#   2026-10-27 用户就是据此判断"好像没重新打包"（实际二进制已经是新的、内嵌资源哈希都对）。
+#   ★这条不是"让时间好看"，而是让"到底打没打包"这个问题**不用问 AI**：Finder 一眼可查。
+touch "$APP"
+printf '  ✓ bundle 时间（Finder 显示的）：%s\n' "$(stat -f '%Sm' -t '%m-%d %H:%M:%S' "$APP")"
+# 内嵌资源自证：二进制里应该能找到 web-dist/index.html 引用的那个 chunk 名。
+# ★只比时间不够——"时间新 + 内容旧"是本仓真实发生过的组合（决策 #1247 陈旧 .app）。
+CHUNK="$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$HERE/web-dist/index.html" | head -1)"
+if [ -n "$CHUNK" ]; then
+  # ★这里必须用 `grep -c`（读完所有输入）而不是 `grep -q`（命中即退出）：
+  #   本脚本是 `set -o pipefail`，`grep -q` 提前退出会给 `strings` 一个 SIGPIPE，
+  #   strings 于是打印 "failed to flush output" 并以非 0 退出 ⇒ **整条管道判假红**。
+  #   （2026-10-27 第一次加这条自检时就是这么翻车的：包明明是新的，自检说不是。）
+  HIT=$(strings "$APP/Contents/MacOS/$EXE_NAME" 2>/dev/null | grep -c -F "$(basename "$CHUNK")" || true)
+  if [ "${HIT:-0}" -gt 0 ]; then
+    echo "  ✓ 内嵌前端自证：二进制里含 $(basename "$CHUNK")（与 web-dist/index.html 一致）"
+  else
+    echo "  ✗ 内嵌前端对不上：二进制里找不到 $(basename "$CHUNK") ⇒ 这次打包没吃到最新 UI" >&2
+    exit 4
+  fi
+fi
 
 # ★图标变了就必须提醒：macOS 的 Dock/Finder 图标是**按 bundle 路径+签名**缓存的，
 #   而我们的 ad-hoc 签名是确定性的（`--timestamp=none`）⇒ 内容没变时签名也一样 ⇒ 缓存不会自动失效。
