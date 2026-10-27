@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-27T01:28:04.446Z",
+  "updated_at": "2026-10-27T01:46:32.911Z",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -3701,6 +3701,40 @@
         "T-cli-host-bridge-probes-sync"
       ],
       "note": "【done · 决策 #1257】用户「cookie注入要严禁现在小程序的漏洞问题出现，安全性是基线，必须重视」。\n★**先取证再动手**：用真 OkHttp 3.14.9 + 两个本地 HTTP 服务做实验，确认**这不是理论风险**——\n  带 `Cookie: PROTEUS_SESSION=SECRET-123` 的请求被 302 到另一个 origin（端口不同）时，\n  **对方真的收到了这个 cookie**（VERDICT=LEAK）。根因：OkHttp 的 `followUpRequest()` 只\n  `removeHeader(\"Authorization\")`，**对 Cookie 完全不管**（正常用法下 cookie 该由 CookieJar\n  按 domain/path 匹配）；而本仓 App 宿主把平台 Cookie 存储的会话 cookie **手工塞进请求头**\n  （Android `buildCallConfig` / iOS `makeRequest`）⇒ 绕过了那层保护。\n★**双层守卫**（不是冗余，是各自可独立验证）：\n  ① JS 管线 `capability-fetch-pipeline.ts`：带凭据的请求**强制 redirectManual** ⇒ 每跳回 JS，\n     由 `nextHopConfig` 统一剥；② 宿主层 Android `CookieOriginGuard`（network interceptor，\n     每跳校验 origin）+ iOS `HttpCredentialGuard`（`willPerformHTTPRedirection` 里同一判据）。\n★**三腿分流** `resolveRedirectFollow`：browser（不干预——浏览器 manual 返回 opaqueredirect 会打坏功能）\n  / host（强制 manual）/ implicit（wx.request 隐式跟随 ⇒ **带凭据一律拒绝**）。\n★**判据**：JVM 门禁 5/5（真 OkHttp；含\"同源必须保留凭据\"防一刀切）+ 管线单测 8 条 + 真机 13/13。\n★★**破坏性验证分三层**（这是本轮最值钱的方法）：① 只摘 Android 守卫 ⇒ JS 层兜住，仍绿；\n  ② 只摘 JS 层 ⇒ Android 守卫兜住，仍绿；③ **两层都摘 ⇒ 真机真的泄露**\n  （`cross_default_final_cookie=\"PROBE_SESSION=DEFAULT_PATH_1257\"`）⇒ 证明两层各自有效、且覆盖的是真路径。\n  ★若只做第 ① 步就宣布\"守卫有效\"，会漏掉\"JS 层其实没接上\"这种形态。\n★**探针盲区自查**：原 `run-redirect-probe.sh` 的跨域用例带了 `onRedirect`（JS 逐跳）⇒ **覆盖不到**\n  \"宿主自己跟随\"那条曾泄露的默认路径。新增 ⑥ 号用例（不带 onRedirect/manual）才真正打中。\n★顺带修两处判据债：`capability-app-fetch` 的\"宿主方法列表恰好只有 http.request\"从 #1226 起就是假红\n  （桥装配会探 11 个 fs.*）；`fetch-pipeline` 的 queuedMs `>10ms` 依赖机器速度（并行跑实测 7ms）。\n★顺带把 CLI 随包桥源副本的 #1169/#1179/#1180/#1251 探针 import 缺口补齐（`check:bridge-sync` 绿），\n  并把 `entry-superapp.ts` 的 6 对 import/export 合并回 992 行（CLI 副本含 8 行同步头 ⇒ 1000 行内）。\n★**诚实边界**：① 真机只有 Android；iOS 是 `swiftc -typecheck` + JVM 层同判据，未真机跑；\n  ② 鸿蒙 RCP 由 JS 层覆盖（且鸿蒙宿主不读不写 cookie 存储，见 `proteus_http.h` 的登记）；\n  ③ 判据证明\"凭据不被跨域转发\"，不证明\"同源多子域之间的 cookie 作用域完全正确\"（那是 cookie jar 的事）。"
+    },
+    {
+      "id": "T-app-capability-phone-call",
+      "title": "App 能力 C21 makePhoneCall：三端拨号唤起（Android ACTION_DIAL / iOS tel: / 鸿蒙 want.action.dial）+ 号码校验",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-main-20261027",
+      "scope": [
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "packages/api/src/capability-app-phone.ts",
+        "packages/api/src/capability-app-device.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/PhoneCallCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java",
+        "hosts/ios/ProteusHost/runtime/phone-call-capability.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/ios/check-selfdraw-compile.sh",
+        "hosts/ios/run-selfdraw.sh",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/DeviceSnapshot.ets",
+        "tests/capability-app-phone.test.ts",
+        "hosts/android/run-phone-probe.sh",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json",
+        "website/scripts/lib/app-bridge-keys.mjs",
+        "website/content/capabilities/phone-call.md",
+        "website/en/capabilities/phone-call.md"
+      ],
+      "decision": 1258,
+      "branch": null,
+      "verification": "npx vitest run tests/capability-app-phone.test.ts（7/7）+ 变异 M1（白名单恒真）红 2 条 + 变异 M2（宿主失败被吞）红 1 条 + bash hosts/android/check-host-compile.sh + bash hosts/ios/check-selfdraw-compile.sh + bash scripts/check-harmony-host-compile.sh + node scripts/check-host-invoke-contract.mjs（android 59/60 · ios 55/60 · harmony 33/60）+ 真机 bash hosts/android/run-phone-probe.sh（10/10）+ 真机变异（摘宿主白名单 ⇒ tel:12?x=1 真的派发）",
+      "related": [
+        "T-app-capability-batch1"
+      ],
+      "note": "【in_progress · 2026-10-27】用户「继续按照 useFetch 的标准做能力主线」。\n★**选型取证（为什么是它，不是 share）**：`capability-app-feasibility` 报 A 类 = 0、B 类只剩 getCookieJar\n（已 blocked 等设计拍板），其余 50 项 C 类都要写原生。按计划文档的建议序（share → openDocument →\nmakePhoneCall → getPermission → getLocation）逐项核可行性时发现：\n  · **share 的鸿蒙端在本机 SDK（API 17 OpenHarmony）里没有 `systemShare`**\n    （全 SDK 搜索只命中 clang 头文件的假阳性）⇒ 要做只能走自建 ShareExtension want，风险高；\n  · **openDocument 三端都要异步回调管线**（SAF Uri / UIDocumentPicker delegate / DocumentViewPicker），\n    是一整块，不是\"一个方法\"；\n  · **getPermission 在 iOS 没有通用查询 API**（每类权限各自一套）⇒ 契约形态本身要改；\n  · **makePhoneCall 三端都有干净路径**且**不需要任何权限**（只唤起拨号盘，不发起通话）：\n    Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`（已核 SDk 里有该常量）。\n⇒ 选 makePhoneCall 作为本轮的任务单元。\n★**安全**：号码必须**严格校验**（只允许数字/+/-/空格/#/*/逗号/分号），拒绝任何其他字符——\n  否则构造出的 `tel:` URI 会成为注入面（同族：#1257 的凭据跨域）。\n★**诚实语义**：返回 `{dispatched:true}` = **已交给系统**，不是\"已拨出\"（拨号盘由用户决定是否拨）。\n\n【done · 决策 #1285】\n- 三端宿主：Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`（走设备动作队列）。\n- JS 桥：`capability-app-phone.ts`（`createAppPhone` + `assertPhoneNumber` + `appPhoneCallAvailable`），\n  装配进 `capability-app-device.ts`（条件 spread：宿主缺 `phone.call` ⇒ 不提供该方法 ⇒ usePhoneCall 如实 unsupported）。\n- 契约：`HOST_CAPABILITY_METHODS` 加 `phone.call`（三端覆盖 59/55/33，各 +1）。\n- 读数：App 桥 49→**50** 方法 · 真缺口 52→**51** · 可接线 41→**42**（`makePhoneCall` 已从缺口消失）。\n- 判据：单测 7/7 · 三端零设备编译绿 · **真机 10/10**（顶层 Activity 实测为 TwelveKeyDialer）·\n  破坏性验证 M1/M2（JS 层）与真机变异（宿主层）三条全红。\n\n★**真机抓出一个只有真机能发现的 bug**：首版用 `intent.resolveActivity(pm)` 做前置判断，\n  在本机（targetSdk=34）**恒返回 null** —— Android 11+ 的**包可见性**限制会过滤未在\n  `<queries>` 声明的包，而 `startActivity` 本身不受此限。实测对照：\n  `pm query-activities -a android.intent.action.DIAL -d tel:10086` 明明找到\n  `com.android.contacts/.activities.TwelveKeyDialer`，`resolveActivity()` 却是 null\n  ⇒ **有拨号器的设备上功能也不可用**。修法：去掉前置判断，直接 `startActivity` 并捕\n  `ActivityNotFoundException`（无拨号器时抛 `UnsupportedOperationException` ⇒ missing ⇒ unsupported）。\n  ★同族教训：**能查询到 ≠ 能解析到**；包可见性是 `targetSdk>=30` 的静默行为变化。\n\n★**诚实边界**：iOS 只有 `swiftc -typecheck` + JVM 同判据，**真机未跑**（模拟器无拨号盘，\n  会走 unsupported 分支）；鸿蒙走动作队列（回执是 `accepted:true` 已入队，不是已拉起），\n  **本机无 hdc 设备 ⇒ 未真机验**，官网能力页如实标 🟡。"
     }
   ]
 }

@@ -56,6 +56,7 @@ HOST_SRCS=(
   # ★★★#1257 凭据跨域守卫（从 http-capability.swift 拆出——该文件加剥离后越 1000 行）
   "$HERE/ProteusHost/runtime/http-credential-guard.swift" \
   "$HERE/ProteusHost/runtime/file-transfer-capability.swift" \
+  "$HERE/ProteusHost/runtime/phone-call-capability.swift" \
   "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift"
   # ★★★#1100：树 diff / 全量请求 / JSON 序列化（从 selfdraw-scene.swift 拆出，文件大小棘轮）
   "$HERE/ProteusHost/runtime/host-tree-diff.swift"

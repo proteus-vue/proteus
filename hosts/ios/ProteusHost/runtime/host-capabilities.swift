@@ -87,6 +87,16 @@ final class HostCapabilities: NSObject {
         case "log":
             do { return ok(try LogCapability.write(args)) }
             catch { return fail("\(error)") }
+        // ★★★#1285 C21 拨号盘唤起（tel: URL，**不需要任何权限**；只预填号码不发起通话）
+        case "phone.call":
+            do { return ok(try PhoneCallCapability.dial(args)) }
+            catch let e as WsError {
+                switch e {
+                case .unsupported(let m): return miss(m)
+                case .invalid(let m): return fail(m)
+                }
+            }
+            catch { return fail("\(error)") }
         // ★#1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request
         case "http.cancel":
             return ok(HttpCapability.cancel(args))

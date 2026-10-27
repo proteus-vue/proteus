@@ -79,6 +79,12 @@ export const APP_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-log.ts', functions: ['createAppLog'] },
   // ★★★#1226 App 能力批 1：文件系统基础面（`getFileSystem`）
   { file: 'packages/api/src/capability-app-filesystem.ts', functions: ['createAppFileSystem'] },
+  // ★★★#1285 C21 拨号盘唤起（`makePhoneCall`）在独立工厂
+  //   （`capability-app-phone.ts::createAppPhone`，装配层用条件 spread 引入）。
+  //   ★不登记就会被判「桥未接线」——与 #1207/#1225/#1226 同一形态。
+  //   ★登记的是**文件与工厂**：宿主缺 `phone.call` 时装配层**不提供**该方法
+  //     ⇒ 运行时如实 `phone-call.unsupported`（不掺假）。
+  { file: 'packages/api/src/capability-app-phone.ts', functions: ['createAppPhone'] },
 
 ]
 

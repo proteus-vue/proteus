@@ -15145,3 +15145,50 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     （adb 与 xcrun 都可能**静默失败**），这条日志让人一眼定位。
   - **教训（今天最贵的一条之一）**：**同一个"设备离线"，三个工具给三种答案。**
     选数据源要问"我真正需要的是哪个判断"——我要的是"能不能投屏"，不是"能不能做性能采集"。
+
+1285. **★编号勘误：本条原写 #1258，与并发 Studio 会话的 #1258（screenrecord 残留清理）撞号 ⇒ 按 check:decision-numbers 的规定，后写入者换新号 #1285（#1284 也被并发 Studio 会话在 check-gates-sync.mjs 里引用）。**
+  **App 能力 C21 `makePhoneCall` 三端落地（拨号盘唤起 + 双层号码白名单）· 真机 10/10 · 剖出一个只有真机能发现的包可见性 bug**（2026-10-27 · 用户「继续按照 useFetch 的标准做能力主线」）:
+  - **★选型取证（为什么是它，不是计划文档建议序里的 share）**：`capability-app-feasibility` 报 A 类 = 0、
+    B 类只剩 `getCookieJar`（已 blocked 等设计拍板），其余 50 项都是 C 类。按 `12-app-capability-batches.md`
+    的建议序（share → openDocument → makePhoneCall → getPermission → getLocation）逐项核可行性：
+    · **share 的鸿蒙端在本机 SDK（API 17 OpenHarmony）里没有 `systemShare`**（全 SDK 搜索只命中 clang
+      头文件的假阳性）⇒ 只能自建 ShareExtension want，风险高；
+    · **openDocument 三端都要异步回调管线**（Android SAF Uri 授权 / iOS UIDocumentPicker delegate /
+      鸿蒙 DocumentViewPicker），是一整块工作，不是"一个方法"；
+    · **getPermission 在 iOS 没有通用查询 API**（每类权限各自一套）⇒ 契约形态本身就得改；
+    · **makePhoneCall 三端都有干净路径且不需要任何权限**（只唤起拨号盘、不发起通话）：
+      Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`（已核 SDK 里该常量存在）。
+    ⇒ 选它作为本轮任务单元。★这条"逐项核可行性再排期"本身就是本仓 A/B/C 三分类的用途。
+  - **★★语义边界（写进代码与文档，防被读成"能打电话"）**：`ACTION_DIAL` / `tel:` / `dial` want
+    **只拉起拨号盘并预填号码**，不发起通话、**不需要运行时权限**。返回 `{dispatched:true}` =
+    **已交给系统**，不是"已拨出"。★"直接拨出"是**另一个能力**（Android `ACTION_CALL` + `CALL_PHONE`
+    权限 + 审核；iOS 公开 API 做不到），**不得**用同一方法名偷换语义。
+  - **★★号码白名单（安全基线，同族 #1257）**：未校验字符串拼进 `tel:` URI 就是注入面
+    （`/`、`?`、`#`、`@` 都能改变 URI 结构）。白名单 `0-9 + - ( ) 空格 # * ,` + 至少 1 位数字 + 长度 ≤32。
+    ★**JS 层与三端宿主各校验一遍**（不信任单侧）：JS 层防非法号码出到宿主（快速失败），
+    宿主层是最后一道（业务可直接调 `__proteusHostInvoke` 绕过 JS）。非法**直接报错**，不静默清洗。
+  - **★★★真机剖出一个只有真机能发现的 bug（本轮最值钱的部分）**：首版用
+    `intent.resolveActivity(packageManager)` 做前置判断，在本机（`targetSdk=34`）**恒返回 null**
+    ⇒ 真机首跑 10 条判据 **0/10 全红**，报"设备上没有可处理拨号的 Activity"。
+    **根因**：Android 11+ 的**包可见性（package visibility）**——`resolveActivity` / `queryIntentActivities`
+    会过滤掉未在 `<queries>` 里声明的包，而 `startActivity()` **本身不受此限**（解析在系统侧）。
+    **对照取证**：`pm query-activities -a android.intent.action.DIAL -d tel:10086` 明明找到
+    `com.android.contacts/.activities.TwelveKeyDialer`，而 `resolveActivity()` 返回 null。
+    ⇒ **有拨号器的设备上功能也不可用**（且 JVM 单测完全测不出——它碰不到 PackageManager）。
+    **修法**：去掉前置判断，直接 `startActivity` 并捕 `ActivityNotFoundException`
+    （无拨号器时抛 `UnsupportedOperationException` ⇒ JNI 转 missing ⇒ JS 侧 `phone-call.unsupported`，
+    与 Android 侧既有的"未实现"口径一致，不用笼统 failed）。
+  - **判据**：`tests/capability-app-phone.test.ts` **7/7**（合法 7 形态放行 / 非法 12 形态全拒 /
+    真的走到 `phone.call` 且传校验后号码 / 非法号码**不出到宿主** / 宿主拒绝如实报错 /
+    鸿蒙"已入队"回执也算受理 / 可用性探测）· 三端零设备编译全绿 · 契约覆盖 android 59/60 ·
+    ios 55/60 · harmony 33/60（各 +1）· **真机 `run-phone-probe.sh` 10/10**。
+  - **★★破坏性验证三层**：M1 把 JS 白名单改恒真 ⇒ 单测红 2 条；M2 把"宿主失败"吞掉 ⇒ 单测红 1 条；
+    **M3 真机把宿主白名单改恒真 ⇒ `tel:12?x=1` 真的被派发出去**（回执 `{dispatched:true, uri:"tel:12?x=1"}`）
+    ⇒ 证明宿主那层校验**确实是防线**，不是摆设。
+  - **★机器读数**：App 桥 49→**50** 方法 · 真缺口 52→**51** · 可接线 41→**42**（`makePhoneCall` 从缺口消失）。
+    ★抽取器契约同步：`website/scripts/lib/app-bridge-keys.mjs` 登记 `capability-app-phone.ts::createAppPhone`
+    ——不登记就会判"桥未接线"（与 #1207/#1225/#1226 同一形态，这文件头就是为此而写）。
+  - **诚实边界**：① iOS 只有 `swiftc -typecheck` + JVM 同判据，**真机未跑**（模拟器无拨号盘，
+    会走 unsupported 分支，属如实降级而非缺陷）；② 鸿蒙走**设备动作队列**（同步 napi 里不能 await
+    `startAbility`）⇒ 回执是 `{accepted:true}` 已入队、不是已拉起；本机无 hdc 设备 ⇒ **未真机验**，
+    官网能力页如实标 🟡；③ 判据验"能唤起拨号盘 + 非法号码被拒"，不验"用户真的点了拨出"。

@@ -23,6 +23,8 @@ import { deviceInfo, batteryInfo, pasteboard, BusinessError } from '@kit.BasicSe
 import { connection } from '@kit.NetworkKit';
 import { vibrator, sensor } from '@kit.SensorServiceKit';
 import { media } from '@kit.MediaKit';
+// ★★★#1285 C21：拨号盘靠 want 拉起（`ohos.want.action.dial`）⇒ 要 AbilityKit 的 Context/Want 类型
+import { common, Want } from '@kit.AbilityKit';
 import { setDeviceSnapshot, drainDeviceActions } from 'proteus_render';
 // ★★决策 #1083：录屏/画中画状态（C71）——快照随设备快照一起交给 C++
 import { readCaptureSnapshot, CaptureSnapshotData } from './CaptureSnapshot';
@@ -36,6 +38,8 @@ interface DeviceAction {
   text?: string;
   value?: number;
   on?: boolean;
+  /** ★#1285 `phone.call`：已由 C++ 白名单校验过的号码（只含 0-9 + - ( ) 空格 # * ,） */
+  number?: string;
 }
 
 /** 采集同步可读读数并交给 C++（渲染前调用；失败不阻断渲染）。 */
@@ -194,6 +198,30 @@ export function runDeviceActions(win: window.Window | undefined): void {
         win.setWindowKeepScreenOn(a.on ?? true).catch((err: BusinessError) => {
           console.error('PROTEUS_KEEP_ON_FAIL ' + JSON.stringify(err));
         });
+      }
+    } else if (a.action === 'phone.call') {
+      /**
+       * ★★★#1285 C21：拨号盘唤起（`ohos.want.action.dial`）。
+       *
+       * 【为什么用 startAbility + want，而不是某个"拨号 API"】
+       *   OpenHarmony 没有专属的拨号模块 API；拨号盘是**系统应用**，靠 want 拉起
+       *   （`@ohos.ability.wantConstant` 里的 `ACTION_DIAL = 'ohos.want.action.dial'`，本机 SDK 已核实存在）。
+       *   ★`uri` 里的号码已由 C++ 白名单校验（只含 0-9 + - ( ) 空格 # * ,）⇒ 不会被解析成别的 URI 结构。
+       *
+       * 【★语义边界】只是**拉起拨号盘并预填号码**，不发起通话、不需要权限；
+       *   失败只记日志（与震动/亮度同一"已受理"语义，见本文件头注释）。
+       */
+      try {
+        const ctx = getContext() as common.UIAbilityContext;
+        const want: Want = {
+          action: 'ohos.want.action.dial',
+          uri: 'tel:' + (a.number ?? ''),
+        };
+        ctx.startAbility(want).catch((err: BusinessError) => {
+          console.error('PROTEUS_PHONE_CALL_FAIL ' + JSON.stringify(err));
+        });
+      } catch (e) {
+        console.error('PROTEUS_PHONE_CALL_THROW ' + JSON.stringify(e));
       }
     }
   }

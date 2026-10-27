@@ -97,6 +97,10 @@ export const HOST_CAPABILITY_METHODS = [
   //     "读全文 + 拼接 + 整写"，而这段在 `await` 边界会被别的写插入 ⇒ 并发下**静默丢数据**。
   //   ⇒ 正解不是加锁，而是让宿主用 **O_APPEND** 打开：追加不经过"读-改-写"，也不把整文件读进 JS 内存。
   'fs.appendBytes',
+  // ★★★#1285 C21 拨号盘唤起（`usePhoneCall`）：只拉起拨号盘并**预填号码**，不发起通话、不需权限。
+  //   ★三端各自实现：Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`。
+  //   ★号码白名单在 JS 层与三端宿主**各校验一遍**（不信任单侧）——拼进 tel: URI 前必须拦注入字符。
+  'phone.call',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

@@ -198,13 +198,58 @@ inline std::string dispatch(const std::string& method, const std::string& argsJs
     snprintf(out, sizeof(out), "{\"ok\":true,\"data\":{\"accepted\":true,\"queued\":%d}}", n);
     return out;
   }
+  /**
+   * ★★★#1258 C21 `phone.call` —— 拨号盘唤起（鸿蒙侧）。
+   *
+   * 【为什么走动作队列而不是直接返回值】
+   *   拉起拨号盘要用 ArkTS 的 `startAbility`（异步 Promise），而本函数的调用点是**同步 napi**
+   *   （在 `hostAppRender` 内部）——不能在同步 napi 里 await。⇒ 与震动/亮度同一形态：
+   *   C++ 入队 `{action:'phone.call', number}`，ArkTS 在渲染后 `drainDeviceActions()` 取走执行。
+   *   ★这与本文件头的既有解释一致（`device.h` 顶部的"动作入队"设计），不是本案特例。
+   *
+   * 【★★号码校验（与 Android/iOS **同一白名单**）】
+   *   未校验字符串拼进 want 的 uri 就是注入面。白名单：`0-9 + - ( ) 空格 # * ,`，至少 1 位数字。
+   *   ★非法**直接报错**（不入队）——静默清洗会让业务打到错的号。
+   *
+   * 【诚实语义】返回 `{accepted:true}` = **已入队**，不是"已拉起"；ArkTS 侧失败只记日志
+   *   （与震动/亮度的既有语义一致，见 DeviceSnapshot.ets 的头注释）。
+   */
+  if (method == "phone.call") {
+    std::string number;
+    if (!jstr(argsJson.c_str(), argsJson.size(), "number", &number)) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"phone.call 需要 { number }\"}";
+    }
+    if (number.empty() || number.size() > 32) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"phone.call: 号码为空或过长\"}";
+    }
+    int digits = 0;
+    for (char c : number) {
+      const bool ok = (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '(' || c == ')' ||
+                      c == ' ' || c == '#' || c == '*' || c == ',';
+      if (!ok) {
+        return "{\"ok\":false,\"missing\":false,\"reason\":\"phone.call: 号码非法（只允许 0-9 + - ( ) 空格 # * ,）\"}";
+      }
+      if (c >= '0' && c <= '9') digits++;
+    }
+    if (digits == 0) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"phone.call: 号码里没有数字\"}";
+    }
+    int n = enqueue(std::string("{\"action\":\"phone.call\",\"number\":\"") + jsonEscape(number) + "\"}");
+    char out[192];
+    snprintf(out, sizeof(out), "{\"ok\":true,\"data\":{\"accepted\":true,\"queued\":%d,\"uri\":\"tel:%s\"}}", n,
+             jsonEscape(number).c_str());
+    return out;
+  }
 
   return std::string("{\"ok\":false,\"missing\":true,\"reason\":\"未实现的设备方法：") + method + "\"}";
 }
 
 /** 是否属于设备域（供 `screenInvokeDispatch` 的前缀判定）。 */
 inline bool isDeviceMethod(const std::string& method) {
-  return method.rfind("device.", 0) == 0 || method == "clipboard.read" || method == "clipboard.write";
+  // ★★★#1285：`phone.call` 也走本文件的分派（动作队列机制），所以必须进这个白名单——
+  //   否则 `host_app_runtime_impl.h` 会在进 dispatch 之前就回落成 `missing`（"写了没人调"）。
+  return method.rfind("device.", 0) == 0 || method == "clipboard.read" || method == "clipboard.write" ||
+         method == "phone.call";
 }
 
 }  // namespace device

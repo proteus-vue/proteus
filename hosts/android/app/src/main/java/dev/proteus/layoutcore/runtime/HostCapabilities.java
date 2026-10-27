@@ -208,6 +208,10 @@ public final class HostCapabilities {
             // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
             case "log":
                 return ok(dev.proteus.layoutcore.runtime.LogCapability.write(args));
+            // ★★★#1285 C21 拨号盘唤起（ACTION_DIAL，**不需要任何权限**；只预填号码不发起通话）
+            //   ★必须全限定名：本类在父包 `dev.proteus.layoutcore`，而 capability 类在 `.runtime` 子包
+            case "phone.call":
+                return ok(dev.proteus.layoutcore.runtime.PhoneCallCapability.dial(activity, args));
             // ── #1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request ──
             case "http.cancel":
                 return ok(HttpCapability.cancel(args));

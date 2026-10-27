@@ -1,0 +1,11 @@
+10-27 09:44:52.189 25011 25011 I ProteusCapProbe: CAP_RECEIPT method=phone.call args={"number":"+86 138 0013 8000"} -> {"ok":true,"data":{"dispatched":true,"uri":"tel:+86 138 0013 8000"}}
+合法号码回执：{"ok":true,"data":{"dispatched":true,"uri":"tel:+86 138 0013 8000"}}
+顶层 Activity：
+    topResumedActivity=ActivityRecord{169868911 u0 com.android.contacts/.activities.TwelveKeyDialer t8967}
+  ResumedActivity: ActivityRecord{169868911 u0 com.android.contacts/.activities.TwelveKeyDialer t8967}
+10-27 09:44:53.690 25175 25175 I ProteusCapProbe: CAP_RECEIPT method=phone.call args={"number":"12/34"} -> ERR:InternalError: host-invoke: phone.call: 号码非法（只允许 0-9 + - ( ) 空格 # * , 且至少 1 位数字）
+非法号码回执：ERR:InternalError: host-invoke: phone.call: 号码非法（只允许 0-9 + - ( ) 空格 # * , 且至少 1 位数字）
+10-27 09:44:55.099 25291 25291 I ProteusCapProbe: CAP_RECEIPT method=phone.call args={"number":"*100#"} -> {"ok":true,"data":{"dispatched":true,"uri":"tel:*100#"}}
+USSD 回执：{"ok":true,"data":{"dispatched":true,"uri":"tel:*100#"}}
+10-27 09:44:56.562 25417 25417 I ProteusCapProbe: CAP_RECEIPT method=phone.call args={"number":"12?x=1"} -> ERR:InternalError: host-invoke: phone.call: 号码非法（只允许 0-9 + - ( ) 空格 # * , 且至少 1 位数字）
+查询串回执：ERR:InternalError: host-invoke: phone.call: 号码非法（只允许 0-9 + - ( ) 空格 # * , 且至少 1 位数字）
