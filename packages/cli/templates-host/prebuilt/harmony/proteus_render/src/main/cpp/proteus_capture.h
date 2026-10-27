@@ -14,6 +14,8 @@
 //   ⇒ 读类由 ArkTS 采集**快照**（`setCaptureSnapshot`）回答；事件由 ArkTS 缓存，下次渲染时推 JS。
 //   ★与 Android/iOS 的"事件即时推"语义不同——**如实登记，不粉饰为三端一致**。
 #pragma once
+
+#include "proteus_log.h"   // ★#1225 日志能力（impl 已贴棘轮 ⇒ 走本头转出）
 #include <string>
 #include "proteus_host_helpers.h"
 #include "proteus_fs.h"   // ★#1210：fs.* 能力通道（由本头转出——`host_app_runtime_impl.h` 已贴 1000 行棘轮）

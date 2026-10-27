@@ -1,0 +1,3 @@
+10-27 08:59:31.859 15626 15626 I ProteusCapProbe: CAP_RECEIPT method=fs.appendBytes args={"path":"probe-1237-append.txt","bytes":[97,98,99]} -> {"ok":true,"data":{"path":"probe-1237-append.txt","size":3,"appended":3}}
+10-27 08:59:33.223 15772 15772 I ProteusCapProbe: CAP_RECEIPT method=fs.appendBytes args={"path":"probe-1237-append.txt","bytes":[97,98,99]} -> {"ok":true,"data":{"path":"probe-1237-append.txt","size":6,"appended":3}}
+10-27 08:59:34.605 16057 16057 I ProteusCapProbe: CAP_RECEIPT method=fs.readBytes args={"path":"probe-1237-append.txt"} -> {"ok":true,"data":{"bytes":[97,98,99,97,98,99],"size":6}}

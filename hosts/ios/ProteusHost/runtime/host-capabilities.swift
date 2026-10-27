@@ -204,6 +204,8 @@ final class HostCapabilities: NSObject {
                     case "fs.getFileInfo": return ok(try FileTransferCapability.getFileInfo(args))
                     // ★★★#1232：裸解压（ZIP 容器解析在共享 JS 层，含 zip slip 单一实现）
                     case "fs.inflateRaw": return ok(try FileTransferCapability.inflateRaw(args))
+                    // ★★★#1237 原生追加（FileHandle seekToEnd；无读-改-写窗口）
+                    case "fs.appendBytes": return ok(try FileTransferCapability.appendBytes(args))
                     default: return miss("未实现的 fs 方法：\(method)")
                     }
                 } catch let e as WsError {

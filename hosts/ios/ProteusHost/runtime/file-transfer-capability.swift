@@ -48,6 +48,44 @@ enum FileTransferCapability {
         return ["path": path, "size": data.count]
     }
 
+    /// ★★★#1237 `fs.appendBytes`：`{ path, bytes: number[] }` → `{ path, size, appended }`
+    ///   （**原生追加**：`FileHandle(forWritingTo:)` + `seekToEnd`；文件不存在则创建）。
+    ///
+    /// 【为什么必须是宿主方法】JS 侧"读全文 + 拼接 + 整写"在 `await` 边界会被别的写插入
+    ///   ⇒ 并发下**静默丢数据**（这是 `appendFile` 此前如实 unsupported 的唯一原因）。
+    ///   ★与 `writeBytes` 的差异：**不能**用 `Data.write(.atomic)`——原子写是"整份替换"，
+    ///     语义上就不是追加；追加必须走 FileHandle，且写完 `synchronize` 落盘。
+    static func appendBytes(_ args: [String: Any]) throws -> [String: Any] {
+        let path = (args["path"] as? String) ?? ""
+        guard let arr = args["bytes"] as? [Int] else {
+            throw WsError.invalid("fs.appendBytes 需要 { path, bytes: number[] }")
+        }
+        let url = try resolve(path)
+        let dir = url.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        let data = Data(arr.map { UInt8($0 & 0xFF) })
+        // ★文件不存在 ⇒ createFile 建空文件；随后统一走 FileHandle 追加（一条路径，不分叉）
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        if #available(iOS 13.0, *) {
+            try handle.seekToEnd()
+            try handle.write(contentsOf: data)
+            try handle.synchronize()
+        } else {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            handle.synchronizeFile()
+        }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let size = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+        return ["path": path, "size": size, "appended": data.count]
+    }
+
     /// `fs.readBytes`：`{ path }` → `{ bytes: number[], size }`
     static func readBytes(_ args: [String: Any]) throws -> [String: Any] {
         let path = (args["path"] as? String) ?? ""

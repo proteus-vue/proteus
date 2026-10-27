@@ -178,6 +178,57 @@ inline std::string writeBytes(const std::string& argsJson) {
   return buf;
 }
 
+/**
+ * ★★★#1237 `fs.appendBytes`：`{ path, bytes: number[] }` → `{ path, size, appended }`
+ *   （**原生追加**：`fopen(abs, "ab")` = `O_APPEND`；文件不存在则创建）。
+ *
+ * 【为什么必须是宿主方法（不是 JS 侧读全文再整写）】
+ *   JS 侧的"读全文 + 拼接 + 整写"在 `await` 边界会被别的写插入 ⇒ **并发下静默丢数据**。
+ *   这是 `appendFile` 此前如实归 unsupported 的唯一原因，而它并非"做不到"。
+ *
+ * 【★与 `writeBytes` 的两处刻意差异（如实登记，不粉饰为一致）】
+ *   ① **不走 `.part` + `rename`**：那是"整份替换"的原子性手段，语义上就不是追加；
+ *      追加的原子性由 `O_APPEND` 提供（每次 write 落在当前文件尾）。
+ *   ② **仍然 fsync**：追加常用于日志/事件流，掉电丢最后几行比"慢一点"更糟。
+ */
+inline std::string appendBytes(const std::string& argsJson) {
+  std::string rel;
+  if (!jstr(argsJson.c_str(), argsJson.size(), "path", &rel) || rel.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.appendBytes 需要 { path, bytes: number[] }\"}";
+  }
+  std::vector<uint8_t> bytes;
+  if (!jbytes(argsJson.c_str(), argsJson.size(), "bytes", &bytes)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.appendBytes 的 bytes 必须是 0..255 的数字数组\"}";
+  }
+  const std::string abs = proteus::http::resolveSandboxPath(rel);
+  if (abs.empty()) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs: 只接受沙箱相对路径（拒绝绝对路径与 '..'）：" +
+           jsonEscape(rel) + "\"}";
+  }
+  if (!mkdirsFor(abs)) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.appendBytes 无法创建目录：" + jsonEscape(rel) + "\"}";
+  }
+  FILE* fp = std::fopen(abs.c_str(), "ab");   // ★"a" = O_APPEND（不存在则创建）
+  if (fp == nullptr) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.appendBytes 打不开：" + jsonEscape(rel) + "\"}";
+  }
+  bool ok = true;
+  if (!bytes.empty() && std::fwrite(bytes.data(), 1, bytes.size(), fp) != bytes.size()) ok = false;
+  if (ok && std::fflush(fp) != 0) ok = false;
+  if (ok && ::fsync(::fileno(fp)) != 0) ok = false;   // ★fsync 在 fclose 之前
+  if (std::fclose(fp) != 0) ok = false;
+  if (!ok) {
+    return "{\"ok\":false,\"missing\":false,\"reason\":\"fs.appendBytes 写入失败：" + jsonEscape(rel) + "\"}";
+  }
+  struct stat st{};
+  const long long size = (::stat(abs.c_str(), &st) == 0) ? static_cast<long long>(st.st_size) : 0;
+  char buf[320];
+  std::snprintf(buf, sizeof(buf),
+                "{\"ok\":true,\"data\":{\"path\":\"%s\",\"size\":%lld,\"appended\":%zu}}",
+                jsonEscape(rel).c_str(), size, bytes.size());
+  return buf;
+}
+
 /** `fs.readBytes`：`{ path }` → `{ bytes: number[], size }` */
 inline std::string readBytes(const std::string& argsJson) {
   std::string rel;
@@ -564,6 +615,7 @@ inline bool dispatch(const std::string& method, const std::string& argsJson, std
   if (method == "fs.rename") { *out = renamePath(argsJson); return true; }
   if (method == "fs.getFileInfo") { *out = getFileInfo(argsJson); return true; }
   if (method == "fs.inflateRaw") { *out = inflateRaw(argsJson); return true; }
+  if (method == "fs.appendBytes") { *out = appendBytes(argsJson); return true; }   // ★#1237
   if (method.rfind("fs.", 0) == 0) {
     *out = "{\"ok\":false,\"missing\":true,\"reason\":\"未实现的 fs 方法：" + jsonEscape(method) + "\"}";
     return true;

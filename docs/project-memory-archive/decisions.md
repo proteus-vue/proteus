@@ -14625,3 +14625,44 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **诚实边界**：判据用 `keyboard.down('Alt')` 模拟；“窗口里按 ⌥ 拖一下、手机跟着滑”仍欠人眼；
     多指/双指缩放/惯性甩动没做（`input` 只能合成单指线性手势，双指要 sendevent 拼多点）；
     手势提示只放在 chip tooltip（不加常驻说明条，避免顶栏变说明栏）。
+
+1256. **`appendFile` 收口：三端宿主补 `fs.appendBytes`（原生 O_APPEND）+ 重建陈旧 AAR —— App 侧 `getFileSystem` 26 方法全部有实现**（2026-10-27 · 用户「继续 App 能力主线」）:
+  - **★旧结论错在"由正确理由得出错误结论"**：批 1 把异步 `appendFile` 记为 unsupported，理由是
+    「宿主无 append 语义 ⇒ JS 只能读全文+拼接+整写 ⇒ await 边界丢数据」。**理由成立**，但正解不是放弃方法，
+    而是给宿主一个追加原语：`fs.appendBytes` 用 **O_APPEND** 打开（Android `FileOutputStream(f,true)` ·
+    iOS `FileHandle.seekToEnd`+synchronize · 鸿蒙 `fopen(...,"ab")`+fsync）⇒ 没有读-改-写窗口，
+    整文件也不必进 JS 堆。
+  - **★顺手修旧 `appendFileSync` 的两处实账问题**：它做 `exists→readBytes→writeBytes` ⇒ 往 10 MiB 文件尾
+    加 1 字节要读 10 MiB；且配额按 `curSize+add` 记账、实际只占 `add`（账实不符）。改后两条腿都一次调用、
+    按实际写入量记账。
+  - **★★开工时 `check:android-runtime-aar-fresh` 本来就是红的**（源指纹 `440c6bc2…` vs AAR 建于 `3515fb73…`）：
+    批 1 往 runtime 加了十几个 `fs.*` 却没重建随包 AAR ⇒ 纯 npm 工程拿到缺方法的 AAR ⇒ 宿主壳编译
+    「找不到符号」（这道门禁记过两次同型事故）。已重建，并用 `javap` 核 AAR 内 `classes.jar` 真有
+    `appendBytes(Context, JSONObject)`。
+  - **判据**：`capability-app-filesystem` **8/8**（新增两条断言调用序列恰为 `[fs.stat, fs.appendBytes]` + 宿主拒绝如实报错）·
+    相关能力套件 **70/70** · 契约覆盖 android 58/59 · ios 54/59 · harmony 32/59（三端各 +1）·
+    `check:file-size` 绿 · 三端零设备编译全绿（Android javac / iOS swiftc / 鸿蒙 OHOS clang，
+    并把 `proteus_fs.h` 单独编了独立 TU——它在主 TU 里只经 `proteus_capture.h` 转出）。
+  - **★真机 8/8**（Android songyuan M098FE，`hosts/android/run-fs-append-probe.sh`）：第 1 次 `size=3 appended=3`、
+    第 2 次 `size=6 appended=3`、读回 `[97,98,99,97,98,99]`=`abcabc`。**跨进程两次追加**（每次 force-stop）
+    ⇒ 验的是磁盘累计，不是内存计数。
+  - **★★破坏性验证三条全中**：M1 异步改 `fs.writeBytes` ⇒ 单测红；M2 Sync 打回旧三跳 ⇒ 单测红；
+    **M3 真机把 `FileOutputStream(f,true)` 改 `false`（覆盖）⇒ 真机 8 条里 3 条红**（第 2 次 size=3、
+    读回 `"abc"`、字节数 3）。★M3 不可省：单测只能观察"调了哪个方法"，**观察不到宿主是否真的追加**。
+  - **★跑起来才暴露的两处探针装置缺陷（都不是产品缺陷）**：
+    ① **`am start` 对已在前台的 Activity 不重走 `onCreate`**，而 `capprobe` 在 `onCreate` 里 ⇒ 第二次起零回执
+    （首跑第 1 次追加 60s 超时，而清场那次成功——差别是清场前 force-stop 过）⇒ 每次注入前 force-stop；
+    ② **`wait_for.sh` 的 `READY:` 提示含 `CAP_RECEIPT` 字面量**，被命令替换捕获后**冒充回执** ⇒ 行序错位、
+    全部解析值 `NaN`（首跑判定 2/8，而设备日志完全正确）⇒ 判据改为只认"行形态"
+    （同时含 `ProteusCapProbe: CAP_RECEIPT` 与 ` -> `）。**同族教训：按 token 过滤必须匹配行形态，
+    不能匹配一个在工具输出里也会出现的子串。**
+  - **诚实边界**：① iOS / 鸿蒙 `appendBytes` **只有编译级证据，本轮没有真机跑**；② 判据证明追加语义，
+    不证明"极端并发下不交错"（后者属压测，POSIX O_APPEND 已保证）；③ `check:bridge-sync` 红是**开工前
+    HEAD 上就红的**（CLI 副本缺 `#1169/#1179/#1180/#1251` 的探针 import，已登记 `T-cli-host-bridge-probes-sync`），
+    `check:ai-tasks` 红在 `T-studio-package-app` 的已删路径——**两项都不代改**（不同 owner / scope）。
+  - **`getCookieJar` 移交（`T-app-capability-cookiejar`，blocked）**：契约按 **name**，三端平台存储按 **URL**
+    （Android `CookieManager.getCookie(url)` **无枚举全部 cookie 的公开 API**）⇒ 按 name 必须自建映射
+    = **第二份 cookie 存储**，与 #1154 定调冲突。两条路：(a) 改契约按 url 取（Web/MP 双桥 + document.cookie
+    作用域语义同步改）；(b) 承认业务要的是自己的 name/value ⇒ 走 `useStorage`（#1209）。静默选一个会造出
+    「看起来有 useCookie、实际读不到登录态」的假能力 ⇒ 必须设计层拍板。
+  - **机器读数**：`node scripts/capability-app-gap.mjs` 真缺口 **52** · 可接线 **41**（App 桥 49 方法）。

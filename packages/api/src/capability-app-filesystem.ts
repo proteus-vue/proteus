@@ -1,26 +1,28 @@
 // packages/api/src/capability-app-filesystem.ts
-// ★★★#1226 App 能力批 1 第 3 项：`getFileSystem` —— **基础面**（读写/存在/删除）+ 其余方法的**具名边界**。
+// ★★★#1226 App 能力批 1 第 3 项：`getFileSystem` —— 26 个方法的三段式落地（#1226→#1237 全程）。
 //
-// 【为什么只做基础面（取证，不是偷懒）】`FileSystemBridge` 契约有 **26 个方法**：
+// 【为什么当初只做基础面（取证，不是偷懒）】`FileSystemBridge` 契约有 **26 个方法**：
 //   readFile/writeFile/appendFile/copyFile/rename/remove/exists/stat/mkdir/rmdir/readdir/getFileInfo/
 //   saveFile/getSavedFileList/removeSavedFile/unzip + 10 个 Sync 变体。
-//   而宿主 `fs.*` 只有 **3 个**（readBytes/writeBytes/remove，本轮补 `exists` ⇒ 4 个）。
-//   ⇒ 缺 22 个，其中 readdir/stat/mkdir/rmdir/copy/rename/unzip 都要**新的宿主方法**（三端各一套）。
+//   而宿主 `fs.*` 只有 **3 个**（readBytes/writeBytes/remove）⇒ 缺 22 个，
+//   其中 readdir/stat/mkdir/rmdir/copy/rename 都要**新的宿主方法**（三端各一套）。
 //   ★这正是 #1212 口径二修的结论：`getFileSystem` **不是 A 类**（不是"只差接线"）。
+//   ⇒ 按"基础面 → 目录面 → 复合面 → 保存物/Sync"分四面逐面验收（#1226/#1227/#1228/#1230/#1231）。
 //
 // 【本文件做什么】
-//   ① **基础面 4 个方法**（readFile / writeFile / remove / exists）走宿主 `fs.*`，真实可用；
-//   ② 其余 22 个**显式抛 `file-system.unsupported` 并写明缺哪个宿主方法**——
+//   ① **26 个方法全部真实可用**（基础面 / 目录面 / 复合面 / 保存文件三件套 / Sync 变体）——
+//      全部走宿主 `fs.*` 或在其上组合；#1237 补上原生追加后无 unsupported 残留；
+//   ② `APP_FS_UNSUPPORTED` 表保留（现为空）：将来新增契约方法但没实现时，往表里加一行即可，
 //      ★不静默失败、不返回假数据（本仓最忌："看起来能调，实际什么都没做"）。
 //
 // 【诚实边界】
 //   · 文本编解码用 UTF-8（与 `capability-app-storage.ts` 同一套实现，不引第二份）；
-//   · **不做 `appendFile`**：宿主没有 append 语义，用"读全文+拼接+整写"会在并发下丢数据
-//     ⇒ 如实归入 unsupported（宁可少一个方法，不给一个会静默丢数据的实现）；
+//   · **`appendFile` 走宿主原生追加**（#1237）：此前的"读全文+拼接+整写"会在并发下丢数据
+//     ⇒ 不是放弃该方法，而是给宿主补了 `fs.appendBytes`（O_APPEND，无读-改-写窗口）。
 //   · 路径校验由宿主负责（拒绝绝对路径与 `..`）——本层**不复制**沙箱校验（一份就够）。
-//   · ★★**`unzip` 是端可选能力**：Android 有 `ZipInputStream`；iOS `compression.h` 与
-//     鸿蒙 `zlib.h` **只有 raw deflate、没有 ZIP 容器解析** ⇒ 该两端宿主未实现 ⇒
-//     `unzip()` 在那两端如实报 `unsupported`（**不影响其余 11 个方法可用**）。
+//   · ★★**`unzip` 是端可选能力**：ZIP 容器解析已下沉到共享 JS 层（#1232），宿主只需裸解压
+//     `fs.inflateRaw`；宿主没有该方法时 `unzip()` 如实报 `unsupported`
+//     （**不影响其余 25 个方法可用**）。
 import { invokeHost } from './capability-invoke'
 import { decodeBytes, encodeString, normalizeEncoding, toArrayBuffer } from './capability-app-fs-encoding'
 // ★★★#1236 在飞配额池（S3 的 ② 背压 / ③ 回收 / ④ 并发一体）——见该文件头注释
@@ -57,18 +59,21 @@ export const APP_FS_BASE_METHODS = [
   // ★★★#1231 Sync 变体 10 个（宿主同步派发 ⇒ 真同步；编码在共享层）
   'readFileSync', 'writeFileSync', 'existsSync', 'statSync', 'readdirSync',
   'mkdirSync', 'renameSync', 'unlinkSync', 'copyFileSync', 'appendFileSync',
+  // ★★★#1237 异步追加（走宿主 `fs.appendBytes` 的原生 O_APPEND）
+  'appendFile',
 ] as const
 
 /**
  * 其余方法的**具名缺口语义**：方法名 → 缺哪个宿主能力。
  * ★这张表是"诚实登记"的唯一来源——门禁/文档都读它（不手写第二份清单）。
+ *
+ * ★★★#1237：**已清空**——`FileSystemBridge` 的 26 个方法在 App 端全部有实现。
+ *   ★最后补上的是异步 `appendFile`：此前归 unsupported 的理由是"宿主无 append 语义 ⇒
+ *   JS 只能读全文+拼接+整写 ⇒ await 边界丢数据"。那理由成立，但**结论错了**：
+ *   正解是给宿主一个 O_APPEND 方法（`fs.appendBytes`），而不是放弃这个方法。
+ *   ★表保持导出（空对象）：消费方/判据按"表里有什么 ⇒ 就是 unsupported"读，删掉符号会让门禁失明。
  */
-export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {
-  // ★★#1231：10 个 Sync 变体**已全部实现**。仅剩异步 `appendFile`：它的
-  //   "读全文+拼接+整写"在 `await` 边界会被别的写插入 ⇒ 丢数据；
-  //   同一算法在**同步**语境下无并发窗口 ⇒ `appendFileSync` 可以安全实现。
-  appendFile: '存在 `appendFileSync`；异步版的"读全文+拼接+整写"在 await 边界会被别的写插入 ⇒ 丢数据',
-}
+export const APP_FS_UNSUPPORTED: Readonly<Record<string, string>> = {}
 
 /** 宿主是否具备基础面所需的 `fs.*` 四件套 */
 export function appFileSystemAvailable(): boolean {
@@ -254,6 +259,28 @@ export function createAppFileSystem(
         if (lease.cancelled) throw new Error(`file-system.busy: writeFile ${path} 已释放（页面退出）`)
         const r = invokeHost('fs.writeBytes', { path, bytes: bytesOut })
         if (!r.ok) throw new Error(`file-system.failed: writeFile ${path}：宿主拒绝`)
+      } finally {
+        lease.release()
+      }
+    },
+    appendFile: async (path: string, data: string) => {
+      // ★★★#1237：走宿主 `fs.appendBytes` 的**原生 O_APPEND** —— 没有"读-改-写"窗口，
+      //   也不把整个文件读进 JS 堆（旧做法是把全文读上来再整写回去）。
+      //   ★为什么用**追加后总大小**做配额而不是"增量"：总大小就是这一次操作真正占用的文件体积，
+      //     拿增量算会让"往 30 MiB 文件尾部加 1 字节"看起来只花 1 B。
+      const bytesOut = utf8Encode(String(data))
+      if (bytesOut.length > FS_MAX_WRITE_BYTES) {
+        throw new Error(`file-system.tooLarge: appendFile ${path} ${bytesOut.length}B > ${FS_MAX_WRITE_BYTES}B`)
+      }
+      const expected = declaredSize(path) + bytesOut.length
+      if (expected > FS_MAX_WRITE_BYTES) {
+        throw new Error(`file-system.tooLarge: appendFile ${path} 结果 ${expected}B > ${FS_MAX_WRITE_BYTES}B`)
+      }
+      const lease = await gov.acquire('appendFile', Math.max(1, bytesOut.length))
+      try {
+        if (lease.cancelled) throw new Error(`file-system.busy: appendFile ${path} 已释放（页面退出）`)
+        const r = invokeHost('fs.appendBytes', { path, bytes: bytesOut })
+        if (!r.ok) throw new Error(`file-system.failed: appendFile ${path}：宿主拒绝`)
       } finally {
         lease.release()
       }
@@ -505,32 +532,28 @@ export function createAppFileSystem(
       if (!r.ok) throw new Error(`file-system.failed: copyFileSync ${src} → ${dest}：宿主拒绝`)
     },
     appendFileSync: (path: string, data: string | ArrayBuffer, encoding?: string) => {
-      // ★★同步语境无并发窗口 ⇒ "读全文 + 拼 + 整写"安全（与异步 appendFile 的差别）。
-      // ★★★#1236：虽然无并发窗口，但**整份读进内存** ⇒ 必须占配额（否则 N 个页面的 append 会拼出 OOM）。
+      // ★★★#1237：改走宿主 `fs.appendBytes`（原生 O_APPEND）——**不再**"读全文 + 拼接 + 整写"。
+      //   旧做法有两个毛病：① 整个文件读进 JS 堆（10 MiB 文件追加 1 字节也要读 10 MiB）；
+      //   ② 配额按 `curSize + add` 记账，实际却只占 add 的写入量，账实不符。
       const add = dataToBytes(data, encoding)
-      const curSize = declaredSize(path)
-      const total = curSize + add.length
+      const total = declaredSize(path) + add.length
       if (total > FS_MAX_WRITE_BYTES) {
         throw new Error(`file-system.tooLarge: appendFileSync ${path} 结果 ${total}B > ${FS_MAX_WRITE_BYTES}B`)
       }
-      const lease = gov.tryAcquire('appendFileSync', Math.max(1, total))
+      // ★同步面拿不到异步配额 ⇒ tryAcquire（拿不到当场抛）；记账按本次实际写入量
+      const lease = gov.tryAcquire('appendFileSync', Math.max(1, add.length))
       try {
-      const ex = invokeHost('fs.exists', { path })
-      let prev: number[] = []
-      if (ex.ok && Boolean((ex.data as { exists?: boolean } | null)?.exists)) {
-        const rb = invokeHost('fs.readBytes', { path })
-        if (!rb.ok) throw new Error(`file-system.failed: appendFileSync 读原内容失败 ${path}`)
-        prev = Array.from(bytesOf(rb.data))
-      }
-      const r = invokeHost('fs.writeBytes', { path, bytes: prev.concat(add) })
-      if (!r.ok) throw new Error(`file-system.failed: appendFileSync ${path}：宿主拒绝`)
+        const r = invokeHost('fs.appendBytes', { path, bytes: add })
+        if (!r.ok) throw new Error(`file-system.failed: appendFileSync ${path}：宿主拒绝`)
       } finally {
         lease.release()
       }
     },
   } as FileSystemBridge
 
-  // ── 其余 22 个：显式 unsupported（★不是 undefined，也不是假实现）──
+  // ── 其余：显式 unsupported（★不是 undefined，也不是假实现）──
+  //   ★#1237 后本表已空（26 个方法全部有实现）；循环保留——新增契约方法而未实现时，
+  //     往表里加一行即可，不必再改装配逻辑。
   for (const m of Object.keys(APP_FS_UNSUPPORTED)) {
     ;(fs as unknown as Record<string, unknown>)[m] = () => unsupported(m)
   }

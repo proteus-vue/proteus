@@ -92,6 +92,11 @@ export const HOST_CAPABILITY_METHODS = [
   // ★★★#1229 `fs.unzip`（仅 Android：平台有 ZipInputStream；iOS/鸿蒙无 ZIP 容器 API）
   // ★★★#1232 裸解压（ZIP 容器解析改到共享 JS 层 ⇒ 三端同一份；宿主只需这一个）
   'fs.inflateRaw',
+  // ★★★#1237 原生追加（`appendFile` 的最后一块）：`fs.appendBytes`。
+  //   ★此前 `appendFile` 被如实归 unsupported——因为宿主没有 append 语义时，JS 只能
+  //     "读全文 + 拼接 + 整写"，而这段在 `await` 边界会被别的写插入 ⇒ 并发下**静默丢数据**。
+  //   ⇒ 正解不是加锁，而是让宿主用 **O_APPEND** 打开：追加不经过"读-改-写"，也不把整文件读进 JS 内存。
+  'fs.appendBytes',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

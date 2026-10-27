@@ -202,6 +202,9 @@ public final class HostCapabilities {
             //   宿主只提供裸解压；Android 原生的 `unzip`（ZipInputStream）不再被调用。
             case "fs.inflateRaw":
                 return ok(FileTransferCapability.inflateRaw(activity, args));
+            // ★★★#1237 原生追加（`appendFile` 的最后一块；O_APPEND 语义，无读-改-写窗口）
+            case "fs.appendBytes":
+                return ok(FileTransferCapability.appendBytes(activity, args));
             // ★★★#1225 App 能力批 1：日志通道（useLog 要的 bridge.log —— 此前宿主无 log.* ⇒ 恒 unsupported）
             case "log":
                 return ok(dev.proteus.layoutcore.runtime.LogCapability.write(args));

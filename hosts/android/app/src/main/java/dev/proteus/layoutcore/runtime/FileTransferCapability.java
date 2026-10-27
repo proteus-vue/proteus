@@ -77,6 +77,41 @@ public final class FileTransferCapability {
         return o;
     }
 
+    /**
+     * ★★★#1237 `fs.appendBytes`：`{ path, bytes: number[] }` → `{ path, size, appended }`
+     *   （**原生追加**：`FileOutputStream(f, true)` = `O_APPEND`；文件不存在则创建）。
+     *
+     * 【为什么必须是宿主方法（不是 JS 侧读全文再整写）】
+     *   JS 侧"读全文 + 拼接 + 整写"在 `await` 边界会被别的写插入 ⇒ **并发下静默丢数据**。
+     *   这是 `appendFile` 此前如实归 unsupported 的唯一原因，而它并不是"做不到"——
+     *   宿主用 O_APPEND 打开就没有读-改-写窗口，也不必把整个文件读进 JS 堆。
+     *
+     * 【返回值语义】`size` = **追加后**的文件总大小，`appended` = 本次写入字节数。
+     *   ★两者都给：只给 size 的话，调用方无法验证"确实是追加而不是覆盖"（#1228 摘要对拍同族口径）。
+     */
+    public static JSONObject appendBytes(Context ctx, JSONObject args) throws Exception {
+        String path = args.optString("path", "");
+        JSONArray arr = args.optJSONArray("bytes");
+        if (arr == null) throw new IllegalArgumentException("fs.appendBytes 需要 { path, bytes: number[] }");
+        File f = resolve(ctx, path);
+        File parent = f.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("fs.appendBytes 无法创建目录：" + parent);
+        }
+        byte[] buf = new byte[arr.length()];
+        for (int i = 0; i < buf.length; i++) buf[i] = (byte) arr.optInt(i, 0);
+        // ★append=true ⇒ O_APPEND 语义（内核保证每次写入落在当前文件尾，天然对多写者安全）
+        try (FileOutputStream out = new FileOutputStream(f, true)) {
+            out.write(buf);
+            out.flush();
+        }
+        JSONObject o = new JSONObject();
+        o.put("path", path);
+        o.put("size", f.length());
+        o.put("appended", buf.length);
+        return o;
+    }
+
     /** `fs.readBytes`：`{ path }` → `{ bytes: number[], size }`。 */
     public static JSONObject readBytes(Context ctx, JSONObject args) throws Exception {
         String path = args.optString("path", "");

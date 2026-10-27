@@ -1,10 +1,10 @@
-// tests/capability-app-filesystem.test.ts —— ★★★#1226 `getFileSystem` 基础面判据
+// tests/capability-app-filesystem.test.ts —— ★★★`getFileSystem` 判据（#1226 基础面 → #1237 追平）
 //
 // 【判据要点（不是"能调用"就算过）】
-//   ① 基础面 4 个方法**真的走到宿主**（断言 payload，不是"Promise resolve 了"）；
-//   ② **其余 22 个必须显式 unsupported 且带具体原因**（不许静默 undefined、不许假实现）；
-//   ③ `APP_FS_UNSUPPORTED` 与 `FileSystemBridge` 的方法集对得上 —— 契约有 26 个方法，
-//      基础面 4 + 未支持 22 = 26（少一个就说明"漏登记"= 用户会遇到 undefined 调用）。
+//   ① 每个方法**真的走到宿主**（断言 payload / 方法名，不是"Promise resolve 了"）；
+//   ② `APP_FS_UNSUPPORTED` 与 `FileSystemBridge` 的方法集对得上 —— 契约有 26 个方法，
+//      已实现 + 未支持 = 26（少一个就说明"漏登记"= 用户会遇到 undefined 调用）；
+//   ③ ★#1237 之后 unsupported 表**必须为空**：26 个方法全部有真实现（含原生追加）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const calls: Array<{ method: string; args: unknown }> = []
@@ -53,29 +53,49 @@ describe('★★★App 能力批 1 · getFileSystem 基础面（#1226）', () =>
     expect(await fs.exists('yes')).toBe(true)
   })
 
-  it('③ 其余方法**显式 unsupported 且原因具体**（不静默、不假实现）', async () => {
-    const { createAppFileSystem, APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
-    const fs = createAppFileSystem().getFileSystem!() as unknown as Record<string, () => Promise<unknown>>
-    const names = Object.keys(APP_FS_UNSUPPORTED)
-    expect(names.length, '未支持方法数（Sync 完成后 = 1：仅剩异步 appendFile）').toBe(1)
-    for (const n of names) {
-      expect(typeof fs[n], `${n} 必须是函数（不是 undefined）`).toBe('function')
-      await expect(fs[n]!()).rejects.toThrow(/file-system\.unsupported/)
-      await expect(fs[n]!()).rejects.toThrow(new RegExp(n))
-    }
+  it('③ 没有 unsupported 残留：26 个契约方法全部有真实现（#1237）', async () => {
+    const { APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
+    // ★表保留但必须为空（门禁按"表里有什么 ⇒ 就是 unsupported"读，删符号会让它失明）
+    expect(Object.keys(APP_FS_UNSUPPORTED), '不应再有 unsupported 方法（含异步 appendFile 已走原生追加）').toEqual([])
   })
 
   it('④ 方法集自洽：基础面 4 + 未支持 22 = FileSystemBridge 的 26 个方法', async () => {
     const { APP_FS_BASE_METHODS, APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
     const total = APP_FS_BASE_METHODS.length + Object.keys(APP_FS_UNSUPPORTED).length
     // ★写死 26 是为了让"契约新增方法却没登记"当场红（比读类型更硬——类型在运行时读不到）
-    expect(total, '基础面 + 未支持 必须覆盖 FileSystemBridge 的全部方法').toBe(26)
-    expect(APP_FS_BASE_METHODS.length, '★#1231 Sync 10 个后基础面 = 25').toBe(25)
+    expect(total, '已实现 + 未支持 必须覆盖 FileSystemBridge 的全部方法').toBe(26)
+    expect(APP_FS_BASE_METHODS.length, '★#1237 补上 appendFile 后已实现 = 26').toBe(26)
   })
 
-  it('⑤ appendFile 明确归 unsupported（读全文拼接再整写会在并发下丢数据）', async () => {
-    const { APP_FS_UNSUPPORTED } = await import('../packages/api/src/capability-app-filesystem')
-    expect(APP_FS_UNSUPPORTED.appendFile, '异步 appendFile 有具名理由（指向 await 边界的丢数据风险）').toMatch(/await 边界|并发/)
+  it('⑤ ★异步 appendFile 走宿主 fs.appendBytes（原生追加，不读全文、不整写）', async () => {
+    const { createAppFileSystem } = await import('../packages/api/src/capability-app-filesystem')
+    const fs = createAppFileSystem().getFileSystem!()
+    calls.length = 0
+    hostResult = { ok: true, data: { path: 'log.txt', size: 6, appended: 3 } }
+    await fs.appendFile('log.txt', 'abc')
+    // ★核心断言：打的是 fs.appendBytes（O_APPEND），而且**没有** readBytes/writeBytes 往返
+    expect(calls.map((c) => c.method), '只应有 fs.stat 探测 + fs.appendBytes 一次').toEqual(['fs.stat', 'fs.appendBytes'])
+    const args = calls[1]!.args as { path: string; bytes: number[] }
+    expect(args.path).toBe('log.txt')
+    expect(Array.from(args.bytes), 'UTF-8 编码后的字节').toEqual([97, 98, 99])
+  })
+
+  it('⑤b ★appendFileSync 也只打 fs.appendBytes（旧实现是 exists+readBytes+writeBytes 三跳）', async () => {
+    const { createAppFileSystem } = await import('../packages/api/src/capability-app-filesystem')
+    const fs = createAppFileSystem().getFileSystem!()
+    calls.length = 0
+    hostResult = { ok: true, data: { path: 'log.txt', size: 6, appended: 3 } }
+    fs.appendFileSync('log.txt', 'xyz')
+    expect(calls.map((c) => c.method)).toEqual(['fs.stat', 'fs.appendBytes'])
+    expect(Array.from((calls[1]!.args as { bytes: number[] }).bytes)).toEqual([120, 121, 122])
+  })
+
+  it('⑤c ★宿主拒绝追加时如实报错（不静默成功）', async () => {
+    const { createAppFileSystem } = await import('../packages/api/src/capability-app-filesystem')
+    const fs = createAppFileSystem().getFileSystem!()
+    hostResult = { ok: false, reason: 'fs.appendBytes 打不开', missing: false }
+    await expect(fs.appendFile('log.txt', 'abc')).rejects.toThrow(/file-system\.failed: appendFile/)
+    expect(() => fs.appendFileSync('log.txt', 'abc')).toThrow(/file-system\.failed: appendFileSync/)
   })
 
   it('⑥ ★回归：可选能力（unzip）缺失**不得**打死必需面探测', async () => {
