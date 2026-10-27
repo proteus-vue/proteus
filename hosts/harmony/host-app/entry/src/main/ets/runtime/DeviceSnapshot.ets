@@ -201,25 +201,53 @@ export function runDeviceActions(win: window.Window | undefined): void {
       }
     } else if (a.action === 'phone.call') {
       /**
-       * ★★★#1285 C21：拨号盘唤起（`ohos.want.action.dial`）。
+       * ★★★#1285 C21：拨号盘唤起。
+       *
+       * 【★★★为什么是 `viewData` 而不是 `dial`——真机取证推翻了我的第一版】
+       *   第一版按 SDK 里存在的 `wantConstant.ACTION_DIAL = 'ohos.want.action.dial'` 写，
+       *   真机回执 `startAbility` 失败 `code:16000019`（ABILITY_NOT_FOUND）。
+       *   **在设备上取证**（`bm dump -n com.ohos.contacts` 逐 ability 读 skills）：
+       *     拨号盘 = `com.ohos.contacts.MainAbility`，
+       *     **actions = `['action.system.home', 'ohos.want.action.viewData']`**，
+       *     **uris.scheme = `tel`** —— 它**没有**声明 `ohos.want.action.dial`。
+       *   再用 `aa start -A ohos.want.action.dial -U 'tel:10086'` 直接验 ⇒ 同样
+       *   `Failed to find a matching application for implicit launch`。
+       *   ⇒ **常量"存在"≠"有人声明"**：SDK 里有那个常量只说明期望名存在，设备上的拨号器
+       *     实现的是通用的 `viewData` + `tel:` scheme。这与本仓「能查询到 ≠ 能解析到」
+       *     （#1285 Android 的包可见性）是同一族教训。
        *
        * 【为什么用 startAbility + want，而不是某个"拨号 API"】
-       *   OpenHarmony 没有专属的拨号模块 API；拨号盘是**系统应用**，靠 want 拉起
-       *   （`@ohos.ability.wantConstant` 里的 `ACTION_DIAL = 'ohos.want.action.dial'`，本机 SDK 已核实存在）。
-       *   ★`uri` 里的号码已由 C++ 白名单校验（只含 0-9 + - ( ) 空格 # * ,）⇒ 不会被解析成别的 URI 结构。
+       *   鸿蒙没有专属拨号模块 API；拨号盘是系统应用，靠 want 拉起。
+       *   ★`uri` 里的号码已由 C++ 白名单校验（只含 0-9 + - ( ) 空格 # * ,）
+       *     ⇒ 不会被解析成别的 URI 结构（注入面已封）。
        *
-       * 【★语义边界】只是**拉起拨号盘并预填号码**，不发起通话、不需要权限；
-       *   失败只记日志（与震动/亮度同一"已受理"语义，见本文件头注释）。
+       * 【★语义边界】只是**拉起拨号盘并预填号码**，不发起通话、不需要权限。
+       *   ★失败只记日志（与震动/亮度同一"已受理"语义）；这一层的诚实性由
+       *     `PROTEUS_PHONE_CALL_FAIL` 日志 + 真机判据（查前台应用）共同保证。
        */
       try {
         const ctx = getContext() as common.UIAbilityContext;
-        const want: Want = {
-          action: 'ohos.want.action.dial',
-          uri: 'tel:' + (a.number ?? ''),
+        // ★两个候选都试：先 `viewData`（本机 nova 15 Pro 的拨号器实际声明的），
+        //   失败再退 `dial`（`wantConstant.ACTION_DIAL` 的规范名；部分设备/版本可能用它）。
+        //   ★不并发、不静默吞：第二个也失败就记 FAIL 日志（判据据此判红）。
+        const candidates: Want[] = [
+          { action: 'ohos.want.action.viewData', uri: 'tel:' + (a.number ?? '') },
+          { action: 'ohos.want.action.dial', uri: 'tel:' + (a.number ?? '') },
+        ];
+        const tryStart = (i: number): void => {
+          if (i >= candidates.length) {
+            console.error('PROTEUS_PHONE_CALL_FAIL all-wants-failed');
+            return;
+          }
+          ctx.startAbility(candidates[i]).then(() => {
+            console.info('PROTEUS_PHONE_CALL_OK action=' + candidates[i].action);
+          }).catch((err: BusinessError) => {
+            console.error('PROTEUS_PHONE_CALL_TRY_FAIL action=' + candidates[i].action +
+                          ' code=' + JSON.stringify(err));
+            tryStart(i + 1);
+          });
         };
-        ctx.startAbility(want).catch((err: BusinessError) => {
-          console.error('PROTEUS_PHONE_CALL_FAIL ' + JSON.stringify(err));
-        });
+        tryStart(0);
       } catch (e) {
         console.error('PROTEUS_PHONE_CALL_THROW ' + JSON.stringify(e));
       }

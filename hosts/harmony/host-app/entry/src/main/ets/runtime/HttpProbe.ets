@@ -17,6 +17,8 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { hostHttpProbe } from 'proteus_render';
 import { InvokeFrame, encodeInvoke } from './InvokeWire';
 import { UploadSpec } from './InvokeWire';
+// ★★★#1285：探针场景不渲染 ⇒ 必须自己 drain 设备动作队列（见文件尾注释），否则 phone.call 只是入队不执行
+import { runDeviceActions } from './DeviceSnapshot';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'HttpProbe';
@@ -191,4 +193,21 @@ export function runHttpProbe(filesDir: string): void {
     hilog.error(DOMAIN, TAG, 'HTTP_PROBE_WRITE_FAIL %{public}s', JSON.stringify(e) ?? '');
   }
   hilog.info(DOMAIN, TAG, 'PROTEUS_HTTP_PROBE_DONE %{public}s', result);
+  /**
+   * ★★★#1285：**探针场景也要 drain 一次设备动作队列**。
+   *
+   * 【为什么必须有】`phone.call` 在鸿蒙走"动作队列"（同步 napi 里不能 await `startAbility`）：
+   *   C++ 入队、ArkTS 在**渲染后** `runDeviceActions()` 执行。而探针场景（`superapp-http`）
+   *   **不渲染** ⇒ `runDeviceActions` 永远不会被调用 ⇒ 动作烂在队列里，
+   *   回执只有 `{accepted:true, queued:1}` 而**拨号盘根本没被拉起**。
+   *   ★这正是"回执说受理 ≠ 真的发生"——本仓最忌的形态。探针必须自己把队列消费掉，
+   *     否则能力直通探针会给出**看起来成功、实际什么都没做**的假证据。
+   * 【★诚实边界】此处不传 `win`（探针场景没有窗口）⇒ 依赖窗口的动作（亮度/常亮）会跳过，
+   *   但 `phone.call` 用的是 `ctx.startAbility`（不需要窗口）⇒ 能真执行。
+   */
+  try {
+    runDeviceActions(undefined);
+  } catch (e) {
+    hilog.error(DOMAIN, TAG, 'HTTP_PROBE_DRAIN_FAIL %{public}s', JSON.stringify(e) ?? '');
+  }
 }

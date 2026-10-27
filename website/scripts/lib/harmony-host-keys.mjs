@@ -143,6 +143,14 @@ export const NATIVE_BRIDGE_TO_HOST = {
  *   消费方读 `.map[...]` 时类型对不上（vue-tsc 实测）。
  * @type {Array<{file: string, factory: string, map: Record<string, string | null>}>}
  */
+/** ★#1285：拨号（C21）的桥成员 → 鸿蒙宿主方法
+ *  ★真机取证（2026-10-27）：`proteus_device.h` 的 `isDeviceMethod` + 分派里有 `phone.call`；
+ *    实际拉起由 ArkTS `DeviceSnapshot.ets` 的 `runDeviceActions` 执行
+ *    —— 用 `ohos.want.action.viewData` + `tel:` scheme（**不是** `ohos.want.action.dial`，
+ *    本机 nova 15 Pro 的拨号器没声明那个 action，真机报 `16000019 ABILITY_NOT_FOUND`）。 */
+export const APP_PHONE_FACTORY = 'createAppPhone'
+export const APP_PHONE_TO_HOST = { makePhoneCall: 'phone.call' }
+
 export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
@@ -153,6 +161,8 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-storage.ts', factory: APP_KV_FACTORY, map: APP_KV_TO_HOST },
   { file: 'packages/api/src/capability-app-log.ts', factory: APP_LOG_FACTORY, map: APP_LOG_TO_HOST },
   { file: 'packages/api/src/capability-app-filesystem.ts', factory: APP_FS_FACTORY, map: APP_FS_TO_HOST },
+  // ★#1285：拨号域（makePhoneCall → phone.call）——不登记则永远 🟡
+  { file: 'packages/api/src/capability-app-phone.ts', factory: APP_PHONE_FACTORY, map: APP_PHONE_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */

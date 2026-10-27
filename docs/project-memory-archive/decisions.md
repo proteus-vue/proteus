@@ -15203,6 +15203,29 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     本机解不开（试过常见口令均失败）⇒ 装机未完成。这是记忆里登记的**已知环境阻塞**，
     需在 DevEco 里对 `hosts/harmony/host-app` 重新自动签名一次（Project Structure → Signing Configs）。
     ⇒ 所以官网能力页鸿蒙仍标 🟡，但**原因已从"未验证"更正为"证据到链接级 + 签名环境阻塞"**。
+  - **★★★签名就绪后（用户「已签名」）鸿蒙真机全通，并再剖出两个真缺陷**：
+    `bash hosts/harmony/build-host-app.sh` → `BUILD SUCCESSFUL`（SignHap 1.8s）→ `hdc install` 成功。
+    **缺陷一：`ohos.want.action.dial` 在这台设备上根本没人声明。** 首版按 SDK 里存在的
+    `wantConstant.ACTION_DIAL` 写，真机 `startAbility` 失败 `code:16000019`（ABILITY_NOT_FOUND）。
+    **设备取证**（`bm dump -n com.ohos.contacts` 逐 ability 读 skills）：拨号盘 =
+    `com.ohos.contacts.MainAbility`，actions = **`['action.system.home', 'ohos.want.action.viewData']`**、
+    uris.scheme = `tel` —— 它**没有**声明 `ohos.want.action.dial`。
+    `aa start -A ohos.want.action.dial -U 'tel:10086'` 直接验也报
+    「Failed to find a matching application for implicit launch」。
+    ⇒ **常量"存在" ≠ "有人声明"**：SDK 有那个常量只说明期望名存在，设备上的拨号器实现的是
+    通用 `viewData` + `tel:` scheme。**与同单 Android 的「能查询到 ≠ 能解析到」（包可见性）同一族**。
+    修法：两个候选按序试（`viewData` → `dial`），都失败才记 FAIL。
+    **缺陷二：探针场景（`superapp-http`）不渲染 ⇒ 设备动作队列永远不 drain。**
+    `phone.call` 在鸿蒙走动作队列（同步 napi 里不能 await `startAbility`），而 drain 点在
+    渲染路径（`Superapp.ets:836`）⇒ 探针场景下回执是 `{accepted:true, queued:1}` 而**拨号盘根本没拉起**
+    —— 正是"回执说受理 ≠ 真的发生"。修法：`HttpProbe.ets` 写完报告后自己 `runDeviceActions(undefined)`。
+  - **鸿蒙真机判据（本轮新增）**：`PROTEUS_PHONE_CALL_OK action=ohos.want.action.viewData`；
+    并核实 `com.ohos.contacts` 进程被拉起、`com.ohos.contactsdataability` 在同秒被访问。
+    **破坏性验证**：把两个候选 action 都改成不存在的 `MUTATED_A/B` ⇒ 真机日志
+    `PROTEUS_PHONE_CALL_TRY_FAIL ... code=16000019` ×2 + `PROTEUS_PHONE_CALL_FAIL all-wants-failed`
+    ⇒ 证明那条 `OK` 确实代表系统接受了 want（不是日志摆设）。恢复后回 `OK`。
+  - **⇒ 鸿蒙能力页已从 🟡 升到 ✅**（`harmony-host-keys.mjs` 登记 `createAppPhone` → `phone.call`，
+    这是该文件设计的显式契约：不登记则永远 🟡）。
   - **诚实边界**：① iOS 只有 `swiftc -typecheck` + JVM 同判据，**真机未跑**（模拟器无拨号盘，
     会走 unsupported 分支，属如实降级而非缺陷）；② 鸿蒙走**设备动作队列**（同步 napi 里不能 await
     `startAbility`）⇒ 回执是 `{accepted:true}` 已入队、不是已拉起；本机无 hdc 设备 ⇒ **未真机验**，
