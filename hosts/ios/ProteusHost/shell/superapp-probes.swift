@@ -77,6 +77,14 @@ enum SuperappProbes {
       },
     ),
     ProbeConfig(
+      argPrefix: "--phone-probe=",
+      kickFormat: "__proteusHostAppPhoneProbe()",
+      resultKey: "__proteusHostPhoneProbeResult",
+      reportPrefix: "phone",
+      deadlineSeconds: 90,
+      extraReadings: { _ in [:] },
+    ),
+    ProbeConfig(
       argPrefix: "--cancel-probe=",
       kickFormat: "__proteusHostAppCancelProbe(%@)",
       resultKey: "__proteusHostCancelProbeResult",

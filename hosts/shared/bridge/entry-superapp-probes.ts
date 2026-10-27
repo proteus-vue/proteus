@@ -879,3 +879,84 @@ export function appCacheProbe(base: string): string {
   return JSON.stringify({ phase: 'started', queued: true })
 }
 
+
+
+/**
+ * ★★★#1285 C21 `makePhoneCall` 真机探针（iOS 侧）。
+ *
+ * 【为什么用 JS 探针而不是直调宿主】本仓 Android/鸿蒙的真机判据都走"能力通道"；
+ *   iOS 若直调 Swift 方法，就只验了 `PhoneCallCapability.dial` 本体，**验不到**
+ *   `usePhoneCall → bridge.makePhoneCall → invokeHost("phone.call") → 宿主` 这条链。
+ *   ⇒ 走 `hooks.usePhoneCall(...)` 才是与业务同一条路径。
+ *
+ * 【判据（四条，缺一不算"能拨号"）】
+ *   ① 合法号码 ⇒ `ok:true`（宿主受理）；
+ *   ② **非法号码 ⇒ 必须报错**（`phone-call.invalid` / `phone-call.failed`）——
+ *      这是安全边界（注入面）：宿主自己那层白名单也得拦；
+ *   ③ 超长号码 ⇒ 报错（长度闸）；
+ *   ④ 不含数字的 `+` ⇒ 报错。
+ *   ★"拨号盘真的弹出"由脚本侧的**前台应用**取证（模拟器/无拨号能力时走 unsupported，属如实降级）。
+ */
+export function appPhoneProbe(): string {
+  const g = globalThis as Record<string, unknown>
+  const out: Record<string, unknown> = { phone: 'probe' }
+  g['__proteusHostPhoneProbeResult'] = ''
+
+  const run = async (): Promise<void> => {
+    const mod = (await import('../../../packages/api/src/capability')) as unknown as {
+      createCapabilityHooks: (b: unknown) => { usePhoneCall: (n: string) => Promise<{ ok: boolean; error?: { code?: string; message?: string } }> }
+      createCapabilityBridge: () => unknown
+    }
+    const hooks = mod.createCapabilityHooks(mod.createCapabilityBridge())
+
+    // ① 合法号码
+    const good = await hooks.usePhoneCall('+86 138 0013 8000')
+    out['good_ok'] = good.ok === true
+    if (!good.ok) out['good_error'] = String(good.error?.code ?? '') + ':' + String(good.error?.message ?? '')
+
+    // ② 非法号码（注入形态：斜杠能改 URI 结构）
+    const badSlash = await hooks.usePhoneCall('12/34')
+    out['bad_slash_rejected'] = badSlash.ok === false
+    out['bad_slash_code'] = String(badSlash.error?.code ?? '')
+
+    // ②b 查询串注入
+    const badQuery = await hooks.usePhoneCall('12?x=1')
+    out['bad_query_rejected'] = badQuery.ok === false
+
+    // ③ 超长（33 位）
+    const tooLong = await hooks.usePhoneCall('1'.repeat(33))
+    out['too_long_rejected'] = tooLong.ok === false
+
+    // ④ 只有 + 没有数字
+    const noDigits = await hooks.usePhoneCall('+')
+    out['no_digits_rejected'] = noDigits.ok === false
+
+    // ⑤ ★★**直调宿主**（绕过 JS 层的 assertPhoneNumber）——单独验宿主那一层白名单。
+    //   ★为什么必须有这条：走 usePhoneCall 时 JS 层会先拦，宿主层即使不校验也看不出来
+    //     ⇒ 只改宿主的破坏性变异会**假绿**。这条断言让"两层各自有效"可分别验证。
+    //     （Android 侧早就有等价能力：`capprobe` 直调 `caps.invoke`。）
+    const inv = (await import('../../../packages/api/src/capability-invoke')) as unknown as {
+      invokeHost: (m: string, a?: unknown) => { ok: boolean; data?: unknown; reason?: string; missing?: boolean }
+    }
+    const hostBad = inv.invokeHost('phone.call', { number: '12/34' })
+    out['host_direct_slash_rejected'] = hostBad.ok === false
+    out['host_direct_slash_reason'] = String(hostBad.reason ?? '')
+    const hostGood = inv.invokeHost('phone.call', { number: '+86 138 0013 8000' })
+    out['host_direct_good_ok'] = hostGood.ok === true
+
+    out['ok'] = out['good_ok'] === true
+      && out['bad_slash_rejected'] === true
+      && out['bad_query_rejected'] === true
+      && out['too_long_rejected'] === true
+      && out['no_digits_rejected'] === true
+      && out['host_direct_slash_rejected'] === true
+      && out['host_direct_good_ok'] === true
+    g['__proteusHostPhoneProbeResult'] = JSON.stringify(out)
+  }
+  void run().catch((e: unknown) => {
+    out['error'] = String((e as Error)?.message ?? e)
+    out['ok'] = false
+    g['__proteusHostPhoneProbeResult'] = JSON.stringify(out)
+  })
+  return JSON.stringify({ phase: 'started', queued: true })
+}

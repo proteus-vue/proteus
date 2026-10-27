@@ -15225,6 +15225,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     `PROTEUS_PHONE_CALL_TRY_FAIL ... code=16000019` ×2 + `PROTEUS_PHONE_CALL_FAIL all-wants-failed`
     ⇒ 证明那条 `OK` 确实代表系统接受了 want（不是日志摆设）。恢复后回 `OK`。
   - **⇒ 鸿蒙能力页已从 🟡 升到 ✅**（`harmony-host-keys.mjs` 登记 `createAppPhone` → `phone.call`，
+  - **★★★iOS 真机也补齐（用户「好的，已经信任过了，不过是 Kairos 应用」）**：
+    `Kairos` 就是 `run-selfdraw.sh` 的 `CFBundleDisplayName`（bundle `cn.shxuxi.proteus.experiments`）。
+    **环境侧先修两个真问题**：
+    ① **描述文件昨天（10-26）过期了**——`signing.sh status` 的判定是对的（我一开始以为它查错目录，
+       实测 `ExpirationDate: 2026-10-26`）⇒ 跑 `provision.sh` 重新申请，现有效至 **11-03**；
+    ② **旧包是另一个 team（`F4R3P3L477`）签的**，新包是本机 team（`XKH568R7A5`）⇒ `application-identifier`
+       不匹配，升级被拒（`MIInstallerErrorDomain error 64`）⇒ 按脚本提示 `devicectl device uninstall` 后重装。
+    **探针链是新建的**：iOS 原先没有能力直通探针入口（Android 有 `capprobe`、鸿蒙有 `--cap-method`）⇒
+    新增 `appPhoneProbe`（JS 侧，走 `usePhoneCall → bridge → invokeHost('phone.call')` 的**完整业务链**，
+    不是直调 Swift）+ Swift `ProbeConfig` 注册 + `probe-args.sh` 的 `IOS_PROBES` 表登记 + 判定脚本。
+    ★三个坑（都属于"参数/变量没到位却不报错"）：
+      · **探针参数只在 `--superapp` 模式分支里被转发**（`SA_ARGS` 在该分支组装）⇒ 不带它时
+        `--phone-probe=1` 被**静默丢弃**（首跑实测：App 起来了、报告里零 probe 键）；
+      · 报告落点是 **`superapp.json`** 而不是我第一版写的 `phone-probe.json`；
+      · **`$REPORT（` 里的全角括号被 bash 吞进变量名** ⇒ `unbound variable`（与 AGENTS.md 记的
+        `$APP（…` 同款坑）⇒ 一律改 `${REPORT}`。
+    **判据 8/8**：合法号码受理 / `12/34` 拒 / `12?x=1` 拒 / 33 位超长拒 / 只有 `+` 拒 /
+    **★★宿主层直调 `phone.call` 传 `12/34` 也被拒** / 宿主层直调合法号码成功。
+    ★**为什么加"宿主层直调"这条**：走 `usePhoneCall` 时 JS 层（`assertPhoneNumber`）会先拦，
+    宿主层即使不校验也看不出来 ⇒ **只改宿主的破坏性变异会假绿**。这条断言把两层拆开验。
+    **破坏性验证**：把 iOS `PhoneCallCapability` 的白名单改成恒通过 ⇒
+    **只有 `host_direct_slash_rejected` 与整体 `ok` 变红（6/8）**，JS 层那四条仍绿 ——
+    正好证明"两层是各自独立的防线"，而非一层在替另一层兜。恢复后回 8/8。
+  - **⇒ iOS 能力页也已 ✅**（`app-bridge-keys.mjs` 已有 `createAppPhone`，宿主源码可读 ⇒ 自动派生）。
     这是该文件设计的显式契约：不登记则永远 🟡）。
   - **诚实边界**：① iOS 只有 `swiftc -typecheck` + JVM 同判据，**真机未跑**（模拟器无拨号盘，
     会走 unsupported 分支，属如实降级而非缺陷）；② 鸿蒙走**设备动作队列**（同步 napi 里不能 await

@@ -18,7 +18,7 @@
 //   （`app-screen-content.generated.ts`，由 `proteus build --target ios|android|harmony`
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
-import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'; export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe } from './entry-superapp-probes'
+import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'; export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'
 // ★★★#1150：RFC 5861 扩展指令探针**单列**（entry-superapp-probes.ts 已到 file-size 上限；
 //   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
 import { appStaleProbe } from './entry-superapp-probes-stale'; export { appStaleProbe } from './entry-superapp-probes-stale'
@@ -963,10 +963,10 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
   .__proteusHostAppFetchLimitProbe = (b: string, m?: number) => appFetchLimitProbe(b, m)
 ;(globalThis as unknown as { __proteusHostAppWsProbeDrive?: () => string })
   .__proteusHostAppWsProbeDrive = () => appWsProbeDrive()
-// ★★★#1118：流式通道探针（宿主按中性名调；结果填 __proteusHostStreamProbeResult）
-;(globalThis as unknown as {
-  __proteusHostAppStreamProbe?: (b: string, c?: number, s?: number, d?: number, w?: number) => string
-}).__proteusHostAppStreamProbe = (b: string, c?: number, s?: number, d?: number, w?: number) => appStreamProbe(b, c, s, d, w)
+// ★★★#1118 流式通道探针（宿主按中性名调；结果填 __proteusHostStreamProbeResult）
+;(globalThis as unknown as { __proteusHostAppStreamProbe?: (b: string, c?: number, s?: number, d?: number, w?: number) => string }).__proteusHostAppStreamProbe = (b: string, c?: number, s?: number, d?: number, w?: number) => appStreamProbe(b, c, s, d, w)
+// ★★★#1285 C21 拨号探针（iOS 真机用）—— 注册压一行守 1000 行上限
+;(globalThis as unknown as { __proteusHostAppPhoneProbe?: () => string }).__proteusHostAppPhoneProbe = () => appPhoneProbe()
 // ★★★#1149：HTTP 条件请求缓存探针（宿主按中性名调；结果填 __proteusHostCacheProbeResult）
 ;(globalThis as unknown as {
   __proteusHostAppCacheProbe?: (b: string) => string
