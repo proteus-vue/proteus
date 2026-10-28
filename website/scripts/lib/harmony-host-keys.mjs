@@ -357,13 +357,16 @@ export function harmonyEndStatus(root, refs, appBridgeKeys, en = false) {
      */
     const netNote = en
       ? 'device-verified (transport-probe 3/3 200 · 3 req/1 conn; fetch-limit both gates → `fetch.tooLarge`); ' +
-        '**three limits here**: ① `abort()` is a **no-op** (one-shot VM + synchronous napi ⇒ no in-flight request to cancel; use `timeout`); ' +
-        '② `stream: true` is **honestly rejected** (`fetch.unsupported` — chunks cannot be pushed back; use `savePath`); ' +
-        '③ **SPKI pinning not wired** (RCP exposes CA config only, no fingerprint verification)'
+        '**#1344 session VM brings real cancel & streaming**: `abort()` → host `hostCancelCalls=1`, transport ends 2ms after abort (a 10s slow response is really cut); ' +
+        '`stream: true` → 8 chunks × 4096B delivered one by one, `seq` contiguous, `spreadMs=433` (chunks arrive over time, not all at the end); ' +
+        '**two honest boundaries**: ① cancel/stream availability **depends on call shape** — **session mode** works, while the **one-shot VM production path** keeps the old semantics (`abort()` is a no-op, `stream` honestly rejected) ⇒ on that path use `timeout` / `savePath`; ' +
+        '② **SPKI pinning not wired** (RCP exposes CA config only, no fingerprint verification)'
       : '真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ' +
-        '★**三处受限**：① **`abort()` 是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout`；' +
-        '② **`stream: true` 如实拒绝**（`fetch.unsupported`——逐块回推没有接收方）⇒ 要边收边处理请用 `savePath`（宿主逐块落盘）；' +
-        '③ **SPKI pinning 未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立'
+        '★★★**#1344 会话式 VM 起：`abort()` 与 `stream` 均已真机打通**——取消：`hostCancelCalls=1` + 传输在 abort 后 2ms 结束（慢响应 10s 被真的掐断）；' +
+        '流式：8 块 × 4096B 逐块到达、`seq` 连续、`spreadMs=433`（块陆续到而非末尾整包）· ' +
+        '★**两处诚实边界**：① **`abort()` / `stream` 的可用性取决于调用形态**——**会话模式**（当前宿主已验证的形态）真取消 + 真流式；' +
+        '**一次性 VM 生产路径仍是旧语义**（同步 napi 期间 JS 无执行机会，连本地 reject 都不会发生）⇒ 那条路径要限时请用 `timeout`、要边收边处理请用 `savePath`；' +
+        '② **SPKI pinning 未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立'
     return {
       status: '✅',
       note: en ? `Harmony host wired (${where})${isNet ? ' · ' + netNote : ''}` : `鸿蒙宿主已接线（${where}）${isNet ? ' · ' + netNote : ''}`,

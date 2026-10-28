@@ -189,12 +189,24 @@ describe('★#1121 取消 · 两端宿主', () => {
    * ★为什么这条必须有判据：#1163 曾写成"abort 只 reject 本地、宿主传输不停"（错）。
    *   那个写法会让业务以为"取消至少能兜住"，于是不去设 `timeout`——**夸大与贬低都是假信息**。
    */
-  it('★★★鸿蒙：取消是 no-op（同步 napi 占满 JS 线程）——文档必须如实写，且这是模型限制不是缺方法', () => {
+  it('★★★鸿蒙：取消的可用性**取决于调用形态**——文档必须两面都写（会话真取消 / 一次性 VM 仍 no-op）', () => {
     const md = read('website/content/capabilities/fetch.md')
     const row = /^\| 鸿蒙 \| ([^|]+) \| (.+) \|$/m.exec(md)
     expect(row, '找不到 fetch 页鸿蒙行').toBeTruthy()
-    expect(row![2], '★鸿蒙行必须写明 abort() 是 no-op（不能只写"未实现 http.cancel"）').toMatch(/abort\(\)[^。]*no-op/)
-    expect(row![2], '★必须指出正确替代：用 timeout 限时（否则业务没有可用的兜底手段）').toMatch(/timeout/)
+    /**
+     * ★★★#1344 B-2c **翻转**：会话式 VM 起，鸿蒙 abort() 真的能取消（真机 hostCancelCalls=1）。
+     *   但**一次性 VM 生产路径**仍是 no-op（同步 napi 期间 JS 无执行机会，连 reject 都不发生）。
+     *   ⇒ 文档必须**两面都写**，只写一面都是假信息：
+     *     · 只写"真取消" ⇒ 业务在一次性 VM 上以为能取消，实际什么都不做；
+     *     · 只写"no-op" ⇒ 业务放弃一个**真的可用**的能力。
+     */
+    // ★★断言必须**两条独立**（首版写成 `/hostCancelCalls|真取消|已真机打通/`，任一命中即过 ⇒
+    //   把"会话真取消"整句抹掉后判据**依然全绿**——破坏性验证抓出的假绿。见 #1344。）
+    expect(row![2], '★鸿蒙行必须写明会话模式**真取消**（#1344 已真机打通）')
+      .toMatch(/hostCancelCalls=1/)
+    expect(row![2], '★鸿蒙行必须**同时**写明一次性 VM 路径仍是 no-op（否则业务会误信能取消）')
+      .toMatch(/no-op|旧语义/)
+    expect(row![2], '★必须指出那条路径的正确替代：用 timeout 限时').toMatch(/timeout/)
     // ★不得再出现#1163 的错误说法（会让业务误以为本地会 reject）
     expect(md, '★"abort() 只 reject 本地"是错误描述（实际连 reject 都不发生）——见 #1165').not.toMatch(
       /abort\(\)\s*只\s*reject\s*本地/,

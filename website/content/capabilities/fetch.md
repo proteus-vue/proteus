@@ -272,7 +272,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
 | Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
-| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（invoke_bytes_bridge.h / proteus_http.h） · 真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★**三处受限**：① **`abort()` 是 no-op**（一次性 VM + 同步 napi ⇒ 请求期间 JS 被占、没有"在飞请求"可取消；连本地 reject 都不会发生）⇒ 要限时请用 `timeout`；② **`stream: true` 如实拒绝**（`fetch.unsupported`——逐块回推没有接收方）⇒ 要边收边处理请用 `savePath`（宿主逐块落盘）；③ **SPKI pinning 未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立 |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（invoke_bytes_bridge.h / proteus_http.h） · 真机已验证（transport-probe 3/3 200 · 3 请求/1 连接 · fetch-limit 两道闸均 `fetch.tooLarge`）· ★★★**#1344 会话式 VM 起：`abort()` 与 `stream` 均已真机打通**——取消：`hostCancelCalls=1` + 传输在 abort 后 2ms 结束（慢响应 10s 被真的掐断）；流式：8 块 × 4096B 逐块到达、`seq` 连续、`spreadMs=433`（块陆续到而非末尾整包）· ★**两处诚实边界**：① **`abort()` / `stream` 的可用性取决于调用形态**——**会话模式**（当前宿主已验证的形态）真取消 + 真流式；**一次性 VM 生产路径仍是旧语义**（同步 napi 期间 JS 无执行机会，连本地 reject 都不会发生）⇒ 那条路径要限时请用 `timeout`、要边收边处理请用 `savePath`；② **SPKI pinning 未接**（RCP 只提供 CA 配置，不做 fingerprint 校验）⇒ 本端 pin 不生效，请勿据此判断安全策略已成立 |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

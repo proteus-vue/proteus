@@ -978,26 +978,16 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as { __proteusHostAppSessionCancelAbort?: () => string }).__proteusHostAppSessionCancelAbort = () => appSessionCancelAbort()
 // ★★★#1344 B-3：会话流式探针（单阶段：发起后由 tick 推块，块到齐自然结算）
 ;(globalThis as unknown as { __proteusHostAppSessionStreamStart?: (u: string) => string }).__proteusHostAppSessionStreamStart = (u: string) => appSessionStreamStart(u)
-// ★★★#1149：HTTP 条件请求缓存探针（宿主按中性名调；结果填 __proteusHostCacheProbeResult）
-;(globalThis as unknown as {
-  __proteusHostAppCacheProbe?: (b: string) => string
-}).__proteusHostAppCacheProbe = (b: string) => appCacheProbe(b)
-// ★★★#1150：RFC 5861 扩展指令探针（SWR / SIE；结果填 __proteusHostStaleProbeResult）
-;(globalThis as unknown as {
-  __proteusHostAppStaleProbe?: (b: string) => string
-}).__proteusHostAppStaleProbe = (b: string) => appStaleProbe(b)
-// ★★★#1151：缓存持久层探针（两阶段：write/read；结果填 __proteusHostPersistProbeResult）
-;(globalThis as unknown as {
-  __proteusHostAppPersistProbe?: (b: string, p: string) => string
-}).__proteusHostAppPersistProbe = (b: string, p: string) => appPersistProbe(b, p)
-// ★★★#1153：TLS pinning 探针（结果填 __proteusHostTlsProbeResult）
-;(globalThis as unknown as {
-  __proteusHostAppTlsProbe?: (a: string, b: string, pa: string, pb: string) => string
-}).__proteusHostAppTlsProbe = (a: string, b: string, pa: string, pb: string) => appTlsProbe(a, b, pa, pb)
-// ★★★#1155：传输层事实取证探针（结果填 __proteusHostTransportProbeResult）
-;(globalThis as unknown as {
-  __proteusHostAppTransportProbe?: (b: string, p: string, r?: number, pb?: string) => string
-}).__proteusHostAppTransportProbe = (b: string, p: string, r?: number, pb?: string) => appTransportProbe(b, p, r, pb)
+// ★★★#1149：HTTP 条件请求缓存探针（宿主按中性名调；结果填 __proteusHostCacheProbeResult）—— 压一行守 1000 行上限
+;(globalThis as unknown as { __proteusHostAppCacheProbe?: (b: string) => string }).__proteusHostAppCacheProbe = (b: string) => appCacheProbe(b)
+// ★★★#1150：RFC 5861 扩展指令探针（SWR / SIE；结果填 __proteusHostStaleProbeResult）—— 压一行
+;(globalThis as unknown as { __proteusHostAppStaleProbe?: (b: string) => string }).__proteusHostAppStaleProbe = (b: string) => appStaleProbe(b)
+// ★★★#1151：缓存持久层探针（两阶段：write/read；结果填 __proteusHostPersistProbeResult）—— 压一行
+;(globalThis as unknown as { __proteusHostAppPersistProbe?: (b: string, p: string) => string }).__proteusHostAppPersistProbe = (b: string, p: string) => appPersistProbe(b, p)
+// ★★★#1153：TLS pinning 探针（结果填 __proteusHostTlsProbeResult）—— 压一行
+;(globalThis as unknown as { __proteusHostAppTlsProbe?: (a: string, b: string, pa: string, pb: string) => string }).__proteusHostAppTlsProbe = (a: string, b: string, pa: string, pb: string) => appTlsProbe(a, b, pa, pb)
+// ★★★#1155：传输层事实取证探针（结果填 __proteusHostTransportProbeResult）—— 压一行
+;(globalThis as unknown as { __proteusHostAppTransportProbe?: (b: string, p: string, r?: number, pb?: string) => string }).__proteusHostAppTransportProbe = (b: string, p: string, r?: number, pb?: string) => appTransportProbe(b, p, r, pb)
 // ★★★#1160：POST 带请求体探针（结果填 __proteusHostBodyProbeResult）
 //   ★补的是**用例空白**：换栈时"整包路径漏 body"会让所有 Android POST/PUT 静默变空体，
 //     而当时四条真机探针全是 GET/上传 ⇒ 9 组回归全绿、功能已坏（独立验证抓出）。

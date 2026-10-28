@@ -25,6 +25,10 @@
 //   **字节**承载（#903 已登记的边界：不为每种能力定义 TLV schema）；大载荷（HTTP 响应/文件）走裸字节。
 
 import { utf8Decode, utf8Encode } from '@proteus-vue/shared'
+// ★★★#1344 B-3：**去程载荷编码已抽到独立文件**（纯函数，零状态）。
+//   抽因：本文件涨到 1007 行顶破 `check:file-size` 的 1000 行硬上限；而那块（meta 归类表 +
+//   body 编码）与"待决表/取消通道/回推结算"完全不同职责。
+import { splitFramePayload, genericFramePayload } from './capability-invoke-payload'
 // ★#1122：取消契约的**单一来源**（`capability-fetch-types`）
 import type { AbortSignalLike } from './capability-fetch-types'
 import {
@@ -161,114 +165,10 @@ const EMPTY_BYTES = new Uint8Array(0)
  */
 const BYTES_MISSING = Symbol('proteus.invokeBytes.missing')
 
-/** 去程 meta 归类表：值是字符串的字段（url / contentType） */
-// ★#1119：`savePath` 与 url/contentType 同族（字符串 meta）——宿主据此把响应体直写沙箱
-/** 去程 meta 归类表：纯字符串字段（★`tlsPins` #1153 也在此：它落到 tag 12 而非 body） */
-const META_STR = ['url', 'contentType', 'savePath', 'tlsPins']
-/** 去程 meta 归类表：值是键值对的字段 */
-const META_HEADERS = ['headers', 'params']
-/** 去程 meta 归类表：枚举校验器（形态合法才折入 meta，否则按业务体处理） */
-const META_ENUM: Record<string, (v: unknown) => boolean> = {
-  responseType: (v) => v === 'text' || v === 'json' || v === 'arraybuffer',
-}
-
-/**
- * 把能力方法的 `args` 拆成「线格式 meta + 裸字节 body」。
- * ★归类规则与 `AppRequestConfig` 字段同名（url/method/headers/params/timeoutMs|timeout/responseType/
- *   contentType）；未识别字段归入 body（按 JSON 编——小数据用 JSON 最经济，宿主按 `contentType` 理解）。
- */
-function splitFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array } {
-  if (args === null || args === undefined) return { meta: {}, body: EMPTY_BYTES }
-  if (typeof args !== 'object' || Array.isArray(args)) {
-    return { meta: { contentType: 'application/json' }, body: utf8Encode(JSON.stringify(args)) }
-  }
-  const src = args as Record<string, unknown>
-  const meta: InvokeMeta = {}
-  const rest: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(src)) {
-    if (v === undefined) continue
-    if (META_STR.includes(k) && typeof v === 'string') {
-      // ★逐分支显式赋值（不能写兜底 `else meta.contentType = v`：新增 META_STR 成员会被静默当 contentType）
-      if (k === 'url') meta.url = v
-      else if (k === 'savePath') meta.savePath = v
-      else if (k === 'tlsPins') meta.tlsPins = v
-      else meta.contentType = v
-    } else if (META_HEADERS.includes(k) && v !== null && typeof v === 'object') {
-      const nv: Record<string, string> = {}
-      for (const [hk, hv] of Object.entries(v as Record<string, unknown>)) nv[hk] = String(hv)
-      if (k === 'headers') meta.headers = nv
-      else meta.params = nv
-    } else if (k === 'method' && typeof v === 'string') {
-      // ★线格式归一大写（宿主按 HTTP 语义消费；`get` 与 `GET` 是同一方法）
-      meta.method = v.toUpperCase()
-    } else if (k === 'timeoutMs' && typeof v === 'number') {
-      meta.timeoutMs = v
-    } else if (k === 'timeout' && typeof v === 'number') {
-      // `RequestConfig.timeout` 别名 ⇒ 线格式 `timeoutMs`（与 `AppRequestConfig` 对齐）
-      meta.timeoutMs = v
-    } else if (META_ENUM[k]?.(v)) {
-      if (k === 'responseType') meta.responseType = v as ResponseKind
-    } else if (k === 'upload' && v !== null && typeof v === 'object') {
-      // ★#1120：流式上传规格——**不能落到 body**（否则整个结构会被 JSON 编进请求体）
-      meta.upload = v as InvokeMeta['upload']
-    } else if (k === 'redirectManual' && typeof v === 'boolean') {
-      // ★#1134：重定向不跟随开关（宿主侧最小能力；跟随/拦截策略在 JS 管线）
-      //   ★必须在此归类：落到 body 会被 JSON 编进请求体（与 upload 同一个坑）
-      meta.redirectManual = v
-    } else if (k === 'tlsPinOnly' && typeof v === 'boolean') {
-      meta.tlsPinOnly = v
-    } else if (k === 'httpDns' && v !== null && typeof v === 'object' && !Array.isArray(v)) {
-      // ★★★#1169：HTTPDNS 映射表（name-values）——**不能落到 body**（否则整张表会被 JSON 编进请求体）
-      //   ★值已是逗号分隔串（`runFetch` 归一）；这里只做形态收敛，不改写语义。
-      const nv: Record<string, string> = {}
-      for (const [host, ips] of Object.entries(v as Record<string, unknown>)) {
-        const s = Array.isArray(ips) ? ips.join(',') : String(ips ?? '')
-        if (host && s) nv[host] = s
-      }
-      if (Object.keys(nv).length > 0) meta.httpDns = nv
-    } else if (k === 'data' || k === 'body') {
-      rest[k] = v
-    } else {
-      rest[k] = v
-    }
-  }
-  const body = encodeBody(src.data !== undefined ? src.data : src.body, meta)
-  return { meta, body }
-}
-
-/** body 编码：字符串 ⇒ utf8；字节/视图 ⇒ 原样；其它对象 ⇒ JSON 字节（并标注 contentType）。 */
-function encodeBody(data: unknown, meta: InvokeMeta): Uint8Array {
-  if (data === undefined || data === null) return EMPTY_BYTES
-  if (typeof data === 'string') {
-    if (meta.contentType === undefined) meta.contentType = 'text/plain'
-    return utf8Encode(data)
-  }
-  if (data instanceof Uint8Array) return data
-  if (data instanceof ArrayBuffer) return new Uint8Array(data)
-  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-  if (meta.contentType === undefined) meta.contentType = 'application/json'
-  return utf8Encode(JSON.stringify(data))
-}
-
-/* ══════════════════ 通用能力的去程载荷（同步/异步共用） ══════════════════ */
-
-const JSON_CONTENT_TYPE = 'application/json'
-
-/**
- * 通用能力的去程载荷：`args` 编成 **JSON 字节**（`contentType: application/json`）。
- * ★为什么不给每种能力定义 TLV：#903 已登记的诚实边界——结构化小对象用 JSON 字节最经济；
- *   真·大载荷（文件/媒体）应在该能力自己的通道里走裸字节，不要把 JSON 当传输层。
- */
-function genericFramePayload(args: unknown): { meta: InvokeMeta; body: Uint8Array } {
-  if (args === undefined || args === null) return { meta: { contentType: JSON_CONTENT_TYPE }, body: EMPTY_BYTES }
-  if (args instanceof Uint8Array) return { meta: {}, body: args }
-  if (args instanceof ArrayBuffer) return { meta: {}, body: new Uint8Array(args) }
-  if (ArrayBuffer.isView(args)) {
-    return { meta: {}, body: new Uint8Array(args.buffer, args.byteOffset, args.byteLength) }
-  }
-  return { meta: { contentType: JSON_CONTENT_TYPE }, body: utf8Encode(JSON.stringify(args)) }
-}
-
+/* ★★★#1344 B-3：`splitFramePayload` / `genericFramePayload` / 四张 meta 归类表
+   已抽到 `capability-invoke-payload.ts`（纯函数，零状态）。
+   那个文件头写着这块**最容易出的三类缺陷**（upload / redirectManual / httpDns 被编进 body），
+   判据见 `tests/fetch-wire-fields.test.ts`。 */
 /**
  * **同步**字节腿：`PINV` 去程 → `PRSP` 回程。
  * 返回 `null` = **本次不能走字节**（宿主没装字节桥 / 不认该方法 / 空回执 / 坏帧）⇒ 调用方回落 JSON。

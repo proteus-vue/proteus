@@ -31,7 +31,7 @@ const src = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), 'utf8
 const LAYERS = {
   runFetch: 'packages/api/src/capability-fetch.ts',
   appRequest: 'packages/api/src/capability-app-request.ts',
-  splitFrame: 'packages/api/src/capability-invoke.ts',
+  splitFrame: 'packages/api/src/capability-invoke-payload.ts',   // ★#1344 B-3：归类表已抽到独立文件
   fetchTypes: 'packages/api/src/capability-fetch-types.ts',
 } as const
 

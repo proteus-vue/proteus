@@ -77,6 +77,8 @@ const STUBS = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_s
 const GUARD_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_guard.h'
 /** ★#1344 B-2c/B-3：会话式 VM（在途表 / 真取消 / 流式块回推的注册处） */
 const SESSION_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_vm_session.h'
+/** ★#1344 B-3：逐块接收闸（累积 / 落盘 / 流式回推 三选一分流点；从 proteus_http.h 抽出） */
+const RECV_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_recv.h'
 
 describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 ⇒ 必须做）', () => {
   it('★落盘走 SaveSession（逐块直写文件，不累积 body）', () => {
@@ -85,10 +87,19 @@ describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 
       /if \(f\.savePath\.has && !f\.savePath\.v\.empty\(\)\)/,
     )
     expect(s, '★没有 SaveSession（落盘实现缺失）').toMatch(/SaveSession save;/)
+    // ★★★#1344 B-3：`recvGate` 已抽到 `proteus_http_recv.h`（三选一分流点：累积/落盘/流式）。
+    //   判据必须跟着走 —— 否则"文件搬了、判据还在看旧文件"会变成**永远绿的空断言**。
+    const recv = read(RECV_H)
     // ★逐块回调里必须走 save->write（否则会先全进内存再写 = 大文件打爆）
-    expect(s, '★逐块回调没走 SaveSession（内存峰值会等于整个响应体）').toMatch(
+    expect(recv, '★逐块回调没走 SaveSession（内存峰值会等于整个响应体）').toMatch(
       /if \(g->save != nullptr\)[\s\S]{0,200}g->save->write\(p, n\)/,
     )
+    // ★且落盘分支必须**在**流式分支之前（savePath 优先，两者同时出现时不能悄悄改语义）
+    const saveAt = recv.indexOf('if (g->save != nullptr)')
+    const streamAt = recv.indexOf('if (g->streamReqId != nullptr')
+    expect(saveAt, '★找不到落盘分支').toBeGreaterThan(0)
+    expect(streamAt, '★找不到流式分支').toBeGreaterThan(0)
+    expect(saveAt, '★落盘分支必须在流式分支之前（savePath 优先，语义不能偷偷变）').toBeLessThan(streamAt)
   })
 
   it('★沙箱路径校验与 iOS `sandboxFile` 同判据（三层防护）', () => {

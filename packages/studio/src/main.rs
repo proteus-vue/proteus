@@ -33,6 +33,12 @@ mod term;
 mod ios_stream;
 /// 触控回传：Studio 监听控制端口，手机反向连上来注入手势（决策 #1295）
 mod ios_touch;
+/// ★#1344：Git **只读**查询（从本文件抽出——曾 1103 行越过 1000 行上限）。
+///   ★只查询不写：stage/commit/push 一律不加（本仓纪律：push 必须人工批准）。
+mod git;
+/// ★#1344：仓库内文件读写 + 路径沙箱（同一组抽出；共享**同一条**安全边界）。
+///   ★新增任何文件系统能力必须复用 `resolve_in_repo`，不要自己拼路径。
+mod fs_guard;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -258,7 +264,7 @@ async fn search_text(query: String) -> Result<search::Outcome, String> {
         // ★明确报错，不静默返回空：单字符搜索在这仓里是上万条命中，那不是"搜索"是"扫描"。
         return Err("至少输入 2 个字符（单字符会命中上万条，不是搜索是扫描）".into());
     }
-    let root = repo_root()?;
+    let root = fs_guard::repo_root()?;
     tauri::async_runtime::spawn_blocking(move || search::run(&root, &q, 300))
         .await
         .map_err(|e| format!("搜索线程异常：{e}"))?
@@ -267,86 +273,18 @@ async fn search_text(query: String) -> Result<search::Outcome, String> {
 /// 把文本写进系统剪贴板（右键菜单「复制相对路径」用）。
 /// ★为什么不走浏览器的 `navigator.clipboard`：WKWebView 里它要**用户手势 + 焦点**同时满足，
 ///   菜单项点击后焦点常在菜单节点上 ⇒ 会静默失败。NSPasteboard 没有这些前提。
-/* ── Git **只读**（决策 #1246）───────────────────────────────────────────────
- * 只跑三条**纯查询**命令：`status --porcelain=v2 --branch`、`rev-parse --abbrev-ref`、`show HEAD:path`。
- * ★不提供任何写操作（stage/commit/checkout/push）——那是另一个层级的责任，
- *   而且本仓纪律是"push 必须人工批准"，工具在这里就不该有那个能力。
- * ★git 不在 PATH / 不是仓库 / 命令非零退出，一律降级为 `is_repo:false`，不抛错（读代码不受影响）。
- */
-#[derive(serde::Serialize)]
-struct GitFile {
-    path: String,
-    /// 'M' 修改 / 'A' 新增 / 'D' 删除 / 'R' 重命名 / '?' 未跟踪 / 'U' 冲突
-    status: String,
-}
-
-#[derive(serde::Serialize)]
-struct GitStatus {
-    is_repo: bool,
-    branch: String,
-    ahead: i32,
-    behind: i32,
-    files: Vec<GitFile>,
-}
-
-fn git(args: &[&str]) -> Option<String> {
-    let root = repo_root().ok()?;
-    let out = std::process::Command::new("git").args(args).current_dir(root).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
+/* ★★★#1344：**Git 只读**整块已抽到 `git.rs`（`GitFile` / `GitStatus` / `git_status` / `git_head`）。
+   本文件曾 1103 行越过 1000 行硬上限；Git 只读与"窗口/画布/设备"职责无关，
+   且它有一条独立安全边界（**只查询、不写**）——分开写更不容易在改窗口代码时被顺手放宽。 */
 #[tauri::command]
-fn git_status() -> GitStatus {
-    let empty = GitStatus { is_repo: false, branch: String::new(), ahead: 0, behind: 0, files: vec![] };
-    let Some(text) = git(&["status", "--porcelain=v2", "--branch"]) else {
-        return empty;
-    };
-    let mut st = GitStatus { is_repo: true, branch: String::new(), ahead: 0, behind: 0, files: vec![] };
-    for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("# branch.head ") {
-            st.branch = rest.trim().to_string();
-        } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
-            for part in rest.split_whitespace() {
-                if let Some(v) = part.strip_prefix('+') {
-                    st.ahead = v.parse().unwrap_or(0);
-                } else if let Some(v) = part.strip_prefix('-') {
-                    st.behind = v.parse().unwrap_or(0);
-                }
-            }
-        } else if let Some(path) = line.strip_prefix("? ") {
-            st.files.push(GitFile { path: path.to_string(), status: "?".into() });
-        } else if line.starts_with("1 ") || line.starts_with("2 ") || line.starts_with("u ") {
-            // "1 XY sub mH mI mW hH hI path" —— 前两列是 XY，最后一段是路径
-            // ★用 `rsplitn(2,' ')` 取**最后一段**当路径：porcelain v2 的字段数并不固定
-            //   （重命名行会多两段），按段落索引会错位。含空格的路径被 git 加了引号，这里如实保留。
-            let path = line.rsplitn(2, ' ').next().unwrap_or("").to_string();
-            let xy = line.split(' ').nth(1).unwrap_or("..");
-            let x = xy.chars().next().unwrap_or('.');
-            let y = xy.chars().nth(1).unwrap_or('.');
-            let code = if x == '.' { y } else { x };
-            let status = match code {
-                'A' => "A",
-                'D' => "D",
-                'R' | 'C' => "R",
-                'U' => "U",
-                'M' | 'T' => "M",
-                _ => "M",
-            };
-            if !path.is_empty() {
-                st.files.push(GitFile { path, status: status.into() });
-            }
-        }
-    }
-    st
+fn git_status() -> git::GitStatus {
+    git::git_status()
 }
 
 /// 取某个文件在 HEAD 里的内容（用于"与 HEAD 比较"）；未跟踪/不存在 ⇒ None。
 #[tauri::command]
 fn git_head(path: String) -> Option<String> {
-    git(&["show", &format!("HEAD:{path}")])
+    git::git_head(path)
 }
 
 #[tauri::command]
@@ -506,152 +444,24 @@ fn dump_frame(path: String) {
 /// 【★诚实边界】仓库根取自编译期 `CARGO_MANIFEST_DIR`：
 ///   开发机直接跑二进制 ⇒ 有效；**打包成 .app 后该路径不存在** ⇒ 明确报错（不静默返回空串）。
 ///   打包形态要读源码是另一个问题（应读设备侧或让用户选工程目录），不在这一版。
-/// 仓库根（`read_text` / `list_files` 共用）。
-/// ★打包成 .app 后编译期路径不存在 ⇒ 明确报错（不静默返回空）。
-fn repo_root() -> Result<std::path::PathBuf, String> {
-    let root = std::env::var("PROTEUS_REPO_ROOT")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
-    root.canonicalize()
-        .map_err(|e| format!("仓库根不可达（打包形态？）：{e}"))
-}
-
-/// 解析"仓库内的一个路径"（`read_text` / `write_text` 共用）。
-/// ★`canonicalize` 后再做前缀比对：只比字符串挡不住 `a/../../etc/passwd` 这类。
-fn resolve_in_repo(path: &str) -> Result<std::path::PathBuf, String> {
-    let root = repo_root()?;
-    let p = root.join(path).canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
-    if !p.starts_with(&root) {
-        return Err(format!("路径越界：{path}"));
-    }
-    Ok(p)
-}
-
-/// 文件的 mtime（**微秒**，Unix epoch）。取不到就 0 —— 上层据此判断"无法做冲突检测"。
-/// ★用微秒而不是毫秒：两次保存可能落在同一毫秒里，那时"冲突检测"会漏判
-///   （单测里连续两次写就是这个形状）。微秒下几乎不可能撞上。
-fn mtime_us(p: &std::path::Path) -> u64 {
-    std::fs::metadata(p)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_micros() as u64)
-        .unwrap_or(0)
-}
-
-/// 读到的一段文本 + 它的 mtime。
-/// ★为什么要带 mtime：保存时回传，用来判断"打开之后文件有没有被别人改过"。
-///   本仓常驻多个 AI 会话同时改文件（今天已发生多次），没有这个检查，
-///   Studio 里保存一次就会**静默覆盖**别人的改动。
-#[derive(Serialize)]
-struct FileText {
-    text: String,
-    /// 文件 mtime（微秒，Unix epoch）
-    mtime_us: u64,
-}
-
+/* ★★★#1344：**仓库内文件读写 + 路径沙箱**已抽到 `fs_guard.rs`
+   （`repo_root` / `resolve_in_repo` / `mtime_us` / `FileText` / `read_text` /
+    `write_text` / `list_files`）。抽因：本文件曾 1103 行越过 1000 行硬上限；
+   而这一组共享**同一条安全边界**（canonicalize + 前缀比对），写在一起边界才不会分叉。
+   ★以下四个 command 只是把 Tauri 入口转发到该模块（命令名不变，前端零改动）。 */
 #[tauri::command]
-fn read_text(path: String) -> Result<FileText, String> {
-    let p = resolve_in_repo(&path)?;
-    let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
-    if len > 512 * 1024 {
-        return Err(format!("文件过大：{len} 字节（上限 512KB）"));
-    }
-    let text = std::fs::read_to_string(&p).map_err(|e| format!("读失败 {path}：{e}"))?;
-    Ok(FileText { text, mtime_us: mtime_us(&p) })
+fn read_text(path: String) -> Result<fs_guard::FileText, String> {
+    fs_guard::read_text(path)
 }
 
-/// 写回一个仓库内的文本文件。返回新的 mtime（前端据此更新"上次已知版本"）。
-///
-/// 【为什么不是简单的 fs::write】
-///   1. **冲突检测**：`expect` 是打开时读到的 mtime。若磁盘上的 mtime 已经变了，
-///      说明这段文本在打开之后被改过（并发会话 / 编辑器 / git 操作）⇒ 拒绝覆盖。
-///      这是"最后写入者赢"之外唯一安全的做法：宁可让用户重读一次，也不静默吃掉别人的改动。
-///   2. **原子替换**：先写同目录的临时文件再 `rename`。直接 `fs::write` 若中途失败/崩溃，
-///      会留下半个文件——而这是个**源码**仓库，半个文件比没写更糟。
-///   3. **保留权限位**：`rename` 会换成新文件的 mode（默认 0644），可执行脚本会因此丢 `+x`。
 #[tauri::command]
 fn write_text(path: String, text: String, expect: u64) -> Result<u64, String> {
-    if text.len() > 512 * 1024 {
-        return Err(format!("内容过大：{} 字节（上限 512KB）", text.len()));
-    }
-    let p = resolve_in_repo(&path)?;
-    let meta = std::fs::metadata(&p).map_err(|e| format!("文件已不存在：{path}（{e}）"))?;
-    let now = mtime_us(&p);
-    // expect == 0 表示"前端拿不到 mtime"（老版本/异常），此时不阻断，但也不假装检测过
-    if expect != 0 && now != expect {
-        return Err(format!(
-            "文件已被外部修改（磁盘 {now} ≠ 打开时 {expect}，可能是并发会话）⇒ 已拒绝覆盖。请重新打开该文件。"
-        ));
-    }
-
-    let dir = p.parent().ok_or_else(|| format!("无法定位目录：{path}"))?;
-    let tmp = dir.join(format!(
-        ".{}.tmp{}-{}",
-        p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "f".into()),
-        std::process::id(),
-        now
-    ));
-    std::fs::write(&tmp, text.as_bytes()).map_err(|e| format!("写临时文件失败：{e}"))?;
-    // 保留原 mode（可执行位/只读位）；失败不影响正确性，只是回到默认权限
-    let _ = std::fs::set_permissions(&tmp, meta.permissions());
-    if let Err(e) = std::fs::rename(&tmp, &p) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!("替换 {path} 失败：{e}"));
-    }
-    Ok(mtime_us(&p))
+    fs_guard::write_text(path, text, expect)
 }
 
-/// 列仓库内若干子树下的源码文件（G4：代码视图的**文件列表**）。
-///
-/// 【为什么不用前端 glob】前端没有文件系统访问权（本目录也没配 capabilities），
-///   而这只是个**只读、有界**的查询 ⇒ 在 Rust 侧做，边界与 `read_text` 共用同一套规则。
-///
-/// 【边界（硬约束）】只在仓库根之下 · 只认白名单扩展名 · 跳过 node_modules/target/构建产物
-///   （否则一次几千条）· 上限 **300** 条（到上限就返回，如实截断而非静默少给）。
 #[tauri::command]
 fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
-    const EXT: [&str; 10] = ["ts", "tsx", "vue", "rs", "m", "h", "py", "md", "json", "css"];
-    const SKIP: [&str; 8] = ["node_modules", "target", "dist", "build-app", "web-dist", "gen", ".git", ".vite"];
-    const MAX: usize = 300;
-
-    let repo = repo_root()?;
-    let mut out: Vec<String> = Vec::new();
-    let mut stack: Vec<std::path::PathBuf> = roots.iter().map(|r| repo.join(r)).collect();
-    while let Some(dir) = stack.pop() {
-        let rd = match std::fs::read_dir(&dir) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        for e in rd.flatten() {
-            let p = e.path();
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            if SKIP.contains(&name.as_ref()) {
-                continue;
-            }
-            if p.is_dir() {
-                stack.push(p);
-                continue;
-            }
-            let ok = p
-                .extension()
-                .map(|x| EXT.contains(&x.to_string_lossy().as_ref()))
-                .unwrap_or(false);
-            if !ok {
-                continue;
-            }
-            if let Ok(rel) = p.strip_prefix(&repo) {
-                out.push(rel.to_string_lossy().replace('\\', "/"));
-                if out.len() >= MAX {
-                    out.sort();
-                    return Ok(out);
-                }
-            }
-        }
-    }
-    out.sort();
-    Ok(out)
+    fs_guard::list_files(roots)
 }
 
 /// 工作区状态的落盘位置（G5）：`~/Library/Application Support/dev.proteus.studio/state.json`。
@@ -1053,7 +863,7 @@ mod tests {
     #[test]
     fn write_text_带冲突检测且原子替换() {
         let rel = "packages/studio/target/write-test.txt";
-        let abs = repo_root().unwrap().join(rel);
+        let abs = fs_guard::repo_root().unwrap().join(rel);
         std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
         std::fs::write(&abs, "v1\n").unwrap();
 
