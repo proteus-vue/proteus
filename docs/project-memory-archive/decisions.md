@@ -15407,3 +15407,36 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **诚实边界**：探针读数走 **hilog 主通道**（报告文件在沙箱里 `hdc shell` 读不到，实测
     Permission denied）· `bundle` 模式的 `proteusHost` 是**最小桩**（invoke 只记调用数、
     永远回 missing）⇒ 验的是"**VM 持久性**"，不是"整包在真实宿主下能跑"（后者属 B 阶段）。
+
+1344. **B-1 会话式 VM：一个 VM 跨 napi 调用存活（异步回推的前提）**（2026-10-28 · 承接 #1343）:
+  - **它解决什么**：把"每次 napi 调用新建一个 VM"换成"**一个 VM 跨调用存活**"
+    ⇒ 异步回推**有接收方** ⇒ 鸿蒙 `http.cancel` / `stream` / WebSocket 三项
+    从"模型限制"变成"可实现"。
+  - **★★★单线程纪律（整套设计的地基，违反必崩）**：`JSVM_Env` 只能由**创建它的线程**使用
+    （`jsvm.h` 的 `AcquireLock` 只做互斥，**不提供并行执行**）。
+    ⇒ 所有 JS 操作只在 `sessionOpen/sessionTick/sessionClose` 内、由 ArkTS 主线程**串行**调用；
+    ⇒ **网络线程只允许 `pushResolve()`（写 C++ 队列）**，队列→JS 的搬运只在 `sessionTick` 里。
+    ★这条分界是整个异步化的关键：**只要有一处网络线程碰了 `env`，就会随机崩溃**。
+  - **与一次性 VM 并存不替换**：`hostAppBoot/Drive/Render/PumpTick/Eval` **保持原样不动**
+    （已验证的生产路径零风险）。会话式是**新增**通道，先由判据场景驱动，稳定后再逐屏切换。
+  - **每拍固定四步（顺序即语义）**：
+    ① 取走队列里的待回推帧 → ② 逐个推 `__proteusHostResolveBytes(Uint8Array(...))`
+    → ③ `PerformMicrotaskCheckpoint`（EXPLICIT 策略下只有宿主推进才跑 Promise）
+    → ④ 读堆 + JS 侧计数。
+    ★"**先推帧、后 checkpoint**"是必须的：推帧会 resolve 一个 Promise，它的 `.then` 是微任务
+    ⇒ 不紧跟 checkpoint 就会延迟 +1 frame。
+  - **判据设计（关键在"能区分会话 vs 一次性"）**：`hosts/harmony/run-session-probe.sh`
+    ① **`jsTicks == ticks`**：同一 JS 上下文跨调用存活 —— **一次性 VM 下这个计数器恒为 1**，
+       所以它是这个改造的**判别式**（不是"有没有崩"，而是"上下文有没有留住"）。
+    ② `frames > 0`：ArkTS 塞的假 PRSP 帧真的入队并被搬运到 JS。
+    ③ `heapOk`：N 拍后堆不线性漂移。④ `boot:"booted"`：整包 Vue runtime 真的启动。
+  - **踩到的两个编译错（都有注释）**：
+    ① `SessionState` 含 `std::mutex` ⇒ 拷贝/移动赋值**被隐式删除** ⇒ `S = SessionState()`
+      编译红三条 ⇒ 手写 `reset()` 替代（**不能靠赋值重置含 mutex 的结构**）；
+    ② ArkTS 禁裸对象字面量（`arkts-no-untyped-obj-literals`）⇒ 具名 `SessionChecks` 接口。
+  - **反巨型化**：napi 入口放 `proteus_vm_session.h`（599 行独立文件）；
+    `proteus_host.cpp` 压回 **1096 基线**（合并空行/注释——棘轮只减不增，不是抬基线）。
+  - **诚实边界**：本场景**不做真实网络请求**（只用假帧证明搬运链）；
+    真实 HTTP + cancel/stream 属下一步。★**真机验证因设备锁屏未完成**：
+    `power-shell wakeup` 只亮屏**不解锁**（`aa start` 报 `10106102 screen is locked`）；
+    解锁后 `bash hosts/harmony/run-session-probe.sh --ticks=100` 一条命令即可验。
