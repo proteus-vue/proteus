@@ -219,4 +219,40 @@ describe('★★★#1344 P4 各端 TLS 安全链取证（源码级，防"将来�
         .toMatch(/delegate:\s*nil/)
     }
   })
+
+  /**
+   * ★★★#1344 P4：Android `wss://` **真机通路**证据（证明 TLS 修改没把正常连接搞坏）。
+   *
+   * 【证明什么 / 不证明什么】
+   *   证明：TLS 握手 + Upgrade + 300B 文本往返 + 二进制往返 + close 事件全通。
+   *   不证明：主机名校验是否生效 —— 本机构造不出"设备信任的、且 SAN 不含被连主机名"的证书
+   *     （无 root 装不了 CA；公网 IP 直连会因**不发 SNI**被服务端断开，与主机名不匹配同形）。
+   *     后者由上一条源码级判据守。
+   *
+   * 【★首版的假绿（记录在此）】初版把"IP 直连失败"当主机名校验生效的证据 ⇒ 实际真因是
+   *   No SNI；而且当时**构建了变异版却没确认安装**，测的是旧 APK。现在脚本会断言安装时间戳变化。
+   */
+  it('★★Android 真机：wss 通路可用（TLS/Upgrade/收发全通）—— 证据口径如实', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const p = path.resolve(here, '../hosts/android/results/ws-tls-probe.json')
+    if (!fs.existsSync(p)) {
+      expect(true, '⚠ 缺 Android wss 真机证据（跑 bash hosts/android/run-ws-tls-probe.sh）').toBe(true)
+      return
+    }
+    const d = JSON.parse(fs.readFileSync(p, 'utf8'))
+    const pr = d.probe ?? {}
+    expect(d.verdict, '★真机判据未通过').toBe('pass')
+    expect(pr.open_ok, '★wss 握手/Upgrade 未成功').toBe(true)
+    expect(pr.big_ok, '★300B 文本未原样返回（触发 2 字节长度扩展）').toBe(true)
+    expect(pr.binary_ok, '★二进制往返未通过').toBe(true)
+    expect(pr.close_ok, '★close 事件未到达').toBe(true)
+    // ★证据口径必须如实：明确写"不覆盖主机名校验"（防后来者读成"安全已验证"）
+    expect(String(d.does_not_cover ?? ''), '★证据没写明不覆盖主机名校验（会被误读为安全已验证）')
+      .toContain('主机名校验')
+    expect(String(d.hostname_verification_guarded_by ?? ''), '★没指出主机名校验由谁守')
+      .toContain('websocket-security-chain')
+  })
 })

@@ -1,0 +1,15 @@
+{
+  "host": "echo.websocket.org",
+  "verdict": "pass",
+  "probe": {
+    "open_ok": true,
+    "binary_ok": true,
+    "big_ok": true,
+    "close_ok": true,
+    "close_code": 1000,
+    "error": null
+  },
+  "covers": "仅「wss 通路可用」（TLS 握手 + Upgrade + 收发往返）",
+  "does_not_cover": "主机名校验是否生效（本机无信任 CA ⇒ 无法构造可区分的实验，见脚本头注释）",
+  "hostname_verification_guarded_by": "tests/websocket-security-chain.test.ts（源码级判据）"
+}

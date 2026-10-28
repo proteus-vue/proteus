@@ -24,8 +24,6 @@
 import { invokeHost } from './capability-invoke'
 // ★★★#1344 P4：域名白名单与 HTTP 走**同一份实现**（一处规则，两条通道）
 import { hostOf, isHostAllowed } from './request/tenant'
-// ★★★#1344 P4：域名白名单与 HTTP 走**同一份实现**（一处规则，两条通道）
-import { hostOf, isHostAllowed } from './request/tenant'
 import type { CapabilityResourceRegistry } from './capability-resources'   // ★#1094 G-43 边界资源账本
 import { CapError as ProteusCapError } from './capability-types'
 import type { CapResult, WebSocketConnection } from './capability-types'
