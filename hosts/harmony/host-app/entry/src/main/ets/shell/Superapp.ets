@@ -19,13 +19,14 @@ import { NodeContent } from '@kit.ArkUI';
 import { display, window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe, hostTransportProbe, setHttpSandboxRoot } from 'proteus_render';
+import { appScreenNodeRect, attach, renderCommands, scrollRoot, clearRoot, appScreenCommands, appScreenContentHeight, appScreenHitAt, hostRtShellInstall, hostRtShellEvent, hostAppDrive, hostAppRender, AppRuntimeDriver, ProteusTabChrome, setContentMode, glassTouch, glassStep, hostHttpProbe, hostTransportProbe, setHttpSandboxRoot, hostVmSessionOpen, hostVmSessionClose } from 'proteus_render';
 // ★T-app-fetch：ArkTS 侧编解码器（本端唯一实现）——真机判据用它**自己编码**一帧交给 C++，
 //   验的就是「ArkTS 编的字节 → C++ 解」这条真实跨语言契约（parity 门禁在本机验同一性质）。
 import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 // ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
+import { trySessionRender, sessionRenderEnabled, openRenderSession, trySessionDrive } from '../runtime/RenderPath';
 import { tryRunProbeScene } from '../runtime/ProbeScenes';   // ★★★#1344 探针场景统一下发（本文件曾因此顶到 1004 行）
 import { runHttpProbe as runHttpProbeImpl } from '../runtime/HttpProbe';   // ★★★#1169 HTTP 探针（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
@@ -110,6 +111,7 @@ struct Superapp {
   /** ★★★跨调用状态（2026-10-07 · 鸿蒙一次性 VM）：上次 hostAppRender 返回的 `snapshot`
    *   （`{屏名:{变量:值}}`）——每次新 VM 作 `state` 回灌，恢复 count 等实例态（否则点击计数不动）。 */
   private runtimeState: Record<string, Object> | null = null;
+  /** ★★★#1344：渲染会话是否就绪（true ⇒ 长活 VM eval；失败保持 false 不白屏） */ private sessionReady: boolean = false;
   private elementProbes: ElementProbeReadout = { registry: 'null', probe: 'null', cls: 'null', compound: 'null', pseudo: 'null', capture: 'null' }; private elementRectVp: string = 'null';   // ★#1081/#1082 元素读数 + 建树后补测几何
   /** ★★决策 #1067：窗口引用（设备亮度/常亮/剪贴板动作要在窗口上执行） */
   private win: window.Window | undefined = undefined;
@@ -268,6 +270,8 @@ struct Superapp {
       const bb: Uint8Array = ctx.resourceManager.getRawFileContentSync('bundle-superapp.js');
       const bundle: string = util.TextDecoder.create('utf-8').decodeToString(bb);
       this.bundle = bundle;   // 存给交互（切 tab 时用）
+      // ★★★#1344：开渲染会话（默认关的开关在 RenderPath 内判定；失败保持 false ⇒ 走原路径不白屏）
+      this.sessionReady = openRenderSession(bundle)
       // ② app-screen-content.json（三端同源产物）
       const sb: Uint8Array = ctx.resourceManager.getRawFileContentSync('app-screen-content.json');
       const scStr: string = util.TextDecoder.create('utf-8').decodeToString(sb);
@@ -342,11 +346,12 @@ struct Superapp {
         this.booted = true;
         this.writeReport();
       } else {
-        // 常驻：**复用 hostAppDrive**（tabs=['index'] ⇒ boot 后跳过 index ⇒ 等价"仅启动"）。
-        //   ★为什么不用 superappBoot：其原生泵是**无条件 400 轮** checkpoint，boot 落定后再泵
-        //   会崩（SIGSEGV，实测）；hostAppDrive 有终态提前退出，是本机**唯一稳定**路径。
-        const out: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': ['index'] } as Record<string, Object>));
-        hilog.info(DOMAIN, TAG, 'SUPERAPP_BOOT %{public}s', out.substring(0, 240));
+        // 常驻：复用 hostAppDrive（tabs=['index'] ⇒ 等价"仅启动"）。★不用 superappBoot：其原生泵无条件 400 轮会崩（SIGSEGV 实测）。
+        const driveArgs: string = JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': ['index'] } as Record<string, Object>)
+        // ★#1344：会话就绪时 boot 也必须在会话里（否则 hostAppDrive 另建一次性 VM ⇒ 与会话冲突，实测停在 SUPERAPP_BOOT）
+        const sessBoot = this.sessionReady ? trySessionDrive(driveArgs) : null
+        const out: string = sessBoot !== null ? sessBoot : hostAppDrive(driveArgs)
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_BOOT session=%{public}s %{public}s', String(sessBoot !== null), out.substring(0, 200));
         const o = JSON.parse(out) as Record<string, Object>;
         const dr = o['drive'] as Record<string, Object> | undefined;
         if (dr) this.applyState(dr['state'] as Object);
@@ -730,20 +735,15 @@ struct Superapp {
       try {
         // ★remount=true（一次性 VM：必须无条件重挂——否则同屏短路 ⇒ 空树 ⇒ 白屏）
         refreshDeviceSnapshot(this.win, this.keyboardHeightVp);   // ★#1083 必须先于 hostAppRender（后者回答 device.capture）
-        /**
-         * ★★★#1344：**单次渲染耗时读数**（`SUPERAPP_RENDER_MS`）。
-         *
-         * 【为什么必须量】生产路径是**一次性 VM**：每次 render 都要
-         *   `CreateVM → eval 整包（~1.6MB）→ boot → 实例化该屏 → DestroyVM`。
-         *   而"该不该改成会话式（VM 常驻）"是个**成本/收益判断**——
-         *   不能靠"感觉卡"拍板，也不能靠"会话式技术上可行"就动手。
-         *   这条读数就是那个判据：它同时给出 render 总耗时与其中 VM 生命周期占比。
-         *
-         * ★为什么同时记 nodes：若耗时高但 nodes 少，说明开销在 VM 不在布局。
-         */
+        // ★★★#1344：渲染耗时读数（判据见 tests/harmony-http-gaps.test.ts；
+        //   真机读数与决策依据见 hosts/harmony/results/render-cost.json：115–135ms/次 · bundle 1542KB）。
         const tRender0: number = Date.now();
-        const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true, this.scrollOffset));
+        // ★★★#1344：**会话式渲染**（默认关 / 失败回落原路径）。设计与读数见 runtime/RenderPath.ets。
+        const rtArgs: string = Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true, this.scrollOffset)
+        const sessOut = sessionRenderEnabled(this.sessionReady) ? trySessionRender(rtArgs) : null
+        const rtOut: string = sessOut !== null ? sessOut.raw : hostAppRender(rtArgs)
         const renderMs: number = Date.now() - tRender0;
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER_PATH page=%{public}s session=%{public}s', page, String(sessOut !== null));
         hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER_MS page=%{public}s ms=%{public}d bundleKB=%{public}d',
           page, renderMs, Math.round(this.bundle.length / 1024));
         const rt = JSON.parse(rtOut) as Record<string, Object>;

@@ -500,16 +500,20 @@ describe('★★★#1344：鸿蒙生产路径渲染成本（会话化的决策�
     // ★必须同时记 bundle 大小：耗时高但 bundle 小 ⇒ 开销在别处，结论会反
     expect(s, '★读数必须带 bundleKB（否则分不清耗时花在 VM 还是别处）')
       .toContain('bundleKB')
-    // ★必须在 hostAppRender 调用**两侧**取时间（否则量的是别的东西）
-    // ★★从 t0 **之后**开始找：`hostAppRender(` 也出现在文件顶部的 import 行里
-    //   （首版没限定范围 ⇒ 命中 import ⇒ 报"计时区间没包住"，是**假红**）。
-    //   ★锚点必须限定在正确的作用域内 —— 与本轮几处假绿同源。
+    // ★必须在**渲染调用两侧**取时间（否则量的是别的东西）。
+    // ★★锚点纪律（两版都踩过）：首版搜 `hostAppRender(` ⇒ 命中文件顶部 **import 行**（假红）；
+    //   改成从 t0 之后搜 ⇒ 会话化后 `hostAppRender` 不再是唯一调用点（现在是
+    //   `sessOut !== null ? sessOut.raw : hostAppRender(rtArgs)` 三元）⇒ 又假红。
+    //   ⇒ 断言"计时区间内**至少有一次**渲染派发"（会话或一次性皆可）。
     const t0 = s.indexOf('const tRender0: number = Date.now()')
-    const call = s.indexOf('const rtOut: string = hostAppRender(', t0)
     const t1 = s.indexOf('const renderMs: number = Date.now() - tRender0', t0)
     expect(t0, '★找不到计时起点').toBeGreaterThan(0)
     expect(t1, '★找不到计时终点').toBeGreaterThan(0)
-    expect(t0 < call && call < t1, '★计时区间没包住 hostAppRender 调用（量错了对象）').toBe(true)
+    const span = s.slice(t0, t1)
+    expect(
+      /hostAppRender\(|trySessionRender\(/.test(span),
+      '★计时区间内没有任何渲染派发（会话或一次性都行）——量错了对象',
+    ).toBe(true)
 
     /**
      * ★★★真机读数入库（"该不该会话化"的量化依据，不是性能门禁）。
@@ -522,11 +526,25 @@ describe('★★★#1344：鸿蒙生产路径渲染成本（会话化的决策�
     if (fs.existsSync(evPath)) {
       const ev = JSON.parse(fs.readFileSync(evPath, 'utf8'))
       expect(ev.device, '★证据必须记机型（跨机型读数不可混用）').toBeTruthy()
-      expect(Number(ev.renderMsMin), '★缺 renderMsMin').toBeGreaterThan(0)
-      expect(Number(ev.renderMsMax), '★缺 renderMsMax').toBeGreaterThan(0)
-      expect(Number(ev.renderMsMax) >= Number(ev.renderMsMin), '★区间反了').toBe(true)
-      expect(Number(ev.bundleKB), '★必须记 bundle 大小（否则分不清耗时花在 VM 还是别处）')
+      // ★结构：oneshot（默认路径，已生效）vs session（会话式，尚未成立）
+      const one = ev.oneshot
+      expect(one, '★证据缺 oneshot 段（默认路径读数）').toBeTruthy()
+      expect(Number(one.renderMsMin), '★缺 oneshot.renderMsMin').toBeGreaterThan(0)
+      expect(Number(one.renderMsMax), '★缺 oneshot.renderMsMax').toBeGreaterThan(0)
+      expect(Number(one.renderMsMax) >= Number(one.renderMsMin), '★读数区间反了').toBe(true)
+      expect(Number(one.bundleKB), '★必须记 bundleKB（否则分不清耗时花在 VM 还是别处）')
         .toBeGreaterThan(0)
+      /**
+       * ★★★#1344：会话式那一段**必须如实记失败**。
+       *   真机实测：会话 open 成功（STEP 全程 + screen.mount nodes=74，65ms），
+       *   但 open 返回后**进程立即死亡**（pidof 空，无 cppcrash 转储，无栈可查）
+       *   —— 与 #540 同形。⇒ 证据必须写明 status + 死点，不能只留一个"没做成"。
+       */
+      expect(ev.session, '★证据缺 session 段（会话式的真实结论）').toBeTruthy()
+      expect(String(ev.session.status ?? ''), '★session.status 必须写明未成立').toContain('未成立')
+      expect(String(ev.session.then ?? ''), '★必须记死点（否则下次又从零排查）').toContain('进程')
+      expect(String(ev.decision?.switchDefault ?? ''), '★必须记默认值（防被误以为已启用）')
+        .toContain('oneshot')
     }
   })
 })

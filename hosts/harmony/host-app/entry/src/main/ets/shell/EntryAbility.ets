@@ -97,6 +97,21 @@ export default class EntryAbility extends UIAbility {
     if (typeof vmMode === 'string' && vmMode.length > 0) {
       AppStorage.setOrCreate('proteusVmProbeMode', vmMode);
     }
+    /**
+     * ★★★#1344：**渲染路径选择**（`--ps renderMode session|oneshot`；缺省 oneshot）。
+     *
+     * · `oneshot`（默认）⇒ 一次性 VM：每次 render `CreateVM→eval(CreateVM→eval→boot→Destroy`
+     *   实测 115–135ms/次（bundle 1542KB）
+     * · `session` ⇒ 会话式：VM 常驻，整包只 eval 一次
+     *
+     * ★默认 oneshot 是**刻意的**：会话化是行为形态改变（长活 VM），
+     *   必须先能对比、能回退，验证通过后再翻默认值。
+     * ★与 `vmRounds`/`vmMode` 同族：`aa start --ps` 不会自动进 AppStorage，必须显式转。
+     */
+    const renderMode = want?.parameters?.['renderMode'];
+    if (typeof renderMode === 'string' && renderMode.length > 0) {
+      AppStorage.setOrCreate('proteusRenderMode', renderMode);
+    }
     // ★★★#1187：`savePath`（宿主逐块落盘）与 `stream`（应被如实拒绝）——两个语义各需真机验证
     // ★#1187 诊断：把 want.parameters 的**全部键**打出来（判断是 key 名变了还是值丢了）
     try { hilog.info(DOMAIN, TAG, 'WANT_PARAMS %{public}s', JSON.stringify(want?.parameters ?? {})); } catch (e) { }
