@@ -26,7 +26,7 @@ import { hasBridge, onTermData, onTermExit, termClose, termOpen, termResize, ter
 async function writeToTerm(data: string) {
   if (!hasBridge) return
   try {
-    await termWrite(data)
+    await termWrite(sid.value ?? 0, data)
   } catch (e) {
     const msg = String((e as Error)?.message ?? e)
     if (msg.includes('终端未打开')) {
@@ -34,7 +34,7 @@ async function writeToTerm(data: string) {
       openSession()
       await new Promise((r) => setTimeout(r, 150))
       try {
-        await termWrite(data)
+        await termWrite(sid.value ?? 0, data)
         return
       } catch {
         /* 仍然失败就走下面统一报错（此时确实开不起来） */
@@ -151,7 +151,7 @@ async function openSession() {
   opened.value = true
   exited.value = false
   try {
-    await termOpen(c, r, shellSel.value)
+    sid.value = await termOpen(c, r, shellSel.value)
   } catch (e) {
     pushToast(`开终端失败：${String((e as Error)?.message ?? e)}`, 'err')
   }
@@ -274,11 +274,13 @@ function focusInput() {
 onMounted(async () => {
   measure()
   await nextTick()
-  offData = onTermData((d) => {
+  offData = onTermData((id, d) => {
+      if (sid.value !== null && id !== sid.value) return
     term.value.write(d)
     scheduleRender()
   })
-  offExit = onTermExit(() => {
+  offExit = onTermExit((id) => {
+      if (sid.value !== null && id !== sid.value) return
     exited.value = true
     term.value.write('\r\n\x1b[2m[会话已结束，按回车重开]\x1b[0m\r\n')
     ver.value++
@@ -306,7 +308,7 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   if (raf) cancelAnimationFrame(raf)
   // ★卸载时才关：视图切换不该杀 shell（用户经常在 code/term 之间来回切）
-  if (hasBridge) void termClose().catch(() => {})
+  if (hasBridge) if (sid.value !== null) void termClose(sid.value).catch(() => {})
 })
 
 /* ── 工具栏（决策 #1349）──────────────────────────────────────────────────
@@ -322,6 +324,8 @@ const shellOpts = [
   { value: 'sh', label: 'sh' },
 ]
 const findOpen = ref(false)
+/* 当前会话 id（决策 #1362 后端多会话化后，所有 term_* 调用都要带 id） */
+const sid = ref<number | null>(null)
 const findQ = ref('')
 /* 匹配规则（决策 #1358）：与 VS Code 一致 —— Aa 区分大小写 · ab 全字匹配 · .* 正则 */
 const fCase = ref(false)
@@ -338,7 +342,7 @@ async function switchShell(v: 'zsh' | 'bash' | 'sh') {
   shellSel.value = v
   if (!hasBridge) return
   try {
-    await termClose()
+    if (sid.value !== null) await termClose(sid.value)
   } catch {
     /* 已经关了也无所谓 */
   }

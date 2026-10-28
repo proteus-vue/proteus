@@ -276,13 +276,14 @@ export function onMenu(cb: (id: string) => void): MenuBridge {
    ⇒ 输出用 `emit("term:data")`，按键用 `term_write`。 */
 
 /** 打开会话。`cols/rows` 是字符格子数（前端按字宽量出来的，不是像素） */
-export const termOpen = (cols: number, rows: number, shell?: 'zsh' | 'bash' | 'sh'): Promise<void> =>
-  invoke<void>('term_open', { cols, rows, shell: shell ?? null })
+export const termOpen = (cols: number, rows: number, shell?: 'zsh' | 'bash' | 'sh'): Promise<number> =>
+  invoke<number>('term_open', { cols, rows, shell: shell ?? null })
 /** 送键盘输入（字节语义由前端生成：`\r` / `\x1b[A` / `\x03` …） */
-export const termWrite = (data: string): Promise<void> => invoke<void>('term_write', { data })
+export const termWrite = (id: number, data: string): Promise<void> => invoke<void>('term_write', { id, data })
 /** 面板尺寸变了：告诉 pty，让 `ls`/`vim` 之类按新宽度排版 */
-export const termResize = (cols: number, rows: number): Promise<void> => invoke<void>('term_resize', { cols, rows })
-export const termClose = (): Promise<void> => invoke<void>('term_close')
+export const termResize = (id: number, cols: number, rows: number): Promise<void> =>
+  invoke<void>('term_resize', { id, cols, rows })
+export const termClose = (id: number): Promise<void> => invoke<void>('term_close', { id })
 export interface TermInfo {
   open: boolean
   pid: number
@@ -293,27 +294,38 @@ export const termInfo = (): Promise<TermInfo> => invoke<TermInfo>('term_info')
  *  ★浏览器/门禁兜底走 `studio:term-data` 自定义事件 —— 与 `onMenu` 同一套路子，
  *    这样 Playwright 能驱动"字节进来 → 屏幕画对"这整段（但**证明不了** pty 真的产出了字节，
  *    那一段由 Rust 侧单测 `pty_runs_echo_and_reads_back` 兜住）。 */
-export function onTermData(cb: (data: string) => void): () => void {
+export function onTermData(cb: (id: number, data: string) => void): () => void {
   const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
   if (ev?.listen) {
     let off: (() => void) | undefined
-    void ev.listen('term:data', (e) => cb(String(e.payload ?? ''))).then((f) => (off = f))
+    /* 多会话（#1362）：payload 是 `{id, data}`；兼容旧的纯字符串（浏览器桩/老版本） */
+    void ev
+      .listen('term:data', (e) => {
+        const p = e.payload as { id?: number; data?: string } | string
+        if (typeof p === 'string') cb(0, p)
+        else cb(Number(p?.id ?? 0), String(p?.data ?? ''))
+      })
+      .then((f) => (off = f))
     return () => off?.()
   }
-  const h = (e: Event) => cb(String((e as CustomEvent).detail ?? ''))
+  const h = (e: Event) => {
+    const d = (e as CustomEvent).detail
+    if (typeof d === 'string') cb(0, d)
+    else cb(Number((d as { id?: number })?.id ?? 0), String((d as { data?: string })?.data ?? ''))
+  }
   addEventListener('studio:term-data', h)
   return () => removeEventListener('studio:term-data', h)
 }
 
 /** 订阅"shell 退出"（子进程结束）。界面据此显示"会话已结束，按回车重开"。 */
-export function onTermExit(cb: () => void): () => void {
+export function onTermExit(cb: (id: number) => void): () => void {
   const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
   if (ev?.listen) {
     let off: (() => void) | undefined
-    void ev.listen('term:exit', () => cb()).then((f) => (off = f))
+    void ev.listen('term:exit', (e) => cb(Number(e.payload ?? 0))).then((f) => (off = f))
     return () => off?.()
   }
-  const h = () => cb()
+  const h = (e: Event) => cb(Number((e as CustomEvent).detail ?? 0))
   addEventListener('studio:term-exit', h)
   return () => removeEventListener('studio:term-exit', h)
 }

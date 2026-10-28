@@ -21,6 +21,7 @@
 //   ② 子进程必须是**新会话**（setsid + TIOCSCTTY）：否则它在我们的会话里，Ctrl-C 会打到 Studio 自己身上。
 
 use std::ffi::{c_char, c_int, c_void, CString};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::Emitter;
@@ -57,6 +58,12 @@ extern "C" {
     fn waitpid(pid: c_int, status: *mut c_int, options: c_int) -> c_int;
 }
 
+#[derive(serde::Serialize, Clone)]
+struct TermData {
+    id: u64,
+    data: String,
+}
+
 struct Session {
     master: c_int,
     pid: c_int,
@@ -64,8 +71,17 @@ struct Session {
     gen: u64,
 }
 
-static SESSION: Mutex<Option<Session>> = Mutex::new(None);
-static NEXT_GEN: AtomicU64 = AtomicU64::new(1);
+/* ★**多会话**（决策 #1362）：从"唯一会话"改成 id → Session 的表。
+   为什么要改：新建终端 / 拆分终端 / 多终端列表都要求"同时存在多个 pty"，
+   单例做不到（新开就把旧的顶掉）。事件也带 id，前端按 id 分发到各自的网格。 */
+static SESSIONS: Mutex<Option<HashMap<u64, Session>>> = Mutex::new(None);
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn with_sessions<T>(f: impl FnOnce(&mut HashMap<u64, Session>) -> T) -> Option<T> {
+    let mut g = SESSIONS.lock().ok()?;
+    let map = g.get_or_insert_with(HashMap::new);
+    Some(f(map))
+}
 
 /// 按 **UTF-8 边界**把缓冲区里"已经完整"的部分切出来（不完整的尾字节留在缓冲区里等下一批）。
 ///
@@ -99,39 +115,41 @@ fn take_utf8(buf: &mut Vec<u8>) -> String {
 ///
 /// ★为什么连**进程组**一起杀：shell 会和它跑着的命令在同一个进程组里，
 ///   只 kill shell 会留下一堆孤儿（`pnpm` 之类会继续吃 CPU）。
-fn close_current() {
-    let old = SESSION.lock().ok().and_then(|mut g| g.take());
-    if let Some(s) = old {
-        unsafe {
-            /* ★**绝不无限阻塞**（决策 #1351：用户切到 bash 后整个应用卡死）：
-               这里是 Tauri 的**同步指令**，跑在主线程上 —— 一旦 `waitpid(..., 0)` 等到
-               子进程迟迟不退出，主线程就永久挂住 ⇒ 表现为"应用没有响应"（连菜单都点不动）。
-               现在：先 SIGTERM，**有界**（最多 30×10ms = 300ms）用 1 /* WNOHANG */ 探；到点就升级 SIGKILL，
-               再探 300ms；仍不退出就**放弃等待**（进程交给系统回收，绝不能拖住 UI）。 */
-            kill(-s.pid, SIGTERM);
-            kill(s.pid, SIGTERM);
-            close(s.master);
-            let mut st: c_int = 0;
-            let mut reaped = false;
+/// 关掉**指定**会话（有界等待，绝不阻塞调用线程 —— 主线程卡死过一次，见 #1351）。
+fn close_session(id: u64) {
+    let old = with_sessions(|m| m.remove(&id)).flatten();
+    let Some(sess) = old else { return };
+    unsafe {
+        kill(-sess.pid, SIGTERM);
+        kill(sess.pid, SIGTERM);
+        close(sess.master);
+        let mut st: c_int = 0;
+        let mut reaped = false;
+        for _ in 0..30 {
+            if waitpid(sess.pid, &mut st, 1 /* WNOHANG */) != 0 {
+                reaped = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        if !reaped {
+            kill(-sess.pid, SIGKILL);
+            kill(sess.pid, SIGKILL);
             for _ in 0..30 {
-                if waitpid(s.pid, &mut st, 1 /* WNOHANG */) != 0 {
-                    reaped = true;
+                if waitpid(sess.pid, &mut st, 1 /* WNOHANG */) != 0 {
                     break;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
-            if !reaped {
-                kill(-s.pid, SIGKILL);
-                kill(s.pid, SIGKILL);
-                for _ in 0..30 {
-                    if waitpid(s.pid, &mut st, 1 /* WNOHANG */) != 0 {
-                        break;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-                /* 还没回收就放它去 —— 僵尸由后续 waitpid 或系统处理，UI 不能等 */
-            }
         }
+    }
+}
+
+/// 关掉全部会话（退出应用时用）。
+fn close_all() {
+    let ids: Vec<u64> = with_sessions(|m| m.keys().copied().collect()).unwrap_or_default();
+    for id in ids {
+        close_session(id);
     }
 }
 
@@ -213,8 +231,7 @@ fn spawn_pty(path: &str, args: &[&str], cols: u16, rows: u16, cwd: &std::path::P
 }
 
 /// 打开会话：`cols x rows` 是**前端量出来的字符格子数**（pty 靠它排版，不是像素）。
-pub fn open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) -> Result<(), String> {
-    close_current();
+pub fn open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) -> Result<u64, String> {
     /* ★shell 可选（决策 #1349）：允许前端明确选 zsh/bash。
        只接受**白名单**里的名字，绝不让调用方传任意路径（那等于给前端一个 exec 后门）。 */
     let shell = match shell.as_deref() {
@@ -225,17 +242,16 @@ pub fn open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) 
     /* `-l`：登录 shell ⇒ 读到用户的 PATH/别名（否则 `pnpm` 之类直接找不到）。 */
     let (master, pid) = spawn_pty(&shell, &["-l"], cols, rows, &cwd)?;
 
-    let gen = NEXT_GEN.fetch_add(1, Ordering::Relaxed);
-    if let Ok(mut g) = SESSION.lock() {
-        *g = Some(Session { master, pid, gen });
-    }
-    std::thread::spawn(move || reader_loop(app, master, gen));
-    eprintln!("[term] 会话就绪 pid={pid} {cols}x{rows} shell={shell}");
-    Ok(())
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let gen = id;
+    with_sessions(|m| m.insert(id, Session { master, pid, gen }));
+    std::thread::spawn(move || reader_loop(app, master, id, gen));
+    eprintln!("[term] 会话就绪 id={id} pid={pid} {cols}x{rows} shell={shell}");
+    Ok(id)
 }
 
 /// 读线程：把 pty 的输出按 UTF-8 边界切好，通过 `term:data` 事件推给前端。
-fn reader_loop(app: tauri::AppHandle, master: c_int, gen: u64) {
+fn reader_loop(app: tauri::AppHandle, master: c_int, id: u64, gen: u64) {
     let mut buf = vec![0u8; 8192];
     let mut pending: Vec<u8> = Vec::new();
     /* `POC_TERM_LOG=1` ⇒ 把**首段输出**打到 stderr（排障/无头验证用）。
@@ -263,7 +279,7 @@ fn reader_loop(app: tauri::AppHandle, master: c_int, gen: u64) {
             let s = take_utf8(&mut pending);
             if !s.is_empty() {
                 // 会话已换（用户点了重开）⇒ 旧线程闭嘴，不把上一只 shell 的输出画到新终端上
-                let cur = SESSION.lock().ok().and_then(|g| g.as_ref().map(|x| x.gen)).unwrap_or(0);
+                let cur = with_sessions(|m| m.get(&id).map(|x| x.gen)).flatten().unwrap_or(0);
                 if cur != gen {
                     break;
                 }
@@ -272,7 +288,7 @@ fn reader_loop(app: tauri::AppHandle, master: c_int, gen: u64) {
                     let head: String = s.chars().take(120).collect();
                     eprintln!("[term] 首段输出（{} 字符）：{:?}", s.chars().count(), head);
                 }
-                let _ = app.emit("term:data", s);
+                let _ = app.emit("term:data", TermData { id, data: s });
             }
         } else if n == 0 {
             break; // EOF：shell 退出
@@ -284,18 +300,16 @@ fn reader_loop(app: tauri::AppHandle, master: c_int, gen: u64) {
             break;
         }
     }
-    let cur = SESSION.lock().ok().and_then(|g| g.as_ref().map(|x| x.gen)).unwrap_or(0);
+    let cur = with_sessions(|m| m.get(&id).map(|x| x.gen)).flatten().unwrap_or(0);
     if cur == gen {
-        let _ = app.emit("term:exit", 0);
+        let _ = app.emit("term:exit", id);
     }
 }
 
 /// 把前端按键送进 pty（原样字节：`\r` / `\x1b[A` / `\x03` 都由前端按终端语义生成）。
-pub fn write_str(data: &str) -> Result<(), String> {
-    let fd = SESSION
-        .lock()
-        .ok()
-        .and_then(|g| g.as_ref().map(|s| s.master))
+pub fn write_str(id: u64, data: &str) -> Result<(), String> {
+    let fd = with_sessions(|m| m.get(&id).map(|s| s.master))
+        .flatten()
         .ok_or("终端未打开")?;
     let bytes = data.as_bytes();
     let mut off = 0usize;
@@ -314,11 +328,9 @@ pub fn write_str(data: &str) -> Result<(), String> {
 }
 
 /// pty 尺寸变化（前端量出新的 cols/rows 时调）。
-pub fn resize(cols: u16, rows: u16) -> Result<(), String> {
-    let fd = SESSION
-        .lock()
-        .ok()
-        .and_then(|g| g.as_ref().map(|s| s.master))
+pub fn resize(id: u64, cols: u16, rows: u16) -> Result<(), String> {
+    let fd = with_sessions(|m| m.get(&id).map(|s| s.master))
+        .flatten()
         .ok_or("终端未打开")?;
     let ws = Winsize {
         ws_row: rows.max(1),
@@ -336,7 +348,7 @@ pub fn resize(cols: u16, rows: u16) -> Result<(), String> {
 /// 关会话（切视图/关窗口时调；也可被"重开终端"复用）。
 /// ★不能叫 `close`：与 libc 的 `close(fd)` 撞名（extern 块里的同名符号会遮蔽）。
 pub fn shutdown() {
-    close_current();
+    close_all();
 }
 
 /// 会话状态（前端据此显示"点一下开终端"/"已连接"）。
@@ -347,17 +359,18 @@ pub struct TermInfo {
 }
 
 pub fn info() -> TermInfo {
-    let s = SESSION.lock().ok().and_then(|g| g.as_ref().map(|x| x.pid));
+    /* 多会话后这条只回答"有没有会话"，pid 给最早那个（兼容旧前端/门禁）。 */
+    let pid = with_sessions(|m| m.values().map(|x| x.pid).min()).flatten();
     TermInfo {
-        open: s.is_some(),
-        pid: s.unwrap_or(-1),
+        open: pid.is_some(),
+        pid: pid.unwrap_or(-1),
     }
 }
 
 // ── IPC 命令 ─────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn term_open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) -> Result<(), String> {
+pub async fn term_open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) -> Result<u64, String> {
     /* 这一行是**接线证据**：前端到底有没有把 term_open 打进来。
        排"点终端没反应"时分两种：① 这行不出现 ⇒ 前端没调（视图/守卫/样式问题）；
        ② 这行出现但 `会话就绪` 不出现 ⇒ openpty/fork 失败（看紧随其后的错误）。 */
@@ -369,18 +382,18 @@ pub async fn term_open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Optio
 }
 
 #[tauri::command]
-pub fn term_write(data: String) -> Result<(), String> {
-    write_str(&data)
+pub fn term_write(id: u64, data: String) -> Result<(), String> {
+    write_str(id, &data)
 }
 
 #[tauri::command]
-pub fn term_resize(cols: u16, rows: u16) -> Result<(), String> {
-    resize(cols, rows)
+pub fn term_resize(id: u64, cols: u16, rows: u16) -> Result<(), String> {
+    resize(id, cols, rows)
 }
 
 #[tauri::command]
-pub async fn term_close() {
-    shutdown();
+pub async fn term_close(id: u64) {
+    let _ = tauri::async_runtime::spawn_blocking(move || close_session(id)).await;
 }
 
 #[tauri::command]
