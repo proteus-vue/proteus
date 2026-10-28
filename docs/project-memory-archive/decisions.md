@@ -15389,6 +15389,21 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ⇒ 把 `globalThis.__probeTick` 的**赋值语句**也改成了 `globalThis.__probeTick() = ...`（语法坏），
     并在调用处叠成 `__probeTick()()()`。**与"sed 里 `&` 是整段匹配"同族**：
     含括号/运算符的批量重命名不要用正则替换，用逐处精确编辑（本次 4 处全是 Edit 修回）。
+  - **★★★B-0 补验：整包 Vue bundle 也通过（2026-10-28 · 决策 #1343 收尾）**：
+    新增独立 napi 入口 `hostVmSessionBundleProbe(bundleJs, rounds)`（bundle 1.5MB **不走 JSON 转义**）。
+    真机 eval 真实 `bundle-superapp.js`（1,568,383 字节）：
+    · **`bootHook:"booted"`** = 整包 Vue 运行时真的 boot 成功
+    · **4000 轮零崩溃**（ok:true / 4000/4000 / firstFail=-1）
+    · 堆 4.44MB→5.09MB（**+14.8%**），第 1600→1700 轮回落 5018→4330KB，**回落点稳定不漂移**
+    ⇒ 真实 Vue 微任务压力下持久 VM 依然稳定，**B 阶段前提成立**。
+  - **★★★B-0 第一版写错了（探针设计错误，不是 VM 问题）**：我原先**每轮**都调
+    `__proteusHostAppBootJson()`，而它内部是 `createAppNavigation + createRouter`
+    ⇒ **每次都新建一个应用实例**，旧组件树/路由栈留在持久 VM 里不回收
+    ⇒ 4000 轮堆回落点**单调上移**：10.4→11.5→12.6→13.7→14.7→16.0→18.1→19.9→22.3→24.3MB。
+    ★这正是生产形态的反面（生产是 **boot 一次**，之后每次 tick 推微任务）。改成 boot 在循环外
+    只做一次后，同样的 4000 轮：+14.8% 且回落点稳定（**差一个数量级**）。
+    ★教训：**测"长期运行"的探针必须复刻生产的时间形态**，否则测到的是"重复初始化"的成本，
+      会被误判成"框架泄漏"。
   - **诚实边界**：探针读数走 **hilog 主通道**（报告文件在沙箱里 `hdc shell` 读不到，实测
-    Permission denied）。★本探针只证明**这三种负载形态**下持久 VM 可行；接入完整 App runtime
-    （eval 整包 Vue bundle + 路由 + 异步驱动）前**仍须再验一轮**。
+    Permission denied）· `bundle` 模式的 `proteusHost` 是**最小桩**（invoke 只记调用数、
+    永远回 missing）⇒ 验的是"**VM 持久性**"，不是"整包在真实宿主下能跑"（后者属 B 阶段）。

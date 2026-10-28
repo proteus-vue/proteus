@@ -1075,7 +1075,7 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimReset", nullptr, HostAppAnimReset, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
-        PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot), PROTEUS_PROBE_EXPORT(hostVmSessionProbe, HostVmSessionProbe),  // ★#1342-A 最后一项 = #540 决策门（持久 VM 探针，不入生产路径）
+        PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot), PROTEUS_PROBE_EXPORT(hostVmSessionProbe, HostVmSessionProbe), PROTEUS_PROBE_EXPORT(hostVmSessionBundleProbe, HostVmSessionBundleProbe),  // ★#1342-A/B-0：后两项 = #540 决策门（合成负载 + 整包 bundle）
         // ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 / 取走待执行动作
         {"setDeviceSnapshot", nullptr, SetDeviceSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"drainDeviceActions", nullptr, DrainDeviceActions, nullptr, nullptr, nullptr, napi_default, nullptr},

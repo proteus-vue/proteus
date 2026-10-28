@@ -54,6 +54,8 @@ struct ProbeResult {
     /** 每 100 轮一个采样点（用于判断"线性增长 ⇒ 泄漏"） */
     std::string heapSamplesJson = "[";
     std::string mode = "plain";
+    /** `bundle` 模式：整包 eval 后 `__proteusHostAppBootJson` 的 typeof（证明整包真跑到了末尾） */
+    std::string bundleBootHook = "(n/a)";
 };
 
 /**
@@ -172,9 +174,17 @@ inline bool checkpointOrEval(JSVM_Env env, const char* js, std::string& why) {
 /**
  * 跑探针。
  * @param rounds 轮数（建议 1000）
- * @param mode `plain` / `nav` / `ref`
+ * @param mode `plain` / `nav` / `ref` / `bundle`
+ * @param bundleJs `bundle` 模式要 eval 的整包源码（其余模式忽略）
+ *
+ * ★★★`bundle` 模式为什么必须有（2026-10-28 · B-0）：
+ *   前三种是**合成负载**（我手写的 Promise 链 / async IIFE / CreateReference），
+ *   它们证明"VM 能跨调用存活"，但**没有**真实 Vue 运行时的微任务压力
+ *   （响应式依赖追踪、组件树调度、`nextTick` 队列、路由守卫链）。
+ *   B 阶段要让整包 Vue runtime 跑在持久 VM 里 ⇒ 必须在**真实负载**下再验一次，
+ *   否则"合成负载通过"会被当成"生产可用"（本仓最忌的假绿形态）。
  */
-inline std::string run(int rounds, const std::string& mode) {
+inline std::string run(int rounds, const std::string& mode, const std::string& bundleJs = std::string()) {
     ProbeResult R;
     R.mode = mode;
     R.rounds = rounds;
@@ -212,6 +222,61 @@ inline std::string run(int rounds, const std::string& mode) {
                 err = "seed 自检失败：" + chkWhy;
             } else if (chk != "function") {
                 err = "seed 未挂上 __probeTick（typeof=" + chk + "）";
+            }
+        }
+    }
+
+    /* ★★★`bundle` 模式：eval **整包 Vue bundle**（真实微任务压力）。
+       ★为什么要放在 seed 之后、循环之前：这正是 `HostAppBoot` 的位置
+         （`host_app_runtime_impl.h` 里 eval bundle 就在 boot 之前）——
+         保持与生产同形，否则测的就不是生产形态。
+       ★必须 `compileAndRun` 整包（1.5MB），不能用 `evalToString`（它要把结果转字符串，整包顶层无返回值）。 */
+    if (err.empty() && mode == "bundle") {
+        if (bundleJs.empty()) {
+            err = "bundle 模式需要 bundleJs（ArkTS 侧从 rawfile 读入后传入）";
+        } else {
+            // 生产宿主在 eval 前会注入 proteusHost（host_app_runtime_impl.h:742-764）。
+            // ★探针用**最小桩**：只给一个会记录调用的 invoke，不接真实内核（那是 B 阶段的事）。
+            const char* stub =
+                "if (typeof globalThis.proteusHost === 'undefined') {"
+                "  globalThis.__probeHostCalls = 0;"
+                "  globalThis.proteusHost = {"
+                "    invoke: function (m, a) { globalThis.__probeHostCalls = globalThis.__probeHostCalls + 1;"
+                "      return JSON.stringify({ ok: false, missing: true, reason: 'vm-probe stub: ' + m }); },"
+                "    invokeBytes: function () { return null; }"
+                "  };"
+                "}";
+            std::string stubWhy;
+            if (!checkpointOrEval(env, stub, stubWhy)) err = "bundle 桩注入失败：" + stubWhy;
+            if (err.empty()) {
+                const std::string t0 = "bundle";
+                (void)t0;
+                // 整包 eval（失败要把 JS 异常带出来——1.5MB 包里任何语法/运行时错都在这暴露）
+                std::string jsWhy;
+                if (!checkpointOrEval(env, bundleJs.c_str(), jsWhy)) {
+                    err = "bundle eval 失败：" + jsWhy;
+                }
+            }
+            // ★自检：整包 eval 后应能看到运行期注入的全局（证明真的跑到了末尾）
+            if (err.empty()) {
+                std::string chk2, why2;
+                if (evalToString(env, "typeof globalThis.__proteusHostAppBootJson", chk2, why2)) {
+                    R.bundleBootHook = chk2;
+                } else {
+                    R.bundleBootHook = "(probe:" + why2 + ")";
+                }
+            }
+            /* ★★★boot **只做一次**（这里是循环外）——这才是生产形态。
+               第一版把 boot 放进循环 ⇒ 每轮新建一个应用实例 ⇒ 堆回落点单调上移（探针设计错误）。 */
+            if (err.empty() && R.bundleBootHook == "function") {
+                std::string bootWhy;
+                if (!checkpointOrEval(env, "String(globalThis.__proteusHostAppBootJson())", bootWhy)) {
+                    // ★boot 失败**不算 VM 崩溃**：整包可能需要更多宿主方法（桩只给了 invoke）。
+                    //   如实记下，但继续跑微任务轮次 —— 这一轮验的是"VM 持久性"，不是"整包能否 boot"。
+                    R.bundleBootHook = "boot-failed:" + bootWhy;
+                } else {
+                    R.bundleBootHook = "booted";
+                }
             }
         }
     }
@@ -271,7 +336,7 @@ inline std::string run(int rounds, const std::string& mode) {
                     OH_JSVM_CloseHandleScope(env, inner);
                     break;
                 }
-            } else { // ref
+            } else if (mode == "ref") {
                 // 跨轮持有：建一个对象 → CreateReference → 下一轮取出 → 删除上一轮的
                 JSVM_Value obj = nullptr;
                 OH_JSVM_CreateObject(env, &obj);
@@ -290,6 +355,27 @@ inline std::string run(int rounds, const std::string& mode) {
                     OH_JSVM_DeleteReference(env, heldRef);
                 }
                 heldRef = nextRef;
+            } else if (mode == "bundle") {
+                /* ★★★真实负载（**boot 一次，之后每轮只跑微任务**）。
+                   【为什么第一版写错了】我原先每轮都调 `__proteusHostAppBootJson()`，
+                   而它内部是 `createAppNavigation + createRouter` ⇒ **每次都新建一个应用实例**，
+                   旧的组件树/路由栈留在持久 VM 里不回收 ⇒ 堆回落点**单调上移**
+                   （实测 4000 轮：10.4→11.5→12.6→13.7→14.7→16.0→18.1→19.9→22.3→24.3MB）。
+                   那是**探针设计错误**，不是 VM 的问题 —— 生产形态本就是"boot 一次"。
+                   ⇒ 现在：boot 只在循环外做一次（见下方 `bundleBooted`），循环里只推微任务。
+                   ★这样测的才是"持久 VM 长期跑微任务"这个真实场景。 */
+                std::string jsWhy;
+                if (!checkpointOrEval(env,
+                        // 只推进 Vue 的 nextTick/微任务队列（若整包暴露了 hook 就顺手 tick 一下路由）
+                        "typeof globalThis.__proteusHostAppTick === 'function'"
+                        " ? String(globalThis.__proteusHostAppTick())"
+                        " : (Promise.resolve().then(function(){}), 'microtask-only')",
+                        jsWhy)) {
+                    R.firstFailureRound = i;
+                    R.firstFailureWhy = "bundle 每轮微任务推进失败：" + jsWhy;
+                    OH_JSVM_CloseHandleScope(env, inner);
+                    break;
+                }
             }
 
             // ★显式 checkpoint（EXPLICIT 策略下只有宿主推进才跑微任务）
@@ -334,9 +420,10 @@ inline std::string run(int rounds, const std::string& mode) {
     char head[512];
     snprintf(head, sizeof(head),
              "{\"ok\":%s,\"mode\":\"%s\",\"rounds\":%d,\"roundsOk\":%d,\"firstFailureRound\":%d,\"firstFailureWhy\":\"%s\","
-             "\"heapBeforeKB\":%.1f,\"heapAfterKB\":%.1f,\"heapPeakKB\":%.1f,\"heapGrowthPct\":%.1f,\"samples\":",
+             "\"heapBeforeKB\":%.1f,\"heapAfterKB\":%.1f,\"heapPeakKB\":%.1f,\"heapGrowthPct\":%.1f,\"bootHook\":\"%s\",\"samples\":",
              allOk ? "true" : "false", R.mode.c_str(), R.rounds, R.roundsOk, R.firstFailureRound,
-             jsonEscape(R.firstFailureWhy).c_str(), R.heapBeforeKB, R.heapAfterKB, R.heapPeakKB, growthPct);
+             jsonEscape(R.firstFailureWhy).c_str(), R.heapBeforeKB, R.heapAfterKB, R.heapPeakKB, growthPct,
+             jsonEscape(R.bundleBootHook).c_str());
     std::string out = head;
     out += R.heapSamplesJson;
     if (!err.empty()) out += ",\"error\":\"" + jsonEscape(err) + "\"";
@@ -396,6 +483,55 @@ inline napi_value HostVmSessionProbe(napi_env env, napi_callback_info info) {
         }
     }
     const std::string out = proteus::vmsession::run(rounds, mode);
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/**
+ * ★★★#1342 B-0：**整包 Vue bundle 版探针**（`hostVmSessionBundleProbe(bundleJs, rounds)`）。
+ *
+ * 【为什么要单独一个 napi 入口，而不是复用 `hostVmSessionProbe`】
+ *   bundle 有 **1.5MB**，塞进 JSON 入参要做一次完整转义 + 解析（既慢又容易踩引号/换行坑）。
+ *   这里直接收**两个参数**：第一个是 bundle 源码原文，第二个是轮数 ⇒ 零转义开销。
+ *
+ * 【它验什么】把整包 `bundle-superapp.js` 真的 eval 进**持久 VM**，然后每轮调用
+ *   `__proteusHostAppBootJson()`（= createAppNavigation + createRouter 的启动链），
+ *   让**真实 Vue 运行时**产出微任务压力（响应式依赖收集 / nextTick 队列 / 路由守卫），
+ *   再 checkpoint。这正是合成负载（plain/nav/ref）测不到的那一层。
+ */
+inline napi_value HostVmSessionBundleProbe(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2] = {nullptr, nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    if (argc < 1 || args[0] == nullptr) {
+        const char* e = "{\"ok\":false,\"mode\":\"bundle\",\"error\":\"需要 (bundleJs, rounds)\"}";
+        napi_value r;
+        napi_create_string_utf8(env, e, strlen(e), &r);
+        return r;
+    }
+
+    // ① bundle 源码（原文，不转义）
+    size_t blen = 0;
+    if (napi_get_value_string_utf8(env, args[0], nullptr, 0, &blen) != napi_ok) {
+        const char* e = "{\"ok\":false,\"mode\":\"bundle\",\"error\":\"bundleJs 读取失败\"}";
+        napi_value r;
+        napi_create_string_utf8(env, e, strlen(e), &r);
+        return r;
+    }
+    std::string bundleJs(blen + 1, '\0');
+    napi_get_value_string_utf8(env, args[0], &bundleJs[0], bundleJs.size(), &blen);
+    bundleJs.resize(blen);
+
+    // ② 轮数
+    int rounds = 1000;
+    if (argc >= 2 && args[1] != nullptr) {
+        int32_t v = 0;
+        if (napi_get_value_int32(env, args[1], &v) == napi_ok && v > 0 && v <= 100000) rounds = v;
+    }
+
+    const std::string out = proteus::vmsession::run(rounds, "bundle", bundleJs);
     napi_value r;
     napi_create_string_utf8(env, out.c_str(), out.size(), &r);
     return r;

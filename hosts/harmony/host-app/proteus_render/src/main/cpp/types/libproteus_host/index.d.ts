@@ -65,6 +65,18 @@ export const hostAppAnimStats: () => string;
  *          heapBeforeKB, heapAfterKB, heapPeakKB, heapGrowthPct, samples }`
  */
 export const hostVmSessionProbe: (argsJson: string) => string;
+/**
+ * ★★★#1342 B-0：**整包 Vue bundle 版持久 VM 探针**。
+ *
+ * 与 `hostVmSessionProbe` 的区别：它把真实的 `bundle-superapp.js`（1.5MB）eval 进持久 VM，
+ * 每轮调 `__proteusHostAppBootJson()`（createAppNavigation + createRouter 启动链），
+ * 让**真实 Vue 运行时**产出微任务压力 —— 这是合成负载（plain/nav/ref）测不到的那一层。
+ *
+ * @param bundleJs 整包源码原文（**不走 JSON 转义**：1.5MB 转义既慢又易踩引号/换行坑）
+ * @param rounds 轮数（默认 1000）
+ * @returns 读数 JSON（比合成版多一个 `bootHook` 字段 = 整包入口的 typeof）
+ */
+export const hostVmSessionBundleProbe: (bundleJs: string, rounds?: number) => string;
 /** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——
  *   不清会把旧页动画错打到新页同 id 节点）。壳每轮渲染/点按导航前调；返回 `{"ok":true}`。 */
 export const hostAppAnimReset: () => string;

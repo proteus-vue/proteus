@@ -71,6 +71,8 @@ export {
   hostAppAnimReset,
   // ★★★#1342-A：#540 决策门（持久 VM 探针，真机判据专用）
   hostVmSessionProbe,
+  // ★★★#1342 B-0：整包 Vue bundle 版（真实微任务压力）
+  hostVmSessionBundleProbe,
 } from 'libproteus_host.so'
 
 // ★★★应用运行期驱动（v-pump 周期驱动 + 跳变驱动动画）——**runtime 归属的唯一实现**（决策 #796）：
