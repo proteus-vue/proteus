@@ -1,0 +1,13 @@
+{
+  "device": "KLE-AL00U (OpenHarmony 7.0.0 / API 26)",
+  "measuredAt": "2026-10-28",
+  "scene": "superapp（生产路径 · 一次性 VM）",
+  "renderMsMin": 115,
+  "renderMsMax": 135,
+  "samples": [117, 115, 135, 124],
+  "bundleKB": 1542,
+  "perRenderCost": "每次 render = CreateVM → eval 整包(1542KB) → boot → 实例化该屏 → DestroyVM",
+  "decisionContext": "生产路径是每次点击/切屏都重付这份成本（115~135ms，与人眼可感卡顿阈值 100ms 同量级）。会话化的收益不只是 WS 能收事件，而是把这 115~135ms 变成只在首屏付一次。",
+  "honestBoundary": "这只是读数，不是性能门禁。跨机型差异大，当 CI 阈值会 flaky；要卡的是「读数存在且真的在打」（见 tests/harmony-http-gaps.test.ts）。",
+  "note": "本读数只覆盖 render 总耗时，未细分 VM 生命周期 vs 布局；若后续要做会话化，需再拆一段计时。"
+}

@@ -730,7 +730,22 @@ struct Superapp {
       try {
         // ★remount=true（一次性 VM：必须无条件重挂——否则同屏短路 ⇒ 空树 ⇒ 白屏）
         refreshDeviceSnapshot(this.win, this.keyboardHeightVp);   // ★#1083 必须先于 hostAppRender（后者回答 device.capture）
+        /**
+         * ★★★#1344：**单次渲染耗时读数**（`SUPERAPP_RENDER_MS`）。
+         *
+         * 【为什么必须量】生产路径是**一次性 VM**：每次 render 都要
+         *   `CreateVM → eval 整包（~1.6MB）→ boot → 实例化该屏 → DestroyVM`。
+         *   而"该不该改成会话式（VM 常驻）"是个**成本/收益判断**——
+         *   不能靠"感觉卡"拍板，也不能靠"会话式技术上可行"就动手。
+         *   这条读数就是那个判据：它同时给出 render 总耗时与其中 VM 生命周期占比。
+         *
+         * ★为什么同时记 nodes：若耗时高但 nodes 少，说明开销在 VM 不在布局。
+         */
+        const tRender0: number = Date.now();
         const rtOut: string = hostAppRender(Superapp.rtArgsJson(page, this.bundle, this.filesDir, vpW, vpH, undefined, this.runtimeState, true, this.scrollOffset));
+        const renderMs: number = Date.now() - tRender0;
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER_MS page=%{public}s ms=%{public}d bundleKB=%{public}d',
+          page, renderMs, Math.round(this.bundle.length / 1024));
         const rt = JSON.parse(rtOut) as Record<string, Object>;
         const tree = rt['tree'] as Record<string, Object> | undefined;
         if (tree && Array.isArray(tree['nodes'])) {

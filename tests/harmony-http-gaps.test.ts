@@ -466,3 +466,67 @@ describe('★★★#1187 鸿蒙三个 http.* 方法：必须有分派（不再 m
     expect(cs, '★cancelStats 没说明取消不可用').toMatch(/no-op|supported/)
   })
 })
+
+describe('★★★#1344：鸿蒙生产路径渲染成本（会话化的决策依据）', () => {
+  /**
+   * 【这条判据守什么】生产路径是**一次性 VM**：每次 render 都
+   *   `CreateVM → eval 整包(~1.5MB) → boot → 实例化该屏 → DestroyVM`。
+   *   「该不该改成会话式（VM 常驻）」是**成本/收益判断**，不能靠"感觉卡"拍板。
+   *   所以先加计时读数（`SUPERAPP_RENDER_MS`），再拿真机数字决策。
+   *
+   * 【真机读数（KLE-AL00U · 2026-10-28）】page=index **ms=135 / 124**，bundleKB=1542。
+   *   ⇒ 每次点击/切屏要付 **~130ms** 的 VM 生命周期成本（与人眼可感的卡顿阈值 100ms 同量级）。
+   *   ⇒ 会话化的收益不只是"WS 能收事件"：它把这 130ms 变成只在首屏付一次。
+   *
+   * 【诚实边界】这只是**读数入库**，不是性能门禁——不同机型差异大，
+   *   拿它当 CI 阈值会变成 flaky。要卡的是"读数存在且被打印"（否则再次失去决策依据）。
+   */
+  it('★渲染耗时读数必须存在（否则"该不该会话化"又回到拍脑袋）', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const { fileURLToPath } = await import('node:url')
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    const p = path.resolve(here, '../hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets')
+    const s = fs.readFileSync(p, 'utf8')
+    /**
+     * ★★★断言必须锚定 `hilog.info` **调用**，不能只 `toContain('SUPERAPP_RENDER_MS')`：
+     *   首版就是这样 —— 而那个字符串在**注释里**也有一份 ⇒ 把实际日志标签改名后
+     *   判据**依然全绿**（破坏性验证实测：改成 `SUPERAPP_RENDER_REMOVED` 仍 17 passed）。
+     *   ★这是本仓反复踩的同一形态："注释里命中 ≠ 代码里有"。
+     *   ⇒ 取 `hilog.info(` 之后的那段，再断言里面含该标签。
+     */
+    const at = s.indexOf("hilog.info(DOMAIN, TAG, 'SUPERAPP_RENDER_MS")
+    expect(at, '★没有真正的 SUPERAPP_RENDER_MS 日志调用（只有注释不算）').toBeGreaterThan(0)
+    // ★必须同时记 bundle 大小：耗时高但 bundle 小 ⇒ 开销在别处，结论会反
+    expect(s, '★读数必须带 bundleKB（否则分不清耗时花在 VM 还是别处）')
+      .toContain('bundleKB')
+    // ★必须在 hostAppRender 调用**两侧**取时间（否则量的是别的东西）
+    // ★★从 t0 **之后**开始找：`hostAppRender(` 也出现在文件顶部的 import 行里
+    //   （首版没限定范围 ⇒ 命中 import ⇒ 报"计时区间没包住"，是**假红**）。
+    //   ★锚点必须限定在正确的作用域内 —— 与本轮几处假绿同源。
+    const t0 = s.indexOf('const tRender0: number = Date.now()')
+    const call = s.indexOf('const rtOut: string = hostAppRender(', t0)
+    const t1 = s.indexOf('const renderMs: number = Date.now() - tRender0', t0)
+    expect(t0, '★找不到计时起点').toBeGreaterThan(0)
+    expect(t1, '★找不到计时终点').toBeGreaterThan(0)
+    expect(t0 < call && call < t1, '★计时区间没包住 hostAppRender 调用（量错了对象）').toBe(true)
+
+    /**
+     * ★★★真机读数入库（"该不该会话化"的量化依据，不是性能门禁）。
+     *   KLE-AL00U · 2026-10-28：`page=index ms=117 / 115`，bundleKB=1542
+     *   （另一次运行 135 / 124 ⇒ 区间 **115–135ms**）。
+     *   ★这只是**读数**，不设阈值：不同机型差异大，拿它当 CI 阈值必然 flaky。
+     *     要卡的是"读数存在且真的在打"（上一条判据），否则决策依据会再次失明。
+     */
+    const evPath = path.resolve(here, '../hosts/harmony/results/render-cost.json')
+    if (fs.existsSync(evPath)) {
+      const ev = JSON.parse(fs.readFileSync(evPath, 'utf8'))
+      expect(ev.device, '★证据必须记机型（跨机型读数不可混用）').toBeTruthy()
+      expect(Number(ev.renderMsMin), '★缺 renderMsMin').toBeGreaterThan(0)
+      expect(Number(ev.renderMsMax), '★缺 renderMsMax').toBeGreaterThan(0)
+      expect(Number(ev.renderMsMax) >= Number(ev.renderMsMin), '★区间反了').toBe(true)
+      expect(Number(ev.bundleKB), '★必须记 bundle 大小（否则分不清耗时花在 VM 还是别处）')
+        .toBeGreaterThan(0)
+    }
+  })
+})
