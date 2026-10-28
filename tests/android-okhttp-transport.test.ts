@@ -183,11 +183,14 @@ describe('★★#1160 Android 传输栈：唯一入口 + 连接复用不退化',
       assignments.length,
       `★cfg.body 被赋值 ${assignments.length} 处（应只有 2 处：buildCallConfig 装配 + 上传清空）`,
     ).toBe(2)
-    // ★上传路径的体必须来自 bodyWriter（而不是"恰好 cfg.body=null 这个写法"）
+    // ★上传路径的体必须来自 bodyWriter（而不是"恰好 cfg.body=null 这个写法"）。
     const upStart = capabilityCode.indexOf('private static InvokeWire.ResolveFrame performStreamUpload')
     const upEnd = capabilityCode.indexOf('static final class UploadStats')
     const up = capabilityCode.slice(upStart, upEnd)
-    expect(up, '★上传路径未挂 bodyWriter（体应由回调产生）').toMatch(/cfg\.bodyWriter\s*=\s*new HttpTransport\.BodyWriter/)
+    // ★★#1336 修正（**既存断言漂移**）：实现已改成经 `UploadBackpressure.streamBody(...)` 构造
+    //   （#1160 之后加了背压/慢写记账），而断言写死旧形态 `new HttpTransport.BodyWriter`
+    //   ⇒ 判据比实现旧、反而报红。**关心的是"上传路径挂了 bodyWriter"**，不是具体构造形式。
+    expect(up, '★上传路径未挂 bodyWriter（体应由回调产生）').toMatch(/cfg\.bodyWriter\s*=\s*[\w.]+\.streamBody\(/)
     expect(up, '★上传路径未清掉整包 body（否则走 byte[] 路径，文件不会被发送）').toMatch(/cfg\.body\s*=\s*null/)
   })
 
@@ -341,11 +344,26 @@ describe('★★#1160 HTTPDNS 接入点（`HttpURLConnection` 根本给不了的
   const transportCode = stripLineComments(transport)
 
   it('★★★`Dns` seam 真的接到 client（不是只声明一个接口）', () => {
-    // ★断言**调用点**：`b.dns(dns)` 必须在 buildClient 里真被调用
-    expect(transportCode, '★声明了 Dns seam 但没接到 client（b.dns(...) 未调用）⇒ 注入的解析器永不生效').toMatch(
-      /b\.dns\(\s*dns\s*\)/,
+    // ★断言**调用点**：Dns 实现必须在 buildClient 里真被挂到 builder 上。
+    // ★★#1336 修正（**既存断言漂移**）：实现后来升级为**总是**装 `ForwardingDns`
+    //   （表 → seam → 系统 三级回落，见 #1169 注释），而本断言原先写死旧形态 `b.dns(dns)`
+    //   ⇒ 代码做了更严的实现、判据反而报红（"判据比实现旧"）。
+    //   ⇒ 改为断言「builder 上挂了 Dns」+ 两条真正关心的事：
+    //     ① `ForwardingDns` 存在；② 它内部真的落到 `httpDns` seam（否则注入的解析器是死的）。
+    expect(
+      transportCode,
+      '★声明了 Dns seam 但没接到 client（b.dns(...) 未调用）⇒ 注入的解析器永不生效',
+    ).toMatch(/b\.dns\(\s*new ForwardingDns\(\)\s*\)/)
+    expect(transportCode, '★缺少转发式 Dns 实现（表/seam/系统三级回落）').toMatch(/class ForwardingDns implements Dns/)
+    expect(transportCode, '★ForwardingDns 里没有用 httpDns seam（注入的解析器不会被调用）').toMatch(
+      /final HttpDns impl = httpDns[\s\S]{0,400}impl\.lookup\(/,
     )
-    expect(transportCode, '★缺少 httpDnsSeam() 包装（记账/Dns 适配）').toMatch(/private static Dns httpDnsSeam\(\)/)
+    // ★★#1336 修正：`httpDnsSeam()` 这个包装方法已被重构掉（现在 seam 直接存字段
+    //   `httpDns` 并由 `installDns(...)` 注入，见上方 154 行）。判据关心的是
+    //   「seam 有注入入口」，不是某个方法名 ⇒ 改成断言注入点存在。
+    expect(transportCode, '★缺少 Dns seam 注入入口（httpDns 字段无人赋值）').toMatch(
+      /httpDns\s*=\s*dns|static\s+void\s+installDns\(/,
+    )
   })
 
   it('★注入的解析器返回空 ⇒ 必须当解析失败（不能静默用系统 DNS）', () => {

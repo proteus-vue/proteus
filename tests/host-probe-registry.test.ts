@@ -122,7 +122,14 @@ describe('★★探针登记：IOS_PROBES 表 ⇄ Swift ProbeConfig 必须同集
     //   判据取"额外参数"的唯一事实来源：Swift 的 kickFormat **形状**——
     //   形如 `__proteusHostAppXxxProbe(%@)` 且 JS 侧函数除 base 外还有参数。
     const extraParamProbes = new Set<string>()
-    for (const [full, name] of swiftSrc.matchAll(/argPrefix:\s*"--([a-z-]+-probe)=/g).map((m) => [m[0], m[1]!] as const)) {
+    // ★★★#1336 修一条**既存判据 bug**：`matchAll()` 返回 `RegExpStringIterator`（**没有** `.map`），
+    //   原写法 `swiftSrc.matchAll(...).map(...)` 一执行就抛 `TypeError: ... .map is not a function`。
+    //   之所以长期没暴露：#1336 加 `--share-probe` 之前，这段循环从未真正跑到
+    //   （它是本单第一条让 `extraParamProbes` 可能非空的路径）⇒ "判据自己崩了"被埋着。
+    //   ⇒ 先 `[...]` 展开成数组再 map。
+    for (const [full, name] of [...swiftSrc.matchAll(/argPrefix:\s*"--([a-z-]+-probe)=/g)].map(
+      (m) => [m[0], m[1]!] as const,
+    )) {
       // 在该 argPrefix 之后的 200 字符内找 kickFormat
       const at = swiftSrc.indexOf(full)
       const kick = /kickFormat:\s*"([^"]+)"/.exec(swiftSrc.slice(at, at + 400))

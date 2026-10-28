@@ -49,6 +49,7 @@ IOS_PROBES=(
   "HTTPDNS_PROD_PROBE_ARG:httpdns-prod-probe" # #1180 HTTPDNS 生产面（useFetch({httpDns}) 走本地代理）
   "WORKER_BOUND_PROBE_ARG:worker-bound-probe" # #1251 worker 数上界（第 16 成 / 第 17 拒）
   "PHONE_PROBE_ARG:phone-probe"         # #1285 C21 拨号盘（合法受理 / 非法号码被拒）
+  "SHARE_PROBE_ARG:share-probe"         # #1336 C22 分享面板（合法受理 / 危险 scheme 被拒）
 )
 
 # 所有探针参数都设置过之后，是否有**任一**非空（决定是否 `--console` 阻塞等报告）

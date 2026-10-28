@@ -97,6 +97,17 @@ final class HostCapabilities: NSObject {
                 }
             }
             catch { return fail("\(error)") }
+        // ★★★#1336 C22 系统分享面板（UIActivityViewController；只拉起面板，不代为选中目标）
+        //   ★iPad 需要 popover 锚点（不设会运行时崩）——已在 ShareCapability 内兜住
+        case "share":
+            do { return ok(try ShareCapability.share(args)) }
+            catch let e as WsError {
+                switch e {
+                case .unsupported(let m): return miss(m)
+                case .invalid(let m): return fail(m)
+                }
+            }
+            catch { return fail("\(error)") }
         // ★#1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request
         case "http.cancel":
             return ok(HttpCapability.cancel(args))

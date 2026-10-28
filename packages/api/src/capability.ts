@@ -266,7 +266,7 @@ export function createCapabilityHooks(
     useDevice: () => wrap(bridge.getDevice()),
     useBattery: () => wrap(bridge.getBattery()),
     useOrientation: () => wrap(bridge.getOrientation()),
-    useShare: (options) => wrap(bridge.share(options)),
+    useShare: (options) => wrap(bridge.share ? bridge.share(options) : Promise.reject(new CapError('share.unsupported', '桥未提供 share（useShare 不可用）'))), // ★#1336 补守卫（原 `wrap(bridge.share(...))` 在桥无 share 时同步抛 TypeError，业务读不到 unsupported）
     // ★#1122 门面开口 · #1133 走请求管线；`bridge.request` 显式出现（文档探测靠它判该端是否接线）
     useFetch: <T>(url: string, config?: FetchConfig): Promise<FetchResult<T>> =>
       bridge.request ? fpipe.fetch<T>(url, config) : Promise.resolve(capErr<T>('fetch.unsupported', '桥未提供 request（useFetch 不可用）') as FetchResult<T>),

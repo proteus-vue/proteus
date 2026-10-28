@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-27T04:04:26.672Z",
+  "updated_at": "2026-10-28T01:53:22.107Z",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -3735,6 +3735,70 @@
         "T-app-capability-batch1"
       ],
       "note": "【in_progress · 2026-10-27】用户「继续按照 useFetch 的标准做能力主线」。\n★**选型取证（为什么是它，不是 share）**：`capability-app-feasibility` 报 A 类 = 0、B 类只剩 getCookieJar\n（已 blocked 等设计拍板），其余 50 项 C 类都要写原生。按计划文档的建议序（share → openDocument →\nmakePhoneCall → getPermission → getLocation）逐项核可行性时发现：\n  · **share 的鸿蒙端在本机 SDK（API 17 OpenHarmony）里没有 `systemShare`**\n    （全 SDK 搜索只命中 clang 头文件的假阳性）⇒ 要做只能走自建 ShareExtension want，风险高；\n  · **openDocument 三端都要异步回调管线**（SAF Uri / UIDocumentPicker delegate / DocumentViewPicker），\n    是一整块，不是\"一个方法\"；\n  · **getPermission 在 iOS 没有通用查询 API**（每类权限各自一套）⇒ 契约形态本身要改；\n  · **makePhoneCall 三端都有干净路径**且**不需要任何权限**（只唤起拨号盘，不发起通话）：\n    Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`（已核 SDk 里有该常量）。\n⇒ 选 makePhoneCall 作为本轮的任务单元。\n★**安全**：号码必须**严格校验**（只允许数字/+/-/空格/#/*/逗号/分号），拒绝任何其他字符——\n  否则构造出的 `tel:` URI 会成为注入面（同族：#1257 的凭据跨域）。\n★**诚实语义**：返回 `{dispatched:true}` = **已交给系统**，不是\"已拨出\"（拨号盘由用户决定是否拨）。\n\n【done · 决策 #1285】\n- 三端宿主：Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`（走设备动作队列）。\n- JS 桥：`capability-app-phone.ts`（`createAppPhone` + `assertPhoneNumber` + `appPhoneCallAvailable`），\n  装配进 `capability-app-device.ts`（条件 spread：宿主缺 `phone.call` ⇒ 不提供该方法 ⇒ usePhoneCall 如实 unsupported）。\n- 契约：`HOST_CAPABILITY_METHODS` 加 `phone.call`（三端覆盖 59/55/33，各 +1）。\n- 读数：App 桥 49→**50** 方法 · 真缺口 52→**51** · 可接线 41→**42**（`makePhoneCall` 已从缺口消失）。\n- 判据：单测 7/7 · 三端零设备编译绿 · **真机 10/10**（顶层 Activity 实测为 TwelveKeyDialer）·\n  破坏性验证 M1/M2（JS 层）与真机变异（宿主层）三条全红。\n\n★**真机抓出一个只有真机能发现的 bug**：首版用 `intent.resolveActivity(pm)` 做前置判断，\n  在本机（targetSdk=34）**恒返回 null** —— Android 11+ 的**包可见性**限制会过滤未在\n  `<queries>` 声明的包，而 `startActivity` 本身不受此限。实测对照：\n  `pm query-activities -a android.intent.action.DIAL -d tel:10086` 明明找到\n  `com.android.contacts/.activities.TwelveKeyDialer`，`resolveActivity()` 却是 null\n  ⇒ **有拨号器的设备上功能也不可用**。修法：去掉前置判断，直接 `startActivity` 并捕\n  `ActivityNotFoundException`（无拨号器时抛 `UnsupportedOperationException` ⇒ missing ⇒ unsupported）。\n  ★同族教训：**能查询到 ≠ 能解析到**；包可见性是 `targetSdk>=30` 的静默行为变化。\n\n★**鸿蒙真机验证完成（用户「已签名」后）——并再剖出两个真缺陷**：\n  ① **`ohos.want.action.dial` 在这台设备上没人声明**：首版按 SDK 常量写，真机 `16000019 ABILITY_NOT_FOUND`。\n     设备取证（`bm dump -n com.ohos.contacts` 逐 ability 读 skills）：拨号盘 `com.ohos.contacts.MainAbility`\n     的 actions = `['action.system.home', 'ohos.want.action.viewData']`、uris.scheme = `tel`\n     —— **没有 dial**。⇒ **常量\"存在\" ≠ \"有人声明\"**（与同单 Android「能查询到 ≠ 能解析到」同族）。\n     修法：按序试 `viewData` → `dial`。\n  ② **探针场景不渲染 ⇒ 设备动作队列永不 drain**：回执 `{accepted:true,queued:1}` 而拨号盘没拉起\n     （\"回执说受理 ≠ 真的发生\"）。修法：`HttpProbe.ets` 写完报告后自己 `runDeviceActions(undefined)`。\n★真机判据：`PROTEUS_PHONE_CALL_OK action=ohos.want.action.viewData` + `com.ohos.contacts` 被拉起；\n  **破坏性验证**：两个候选 action 改成 `MUTATED_A/B` ⇒ `TRY_FAIL code=16000019` ×2 + `FAIL all-wants-failed`，\n  恢复后回 OK。\n★鸿蒙能力页已 🟡 → **✅**（`harmony-host-keys.mjs` 登记 `createAppPhone` → `phone.call`）。\n\n★**iOS 真机也补齐**（用户「已信任过了，不过是 Kairos 应用」；Kairos = run-selfdraw 的 CFBundleDisplayName）：\n  环境侧先修两处——① 描述文件 **10-26 已过期**（我一度怀疑 signing.sh 查错目录，实测 ExpirationDate 就是过期，\n  **它对我错**），跑 provision.sh 重新申请至 11-03；② 旧包是另一个 team（F4R3P3L477）签的，\n  与本机 team（XKH568R7A5）application-identifier 不匹配 ⇒ 卸载旧包后重装。\n  **探针链是新建的**（iOS 原先没有能力直通入口）：`appPhoneProbe`（走 usePhoneCall → bridge →\n  invokeHost，完整业务链）+ Swift ProbeConfig + probe-args 的 IOS_PROBES 表 + 判定脚本。\n  ★三个坑：① 探针参数**只在 --superapp 分支被转发** ⇒ 不带它时 --phone-probe 被静默丢弃；\n  ② 报告落点是 superapp.json（不是 phone-probe.json）；③ `$REPORT（` 全角括号被吞进变量名 ⇒ 用 ${REPORT}。\n  判据 **8/8**，含**宿主层直调**两条（走 usePhoneCall 时 JS 层先拦 ⇒ 不加这条则\"只改宿主\"的变异会假绿）。\n  **破坏性验证**：摘 iOS 宿主白名单 ⇒ **只有 host_direct_slash_rejected 与整体 ok 变红（6/8）**，\n  JS 层四条仍绿 ⇒ 证明两层各自独立。恢复后 8/8。\n\n★**三端收官（C21 makePhoneCall 全部有真机证据）**：\n  · Android ✅ run-phone-probe 10/10（顶层 Activity = TwelveKeyDialer）+ 真机变异摘白名单 ⇒ tel:12?x=1 真被派发；\n  · 鸿蒙 ✅ PROTEUS_PHONE_CALL_OK action=viewData + 真机变异改错 action ⇒ FAIL；\n  · iOS ✅ 探针 8/8（含宿主层直调）+ 真机变异摘宿主白名单 ⇒ 仅 host_direct 那条红。"
+    },
+    {
+      "id": "T-app-capability-share",
+      "title": "App 能力 C22 share：系统分享面板（Android ACTION_SEND+createChooser / iOS UIActivityViewController / 鸿蒙 systemShare.ShareController）+ 载荷与 URL scheme 白名单",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-main-20261028",
+      "scope": [
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "packages/api/src/capability-app-share.ts",
+        "packages/api/src/capability-app-device.ts",
+        "packages/api/src/capability.ts",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/ShareCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java",
+        "hosts/ios/ProteusHost/runtime/share-capability.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/ios/check-selfdraw-compile.sh",
+        "hosts/ios/run-selfdraw.sh",
+        "hosts/ios/lib/probe-args.sh",
+        "hosts/ios/ProteusHost/shell/superapp-probes.swift",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/DeviceSnapshot.ets",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "hosts/shared/bridge/entry-superapp-probes-share.ts",
+        "tests/capability-app-share.test.ts",
+        "hosts/android/run-share-probe.sh",
+        "hosts/ios/run-share-probe.sh",
+        "hosts/harmony/run-share-probe.sh",
+        "website/scripts/lib/app-bridge-keys.mjs",
+        "website/scripts/lib/harmony-host-keys.mjs",
+        "website/content/capabilities/share.md",
+        "website/en/capabilities/share.md",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1336,
+      "branch": null,
+      "verification": "npx vitest run tests/capability-app-share.test.ts（9/9）+ 破坏性验证 M1-M8（JS 白名单恒真红2 / 空内容守卫恒真红2 / 宿主失败被吞红1 / 用回 new URL 红2 / iOS 宿主白名单摘掉仅宿主直调红1 / 鸿蒙 URL 白名单摘掉红4）+ bash hosts/android/check-host-compile.sh + bash hosts/ios/check-selfdraw-compile.sh + bash scripts/check-harmony-host-compile.sh + node scripts/check-host-invoke-contract.mjs（android 60/61 · ios 56/61 · harmony 34/61）+ 真机：iOS bash hosts/ios/run-share-probe.sh 10/10 · 鸿蒙 bash hosts/harmony/run-share-probe.sh 11/11（含 PROTEUS_SHARE_OK 设备日志）· Android 探针已就绪但本机无设备未跑",
+      "related": [
+        "T-app-capability-phone-call",
+        "T-app-runtime-capabilities"
+      ],
+      "note": "【done · #1336（2026-10-28）】用户「继续 App 能力主线」。\n★**选型**：A 类 0、B 类只剩 getCookieJar（已 blocked）。按计划文档建议序复核 share —— **推翻上一单的结论**：上一轮记「鸿蒙 SDK 没有 systemShare」是**搜错目录**（只搜 openharmony/ets/api）。它在 **HMS kit**（`hms/ets/api/@hms.collaboration.systemShare.d.ts`，`@kit.ShareKit`，`@since 4.1.0(11)`）⇒ 「搜不到 ≠ 不存在」。\n★**语义边界**：只拉起**系统分享面板**，返回 = 面板已交给系统，不是\"分享成功\"；对齐 **Web Share API**（title/text/url），**不是** wx.shareAppMessage。能力页不得写\"分享到微信\"。\n★★**双层白名单**：至少一项内容 · 文本 8 KiB / 标题 256 / URL 2 KiB · **url 只允许 http/https**（分享会把链接递给别的 App，`file:`/`javascript:`/自定义 scheme 属注入面）· **标题 trim 正文不 trim**。非法**直接报错不清洗**；JS 层与三端宿主**各校验一遍**。\n★★★**真机剖出两个只有真机能发现的缺陷**：① **`new URL()` 在 App 精简引擎不存在**（Node 下单测 8/8 全绿、iOS 真机 `useShare({url:'https://proteus.dev/'})` 判\"不是合法绝对地址\"）⇒ 改纯正则，并补一条\"把全局 URL 换成必抛\"的回归断言（M6 验证它真能抓住回退）；② **宿主层此前不 trim 标题**（JS 层 trim，直调宿主传 `\"   \"` 被判有内容）⇒ 三端一起补。\n★**判据装置缺陷（自查）**：鸿蒙脚本首版把\"面板真拉起\"的日志断言放在全部用例之后，而每个 run-http-probe.sh 都会 `hilog -r` 清日志 ⇒ 永远查不到（是装置缺陷不是能力缺陷）⇒ 改成受理后**立即**断言。另：`console.*` 在本宿主不进 hilog 缓冲区 ⇒ share 路径改 `hilog.info/error`。\n★**读数**：App 桥 50→**51** · 真缺口 51→**50** · 可接线 42→**43** · 契约覆盖 android 59→60/61 · ios 55→56/61 · harmony 33→34/61 · 能力页鸿蒙 🟡→✅。\n★**诚实边界**：Android 探针脚本已就绪但**本机无设备**（`adb devices` 空）⇒ 真机未验，不得读成\"三端真机验过\"；判据验\"面板拉起\"，不验\"用户选了目标并发送成功\"。\n★**顺带修**：`capability.ts` 的 `useShare` 此前 `wrap(bridge.share(options))` 在桥缺 share 时**同步抛 TypeError**（业务读不到 `share.unsupported`）⇒ 加分档守卫。\n★**反巨型化**：探针单列到 `entry-superapp-probes-share.ts`（原文件已 962 行，与 #1150/#1179/#1180 同手法）；`capability.ts` 净零（1012 = 基线）。"
+    },
+    {
+      "id": "T-bridge-packaged-probes-imports",
+      "title": "随包桥目录（templates-host/shared/bridge）无法独立打包：11 个探针模块用框架相对路径 import `../../../packages/api/src/*`",
+      "type": "bugfix",
+      "status": "blocked",
+      "owner": null,
+      "scope": [
+        "hosts/shared/bridge/entry-superapp-probes.ts",
+        "hosts/shared/bridge/entry-superapp-probes-share.ts",
+        "packages/cli/src/app-bundle.ts",
+        "packages/cli/templates-host/shared/bridge",
+        "scripts/sync-host-bridge.mjs"
+      ],
+      "decision": null,
+      "branch": null,
+      "verification": "（待定：判据应是「从 packages/cli/templates-host/shared/bridge 独立跑 esbuild 打包成功」——目前 el.build 直接报 Could not resolve）",
+      "related": [
+        "T-app-capability-share"
+      ],
+      "note": "【Handoff】\n- 做到哪：仅取证（两个层面的 esbuild 失败都已实测复现），未改打包链路。\n- 已改：#1336 顺带补了 sync-host-bridge.mjs 同步 11 个探针文件（避免缺口再宽一格）。\n- 未做：探针模块的 import 改写 / 随包 entry 剥离 / 干净工程实测。\n- 下一步：① 先跑干净 npm 工程 `proteus build --package` 确认外部用户是否真炸（决定是否升 P0）；② 在 (a)/(b) 里拍板。\n- 坑：探针用 `../../../packages/api/src/*` 框架相对路径，且 `@proteus-vue/api` 不在 CLI 依赖里。\n- 判据状态：无可跑判据（判据应是「从随包目录独立 esbuild 成功」）。\n\n【blocked · 2026-10-28 发现（#1336 副产物）】\n★**现象（实测，不是推断）**：从 `packages/cli/templates-host/shared/bridge/` 单独跑 esbuild 打包 `entry-superapp.ts` 失败：\n  · 补文件前：`Could not resolve \"./entry-superapp-probes\"` 等 11 个（随包目录只有 entry-superapp.ts 一个文件）；\n  · 已在 #1336 补同步 11 个探针文件后：仍失败在 `Could not resolve \"../../../packages/api/src/capability\"` 等 29 处。\n★**根因两层**：① `sync-host-bridge.mjs` 此前只同步 `entry-superapp.ts`，不同步它 import 的探针模块（#1336 已补，`--check` 现在会守 11 个文件）；\n  ② 探针模块用**框架相对路径** `../../../packages/api/src/*` 引用 JS 桥源码 ⇒ 随包目录里那个路径不存在，且 `@proteus-vue/api` **不在 CLI 的依赖里**（无法改写成 bare specifier 直接解析）。\n★**影响**：`#666` 承诺的「外部用户无框架 checkout 也能 `proteus build --target <端> --package`」在 esbuild 阶段就断——纯 npm 安装的用户会直接失败。\n  ★但**外部用户是否真的踩到尚未取证**：需一个干净 `npm create` 工程实测一次（本单不猜）。\n★**两条候选修法（需拍板）**：\n  (a) 在 `app-bundle.ts` 加 esbuild plugin，把探针里的 `../../../packages/api/src/**` 重定向到**框架根**（有框架时）或一个 stub（无框架时，探针本就只在框架自测里用）；\n  (b) 探针**不进发布 bundle**：把 11 个探针 import 改成按需动态 import / 或在随包 entry 里剥掉（外部用户不需要 `--*-probe`）。\n  ★倾向 (b)：探针是**框架装置**（真机判据用），不是外部用户的运行时能力；发布物里不该带。但 (b) 会让「真源 ⇄ 副本」从字节相等变成**有差异**，需要把 diff 规则写进 `sync-host-bridge.mjs`（不是简单复制）。\n★**为什么不并入 #1336**：这是**既存**缺陷（首个探针文件加入时就成立），与 share 能力无关；#1336 只做了「把新探针文件也同步过去」这一层，避免让缺口再宽一格。\n  ★按 ai-development 规范 M5「一条任务改多件不相干的事」——不并入。\n★**下结论前先取证**（本仓纪律）：跑一次干净工程的 `proteus build --package` 看是否真的炸；若炸，本单升 P0（对外承诺失效）。"
     }
   ]
 }

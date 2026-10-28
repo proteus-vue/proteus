@@ -19,6 +19,7 @@
 //   经 `gen-app-screen-content.mjs` 生成）——与 Web/小程序**同一棵路由树**。
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'; export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'
+import { appShareProbe } from './entry-superapp-probes-share'; export { appShareProbe } from './entry-superapp-probes-share'   // ★#1336 分享探针（单列：probes.ts 已 962 行）
 // ★★★#1150：RFC 5861 扩展指令探针**单列**（entry-superapp-probes.ts 已到 file-size 上限；
 //   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
 import { appStaleProbe } from './entry-superapp-probes-stale'; export { appStaleProbe } from './entry-superapp-probes-stale'
@@ -967,6 +968,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as { __proteusHostAppStreamProbe?: (b: string, c?: number, s?: number, d?: number, w?: number) => string }).__proteusHostAppStreamProbe = (b: string, c?: number, s?: number, d?: number, w?: number) => appStreamProbe(b, c, s, d, w)
 // ★★★#1285 C21 拨号探针（iOS 真机用）—— 注册压一行守 1000 行上限
 ;(globalThis as unknown as { __proteusHostAppPhoneProbe?: () => string }).__proteusHostAppPhoneProbe = () => appPhoneProbe()
+// ★★★#1336 C22 分享面板探针（iOS 真机用）—— 同上压一行
+;(globalThis as unknown as { __proteusHostAppShareProbe?: () => string }).__proteusHostAppShareProbe = () => appShareProbe()
 // ★★★#1149：HTTP 条件请求缓存探针（宿主按中性名调；结果填 __proteusHostCacheProbeResult）
 ;(globalThis as unknown as {
   __proteusHostAppCacheProbe?: (b: string) => string

@@ -23,8 +23,16 @@ import { deviceInfo, batteryInfo, pasteboard, BusinessError } from '@kit.BasicSe
 import { connection } from '@kit.NetworkKit';
 import { vibrator, sensor } from '@kit.SensorServiceKit';
 import { media } from '@kit.MediaKit';
+// ★★★#1336：本文件此前只用 `console.*`，而**该宿主里 console 不进 hilog 缓冲区**
+//   （实测：share 动作执行后 `hilog -x | grep PROTEUS_SHARE` 零命中 ⇒ 无法取证"面板是否真拉起"）。
+//   ⇒ 关键动作路径改用 `hilog.info/error`（与 HttpProbe.ets 同款），让 `hdc ... hilog` 可验。
+import { hilog } from '@kit.PerformanceAnalysisKit';
 // ★★★#1285 C21：拨号盘靠 want 拉起（`ohos.want.action.dial`）⇒ 要 AbilityKit 的 Context/Want 类型
 import { common, Want } from '@kit.AbilityKit';
+// ★★★#1336 C22：系统分享面板 —— `systemShare` 在 **HMS kit**（`@kit.ShareKit`），
+//   不在 `openharmony/ets/api` 下。★这是本次取证纠正的一处错误结论：
+//   上一轮记「鸿蒙 SDK 没有 systemShare」是**只搜了 openharmony 目录**导致的误判（"搜不到" ≠ "不存在"）。
+import { systemShare } from '@kit.ShareKit';
 import { setDeviceSnapshot, drainDeviceActions } from 'proteus_render';
 // ★★决策 #1083：录屏/画中画状态（C71）——快照随设备快照一起交给 C++
 import { readCaptureSnapshot, CaptureSnapshotData } from './CaptureSnapshot';
@@ -40,6 +48,10 @@ interface DeviceAction {
   on?: boolean;
   /** ★#1285 `phone.call`：已由 C++ 白名单校验过的号码（只含 0-9 + - ( ) 空格 # * ,） */
   number?: string;
+  /** ★#1336 `share`：标题/URL 均已由 C++ 白名单校验（长度上限 + URL 只允许 http/https）
+   *  ★正文复用上面的 `text` 字段（与 `clipboard.write` 同名字段，都是"文本载荷"） */
+  title?: string;
+  url?: string;
 }
 
 /** 采集同步可读读数并交给 C++（渲染前调用；失败不阻断渲染）。 */
@@ -250,6 +262,58 @@ export function runDeviceActions(win: window.Window | undefined): void {
         tryStart(0);
       } catch (e) {
         console.error('PROTEUS_PHONE_CALL_THROW ' + JSON.stringify(e));
+      }
+    } else if (a.action === 'share') {
+      /**
+       * ★★★#1336 C22：系统分享面板（鸿蒙侧）。
+       *
+       * 【API 出处（本次取证纠正了上一单的错误结论）】
+       *   `systemShare.ShareController` 在 **HMS kit** 里，经 `@kit.ShareKit` 导出
+       *   （`@hms.collaboration.systemShare.d.ts`，`@since 4.1.0(11)`）。
+       *   上一轮选型时记的「鸿蒙 SDK 里没有 systemShare」是**搜错目录**（只搜了
+       *   `openharmony/ets/api`，没搜 `hms/ets/api`）⇒ **"搜不到" ≠ "不存在"**。
+       *
+       * 【为什么走 `systemShare` 而不是自定义 want】
+       *   分享面板是系统 UI，`ShareController.show()` 是官方入口；自定义 want 需要自己实现
+       *   目标选择 UI 与投递协议（等于重写系统面板，且各接收方兼容性都得上）。
+       *
+       * 【★语义边界】
+       *   `show()` 只**拉起面板**；用户选谁、是否真的发出去由系统决定。
+       *   本层失败只记日志（与震动/拨号同一"已受理"语义）——
+       *   诚实性由 `PROTEUS_SHARE_FAIL` 日志 + 真机判据（查前台是分享面板）共同保证。
+       *
+       * 【★ArkTS 约束（本项目实测过的两条）】
+       *   ① 不允许裸对象字面量当跨 HAR 接口类型 ⇒ `SharedData`/`SharedRecord` 用具名常量；
+       *   ② udi 用 UDMF 标准类型名 `general.plain-text` / `general.hyperlink`（不是 MIME）。
+       */
+      try {
+        const ctx = getContext() as common.UIAbilityContext;
+        /* ★★★`SharedData` 构造器只收**单条** record（`constructor(record: SharedRecord)`），
+           不是数组——首版传 `SharedRecord[]` 被真编译当场拦下（ArkTS 10505001：
+           "Argument of type 'SharedRecord[]' is not assignable to parameter of type 'SharedRecord'"）。
+           ★这也说明**C++ 编译门禁不覆盖 ArkTS**：这条错误只有真跑 hvigor 才看得见。 */
+        const hasText: boolean = (a.text ?? '') !== '';
+        const hasUrl: boolean = (a.url ?? '') !== '';
+        const hasTitle: boolean = (a.title ?? '') !== '';
+        // 正文优先 text；只有链接时用链接本身（`general.hyperlink` 让系统按链接渲染）
+        const body: string = hasText ? (a.text as string) : (a.url ?? '');
+        const utd: string = (!hasText && hasUrl) ? 'general.hyperlink' : 'general.plain-text';
+        const content: string = body !== '' ? body : (a.title ?? '');
+        const seed: systemShare.SharedRecord = { utd: utd, content: content, title: hasTitle ? (a.title as string) : '' };
+        const data: systemShare.SharedData = new systemShare.SharedData(seed);
+        const controller = new systemShare.ShareController(data);
+        controller.on('dismiss', () => {
+          hilog.info(0x0000, 'proteus-share', 'PROTEUS_SHARE_DISMISS');
+        });
+        controller.show(ctx, { previewMode: systemShare.SharePreviewMode.DEFAULT, selectionMode: systemShare.SelectionMode.SINGLE })
+          .then(() => {
+            hilog.info(0x0000, 'proteus-share', 'PROTEUS_SHARE_OK');
+          })
+          .catch((err: BusinessError) => {
+            hilog.error(0x0000, 'proteus-share', 'PROTEUS_SHARE_FAIL code=%{public}s', JSON.stringify(err) ?? '');
+          });
+      } catch (e) {
+        hilog.error(0x0000, 'proteus-share', 'PROTEUS_SHARE_THROW %{public}s', JSON.stringify(e) ?? '');
       }
     }
   }

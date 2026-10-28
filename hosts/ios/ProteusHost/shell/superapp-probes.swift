@@ -84,6 +84,17 @@ enum SuperappProbes {
       deadlineSeconds: 90,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1336 C22 系统分享面板（`--share-probe=1`）
+    //   ★deadline 给 60s：分享面板是**异步呈现**的，但探针不等用户选择（只断"受理"），
+    //     所以不需要长等待；真正慢的是 JS 侧多次 useShare 往返。
+    ProbeConfig(
+      argPrefix: "--share-probe=",
+      kickFormat: "__proteusHostAppShareProbe()",
+      resultKey: "__proteusHostShareProbeResult",
+      reportPrefix: "share",
+      deadlineSeconds: 60,
+      extraReadings: { _ in [:] },
+    ),
     ProbeConfig(
       argPrefix: "--cancel-probe=",
       kickFormat: "__proteusHostAppCancelProbe(%@)",

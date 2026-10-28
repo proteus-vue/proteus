@@ -212,6 +212,10 @@ public final class HostCapabilities {
             //   ★必须全限定名：本类在父包 `dev.proteus.layoutcore`，而 capability 类在 `.runtime` 子包
             case "phone.call":
                 return ok(dev.proteus.layoutcore.runtime.PhoneCallCapability.dial(activity, args));
+            // ★★★#1336 C22 系统分享面板（ACTION_SEND + createChooser；只拉起面板，不代为选中目标）
+            //   ★与 #1285 同一教训：不做 resolveActivity 前置判断（包可见性会误判为"无分享目标"）
+            case "share":
+                return ok(dev.proteus.layoutcore.runtime.ShareCapability.share(activity, args));
             // ── #1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request ──
             case "http.cancel":
                 return ok(HttpCapability.cancel(args));

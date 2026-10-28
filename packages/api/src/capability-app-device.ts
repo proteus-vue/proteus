@@ -30,6 +30,7 @@ import { createAppFileStorage } from './capability-app-storage'   // ★#1207 Ap
 import { appLogAvailable, createAppLog } from './capability-app-log'   // ★#1225 App 端日志通道
 import { appFileSystemAvailable, createAppFileSystem } from './capability-app-filesystem'   // ★#1226 文件系统（基础面）
 import { appPhoneCallAvailable, createAppPhone } from './capability-app-phone'   // ★#1285 C21 拨号盘
+import { appShareAvailable, createAppShare } from './capability-app-share'   // ★#1336 C22 系统分享面板
 // ★★★决策 #1081：App 端元素查询（`useElement` 选择器通路）——解析器由装配层注入
 import { createAppElementCapabilities } from './capability-app-element'
 // ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
@@ -285,6 +286,8 @@ export function createAppCapabilities<E extends Error = Error>(
     ...createAppCaptureCapabilities(resOpts),   // ★#1083 录屏/截屏状态（getScreenCapture）
     // ★★★#1285 C21 拨号盘唤起（宿主缺 phone.call 时**不提供** ⇒ usePhoneCall 如实 unsupported）
     ...(appPhoneCallAvailable() ? createAppPhone() : {}),
+    // ★★★#1336 C22 系统分享面板（宿主缺 share 时**不提供** ⇒ useShare 如实 unsupported）
+    ...(appShareAvailable() ? createAppShare() : {}),
     connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
     createSocketTask: createAppSocketTask(appWs, resOpts.resources ?? undefined, resOpts.owner),   // ★#1096 C28 低层句柄（复用同一 ws 腿）· ★#1245 透传账本
     ...createAppTransfer(resOpts),   // ★#1095 App 端 upload/download（复用 http.request 字节腿 + 宿主 fs）

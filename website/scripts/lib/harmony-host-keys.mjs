@@ -151,6 +151,14 @@ export const NATIVE_BRIDGE_TO_HOST = {
 export const APP_PHONE_FACTORY = 'createAppPhone'
 export const APP_PHONE_TO_HOST = { makePhoneCall: 'phone.call' }
 
+/** ★#1336：系统分享面板（C22）的桥成员 → 鸿蒙宿主方法
+ *  ★真机取证（2026-10-28）：`proteus_device.h` 的 `isDeviceMethod` + 分派里有 `share`（走动作队列）；
+ *    实际拉起由 ArkTS `DeviceSnapshot.ets` 的 `runDeviceActions` 执行
+ *    —— 用 `systemShare.ShareController.show(ctx, …)`（HMS `@kit.ShareKit`，API 11+）。
+ *    设备日志 `PROTEUS_SHARE_OK` 已取证（`hosts/harmony/run-share-probe.sh` 11/11）。 */
+export const APP_SHARE_FACTORY = 'createAppShare'
+export const APP_SHARE_TO_HOST = { share: 'share' }
+
 export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
@@ -163,6 +171,8 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-filesystem.ts', factory: APP_FS_FACTORY, map: APP_FS_TO_HOST },
   // ★#1285：拨号域（makePhoneCall → phone.call）——不登记则永远 🟡
   { file: 'packages/api/src/capability-app-phone.ts', factory: APP_PHONE_FACTORY, map: APP_PHONE_TO_HOST },
+  // ★#1336：分享域（share → share）——不登记则永远 🟡（代码做了、文档不认，与 #1285 同族）
+  { file: 'packages/api/src/capability-app-share.ts', factory: APP_SHARE_FACTORY, map: APP_SHARE_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */

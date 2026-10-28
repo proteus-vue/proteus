@@ -15254,3 +15254,51 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     会走 unsupported 分支，属如实降级而非缺陷）；② 鸿蒙走**设备动作队列**（同步 napi 里不能 await
     `startAbility`）⇒ 回执是 `{accepted:true}` 已入队、不是已拉起；本机无 hdc 设备 ⇒ **未真机验**，
     官网能力页如实标 🟡；③ 判据验"能唤起拨号盘 + 非法号码被拒"，不验"用户真的点了拨出"。
+
+1336. **App 能力 C22 `share` 三端落地（系统分享面板）+ 真机剖出两个只有真机能发现的缺陷**（2026-10-28 · 用户「继续 App 能力主线」）:
+  - **选型（推翻上一单的一个错误结论）**：A 类 0、B 类只剩 `getCookieJar`（已 blocked）。
+    #1285 选型时记「鸿蒙 SDK 没有 `systemShare`」——**那是搜错目录**：只搜了
+    `openharmony/ets/api`。它其实在 **HMS kit**（`hms/ets/api/@hms.collaboration.systemShare.d.ts`，
+    经 `@kit.ShareKit` 导出，`@since 4.1.0(11)`，本机 SDK API 24）。
+    ⇒ 教训：**「搜不到」≠「不存在」**——下否定结论前要把搜索面覆盖全（这里要多搜一层 `hms/`）。
+    与 #1285 鸿蒙 `dial` 的「常量存在 ≠ 有人声明」是**同族反向**的两条。
+  - **语义边界**：只拉起**系统分享面板**（Android `ACTION_SEND`+`createChooser` / iOS
+    `UIActivityViewController` / 鸿蒙 `systemShare.ShareController.show`），返回 = **面板已交给系统**，
+    不是"分享成功"。对齐 **Web Share API**（`{title?,text?,url?}`），**不是** `wx.shareAppMessage`。
+  - **★★双层白名单**（JS 层与三端宿主**各校验一遍**，业务可绕过 JS 直调 `__proteusHostInvoke`）：
+    至少一项内容 · 文本 8 KiB / 标题 256 / URL 2 KiB · **url 只允许 http/https**
+    （分享会把链接递给**别的 App**：`file:` 泄漏本机路径、`javascript:` 是可执行语义、
+    自定义 scheme 是深链注入面）· **标题 trim、正文不 trim**。
+    非法**直接报错不清洗**——静默清洗等于把业务没写过的链接发出去。
+  - **★★★真机剖出两个只有真机能发现的缺陷（本轮最值钱）**：
+    ① **`new URL()` 在 App 精简引擎不存在**。首版用 `new URL(u)` 校验：Node 下单测 **8/8 全绿**，
+       iOS 真机 `useShare({url:'https://proteus.dev/'})` 却返回 `share.invalid: url 不是合法绝对地址`。
+       ⇒ 改**纯正则**（scheme 白名单 + 必须带 `://` 且有 authority），并补一条回归断言：
+       把全局 `URL` 换成"一调用就抛"，校验逻辑必须照样工作（M6 验证它真能抓住回退）。
+       ★同族既有事实：无 TextDecoder #1071 / 无 TextEncoder #1095 / `capability-fetch-redirect.ts`
+       的 `resolveLocation` 注释。**「单测全绿 ≠ 真机可用」再次成立。**
+    ② **宿主层此前不 trim 标题**（JS 层 trim，宿主只看原始串）⇒ 直调宿主传 `{"title":"   "}`
+       被判"有内容"而受理（拉起一个空面板）。**三端一起补 trim**（鸿蒙真机 9/10 → 10/10）。
+  - **判据装置缺陷（自查，同样值得记）**：鸿蒙脚本首版把"面板真拉起"的设备日志断言放在**全部用例之后**，
+    而每个 `run-http-probe.sh` 开头都会 `hilog -r` 清日志，最后一条是"被拒"用例（没有分享动作）
+    ⇒ **永远查不到**。这是**装置缺陷**不是能力缺陷。改成受理后**立即**断言。
+    另：`console.*` 在本宿主**不进 hilog 缓冲区** ⇒ share 路径改 `hilog.info/error` 才可取证。
+  - **读数**：App 桥 **50→51** 方法 · 真缺口 **51→50** · 可接线 **42→43** ·
+    契约覆盖 android **59→60/61** · ios **55→56/61** · harmony **33→34/61** ·
+    官网能力页鸿蒙列 **🟡→✅**（登记 `website/scripts/lib/harmony-host-keys.mjs` 的
+    `APP_SHARE_FACTORY`/`APP_SHARE_TO_HOST` + `HARMONY_BRIDGE_SOURCES`，不登记则永远 🟡）。
+  - **判据**：单测 `capability-app-share` **9/9** · 三端零设备编译全绿 ·
+    **iOS 真机 10/10**（`hosts/ios/run-share-probe.sh`，含宿主层直调两条）·
+    **鸿蒙真机 11/11**（`hosts/harmony/run-share-probe.sh`，含设备日志 `PROTEUS_SHARE_OK` = 面板真拉起）。
+  - **破坏性验证八层**：M1 JS URL 白名单恒真 ⇒ 红 2；M2 空内容守卫恒真 ⇒ 红 2；
+    M3 Android 宿主白名单恒真（编译验证）；M5 宿主失败被吞 ⇒ 红 1；
+    M6 用回 `new URL` ⇒ 红 2（新断言当场抓住）；M7 **iOS 宿主白名单摘掉 ⇒ 只有宿主直调两条红、
+    JS 四条仍绿**（8/10，证明两层各自独立）；M8 鸿蒙 URL 白名单摘掉 ⇒ 红 4。
+  - **顺带修**：`capability.ts` 的 `useShare` 此前是 `wrap(bridge.share(options))`——桥缺 `share` 时
+    **同步抛 `TypeError`**，业务连 `share.unsupported` 都读不到 ⇒ 补分档守卫（与其它 C 类同款）。
+  - **反巨型化**：探针**单列**到 `entry-superapp-probes-share.ts`（`entry-superapp-probes.ts` 已 962 行，
+    与 #1150/#1179/#1180 同手法）；`capability.ts` 净零（1012 = 基线）。
+  - **诚实边界**：**Android 真机未验**——探针脚本 `hosts/android/run-share-probe.sh` 已就绪，
+    但本机 `adb devices` 为空；不得把"代码编译过"读成"三端真机验过"。
+    判据验"面板真的拉起"，**不验**"用户选了某个目标并发送成功"（那属系统 UI 内的行为）。
+    鸿蒙走动作队列 ⇒ 回执 `{accepted:true}` 只是"已入队"，故另用设备日志取证面板真的起了。

@@ -101,6 +101,14 @@ export const HOST_CAPABILITY_METHODS = [
   //   ★三端各自实现：Android `Intent.ACTION_DIAL` / iOS `tel:` URL / 鸿蒙 `ohos.want.action.dial`。
   //   ★号码白名单在 JS 层与三端宿主**各校验一遍**（不信任单侧）——拼进 tel: URI 前必须拦注入字符。
   'phone.call',
+  // ★★★#1336 C22 系统分享面板（`useShare`）：把 `{title?,text?,url?}` 交给**系统分享 UI**。
+  //   ★语义边界：返回只代表"面板已拉起"，不是"分享成功"；对齐 **Web Share API**，
+  //     **不是** `wx.shareAppMessage`（分享到某个具体 IM）。能力页不得写成"分享到微信"。
+  //   ★三端各自实现：Android `Intent.ACTION_SEND` + `createChooser` / iOS `UIActivityViewController` /
+  //     鸿蒙 `systemShare.ShareController.show`（HMS `@kit.ShareKit`，API 11+）。
+  //   ★输入白名单（JS 层与三端宿主各校验一遍）：至少一项内容 · 文本 8 KiB / 标题 256 ·
+  //     **url 只允许 http/https**（分享会把链接交给别的 App，`file:`/自定义 scheme 属注入面）。
+  'share',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

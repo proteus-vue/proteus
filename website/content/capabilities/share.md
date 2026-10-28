@@ -12,7 +12,7 @@ order: 6002
 
 > 技术标识：能力原语 C18 · `capability.share` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
-通知/分享（wx.shareAppMessage / navigator.share / mock）
+★#1336 补守卫：此前 `wrap(bridge.share(options))` 在桥无 share 时同步抛 TypeError（业务读不到 share.unsupported）
 
 ## 签名
 
@@ -66,7 +66,7 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 
 | code | 说明 |
 |---|---|
-| `share.unsupported` | wx.shareAppMessage 缺失 |
+| `share.unsupported` | 桥未提供 share |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 
@@ -77,9 +77,9 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 | Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.shareAppMessage |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
-| Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · 渲染核心已落地——能力桥未接线 |
+| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（proteus_device.h） |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

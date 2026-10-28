@@ -67,12 +67,39 @@ function walk(dir, out = []) {
   return out
 }
 
+/**
+ * ★★★#1336：**AUTO-SYNCED 生成副本**不参与本门禁（它的真源已被单独计量）。
+ *
+ * 【为什么必须排除（本单实测撞到的形态）】
+ *   `packages/cli/templates-host/shared/bridge/entry-superapp.ts` 是
+ *   `hosts/shared/bridge/entry-superapp.ts` 的「固定头 + 逐字节正文」副本（决策 #666，
+ *   由 `scripts/sync-host-bridge.mjs` 生成，带唯一 SENTINEL 行）。
+ *   ⇒ 真源 993 行（**合规**）+ 8 行生成头 = 1001 行 ⇒ 门禁把**生成物**判成"新增大文件"。
+ *   而真正该管的是真源的职责拆分——对副本提"拆文件"没有意义（它由脚本整体重写，
+ *   手工拆分会在下一次同步时被覆盖）。
+ *   ★这不是放宽：真源仍在扫描范围内（本单真源 993 < 1000，合规）；
+ *     判据 = 文件里存在 AUTO-SYNCED 哨兵行（不是按路径白名单，避免以后新副本又要手工登记）。
+ */
+const AUTOSYNCED = /^\/\/ ===== AUTO-SYNCED BODY BELOW /m
+
+function isAutoSyncedCopy(abs) {
+  try {
+    // 只看前 20 行（哨兵固定在头部，不必读全文——2500 个文件全读全文会更慢）
+    const head = fs.readFileSync(abs, 'utf-8').split('\n', 20).join('\n')
+    return AUTOSYNCED.test(head)
+  } catch {
+    return false
+  }
+}
+
 const files = ROOTS.flatMap((r) => walk(path.join(ROOT, r)))
 
 const sizes = [] // { rel, lines }
+let autoSyncedSkipped = 0
 for (const f of files) {
   const rel = path.relative(ROOT, f)
   if (rel in ALLOW) continue
+  if (isAutoSyncedCopy(f)) { autoSyncedSkipped++; continue }
   let lines
   try { lines = fs.readFileSync(f, 'utf-8').split('\n').length } catch { continue }
   sizes.push({ rel, lines })
@@ -106,7 +133,10 @@ for (const { rel, lines } of sizes) {
   }
 }
 
-console.log(`文件大小门禁（扫 ${files.length} 个源文件；硬上限 ${cap} 行；豁免 ${Object.keys(ALLOW).length} 个）`)
+console.log(
+  `文件大小门禁（扫 ${files.length} 个源文件；硬上限 ${cap} 行；豁免 ${Object.keys(ALLOW).length} 个；` +
+    `AUTO-SYNCED 生成副本跳过 ${autoSyncedSkipped} 个——真源另计）`,
+)
 
 if (args.includes('--list')) {
   for (const s of sizes.filter((s) => s.lines >= cap)) console.log(`  · ${String(s.lines).padStart(6)}  ${s.rel}`)

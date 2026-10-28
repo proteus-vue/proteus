@@ -241,6 +241,72 @@ inline std::string dispatch(const std::string& method, const std::string& argsJs
     return out;
   }
 
+  /**
+   * ★★★#1336 C22 `share` —— 系统分享面板（鸿蒙侧）。
+   *
+   * 【★★★为什么不是"直接调 systemShare"】鸿蒙的 `systemShare.ShareController.show()`
+   *   需要 `common.UIAbilityContext` + 是一次 **Promise** 调用，而本函数在**同步 napi** 内执行
+   *   （与 `phone.call` 同一约束）⇒ 入队 `{action:'share', ...}`，ArkTS 渲染后 drain 执行。
+   *   ★回执 `{accepted:true}` = **已入队**，不是"面板已拉起"（与震动/拨号同一语义）。
+   *
+   * 【★API 出处（本次取证纠正了上一单的一个错误结论）】
+   *   上一轮（#1285 选型时）记录「鸿蒙 SDK 里没有 systemShare」——**那是搜错了目录**：
+   *   `systemShare` 在 **HMS kit**（`hms/ets/api/@hms.collaboration.systemShare.d.ts`，
+   *   经 `@kit.ShareKit` 导出，`@since 4.1.0(11)`），不在 `openharmony/ets/api` 下。
+   *   ★教训与「常量存在 ≠ 有人声明」（#1285 鸿蒙 `dial`）同族但方向相反：
+   *     **"搜不到" ≠ "不存在"**——下否定结论前要把搜索面覆盖全（这里要多搜一层 `hms/`）。
+   *
+   * 【输入校验（与 Android/iOS **同一集**）】
+   *   ① 至少一项内容；② 文本 8 KiB / 标题 256 / URL 2 KiB；
+   *   ③ URL scheme 只允许 http/https（分享会把链接递给别的应用）。
+   *   ★非法**直接报错**（不入队）——静默清洗等于把业务没写过的链接发出去。
+   */
+  if (method == "share") {
+    std::string title, text, url;
+    jstr(argsJson.c_str(), argsJson.size(), "title", &title);
+    jstr(argsJson.c_str(), argsJson.size(), "text", &text);
+    jstr(argsJson.c_str(), argsJson.size(), "url", &url);
+    /* ★★★#1336 真机剖出：宿主层此前**不 trim 标题**，而 JS 层 `assertShareOptions` 会 trim
+       ⇒ 直调宿主传 `{"title":"   "}` 被判"有内容"而受理（拉起一个空面板）。
+       ★三端同一缺陷（Android/iOS 同样只在判空时看原始串）⇒ 三端一起补 trim。
+       口径与 JS 层一致：**标题 trim**（空白标题等于没给），**正文不 trim**（首尾空白可能有意为之）。 */
+    {
+      const auto notSpace = [](unsigned char c) { return c != ' ' && c != '\t' && c != '\n' && c != '\r'; };
+      auto b = title.begin(), e = title.end();
+      while (b != e && !notSpace(static_cast<unsigned char>(*b))) ++b;
+      while (b != e && !notSpace(static_cast<unsigned char>(*(e - 1)))) --e;
+      title = std::string(b, e);
+    }
+    if (title.size() > 256) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"share: title 过长（上限 256）\"}";
+    }
+    if (text.size() > 8192) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"share: text 过长（上限 8192）\"}";
+    }
+    if (url.size() > 2048) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"share: url 过长（上限 2048）\"}";
+    }
+    if (!url.empty()) {
+      /* http/https 前缀判定。★大小写不敏感（`HTTP://` 也是合法 scheme），
+         且必须带 `://` —— 否则 `httpfoo:` 这种自定义 scheme 会被误放行（前缀匹配的经典穿帮）。 */
+      std::string low;
+      low.reserve(url.size());
+      for (char c : url) low += static_cast<char>((c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c);
+      const bool httpLike = (low.rfind("http://", 0) == 0) || (low.rfind("https://", 0) == 0);
+      if (!httpLike) {
+        return "{\"ok\":false,\"missing\":false,\"reason\":\"share: url 只允许 http/https\"}";
+      }
+    }
+    if (title.empty() && text.empty() && url.empty()) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"share: 内容为空（title/text/url 至少给一项）\"}";
+    }
+    int n = enqueue(std::string("{\"action\":\"share\",\"title\":\"") + jsonEscape(title) + "\",\"text\":\"" +
+                    jsonEscape(text) + "\",\"url\":\"" + jsonEscape(url) + "\"}");
+    char out[128];
+    snprintf(out, sizeof(out), "{\"ok\":true,\"data\":{\"accepted\":true,\"queued\":%d}}", n);
+    return out;
+  }
+
   return std::string("{\"ok\":false,\"missing\":true,\"reason\":\"未实现的设备方法：") + method + "\"}";
 }
 
@@ -249,7 +315,10 @@ inline bool isDeviceMethod(const std::string& method) {
   // ★★★#1285：`phone.call` 也走本文件的分派（动作队列机制），所以必须进这个白名单——
   //   否则 `host_app_runtime_impl.h` 会在进 dispatch 之前就回落成 `missing`（"写了没人调"）。
   return method.rfind("device.", 0) == 0 || method == "clipboard.read" || method == "clipboard.write" ||
-         method == "phone.call";
+         method == "phone.call" ||
+         // ★★★#1336：`share` 与 `phone.call` 同因——走本文件的分派（动作队列），
+         //   不进这个白名单就会在 dispatch 前回落 `missing`（"写了没人调"）。
+         method == "share";
 }
 
 }  // namespace device
