@@ -91,6 +91,10 @@ export type { ToolingEngineering, ToolingEngineeringOptions, DevToolsHandle, Dev
 // ★G-32 B6 前置：请求数据层语义面（injectable——R1 request 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe 去重）+ G-31 B7 收口适配器
 export { createRequestEngineering, defaultCacheKey, createCapabilityRequestClient } from './request-engineering'
 export type { RequestEngineering, RequestEngineeringOptions, RequestExecutor, RequestCacheEntry, QueryState, QueryHandle, QueryOptions, RequestStrategyOptions } from './request-engineering'
+// ★★★#1342 请求库（useFetch 之上的**高级封装**：实例配置 · 幂等/熔断/离线/**未知态** · 签名防重放脱敏 · bizId 隔离 · 审计）
+//   ★定位：不做"又一个 axios"，做**平台方的请求治理层**（几十个业务团队共用一套网络且管得住）。
+//   ★底座仍是 useFetch/pipeline（不重写传输与 HTTP 语义）；策略字段不下传线格式（四层链纪律）。
+export * from './request'
 export { createOwnershipEngineering } from './ownership-engineering'
 export type { OwnershipEngineering, OwnershipEngineeringOptions, OwnershipReactivity, OwnedStateLike, OwnedLike, BorrowLike, OwnedView } from './ownership-engineering'
 // ★WebMCP 接入（E30 engineering.mcp）：把能力面暴露为 agent 可调用工具（能力派生 + CapResult 归一）
