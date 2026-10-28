@@ -15302,3 +15302,41 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     但本机 `adb devices` 为空；不得把"代码编译过"读成"三端真机验过"。
     判据验"面板真的拉起"，**不验**"用户选了某个目标并发送成功"（那属系统 UI 内的行为）。
     鸿蒙走动作队列 ⇒ 回执 `{accepted:true}` 只是"已入队"，故另用设备日志取证面板真的起了。
+
+1342. **请求库：不做"又一个 axios"，做平台方的请求治理层（C1 骨架 · 未知态建模）**（2026-10-28 · 用户「请求库这层就是针对当前主流请求库痛点提供我们自己的答案」）:
+  - **定位分野**：主流请求库站在**业务方**视角（帮我少写代码）；超级应用平台方要的是
+    "**一个 App 里几十个团队共用一套网络，还管得住**"（可控 · 可审计 · 可对账）。
+    两个视角的答案完全不同，本库选后者。
+  - **架构位置（四条铁律，违反即第四套并行栈）**：
+    ① `FetchConfig`/`FetchResult` 是唯一契约；
+    ② `baseURL`/`bizId`/幂等等策略字段**不进** `FetchConfig`（不污染
+    「门面 → 桥参数 → App args → 线格式」四层白名单，`contract-index.md:190-202`）；
+    ③ 结果永不抛（G-32.3），`requestOrThrow` 只是显式选择；
+    ④ 内部只调 `useFetch`/`useFetchTask`/pipeline，**绝不复刻 `IRequestAdapter`**。
+  - **★★★核心差异化 = 未知态建模**：新增 `fetch.unknown` + `meta.sent`，把一次请求分成**三态**
+    `success` / `failed`（确定没被服务端处理）/ `unknown`（可能已处理，**必须去查单**）。
+    主流库把"超时"当失败；而对支付/下单，超时是**必须去查的状态**而不是错误。
+    判不出时**保守按 `unknown`**——宁可让业务多查一次单，也不能让它以为失败而重试。
+    ★判定表 11 行（rejected-local / connect-failed / responded / response-incomplete /
+    aborted-after-sent / indeterminate），每条都有依据，不是拍脑袋。
+  - **20 条痛点 → 答案**（全文 `docs/request-client-plan/01-pain-points.md`）：
+    可靠性 7 · 数据获取 4 · 安全合规 5 · 平台化 4。每条都标了**本仓实证**或业界共识的来源。
+  - **C1 交付**（`packages/api/src/request/`，7 文件全部 <1000 行）：
+    `types`(419) `reliability`(505) `security`(245) `tenant`(276) `query`(191) `client`(660) `index`(93)。
+  - **判据 63/63**：reliability 21 · security 14 · tenant 16 · client 12。
+    **破坏性验证**：M1 幂等键每次 attempt 重生成 ⇒ 红 1（报错直接列出 3 个不同 key）·
+    M2b 超时改判 failed ⇒ 红 4 · M4 脱敏失效 ⇒ 红 2。
+  - **★★测试抓出的两个真缺陷（本轮最值钱）**：
+    ① `classifyFailure` 与 `shouldRetryResult` 口径不一致（一个判 unknown、一个说可重试）
+       ⇒ 改为 `shouldRetryResult` 内部**直接调** `classifyFailure`（单一事实源）；
+    ② 重试上限 **off-by-one**：`attempts` 是"额外次数"（总次数 = attempts+1），
+       写成 `attempt >= max` 会少重试一次 ⇒ 改 `attempt > max`。
+  - **★一条工具纪律（血的教训）**：破坏性验证**禁止用 `sed`/`--replace` 做含 `&` 或换行的变异**——
+    `&` 在 sed 替换串里代表"整个匹配"，实测把整份 `tenant.ts` 写成 660KB 垃圾。
+    ⇒ 变异一律用 `Edit`（精确匹配 + 内容自证），或用 `/tmp/*.mjs` 变换函数走 `safe-edit --script`。
+  - **诚实边界**：支付渠道 SDK **不接**（本库只提供可靠性语义）· 无 schema/OpenAPI 代码生成
+    （仓库零基础设施）· 断路器/配额是**进程内**单实例 · 脱敏是**字段名匹配**（不是内容识别，
+    业务把 token 塞进自定义头且没加黑名单就漏了）· 不证明 `unknown` 时代码一定正确处置
+    （那是业务的、也是文档必须教会的责任）。
+  - **后续**：C2 收口（`createApi`/`createRequestEngineering` 内部委托本库）·
+    A（P0 VM 决策门，真机验 #540）· B（鸿蒙会话式 VM）· P4 让 WebSocket 也走同一套安全链。

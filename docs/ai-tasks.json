@@ -3818,7 +3818,7 @@
         "scripts/lib/contract-units.mjs",
         "docs/request-client-plan/**"
       ],
-      "decision": null,
+      "decision": 1342,
       "branch": null,
       "verification": "npx vitest run tests/request-*.test.ts（含幂等键跨重试稳定 / 未知态三态分类 / 断路器状态机 / 域名白名单 / 脱敏 / useQuery 状态机）+ 每条破坏性验证（改坏必红）+ node scripts/check-file-size.mjs + node scripts/check-script-compile.mjs + npx vitest run tests/fetch-wire-fields.test.ts（确认未污染四层链）",
       "related": [
