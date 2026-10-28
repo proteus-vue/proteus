@@ -475,6 +475,13 @@ jobs:
       - name: SPEC_LINT + 生成物漂移门禁（WIT SSOT 不一致即阻断）
         run: cd website && pnpm run check:plugin-docs
 
+      # ★★★#1344：请求治理层「承诺 ↔ 驱动」门禁（纯静态，零环境依赖）。
+      #   抓的是"类型/API 都在、缺最后一根驱动线"这一类 —— #1344 的离线队列就是它：
+      #   `OfflineQueuePolicy` 文档写着"恢复后按序重放"，而 flush 没有任何调用方。
+      #   ★单测看不见（队列自身测试全绿）、TS 看不见（类型都在）、评审容易漏。
+      - name: 请求治理层接线门禁（承诺 ↔ 驱动，防"实现了但没接线"）
+        run: pnpm run check:request-governance
+
       - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/CSS 支持参考/组件能力页/配置参考与源一致）
         run: cd website && pnpm run check:reference && pnpm run check:config-ref && pnpm run check:css-compat && pnpm run check:css-support && pnpm run check:content && pnpm run check:doc-links
 
