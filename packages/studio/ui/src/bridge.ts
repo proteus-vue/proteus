@@ -373,6 +373,9 @@ export function onIosResult(cb: (o: IosOutcome) => void): () => void {
 export const iosTap = (nx: number, ny: number): Promise<void> => invoke<void>('ios_tap', { nx, ny })
 
 /** 滚轮注入（决策 #1327）：`dy` 用浏览器 deltaY 语义（正 = 向下滚） */
+/** 键盘输入（决策 #1341）：`text` 是可打印文本，或特殊键名（Backspace/Enter/Tab/Escape/Arrow*） */
+export const iosKey = (text: string): Promise<void> => invoke<void>('ios_key', { text })
+
 export const iosScroll = (
   nx: number,
   ny: number,

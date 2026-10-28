@@ -709,6 +709,8 @@ extern "C" {
     fn poc_mirror_scroll(win: u32, nx: f64, ny: f64, dy: f64) -> i32;
     fn poc_mirror_scroll_begin(win: u32, nx: f64, ny: f64) -> i32;
     fn poc_mirror_scroll_post(win: u32, nx: f64, ny: f64, dy: f64) -> i32;
+    fn poc_mirror_type(win: u32, utf8: *const std::os::raw::c_char) -> i32;
+    fn poc_mirror_key(win: u32, keycode: i32) -> i32;
     fn poc_mirror_scroll_end() -> i32;
     fn poc_accessibility_granted() -> i32;
     fn poc_request_accessibility();
@@ -845,4 +847,32 @@ pub(crate) fn mirror_scroll_post(nx: f64, ny: f64, dy: f64) -> Result<(), String
 /// 滚动会话：结束（还原指针与焦点）
 pub(crate) fn mirror_scroll_end() {
     unsafe { poc_mirror_scroll_end() };
+}
+
+/// 键盘文本 → 镜像窗口（决策 #1341）：走 `CGEventKeyboardSetUnicodeString`，与键盘布局无关。
+pub(crate) fn mirror_type(text: &str) -> Result<(), String> {
+    let win = mirror_win()?;
+    ensure_accessibility()?;
+    let c = std::ffi::CString::new(text).map_err(|_| "文本里含有 NUL".to_string())?;
+    match unsafe { poc_mirror_type(win, c.as_ptr()) } {
+        0 => {
+            eprintln!("[mirror] → type {} 字", text.chars().count());
+            Ok(())
+        }
+        -2 => Err("缺少「辅助功能」权限（按键被系统丢弃）".into()),
+        -3 => Err("找不到镜像窗口的进程（镜像已断开？）".into()),
+        c => Err(format!("镜像键入失败（code {c}）")),
+    }
+}
+
+/// 特殊键 → 镜像窗口（决策 #1341）：退格/回车/Tab/Esc/方向键只能走键码。
+pub(crate) fn mirror_key(keycode: i32) -> Result<(), String> {
+    let win = mirror_win()?;
+    ensure_accessibility()?;
+    match unsafe { poc_mirror_key(win, keycode) } {
+        0 => Ok(()),
+        -2 => Err("缺少「辅助功能」权限（按键被系统丢弃）".into()),
+        -3 => Err("找不到镜像窗口的进程（镜像已断开？）".into()),
+        c => Err(format!("镜像按键失败（code {c}）")),
+    }
 }

@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { capturePreset, copyText, deviceSwipe, deviceTap, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, type IosHint } from './bridge'
+import { capturePreset, copyText, deviceSwipe, deviceTap, iosKey, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -186,6 +186,13 @@ async function switchView(v: ViewName) {
      webview 的 keydown 根本收不到（真机上这里不会执行）；只有浏览器/门禁才走这条兜底。
      留着它是因为"没菜单的环境也该能缩放"，同时 **不能** 两边都执行（会一次跳两档）。 */
 function onKey(e: KeyboardEvent) {
+  /* ★**画布聚焦时，按键送给设备**（决策 #1341）：
+     复用这一个全局入口，而不是再加一个 canvas 级监听——
+     两个监听会各自处理一次（今天踩过同名冲突 + 双触发）。
+     放在最前面且**先于**快捷键判断：否则 Cmd+C 之类会先被 IDE 吃掉。 */
+  if (canvasEl.value && document.activeElement === canvasEl.value && touchOn.value) {
+    if (!(e.metaKey || e.ctrlKey || e.altKey) && sendKeyToDevice(e)) return
+  }
   if (nativeMenu) return
   if (view.value !== 'device' || !(e.metaKey || e.ctrlKey)) return
   if (e.key === '0') {
@@ -287,6 +294,9 @@ function clientToNorm(clientX: number, clientY: number): { nx: number; ny: numbe
 const toDevice = (e: PointerEvent) => clientToDevice(e.clientX, e.clientY)
 
 function onPointerDown(e: PointerEvent) {
+  /* ★点击画布即聚焦（决策 #1341）：键盘输入依赖"画布是当前焦点"，
+     而 div 只有在 tabindex 且被点过之后才会成为 activeElement。 */
+  canvasEl.value?.focus?.()
   const p = toDevice(e)
   if (p) pick.value = p
   // ★`moved` 用来区分"点一下"和"拖着看别处"（决策 #1254）：拖拽是**看**，不该在设备上留下点击。
@@ -551,6 +561,65 @@ function onWheel(e: WheelEvent) {
   }, 220)
 }
 
+/**
+ * 键盘 → 设备（决策 #1341）。
+ *
+ * ★可打印字符**合并后发送**（30ms 静默或遇到特殊键时 flush）：逐字一次 IPC 在快速输入时会卡；
+ *   特殊键（退格/回车/方向键）必须**立刻**发，否则顺序会乱。
+ * ★带 Cmd/Ctrl 的组合键直接放行——那是给 IDE 自己的快捷键（保存、切换面板…）。
+ */
+let keyBuf = ''
+let keyTimer: number | undefined
+let keyBusy = false
+
+function flushKeys() {
+  if (!keyBuf || keyBusy) return
+  const text = keyBuf
+  keyBuf = ''
+  keyBusy = true
+  void (async () => {
+    try {
+      await iosKey(text)
+    } catch (err) {
+      onTouchError(err)
+    } finally {
+      keyBusy = false
+      if (keyBuf) flushKeys() /* 期间又攒了字 ⇒ 接着发 */
+    }
+  })()
+}
+
+
+/** 把一次按键送给设备；返回 true 表示"已消费"（调用方不再往下走快捷键） */
+function sendKeyToDevice(e: KeyboardEvent) {
+  const special = ['Backspace', 'Enter', 'Tab', 'Escape', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+  if (special.includes(e.key)) {
+    e.preventDefault()
+    if (keyTimer) {
+      window.clearTimeout(keyTimer)
+      keyTimer = undefined
+    }
+    flushKeys() /* 先把已攒的可打印字符发出去，保证顺序 */
+    void (async () => {
+      try {
+        await iosKey(e.key)
+      } catch (err) {
+        onTouchError(err)
+      }
+    })()
+    return true
+  }
+  if (e.key.length !== 1) return false
+  e.preventDefault()
+  keyBuf += e.key
+  if (keyTimer) window.clearTimeout(keyTimer)
+  keyTimer = window.setTimeout(() => {
+    keyTimer = undefined
+    flushKeys()
+  }, 30)
+  return true
+}
+
 onMounted(async () => {
   // ★先恢复上次的视图，再量画布：顺序反了会先按设备视图同步一次 rect，
   //   而恢复成 code 视图时那次同步是白做的（还会让原生画布闪一下）。
@@ -762,6 +831,7 @@ async function copyIosCmd() {
             <div
               id="canvas"
               ref="canvasEl"
+              tabindex="0"
               @pointerdown="onPointerDown"
               @pointermove="onPointerMove"
               @pointerup="onPointerUp"

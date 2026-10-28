@@ -140,6 +140,12 @@ pub(crate) fn ios_tap(nx: f64, ny: f64) -> Result<(), String> {
 }
 
 /// 滚轮注入（决策 #1327）：镜像走真实滚轮，模拟器/安卓用短滑动近似。
+/// 键盘输入（决策 #1341）：参数是"可打印文本"或特殊键名。
+#[tauri::command]
+pub(crate) fn ios_key(text: String) -> Result<(), String> {
+    key(&text)
+}
+
 #[tauri::command]
 pub(crate) fn ios_scroll(nx: f64, ny: f64, dy: f64, phase: String) -> Result<(), String> {
     scroll(&phase, nx, ny, dy)
@@ -212,4 +218,114 @@ pub(crate) fn scroll(phase: &str, nx: f64, ny: f64, dy: f64) -> Result<(), Strin
         return Ok(()); /* 太小就忽略，避免高频细碎事件 */
     }
     swipe(nx, ny, 0.0, -travel)
+}
+
+// ── 键盘输入（决策 #1341）──────────────────────────────────────────────────
+
+/// 特殊键 → macOS 键码（镜像用）与 HID 用量码（模拟器用）。
+///
+/// ★为什么用**名字**而不是字符：退格/回车/方向键没有可打印字符，
+///   用 `\b` 这类控制字符在 CGEvent 的 unicode 通道里**不会**变成按键。
+fn special_keys(name: &str) -> Option<(i32, u8)> {
+    Some(match name {
+        "Backspace" => (51, 0x2A),
+        "Enter" => (36, 0x28),
+        "Tab" => (48, 0x2B),
+        "Escape" => (53, 0x29),
+        "Delete" => (117, 0x4C),
+        "ArrowLeft" => (123, 0x50),
+        "ArrowRight" => (124, 0x4F),
+        "ArrowDown" => (125, 0x51),
+        "ArrowUp" => (126, 0x52),
+        _ => return None,
+    })
+}
+
+/// 可打印字符 → HID 用量码串（US 布局；`s` 前缀 = 带 Shift）。非 ASCII 返回 None。
+fn hid_strokes(text: &str) -> Option<String> {
+    let mut out: Vec<String> = Vec::new();
+    for c in text.chars() {
+        let (code, shift) = match c {
+            'a'..='z' => (0x04 + (c as u8 - b'a'), false),
+            'A'..='Z' => (0x04 + (c as u8 - b'A'), true),
+            '1'..='9' => (0x1D + (c as u8 - b'0'), false),
+            '0' => (0x27, false),
+            ' ' => (0x2C, false),
+            '.' => (0x37, false),
+            ',' => (0x36, false),
+            '/' => (0x38, false),
+            '-' => (0x2D, false),
+            '=' => (0x2E, false),
+            ';' => (0x33, false),
+            '\'' => (0x34, false),
+            '[' => (0x2F, false),
+            ']' => (0x30, false),
+            '\\' => (0x31, false),
+            '`' => (0x35, false),
+            '!' => (0x1E, true),
+            '@' => (0x1F, true),
+            '#' => (0x20, true),
+            '$' => (0x21, true),
+            '%' => (0x22, true),
+            '^' => (0x23, true),
+            '&' => (0x24, true),
+            '*' => (0x25, true),
+            '(' => (0x26, true),
+            ')' => (0x27, true),
+            '_' => (0x2D, true),
+            '+' => (0x2E, true),
+            '{' => (0x2F, true),
+            '}' => (0x30, true),
+            '|' => (0x31, true),
+            ':' => (0x33, true),
+            '"' => (0x34, true),
+            '<' => (0x36, true),
+            '>' => (0x37, true),
+            '?' => (0x38, true),
+            '~' => (0x35, true),
+            _ => return None,
+        };
+        out.push(if shift { format!("s{code:02x}") } else { format!("{code:02x}") });
+    }
+    Some(out.join(","))
+}
+
+/// 键盘输入入口：`text` 可以是**可打印文本**，也可以是特殊键名（见 `special_keys`）。
+pub(crate) fn key(text: &str) -> Result<(), String> {
+    let kind = crate::capture_preset::current_kind();
+    if kind.as_deref() == Some("mirror") {
+        if let Some((code, _)) = special_keys(text) {
+            return crate::live_source::mirror_key(code);
+        }
+        return crate::live_source::mirror_type(text);
+    }
+    if let Some(udid) = crate::capture_preset::sim_udid() {
+        /* 模拟器：helper 的 `type` 收的是 HID 用量码串（只支持 ASCII） */
+        let strokes = if let Some((_, hid)) = special_keys(text) {
+            format!("{hid:02x}")
+        } else {
+            hid_strokes(text).ok_or_else(|| {
+                "模拟器键盘只支持 ASCII（含数字/标点）；中文请输入到镜像源或真机".to_string()
+            })?
+        };
+        let (_cast, hid_bin) = crate::live_source::sim_tools()?;
+        let out = std::process::Command::new(&hid_bin)
+            .args([
+                "type",
+                &udid,
+                &strokes,
+                "--developer-dir",
+                &crate::device::simctl_developer_dir().unwrap_or_default(),
+            ])
+            .output()
+            .map_err(|e| format!("调 sim-hid type 失败：{e}"))?;
+        if out.status.success() {
+            return Ok(());
+        }
+        return Err(format!(
+            "模拟器键入失败：{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Err("当前源不支持键盘输入（真机 ReplayKit 通道还没有文本注入能力）".into())
 }

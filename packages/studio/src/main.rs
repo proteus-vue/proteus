@@ -794,6 +794,7 @@ fn main() {
             /* 触控回传（决策 #1295） */
             ios_touch::ios_tap,
             ios_touch::ios_scroll,
+            ios_touch::ios_key,
             ios_touch::ios_longpress,
             ios_touch::ios_swipe,
             ios_touch::ios_touch_state,

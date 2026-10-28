@@ -797,7 +797,11 @@ int poc_mirror_scroll_post(uint32_t win, double nx, double ny, double dy) {
     CGEventSetDoubleValueField(ev, kCGScrollWheelEventFixedPtDeltaAxis1, (double)v);
     CGEventSetLocation(ev, p);
     CGEventSetIntegerValueField(ev, kCGMouseEventWindowUnderMousePointer, (int64_t)win);
-    CGEventPostToPid(pid, ev);
+    /* ★待验证（决策 #1336）：`CGEventPostToPid` 滚轮被镜像 app 忽略（已实测两轮）。
+       现在验证最后一个可能性：**HID 投递 + 事件坐标**——若系统按事件里的 location 路由，
+       就能在不移动真实指针的情况下滚到镜像窗口。
+       （若不行，说明 HID 只认"真实指针下方的窗口"，那就彻底没有零干扰方案。） */
+    CGEventPost(kCGHIDEventTap, ev);
     CFRelease(ev);
     usleep(12000);
   }
@@ -808,6 +812,65 @@ int poc_mirror_scroll_end(void) {
   if (!g_scroll_active) return 0;
   g_scroll_active = 0;
   /* 什么都没动过 ⇒ 什么都不用还原（不显示/隐藏指针、不动焦点） */
+  return 0;
+}
+
+/* 特殊键（退格/回车/Tab/Esc/方向键）→ 镜像窗口：这类键没有"字符"，必须走**键码**。
+ * `kCGEventKeyboardSetUnicodeString` 对它们无效（ 之类不会变成退格）。 */
+int poc_mirror_key(uint32_t win, int keycode) {
+  if (!AXIsProcessTrusted()) return -2;
+  if (mirror_owner_pid(win) <= 0) return -3;
+  MirrorSaved sv = mirror_begin(win);
+  CGEventRef dn = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)keycode, true);
+  CGEventRef up = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)keycode, false);
+  if (dn) { CGEventPost(kCGHIDEventTap, dn); CFRelease(dn); }
+  usleep(20000);
+  if (up) { CGEventPost(kCGHIDEventTap, up); CFRelease(up); }
+  usleep(20000);
+  mirror_end(sv);
+  return 0;
+}
+
+/* 键盘 → 镜像窗口（决策 #1341）。
+ *
+ * ★用 `CGEventKeyboardSetUnicodeString` 而不是"字符 → 键码"映射：**不受键盘布局影响**，
+ *   中文/emoji 也能直传（镜像 app 会转成手机的文本输入）。
+ * ★必须先把窗口激活（键盘事件只进前台窗口），投递完把焦点还给原 app——与点击同一套补偿。
+ * 每次调用只处理一串文本（UI 侧按输入事件聚合，避免一个字符一次 IPC）。
+ */
+int poc_mirror_type(uint32_t win, const char *utf8) {
+  if (!AXIsProcessTrusted()) return -2;
+  if (mirror_owner_pid(win) <= 0) return -3;
+  if (!utf8) return -4;
+  NSString *str = [NSString stringWithUTF8String:utf8];
+  if (!str.length) return 0;
+  MirrorSaved sv = mirror_begin(win);
+  NSUInteger n = str.length;
+  unichar *buf = (unichar *)malloc(sizeof(unichar) * n);
+  if (!buf) {
+    mirror_end(sv);
+    return -5;
+  }
+  [str getCharacters:buf range:NSMakeRange(0, n)];
+  /* 逐字符投递：一次塞整串时，某些输入框会只取第一个字符 */
+  for (NSUInteger i = 0; i < n; i++) {
+    UniChar ch = buf[i];
+    CGEventRef dn = CGEventCreateKeyboardEvent(NULL, 0, true);
+    CGEventRef up = CGEventCreateKeyboardEvent(NULL, 0, false);
+    if (dn) {
+      CGEventKeyboardSetUnicodeString(dn, 1, &ch);
+      CGEventPost(kCGHIDEventTap, dn);
+      CFRelease(dn);
+    }
+    if (up) {
+      CGEventKeyboardSetUnicodeString(up, 1, &ch);
+      CGEventPost(kCGHIDEventTap, up);
+      CFRelease(up);
+    }
+    usleep(6000);
+  }
+  free(buf);
+  mirror_end(sv);
   return 0;
 }
 
