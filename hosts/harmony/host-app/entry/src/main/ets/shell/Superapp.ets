@@ -28,6 +28,7 @@ import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapsh
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
 import { runTransportProbeScene } from '../runtime/TransportProbe';   // ★★★#1156 传输层取证（逻辑单列）
 import { runVmSessionProbeScene } from '../runtime/VmSessionProbe';   // ★★★#1342-A #540 决策门（持久 VM 探针）
+import { runVmSessionScene } from '../runtime/VmSessionScene';   // ★★★#1344 B-1 会话式 VM 判据
 import { runHttpProbe as runHttpProbeImpl } from '../runtime/HttpProbe';   // ★★★#1169 HTTP 探针（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
 import { readElementProbes, elementReportFragment, measureElementRect, ElementProbeReadout } from '../runtime/ElementProbe';
@@ -147,6 +148,12 @@ struct Superapp {
     if (this.scene === 'superapp-vmprobe') {
       try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
       runVmSessionProbeScene(this.filesDir, this.vmProbeRounds, this.vmProbeMode);
+      return;
+    }
+    // ★★★#1344 B-1：**会话式 VM 判据**（逻辑在 `runtime/VmSessionScene.ets`）
+    if (this.scene === 'superapp-session') {
+      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
+      runVmSessionScene(this.filesDir, this.vmProbeRounds);
       return;
     }
     // ★★★C14 键盘推送判据场景（决策 #1077）：真实系统键盘 → keyboardHeightChange → env

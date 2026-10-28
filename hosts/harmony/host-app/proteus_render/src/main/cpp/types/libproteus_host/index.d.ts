@@ -77,6 +77,26 @@ export const hostVmSessionProbe: (argsJson: string) => string;
  * @returns 读数 JSON（比合成版多一个 `bootHook` 字段 = 整包入口的 typeof）
  */
 export const hostVmSessionBundleProbe: (bundleJs: string, rounds?: number) => string;
+/**
+ * ★★★#1344 B-1：**会话式 VM**（一个 VM 跨 napi 调用存活）。
+ *
+ * 打开会话：建 VM → 注入 `proteusHost` → eval 整包 → boot，**不销毁**。
+ * 之后每拍 `hostVmSessionTick()` 只推进微任务 + 搬运待回推帧 ⇒ **异步回推有了接收方**。
+ *
+ * ★单线程纪律：open/tick/close 必须由 ArkTS 主线程**串行**调用；
+ *   网络线程只能 `hostVmSessionPushResolve()`（入队，不碰 JS）。
+ *
+ * @param bundleJs 整包源码原文（不走 JSON 转义）
+ * @param doBoot `true`（默认）⇒ eval 后 boot；`false` ⇒ 只 eval（诊断形态）
+ * @returns 读数 JSON（`open/ticks/pushed/pendingDepth/heapKB/boot`）
+ */
+export const hostVmSessionOpen: (bundleJs: string, doBoot?: boolean) => string;
+/** 会话节拍（推回推帧 + checkpoint）。@param maxPush 单拍最多推几帧（默认 64） */
+export const hostVmSessionTick: (maxPush?: number) => string;
+/** 诊断用：把一个 PRSP 帧（**十六进制字符串**）塞进待回推队列，验"队列→tick→JS"通路 */
+export const hostVmSessionPushResolve: (frameHex: string) => string;
+export const hostVmSessionClose: () => string;
+export const hostVmSessionStats: () => string;
 /** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——
  *   不清会把旧页动画错打到新页同 id 节点）。壳每轮渲染/点按导航前调；返回 `{"ok":true}`。 */
 export const hostAppAnimReset: () => string;

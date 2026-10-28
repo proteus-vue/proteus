@@ -12,14 +12,14 @@
 #include "host_app_runtime_impl.h"
 #include "http_probe.h"   // ★T-app-fetch：真机 HTTP 通路判据（走真实 invokeBytes）
 #include "transport_probe.h"   // ★★★#1156：鸿蒙传输层事实取证（多轮同 host:port ⇒ 服务端判复用）
-#include "vm_session_probe.h"   // ★★★#1342-A：#540 决策门（持久 VM 探针）
+#include "vm_session_probe.h"   // ★★★#1342-A：#540 决策门 · #1344 B-1 会话式 VM 见 proteus_vm_session.h
+#include "proteus_vm_session.h"
 #include <arkui/native_node_napi.h>
 #define PROTEUS_HOST_DOMAIN 0x0003
 #define PROTEUS_HOST_TAG "ProteusHostBridge"
 // 迁移前代码用了 bench 的宏名——就地别名（语义 = 同一 log 域）
 #define PROTEUS_BENCH_DOMAIN PROTEUS_HOST_DOMAIN
 #define PROTEUS_BENCH_TAG PROTEUS_HOST_TAG
-
 /* ── 矩阵 #18 C 组：**持久 VM**（壳转发用——跨事件存活，不销毁；与 Android 的 shellRt 同构） ──
  *
  * 【为什么持久】壳转发的运行时代表"App 进程"本身（Android 注释同语）：它要跨多次
@@ -34,7 +34,6 @@ static std::string g_shellDir;
 static int g_shellAttempts = 0;   // 真事件回调次数（宿主侧计数）
 static int g_shellPushes = 0;     // 成功推入 JS 次数
 static std::string g_shellHookState = "none";  // none / installed / no-hook
-
 static napi_value HostRtShellInstall(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
@@ -1075,7 +1074,8 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimReset", nullptr, HostAppAnimReset, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
-        PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot), PROTEUS_PROBE_EXPORT(hostVmSessionProbe, HostVmSessionProbe), PROTEUS_PROBE_EXPORT(hostVmSessionBundleProbe, HostVmSessionBundleProbe),  // ★#1342-A/B-0：后两项 = #540 决策门（合成负载 + 整包 bundle）
+        PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot), PROTEUS_PROBE_EXPORT(hostVmSessionProbe, HostVmSessionProbe), PROTEUS_PROBE_EXPORT(hostVmSessionBundleProbe, HostVmSessionBundleProbe),  // ★#1342-A/B-0：后两项 = #540 决策门
+        PROTEUS_PROBE_EXPORT(hostVmSessionOpen, HostVmSessionOpen), PROTEUS_PROBE_EXPORT(hostVmSessionTick, HostVmSessionTick), PROTEUS_PROBE_EXPORT(hostVmSessionPushResolve, HostVmSessionPushResolve), PROTEUS_PROBE_EXPORT(hostVmSessionClose, HostVmSessionClose), PROTEUS_PROBE_EXPORT(hostVmSessionStats, HostVmSessionStats),  // ★#1344 B-1 会话式 VM（一处：一个 VM 跨调用存活 ⇒ 异步回推有接收方）
         // ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 / 取走待执行动作
         {"setDeviceSnapshot", nullptr, SetDeviceSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"drainDeviceActions", nullptr, DrainDeviceActions, nullptr, nullptr, nullptr, napi_default, nullptr},

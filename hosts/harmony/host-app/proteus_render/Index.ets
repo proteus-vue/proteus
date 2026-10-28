@@ -73,6 +73,12 @@ export {
   hostVmSessionProbe,
   // ★★★#1342 B-0：整包 Vue bundle 版（真实微任务压力）
   hostVmSessionBundleProbe,
+  // ★★★#1344 B-1：会话式 VM（一个 VM 跨调用存活 ⇒ 异步回推有接收方）
+  hostVmSessionOpen,
+  hostVmSessionTick,
+  hostVmSessionPushResolve,
+  hostVmSessionClose,
+  hostVmSessionStats,
 } from 'libproteus_host.so'
 
 // ★★★应用运行期驱动（v-pump 周期驱动 + 跳变驱动动画）——**runtime 归属的唯一实现**（决策 #796）：
