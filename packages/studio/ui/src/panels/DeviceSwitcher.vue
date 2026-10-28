@@ -7,6 +7,7 @@
 import { computed, onMounted, ref } from 'vue'
 import PanelShell from './PanelShell.vue'
 import { listDevices, selectDevice, hasBridge, type DeviceInfo } from '../bridge'
+import IosStreamCard from './IosStreamCard.vue'
 import { pushToast } from '../toast'
 
 const devices = ref<DeviceInfo[]>([])
@@ -15,7 +16,12 @@ const busy = ref<string | null>(null)
 /** 按平台分组（决策 #1274）：Android 与 iOS 的"接法"完全不同，混在一个列表里会误导 */
 const PLATFORMS: { id: string; label: string }[] = [
   { id: 'android', label: 'Android' },
-  { id: 'ios', label: 'iOS' },
+  { id: 'ios', label: 'iOS 真机' },
+  /* ★模拟器（决策 #1302）：画面走 SCK 窗口捕获、输入走 SimulatorKit HID，
+     比真机（ReplayKit 变化驱动、无键盘、要签名装机）体验好得多 */
+  { id: 'simulator', label: 'iOS 模拟器' },
+  /* ★iPhone 镜像（决策 #1316）：macOS 15+ 系统功能，看的是**真机整屏**（手机需锁屏） */
+  { id: 'mirror', label: 'iPhone 镜像（真机）' },
 ]
 const groups = computed(() =>
   PLATFORMS
@@ -35,18 +41,37 @@ async function refresh(force = false) {
 }
 
 async function pick(d: DeviceInfo) {
-  if (d.current || busy.value || d.state !== 'device') return
+  if (d.current) return
+  if (busy.value) {
+    pushToast('上一台设备还在切换中，稍等一下', 'info')
+    return
+  }
+  /* ★点"不可用"的行**必须有回声**（决策 #1286）：
+     原来这里直接 `return`，用户点一下屏幕上什么都不变 ⇒ 以为"要双击"（实测反馈）。
+     现在：把原因说出来 + **顺手强制刷新一次**（iOS 走 xcdevice 有 30s 缓存，
+     刚插线/刚点信任那一下，不 force 就还显示旧状态）。 */
+  if (d.state !== 'device') {
+    pushToast(`${d.model} 现在不可用（${d.state}）${d.note ? '：' + d.note : ''} —— 已重新检测`, 'info')
+    await refresh(true)
+    return
+  }
   busy.value = d.serial
   try {
     const info = await selectDevice(d.serial)
-    await refresh()
-    /* iOS 此刻还没有尺寸（要等第一帧的 SPS）⇒ 提示"等推流"，不要显示 0×0 */
-    pushToast(
-      info.width > 0
-        ? `已切到 ${d.model} · ${info.width}×${info.height} · ${info.mbps} Mbps`
-        : `已切到 ${d.model}：等手机端开始直播（ProteusHost）`,
-      'info',
-    )
+    /* ★列表刷新**不阻塞**交互（决策 #1314）：`listDevices()` 要跑 adb + xcdevice(≈7s) + simctl，
+       以前 `await` 它 ⇒ 切换完还要再干等几秒。现在后台刷，选中态由后端 `CURRENT_SERIAL` 保证。 */
+    void refresh()
+    /* 各种源的"尺寸何时可知"不同，提示要分开说（原来模拟器也显示"等手机端直播"，误导） */
+    if (d.platform === 'simulator') {
+      pushToast(`已切到 ${d.model}（模拟器画面稍后出现）`, 'info')
+    } else {
+      pushToast(
+        info.width > 0
+          ? `已切到 ${d.model} · ${info.width}×${info.height} · ${info.mbps} Mbps`
+          : `已切到 ${d.model}：等手机端开始直播（ProteusHost）`,
+        'info',
+      )
+    }
   } catch (e) {
     // ★失败**不改**当前项：乐观更新会让界面说谎（和画质档位同一条纪律）
     pushToast(String((e as Error)?.message ?? e), 'err')
@@ -72,7 +97,8 @@ onMounted(() => void refresh(false))
           v-for="d in g.items"
           :key="d.serial"
         class="devrow"
-        :class="{ on: d.current, dead: d.state !== 'device' }"
+        :class="{ on: d.current && !busy, dead: d.state !== 'device', switching: busy === d.serial }"
+          :disabled="!!busy && busy !== d.serial"
           :data-dev="d.serial"
           :data-platform="d.platform"
           :title="`${d.model} · ${d.serial} · ${d.state}${d.size ? ' · ' + d.size : ''}${d.note ? '\n' + d.note : ''}`"
@@ -81,22 +107,47 @@ onMounted(() => void refresh(false))
         >
           <span class="dot" :class="{ off: d.state !== 'device' }" />
           <span class="dmodel">{{ d.model }}</span>
-          <span class="dmeta">{{ d.size ?? d.state }} · {{ shortSerial(d.serial) }}</span>
+          <span v-if="busy === d.serial" class="dmeta dswitching" data-switching>切换中…</span>
+          <span v-else class="dmeta">{{ d.size ?? d.state }} · {{ shortSerial(d.serial) }}</span>
           <!-- 不可用的原因写**行内**（只放 tooltip 等于没说）：决策 #1276 -->
           <span v-if="d.note && d.state !== 'device'" class="dnote" :data-note="d.platform">{{ d.note }}</span>
         </button>
+        <!-- ★iOS 分组下挂「一键投屏」（决策 #1288）：把 5 步命令压成一个按钮 -->
+        <IosStreamCard v-if="g.platform === 'ios'" :devices="g.items" />
       </template>
       <div v-if="!devices.length" class="dnone">没有检测到设备（插上 USB 并允许「USB 调试」）</div>
       <!-- iOS 一台都没列到 ⇒ 大概率是 xcrun 找不到 Xcode（它是**静默失败**的），把线索说出来 -->
       <div v-else-if="!groups.some((g) => g.platform === 'ios')" class="dnone">
         iOS：没列出设备 —— 检查「设置 → 开发环境 → iOS」的 Xcode 路径，以及手机是否已信任此电脑
       </div>
-      <button class="drefresh" id="devRefresh" @click="refresh(true)">刷新设备列表</button>
+      <button class="drefresh" id="devRefresh" :disabled="!!busy" @click="refresh(true)">刷新设备列表</button>
     </div>
     <template #note>
-      <span>切换设备会重启采集会话（画面黑一下）。机型/尺寸按串号缓存，不会串台。</span>
+      <span v-if="busy" data-busy-note>
+        正在切换…（模拟器要启动并等窗口出来，最多十几秒；期间画面会保持上一帧）
+      </span>
+      <span v-else>切换设备会重启采集会话（画面黑一下）。机型/尺寸按串号缓存，不会串台。</span>
     </template>
   </PanelShell>
 </template>
+
+<style scoped>
+/* 切换中的行：给明确视觉反馈（原来只是"点了没反应，过很久才变"，用户实测吐槽） */
+.devrow.switching {
+  cursor: progress;
+}
+.devrow.switching .dswitching {
+  color: var(--accent, #4c8dff);
+  animation: dsPulse 1s ease-in-out infinite;
+}
+.devrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+@keyframes dsPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+</style>
 
 <!-- 样式在全局 styles.css（.devlist/.devrow）：与 .kv 同理，避免每个面板各写一套 -->

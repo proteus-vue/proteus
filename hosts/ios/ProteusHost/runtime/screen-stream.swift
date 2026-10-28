@@ -26,6 +26,7 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import ReplayKit
+import UIKit
 import VideoToolbox
 
 final class ScreenStream {
@@ -81,6 +82,49 @@ final class ScreenStream {
         let parts = s.split(separator: ":")
         guard parts.count == 2, let p = UInt16(parts[1]), p > 0 else { return nil }
         return (String(parts[0]), p)
+    }
+
+    // MARK: - 生命周期（决策 #1293）
+
+    /// 只接一次通知（`viewDidAppear` 会在切前台时反复调用）
+    private var lifecycleWired = false
+
+    func wireLifecycle() {
+        guard !lifecycleWired else { return }
+        lifecycleWired = true
+        let c = NotificationCenter.default
+        c.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) {
+            [weak self] _ in self?.handleDidEnterBackground()
+        }
+        c.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) {
+            [weak self] _ in self?.handleWillEnterForeground()
+        }
+    }
+
+    /// 进后台：**停止捕获 + 主动关连接**。
+    ///
+    /// 【为什么必须关连接】App 内 ReplayKit 进后台就停帧（这是它的语义，不是缺陷），
+    ///   但 TCP 还开着 ⇒ Mac 侧只看到"没有新帧"，无法与"屏幕静止"区分
+    ///   （决策 #1291 花了整轮才把这两种分开，结果在"退回桌面"这里又撞上）。
+    ///   ⇒ 关连接 = 给对端一个**明确信号**（EOF）：Studio 立刻抹黑并显示"手机端已停止推流"，
+    ///     而不是把最后一帧挂在那里骗人。
+    func handleDidEnterBackground() {
+        guard configured else { return }
+        lock.lock()
+        if fd >= 0 { close(fd); fd = -1 }
+        let had = frames
+        lock.unlock()
+        started = false
+        RPScreenRecorder.shared().stopCapture { err in
+            if let err { NSLog("[stream] STOP_FAILED %@", "\(err)") }
+            else { NSLog("[stream] 已停止并断开（进后台，累计 %d 帧）", had) }
+        }
+    }
+
+    /// 回前台：重新开捕获（下一帧会自动重连，`connect()` 内已有重试逻辑）
+    func handleWillEnterForeground() {
+        guard configured, !started else { return }
+        startCapture()
     }
 
     // MARK: - 捕获
@@ -168,8 +212,10 @@ final class ScreenStream {
         // 实时模式：宁可掉画质也不攒缓冲（与 Studio 的「看到现在」目标一致）
         VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
         VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_ProfileLevel, value: kVTProfileLevel_H264_High_AutoLevel)
-        VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_AverageBitRate, value: 8_000_000 as CFNumber)
-        VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: 60 as CFNumber)
+        VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_AverageBitRate, value: 5_000_000 as CFNumber)
+        /* ★60 帧在"变化驱动"下≈12s 才一个 IDR（iOS 静止 0fps、动起来 ~5fps）
+           ⇒ 切页/重连后要等很久才自愈（决策 #1296：改 30）。 */
+        VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: 30 as CFNumber)
         VTSessionSetProperty(sess, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse)
         VTCompressionSessionPrepareToEncodeFrames(sess)
         session = sess
@@ -318,6 +364,11 @@ final class ScreenStream {
         //   走我们自己的"关连接 + 下帧重连"路径。
         var noSigPipe: Int32 = 1
         setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+        /* ★★TCP_NODELAY 必须开（决策 #1296）：不设时 Nagle 会把小块数据攒起来等 ACK，
+           而我们的帧本身就是"变化驱动"的稀疏小块 ⇒ 体感"跟随慢半拍"（实测到达间隔 p95 766ms）。
+           这是"延迟比 Android 大"最容易被忽略的一条：adb 是本地管道，根本没有 Nagle。 */
+        var noDelay: Int32 = 1
+        setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
         // 发送超时 2s：Mac 侧没起来时不能把编码线程挂死
         var tv = timeval(tv_sec: 2, tv_usec: 0)
         setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))

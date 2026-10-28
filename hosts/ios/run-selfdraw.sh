@@ -221,7 +221,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   "$HS/runtime/local-service-capability.swift" "$HS/runtime/js-task-sampler.swift" "$HS/runtime/host-tree-diff.swift" "$HS/runtime/host-abi.swift" "$HS/runtime/host-support.swift" "$HS/runtime/host-exports-protocol.swift" "$HS/runtime/selfdraw-glass.swift" \
   "$HS/runtime/InvokeWire.swift" "$HS/runtime/invoke-bytes-bridge.swift" "$HS/runtime/http-capability.swift" "$HS/runtime/upload-backpressure.swift" "$HS/runtime/tls-pinning.swift" "$HS/runtime/HttpDnsProxy.swift" "$HS/runtime/http-capability-dns-session.swift" \
   "$HS/runtime/host-lifecycle-events.swift" "$HS/runtime/log-capability.swift" "$HS/runtime/screen-host.swift" "$HS/runtime/tab-chrome.swift" \
-  "$HS/runtime/screen-stream.swift" \
+  "$HS/runtime/screen-stream.swift" "$HS/runtime/touch-control.swift" \
   "$HS/runtime/glass-metal.swift" "$HS/runtime/generated-materials.swift" \
   "$HS/dev/host-runtime-scene.swift" "$HS/dev/app-stack-scene.swift" "$HS/dev/showcase-scene.swift" "$HS/dev/glass-scene.swift" "$HS/shell/superapp-scene.swift" "$HS/shell/superapp-probes.swift" "$HS/shell/selfdraw-app.swift" "$ABI_LIB" "$LIB" > "$COMPILE_LOG" 2>&1 || COMPILE_RC=$?
 snap_check "$HERE/ProteusHost" "$HS" || true; rm -rf "$(dirname "$HS")"

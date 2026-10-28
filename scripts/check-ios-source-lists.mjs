@@ -75,7 +75,15 @@ if (!fs.existsSync(RUN) || !fs.existsSync(CHECK)) {
   for (const [file, src] of [[RUN, runSrc], [CHECK, checkSrc]]) {
     const bad = []
     src.split('\n').forEach((line, i) => {
-      if (/\\\\\s*$/.test(line) && /ProteusHost\/|ABI_LIB|LIB"?\s*\\/.test(line)) bad.push(i + 1)
+      /* ★★2026-10-27（决策 #1287）：条件里**必须**认 `$HS/`。
+         事故复盘：清单在 #1190 改成从"源码快照"取（实参写成 `$HS/runtime/x.swift`）后，
+         这条判据的第二段仍只认 `ProteusHost/|ABI_LIB|LIB` ⇒ 漏掉了 `$HS/...` 那几行。
+         于是 `run-selfdraw.sh:220` 行尾被写成 `\\`（双反斜杠）时，门禁**照样绿**，
+         而 swiftc 只收到 15 个文件（`$HS/glass-metal.swift` 等全被截掉）⇒ 用户看到
+         586 条 "cannot find type ... in scope" 的级联假错误。
+         ⇒ 判据口径改成"只要这行像源码清单/库参数续行，就查行尾"，
+           并且把 `$HS/` 与 `ProteusHost/` 一视同仁。 */
+      if (/\\\\\s*$/.test(line) && /(?:ProteusHost|\$HS)\//.test(line)) bad.push(i + 1)
     })
     if (bad.length) {
       fail(`\`${path.relative(ROOT, file)}\` 第 ${bad.join(', ')} 行以**双反斜杠**结尾——bash 会当作"转义反斜杠 + 命令结束" ⇒ 后续文件全部不参与编译（\`bash -n\` 查不出来）`)

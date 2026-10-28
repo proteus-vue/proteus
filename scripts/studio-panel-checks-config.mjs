@@ -59,24 +59,32 @@ export function checksConfig({ capability, set, dev, cap }) {
       set.nav0.length === 3 &&
       set.nav0.map((n) => n.label).join('/') === '开发环境/设备/关于' &&
       set.nav0.find((n) => n.on)?.id === 'env' &&
-      set.devRows === 5 &&
+      set.devRows === 6 &&
       set.aboutText.includes('settings.json') &&
       set.winErrors === 0,
   ],
   // ㊺ 设备列表按平台分组（decision #1274）：Android / iOS 分开；iOS 离线不可投
   [
     `㊺ 设备按平台分组：分组 ${dev.groups.join('/')} · 各平台行数 ${JSON.stringify(dev.perPlatform)} · 点 iOS 在线 ⇒ ${JSON.stringify(dev.iosPick.arg)} 后当前=${dev.iosPick.current} · 点 iOS 离线发 IPC ${dev.offlineCalls} 次（应 0）`,
-    dev.groups.join('/') === 'android/ios' &&
+    dev.groups.join('/') === 'android/ios/simulator' &&
       dev.perPlatform.android === 3 &&
       dev.perPlatform.ios === 2 &&
+      dev.perPlatform.simulator === 1 &&
       dev.iosPick.arg === 'IOS-00008101' &&
       dev.iosPick.current === 'IOS-00008101' &&
       dev.offlineCalls === 0,
   ],
   // ㊵ 设备管理：列表 + 切换（含"未授权不许点"和"失败不改状态"）
   [
-    `㊵ 设备管理：列表 ${dev.count} 台（当前 ${dev.current0}）→ 点第二台 ${dev.pickedArg} 后当前 ${dev.currentAfter} · 点未授权发 IPC ${dev.deadCalls} 次（应 0）· 失败时当前 ${dev.beforeFail}→${dev.afterFail}（应不变）`,
-    dev.count === 5 &&
+    `㊵ 设备管理：列表 ${dev.count} 台（当前 ${dev.current0}）→ 点第二台 ${dev.pickedArg} 后当前 ${dev.currentAfter} · 点未授权发 IPC ${dev.deadCalls} 次（应 0）· 失败时当前 ${dev.beforeFail}→${dev.afterFail}（应不变）· 切模拟器后高亮=${dev.simSel.current}（安卓残留 ${dev.simSel.androidStillOn} 行，应 0）· 切换中提示=${dev.busyState.switchingText} 其它行禁用=${dev.busyState.othersDisabled} note=「${dev.busyState.note.slice(0, 12)}」 · 失败提示含 unauthorized=${dev.failToast.includes('unauthorized')}`,
+    dev.count === 6 &&
+      /* ★跨平台选中态 + 切换中反馈（决策 #1315）：这两条今天才被用户发现，
+         而在此之前**没有任何判据覆盖**（桩里连模拟器行都没有）。 */
+      dev.simSel.current === 'SIM-0000AAAA' &&
+      dev.simSel.androidStillOn === 0 &&
+      dev.busyState.switchingText &&
+      dev.busyState.othersDisabled &&
+      dev.busyState.note.includes('正在切换') &&
       dev.current0 === 'd1aaaaaaaa' &&
       dev.pickedArg === 'd2bbbbbbbb' &&
       dev.currentAfter === 'd2bbbbbbbb' &&

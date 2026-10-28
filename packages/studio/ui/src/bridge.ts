@@ -26,6 +26,10 @@ export interface Stats {
   width: number
   height: number
   hwdec: boolean
+  /** 推流是否已中断（>1.5s 没有新帧）——界面据此把"运行中"改成"手机端已停止推流" */
+  stalled: boolean
+  /** 当前采集源：android / ios / file / none（触控分派依据） */
+  source: string
   device: string | null
   /** 设备**物理**像素（`wm size`；0 = 未知）。触摸回传必须用它，不能用码流尺寸（决策 #1260） */
   dev_w: number
@@ -312,3 +316,75 @@ export function onTermExit(cb: () => void): () => void {
   addEventListener('studio:term-exit', h)
   return () => removeEventListener('studio:term-exit', h)
 }
+
+// ── 一键投屏到 iPhone（决策 #1288）───────────────────────────────────────
+/* 【契约】`ios_stream_start` 立刻返回；进度走 `ios:progress`、结果走 `ios:result`。
+   为什么不是"一个同步命令跑完"：编译 Swift 宿主几十秒，同步会把 IPC 和界面一起卡住。 */
+export interface IosProgress {
+  /** 阶段标题（脚本里的 `==> ④ 编译 Swift 宿主`）；不是阶段行时为 null */
+  stage: string | null
+  line: string
+}
+export interface IosOutcome {
+  ok: boolean
+  code: number | null
+  /** 人话解释（后端翻译过的，例如"设备上有另一个团队签的同名应用"） */
+  hint: string | null
+  /** 界面该给哪个动作按钮 */
+  action: 'uninstall' | 'rebuild' | 'signing' | 'none' | null
+}
+export const iosStreamStart = (udid: string, ip: string, port: number): Promise<void> =>
+  invoke<void>('ios_stream_start', { udid, ip, port })
+/** 卸载设备上的同名应用（团队冲突时的标准解法）；bundle 省略则用后端记住的那个 */
+export const iosUninstall = (udid: string, bundle?: string): Promise<string> =>
+  invoke<string>('ios_uninstall', { udid, bundle: bundle ?? null })
+export const iosRunState = (): Promise<{ running: boolean; bundle: string | null }> =>
+  invoke<{ running: boolean; bundle: string | null }>('ios_run_state')
+
+/** 订阅投屏流水线进度。浏览器/门禁兜底走 `studio:ios-progress` 自定义事件。 */
+export function onIosProgress(cb: (p: IosProgress) => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('ios:progress', (e) => cb(e.payload as IosProgress)).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = (e: Event) => cb((e as CustomEvent).detail as IosProgress)
+  addEventListener('studio:ios-progress', h)
+  return () => removeEventListener('studio:ios-progress', h)
+}
+
+export function onIosResult(cb: (o: IosOutcome) => void): () => void {
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    let off: (() => void) | undefined
+    void ev.listen('ios:result', (e) => cb(e.payload as IosOutcome)).then((f) => (off = f))
+    return () => off?.()
+  }
+  const h = (e: Event) => cb((e as CustomEvent).detail as IosOutcome)
+  addEventListener('studio:ios-result', h)
+  return () => removeEventListener('studio:ios-result', h)
+}
+
+// ── 触控回传（决策 #1295）────────────────────────────────────────────────
+/* 【契约】坐标一律**归一化 0..1**（相对画面）。宿主自己乘 `bounds`：
+   帧是像素（888×1920）、注入要逻辑点（390×844），传归一化两边都不用猜 scale。
+   ★只能注入到**我们自己的宿主 app 内**（iOS 没有系统级注入 API）。 */
+export const iosTap = (nx: number, ny: number): Promise<void> => invoke<void>('ios_tap', { nx, ny })
+
+/** 滚轮注入（决策 #1327）：`dy` 用浏览器 deltaY 语义（正 = 向下滚） */
+export const iosScroll = (
+  nx: number,
+  ny: number,
+  dy: number,
+  phase: 'begin' | 'post' | 'end' = 'post',
+): Promise<void> => invoke<void>('ios_scroll', { nx, ny, dy, phase })
+export const iosLongpress = (nx: number, ny: number): Promise<void> => invoke<void>('ios_longpress', { nx, ny })
+export const iosSwipe = (nx: number, ny: number, dx: number, dy: number): Promise<void> =>
+  invoke<void>('ios_swipe', { nx, ny, dx, dy })
+export const iosTouchState = (): Promise<boolean> => invoke<boolean>('ios_touch_state')
+
+/** ★推荐入口（决策 #1297）：先试"直接启动已装宿主"（秒级）；没装才回退到完整构建。
+ *  用户不该为了看一眼画面每次等 40 秒编译。 */
+export const iosStartHost = (udid: string, ip: string, port: number): Promise<void> =>
+  invoke<void>('ios_start_host', { udid, ip, port })

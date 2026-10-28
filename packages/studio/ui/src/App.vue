@@ -2,7 +2,7 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { capturePreset, copyText, deviceSwipe, deviceTap, iosStreamHint, openSettings, setCanvasRect, type IosHint } from './bridge'
+import { capturePreset, copyText, deviceSwipe, deviceTap, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -265,6 +265,25 @@ function clientToDevice(clientX: number, clientY: number): { x: number; y: numbe
   }
 }
 
+/**
+ * 视口坐标 → **归一化 0..1**（决策 #1295 · 只给 iOS 触控回传用）。
+ *
+ * ★为什么不能复用 `clientToDevice`：iOS 注入要**逻辑点**（宿主 `bounds`，如 390×844），
+ *   而 `clientToDevice` 给的是**设备物理像素**（安卓 `input tap` 口径，如 1200×2608）；
+ *   ReplayKit 推流帧又是第三种（888×1920）。三者换算需要 scale，而 scale 只有设备知道。
+ *   ⇒ 传归一化、由宿主乘自己的 `bounds`：两端都不用猜（实测 0.5/0.15 → 195,126.6）。
+ */
+function clientToNorm(clientX: number, clientY: number): { nx: number; ny: number } | null {
+  const el = canvasEl.value
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  if (r.width <= 0 || r.height <= 0) return null
+  return {
+    nx: Math.min(1, Math.max(0, (clientX - r.left) / r.width)),
+    ny: Math.min(1, Math.max(0, (clientY - r.top) / r.height)),
+  }
+}
+
 const toDevice = (e: PointerEvent) => clientToDevice(e.clientX, e.clientY)
 
 function onPointerDown(e: PointerEvent) {
@@ -399,7 +418,10 @@ async function injectTap(e: PointerEvent) {
   if (!p) return
   touchBusy = true
   try {
-    await deviceTap(p.x, p.y)
+    /* ★iOS 走控制通道注入归一化坐标（决策 #1295）；安卓仍走 adb 物理像素 */
+    const n = iosSource.value ? clientToNorm(e.clientX, e.clientY) : null
+    if (n) await iosTap(n.nx, n.ny)
+    else await deviceTap(p.x, p.y)
   } catch (err) {
     onTouchError(err)
   } finally {
@@ -424,6 +446,15 @@ async function injectGesture(e: PointerEvent, x0: number, y0: number, t0: number
   const elapsed = Math.round(performance.now() - t0)
   touchBusy = true
   try {
+    if (iosSource.value) {
+      const n0 = clientToNorm(x0, y0)
+      const n1 = clientToNorm(e.clientX, e.clientY)
+      if (!n0 || !n1) return
+      if (moved) await iosSwipe(n0.nx, n0.ny, n1.nx - n0.nx, n1.ny - n0.ny)
+      else if (elapsed >= HOLD_MS) await iosLongpress(n0.nx, n0.ny)
+      else await iosTap(n0.nx, n0.ny)
+      return
+    }
     if (moved) await deviceSwipe(a.x, a.y, b.x, b.y, elapsed)
     else if (elapsed >= HOLD_MS) await deviceSwipe(a.x, a.y, a.x, a.y, HOLD_MS)
     else await deviceTap(a.x, a.y)
@@ -432,6 +463,92 @@ async function injectGesture(e: PointerEvent, x0: number, y0: number, t0: number
   } finally {
     touchBusy = false
   }
+}
+
+/**
+ * 滚轮 → 设备（决策 #1327）：iPhone 镜像会把 Mac 滚轮换算成手机的上下滑。
+ *
+ * ★必须 `preventDefault`（模板里用 `@wheel.prevent`）：否则先把**页面**滚了；
+ * ★按帧节流：触控板一次滑动会连发几十个 wheel，一个个注入会把手机刷爆。
+ */
+/**
+ * 滚轮 → 设备（决策 #1327 / 会话化 #1329）。
+ *
+ * ★★为什么要"会话"：滚轮是连续输入，而每条消息都要做"藏指针+激活+还原"（30~80ms），
+ *   串行发送就成了"一格一格"，用户实测"没有在镜像里直接滚那么丝滑"。
+ *   现在：begin 只做一次准备；期间每 16ms 把累积量 post 一次（只发滚动事件，~1ms）；
+ *   停手 220ms 后 end 还原指针与焦点。
+ * ★所有调用走**串行队列**：begin 必须早于 post，end 必须晚于最后一个 post。
+ */
+let scrollActive = false
+let scrollAcc = 0
+let scrollPt: { nx: number; ny: number } | null = null
+let scrollTick: number | undefined
+let scrollIdle: number | undefined
+let queue: Promise<void> = Promise.resolve()
+
+function enqueue(fn: () => Promise<unknown>) {
+  queue = queue.then(fn).then(
+    () => undefined,
+    (err) => {
+      const msg = String((err as Error)?.message ?? err)
+      /* 滚轮在某源上不支持时只提示**一次**，并且不再发送（否则每帧弹一个） */
+      if (msg.includes('不支持滚轮')) {
+        scrollUnsupported = true
+        if (scrollActive) {
+          scrollActive = false
+          if (scrollTick) {
+            window.clearInterval(scrollTick)
+            scrollTick = undefined
+          }
+        }
+      }
+      onTouchError(err)
+    },
+  )
+}
+
+let scrollUnsupported = false
+function onWheel(e: WheelEvent) {
+  if (!touchOn.value || scrollUnsupported) return
+  const n = clientToNorm(e.clientX, e.clientY)
+  if (!n) return
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
+  scrollAcc += e.deltaY * unit
+  scrollPt = n
+  if (!scrollActive) {
+    scrollActive = true
+    const p0 = n
+    enqueue(() => iosScroll(p0.nx, p0.ny, 0, 'begin'))
+  }
+  /* 每 16ms 发一次（约一帧），而不是每个 wheel 事件都发 */
+  if (!scrollTick) {
+    scrollTick = window.setInterval(() => {
+      if (!scrollPt || Math.abs(scrollAcc) < 1) return
+      const dy = scrollAcc
+      scrollAcc = 0
+      const pt = scrollPt
+      enqueue(() => iosScroll(pt.nx, pt.ny, dy, 'post'))
+    }, 16)
+  }
+  /* 停手 220ms ⇒ 收尾：把余量发完，再结束会话 */
+  if (scrollIdle) window.clearTimeout(scrollIdle)
+  scrollIdle = window.setTimeout(() => {
+    if (scrollTick) {
+      window.clearInterval(scrollTick)
+      scrollTick = undefined
+    }
+    if (scrollPt && Math.abs(scrollAcc) >= 1) {
+      const dy = scrollAcc
+      const pt = scrollPt
+      scrollAcc = 0
+      enqueue(() => iosScroll(pt.nx, pt.ny, dy, 'post'))
+    }
+    enqueue(async () => {
+      await iosScroll(0, 0, 0, 'end')
+      scrollActive = false
+    })
+  }, 220)
 }
 
 onMounted(async () => {
@@ -468,11 +585,34 @@ const pickStyle = computed(() => {
   return { left: `${(p.x / d.width) * 100}%`, top: `${(p.y / d.height) * 100}%` }
 })
 
-const running = computed(() => (stats.value?.frames ?? 0) > 0)
-const linkText = computed(() => (!hasBridge ? '未连接 IPC' : running.value ? '画布运行中' : '等待首帧'))
+/** 推流已中断（决策 #1290）：画布已被抹黑，此时不能再说"运行中" */
+const stalled = computed(() => !!stats.value?.stalled)
+/* ★`frames` 是累计值，第一帧之后永远 >0 ⇒ 光看它会把"断了"也报成运行中。
+   必须叠加 `!stalled`，否则用户看到"画布运行中"而画面是停的（实测反馈）。 */
+const running = computed(() => (stats.value?.frames ?? 0) > 0 && !stalled.value)
+/* ★"静止"是第三种态（决策 #1291）：iOS 的 ReplayKit 只在屏幕**变化**时出帧，
+   所以"没有新帧"多数时候是**正常**的 —— 画面保持最后一帧、只把帧率报 0。
+   注意它**不能**让 `running` 变 false：`.screen` 靠 running 决定"透明洞"，
+   一旦变 false 会盖一层不透明底色，把最后一帧也挡住。 */
+const still = computed(
+  () => !stalled.value && (stats.value?.frames ?? 0) > 0 && (stats.value?.fps ?? -1) === 0,
+)
+const linkText = computed(() =>
+  !hasBridge
+    ? '未连接 IPC'
+    : stalled.value
+      ? '手机端已停止推流'
+      : still.value
+        ? '画面静止'
+        : running.value
+          ? '画布运行中'
+          : '等待首帧',
+)
 const hint = computed(() => {
   if (error.value) return 'stats 调用失败：' + error.value
   if (!hasBridge) return '无 Tauri 桥（浏览器直开时属正常）'
+  if (stalled.value) return '推流已中断：手机端退出/回桌面/断网后重新开始直播即可'
+  if (still.value) return '画面静止：手机端没有新的画面变化（iOS 只在屏幕变化时出帧），画面停在最后一帧'
   return running.value ? '原生画布运行中 · 60Hz 调度 · VT 解码' : '等待原生画布…'
 })
 /** 画面角标：一眼知道"这是什么流"，不用去右栏找 */
@@ -495,6 +635,18 @@ const hud = computed(() => {
  *   两次 `lsof`（微秒级）；而这个提示的存在时长本来就很短（手机一推上来就消失）。
  */
 const iosHint = ref<IosHint | null>(null)
+/**
+ * 当前采集源是不是 iOS（决定触控走哪条腿：控制通道 vs adb）。
+ *
+ * ★★不能用 `iosHint.active`（决策 #1298，用户实测"点了没反应"的直因）：
+ *   那个值是挂载时算一次的**快照**，切到 iOS 后不会重算 ⇒ `iosSource` 恒 false
+ *   ⇒ 点击走的是 `deviceTap`（安卓腿），而 iOS 模式下 ADB_SERIAL 是空的 ⇒ 发给空气。
+ *   改用 `stats.source`（每拍都来自 `capture_preset::current_kind()`，是真源）。
+ */
+const iosSource = computed(
+  () =>
+    stats.value?.source === 'ios' || stats.value?.source === 'sim' || stats.value?.source === 'mirror',
+)
 let iosTimer: ReturnType<typeof setInterval> | null = null
 /** 只在"没画面 + 采集源是 iOS"时才显示，避免 Android 投屏时弹一段无关说明 */
 const iosGuide = computed(() => (!running.value && iosHint.value?.active ? iosHint.value : null))
@@ -614,6 +766,7 @@ async function copyIosCmd() {
               @pointermove="onPointerMove"
               @pointerup="onPointerUp"
               @pointercancel="onPointerUp"
+              @wheel.prevent="onWheel"
             />
             <!-- 点击落点标记（输入通路已通的可见证据；元素信息要等设备侧视图树） -->
             <div class="picks">

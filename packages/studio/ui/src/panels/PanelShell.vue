@@ -8,7 +8,10 @@ defineProps<{ title: string; note?: string }>()
   <section class="sec">
     <h3>{{ title }}</h3>
     <slot />
-    <div v-if="note" class="note"><slot name="note">{{ note }}</slot></div>
+    <!-- ★`note || $slots.note`（决策 #1315）：原来只看 `note` **属性**，
+         而 DeviceSwitcher 用的是 `#note` **插槽** ⇒ 那段说明**从来没渲染过**。
+         用户报"切换时没有任何提示"时，其中一部分就是这个（行内提示是新加的，底部说明一直在丢）。 -->
+    <div v-if="note || $slots.note" class="note"><slot name="note">{{ note }}</slot></div>
   </section>
 </template>
 

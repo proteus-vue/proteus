@@ -24,11 +24,15 @@ export function stubTauri(payload) {
           // ★"没有画面"可覆盖（判据 ㊻）：iOS 引导卡只在 frames==0 时出现，
           //   而 fixture 是**有画面**的真实读数 ⇒ 必须能临时把 frames 归零。
           const noFrames = window.localStorage.getItem('__NO_FRAMES__') === '1'
+          /* ★采集源可覆盖（判据 ㊽b）：localStorage.__SOURCE__ = "ios"
+             —— 触控分派就是看这个字段，判据必须能把它切过去（决策 #1298）。 */
+          const src = window.localStorage.getItem('__SOURCE__') || 'android'
+          const base = { ...payload, source: src, ...(noFrames ? { frames: 0 } : {}) }
           if (dv) {
             const [w, h] = dv.split('x').map(Number)
-            return { ...payload, dev_w: w, dev_h: h, ...(noFrames ? { frames: 0 } : {}) }
+            return { ...base, dev_w: w, dev_h: h }
           }
-          return noFrames ? { ...payload, frames: 0 } : payload
+          return base
         }
         if (cmd === 'set_canvas_rect') return null
         // 开发环境设置（决策 #1266）：路径来自"用户填写"，桩只负责回显与验证
@@ -88,9 +92,17 @@ export function stubTauri(payload) {
             { platform: 'android', note: '', serial: 'd3cccccccc', state: 'unauthorized', model: '—', size: null, current: false },
             { platform: 'ios', note: '在手机上运行 ProteusHost 并开始直播后出画面（触控回传暂不支持）', serial: 'IOS-00008101', state: 'device', model: 'yunlai的iPhone · iOS 26.7.2', size: null, current: cur === 'IOS-00008101' },
             { platform: 'ios', note: '离线：用 USB 连接并在手机上点「信任此电脑」', serial: 'IOS-OFFLINE-02', state: 'offline', model: '旧 iPhone · iOS 17.0', size: null, current: false },
+            /* ★模拟器行（决策 #1315）：之前桩里**没有 simulator**，于是"切换后选中态丢失"
+               这个 bug 完全没有判据能抓到（它只在模拟器/真机上暴露）。 */
+            { platform: 'simulator', note: '', serial: 'SIM-0000AAAA', state: 'device', model: 'iPhone 17 Pro · iOS 26.5', size: null, current: cur === 'SIM-0000AAAA' },
           ]
         }
         if (cmd === 'select_device') {
+          /* ★可延迟（决策 #1315）：观察"切换中…"必须有足够长的窗口，
+             否则桩瞬时返回，UI 的 busy 态一帧都看不到。 */
+          if (window.localStorage.getItem('__SLOW_SELECT__') === '1') {
+            await new Promise((r) => setTimeout(r, 700))
+          }
           if (window.localStorage.getItem('__DEV_FAIL__') === '1')
             throw new Error('设备 d2bbbbbbbb 当前状态是 unauthorized，不能投屏（要先授权/唤醒）')
           window.__STUB_DEV_CUR__ = args?.serial
@@ -211,6 +223,13 @@ export function stubTauri(payload) {
            `pty_runs_echo_and_reads_back` 覆盖；这里测的是"界面到 IPC 这一层"有没有接对。 */
         if (cmd === 'term_open' || cmd === 'term_resize' || cmd === 'term_write' || cmd === 'term_close') return null
         if (cmd === 'term_info') return { open: true, pid: 4242 }
+        /* 一键投屏（决策 #1288）：桩只记录调用与参数；真流水线由 Rust/真机那条路覆盖。
+           ★`ios_uninstall` 要回 bundle id（前端会拿它显示"已卸载 X"）。 */
+        if (cmd === 'ios_stream_start') return null
+        /* 快路径（决策 #1297）：先试"直接启动已装宿主" */
+        if (cmd === 'ios_start_host') return null
+        if (cmd === 'ios_uninstall') return String(args?.bundle ?? 'cn.shxuxi.proteus.experiments')
+        if (cmd === 'ios_run_state') return { running: false, bundle: 'cn.shxuxi.proteus.experiments' }
         /* iOS 接法提示（决策 #1277）：真实实现要 `route`+`ifconfig`+`lsof`，桩里给一组定值。
            ★`active` 由 `__IOS_ACTIVE__` 控制——判据要能分别验"该显示"和"不该显示"两态。 */
         if (cmd === 'ios_stream_hint')

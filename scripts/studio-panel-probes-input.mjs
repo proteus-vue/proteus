@@ -317,6 +317,42 @@ export async function probeDeviceSwitch(page) {
   const failToast = await page.evaluate(() =>
     [...document.querySelectorAll('#toasts .toast')].map((n) => n.textContent?.trim() ?? '').join(' | '),
   )
+  /* ⑤ 选中态**跨平台**（决策 #1315）：切到模拟器后，高亮必须在模拟器那行。
+     原 bug：`current` 只按 adb 串号算 ⇒ 只有安卓会高亮，切到模拟器后高亮仍留在安卓。 */
+  await page.evaluate(() => {
+    window.__STUB_DEV_CUR__ = 'SIM-0000AAAA'
+  })
+  await page.click('#devRefresh')
+  await page.waitForTimeout(600)
+  const simSel = await rows()
+  const simCurrent = currentOf(simSel)
+  const androidStillOn = simSel.filter((r) => r.serial.startsWith('d') && r.current).length
+
+  /* ⑥ 切换中的可见反馈（决策 #1315）：慢切换时必须**看得到在做事**，
+     而不是"点了没反应，过很久才变"。 */
+  await page.evaluate(() => localStorage.setItem('__SLOW_SELECT__', '1'))
+  await page.evaluate(() => {
+    window.__STUB_DEV_CUR__ = 'd1aaaaaaaa'
+  })
+  await page.click('#devRefresh')
+  await page.waitForTimeout(300)
+  await page.click('#devList .devrow[data-dev="SIM-0000AAAA"]')
+  await page.waitForTimeout(120) // 落在 busy 窗口内（桩延迟 700ms）
+  const busyState = await page.evaluate(() => {
+    const row = document.querySelector('#devList .devrow[data-dev="SIM-0000AAAA"]')
+    const others = [...document.querySelectorAll('#devList .devrow')].filter(
+      (n) => n.getAttribute('data-dev') !== 'SIM-0000AAAA',
+    )
+    return {
+      switchingText: row?.textContent?.includes('切换中') ?? false,
+      rowClass: row?.className ?? '',
+      othersDisabled: others.every((n) => n.disabled === true),
+      note: document.querySelector('[data-busy-note]')?.textContent?.trim() ?? '',
+    }
+  })
+  await page.waitForTimeout(900) // 等桩返回，让 busy 收尾
+  await page.evaluate(() => localStorage.removeItem('__SLOW_SELECT__'))
+
   await page.evaluate(() => {
     localStorage.removeItem('__DEV_FAIL__')
     window.__STUB_DEV_CUR__ = 'd1aaaaaaaa' // 复位，别把状态留给后面的判据
@@ -368,6 +404,9 @@ export async function probeDeviceSwitch(page) {
     beforeFail,
     afterFail,
     failToast,
+    /* ★决策 #1315：跨平台选中态 + 切换中反馈（这两条此前**零覆盖**） */
+    simSel: { current: simCurrent, androidStillOn },
+    busyState,
   }
 }
 

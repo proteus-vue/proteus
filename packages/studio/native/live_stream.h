@@ -44,6 +44,11 @@ static int g_live_head = 0, g_live_tail = 0, g_live_count = 0;
 static pthread_t g_live_thread;
 static volatile int g_live_run = 0;
 static volatile int g_live_restarts = 0;
+/* ★「链路断了」与「画面静止」是两件事（决策 #1291）：
+   iOS 的 ReplayKit 是**变化驱动**的 —— 屏幕不动就没有帧（实测 0.0fps 但链路正常）。
+   按"多久没帧"判断开会把静止画面误判成断流（用户实测：不动就黑屏）。
+   ⇒ 真正的断连信号在**管道**：read() 返回 0（对端关闭/进程退出）就在这里置位。 */
+static volatile int g_link_lost = 0;
 static volatile long g_live_aus = 0;
 static volatile long long g_live_bytes = 0;   /* 累加入队 AU 的字节数（码率估算用） */
 
@@ -396,6 +401,9 @@ static void *live_reader(void *arg) {
         carry = 0;
       }
     }
+    /* ★走到这里 = 管道 EOF（手机端停止直播 / 进程退出）⇒ 这才是"断了"（决策 #1291）。
+       注意：静止画面**不会**走到这里（连接还在，只是没有新数据）⇒ 不会误判。 */
+    g_link_lost = 1;
     close(fd);
     int st = 0;
     waitpid(pid, &st, 0);

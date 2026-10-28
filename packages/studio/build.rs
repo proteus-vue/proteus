@@ -21,7 +21,19 @@ fn main() {
     for lib in ["avformat", "avcodec", "avutil", "swscale"] {
         println!("cargo:rustc-link-lib={lib}");
     }
-    for fw in ["Cocoa", "OpenGL", "VideoToolbox", "CoreVideo", "QuartzCore"] {
+    /* ★AVFoundation/CoreMedia：决策 #1292 起要用「iPhone 屏幕」USB 采集
+       （AVCaptureDeviceDiscoverySession + AVCaptureVideoDataOutput），
+       它们不在 Cocoa 里，必须显式链接，否则 `linker command failed`。 */
+    for fw in [
+        "Cocoa",
+        "OpenGL",
+        "VideoToolbox",
+        "CoreVideo",
+        "QuartzCore",
+        "AVFoundation",
+        "CoreMedia",
+        "CoreMediaIO",
+    ] {
         println!("cargo:rustc-link-lib=framework={fw}");
     }
     tauri_build::build();

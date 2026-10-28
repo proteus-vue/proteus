@@ -27,6 +27,12 @@ pub struct Settings {
     /// iOS 推流端口（ReplayKit 助手推到本机这个端口，`nc -l` 收）
     #[serde(default)]
     pub ios_port: Option<u16>,
+    /// **上次成功连接的设备串号**（决策 #1307）：启动时用它自动重连。
+    /// ★为什么要持久化：用户的原话是"为什么你启动的就正常、我从 Finder 打开就不显示"——
+    ///   因为"自动连上"之前只是我调试用的环境变量钩子，不是产品行为。
+    ///   手动打开的会话没有输入源 ⇒ 画布永远是"等待首帧"。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_device: Option<String>,
     /// ↓ v1 遗留字段：只为读旧文件，写盘时不再序列化（load 时折进 `paths`）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xcode: Option<String>,

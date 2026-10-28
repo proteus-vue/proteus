@@ -51,8 +51,27 @@ pub fn probe_size(serial: Option<&str>) -> Option<(u32, u32)> {
     adb(serial, &["shell", "wm", "size"]).and_then(|s| capture::parse_wm_size(&s))
 }
 
+/// **当前选中的设备串号**（任意平台）。
+///
+/// ★为什么不能再用 `ADB_SERIAL`（决策 #1314）：那个只在安卓分支被设置，
+///   于是**只有安卓能显示选中态**，切到 iOS/模拟器后高亮还留在安卓那行（用户实测）。
+pub static CURRENT_SERIAL: Mutex<Option<String>> = Mutex::new(None);
+
 pub fn current_serial() -> Option<String> {
+    if let Ok(g) = CURRENT_SERIAL.lock() {
+        if let Some(s) = g.as_ref() {
+            return Some(s.clone());
+        }
+    }
+    /* 启动早期还没 select 过时，用 adb 探测到的那台兜底 */
     ADB_SERIAL.lock().ok().and_then(|g| g.clone())
+}
+
+/// 记下"当前设备"（`select()` 成功后调用）
+fn set_current(serial: &str) {
+    if let Ok(mut g) = CURRENT_SERIAL.lock() {
+        *g = Some(serial.to_string());
+    }
 }
 
 /// 机型 + 屏幕尺寸的展示串（侧栏"机型"那一行）。
@@ -252,7 +271,7 @@ fn xcode_usable(app: &str) -> Option<String> {
 
 /// 解析可用的 `DEVELOPER_DIR`：设置 → `xcode-select -p` → 自动探测（**按版本号取最高的可用那套**）。
 /// 结果缓存；判断"可用"只看文件（见 `xcode_usable`），不跑命令 —— 跑一次 `xcdevice` 要 6.8 秒。
-fn xcode_developer_dir() -> Option<String> {
+pub(crate) fn xcode_developer_dir() -> Option<String> {
     static CACHE: std::sync::Mutex<Option<Option<String>>> = std::sync::Mutex::new(None);
     if let Some(p) = crate::settings::current().path("ios.xcode") {
         if xcode_usable(p).is_some() {
@@ -299,6 +318,130 @@ fn version_score(v: &str) -> u64 {
     major * 10_000 + minor * 100 + patch
 }
 
+/// 列出**可用的 iOS 模拟器**（决策 #1302）。
+///
+/// ★用 `simctl list devices available` 的**文本**输出而不是 `--json`：
+///   我们只要 "名字 + UDID + 是否 Booted" 三样，文本行更稳（JSON 结构随 Xcode 版本变过）。
+///   行格式：`    iPhone 17 Pro (F977AC99-…) (Booted)`。
+fn simulators() -> Vec<DeviceInfo> {
+    /* ★必须带 DEVELOPER_DIR（决策 #1302）：GUI 应用的 PATH/环境里没有它，
+       `xcrun simctl` 会静默失败 ⇒ 列表为空 ⇒ 用户看到"没有模拟器"。
+       复用 `xcode_developer_dir()`（设置 → xcode-select → 自动探测，已验证可用）。 */
+    /* ★simctl 必须**逐个候选真跑一次**（决策 #1302）：
+       `xcode-select -p` 在本机指向 CommandLineTools（**没有 simctl**），
+       而 `xcode_developer_dir()` 是按"xcdevice 可用 + 版本最高"挑的——两套判据不同。
+       仓里早有同族教训（#1275）：**路径存在 ≠ 工具可用**。 */
+    let out = match simctl_source() {
+        Some(o) => o,
+        None => return Vec::new(),
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut cur_runtime = String::new();
+    let mut v = Vec::new();
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with("--") && t.ends_with("--") {
+            // `-- iOS 26.5 --`
+            cur_runtime = t.trim_matches('-').trim().to_string();
+            continue;
+        }
+        // `iPhone 17 Pro (UDID) (Booted)` / `(Shutdown)`
+        let Some(open) = t.rfind('(') else { continue };
+        let state = t[open + 1..].trim_end_matches(')').trim().to_string();
+        let head = &t[..open];
+        let Some(open2) = head.rfind('(') else { continue };
+        /* ★顺序要紧（决策 #1302）：`(UDID) (Booted)` 里 UDID 后面先有 `)` 再有空格，
+           写成 `trim_end_matches(')')` 在前 ⇒ 最后的字符是空格，括号**去不掉**
+           ⇒ serial 带尾巴 `)` ⇒ `select()` 永远"不在列表里"（实测踩到）。 */
+        let udid = head[open2 + 1..].trim().trim_end_matches(')').trim().to_string();
+        let name = head[..open2].trim().to_string();
+        if udid.len() < 30 || !udid.contains('-') {
+            continue;
+        }
+        let booted = state.eq_ignore_ascii_case("Booted");
+        v.push(DeviceInfo {
+            platform: "simulator".into(),
+            // ★未启动的也能点（select 会先 boot）⇒ 这里一律报 device，把"未启动"写在 size 里
+            note: if booted { String::new() } else { "未启动（点它会先启动模拟器）".into() },
+            current: false,
+            serial: udid,
+            state: "device".into(),
+            model: format!("{name} · {cur_runtime}"),
+            size: if booted { None } else { Some("未启动".into()) },
+        });
+    }
+    v
+}
+
+/// 命中的那个 DEVELOPER_DIR（`simctl_developer_dir()` 用）
+static CACHE_DEV: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// 找一个**真的能跑 `simctl list devices`** 的 DEVELOPER_DIR（带缓存）。
+///
+/// 候选顺序：设置里的 iOS Xcode → `xcode_developer_dir()` → `detect()` 扫到的全部 →
+/// `xcode-select -p`。用"输出里有 iPhone"当判据（而不是"目录存在"）。
+pub(crate) fn simctl_developer_dir() -> Option<String> {
+    simctl_source().map(|_| {
+        CACHE_DEV
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_default()
+    })
+}
+
+fn simctl_source() -> Option<std::process::Output> {
+    let mut cands: Vec<String> = Vec::new();
+    if let Some(p) = crate::settings::current().path("ios.xcode") {
+        cands.push(crate::settings::developer_dir(&p));
+    }
+    if let Some(d) = xcode_developer_dir() {
+        cands.push(d);
+    }
+    for c in crate::settings::detect("ios.xcode") {
+        cands.push(crate::settings::developer_dir(&c.path));
+    }
+    if let Ok(out) = Command::new("xcode-select").arg("-p").output() {
+        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !p.is_empty() {
+            cands.push(p);
+        }
+    }
+    cands.dedup();
+
+    let try_one = |dev: &str| -> Option<std::process::Output> {
+        let o = Command::new("/usr/bin/xcrun")
+            .args(["simctl", "list", "devices", "available"])
+            .env("DEVELOPER_DIR", dev)
+            .output()
+            .ok()?;
+        if o.status.success() && String::from_utf8_lossy(&o.stdout).contains("iPhone") {
+            Some(o)
+        } else {
+            None
+        }
+    };
+    // 先看缓存（缓存的是 DEVELOPER_DIR，命中就直接再跑一次——simctl 输出是动态的）
+    if let Ok(g) = CACHE_DEV.lock() {
+        if let Some(dev) = g.as_ref() {
+            if let Some(o) = try_one(dev) {
+                return Some(o);
+            }
+        }
+    }
+    for d in cands {
+        if let Some(o) = try_one(&d) {
+            if let Ok(mut g) = CACHE_DEV.lock() {
+                *g = Some(d.clone());
+            }
+            eprintln!("[studio] 模拟器用 Xcode：{d}");
+            return Some(o);
+        }
+    }
+    eprintln!("[studio] 找不到能跑 simctl 的 Xcode ⇒ 设备列表不显示模拟器");
+    None
+}
+
 /// 列设备。`size` 只对 `state == device` 的查（离线/未授权的 adb shell 会挂）。
 /// ★这是阻塞调用（每台 1~2 次 adb），必须从 `spawn_blocking` 里进。
 pub fn list(force: bool) -> Vec<DeviceInfo> {
@@ -337,7 +480,70 @@ pub fn list(force: bool) -> Vec<DeviceInfo> {
             size: None,
         });
     }
+    // ── iPhone 镜像（真机整屏；macOS 独占，决策 #1316）──
+    if let Some(mut d) = mirror_device() {
+        d.current = cur.as_deref() == Some(d.serial.as_str());
+        out.push(d);
+    }
+
+    // ── iOS 模拟器（simctl；与真机并列，决策 #1302）──
+    out.extend(simulators().into_iter().map(|mut d| {
+        d.current = cur.as_deref() == Some(d.serial.as_str());
+        d
+    }));
+
     out
+}
+
+/// **iPhone 镜像** 这一"台"（决策 #1316）：macOS 15+ 的系统功能，看见的是**真机整屏**。
+///
+/// 它不是真机设备列表里的一台（没有 UDID 可枚举），而是一个**系统窗口**；
+/// 但对用户来说它确实是"另一块能看的真机屏幕"，所以在列表里给它一行。
+fn mirror_device() -> Option<DeviceInfo> {
+    /* ★优先用**缓存的**窗口信息（决策 #1320）：`--list` 在 Studio 里偶发阻塞，
+       一超时就当成"没窗口" ⇒ 列表那行消失（画面却还在投）。缓存 30s 内直接用。 */
+    let (_, w, h) = match crate::live_source::mirror_cached(30_000) {
+        Some(v) => v,
+        None => {
+            let cast = crate::live_source::sim_tools().ok()?.0;
+            let (_, w, h) = crate::live_source::mirror_window(&cast).ok()?;
+            crate::live_source::set_mirror_window(0, w, h); // 只记尺寸，id 交给下一次 request_mirror
+            (0, w, h)
+        }
+    };
+    Some(DeviceInfo {
+        platform: "mirror".into(),
+        note: "真机整屏（手机需锁屏；一解锁镜像就断）".into(),
+        current: false,
+        serial: "MIRROR-IPHONE".into(),
+        state: "device".into(),
+        model: "iPhone（镜像）".into(),
+        size: Some(format!("{}x{}", w * 2, h * 2)),
+    })
+}
+
+/// 自动挑一台模拟器（决策 #1307）：**上次用过的**优先，否则任一**已启动**的。
+///
+/// 只在"没有 adb 设备"的兜底路径里用——那时用户最可能的意图就是"看模拟器"。
+/// 所有可用模拟器的串号（判断"上次那台是不是模拟器"用）
+pub(crate) fn sim_serials() -> Vec<String> {
+    simulators().into_iter().map(|d| d.serial).collect()
+}
+
+pub(crate) fn auto_simulator() -> Option<String> {
+    let sims = simulators();
+    /* ★上次那台**即使没启动**也要用（决策 #1308）：实测踩到——用户上次看的是 iPhone 17 Pro，
+       后来模拟器被 Shutdown 了，而这里只看"已启动"的 ⇒ 一台都没有 ⇒ 退回"干等 iPhone 推流"
+       ⇒ 画布永远"等待首帧"。体验上应该是"我帮你把上次那台拉起来"。 */
+    if let Some(last) = crate::settings::current().last_device {
+        if sims.iter().any(|d| d.serial == last) {
+            return Some(last);
+        }
+    }
+    sims.iter()
+        .find(|d| d.size.is_none())
+        .map(|d| d.serial.clone())
+        .or_else(|| sims.first().map(|d| d.serial.clone()))
 }
 
 /// 切换当前设备：返回平台名（`android` / `ios`），调用方据此决定**采集源**。
@@ -351,6 +557,43 @@ pub fn select(serial: &str) -> Result<String, String> {
     if d.state != "device" {
         return Err(format!("{} 当前是 {}，不能投屏：{}", d.model, d.state, d.note));
     }
+    if serial == "MIRROR-IPHONE" {
+        /* ★镜像不依赖 `list()`（决策 #1320）：`--list` 偶发超时会让列表里暂时没有它，
+           而"选它"本身只需要一个指令 —— 不该因此报"不在列表里"。 */
+        set_current(serial);
+        if let Ok(mut g) = ADB_SERIAL.lock() {
+            *g = None;
+        }
+        TOUCH_ANDROID.store(false, std::sync::atomic::Ordering::Relaxed);
+        eprintln!("[studio] 切换设备 → iPhone 镜像（真机整屏）");
+        return Ok("mirror".into());
+    }
+    if d.platform == "mirror" {
+        set_current(serial);
+        if let Ok(mut g) = ADB_SERIAL.lock() {
+            *g = None;
+        }
+        TOUCH_ANDROID.store(false, std::sync::atomic::Ordering::Relaxed);
+        eprintln!("[studio] 切换设备 → iPhone 镜像（真机整屏）");
+        return Ok("mirror".into());
+    }
+    if d.platform == "simulator" {
+        /* 模拟器：boot 是幂等的（已启动会返回错误，忽略即可）；窗口没开会话就没画面 */
+        let _ = std::process::Command::new("/usr/bin/xcrun")
+            .args(["simctl", "boot", serial])
+            .output();
+        let _ = std::process::Command::new("/usr/bin/open")
+            .args(["-a", "Simulator"])
+            .output();
+        if let Ok(mut g) = ADB_SERIAL.lock() {
+            *g = None;
+        }
+        TOUCH_ANDROID.store(false, std::sync::atomic::Ordering::Relaxed);
+        set_current(serial);
+        eprintln!("[studio] 切换设备 → iOS 模拟器 {}（{}）", d.model, serial);
+        return Ok("sim".into());
+    }
+    set_current(serial);
     if d.platform == "ios" {
         if let Ok(mut g) = ADB_SERIAL.lock() {
             *g = None;

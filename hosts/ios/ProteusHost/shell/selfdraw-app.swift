@@ -340,7 +340,16 @@ final class SelfDrawViewController: UIViewController {
     ///   ★未配置 `PROTEUS_SCREEN_STREAM` 时是**空操作**（不引入任何授权弹窗）。
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        /* ★先接生命周期，再启动（决策 #1293）：进后台要主动断开连接，
+           否则 Studio 只能把最后的画面挂在那里（它分不清"静止"和"停播"）。 */
+        ScreenStream.shared.wireLifecycle()
         ScreenStream.shared.startIfConfigured()
+        /* ★触控回传（决策 #1295）：把宿主视图交给控制通道，再起连接。
+           `PROTEUS_TOUCH_CONTROL` 未配置时零副作用。 */
+        if let sv = view.subviews.compactMap({ $0 as? SelfDrawView }).first {
+            TouchControl.shared.register(sv)
+        }
+        TouchControl.shared.startIfConfigured()
     }
 
     /// ★★★六端 SFC 压力夹具驱动器（iOS 第三条链的落点）。

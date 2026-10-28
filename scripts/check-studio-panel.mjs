@@ -37,9 +37,10 @@ import { langExtCoverage } from './studio-panel-langext.mjs'
 import { checkCapability } from './studio-panel-capability.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
 import { checksConfig } from './studio-panel-checks-config.mjs'
-import { checksUiGuides } from './studio-panel-checks-ui.mjs'
+import { checksUiGuides, checksIosStream } from './studio-panel-checks-ui.mjs'
 import { probeIosGuide } from './studio-panel-probes-ios.mjs'
 import { probeTerminal } from './studio-panel-probes-term.mjs'
+import { probeIosStream } from './studio-panel-probes-ios-stream.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STUDIO = path.join(ROOT, 'packages', 'studio')
@@ -434,6 +435,11 @@ await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
      必须排在 pan/touch/hole 这些**依赖"有画面"**的采集之后，且必须在 `closeAll()` 之前
      （那个函数会关掉浏览器，之后任何 page.evaluate 都是 "Target page has been closed"）。 */
 const ios = await probeIosGuide(page)
+
+/* ── ㊽ 一键投屏（采集段在 studio-panel-probes-ios-stream.mjs，决策 #1288）──
+   ★放在 ㊻ 之后：探针会点"投屏"按钮 ⇒ 把当前设备切成 iOS，
+     后面 touch/tap 那些依赖 Android 的采集**已经跑完**了（它们在更前面）。 */
+const iosStream = await probeIosStream(page)
 
 /* ── ㊼ 内置终端（采集段在 studio-panel-probes-term.mjs，决策 #1279）──
    ★放这里：它会点 rail 切到终端视图（之后 perf 段自己 reload 回 code 视图，互不影响）。 */
@@ -949,6 +955,7 @@ const checks = [
   ],
   // ㊻㊼ 两块"引导/输入类"判据在 studio-panel-checks-ui.mjs（决策 #1279 拆出，断言一字未改）
   ...checksUiGuides({ ios, term: termProbe }),
+  ...checksIosStream({ stream: iosStream }),
   [`⑩ fixture 与原始采集输出一致${fixtureWhy ? `（${fixtureWhy}）` : ''}`, fixtureInSync],
   // ㉑ 大文件冷跳着色（见脚本里的长注释：这条钉的是 warmParse 不能掉）
   [

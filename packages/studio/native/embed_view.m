@@ -11,6 +11,9 @@
 //   poc_report(path)     → 落 JSON 读数
 //   poc_probe()          → 返回位掩码：bit0=找到 WKWebView，bit1=背景已透明
 #import <Cocoa/Cocoa.h>
+/* ★决策 #1292：iPhone「USB 整屏采集」要用 AVFoundation 的设备发现与采集会话。
+   之前这个文件只做 GL/解码，不需要它；探针/采集加上后必须有这一行头文件。 */
+#import <AVFoundation/AVFoundation.h>
 #import <OpenGL/gl3.h>
 #import <OpenGL/OpenGL.h>
 
@@ -69,9 +72,12 @@ static const char *VS_BLIT =
     "  gl_Position = vec4(p*2.0-1.0, 0.0, 1.0); }\n";
 static const char *FS_YUV =
     "#version 150\nin vec2 vUV;\nout vec4 o;\n"
-    "uniform sampler2D texY; uniform sampler2D texUV;\n"
+    "uniform sampler2D texY; uniform sampler2D texUV; uniform float uFullRange;\n"
+    /* ★★颜色范围必须按**源**区分（决策 #1296）：ReplayKit/VT 给的是 **full range**（JPEG），
+       而 Android screenrecord 是 **limited**（video）。之前一律按 limited 转 ⇒
+       iOS 的浅灰背景（≈240）被 (240-16)*1.164≈261 放大后**截成纯白**（用户实测：灰底全白）。 */
     "void main(){ float y = texture(texY, vUV).r; vec2 uv = texture(texUV, vUV).rg - vec2(0.5);\n"
-    "  y = (y - 16.0/255.0) * 1.164383;\n"
+    "  if (uFullRange > 0.5) { y = y; } else { y = (y - 16.0/255.0) * 1.164383; }\n"
     "  o = vec4(y + 1.596027*uv.y, y - 0.391762*uv.x - 0.812968*uv.y, y + 2.017232*uv.x, 1.0); }\n";
 static const char *FS_BLIT =
     "#version 150\nin vec2 vUV;\nout vec4 o;\nuniform sampler2D texCanvas; uniform vec2 uFit;\n"
@@ -137,6 +143,8 @@ static PocGLView *g_view = nil;
 static NSOpenGLContext *g_ctx = nil;
 static GLuint g_fbo = 0, g_canvas = 0, g_vao = 0, g_ty = 0, g_tuv = 0, g_progComp = 0, g_progBlit = 0;
 static GLint g_uFit = -1;
+/// YUV→RGB 的范围开关（1 = full/JPEG，0 = limited/video）。见 FS_YUV 注释。
+static GLint g_uFullRange = -1;
 
 static AVFormatContext *g_fmt = NULL;
 static AVCodecContext *g_cc = NULL;
@@ -189,8 +197,13 @@ static void maybe_degrade_to_sw(void) {
      · 现在：1.5 秒后实测出帧率 < 30fps 就判定"硬解这条路在这份参数集上跑不动"。 */
   double el = now_ms() - g_dec_t0;
   if (el < 1500) return;
+  /* ★★判据必须是"**硬解一帧都出不来**"，不能是"fps 不够高"（决策 #1294）。
+     实测：iOS 静止 0fps、动起来 ~5fps；Android screenrecord ~15fps ⇒
+     "fps < 30 就降级"会让**两个平台每轮都降级**：强制软解 + 重启会话（断开连接、重新等 IDR）。
+     真正该降级的场景只有一个：**AUS 在进来，但一帧都没解出来**（VT 拒绝这份参数集）。 */
+  if (g_live_aus < 10) return;                       /* 还没数据，别急着判 */
+  if (g_hw_frames > 0 || g_sw_frames > 0) return;    /* 出过帧就说明这条路能用 */
   double fps = (double)g_frames / (el / 1000.0);
-  if (fps >= 30.0) return;
   g_dec_sw = 1;
   g_force_sw = 1;
   /* ★★降级 = **重启采集会话**，不是"原地换一个软解解码器"（决策 #1264 实测修正）。
@@ -198,8 +211,8 @@ static void maybe_degrade_to_sw(void) {
      而静止画面（桌面/文档）很久才有一个 IDR ⇒ 表现为"本该降级救场，结果黑屏更久"。
      重启会话则必然从 SPS/PPS + IDR 开始，一次到位。
      代价：一次重启（几百毫秒黑一下），但比"黑到下一次关键帧"好得多。 */
-  fprintf(stderr, "实时：硬解只有 %.1ffps（VT 出 %ld 帧 / 回退 %ld 帧）⇒ 重启会话并强制软解\n",
-          fps, g_hw_frames, g_sw_frames);
+  fprintf(stderr, "实时：收到 %ld 个 AU 但**一帧都没解出来**（出帧 %.1f）⇒ 判定硬解不可用，重启会话并强制软解\n",
+          g_live_aus, fps);
   poc_live_restart(g_live_cmd);
 }
 
@@ -305,6 +318,30 @@ static int live_open_decoder(void) {
     if (dp) { FILE *f = fopen(dp, "wb"); if (f) { fwrite(params, 1, (size_t)plen, f); fclose(f); } }
   }
   fprintf(stderr, "实时：参数集 %d 字节（等 %dms）· 硬解=%d · open rc=%d\n", plen, waited, (int)g_hw, open_rc);
+  /* ★**没拿到参数集时把抓流日志的尾巴打出来**（决策 #1324）：
+     否则现象只有一个"0 字节"，昨天为此猜了一下午（实际是 cast 卡在 SCStream.startCapture）。
+     抓流的 stderr 落在 ~/Library/Logs/Proteus Studio/cast.err（见 capture_preset）。 */
+  if (plen == 0) {
+    char path[512];
+    const char *home = getenv("HOME");
+    snprintf(path, sizeof(path), "%s/Library/Logs/Proteus Studio/cast.err", home ? home : "");
+    FILE *f = fopen(path, "rb");
+    if (f) {
+      char buf[601] = {0};
+      if (fseek(f, 0, SEEK_END) == 0) {
+        long sz = ftell(f);
+        long take = sz > 600 ? 600 : sz;
+        if (sz > 0 && fseek(f, sz - take, SEEK_SET) == 0) {
+          size_t n = fread(buf, 1, (size_t)take, f);
+          buf[n] = 0;
+        }
+      }
+      fclose(f);
+      fprintf(stderr, "实时：抓流没有数据 —— cast 日志尾部：\n%s\n", buf);
+    } else {
+      fprintf(stderr, "实时：抓流没有数据，且没有 cast 日志（%s）\n", path);
+    }
+  }
   if (open_rc < 0) { fprintf(stderr, "实时：解码器打开失败\n"); return -1; }
 
   /* 尺寸：SPS 里已经解析出来了，优先用它（screenrecord --size 只是请求值，设备可能改） */
@@ -362,6 +399,32 @@ int poc_pick_path(const char *message, char *out, int cap) {
   return ok;
 }
 
+/* ★「切设备后画布还显示上一台」的根因（决策 #1286）：
+ *   live 分支在没有新 AU 时走 `if (!got) { g_empty++; return 0; }` **直接返回、不绘制**
+ *   ⇒ GL 后台缓冲里留着上一台设备的最后一帧，窗口就"卡"在那张图上。
+ *   用户看到的是"点了没反应"，于是再点一次。⇒ 切源时必须**主动抹一次**：
+ *   ① 丢掉 g_last（不让它被当作可用帧）；② 清空读数（面板/界面回到"等推流"）；
+ *   ③ 画一帧黑（把残留像素盖掉）—— 只画一次，新流一到就恢复。 */
+static int g_blank_once = 0;
+/* ★"流断了"的检测（决策 #1290）：手机端一旦停止推流（回桌面/退出/断网），
+   live 分支没有新 AU ⇒ tick 直接 return、不绘制 ⇒ **画布永远停在最后一帧**，
+   看起来像"还在跑"（面板 fps 也还是旧值）。用户实测就撞到这个：
+   手机已经回到桌面，Studio 里画面还是那个页面。
+   ⇒ 记录最后一次收到 AU 的时刻，超过阈值就抹黑一次并置 g_stalled（fps 归 0）。 */
+static double g_last_au_ms = 0;
+static int g_stalled = 0;
+#define STALL_MS 1500.0
+
+static void draw_blank_frame(void) {
+  if (!g_view || !g_ctx) return;
+  NSSize bs = [g_view convertRectToBacking:[g_view bounds]].size;
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, (GLsizei)bs.width, (GLsizei)bs.height);
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  [g_ctx flushBuffer];
+}
+
 void poc_live_request_restart(const char *cmd) {
   if (!cmd || !*cmd) return;
   snprintf(g_pending_cmd, sizeof(g_pending_cmd), "%s", cmd);
@@ -374,6 +437,19 @@ int poc_live_restart(const char *cmd) {
   if (!g_live || !cmd || !*cmd) return 1;
   fprintf(stderr, "实时：切换采集 ⇒ %s\n", cmd);
   live_stop();                                   /* 杀进程组 + 设备侧 pkill + join */
+  /* ★切源即"上一台的画面作废"（决策 #1286）：不丢 g_last 的话，下一拍 tick 找不到新 AU
+     就会把旧设备的最后一帧一直重画在屏幕上（实测：切到 iOS 后画布永远是安卓那张）。 */
+  /* ★这里**不能** `av_frame_unref(g_last)`（虽然直觉上"作废"就该 unref）：
+     实测这么写会 **SIGABRT** —— `Assertion desc failed at libswscale/swscale_internal.h:737`。
+     一个被 unref 的 AVFrame（width/height=0、format=NONE）仍可能被后面的 sws 路径当成有效帧，
+     `sws_getContext` 拿到 format=-1 就断言。A/B 对照：去掉 unref ⇒ rc=0 / 117 帧 / 零断言。
+     ⇒ 正确做法是**不碰帧的生命周期，只"不画它"**：切源后主动抹一次黑（g_blank_once），
+       新流第一帧到达时自然会覆盖 g_last，旧画面就再没有机会被画出来。 */
+  g_blank_once = 1;
+  /* 读数归零：面板的"出帧/码率/延迟"必须跟着新会话从 0 起，否则界面显示还在跑旧流 */
+  g_frames = 0; g_late = 0; g_live_aus = 0; g_live_bytes = 0;
+  g_last_out = -1; g_wall0 = 0; g_last_t_first = 0;
+  g_n_iv = g_n_rc = g_n_pr = g_n_tr = g_n_lat = g_n_qw = g_n_dec = 0;
   if (g_sws) { sws_freeContext(g_sws); g_sws = NULL; }
   if (g_nv12) av_frame_unref(g_nv12);
   g_dec_sw = 0; g_dec_fail = 0; g_hw_frames = 0; g_sw_frames = 0;
@@ -381,8 +457,443 @@ int poc_live_restart(const char *cmd) {
   return live_open_decoder() == 0 ? 0 : 3;
 }
 
+/* 找 **iPhone 镜像** 窗口：`CGWindowListCopyWindowInfo`（纯 CoreGraphics，**不碰 SCK**）。
+ *
+ * ★★为什么不用 helper 的 `--list`（决策 #1321）：
+ *   那个走 `SCShareableContent`，在 Studio 里实测**挂满 8 秒**回不来（子进程 + 内存紧张时更糟），
+ *   于是设备列表里"镜像"那行**时有时无**、选中还报"不在列表里"。
+ *   而"窗口在不在、多大、谁拥有"用 CGWindowList 就够了 —— 毫秒级、不要权限、不起进程。
+ *   只有**抓画面**（SCK）才需要 helper。
+ * 返回 1 = 找到（写回 id/宽/高），0 = 没有。
+ */
+int poc_find_mirror_window(uint32_t *out_id, uint32_t *out_w, uint32_t *out_h) {
+  CFArrayRef arr = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
+  if (!arr) return 0;
+  int found = 0;
+  CFIndex n = CFArrayGetCount(arr);
+  for (CFIndex i = 0; i < n && !found; i++) {
+    NSDictionary *d = (__bridge NSDictionary *)CFArrayGetValueAtIndex(arr, i);
+    NSString *title = d[(id)kCGWindowName];
+    NSString *owner = d[(id)kCGWindowOwnerName];
+    NSString *hay = [NSString stringWithFormat:@"%@ %@", title ?: @"", owner ?: @""];
+    NSString *low = hay.lowercaseString;
+    BOOL isMirror = ([hay containsString:@"镜像"] || [low containsString:@"iphone mirroring"] ||
+                     [low containsString:@"screencontinuity"]);
+    if (!isMirror) continue;
+    NSDictionary *b = d[(id)kCGWindowBounds];
+    if (!b) continue;
+    double w = [b[@"Width"] doubleValue], h = [b[@"Height"] doubleValue];
+    if (w < 100 || h < 200) continue; /* 过滤掉奇怪的附属窗口 */
+    if (out_id) *out_id = (uint32_t)[d[(id)kCGWindowNumber] unsignedIntValue];
+    if (out_w) *out_w = (uint32_t)w;
+    if (out_h) *out_h = (uint32_t)h;
+    found = 1;
+  }
+  CFRelease(arr);
+  return found;
+}
+
+/* ── iPhone 镜像的输入注入（决策 #1318）────────────────────────────────────────
+ * 镜像窗口是**普通 macOS 窗口**，所以输入不需要任何私有 HID：
+ * 用公开的 `CGEvent` 往那个窗口的屏幕坐标投递鼠标/键盘事件，Apple 自己会转成真机触摸。
+ *
+ * ★需要「辅助功能」（Accessibility）授权；没有时事件会被系统静默丢弃（不报错），
+ *   所以调用方必须先查 `poc_accessibility_granted()`，否则用户只会看到"点了没反应"。
+ * ★窗口必须在前台才有意义：先用 owner pid 激活它，否则首次点击只会"激活窗口"而不传递。
+ */
+static CGRect mirror_window_rect(uint32_t win) {
+  CGRect r = CGRectZero;
+  CFArrayRef arr = CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, win);
+  if (arr) {
+    if (CFArrayGetCount(arr) > 0) {
+      NSDictionary *d = (__bridge NSDictionary *)CFArrayGetValueAtIndex(arr, 0);
+      NSDictionary *b = d[(id)kCGWindowBounds];
+      if (b) {
+        r = CGRectMake([b[@"X"] doubleValue], [b[@"Y"] doubleValue],
+                       [b[@"Width"] doubleValue], [b[@"Height"] doubleValue]);
+      }
+    }
+    CFRelease(arr);
+  }
+  return r;
+}
+
+int poc_accessibility_granted(void) { return AXIsProcessTrusted() ? 1 : 0; }
+
+void poc_request_accessibility(void) {
+  NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
+  AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts);
+}
+
+/* 取镜像窗口的属主 pid —— 用 `CGEventPostToPid` 投递事件给它。
+ *
+ * ★★为什么**不能**用 `CGEventPost(kCGHIDEventTap, ...)`（决策 #1319，用户实测的 bug）：
+ *   那是"全局 HID 投递"，会**把真实鼠标指针搬到目标坐标**并真的在那里按下/拖动
+ *   ⇒ 用户在**我们画布**上拖拉时，指针瞬间跳到镜像窗口里去操作它，
+ *     画布自己的拖拽被打断，体验是"每次滑动都在滑镜像"。
+ *   `CGEventPostToPid` 把事件**直接塞进目标进程的事件队列**，不动真实指针、也不抢焦点。
+ * ★同样不再 `activate` 窗口：抢焦点会让用户正在用的 Studio 失焦。 */
+static pid_t mirror_owner_pid(uint32_t win) {
+  pid_t out = 0;
+  CFArrayRef arr = CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, win);
+  if (!arr) return 0;
+  if (CFArrayGetCount(arr) > 0) {
+    NSDictionary *d = (__bridge NSDictionary *)CFArrayGetValueAtIndex(arr, 0);
+    NSNumber *pid = d[(id)kCGWindowOwnerPID];
+    if (pid) out = (pid_t)pid.intValue;
+  }
+  CFRelease(arr);
+  return out;
+}
+
+/* 往指定进程投递一个鼠标事件（不动全局指针） */
+static void post_to_pid(pid_t pid, CGEventType type, CGPoint p) {
+  CGEventRef ev = CGEventCreateMouseEvent(NULL, type, p, kCGMouseButtonLeft);
+  if (!ev) return;
+  CGEventPostToPid(pid, ev);
+  CFRelease(ev);
+}
+
+/* 把镜像窗口挪到主屏**右下角**（决策 #1326）：让它"在屏幕上、可点到，但不占主工作区"。
+ *
+ * ★为什么必须留在屏幕上（不能藏/最小化）：我们的点击是**真实 HID 事件**，
+ *   它落在"屏幕上该坐标的最上层窗口" ⇒ 窗口离屏则点不到，被 Studio 盖住则点到 Studio。
+ *   所以只能"挪到角落"，不能"隐藏"。这是 HID 方案的天花板，不是实现偷懒。
+ * 用 AX 设置窗口位置（需要「辅助功能」，和注入同一份权限）。
+ */
+int poc_place_mirror_window(uint32_t win, int margin) {
+  if (!AXIsProcessTrusted()) return -2;
+  pid_t pid = mirror_owner_pid(win);
+  if (pid <= 0) return -3;
+  AXUIElementRef app = AXUIElementCreateApplication(pid);
+  if (!app) return -4;
+  CFTypeRef winsRef = NULL;
+  int rc = -4;
+  if (AXUIElementCopyAttributeValue(app, kAXWindowsAttribute, &winsRef) == kAXErrorSuccess &&
+      winsRef && CFGetTypeID(winsRef) == CFArrayGetTypeID() && CFArrayGetCount(winsRef) > 0) {
+    AXUIElementRef winEl = (AXUIElementRef)CFArrayGetValueAtIndex((CFArrayRef)winsRef, 0);
+    CGRect r = mirror_window_rect(win);
+    CGDirectDisplayID disp = CGMainDisplayID();
+    double sw = CGDisplayPixelsWide(disp) / (CGDisplayPixelsWide(disp) > 0 ? 1 : 1);
+    /* 用"屏幕的 Cocoa 坐标"（左上原点）算目标位置：右下角，留 margin */
+    NSScreen *main = NSScreen.mainScreen;
+    if (main) {
+      NSRect vf = main.visibleFrame; /* Cocoa 坐标（左下原点） */
+      double ww = r.size.width, hh = r.size.height;
+      double targetX = vf.origin.x + vf.size.width - ww - margin;
+      /* Cocoa 的 y 是左下原点 ⇒ 底部对齐：y = vf.origin.y + margin */
+      double targetY = vf.origin.y + margin;
+      /* AX 的 position 是**左上原点**的全局坐标 ⇒ y 需要换算 */
+      double screenH = main.frame.size.height;
+      double axY = screenH - (targetY + hh);
+      CGPoint p = CGPointMake(targetX, axY);
+      AXValueRef posVal = AXValueCreate(kAXValueCGPointType, &p);
+      if (posVal) {
+        if (AXUIElementSetAttributeValue(winEl, kAXPositionAttribute, posVal) == kAXErrorSuccess) rc = 0;
+        CFRelease(posVal);
+      }
+    }
+    (void)sw;
+  }
+  if (winsRef) CFRelease(winsRef);
+  CFRelease(app);
+  return rc;
+}
+
+/* ── 真实 HID 投递 + 事后还原（决策 #1325）─────────────────────────────────
+ * ★为什么放弃 `CGEventPostToPid`：实测事件发出去了（我们的日志有 17 条），
+ *   但**镜像 app 直接忽略**——这类"直接塞进某个进程队列"的鼠标事件在很多 app 上不生效
+ *   （苹果文档也只保证键盘事件可靠）。所以只能走真实 HID。
+ * ★代价与补偿：HID 会移动真实指针、并把镜像窗口激活。所以：
+ *   ① 投递前记住**指针位置**与**原前台 app**；
+ *   ② 把镜像窗口拉到前台（否则点击会落到它上面盖着的窗口）；
+ *   ③ 投递完成后**还原指针**、并把**焦点还给原来的 app**。
+ *   用户看到的是"指针闪一下、点到了手机上"，而不是"我正在用的窗口被抢走"。
+ */
+typedef struct {
+  CGPoint cursor;
+  pid_t front;
+} MirrorSaved;
+
+static MirrorSaved mirror_begin(uint32_t win) {
+  MirrorSaved sv = {{0, 0}, 0};
+  CGEventRef ev0 = CGEventCreate(NULL);
+  if (ev0) {
+    sv.cursor = CGEventGetLocation(ev0);
+    CFRelease(ev0);
+  }
+  /* ★**投递期间把真实指针藏起来**（决策 #1326）：HID 必然移动指针，用户看到的是
+     "鼠标突然飞到镜像窗口里"。指针移动只有几十毫秒，藏起来就几乎无感；
+     投递结束后先还原位置、再显示。 */
+  CGDisplayHideCursor(kCGDirectMainDisplay);
+  NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+  sv.front = front ? front.processIdentifier : 0;
+  /* 把镜像窗口所属 app 拉到前台（否则点击/滚动落不到它上面）。
+     ★**已经在前台就不要再激活、也不要等**（决策 #1328）：连续滚动时每次省 80ms，
+       否则用户看到的是"滚一下顿一下"。 */
+  pid_t pid = mirror_owner_pid(win);
+  if (pid > 0 && sv.front != pid) {
+    NSRunningApplication *app =
+        [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+    [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+    usleep(80000);
+  } else if (pid > 0) {
+    usleep(5000); /* 已在前台：只让出一次调度，别空等 */
+  }
+  return sv;
+}
+
+static void mirror_end(MirrorSaved sv) {
+  CGWarpMouseCursorPosition(sv.cursor);
+  CGDisplayShowCursor(kCGDirectMainDisplay);
+  if (sv.front > 0) {
+    NSRunningApplication *prev =
+        [NSRunningApplication runningApplicationWithProcessIdentifier:sv.front];
+    [prev activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+  }
+}
+
+static void hid_post(CGEventType type, CGPoint p) {
+  CGEventRef ev = CGEventCreateMouseEvent(NULL, type, p, kCGMouseButtonLeft);
+  if (!ev) return;
+  CGEventPost(kCGHIDEventTap, ev);
+  CFRelease(ev);
+}
+
+
+static CGPoint mirror_point(uint32_t win, double nx, double ny, CGRect *out) {
+  CGRect r = mirror_window_rect(win);
+  if (out) *out = r;
+  return CGPointMake(r.origin.x + nx * r.size.width, r.origin.y + ny * r.size.height);
+}
+
+int poc_mirror_click(uint32_t win, double nx, double ny) {
+  if (!AXIsProcessTrusted()) return -2;
+  if (mirror_owner_pid(win) <= 0) return -3;
+  CGRect r;
+  CGPoint p = mirror_point(win, nx, ny, &r);
+  if (r.size.width < 2) return -1;
+  MirrorSaved sv = mirror_begin(win);
+  hid_post(kCGEventMouseMoved, p);
+  usleep(15000);
+  hid_post(kCGEventLeftMouseDown, p);
+  usleep(45000);
+  hid_post(kCGEventLeftMouseUp, p);
+  usleep(30000);
+  mirror_end(sv);
+  return 0;
+}
+
+int poc_mirror_drag(uint32_t win, double x1, double y1, double x2, double y2, int ms) {
+  if (!AXIsProcessTrusted()) return -2;
+  if (mirror_owner_pid(win) <= 0) return -3;
+  CGRect r;
+  CGPoint a = mirror_point(win, x1, y1, &r);
+  if (r.size.width < 2) return -1;
+  CGPoint b = mirror_point(win, x2, y2, NULL);
+  int steps = 12;
+  if (ms <= 0) ms = 220;
+  MirrorSaved sv = mirror_begin(win);
+  hid_post(kCGEventMouseMoved, a);
+  usleep(15000);
+  hid_post(kCGEventLeftMouseDown, a);
+  for (int i = 1; i <= steps; i++) {
+    double t = (double)i / steps;
+    CGPoint p = CGPointMake(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+    hid_post(kCGEventLeftMouseDragged, p);
+    usleep((useconds_t)(ms * 1000 / steps));
+  }
+  hid_post(kCGEventLeftMouseUp, b);
+  usleep(30000);
+  mirror_end(sv);
+  return 0;
+}
+
+/* ── 滚动会话（决策 #1329）───────────────────────────────────────────────
+ * ★为什么要有"会话"：滚轮是**连续输入**，而每条消息都做一遍"藏指针+激活+还原"要 30~80ms，
+ *   串行发就成了"一格一格"（用户实测："没有在镜像里直接滚那么丝滑"）。
+ *   开会话后：begin 做一次准备（藏指针、激活、把指针停到目标点），
+ *   post 只投滚动事件（~1ms，并且拆成多步逼近连续），end 才还原一次。
+ */
+/* ★★滚动**不抢焦点**（决策 #1330，用户实测的 bug）：
+ *   原实现复用 `mirror_begin`（会 activate 镜像 app），会话结束时再 activate 回 Studio
+ *   ⇒ 连续滚动时焦点来回跳，用户看到**左上角菜单在 Studio 和镜像之间闪**。
+ *   而 macOS 的滚轮事件投给"**指针下方**的窗口"，**不需要**该 app 在前台 ⇒
+ *   滚动路径只做"藏指针 + 把指针停到目标点"，一个焦点都不动。
+ */
+/* 取"屏幕上该点最上层的普通窗口"（layer 0）——用来判断镜像窗口有没有被遮住。
+ * 被遮住时 HID 滚动会落到上层窗口上（用户实测：焦点正常了，但页面不动）。 */
+static uint32_t top_window_at(CGPoint p) {
+  CFArrayRef arr = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
+  if (!arr) return 0;
+  uint32_t found = 0;
+  CFIndex n = CFArrayGetCount(arr);
+  for (CFIndex i = 0; i < n; i++) {
+    NSDictionary *d = (__bridge NSDictionary *)CFArrayGetValueAtIndex(arr, i);
+    NSNumber *layer = d[(id)kCGWindowLayer];
+    if (layer && layer.intValue != 0) continue; /* 只看普通窗口层 */
+    NSDictionary *b = d[(id)kCGWindowBounds];
+    if (!b) continue;
+    CGRect r = CGRectMake([b[@"X"] doubleValue], [b[@"Y"] doubleValue],
+                          [b[@"Width"] doubleValue], [b[@"Height"] doubleValue]);
+    if (CGRectContainsPoint(r, p)) {
+      found = (uint32_t)[d[(id)kCGWindowNumber] unsignedIntValue];
+      break; /* 列表是前→后有序，第一个命中的就是最上层 */
+    }
+  }
+  CFRelease(arr);
+  return found;
+}
+
+static int g_scroll_dbg = -1;
+static int g_scroll_active = 0;
+static MirrorSaved g_scroll_sv;
+static CGPoint g_scroll_pt = {0, 0};
+
+int poc_mirror_scroll_begin(uint32_t win, double nx, double ny) {
+  if (!AXIsProcessTrusted()) return -2;
+  if (mirror_owner_pid(win) <= 0) return -3;
+  CGRect r;
+  CGPoint p = mirror_point(win, nx, ny, &r);
+  if (r.size.width < 2) return -1;
+  if (g_scroll_active) {
+    g_scroll_pt = p;
+    return 0;
+  }
+  /* ★★**一个像素都不动**（决策 #1332）：之前"藏指针 + 移指针 + 每帧还原"会让用户看到
+     指针不停变化（闪烁），而且滚轮事件还得跟真实指针抢。现在滚动全部走 `CGEventPostToPid`，
+     指针位置、显隐、焦点都不碰。 */
+  g_scroll_sv.cursor = CGPointZero;
+  g_scroll_sv.front = 0;
+  g_scroll_pt = p;
+  g_scroll_active = 1;
+  return 0;
+}
+
+int poc_mirror_scroll_post(uint32_t win, double nx, double ny, double dy) {
+  if (!g_scroll_active) return -5;
+  pid_t pid = mirror_owner_pid(win);
+  if (pid <= 0) return -3;
+  CGRect r;
+  CGPoint p = mirror_point(win, nx, ny, &r);
+
+  /* ★★滚轮事件**透传**（决策 #1335，用户指出的正解）：
+     镜像 app 只把"滚动事件"映射成手机滚动；**拖动指针在镜像里不会滚动**（合成拖动是错的）。
+     这里直接构造**连续型**滚动事件投给镜像进程，指针一动不动：
+       · `kCGScrollWheelEventIsContinuous = 1` —— 触控板式连续滚动（缺这个字段很多 app 会忽略）；
+       · `kCGScrollWheelEventPointDeltaAxis1` 与 `FixedPtDeltaAxis1` 同时给；
+       · 事件里带上窗口号，让接收方知道"这一滚是给哪个窗口的"；
+       · 分 3 步递减发送，近似惯性。
+     `CGEventPostToPid` 对鼠标按键不可靠，但对**滚动**是可用的（此前失败更像字段不全）。 */
+  int32_t total = (int32_t)(-dy);
+  if (total == 0) total = dy > 0 ? -1 : 1;
+  for (int i = 0; i < 3; i++) {
+    int32_t v = total * (3 - i) / 3; /* 3/3, 2/3, 1/3 递减 */
+    if (v == 0) continue;
+    CGEventRef ev = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitPixel, 1, v);
+    if (!ev) break;
+    CGEventSetIntegerValueField(ev, kCGScrollWheelEventIsContinuous, 1);
+    CGEventSetIntegerValueField(ev, kCGScrollWheelEventPointDeltaAxis1, v);
+    CGEventSetDoubleValueField(ev, kCGScrollWheelEventFixedPtDeltaAxis1, (double)v);
+    CGEventSetLocation(ev, p);
+    CGEventSetIntegerValueField(ev, kCGMouseEventWindowUnderMousePointer, (int64_t)win);
+    CGEventPostToPid(pid, ev);
+    CFRelease(ev);
+    usleep(12000);
+  }
+  return 0;
+}
+
+int poc_mirror_scroll_end(void) {
+  if (!g_scroll_active) return 0;
+  g_scroll_active = 0;
+  /* 什么都没动过 ⇒ 什么都不用还原（不显示/隐藏指针、不动焦点） */
+  return 0;
+}
+
+/* 滚轮 → 镜像窗口（决策 #1327）：iPhone 镜像会把 Mac 的滚动换算成手机的上下滑。
+ * 单位用**像素**（`kCGScrollEventUnitPixel`）：按"行"投递太慢，一次滚不动多远。
+ * 调用方保证此刻已有辅助功能权限；窗口位置/前台由 mirror_begin 处理（含指针隐藏与还原）。 */
+int poc_mirror_scroll(uint32_t win, double nx, double ny, double dy) {
+  if (!AXIsProcessTrusted()) return -2;
+  if (mirror_owner_pid(win) <= 0) return -3;
+  CGRect r;
+  CGPoint p = mirror_point(win, nx, ny, &r);
+  if (r.size.width < 2) return -1;
+  MirrorSaved sv = mirror_begin(win);
+  hid_post(kCGEventMouseMoved, p);
+  usleep(12000);
+  CGEventRef ev = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitPixel, 1, (int32_t)(-dy));
+  if (!ev) {
+    mirror_end(sv);
+    return -4;
+  }
+  CGEventSetLocation(ev, p);
+  CGEventPost(kCGHIDEventTap, ev);
+  CFRelease(ev);
+  usleep(20000);
+  mirror_end(sv);
+  return 0;
+}
+
+/* 屏幕录制权限是否已授予（决策 #1309）。
+   ★为什么需要它：SCK 抓窗口在**没有权限**时表现为"拿不到窗口"，
+   于是上层报"找不到模拟器窗口"——**错误指向了错误的原因**（用户实测被误导）。 */
+int poc_screen_capture_granted(void) {
+  return CGPreflightScreenCaptureAccess() ? 1 : 0;
+}
+
+/* 主动请求一次（只会弹一次系统对话框）。
+   ★为什么要单独一个函数：没有权限时**每次**去抓窗口（`cast --list`）都会触发一次弹窗，
+   而我们在等窗口时每 500ms 调一次 ⇒ 用户看到"弹窗连环"（实测反馈"体验极差"）。
+   ⇒ 启动路径先查 → 没权限就**只请求一次**，然后直接告诉用户去设置里勾选，不再重试。 */
+void poc_request_screen_capture(void) {
+  (void)CGRequestScreenCaptureAccess();
+}
+
+/* ★探针（决策 #1292）：列一下 AVCaptureDevice 里有没有 iPhone 屏幕。
+   QuickTime 能录 = 系统有这个采集设备；但**第三方进程要有「屏幕录制」TCC 授权**才看得见。
+   这一段只在 `POC_IOS_USB_PROBE=1` 时跑，用来判定"USB 整屏采集"这条路能不能走。 */
+static void probe_ios_capture_devices(void) {
+  if (!getenv("POC_IOS_USB_PROBE")) return;
+  @autoreleasepool {
+    /* ★TCC 判定（决策 #1292）：iPhone「屏幕」设备在**没有屏幕录制权限**时会被系统
+       静默隐藏（相机照样列得出来 ⇒ 很容易误判成"没有这个设备"）。
+       这里主动问一次，把"有没有权限"变成可读的事实。 */
+    bool pre = CGPreflightScreenCaptureAccess();
+    fprintf(stderr, "[probe] 屏幕录制权限（预检）=%s\n", pre ? "已授权" : "未授权");
+    if (!pre) {
+      bool req = CGRequestScreenCaptureAccess();
+      fprintf(stderr, "[probe] 已发起授权请求 ⇒ %s（授权后需重启本程序才生效）\n",
+              req ? "系统已授权" : "等待用户在系统设置里勾选");
+    }
+    NSMutableArray *types = [NSMutableArray array];
+    /* `.external` 是 DAL/插件类设备（iPhone 屏幕属于这类） */
+    [types addObject:AVCaptureDeviceTypeExternal];
+    if (@available(macOS 13.0, *)) [types addObject:AVCaptureDeviceTypeContinuityCamera];
+    AVCaptureDeviceDiscoverySession *ds =
+        [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:types
+                                                               mediaType:AVMediaTypeVideo
+                                                                position:AVCaptureDevicePositionUnspecified];
+    fprintf(stderr, "[probe] DiscoverySession(.external/.continuity) 共 %lu 台\n",
+            (unsigned long)ds.devices.count);
+    for (AVCaptureDevice *d in ds.devices) {
+      fprintf(stderr, "[probe]   · %s（type=%s）\n", d.localizedName.UTF8String, d.deviceType.UTF8String);
+    }
+    /* ★再列"所有视频设备"（含系统/插件类）：QuickTime 的「iPhone 屏幕」可能不在
+       .external 里，而是另一类（DAL 插件设备）。这一步决定能不能用 AVFoundation 抓屏幕。 */
+    NSArray<AVCaptureDevice *> *all = [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo];
+    fprintf(stderr, "[probe] 全部视频设备 %lu 台\n", (unsigned long)all.count);
+    for (AVCaptureDevice *d in all) {
+      fprintf(stderr, "[probe]   · %s（type=%s model=%s）\n", d.localizedName.UTF8String,
+              d.deviceType.UTF8String, d.modelID.UTF8String);
+    }
+  }
+}
+
 static int poc_attach_impl(void *parent_nsview) {
   @autoreleasepool {
+    probe_ios_capture_devices();
     // ★tauri 的 `ns_window()` 给的是 **NSWindow**（TaoWindow），不是 NSView。
     //   第一版直接当 NSView 用 ⇒ `-[TaoWindow bounds]: unrecognized selector` ⇒ ObjC 异常穿进 Rust ⇒ abort。
     id obj = (__bridge id)parent_nsview;
@@ -485,6 +996,7 @@ gl_init:
     // ★-1 = 编译器把 uniform 优化掉了（源里没用/拼错）。此时 uFit 恒为 0 ⇒ 着色器里除零
     //   ⇒ 整个画面变成背景色（全黑），而且**不会报错**。宁可启动即失败，也不要"看起来能跑但全黑"。
     if (g_uFit < 0) { fprintf(stderr, "blit: 找不到 uFit uniform（着色器与查表不一致）\n"); exit(2); }
+    g_uFullRange = glGetUniformLocation(g_progComp, "uFullRange");
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     g_pkt = av_packet_alloc();
@@ -569,7 +1081,12 @@ long poc_live_aus(void) { return g_live_aus; }
 int poc_live_stats(double *out) {
   double wall = (g_last_out > 0 && g_wall0 > 0) ? (g_last_out - g_wall0) : 0;
   double mbps = wall > 0 ? (double)g_live_bytes * 8.0 / (wall / 1000.0) / 1e6 : -1;
-  out[0] = wall > 0 ? (double)g_frames / (wall / 1000.0) : -1;   /* fps */
+  /* ★stall 时 fps 必须归 0：否则面板显示"14.8 fps"，用户以为还在跑（实测踩到） */
+  /* fps 语义 = **当前是否在出帧**：断连 → 0；静止（>1.5s 无新帧）→ 0；否则累计平均。
+     ★不要用累计平均硬撑：静止时显示 4.8fps，用户会以为还在跑（实测）。 */
+  double nowm = now_ms();
+  double idle_ms = g_last_au_ms > 0 ? nowm - g_last_au_ms : -1;
+  out[0] = (g_stalled || idle_ms > STALL_MS) ? 0.0 : (wall > 0 ? (double)g_frames / (wall / 1000.0) : -1);
   out[1] = hist_pct(&h_iv, 0.50);
   out[2] = hist_pct(&h_iv, 0.95);
   out[3] = hist_pct(&h_lat, 0.50);
@@ -587,7 +1104,8 @@ int poc_live_stats(double *out) {
   out[15] = (double)g_W;
   out[16] = (double)g_H;
   out[17] = g_hw ? 1.0 : 0.0;
-  return 18;
+  out[18] = g_stalled ? 1.0 : 0.0;   /* 推流是否已中断（决策 #1290） */
+  return 19;
 }
 
 long poc_ticks(void) { return g_ticks; }
@@ -640,8 +1158,38 @@ static int poc_tick_impl(void) {
   g_ticks++;
   @autoreleasepool {
     [g_ctx makeCurrentContext];
+    /* 切源后的第一拍：把上一台的残留画面抹掉（只做一次；新流一到就覆盖它） */
+    if (g_blank_once) {
+      g_blank_once = 0;
+      draw_blank_frame();
+    }
 
     if (g_live) {
+      /* ★★「画面静止」≠「流断了」（决策 #1291 修正 #1290 的误判）：
+         iOS 的 ReplayKit 只在屏幕**变化**时出帧 ⇒ 静止时 0fps 完全正常，
+         之前的"1.5s 没帧就抹黑"会把静置的手机判成断流（用户实测：不动屏幕就黑屏）。
+         ⇒ 断连只看 **管道 EOF**（`g_link_lost`，由 live_stream.h 在读线程里置位）；
+            静止则什么都不做 —— 保持最后一帧（那本来就是当前屏幕内容），只把 fps 报 0。 */
+      if (g_link_lost) {
+        if (!g_stalled) {
+          g_stalled = 1;
+          draw_blank_frame();
+          fprintf(stderr, "实时：推流中断（手机端停止直播/连接关闭）⇒ 画布置空\n");
+        }
+      } else if (g_stalled) {
+        g_stalled = 0;
+        fprintf(stderr, "实时：推流恢复\n");
+      }
+      /* 排障开关：`POC_STALL_DIAG=1` ⇒ 每秒打一行，区分"tick 停了/静止/断连" */
+      if (getenv("POC_STALL_DIAG")) {
+        static double last_diag = 0;
+        double t = now_ms();
+        if (t - last_diag > 1000) {
+          last_diag = t;
+          fprintf(stderr, "[diag] tick=%ld idle=%.0fms aus=%ld lost=%d stalled=%d\n",
+                  g_ticks, g_last_au_ms > 0 ? t - g_last_au_ms : -1, g_live_aus, g_link_lost, g_stalled);
+        }
+      }
       // ★必须**排空队列**：tick 60Hz 而流 ~120fps，只解一帧/拍会让队列积压并丢帧，
       //   而 H.264 丢一帧参考帧 ⇒ 后续全花屏（实测：块状拖影）。
       //   做法：把这一拍到达的 AU 全解掉，只把**最后一帧**拿去渲染。
@@ -649,6 +1197,8 @@ static int poc_tick_impl(void) {
       int got = 0;
       while (live_pop(&au)) {
         double t_pop = now_ms();
+        g_last_au_ms = t_pop;
+        if (g_link_lost) g_link_lost = 0;   /* 新数据到了 ⇒ 链路恢复 */
         if (g_n_qw < MAX_SAMPLES) g_qw[g_n_qw++] = t_pop - au.t_ms;   /* 在队列里躺了多久 */
         if (g_rec) hist_add(&h_qw, t_pop - au.t_ms);
         if (av_new_packet(g_pkt, au.size) < 0) { free(au.data); continue; }
@@ -798,6 +1348,25 @@ use_last:
       if (now_ms() > g_t_start + (show_ms - g_base_pts) + g_budget) g_late++;
     }
 
+    /* ★颜色范围（决策 #1296）：先信任解码帧自带的 `color_range`；
+       VT 解出来的硬件帧常常不带这个字段 ⇒ 用"源是不是 iOS 推流(nc)"兜底。
+       （Android screenrecord 写 VUI 的 limited，走 else 分支不受影响。） */
+    {
+      /* ★★判据是"**这一帧由谁解出来的**"，不是"流里标了什么"（决策 #1305 的真因）：
+         VideoToolbox 交给我们的 CVPixelBuffer 一律是 **full range**（哪怕码流 VUI 标的是 limited，
+         实测：mjpeg→x264 产出 color_range=tv，VT 解出来仍是 full）。
+         之前按 limited 转 ⇒ 浅灰(242) 被放大到 >255 **截成纯白**（设置页灰底 34.1% → 0.4%）。
+         ⇒ 硬解（g_hw 且未降级）一律 full；软解才信码流自带标记。 */
+      int full = 0;
+      if (g_hw && !g_dec_sw) {
+        full = 1;
+      } else {
+        full = (src->color_range == AVCOL_RANGE_JPEG) ? 1 : 0;
+        if (!full && g_live && g_live_cmd && strncmp(g_live_cmd, "/usr/bin/nc", 11) == 0) full = 1;
+      }
+      glUseProgram(g_progComp);
+      glUniform1f(g_uFullRange, full ? 1.0f : 0.0f);
+    }
     double c0 = now_ms();
     glBindFramebuffer(GL_FRAMEBUFFER, g_fbo);
     glViewport(0, 0, g_W, g_H);

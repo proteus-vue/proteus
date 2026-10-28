@@ -174,7 +174,27 @@ python3 "$HERE/bundle-dylibs.py" "$APP"
 
 # ⑤ 签名：ad-hoc（`-`）。★这只是让本机能跑，**不能**消除 Gatekeeper 在别人机器上的拦截
 #    ★BUILD_INFO.txt 必须在**签名之前**写：签名后再往包里加文件会破坏 ad-hoc 封印。
-codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || echo "⚠ ad-hoc 签名失败（应用仍可本机运行）"
+# ★签名身份必须**固定**（决策 #1309）：ad-hoc（`-s -`）签名的 cdhash 每次重新编译都变，
+#   macOS 的 TCC 会把它当成"另一个应用"⇒ **每次打开都重新问一次屏幕录制权限**（用户实测）。
+#   用本机已有的开发者证书签名后，TCC 认的是"证书 + bundle id"，重编不再打扰。
+# ★按**哈希**签，不能按名字（决策 #1309 的第二坑）：本机有两个**同名**的
+#   "Apple Development: lyl@shxuxi.cn"，按名字 `codesign` 会报 ambiguous 并**静默回落 ad-hoc**
+#   （错误打在 stdout、退出码仍是 0，脚本的 `||` 根本兜不住）。
+SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 'Apple Development' | awk '{print $2}')"
+if [ -n "$SIGN_ID" ]; then
+  echo "  签名身份：$SIGN_ID"
+  codesign --force --sign "$SIGN_ID" --timestamp=none "$APP" >/dev/null 2>&1
+  # ★必须**复查**签名结果：codesign 出错时退出码可能仍是 0（上面 ambiguous 就是），
+  #   只有 `Signature=adhoc` 才是真的回落。不复查就会出现"以为签了、其实没有"。
+  if codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc"; then
+    echo "  ⚠ 「$SIGN_ID」签名未生效（仍是 ad-hoc）⇒ 每次重编都会重新询问录屏权限"
+  else
+    echo "  ✓ 已用开发者证书签名（TCC 会记住，不再反复询问）"
+  fi
+else
+  echo "  ⚠ 没找到 Apple Development 证书 ⇒ 回落 ad-hoc（每次重编都会重新询问录屏权限）"
+  codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1
+fi
 
 # ⑥ 自检
 echo "▸ 校验"

@@ -29,6 +29,10 @@ mod search;
 mod live_source;
 /// 内置终端（pty）：openpty + fork + execve（决策 #1279）
 mod term;
+/// 一键投屏到 iPhone：复用 run-selfdraw.sh + 把失败翻译成人话（决策 #1288）
+mod ios_stream;
+/// 触控回传：Studio 监听控制端口，手机反向连上来注入手势（决策 #1295）
+mod ios_touch;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -79,6 +83,13 @@ struct Stats {
     width: i64,
     height: i64,
     hwdec: bool,
+    /// 推流是否已中断（>1.5s 没有新 AU）。★界面据此把"运行中"改成"手机端已停止推流"，
+    /// 否则画布停着上一帧、面板还在显示旧 fps，看起来像没断（决策 #1290）
+    stalled: bool,
+    /// 当前采集源（`android` / `ios` / `file`…）。★界面用它决定触控走哪条腿：
+    /// 之前用 `iosStreamHint.active`，而那个值在挂载时算一次就不再更新
+    /// ⇒ 切到 iOS 后点击仍走 adb（对空气发指令，用户看到"点了没反应"）。决策 #1298
+    source: String,
     /// 机型（adb 探测；没探测到就是 null —— 不编一个）
     device: Option<String>,
     /// 设备**物理**像素（`wm size`；0 = 未知）。
@@ -89,6 +100,16 @@ struct Stats {
 }
 
 /// 画质档位（决策 #1264）：逻辑在 `capture_preset.rs`，这里只做 IPC 接线。
+/// 自动连接的内部实现（决策 #1307）：与 `select_device` 同一套分支，只是不走 IPC。
+fn auto_connect(serial: &str) -> Result<(), String> {
+    let platform = device::select(serial)?;
+    match platform.as_str() {
+        "ios" => capture_preset::request_ios().map(|_| ()),
+        "sim" => capture_preset::request_sim(serial).map(|_| ()),
+        _ => capture_preset::request_for_serial(Some(serial)).map(|_| ()),
+    }
+}
+
 #[tauri::command]
 fn capture_preset(preset: String) -> Result<capture_preset::CaptureInfo, String> {
     capture_preset::capture_preset(preset)
@@ -110,8 +131,22 @@ async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, St
         /* ★先切"当前设备"，再**按平台**决定采集源（决策 #1274）：
            Android 走 adb 拉流；iOS 走 `nc -l` 收手机推流。 */
         let platform = device::select(&serial)?;
+        /* 记住这次的选择（决策 #1307）：下次启动自动连回来，用户不必每次手动点 */
+        {
+            let mut cfg = settings::current();
+            cfg.last_device = Some(serial.clone());
+            if let Err(e) = settings::save(cfg) {
+                eprintln!("[studio] 记不住上次设备（不影响本次会话）：{e}");
+            }
+        }
         if platform == "ios" {
             capture_preset::request_ios()
+        } else if platform == "mirror" {
+            /* ★iPhone 镜像（决策 #1316）：真机整屏，走 SCK 抓系统镜像窗口 */
+            capture_preset::request_mirror()
+        } else if platform == "sim" {
+            /* ★iOS 模拟器（决策 #1302）：画面走 SCK 抓窗口 → ffmpeg → 现有管线 */
+            capture_preset::request_sim(&serial)
         } else {
             capture_preset::request_for_serial(device::current_serial().as_deref())
         }
@@ -130,9 +165,9 @@ fn set_canvas_rect(x: f64, y: f64, w: f64, h: f64) {
 #[tauri::command]
 fn stats() -> Stats {
     // 下标见 native/embed_view.m 的 poc_live_stats（一处定义，两边按注释对齐）
-    let mut a = [0f64; 18];
+    let mut a = [0f64; 19];
     let n = unsafe { poc_live_stats(a.as_mut_ptr()) };
-    debug_assert_eq!(n, 18);
+    debug_assert_eq!(n, 19);
     Stats {
         frames: a[10] as i64,
         late: a[9] as i64,
@@ -153,7 +188,16 @@ fn stats() -> Stats {
         width: a[15] as i64,
         height: a[16] as i64,
         hwdec: a[17] > 0.5,
-        device: device_label(),
+        stalled: a[18] > 0.5,
+        source: capture_preset::current_kind().unwrap_or_else(|| "none".into()),
+        /* ★切到 iOS 后 ADB_SERIAL 是空的，但 `device::label(None)` 会跑
+           `adb shell getprop`（无 `-s`）⇒ 机器上只接着一台安卓时它**照样返回那台**
+           ⇒ 面板在 iOS 推流时显示 Android 机型（实测）。这里按"真的选了安卓"才取。 */
+        device: ADB_SERIAL
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .and_then(|s| device::label(Some(&s))),
         dev_w: DEVICE_PX.lock().ok().and_then(|g| *g).map(|(w, _)| w as i64).unwrap_or(0),
         dev_h: DEVICE_PX.lock().ok().and_then(|g| *g).map(|(_, h)| h as i64).unwrap_or(0),
     }
@@ -603,13 +647,6 @@ fn save_state(json: String) -> Result<(), String> {
     std::fs::rename(&tmp, &p).map_err(|e| format!("替换状态文件失败：{e}"))
 }
 
-/// 机型探测：一次 adb 查询，缓存住。
-/// ★探测不到就返回 None —— **不拿"Android"这种占位串冒充机型**（面板上"未知"比一个假型号有用）。
-fn device_label() -> Option<String> {
-    /* 机型按**串号**缓存（决策 #1265）：原来用 `OnceLock` 全局缓存一次，
-       切换设备后侧栏永远显示上一台的型号。 */
-    device::label(device::current_serial().as_deref())
-}
 
 /// 设置窗口入口（实现见 `settings::open_window`）
 #[tauri::command]
@@ -618,7 +655,55 @@ fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// PATH 补齐 / 设备尺寸 / 默认采集源：见 `live_source.rs`（决策 #1277 拆出，本文件只留调用）
+/// 把 stderr 同时落到日志文件（决策 #1310）。
+///
+/// ★为什么必须有：从 Finder 启动时 stdout/stderr 被 LaunchServices 丢掉，
+///   于是"为什么没画面"这类问题只能靠猜（今天已经猜错好几次）。
+///   有了它，用户点两下我就能看到真实原因。
+///
+/// ★为什么用 `freopen` 而不是换掉所有 `eprintln!`：一处生效、不侵入既有代码；
+///   终端里启动（stderr 是 tty）时**不重定向**，保持开发体验不变。
+fn init_log_file() {
+    use std::io::IsTerminal;
+    if std::io::stderr().is_terminal() {
+        return;
+    }
+    let dir = dirs_log_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    use std::os::unix::io::AsRawFd;
+    let path = dir.join("studio.log");
+    /* ★用 `dup2(fd, 2)` 而不是 `freopen`：不依赖 libc crate，也不需要 `stderr` 这个 FILE* 符号。
+       Rust 的 `eprintln!` 写 fd 2，重定向后自然落到文件。 */
+    extern "C" {
+        fn dup2(oldfd: i32, newfd: i32) -> i32;
+    }
+    if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        unsafe {
+            dup2(f.as_raw_fd(), 2);
+        }
+        std::mem::forget(f); // 让 fd 一直开着（进程退出才关）
+    }
+    eprintln!("\n===== {} 启动 · {} =====", chrono_stamp(), env!("CARGO_PKG_VERSION"));
+}
+
+fn dirs_log_dir() -> std::path::PathBuf {
+    std::env::var("HOME")
+        .map(|h| std::path::PathBuf::from(h).join("Library/Logs/Proteus Studio"))
+        .unwrap_or_else(|_| std::env::temp_dir())
+}
+
+fn chrono_stamp() -> String {
+    // 不引 chrono：用 `date` 拿本地时间（只在启动时跑一次）
+    std::process::Command::new("/bin/date")
+        .arg("+%F %T")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
 fn main() {
+    init_log_file();
     live_source::ensure_tool_path();
     /* ★读设置要在**所有子进程之前**（决策 #1266）：DEVELOPER_DIR 决定 xcrun 用哪个 Xcode，
        而 adb 路径决定设备探测能不能跑。放后面就晚了——那正是"默认路径"假设的来源。 */
@@ -659,6 +744,17 @@ fn main() {
             term::term_resize,
             term::term_close,
             term::term_info,
+            /* 一键投屏（决策 #1288） */
+            ios_stream::ios_stream_start,
+            ios_stream::ios_start_host,
+            ios_stream::ios_uninstall,
+            ios_stream::ios_run_state,
+            /* 触控回传（决策 #1295） */
+            ios_touch::ios_tap,
+            ios_touch::ios_scroll,
+            ios_touch::ios_longpress,
+            ios_touch::ios_swipe,
+            ios_touch::ios_touch_state,
             settings::get_settings_cmd,
             settings::save_settings_cmd,
             settings::probe_tool,
@@ -700,6 +796,55 @@ fn main() {
             /* 回归钩子（决策 #1267）：`STUDIO_OPEN_SETTINGS_MS=<毫秒>` ⇒ 到点自动开设置窗口。
                用来在**无头**模式下验证"独立窗口真能建起来"——窗建不出来的表现是白窗，
                而判据跑的是 http 页面，天生看不到 Tauri 那一层。 */
+            /* ★启动自动重连（决策 #1307）：按"上次设备 → 唯一可用"的顺序自动接上。
+               优先级：**上次成功的设备** → 唯一的已连真机 → 已启动的模拟器。
+               `POC_LIVE` 显式指定时不动（那是调试/自测路径）。 */
+            {
+                let h4 = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(900));
+                    if std::env::var("POC_LIVE").is_ok() {
+                        return;
+                    }
+                    let last = settings::current().last_device.clone();
+                    let list = device::list(false);
+                    let pick = last
+                        .filter(|s| list.iter().any(|d| &d.serial == s))
+                        .or_else(|| {
+                            let ready: Vec<_> = list
+                                .iter()
+                                .filter(|d| d.platform == "android" && d.state == "device")
+                                .collect();
+                            (ready.len() == 1).then(|| ready[0].serial.clone())
+                        })
+                        .or_else(|| list.iter().find(|d| d.platform == "simulator" && d.size.is_none()).map(|d| d.serial.clone()));
+                    let Some(serial) = pick else {
+                        eprintln!("[studio] 没有可自动连接的设备（列表里点一台即可）");
+                        return;
+                    };
+                    eprintln!("[studio] 自动连接上次/唯一可用设备 → {serial}");
+                    let _ = h4;
+                    if let Err(e) = auto_connect(&serial) {
+                        eprintln!("[studio] 自动连接失败（可手动点设备）：{e}");
+                    }
+                });
+            }
+            /* 回归钩子（决策 #1302）：`PROTEUS_SIM_AUTOSTART=<udid>` ⇒ 启动即切到该 iOS 模拟器。
+               存在的理由与终端钩子相同：**画面/注入这条链只有真环境能证**，
+               而判据跑的是 http 页面（桩），看不到 Tauri 与 SCK/HID 那一层。 */
+            if let Ok(udid) = std::env::var("PROTEUS_SIM_AUTOSTART") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(1200));
+                    if let Err(e) = device::select(&udid) {
+                        eprintln!("[sim] 自动切模拟器失败：{e}");
+                        return;
+                    }
+                    match capture_preset::request_sim(&udid) {
+                        Ok(_) => eprintln!("[sim] 已切到模拟器 {udid}"),
+                        Err(e) => eprintln!("[sim] request_sim 失败：{e}"),
+                    }
+                });
+            }
             /* 回归钩子（决策 #1279）：`STUDIO_OPEN_TERM_MS=<毫秒>` ⇒ 到点替用户点一下"终端"。
                存在的理由和上面那条一样：pty 开没开、shell 有没有起来，**只有真窗口能证**——
                判据跑的是 http 页面（桩），天生看不到 Tauri 那一层。证法看 stderr 里的
@@ -709,6 +854,13 @@ fn main() {
                  会直接丢（2500ms 命中过一次、8000ms 反而没命中）——与"投屏解码占着渲染线程"同源。
                  所以真窗口那一步（点 rail 图标 / ⌘\` 能开出终端）**只能人眼验**，
                  别拿这条钩子当"功能已通"的证据。 */
+            /* ★手动 iOS 模式（`PROTEUS_IOS_STREAM_PORT`）也要有触控通道：
+       否则只有走「一键投屏」才有 9002 监听，手工起的会话点了没反应（决策 #1299）。 */
+            if let Ok(p) = std::env::var("PROTEUS_IOS_STREAM_PORT") {
+                if let Ok(port) = p.parse::<u16>() {
+                    ios_touch::ensure_listening(app.handle().clone(), port.saturating_add(1));
+                }
+            }
             if let Ok(ms) = std::env::var("STUDIO_OPEN_TERM_MS") {
                 let h2 = app.handle().clone();
                 let delay = ms.parse::<u64>().unwrap_or(1500);

@@ -1,0 +1,6 @@
+/Users/kags/.rvm/scripts/rvm:29: operation not permitted: ps
+Your user’s .npmrc file (${HOME}/.npmrc)
+has a `globalconfig` and/or a `prefix` setting, which are incompatible with nvm.
+Run `nvm use --delete-prefix v18.16.1 --silent` to unset it.
+/Users/kags/.rvm/scripts/rvm:29: operation not permitted: ps
+[1m[7m%[27m[1m[0m                                                                                                                                               ]2;kags@kagsdeiMac:/Volumes/data1/work/office/debug/proteus]1;..debug/proteus]7;file://kagsdeiMac.local/Volumes/data1/work/office/debug/proteus\[0m[27m[24m[J[39m[0m[49m[40m[39m kags@kagsdeiMac [44m[30m[30m /Volumes/data1/work/office/debug/proteus [43m[34m[30m  main ± [49m[33m[39m [K[?1h=[?2004h

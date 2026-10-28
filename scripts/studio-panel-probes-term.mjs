@@ -109,6 +109,36 @@ export async function probeTerminal(page, studioDir) {
   await page.setViewportSize(vp)
   await page.waitForTimeout(300)
 
+  /* ⑤ ★回放**真实 zsh 启动字节**（用户点开终端时抓的 816 字节，落在 fixtures 里）。
+     这是"闪一下就全黑"那条 bug 的回归判据：zsh 画完提示符会发**裸的** `ESC[J` / `ESC[K`
+     （缺省参数 0 = 擦向末尾）；若按通用默认 1 处理就会反向擦掉刚写的内容。
+     ⇒ 断言只有一句：这几段真实字节喂进去之后，**提示符还在屏幕上**。
+     ★分三块喂：跨 chunk 的序列边界（ESC 与 '[' 被切开）也必须活。 */
+  const fixturePath = path.join(studioDir, '..', '..', 'scripts', 'fixtures', 'term-zsh-startup.bin')
+  const raw = fs.readFileSync(fixturePath).toString('utf8')
+  const cut1 = Math.floor(raw.length / 3)
+  const cut2 = Math.floor((raw.length * 2) / 3)
+  await page.evaluate((chunks) => {
+    const fire = (d) => window.dispatchEvent(new CustomEvent('studio:term-data', { detail: d }))
+    fire('\x1b[2J\x1b[H') // 先清屏（带参数，避免又踩 J/K 缺省值）
+    for (const c of chunks) fire(c)
+  }, [raw.slice(0, cut1), raw.slice(cut1, cut2), raw.slice(cut2)])
+  await page.waitForTimeout(400)
+  const replay = await page.evaluate(() => {
+    const txt = document.getElementById('termBody')?.textContent ?? ''
+    /* ★行数要数 **`.trow` 元素**，不能按 textContent 里的 '\n' 数：
+       每行是一个 div，textContent 拼接后**没有任何换行符** ⇒ 按 '\n' 数永远是 1，
+       断言 `rows >= 4` 会恒假（这是我自己写错过一版的地方）。 */
+    const rows = [...document.querySelectorAll('#termGrid .trow')]
+    return {
+      text: txt,
+      hasPrompt: txt.includes('kags@kagsdeiMac'),
+      hasBranch: txt.includes('main'),
+      hasWarn: txt.includes('rvm') || txt.includes('npmrc'),
+      rows: rows.filter((r) => (r.textContent ?? '').trim()).length,
+    }
+  })
+
   return {
     parity,
     opened,
@@ -116,5 +146,6 @@ export async function probeTerminal(page, studioDir) {
     sent,
     resizeBefore,
     resized,
+    replay,
   }
 }

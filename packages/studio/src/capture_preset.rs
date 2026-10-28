@@ -105,6 +105,131 @@ pub fn request_ios() -> Result<CaptureInfo, String> {
     })
 }
 
+/// 当前模拟器的 UDID（触控注入用；`request_sim` 设置）
+static SIM_UDID: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// 切到 **iOS 模拟器**（决策 #1302）：画面 = SCK 抓窗口 → ffmpeg 转 H.264 → 现有解码管线。
+///
+/// 【为什么走"窗口捕获 + 转码"而不是接一条新渲染路径】
+///   我们的 live 源本来就是一个**吐出 H.264 裸流的命令**。把
+///   `window-cast（JPEG 流）| ffmpeg（mjpeg→h264）` 拼成同一个命令，
+///   解码/上屏/断流判定**全部复用**，零改动。代价是多一次编解码（450px 宽，实测可接受）。
+pub fn sim_pipeline_cmd(udid: &str) -> Result<(String, u32, u32, u32, u32), String> {
+    let (cast, _hid) = crate::live_source::sim_tools()?;
+    /* 等窗口（决策 #1309）：冷启动时窗口要几秒才出现，手动点击也走这条路 */
+    let (win, win_w, win_h) = crate::live_source::sim_window_wait(&cast, 12_000)?;
+    let ff = crate::live_source::ffmpeg_bin();
+    const OUT_W: u32 = 896;
+    let crop = crate::live_source::sim_crop_rect(win_w, win_h, OUT_W);
+    let crop_filter = match crop {
+        Some((x, y, w, h)) => format!("crop={w}:{h}:{x}:{y},"),
+        None => {
+            eprintln!(
+                "[studio] ⚠ 模拟器窗口 {win_w}x{win_h} 没有裁剪标定 ⇒ 画面会带标题栏 \
+                 （跑 `node scripts/calibrate-sim-crop.mjs --udid <UDID>` 生成）"
+            );
+            String::new()
+        }
+    };
+    let cmd = format!(
+        "'{cast}' --window {win} --fps 24 --width {OUT_W} --quality 0.9 --device-aspect 0 2>/dev/null | \
+         '{ff}' -hide_banner -loglevel error -f image2pipe -c:v mjpeg -i - \
+         -vf \"{crop_filter}scale=trunc(iw/2)*2:trunc(ih/2)*2,setrange=limited\" \
+         -c:v libx264 -preset ultrafast -tune zerolatency -crf 20 \
+         -pix_fmt yuv420p -g 30 -f h264 -"
+    );
+    /* ★**不再调 `simctl io screenshot` 取设备尺寸**（决策 #1310 的真凶）：
+       模拟器刚 boot 时这个命令会**阻塞等设备就绪**（实测卡住 20s+ 无输出），
+       而它取的只是"界面显示用的物理尺寸"——我们注入用的是**归一化坐标**，根本不需要它。
+       ⇒ 少一次 simctl 调用，也少一个能把启动流程卡死的点。 */
+    let (dw, dh) = (0u32, 0u32);
+    let _ = udid;
+    Ok((cmd, win, dw, dh, win_w))
+}
+
+pub fn request_sim(udid: &str) -> Result<CaptureInfo, String> {
+    let (cmd, win, dw, dh, _win_w) = sim_pipeline_cmd(udid)?;
+    eprintln!("[studio]   模拟器管道 → {cmd}");
+    let c = std::ffi::CString::new(cmd.clone()).map_err(|e| e.to_string())?;
+    unsafe { poc_live_request_restart(c.as_ptr()) };
+    if let Ok(mut g) = PRESET.lock() {
+        *g = Some("sim".into());
+    }
+    if let Ok(mut g) = SIM_UDID.lock() {
+        *g = Some(udid.to_string());
+    }
+    if let Ok(mut g) = crate::DEVICE_PX.lock() {
+        *g = if dw > 0 { Some((dw, dh)) } else { None };
+    }
+    eprintln!("[studio]   采集源 → iOS 模拟器 {udid}（窗口 {win} · {dw}x{dh}）");
+    Ok(CaptureInfo {
+        preset: "sim".into(),
+        width: dw,
+        height: dh,
+        mbps: 0,
+    })
+}
+
+/// 切到 **iPhone 镜像**（决策 #1316）：真机整屏，走 SCK 抓系统镜像窗口。
+///
+/// 【为什么不需要裁剪】这个窗口里**只有设备画面**（没有标题栏/边框）：
+///   实测窗口 316x696 → 抓帧 600x1321，比例 0.454 ≈ 316/696，与设备一致。
+/// 【为什么不需要设置权限】它和模拟器一样依赖"屏幕录制"（已有）。
+pub fn request_mirror() -> Result<CaptureInfo, String> {
+    let (cast, _hid) = crate::live_source::sim_tools()?;
+    let (win, w, h) = crate::live_source::mirror_window(&cast)?;
+    let ff = crate::live_source::ffmpeg_bin();
+    /* 宽度取 640：窗口原生是 632（316×2 retina），再大只是插值放大 */
+    let cmd = format!(
+        /* ★**不能**把 cast 的 stderr 丢进 /dev/null（决策 #1322）：抓流失败时它会说明原因
+           （权限/窗口不可抓/被遮挡…），丢了就只能看到"参数集 0 字节"这种无信息的现象。
+           落盘到日志目录，排障时直接看。 */
+        "'{cast}' --window {win} --fps 30 --width 640 --quality 0.9 --device-aspect 0 2>>\"$HOME/Library/Logs/Proteus Studio/cast.err\" | \
+         '{ff}' -hide_banner -loglevel error -f image2pipe -c:v mjpeg -i - \
+         -vf \"scale=trunc(iw/2)*2:trunc(ih/2)*2,setrange=limited\" \
+         -c:v libx264 -preset ultrafast -tune zerolatency -crf 20 \
+         -pix_fmt yuv420p -g 30 -f h264 -"
+    );
+    eprintln!("[studio]   镜像管道 → {cmd}");
+    /* ★**启动路径必须同时写 `POC_LIVE`**（决策 #1316 的坑）：
+       `poc_live_request_restart()` 只是"下一拍重启"，而原生 attach 时读的是**环境变量**；
+       不写的话启动阶段会退回内置示例（日志表现为"打开失败：/tmp/proteus-poc/720p30.mp4"）。 */
+    std::env::set_var("POC_LIVE", &cmd);
+    let c = std::ffi::CString::new(cmd.clone()).map_err(|e| e.to_string())?;
+    unsafe { poc_live_request_restart(c.as_ptr()) };
+    if let Ok(mut g) = PRESET.lock() {
+        *g = Some("mirror".into());
+    }
+    if let Ok(mut g) = SIM_UDID.lock() {
+        *g = None;
+    }
+    crate::live_source::set_mirror_window(win, w, h);
+    /* 摆到右下角：它必须留在屏幕上（HID 才点得到），但不必占主工作区 */
+    crate::live_source::place_mirror_window(win);
+    if let Ok(mut g) = crate::DEVICE_PX.lock() {
+        *g = Some((w * 2, h * 2)); // 窗口是 point，实际像素 2x（retina）
+    }
+    eprintln!("[studio]   采集源 → iPhone 镜像（窗口 {win} · {w}x{h}）");
+    Ok(CaptureInfo {
+        preset: "mirror".into(),
+        width: w * 2,
+        height: h * 2,
+        mbps: 0,
+    })
+}
+
+/// 启动路径用：登记当前模拟器（`POC_LIVE` 由 init 直接设，不走 request_sim）
+pub fn set_sim_udid(udid: &str) {
+    if let Ok(mut g) = SIM_UDID.lock() {
+        *g = Some(udid.to_string());
+    }
+}
+
+/// 当前是不是模拟器源（触控分派用）
+pub fn sim_udid() -> Option<String> {
+    SIM_UDID.lock().ok().and_then(|g| g.clone())
+}
+
 pub fn capture_preset(preset: String) -> Result<CaptureInfo, String> {
     let serial = ADB_SERIAL.lock().ok().and_then(|g| g.clone());
     if serial.is_none() {

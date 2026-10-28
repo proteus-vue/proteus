@@ -26,8 +26,17 @@ ios_stream_launch() {
   echo "    ★设备将弹「录制屏幕」授权窗——请点【允许】，否则无任何帧"
   echo "    Mac 侧接收：nc -l ${target##*:} | ffplay -f h264 -"
   echo "    日志：${log}"
+  # ★触控回传（决策 #1295）：控制地址由 Studio 通过 `PROTEUS_TOUCH_CONTROL` 传进来；
+  #   手机端会**主动连**这个地址（同推流方向），不配则宿主那边是空操作。
+  local touch="${PROTEUS_TOUCH_CONTROL:-}"
+  local envjson="{\"PROTEUS_SCREEN_STREAM\":\"$target\""
+  if [ -n "$touch" ]; then
+    envjson="$envjson,\"PROTEUS_TOUCH_CONTROL\":\"$touch\""
+    echo "    触控回传：PROTEUS_TOUCH_CONTROL=$touch（Studio 监听，手机主动连）"
+  fi
+  envjson="$envjson}"
   nohup xcrun devicectl device process launch --console --terminate-existing \
-    --environment-variables "{\"PROTEUS_SCREEN_STREAM\":\"$target\"}" \
+    --environment-variables "$envjson" \
     --device "$udid" "$bundle" --selfdraw > "$log" 2>&1 &
   # ★`$!` 后面紧跟全角「）」会触发同一个坑（bash 3.2 非 UTF-8 locale 吞首字节）⇒ 先落变量
   local pid=$!

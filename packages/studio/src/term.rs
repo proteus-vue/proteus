@@ -219,9 +219,22 @@ fn reader_loop(app: tauri::AppHandle, master: c_int, gen: u64) {
        是另一件事，而字节的去向是 webview（看不到）。这条钩子把那段补上。 */
     let log_first = std::env::var("POC_TERM_LOG").ok().as_deref() == Some("1");
     let mut logged = false;
+    /* `POC_TERM_RAW=<path>` ⇒ 把 pty 的**原始字节**原样落盘（排障用，决策 #1285）。
+       为什么要它：`首段输出` 只能看到第一块，"界面上一片空白"到底是
+       ①shell 没吐字 ②字节到了但被前端解析吞了 ③画出来了但看不见 —— 三者只能靠
+       **同一份字节**分别喂给两侧来区分。落盘后可以脱离 GUI，直接喂给渲染层做对照。 */
+    let raw_path = std::env::var("POC_TERM_RAW").ok();
+    let mut raw_file = raw_path.as_ref().and_then(|p| {
+        std::fs::OpenOptions::new().create(true).append(true).open(p).ok()
+    });
     loop {
         let n = unsafe { read(master, buf.as_mut_ptr() as *mut c_void, buf.len()) };
         if n > 0 {
+            if let Some(f) = raw_file.as_mut() {
+                use std::io::Write as _;
+                let _ = f.write_all(&buf[..n as usize]);
+                let _ = f.flush();
+            }
             pending.extend_from_slice(&buf[..n as usize]);
             let s = take_utf8(&mut pending);
             if !s.is_empty() {

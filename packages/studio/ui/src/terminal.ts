@@ -324,11 +324,17 @@ export class Terminal {
       case 'd':
         this.cy = Math.min(this.rows - 1, Math.max(0, (a[0] || 1) - 1))
         return
+      /* ★★`CSI J` / `CSI K` 的**缺省参数是 0**（擦到末尾），不是 1（决策 #1285）。
+         通用 `nums(p, 1)` 对 A/B/C/D/H（"移动 1 格"）是对的，但套到 J/K 上就把
+         "擦光标之后" 变成了 "擦光标之前" ⇒ zsh 画完提示符后的 `ESC[K` 会把**整行提示符反擦掉**，
+         再配合 `ESC[J` 把上面几行一起抹 ⇒ 用户看到"闪一下就全黑"。
+         实测证据：用户点开终端时抓的 816 字节里，`\x1b[J`（第 642 字节）和 `\x1b[K`（第 787 字节）
+         **都是裸的**（无参数）⇒ 默认 0。 */
       case 'K':
-        this.eraseLine(a[0] ?? 0)
+        this.eraseLine(p === '' ? 0 : (a[0] ?? 0))
         return
       case 'J':
-        this.eraseScreen(a[0] ?? 0)
+        this.eraseScreen(p === '' ? 0 : (a[0] ?? 0))
         return
       case 'L':
         for (let i = 0; i < (a[0] || 1); i++) {

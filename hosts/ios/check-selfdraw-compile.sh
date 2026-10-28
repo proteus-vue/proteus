@@ -94,6 +94,7 @@ HOST_SRCS=(
   # ★★★Studio G3（决策 #1190）：真机画面 → Mac（ReplayKit + VideoToolbox → TCP 裸 Annex-B）
   #   ★不在这里就会"静态绿、真机红"（#1067/#1069 同族）；run-selfdraw.sh 的 swiftc 行必须同集
   "$HERE/ProteusHost/runtime/screen-stream.swift"
+  "$HERE/ProteusHost/runtime/touch-control.swift"
 )
 for f in "${HOST_SRCS[@]}"; do
   [ -f "$f" ] || { echo "✗ 找不到宿主源码：$f"; exit 2; }
