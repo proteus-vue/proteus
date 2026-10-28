@@ -431,3 +431,57 @@ describe('G-31 B7 收口：createCapabilityRequestClient（能力桥 → 策略�
     expect(calls).toBe(3)
   })
 })
+
+describe('★★★#1342 C2 收口修复（两处真缺陷，回归锁）', () => {
+  it('★★★① defaultCacheKey **含 body**（不同 POST 体不得被合并/互相覆盖）', () => {
+    // ★缺陷形态：此前键 = method+url+params，不含 body
+    //   ⇒ 两个不同订单的 POST 会共享同一 in-flight / 同一缓存条目（决策 #1342 痛点 #9）
+    const a = defaultCacheKey('POST', '/order', undefined, { amount: 100 })
+    const b = defaultCacheKey('POST', '/order', undefined, { amount: 200 })
+    expect(a, '★不同 body 必须得到不同键').not.toBe(b)
+    expect(defaultCacheKey('POST', '/order', undefined, { amount: 100 })).toBe(a)
+    // ★键序无关（稳定序列化）
+    expect(defaultCacheKey('POST', '/o', undefined, { a: 1, b: 2 })).toBe(
+      defaultCacheKey('POST', '/o', undefined, { b: 2, a: 1 }),
+    )
+    // ★向后兼容：无 body 时键格式逐字节不变（既有持久化缓存不失效）
+    expect(defaultCacheKey('GET', '/cache')).toBe('GET /cache')
+    expect(defaultCacheKey('GET', '/cache', { q: 'x' })).toBe('GET /cache?q=x')
+  })
+
+  it('★★② body 不含原文（键里不得出现敏感字段值）', () => {
+    const k = defaultCacheKey('POST', '/login', undefined, { password: 'super-secret-value' })
+    expect(k, '★键里不得出现 body 原文').not.toContain('super-secret-value')
+    expect(k).toContain('#')
+  })
+
+  it('★★★③ ttl + queue 同时使用时**仍写缓存**（此前直接 return 跳过写缓存 ⇒ 永不命中）', async () => {
+    const m = mockClient()
+    m.setResponse({ data: 'v1', status: 200, headers: {}, config: { url: '/q' } })
+    const mem = memoryCache()
+    const eng = createRequestEngineering({ client: m.client, reactivity: mockReactivity(), cache: mem.cache })
+    const r1 = await eng.request({ url: '/q' }, { ttl: 10000, queue: true })
+    expect(r1.data as string).toBe('v1')
+    expect(m.calls.length).toBe(1)
+    const r2 = await eng.request({ url: '/q' }, { ttl: 10000, queue: true })
+    expect(r2.data as string).toBe('v1')
+    expect(m.calls.length, '★★queue+ttl 命中缓存后不得重发').toBe(1)
+  })
+
+  it('★④ 不同 body 的 POST 在 ttl 下不互相覆盖（端到端）', async () => {
+    let n = 0
+    const client: RequestExecutor = {
+      request: async <T,>(config: RequestConfig) => {
+        n++
+        return { data: { seq: n, body: config.data } as unknown as T, status: 200, headers: {}, config } as RequestResponse<T>
+      },
+    }
+    const mem = memoryCache()
+    const eng = createRequestEngineering({ client, reactivity: mockReactivity(), cache: mem.cache })
+    const a = await eng.request({ url: '/order', method: 'POST', data: { amount: 100 } }, { ttl: 10000 })
+    const b = await eng.request({ url: '/order', method: 'POST', data: { amount: 200 } }, { ttl: 10000 })
+    expect((a.data as { seq: number }).seq, '★两次不同订单必须各自发请求').toBe(1)
+    expect((b.data as { seq: number }).seq).toBe(2)
+    expect(mem.size(), '★两条独立缓存条目').toBe(2)
+  })
+})

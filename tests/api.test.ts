@@ -176,3 +176,70 @@ describe('★api-plan B3：凭证托管（createAuth + createApi 自动 Authoriz
     expect(auth.isAuthenticated()).toBe(true)
   })
 })
+
+describe('★★★#1342 C2：createApi 已收口到请求库（不是第四套栈）', () => {
+  it('★★① `createApi()` 暴露 `library`（请求库实例，冻结）', () => {
+    const api = createApi()
+    expect(api.library, '★必须能拿到请求库').toBeDefined()
+    expect(typeof api.library.request).toBe('function')
+    expect(typeof api.library.task).toBe('function')
+    expect(Object.isFrozen(api.library), '请求库实例冻结').toBe(true)
+  })
+
+  it('★★② 旧入口仍**抛 ApiError**（G-58.4 只增不改）；`library` 不抛（三态）', async () => {
+    const adapter = {
+      name: 'web' as const,
+      request: async () => {
+        throw Object.assign(new Error('boom'), { code: 'TIMEOUT' })
+      },
+    }
+    const api = createApi({ adapter: adapter as never })
+    // 旧入口：抛
+    await expect(api.get('/x')).rejects.toThrow(ApiError)
+    // 新入口：不抛，返回 unknown（超时 = 未知态）
+    const r = await api.library.get('/x')
+    expect(r.ok).toBe(false)
+    expect(r.outcome, '★超时经适配器腿也必须归 unknown').toBe('unknown')
+    // 且 err.outcome 让业务能区分"未知"与"确定失败"
+    try {
+      await api.get('/x')
+    } catch (e) {
+      expect((e as { outcome?: string }).outcome).toBe('unknown')
+    }
+  })
+
+  it('★★③ 旧错误码映射不破坏：TIMEOUT→/TIMEOUT/、NETWORK_ERROR→/NETWORK_ERROR/', async () => {
+    const mk = (adapterErr: string) =>
+      createApi({
+        adapter: {
+          name: 'web' as const,
+          request: async () => {
+            throw Object.assign(new Error('e'), { code: adapterErr })
+          },
+        } as never,
+      })
+    await expect(mk('TIMEOUT').get('/x')).rejects.toThrow(/TIMEOUT/)
+    await expect(mk('NETWORK_ERROR').get('/x')).rejects.toThrow(/NETWORK_ERROR/)
+  })
+
+  it('★★④ 非幂等默认不重试（C2 的语义收紧，防重复下单）', async () => {
+    let calls = 0
+    const api = createApi({
+      adapter: {
+        name: 'web' as const,
+        request: async () => {
+          calls++
+          throw Object.assign(new Error('down'), { code: 'NETWORK_ERROR' })
+        },
+      } as never,
+    })
+    // POST + retry:3 但**没有**幂等键 ⇒ 不得重试
+    await expect(api.post('/order', { a: 1 }, { retry: 3, retryDelay: 1 })).rejects.toThrow()
+    expect(calls, '★非幂等 POST 默认只发一次').toBe(1)
+    // 给了幂等键 ⇒ 允许重试
+    calls = 0
+    const r = await api.library.post('/order', { a: 1 }, { idempotencyKey: 'k', retry: { attempts: 2, delayMs: 1 } })
+    expect(r.ok).toBe(false)
+    expect(calls, '★有幂等键才允许重试（>1 次）').toBeGreaterThan(1)
+  })
+})

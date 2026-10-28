@@ -12,7 +12,7 @@ order: 6002
 
 > 技术标识：能力原语 C18 · `capability.share` · 返回 `Result<void>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
-★#1336 补守卫：此前 `wrap(bridge.share(options))` 在桥无 share 时同步抛 TypeError（业务读不到 share.unsupported）
+通知/分享（wx.shareAppMessage / navigator.share / mock）
 
 ## 签名
 
@@ -66,7 +66,7 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 
 | code | 说明 |
 |---|---|
-| `share.unsupported` | 桥未提供 share |
+| `share.unsupported` | 桥未提供 share（useShare 不可用） |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

@@ -68,6 +68,57 @@ import type {
 /** 默认并发（与 `M7.3` 文档的"全局 6"对齐；pipeline 的实例级 10 仍生效，这是叠加） */
 const DEFAULT_GLOBAL_CONCURRENCY = 6
 
+/**
+ * ★★★#1342 C2：**适配器腿**——把 `IRequestAdapter`（wx/web 两套原生实现）接成
+ * `hooks` 形状，让 `createApi` 能委托本库而**不丢它自己的适配器**。
+ *
+ * 【为什么需要这一层（不能直接把 adapter 塞进 hooks）】
+ *   `hooks.useFetch` 的契约是 `FetchConfig → FetchResult`（不抛、带 meta）；
+ *   而 `IRequestAdapter.request` 的契约是 `RequestConfig → RequestResponse`（**会抛** `ApiError`）。
+ *   两者错误模型相反 ⇒ 必须做一次翻译，**不能**让 `createApi` 直接透传（那就丢了三态与重试）。
+ *
+ * 【已知边界（如实登记）】
+ *   适配器腿没有 pipeline 的 HTTP 缓存/优先级/deadline，也没有 `meta.transport` 读数
+ *   ——那些是能力桥腿（App）独有的。适配器腿拿到的是 `meta.attempts` 由本库补。
+ */
+export function adapterToHooks(
+  request: (config: {
+    url: string
+    method?: string
+    headers?: Record<string, string>
+    data?: unknown
+    params?: Record<string, unknown>
+    timeout?: number
+  }) => Promise<{ data: unknown; status: number; headers: Record<string, string> }>,
+): CapabilityHooks {
+  return {
+    useFetch: async (url: string, cfg: FetchConfig) => {
+      try {
+        const res = await request({
+          url,
+          method: cfg.method,
+          headers: cfg.headers,
+          data: cfg.data,
+          params: cfg.params,
+          timeout: cfg.timeout,
+        })
+        return { ok: true as const, data: res.data, status: res.status, headers: res.headers, meta: { attempts: 1 } as never }
+      } catch (e) {
+        // ★把抛出的错误翻成 `FetchResult`（本库内部只认 FetchResult）
+        const code = (e as { code?: string })?.code
+        // 适配器的 `TIMEOUT`/`NETWORK_ERROR` 映射到 pipeline 的错误码族，才能被 classifyFailure 正确分档
+        const mapped =
+          code === 'TIMEOUT' ? 'fetch.timeout' : code === 'NETWORK_ERROR' ? 'network.unreachable' : 'fetch.failed'
+        return {
+          ok: false as const,
+          error: new CapError(mapped, e instanceof Error ? e.message : String(e)),
+          meta: { attempts: 1 } as never,
+        }
+      }
+    },
+  } as unknown as CapabilityHooks
+}
+
 /** 把三层超时归一成 pipeline 的两个字段（pipeline 只有单轮 timeout + 总 deadline） */
 function normalizeTimeout(
   t: RequestTimeoutPolicy | number | undefined,
@@ -151,7 +202,7 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
    *
    * ★注意：本函数**不抛**——所有失败都以 `RequestResult` 表达（G-32.3）。
    */
-  async function execute<T>(url: string, opts: RequestOptions): Promise<RequestResult<T>> {
+  async function execute<T>(url: string, opts: RequestOptions, attemptNo = 1): Promise<RequestResult<T>> {
     const startedAt = Date.now()
     const requestId = `rq-${(requestSeq = (requestSeq + 1) % 1e9).toString(36)}-${startedAt.toString(36)}`
     const method = (opts.method ?? 'GET').toUpperCase()
@@ -392,7 +443,11 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
       releaseGates = []
     }
 
-    attempts = result.meta?.attempts ?? 1
+    /* ★尝试次数的**唯一来源是本地计数器**（不从 `result.meta.attempts` 读）：
+       适配器腿（`adapterToHooks`）的返回值没有 pipeline meta ⇒ 若从 meta 读会恒为 1，
+       进而让"是否达上限"永远判 false ⇒ **无限重试**（实测推演过这条链）。
+       pipeline 腿自己也会重试，但它的 attempts 会计入 meta；两者取**较大者**才不会重复计数。 */
+    attempts = Math.max(attemptNo, result.meta?.attempts ?? 1)
 
     // ── 5. 三态归一 ────────────────────────────────────────────
     if (result.ok) {
@@ -459,8 +514,8 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
           errorCode: result.error.code,
         })
         await sleep(delay)
-        // ★重试复用同一个 requestId 与幂等键（同一次逻辑请求）
-        return execute<T>(url, { ...opts, idempotencyKey: effectiveIdemKey })
+        // ★重试复用同一个 requestId 与幂等键（同一次逻辑请求）；attemptNo+1 是**本地**计数
+        return execute<T>(url, { ...opts, idempotencyKey: effectiveIdemKey }, attemptNo + 1)
       }
     }
 

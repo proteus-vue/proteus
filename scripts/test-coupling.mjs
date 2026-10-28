@@ -157,6 +157,25 @@ const COUPLING = [
     gates: ['pnpm check:docs-stats'],
     why: '文档权威数字与源码实际值同源（包数/原语数/规则数/组件数）——数字过时会静默上线',
   },
+  {
+    // ★★★#1342：**请求库 + 两个历史入口**（三套栈收口的回归面）
+    //   · `request/**` 是策略内核（未知态/幂等/断路器/离线/租户/安全）；
+    //   · `client.ts` 已**委托**它（改任一侧都可能破坏"旧入口抛 ApiError / 新入口三态"的双契约）；
+    //   · `request-engineering.ts` 是注入式 R1-R4 原语（TTL 缓存 + FIFO 队列 + useQuery）。
+    //   ★为什么必须登记：C2 实测**未命中任何精化表**（只落进 ⑨ 的宽面 check:content），
+    //     而它恰恰改了"错误模型映射"与"重试幂等门"——正是最该有定向判据的地方（#869 同族盲区）。
+    match: /packages\/api\/src\/(client\.ts|request-engineering\.ts|request\/[a-z-]+\.ts)$/,
+    tests: [
+      'tests/request-reliability.test.ts',
+      'tests/request-security.test.ts',
+      'tests/request-tenant.test.ts',
+      'tests/request-client.test.ts',
+      'tests/request-engineering.test.ts',
+      'tests/api.test.ts',
+      'tests/fetch-wire-fields.test.ts',
+    ],
+    why: '请求库 = 策略内核 + 两个历史入口委托：①request/** 改任一策略 ⇒ request-*.test 必跑；②client.ts 改了错误码映射/重试幂等门 ⇒ 旧入口抛 ApiError 的契约（api.test）必须绿；③request-engineering.ts 改了缓存键/队列 ⇒ R1-R4 判据必须绿；④fetch-wire-fields 守"门面字段不进四层链"（本库策略字段绝不可下传宿主）',
+  },
   // ★★★G-61 B1（2026-10-05）：**CSE 编译期 CSS 引擎**（L-A 唯一实现——收集/长手展开/索引/
   //   右→左匹配/五级层叠/继承/计算值/IR 映射）。全模块统一配对：
   //   · cse-core：内核单测（34 条——逐级层叠/长手竞争/继承/计算值/IR 映射/trace）

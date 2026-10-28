@@ -8,6 +8,28 @@
 //   ★G-31 B7 收口：createCapabilityRequestClient——把 useFetch 的底层能力桥（wx.request/fetch 双端）
 //     升级为策略请求执行器（useFetch 语义 = req.request 的裸版；增强走缓存/去重/队列）
 //   零运行时依赖 vue；MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
+//
+// ★★★#1342 C2（2026-10-28）：**本文件的定位已明确为「注入式策略原语」，不是终态入口**
+//
+// 【三层分工（读到这里就不用再猜该用哪个）】
+//   L3 请求库 `createRequestClient`（`./request/`）—— **业务首选**：
+//      实例配置 · 幂等/熔断/离线/**未知态** · 签名脱敏 · bizId 隔离 · 审计 · 三态结果
+//   L2a 本文件 `createRequestEngineering` —— **注入式 R1-R4 原语**：
+//      TTL 缓存 + 同飞去重 + FIFO 队列 + useQuery 句柄。**零依赖、可单测、可注入任意 executor**
+//      ⇒ 保留它是因为它有独立价值：不依赖 Vue、不依赖能力桥、可套在任意 `RequestExecutor` 上。
+//   L2b `useFetch` + fetch pipeline —— **HTTP 语义层**：
+//      RFC 9111 缓存 / 5861 SWR / 重定向 / deadline / 并发 / 优先级 / 传输读数
+//
+// 【为什么不删掉本文件的 TTL 缓存（与痛点 #8 的关系）】
+//   痛点 #8 说的是"**同一请求出现两种缓存命中解释**"，正解是**分层清楚**，不是删掉一层：
+//   · 本文件的 TTL 缓存 = **查询级**（"这个数据多久内可直接用"，业务语义）
+//   · pipeline 的 HTTP 缓存 = **协议级**（Cache-Control/ETag/304，服务端语义）
+//   两者解决不同问题。错的是"业务不知道自己在用哪层" ⇒ 上面那张三层表就是答案。
+//   ★业务要 HTTP 语义 ⇒ 用 L3（它直接调 useFetch/pipeline）；要"数据 5 分钟内别重拉" ⇒ 用 L2a。
+//
+// 【C2 修掉的两个真缺陷（都有判据）】
+//   ① `defaultCacheKey` 不含 body ⇒ 不同 POST 体被错误合并/互相覆盖（痛点 #9）
+//   ② `queue=true` 路径直接 return ⇒ 跳过写缓存 ⇒ `ttl`+`queue` 同时用时永不命中
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 import type { Reactivity } from './engineering'
 import { CapError } from './capability'
@@ -94,8 +116,21 @@ export interface RequestEngineering {
   queued(): number
 }
 
-/** 缺省缓存键：method + url + params 序列化（GET 语义——同 url 不同 query 视为不同资源） */
-export function defaultCacheKey(method: string, url: string, params?: Record<string, unknown>): string {
+/**
+ * 缺省缓存键：method + url + params(+ body)。
+ *
+ * ★★★#1342 C2 修一个真缺陷：此前**不含 body** ⇒ 两个 `POST /order`（不同订单）
+ *   在 `ttl>0` 时会被**错误合并/互相覆盖**（去重键与缓存键同源，决策 #1342 痛点 #9）。
+ *   现在：body 存在时追加其**确定性短哈希**（不塞原文——body 可能含敏感字段，也不让键过长）。
+ *   ★向后兼容：**无 body 时键格式逐字节不变**（`GET /cache` 仍是 `GET /cache`），
+ *     既有持久化缓存与 `defaultCacheKey` 的调用方不受影响。
+ */
+export function defaultCacheKey(
+  method: string,
+  url: string,
+  params?: Record<string, unknown>,
+  body?: unknown,
+): string {
   let base = method.toUpperCase() + ' ' + url
   if (params) {
     const qs = Object.keys(params)
@@ -105,7 +140,35 @@ export function defaultCacheKey(method: string, url: string, params?: Record<str
       .join('&')
     if (qs) base += '?' + qs
   }
+  if (body !== undefined) base += '#' + shortHash(safeStringify(body))
   return base
+}
+
+/** 确定性短哈希（djb2；★不引依赖，且不含原文） */
+function shortHash(s: string): string {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
+/** 稳定序列化（键排序；循环引用退化成 `[circular]`——不抛） */
+function safeStringify(v: unknown): string {
+  const seen = new WeakSet<object>()
+  const walk = (x: unknown): unknown => {
+    if (x === null || typeof x !== 'object') return x
+    if (seen.has(x as object)) return '[circular]'
+    seen.add(x as object)
+    if (Array.isArray(x)) return x.map(walk)
+    const o = x as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const k of Object.keys(o).sort()) out[k] = walk(o[k])
+    return out
+  }
+  try {
+    return JSON.stringify(walk(v))
+  } catch {
+    return String(v)
+  }
 }
 
 /**
@@ -193,7 +256,11 @@ export function createRequestEngineering(options: RequestEngineeringOptions): Re
   async function strategyRequest<T>(config: RequestConfig, strategy?: RequestStrategyOptions): Promise<RequestResponse<T>> {
     const hasStrategy = strategy !== undefined
     const method = config.method !== undefined ? config.method : 'GET'
-    const cacheKey = hasStrategy && strategy.cacheKey !== undefined ? strategy.cacheKey : defaultCacheKey(method, config.url, config.params)
+    // ★#1342 C2：body 参与键（此前不含 ⇒ 不同 POST 体被错误合并/覆盖）
+    const cacheKey =
+      hasStrategy && strategy.cacheKey !== undefined
+        ? strategy.cacheKey
+        : defaultCacheKey(method, config.url, config.params, config.data)
     const ttl = hasStrategy && strategy.ttl !== undefined ? strategy.ttl : 0
     if (ttl > 0) {
       const hit = readCache<RequestResponse<T>>(cacheKey)
@@ -204,7 +271,12 @@ export function createRequestEngineering(options: RequestEngineeringOptions): Re
     if (hasStrategy && strategy.queue === true) {
       // ★队列语义：真实网络调用必须发生在队列槽位内（enqueue 前不发请求）——
       //   去重在队列内依旧生效（同 key 排队任务共享同一个 in-flight）
-      return enqueue(() => runOnce(cacheKey, execute))
+      // ★★★#1342 C2 修 bug：此前 `return enqueue(...)` 直接返回 ⇒ **跳过了写缓存**
+      //   ⇒ `ttl` 与 `queue` 同时使用时永远不写缓存（"配了 TTL 却永不命中"）。
+      //   现在队列路径也在成功后写缓存。
+      const queued = await enqueue(() => runOnce(cacheKey, execute))
+      writeCache(cacheKey, queued, ttl)
+      return queued
     }
     const run = runOnce(cacheKey, execute)
     const res = await run
