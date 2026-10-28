@@ -123,6 +123,40 @@ async fn list_devices(force: Option<bool>) -> Vec<device::DeviceInfo> {
         .unwrap_or_default()
 }
 
+/// 等"首帧真的到了"——**切换成功与否以此为准**（决策 #1339）。
+///
+/// ★为什么必须在后端等：原来的 `select_device` 只是"把命令发下去"就返回 Ok，
+///   UI 于是立刻弹"已切到 xxx"，而流可能根本没起来（昨天就出现"提示切换成功、画布空白"）。
+///   这正是"假绿"——提示的依据必须是**观察到的事实**，不是"指令已发出"。
+///
+/// 判定（两种情形都兼容）：
+///   · `frames` 是累计计数 ⇒ 比切换前大即视为有新帧；
+///   · 采集会话重启后计数会归零 ⇒ 只要"restarts 增加过且 frames > 0"也算成功。
+///
+/// 注意：**有界等待**（最多 `ms`），不做无退出条件的轮询。
+fn wait_first_frame(f0: i64, r0: i32, ms: u64) -> Result<(), String> {
+    let t0 = std::time::Instant::now();
+    let mut restarted = unsafe { poc_live_restarts() } > r0;
+    while (t0.elapsed().as_millis() as u64) < ms {
+        let f = unsafe { poc_frames() };
+        if unsafe { poc_live_restarts() } > r0 {
+            restarted = true;
+        }
+        if f > f0 || (restarted && f > 0) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Err(if restarted {
+        format!(
+            "采集已启动，但 {}s 内没有收到画面 —— 原因见 ~/Library/Logs/Proteus Studio/cast.err",
+            ms / 1000
+        )
+    } else {
+        format!("{}s 内采集进程都没起来（设备/窗口可能没就绪）", ms / 1000)
+    })
+}
+
 /// 切换当前设备：改全局串号/尺寸 → 用**当前画质档**重建采集命令 → 让渲染线程重启会话。
 /// ★顺序不能反：先改状态再重建命令，否则新命令还是旧串号。
 #[tauri::command]
@@ -139,8 +173,12 @@ async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, St
                 eprintln!("[studio] 记不住上次设备（不影响本次会话）：{e}");
             }
         }
-        if platform == "ios" {
-            capture_preset::request_ios()
+        /* ★记下切换前的计数，用于"首帧是否真的到了"（决策 #1339） */
+        let f0 = unsafe { poc_frames() };
+        let r0 = unsafe { poc_live_restarts() };
+        let info = if platform == "ios" {
+            /* iOS 真机：命令是 `nc -l`，**本来就该等手机开始推流** ⇒ 不等首帧（不能把"等待"当失败） */
+            return capture_preset::request_ios();
         } else if platform == "mirror" {
             /* ★iPhone 镜像（决策 #1316）：真机整屏，走 SCK 抓系统镜像窗口 */
             capture_preset::request_mirror()
@@ -149,7 +187,11 @@ async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, St
             capture_preset::request_sim(&serial)
         } else {
             capture_preset::request_for_serial(device::current_serial().as_deref())
-        }
+        };
+        let info = info?;
+        /* ★**只有看到首帧才算切换成功**（决策 #1339）：模拟器/镜像/安卓都该立刻出帧 */
+        wait_first_frame(f0, r0, 10_000)?;
+        Ok(info)
     })
     .await
     .map_err(|e| format!("切换线程失败：{e}"))?

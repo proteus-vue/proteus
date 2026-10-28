@@ -64,6 +64,10 @@ const LOCAL_ONLY = {
   //   判的是"真机跑几秒、零解码错误、出帧数是正数"——CI 没有设备，接了只会得到 skip。
   //   ★它在无设备时自己打一行原因并 rc=0（不造假红），所以本地/CI 都能安全调用。
   'check:studio-live': '需真 Android 设备 + 已打包 .app（真机解码健康度）；无设备自动跳过',
+  // ★Studio 设备源抓帧门禁（决策 #1340 登记）：判的是"镜像窗口/模拟器窗口**真的能抓到帧**"。
+  //   前置是 macOS + 屏幕录制权限 + 已连接镜像/已启动模拟器；CI 全都没有。
+  //   ★而且**同一窗口不能被两个 SCK 客户端同时抓** ⇒ Studio 在跑时脚本自动跳过（不造假红）。
+  'check:studio-capture': '需 macOS + 屏幕录制权限 + iPhone 镜像已连/模拟器已启动；占用或缺失自动跳过',
   // ★CLI iOS 宿主模板编译检查（2026-10-08，check:ios-selfdraw-compile 的姊妹盲区）：
   //   它检查**框架参考宿主**；CLI 生成宿主的**壳模板**（templates-host/ios/shell/*.swift）此前无任何本地判据
   //   ⇒ 改模板只能等真机打包才发现编译错。同样需 macOS + Xcode。
@@ -310,6 +314,8 @@ const LOCAL_ONLY_META = {
   'check:embed-demo': { cat: 'device', run: 'verify' },
   // 决策 #1284：真机解码健康度（活体取证，无 results/*.json ⇒ evidence: live）
   'check:studio-live': { cat: 'device', run: 'on-device', evidence: 'live' },
+  // 决策 #1340：设备源抓帧（活体取证，结果只在运行时存在 ⇒ evidence: live）
+  'check:studio-capture': { cat: 'device', run: 'on-device', evidence: 'live' },
   // ── macos（需 Xcode / Swift / Metal / JSC）───────────────────────────
   'check:ios-host': { cat: 'macos', run: 'manual' },
   'check:ios-perf': { cat: 'macos', run: 'on-device' },
@@ -385,7 +391,10 @@ const LOCAL_ONLY_META = {
 //   **自己打原因并 rc=0**（设计如此，不造假红）⇒ 接进 workflow 只会永远 skip，
 //   那正是本仓最讨厌的"假接线"（给人"CI 在管这件事"的错觉）。
 //   ★它放在 `run: 'on-device'`：由开发机在 `pnpm run check:studio-live` 手动跑。
-const LOCAL_ONLY_MAX = 57
+// ★2026-10-28 抬 57 → 58（决策 #1340）：新增 `check:studio-capture`（设备源抓帧能力）。
+//   理由同 check:studio-live：判据是活体（要 macOS + 屏幕录制 + 已连镜像/已启动模拟器），
+//   CI 一样都没有；且"同一窗口不能被两个 SCK 客户端同时抓" ⇒ Studio 在跑时必须跳过。
+const LOCAL_ONLY_MAX = 58
 
 /** 读取所有 workflow 文本（含 pages.yml / consistency.yml 等） */
 function workflowFiles() {
