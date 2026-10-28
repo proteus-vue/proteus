@@ -148,3 +148,43 @@ final class TouchControl {
         }
     }
 }
+
+/*
+ * ★★★#1344：`injectTouch` 从 `selfdraw-scene.swift` 移到这里（该文件 8219 → 8250 行，
+ *   越过 check:file-size 的"存量只减不增"）。移到这里的理由不只是省行：
+ *   本文件本就是**触控回传的职责落点**（控制连接 + 协议 + 注入），
+ *   文件头已解释"为什么必须复用 emitGesture"——注入入口放在协议旁边，改协议时不必再开
+ *   一个 8000 行的文件。
+ */
+extension SelfDrawView {
+    /// 触控回传入口（决策 #1295）：把**归一化坐标**注入成一次手势。
+    ///
+    /// 【为什么走 `emitGesture` 而不是合成 UITouch】`touchesEnded` 最终也是调它
+    ///   （真触摸 → classifyAndEmit → emitGesture）⇒ 走同一派发器，命中/冒泡/JS 通知全一致，
+    ///   "注入结果 = 真手指结果"才成立。合成 UIEvent 属私有 API，不用。
+    ///
+    /// 【为什么收归一化 0..1】推流帧是像素（如 888×1920），注入要逻辑点（如 390×844），
+    ///   中间还有系统缩放。传归一化后由**这里**乘 `bounds`，两边都不必猜 scale。
+    /// - Returns: 诊断串（进宿主日志；判据靠它确认"真的注入了"）
+    @discardableResult
+    func injectTouch(_ nx: Double, _ ny: Double, _ type: String, dx: Double = 0, dy: Double = 0) -> String {
+        guard bounds.width > 1, bounds.height > 1 else { return "no-bounds" }
+        let x = min(max(nx, 0), 1) * Double(bounds.width)
+        let y = min(max(ny, 0), 1) * Double(bounds.height)
+        switch type {
+        case "longpress":
+            emitGesture(x: x, y: y, type: "longpress")
+            return String(format: "longpress@%.1f,%.1f", x, y)
+        case "swipe":
+            /* 方向由位移符号推导（与协议注释一致：类型 = `swipe:<dir>`）*/
+            let dir: String
+            if abs(dx) > abs(dy) { dir = dx > 0 ? "right" : "left" }
+            else { dir = dy > 0 ? "down" : "up" }
+            emitGesture(x: x, y: y, type: "swipe:\(dir)")
+            return String(format: "swipe:%@@%.1f,%.1f", dir, x, y)
+        default:
+            emitGesture(x: x, y: y, type: "tap")
+            return String(format: "tap@%.1f,%.1f", x, y)
+        }
+    }
+}

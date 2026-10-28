@@ -37,12 +37,10 @@ export {
   getHostInvoke,
   invokeHost,
   appNativeAvailable,
-  invokeHostAsync, invokeHostStream, installHostResolveBridge, pendingHostCallCount, lastStreamChunkCount, createAbortController,
-  abortDiag,
+  invokeHostAsync, invokeHostStream, installHostResolveBridge, pendingHostCallCount, lastStreamChunkCount, createAbortController, abortDiag,
   HOST_RESOLVE_KEY,
 } from './capability-invoke'
-export type { HostInvokeFn, AppRequestConfig, AppRequestResponse } from './capability-invoke'
-export type { AbortDiag } from './capability-invoke'
+export type { HostInvokeFn, AppRequestConfig, AppRequestResponse, AbortDiag } from './capability-invoke'
 // ── 类型（与 capability.ts 的同名接口结构兼容；不 import 以避免循环） ──
 
 /** 应用阶段（与 C23 `AppLifecycle.phase` 同值域） */

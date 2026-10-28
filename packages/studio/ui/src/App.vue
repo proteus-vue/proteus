@@ -40,6 +40,9 @@ import ToastStack from './ToastStack.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 import { onMenuAction, wireMenu } from './menu'
+import { useStageGeometry } from './composables/useStageGeometry'
+import { useQuality } from './composables/useQuality'
+import { useDeviceKeyboard } from './composables/useDeviceKeyboard'
 
 const { stats, error, hasBridge } = useStats(500)
 const rect = ref('—')
@@ -52,67 +55,34 @@ const stageEl = ref<HTMLElement | null>(null)
 const ws = useWorkspaceState()
 const view = computed(() => ws.view)
 
-/* ─── 设备画面：**等比**适配 + 缩放（2026-10-23 · 生产验收标准）─────────────────
- *
- * 【为什么必须做】原生视图之前是「main 区减去 20px 内边距」的一整块，而 blit 把纹理
- *   **铺满整个视口** ⇒ 画面被拉伸成视口的宽高比。这不是观感问题，是**画面失真**：
- *     · Android 1280x720 (1.78) 塞进约 1.25 的方形区 ⇒ 纵向拉伸约 40%；
- *     · iPhone 888x1920 (0.4625) 塞进同一区域 ⇒ 横向拉伸约 2.7 倍。
- *   为什么一直没被发现：`poc_dump` 读的是 **FBO（g_canvas 纹理）**而不是屏幕，
- *   dump 出来的像素永远正确，只有人眼看窗口才看得出变形。
- *
- * 【怎么修】让原生视图**只占设备那一块**：HTML 侧按设备宽高比算出矩形，
- *   原生视图跟着走 ⇒ 视口宽高比 == 画面宽高比 ⇒ 像素 1:1（无拉伸、无黑边）。
- *   原生侧同时加了等比兜底（embed_view.m 的 uFit），万一两边漂移也只留黑边、绝不变形。
+/* ─── 设备画面：等比适配 + 缩放 / 平移（几何计算已抽到 composables/useStageGeometry.ts）───
+ * 该文件头保存完整事故记录：为什么必须等比（FBO dump 永远正确、只有人眼看窗口才看得出变形）
+ * 与为什么平移必须在 HTML 侧（原生 mouseDown 被 webview 吃掉，一次都不触发）。
+ * 抽出理由：本文件脚本区曾 800 行、整文件 1109 行越过 check:file-size 的 1000 行上限。
  */
-const stageBox = ref({ w: 0, h: 0 })
-/** 设备宽高比；0 = 还没收到首帧（占满舞台，与旧行为一致） */
-const devAspect = computed(() => {
-  const s = stats.value
-  return s && s.width > 0 && s.height > 0 ? s.width / s.height : 0
-})
-
-/* ─── 拖拽平移（配合缩放）──────────────────────────────────────────────────
- * 【为什么在前端做】B1 曾在原生侧接 mouseDown，但 GL 视图是
- *   `addSubview ... NSWindowBelow` 挂的（在所有兄弟视图最下面），而 webview 铺满 contentView
- *   ⇒ 真实点击全被 webview 吃掉，那个回调**一次都不会触发**。
- *   `#canvas` 是真实 DOM 元素、有真实几何，pointer 事件直接在这里处理最简单也最可靠。
- * 【为什么不持久化 pan】平移是"看哪里"的一次性手势，不是工作区偏好；
- *   重启后仍旧居中才是符合预期的（缩放会持久化，因为它代表"看多大"）。
+/**
+ * ★把 `ws.zoom` 桥成可写 Ref：stageGeometry 要"读 + 写"同一个缩放值。
+ *   不能直接传 `ws.zoom`（那是个 number，不是 Ref）；也不能每次传新对象
+ *   （会破坏 composable 内部 computed 的响应性）。⇒ 用 get/set 双钩子。
  */
-const pan = ref({ x: 0, y: 0 })
-
-/** 屏幕实际尺寸（px）：contain 适配 × 缩放。`0` = 还没量到舞台 */
-const screenSize = computed(() => {
-  const { w, h } = stageBox.value
-  if (!w || !h) return { w: 0, h: 0 }
-  const ar = devAspect.value
-  if (!ar) return { w, h }
-  const fitW = Math.min(w, h * ar) * ws.zoom
-  return { w: fitW, h: fitW / ar }
+const wsZoom = computed({
+  get: () => ws.zoom,
+  set: (v: number) => { ws.zoom = v },
 })
-/** 平移上限：屏幕比舞台大才允许移动，且最多把边缘拖到舞台边缘（图像查看器的常规手感） */
-function panLimit() {
-  const st = stageBox.value
-  const s = screenSize.value
-  return { x: Math.max(0, (s.w - st.w) / 2), y: Math.max(0, (s.h - st.h) / 2) }
-}
-function clampPan(p: { x: number; y: number }) {
-  const l = panLimit()
-  return { x: Math.max(-l.x, Math.min(l.x, p.x)), y: Math.max(-l.y, Math.min(l.y, p.y)) }
+const stageGeom = useStageGeometry(stats, wsZoom)
+const stageBox = stageGeom.stageBox
+const devAspect = stageGeom.devAspect
+const pan = stageGeom.pan
+const screenSize = stageGeom.screenSize
+const panLimit = stageGeom.panLimit
+const clampPan = stageGeom.clampPan
+const screenStyle = stageGeom.screenStyle
+const zoomLabel = stageGeom.zoomLabel
+
+function setZoom(z: number) {
+  stageGeom.setZoom(z, () => void syncRect())
 }
 
-const screenStyle = computed(() => {
-  const { w, h } = screenSize.value
-  // contain：两轴同一缩放 ⇒ 等比。**只 round 算式不 round 结果**（保留两位小数），
-  // 否则 w/h 各自取整会把比例拧出最多 1px 的误差，等比判据就变得可疑。
-  const size = w
-    ? { width: `${w.toFixed(2)}px`, height: `${h.toFixed(2)}px` }
-    : { width: '100%', height: '100%' }
-  // 平移用 transform：不改布局 ⇒ `.screen` 仍是 flex 居中的那个元素，
-  // 而 getBoundingClientRect **含 transform** ⇒ 原生矩形自动跟随。
-  return { ...size, transform: `translate(${pan.value.x}px, ${pan.value.y}px)` }
-})
 /** 当前文件的语言模式名（手选优先）——底部状态栏的 chip 用它 */
 const langNow = computed(() => langLabel(effectiveLangId(editorLang.path)))
 
@@ -125,19 +95,10 @@ function pickLang(e: MouseEvent) {
     [
       { id: '__auto', label: `自动（${langLabel(auto)}）`, accel: langOverrides[p] ? '' : '✓' },
       { id: '__sep', label: '', sep: true },
-      ...LANGS.map((l) => ({ id: l.id, label: l.label, accel: langOverrides[p] === l.id ? '✓' : '' })),
+      ...LANGS.map((lang) => ({ id: lang.id, label: lang.label, accel: langOverrides[p] === lang.id ? '✓' : '' })),
     ],
     (id) => setLangOverride(p, id === '__auto' ? '' : id),
   )
-}
-
-const zoomLabel = computed(() =>
-  Math.abs(ws.zoom - 1) < 0.001 ? '适应' : `${Math.round(ws.zoom * 100)}%`,
-)
-function setZoom(z: number) {
-  ws.zoom = clampZoom(z)
-  pan.value = clampPan(pan.value)
-  void syncRect()
 }
 
 /* ─── 菜单动作（决策 #1221）───────────────────────────────────────────────────
@@ -400,42 +361,17 @@ const touchOn = ref(true)
 let touchWarned = false
 let touchBusy = false
 
-/* ─── 画质档位（决策 #1264）：**分辨率不变，只改码率** ──────────────────────
- * 【用户纠正】原来我做的是"切分辨率"（标准 1920 / 原生清晰），而他要的是
- *   **同分辨率下的清晰度档**——降画质换流畅。这两个轴不是一回事：
- *   · 改分辨率：改几何（1.36× 下采样），字变清楚但编码/解码成本 ×1.84
- *   · 改码率：几何不变，只改量化与链路占用 ⇒ 影响的是"压缩痕迹多少"与"抗抖动能力"
- * 【实测（真机 USB）】4/8/13/20 Mbps 四档跑下来 **迟到帧恒为 0**，空转全在设备端
- *   ⇒ USB 链路下低码率**换不到帧率**；它换的是抗抖动与省带宽（Wi-Fi adb 才有意义）。
- * 【为什么还是做】① 无线 adb / 带宽紧张时有用 ② 高码率确实能减少密集细节的压缩痕迹
- *   ③ 切换成本已经被 #1263 的"干净重启会话"付掉了，多一个维度是几十行。
- * 【为什么切换要重启会话】`--bit-rate` 只在会话开始时生效（和 `--size` 一样）。 */
-const QUALITY = [
-  { id: 'low', label: '省流', hint: '4 Mbps —— 带宽紧张/链路抖动时才值得（USB 下换不到帧率）' },
-  { id: 'standard', label: '标准', hint: '13 Mbps —— 默认' },
-]
-const qIndex = ref(1)
-const capBusy = ref(false)
-const qNow = computed(() => QUALITY[qIndex.value])
-const capLabel = computed(() => `画质·${qNow.value.label}`)
-const capTitle = computed(
-  () => `画质：${qNow.value.label}（${qNow.value.hint}）· 分辨率不变。点击切到「${QUALITY[(qIndex.value + 1) % QUALITY.length].label}」`,
-)
-
-async function cycleQuality() {
-  if (capBusy.value) return
-  const next = QUALITY[(qIndex.value + 1) % QUALITY.length]
-  capBusy.value = true
-  try {
-    const info = await capturePreset(next.id)
-    qIndex.value = (qIndex.value + 1) % QUALITY.length
-    pushToast(`画质：${next.label} · ${info.width}×${info.height} · ${info.mbps} Mbps`, 'info')
-  } catch (err) {
-    pushToast(String((err as Error)?.message ?? err), 'err')
-  } finally {
-    capBusy.value = false
-  }
-}
+/* ★★★#1344：**画质档位**（#1264）已抽到 composables/useQuality.ts（自包含；只依赖
+   capturePreset + pushToast）。文件头记着那两条设计理由：① 用户纠正的是"同分辨率的清晰度档"
+   而不是"切分辨率"（两个轴不是一回事）；② 真机 USB 实测 4/8/13/20 Mbps 四档迟到帧恒为 0
+   ⇒ 低码率在 USB 下换不到帧率，它换的是抗抖动与省带宽（Wi-Fi adb 才有意义）。 */
+const quality = useQuality()
+const qIndex = quality.qIndex
+const capBusy = quality.capBusy
+const qNow = quality.qNow
+const capLabel = quality.capLabel
+const capTitle = quality.capTitle
+const cycleQuality = quality.cycleQuality
 
 /** ⌥ 手势里"按住多久算长按"（Android 默认 long press ≈500ms，取 600ms 更稳） */
 const HOLD_MS = 600
@@ -596,33 +532,17 @@ function onWheel(e: WheelEvent) {
 }
 
 /**
- * 键盘 → 设备（决策 #1341）。
- *
- * ★可打印字符**合并后发送**（30ms 静默或遇到特殊键时 flush）：逐字一次 IPC 在快速输入时会卡；
- *   特殊键（退格/回车/方向键）必须**立刻**发，否则顺序会乱。
- * ★带 Cmd/Ctrl 的组合键直接放行——那是给 IDE 自己的快捷键（保存、切换面板…）。
+ * 键盘 → 设备（决策 #1341）：缓冲/合并/顺序逻辑已抽到 composables/useDeviceKeyboard.ts。
+ * ★该文件头记着两条**真机踩出来的**设计（可打印字符合并后发 / 特殊键立刻发以保顺序），
+ *   以及"Cmd/Ctrl 组合键一律放行"（那是 IDE 自己的快捷键）。
+ * ★失败处理仍走本文件的 onTouchError（源不支持只提示一次并关开关 / 真故障每次提示）。
  */
-let keyBuf = ''
-let keyTimer: number | undefined
-let keyBusy = false
+const deviceKeyboard = useDeviceKeyboard(onTouchError)
 
-function flushKeys() {
-  if (!keyBuf || keyBusy) return
-  const text = keyBuf
-  keyBuf = ''
-  keyBusy = true
-  void (async () => {
-    try {
-      await iosKey(text)
-    } catch (err) {
-      onTouchError(err)
-    } finally {
-      keyBusy = false
-      if (keyBuf) flushKeys() /* 期间又攒了字 ⇒ 接着发 */
-    }
-  })()
+/** 把一次按键送给设备；返回 true 表示"已消费"（调用方不再往下走快捷键） */
+function sendKeyToDevice(e: KeyboardEvent): boolean {
+  return deviceKeyboard.sendKeyToDevice(e)
 }
-
 
 /**
  * 终端面板的**左偏移**（决策 #1347）：用户实测"终端把文件树那列也盖住了"。
@@ -645,36 +565,6 @@ const paneStyle = computed(() => {
 })
 
 const termLeft = computed(() => (view.value === 'code' && !treeHidden.value ? treeW.value : 0))
-
-/** 把一次按键送给设备；返回 true 表示"已消费"（调用方不再往下走快捷键） */
-function sendKeyToDevice(e: KeyboardEvent) {
-  const special = ['Backspace', 'Enter', 'Tab', 'Escape', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
-  if (special.includes(e.key)) {
-    e.preventDefault()
-    if (keyTimer) {
-      window.clearTimeout(keyTimer)
-      keyTimer = undefined
-    }
-    flushKeys() /* 先把已攒的可打印字符发出去，保证顺序 */
-    void (async () => {
-      try {
-        await iosKey(e.key)
-      } catch (err) {
-        onTouchError(err)
-      }
-    })()
-    return true
-  }
-  if (e.key.length !== 1) return false
-  e.preventDefault()
-  keyBuf += e.key
-  if (keyTimer) window.clearTimeout(keyTimer)
-  keyTimer = window.setTimeout(() => {
-    keyTimer = undefined
-    flushKeys()
-  }, 30)
-  return true
-}
 
 onMounted(async () => {
   loadLayout()

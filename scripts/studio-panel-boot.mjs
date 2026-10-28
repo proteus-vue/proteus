@@ -54,3 +54,29 @@ export async function openPanel({ dist, payload, outPath }) {
   }
   return { page, errors, close, url: `http://127.0.0.1:${port}/index.html` }
 }
+
+/**
+ * ★★★#1344：⑲ 段（语法着色）的**采样辅助** —— 从 check-studio-panel.mjs 移出
+ *   （那条主文件涨到 1012 行越过 check:file-size 的 1000 行上限）。
+ *
+ * 【tokenSpans 为什么量 DOM 颜色，而不是断言"代码里有 syntaxHighlighting(...)"】
+ *   后者只能证明一段**可能没人调用**的配置存在 —— 本仓两次同源假绿：
+ *   #1207（判据从 window.__EMIT__ 注入，而真实入口一次都不触发）、
+ *   #1205（dump 读 FBO 永远正确，但上屏是拉伸的）。
+ *   这里取浏览器**算出来的 color**：扩展没挂上 ⇒ 全部同色 ⇒ 必然翻红。
+ */
+export function tokenSpans(page) {
+  return page.evaluate(() => {
+    const spans = [...document.querySelectorAll('.cm-line span')]
+    return {
+      base: getComputedStyle(document.querySelector('.cm-content')).color,
+      items: spans.map((el) => ({ t: (el.textContent || '').trim(), c: getComputedStyle(el).color })),
+    }
+  })
+}
+
+/** 打开某个文件并等渲染完成（统一 250ms，与原有节奏一致）。 */
+export async function openFile(page, p) {
+  await page.locator(`#codeFiles button[data-file="${p}"]`).click()
+  await page.waitForTimeout(250)
+}

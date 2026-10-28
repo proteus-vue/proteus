@@ -28,11 +28,13 @@ import { chromium } from 'playwright'
 import { stubTauri } from './studio-panel-stub.mjs'
 import { measureBigFile } from './studio-panel-perf.mjs'
 import { probeCodeExtras, probeHole, probeMenu, probePan, probeSearch, probeTitlebar } from './studio-panel-probes.mjs'
+// ★★★#1344：⑲ 段采样辅助已移到 studio-panel-boot.mjs（守 1000 行上限）。
+const tokenSpans = () => tokenSpansIn(page), openFile = (p) => openFileIn(page, p)
 import { probeCapPreset, probeDeviceSwitch, probeGesture, probeSettings, probeTapSpace, probeTouch } from './studio-panel-probes-input.mjs'
 import { iconReport as iconReportOf } from './studio-panel-icons.mjs'
 import { warnIfAppStale } from './studio-panel-stale.mjs'
 import { resolveDevice } from './studio-panel-device.mjs'
-import { openPanel } from './studio-panel-boot.mjs'
+import { openFile as openFileIn, openPanel, tokenSpans as tokenSpansIn } from './studio-panel-boot.mjs'
 import { langExtCoverage } from './studio-panel-langext.mjs'
 import { checkCapability } from './studio-panel-capability.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
@@ -188,23 +190,8 @@ const codeView = await page.evaluate(() => {
 //   #1207（判据从 `window.__EMIT__` 注入，而真实入口一次都不触发）、
 //   #1205（dump 读 FBO，永远正确，但上屏是拉伸的）。
 //   这里取的是浏览器**算出来的 color**：扩展没挂上 ⇒ 全部同色 ⇒ 必然翻红。
-const tokenSpans = () =>
-  page.evaluate(() => {
-    const spans = [...document.querySelectorAll('.cm-line span')]
-    return {
-      base: getComputedStyle(document.querySelector('.cm-content')).color,
-      items: spans.map((el) => ({
-        t: (el.textContent || '').trim(),
-        c: getComputedStyle(el).color,
-      })),
-    }
-  })
 const tokensVue = await tokenSpans()
 /** 打开某个文件并等渲染完成（统一 250ms，与原有节奏一致） */
-const openFile = async (p) => {
-  await page.locator(`#codeFiles button[data-file="${p}"]`).click()
-  await page.waitForTimeout(250)
-}
 await openFile('packages/studio/src/main.rs')
 const tokensRust = await tokenSpans()
 const switchedPath = await page.evaluate(

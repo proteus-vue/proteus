@@ -449,7 +449,9 @@ mod tests {
     #[test]
     fn resize_before_open_is_error() {
         // 没开会话时 resize 必须**明确报错**（而不是静默成功，让界面以为生效了）
-        assert!(resize(80, 24).is_err());
+        // ★#1362 起 `resize` 带会话 id（多终端）：用一个**不存在**的 id ⇒ 必须报错，而不是
+        //   落到某个默认会话上（那会让"切错标签"这类问题变成静默生效）。
+        assert!(resize(9_999_999, 80, 24).is_err());
     }
 
     #[test]
