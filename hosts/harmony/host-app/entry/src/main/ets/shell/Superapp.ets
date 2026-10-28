@@ -153,7 +153,15 @@ struct Superapp {
     // ★★★#1344 B-1：**会话式 VM 判据**（逻辑在 `runtime/VmSessionScene.ets`）
     if (this.scene === 'superapp-session') {
       try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
-      runVmSessionScene(this.filesDir, this.vmProbeRounds);
+      // ★诊断矩阵：noframes = 不推帧 · jsstub = JS 桩 · noboot = 只 eval · explicit = 退回 EXPLICIT 策略
+      //   ★生产/正式判据走缺省（AUTO 微任务策略 —— #540 的真因就是 EXPLICIT，见决策 #1344）
+      runVmSessionScene(
+        this.filesDir, this.vmProbeRounds,
+        this.vmProbeMode !== 'noframes',
+        this.vmProbeMode === 'jsstub' || this.vmProbeMode === 'noboot',
+        this.vmProbeMode === 'noboot',
+        this.vmProbeMode !== 'explicit',
+      );
       return;
     }
     // ★★★C14 键盘推送判据场景（决策 #1077）：真实系统键盘 → keyboardHeightChange → env

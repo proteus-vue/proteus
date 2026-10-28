@@ -15437,6 +15437,32 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **反巨型化**：napi 入口放 `proteus_vm_session.h`（599 行独立文件）；
     `proteus_host.cpp` 压回 **1096 基线**（合并空行/注释——棘轮只减不增，不是抬基线）。
   - **诚实边界**：本场景**不做真实网络请求**（只用假帧证明搬运链）；
-    真实 HTTP + cancel/stream 属下一步。★**真机验证因设备锁屏未完成**：
-    `power-shell wakeup` 只亮屏**不解锁**（`aa start` 报 `10106102 screen is locked`）；
-    解锁后 `bash hosts/harmony/run-session-probe.sh --ticks=100` 一条命令即可验。
+    真实 HTTP + cancel/stream 属下一步。
+
+  - **★★★（2026-10-28 真机收口）根因找到：`EXPLICIT` 微任务策略才是 #540 的真凶**
+    **真机判据 `run-session-probe.sh --ticks=200` 4/4 通过**：
+    `SESSION_OPEN boot:"booted" heapKB:4493` → `SESSION_DONE ok=true jsTicks=200/200 frames=20 heapOk=true`；
+    另跑 **1000 拍** → `jsTicks=1000/1000 frames=100`，全程约 **10ms**，零崩溃。
+    ★**定位过程（逐步 hilog 二分 + 4 组 A/B 对照）**：会话最初**第一拍 checkpoint 就崩**
+    （`TICK_STEP pre-checkpoint` 之后无日志、进程 `HandleAppDied`、且 `faultlog Unsupported` 拿不到栈）。
+    | 组合（同一 VM / 同一 bundle） | 结果 |
+    |---|---|
+    | `EXPLICIT` + C++ napi 回调 + **boot** | **崩**（第一拍 checkpoint） |
+    | `EXPLICIT` + C++ 回调 + 不 boot | 通过 |
+    | `EXPLICIT` + **JS 桩** + boot | 通过 |
+    | **`AUTO` + C++ 回调 + boot** | **通过（1000 拍零崩溃）** |
+    ⇒ **崩的不是"持久 VM"、也不是"napi 回调"，而是「EXPLICIT 策略下由宿主显式 checkpoint
+      真实 Vue 调度器的微任务」**（与 #540 记的 `HandleScope::Extend` 溢出同族）。
+    ★★★**这是个"规避方案成了病因"的案例**：当年为规避 #540 选了 `EXPLICIT`，
+      恰恰是 `EXPLICIT` 导致崩溃；换成 `AUTO` 后同一场景 1000 拍稳定。
+    ★**推论（对 #540 的最终定性）**："跨 napi 复用 JSVM 必崩"**不成立**；
+      成立的只是"**EXPLICIT + 真实 Vue 微任务 + 宿主显式 checkpoint** 这个组合会崩"。
+    ★**左证**：`vm_session_probe.h` 的 `nav` 模式（手写 async IIFE）在 EXPLICIT 下能过
+      —— 因为它**不是**真实 Vue 调度器，压力差一个量级。所以"合成负载通过"不能替代
+      「真实 bundle + 正确策略」的验证（这正是 B-0 存在的价值）。
+  - **生产默认**：`sessionOpen` 的 `autoMicrotask` 缺省 **true**（AUTO）；`explicit` 仅作诊断
+    （`--ps vmMode=explicit`）保留，用于随时复现对照。
+  - **判据矩阵（解锁后已全绿）**：`run-session-probe.sh --ticks=200` **4/4**；
+    1000 拍稳定性一次性验证；堆 `heapOk=true`（不线性漂移）。
+  - **诚实边界（更新）**：仍**不做真实网络请求**（只用假帧证明搬运链）；
+    真实 HTTP pending 帧 + 真 `http.cancel` + `stream` + WebSocket 属下一步。

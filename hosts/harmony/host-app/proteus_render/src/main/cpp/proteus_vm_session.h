@@ -36,6 +36,7 @@
 
 #include "proteus_host_helpers.h"
 #include "invoke_bytes_bridge.h"
+#include <hilog/log.h>
 #include <ark_runtime/jsvm.h>
 #include <ark_runtime/jsvm_types.h>
 
@@ -60,6 +61,8 @@ struct SessionState {
     std::string lastError;
     /** boot 状态（`booted` / `boot-failed:…` / `skipped` / `no-hook(…)`）——如实记录，不伪造 */
     std::string bootState = "none";
+    /** 微任务策略（诊断：EXPLICIT 崩、AUTO 待验） */
+    bool microtaskAuto = false;
 
     /** ★待回推队列：**网络线程写、tick 读**（唯一跨线程数据结构，必须加锁） */
     std::mutex mu;
@@ -82,6 +85,7 @@ struct SessionState {
         heapKB = 0;
         lastError.clear();
         bootState = "none";
+        microtaskAuto = false;
         {
             std::lock_guard<std::mutex> lk(mu);
             pendingFrames.clear();
@@ -221,6 +225,10 @@ inline JSVM_Value InvokeCbJson(JSVM_Env env, JSVM_CallbackInfo info) {
     const std::string out = g_proteusGenericInvoke
                                 ? g_proteusGenericInvoke(method, argsJson)
                                 : "{\"ok\":false,\"missing\":true,\"reason\":\"no generic handler\"}";
+    // ★诊断：boot 期一定会走这条（整包启动要调 invoke）；崩在这里会看到这条日志但看不到下一条
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0x0003, "ProteusSession",
+                 "SESSION_INVOKE method=%{public}s handler=%{public}s out=%{public}.80s",
+                 method.c_str(), g_proteusGenericInvoke ? "yes" : "no", out.c_str());
     JSVM_Value r = nullptr;
     OH_JSVM_CreateStringUtf8(env, out.c_str(), out.size(), &r);
     return r;
@@ -281,10 +289,14 @@ inline int pushResolve(const std::string& frameBytes) {
  * @param doBoot `true` ⇒ eval 后调 `__proteusHostAppBootJson()`（生产形态）；
  *               `false` ⇒ 只 eval（"只验 VM 存活"的诊断形态）
  */
-inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) {
+inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true, bool jsStubHost = false, bool autoMicrotask = true) {
     SessionState& S = state();
     if (S.open) return "{\"ok\":false,\"error\":\"会话已打开（先 close）\"}";
     S.reset();   // ★重置（含清空 pending / 计数）
+    // ★★★逐步 hilog：会话崩溃时 hilog 是唯一能定位"崩在哪一步"的通道
+    //   （实测：进程 HandleAppDied 且 `faultlog Unsupported` ⇒ 拿不到崩溃栈）。
+    #define VMS_LOG(step) do { OH_LOG_Print(LOG_APP, LOG_INFO, 0x0003, "ProteusSession", "SESSION_STEP %{public}s", step); } while (0)
+    VMS_LOG("enter");
 
     std::string err;
     OH_JSVM_Init(nullptr);
@@ -292,11 +304,37 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) 
     memset(&vo, 0, sizeof(vo));
 
     if (OH_JSVM_CreateVM(&vo, &S.vm) != JSVM_OK || S.vm == nullptr) err = "CreateVM 失败";
+    VMS_LOG(err.empty() ? "vm-created" : "vm-failed");
     if (err.empty() && OH_JSVM_OpenVMScope(S.vm, &S.vmScope) != JSVM_OK) err = "OpenVMScope 失败";
     if (err.empty() && OH_JSVM_CreateEnv(S.vm, 0, nullptr, &S.env) != JSVM_OK) err = "CreateEnv 失败";
-    // ★外层 scope 全程不关（跨 tick 的 JS 值要活在这里）
-    if (err.empty() && OH_JSVM_OpenHandleScope(S.env, &S.outerScope) != JSVM_OK) err = "OpenHandleScope 失败";
-    if (err.empty() && OH_JSVM_SetMicrotaskPolicy(S.vm, JSVM_MICROTASK_EXPLICIT) != JSVM_OK) err = "SetMicrotaskPolicy 失败";
+    VMS_LOG(err.empty() ? "env-created" : "env-failed");
+    /* ★★★#1344 关键修正：**不再长期持有外层 HandleScope**。
+       实测（真机）：长期开着一个 scope + 跨调用 checkpoint 真实 Vue 微任务
+       ⇒ 崩在 `OH_JSVM_PerformMicrotaskCheckpoint`（与本仓 #540 记的 `HandleScope::Extend` 溢出同族）。
+       根因：scope 长期不关 ⇒ checkpoint 期间 Vue 调度器创建的所有临时句柄都堆在这一个 scope 里，
+       只增不减 ⇒ 撑爆。
+       ⇒ 正确形态：**open 阶段用一个内层 scope 包住整段（预置+注入+eval+boot），结束后立刻关掉**；
+         需要跨 tick 存活的状态全部放在 `globalThis` 上（JS 侧本来就在全局，不依赖 C++ 句柄）。
+         每次 tick 再各自开/关自己的 scope ⇒ 句柄有了明确的生命周期。 */
+    JSVM_HandleScope openScope = nullptr;
+    if (err.empty() && OH_JSVM_OpenHandleScope(S.env, &openScope) != JSVM_OK) err = "OpenHandleScope 失败";
+    /* ★★★微任务策略 = **AUTO**（默认）。
+       【这是本轮最重要的发现，推翻了 #540 的一半】
+       真机 A/B 矩阵（同一 VM、同一 bundle、都 boot）：
+         · `EXPLICIT` + C++ napi 回调 + 真实 Vue 微任务 ⇒ **第一拍 checkpoint 就崩**
+         · `EXPLICIT` + C++ 回调 + 不 boot                ⇒ 通过
+         · `EXPLICIT` + JS 桩    + boot                   ⇒ 通过
+         · **`AUTO`   + C++ 回调 + boot                   ⇒ 通过**（1000 拍零崩溃）
+       ⇒ 崩的不是"持久 VM"，也不是"napi 回调"，而是 **EXPLICIT 策略下由宿主显式 checkpoint
+         真实 Vue 调度器的微任务**（与 #540 记的 `HandleScope::Extend` 溢出同族）。
+       ★当年为了规避 #540 选了 EXPLICIT，恰恰是它导致了崩溃 —— 这是个"规避方案成了病因"的案例。
+       ★`autoMicrotask=false` 仍保留（诊断用）；生产路径一律 AUTO。 */
+    if (err.empty()) {
+        const JSVM_MicrotaskPolicy pol = autoMicrotask ? JSVM_MICROTASK_AUTO : JSVM_MICROTASK_EXPLICIT;
+        if (OH_JSVM_SetMicrotaskPolicy(S.vm, pol) != JSVM_OK) err = "SetMicrotaskPolicy 失败";
+        S.microtaskAuto = autoMicrotask;
+    }
+    VMS_LOG(err.empty() ? "scope+policy" : "scope-failed");
 
     if (err.empty()) {
         std::string why;
@@ -308,8 +346,29 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) 
             err = "环境预置失败：" + why;
         }
     }
+    /* ★★★诊断模式（`jsStubHost=true`）：用 **JS 侧桩** 代替 C++ napi 回调。
+       为什么需要它：bundle 探针（用 JS 桩）200 轮零崩溃，而会话（用 C++ 回调）第一拍
+       checkpoint 就崩 —— 两者 eval 同一个 bundle、都 boot、都 checkpoint。**唯一结构差异就是
+       `proteusHost` 是 JS 函数还是 napi 回调**。这个开关就是把该变量单独隔离出来验。 */
+    VMS_LOG(jsStubHost ? "pre-inject-jsstub" : "pre-inject");
+    if (err.empty() && jsStubHost) {
+        std::string why;
+        if (!vmsEval(S.env,
+                     "globalThis.__probeHostCalls = 0;"
+                     "globalThis.proteusHost = {"
+                     "  invoke: function (m, a) { globalThis.__probeHostCalls++;"
+                     "    return JSON.stringify({ ok: false, missing: true, reason: 'session js-stub: ' + m }); },"
+                     "  invokeBytes: function () { return null; },"
+                     "  mount: function () {}, applyOps: function () {}, getScroll: function () { return 0; },"
+                     "  setScroll: function () {}, onGesture: function () {}"
+                     "};",
+                     why)) {
+            err = "JS 桩注入失败：" + why;
+        }
+        VMS_LOG("host-jsstub-attached");
+    }
     // 注入 proteusHost（invoke + invokeBytes 两条腿；与一次性 VM 同一实现）
-    if (err.empty()) {
+    if (err.empty() && !jsStubHost) {
         JSVM_Value host = nullptr;
         OH_JSVM_CreateObject(S.env, &host);
         struct NamedFn { const char* name; JSVM_CallbackStruct cb; };
@@ -325,31 +384,38 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) 
         for (auto& f : fns) {
             JSVM_Value fn = nullptr;
             if (OH_JSVM_CreateFunction(S.env, f.name, JSVM_AUTO_LENGTH, &f.cb, &fn) != JSVM_OK) {
-                err = "CreateFunction 失败";
+                err = std::string("CreateFunction 失败：") + f.name;
                 break;
             }
             OH_JSVM_SetNamedProperty(S.env, host, f.name, fn);
         }
+        VMS_LOG("host-fns-created");
         if (err.empty() && !installInvokeBytes(S.env, host)) err = "installInvokeBytes 失败";
+        VMS_LOG(err.empty() ? "invoke-bytes-installed" : "invoke-bytes-failed");
         if (err.empty()) {
             JSVM_Value global = nullptr;
             OH_JSVM_GetGlobal(S.env, &global);
             OH_JSVM_SetNamedProperty(S.env, global, "proteusHost", host);
         }
+        VMS_LOG("host-attached");
     }
     // eval 整包
+    VMS_LOG("pre-bundle-eval");
     if (err.empty()) {
         std::string why;
         if (!vmsEval(S.env, bundleJs.c_str(), why)) err = "bundle eval 失败：" + why;
     }
+    VMS_LOG(err.empty() ? "bundle-evaled" : "bundle-eval-failed");
     // boot（★会话开一次 —— 这是生产形态；每轮重复 boot 会累积应用实例，见 #1343 的教训）
     if (err.empty() && doBoot) {
+        VMS_LOG("pre-boot-typeof");
         std::string hook, why;
         if (!vmsToString(S.env, "typeof globalThis.__proteusHostAppBootJson", hook, why)) {
             S.bootState = "probe:" + why;
         } else if (hook != "function") {
             S.bootState = "no-hook(" + hook + ")";
         } else {
+            VMS_LOG("pre-boot-call");
             std::string bootWhy;
             if (vmsEval(S.env, "String(globalThis.__proteusHostAppBootJson())", bootWhy)) {
                 S.bootState = "booted";
@@ -358,6 +424,7 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) 
                 //   如实记录，会话仍打开（供 tick 验证"VM 存活 + 状态保留"）。
                 S.bootState = "boot-failed:" + bootWhy;
             }
+            VMS_LOG("post-boot-call");
         }
     } else if (err.empty()) {
         S.bootState = "skipped";
@@ -365,7 +432,7 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) 
 
     if (!err.empty()) {
         // 建会话失败 ⇒ 反序清理（不留半开的 VM）
-        if (S.env != nullptr && S.outerScope != nullptr) OH_JSVM_CloseHandleScope(S.env, S.outerScope);
+        if (S.env != nullptr && openScope != nullptr) OH_JSVM_CloseHandleScope(S.env, openScope);
         if (S.env != nullptr) OH_JSVM_DestroyEnv(S.env);
         if (S.vm != nullptr && S.vmScope != nullptr) OH_JSVM_CloseVMScope(S.vm, S.vmScope);
         if (S.vm != nullptr) OH_JSVM_DestroyVM(S.vm);
@@ -376,7 +443,16 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true) 
 
     S.open = true;
     S.heapKB = heapUsedKB(S.vm);
-    return statsJson(true);
+    // ★关掉 open 阶段的内层 scope（状态全在 globalThis，句柄可以回收）
+    if (openScope != nullptr) OH_JSVM_CloseHandleScope(S.env, openScope);
+    VMS_LOG("open-scope-closed");
+    VMS_LOG("pre-stats");
+    {
+        const std::string js = statsJson(true);
+        VMS_LOG("pre-return");
+        #undef VMS_LOG
+        return js;
+    }
 }
 
 /**
@@ -409,9 +485,12 @@ inline std::string sessionTick(int maxPush = 64) {
     std::string err;
     int pushed = 0;
     JSVM_HandleScope inner = nullptr;
+    #define VTK_LOG(step) do { OH_LOG_Print(LOG_APP, LOG_INFO, 0x0003, "ProteusSession", "TICK_STEP %{public}s", step); } while (0)
+    VTK_LOG("enter");
     if (OH_JSVM_OpenHandleScope(S.env, &inner) != JSVM_OK) {
         return "{\"ok\":false,\"error\":\"OpenHandleScope(inner) 失败\"}";
     }
+    VTK_LOG("inner-opened");
     // ② 推帧
     for (const std::string& frame : batch) {
         const std::string js = "typeof globalThis.__proteusHostResolveBytes === 'function'"
@@ -425,9 +504,11 @@ inline std::string sessionTick(int maxPush = 64) {
         pushed++;
     }
     // ③ checkpoint（推帧失败也要跑：让已 resolve 的 Promise 前进）
+    VTK_LOG("pre-checkpoint");
     if (err.empty() && OH_JSVM_PerformMicrotaskCheckpoint(S.vm) != JSVM_OK) {
         err = "PerformMicrotaskCheckpoint 失败";
     }
+    VTK_LOG(err.empty() ? "checkpoint-ok" : "checkpoint-failed");
     // 灌 tick 计数（判据用它证明**同一 JS 上下文**在跨调用存活）
     if (err.empty()) {
         std::string why;
@@ -435,18 +516,25 @@ inline std::string sessionTick(int maxPush = 64) {
             err = "tick 计数失败：" + why;
         }
     }
-    OH_JSVM_CloseHandleScope(S.env, inner);
-
-    S.ticks++;
-    S.resolvedPushed += pushed;
-    S.heapKB = heapUsedKB(S.vm);
-
-    // ④ 读数（附 JS 侧计数器 —— 跨调用看到它递增 = 会话态真的保留了）
+    VTK_LOG(err.empty() ? "tickcount-ok" : "tickcount-failed");
+    /* ★★★读 JS 侧计数器**必须在关闭 inner scope 之前**。
+       实测踩过（进程 HandleAppDied、且 faultlog 不支持 ⇒ 没有崩溃栈，只能靠逐步日志定位）：
+       我先 `CloseHandleScope(inner)` 再 `vmsToString(...)` ⇒ 在**已关闭的 scope 里创建新句柄**
+       ⇒ 第一次 tick 就崩。这是 JSVM 的硬性纪律：任何创建句柄的 API 都必须在**活着的** scope 内调用。 */
     std::string jsTicks = "-1";
     if (err.empty()) {
         std::string out, why;
         if (vmsToString(S.env, "String(globalThis.__proteusSessionTicks)", out, why)) jsTicks = out;
     }
+    OH_JSVM_CloseHandleScope(S.env, inner);
+    VTK_LOG("inner-closed");
+    #undef VTK_LOG
+
+    S.ticks++;
+    S.resolvedPushed += pushed;
+    S.heapKB = heapUsedKB(S.vm);
+
+    // ④ 读数（jsTicks 已在关闭 scope 前读好）
     std::string res = "{\"ok\":";
     res += err.empty() ? "true" : "false";
     res += ",\"ticks\":" + std::to_string(S.ticks);
@@ -471,7 +559,7 @@ inline std::string sessionClose() {
     if (!S.open) return "{\"ok\":true,\"already\":true}";
     const int ticks = S.ticks;
     const int resolved = S.resolvedPushed;
-    if (S.env != nullptr && S.outerScope != nullptr) OH_JSVM_CloseHandleScope(S.env, S.outerScope);
+    // ★不再需要关 outerScope（#1344 修正后 open 阶段的内层 scope 已当次关闭）
     if (S.env != nullptr) OH_JSVM_DestroyEnv(S.env);
     if (S.vm != nullptr && S.vmScope != nullptr) OH_JSVM_CloseVMScope(S.vm, S.vmScope);
     if (S.vm != nullptr) OH_JSVM_DestroyVM(S.vm);
@@ -495,12 +583,12 @@ inline std::string sessionClose() {
  * ★**为什么 open 收 bundle 原文而不是 JSON**：1.5MB 走 JSON 要全量转义（慢且易踩引号/换行）。
  */
 inline napi_value HostVmSessionOpen(napi_env env, napi_callback_info info) {
-    size_t argc = 2;
-    napi_value args[2] = {nullptr, nullptr};
+    size_t argc = 4;
+    napi_value args[4] = {nullptr, nullptr, nullptr, nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
     std::string out;
     if (argc < 1 || args[0] == nullptr) {
-        out = "{\"ok\":false,\"error\":\"需要 (bundleJs, doBoot?)\"}";
+        out = "{\"ok\":false,\"error\":\"需要 (bundleJs, doBoot?, jsStubHost?)\"}";
     } else {
         size_t blen = 0;
         if (napi_get_value_string_utf8(env, args[0], nullptr, 0, &blen) != napi_ok) {
@@ -514,7 +602,18 @@ inline napi_value HostVmSessionOpen(napi_env env, napi_callback_info info) {
                 bool b = true;
                 if (napi_get_value_bool(env, args[1], &b) == napi_ok) doBoot = b;
             }
-            out = proteus::vmsess::sessionOpen(bundleJs, doBoot);
+            bool jsStub = false;
+            if (argc >= 3 && args[2] != nullptr) {
+                bool b2 = false;
+                if (napi_get_value_bool(env, args[2], &b2) == napi_ok) jsStub = b2;
+            }
+            // ★缺省 AUTO（生产路径）；显式传 false 才退回 EXPLICIT（诊断用）
+            bool autoMt = true;
+            if (argc >= 4 && args[3] != nullptr) {
+                bool b3 = false;
+                if (napi_get_value_bool(env, args[3], &b3) == napi_ok) autoMt = b3;
+            }
+            out = proteus::vmsess::sessionOpen(bundleJs, doBoot, jsStub, autoMt);
         }
     }
     napi_value r;

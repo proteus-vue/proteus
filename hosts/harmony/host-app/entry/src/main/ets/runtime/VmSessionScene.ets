@@ -70,8 +70,9 @@ interface TickReading {
  * 跑会话判据：open → N 拍 tick（每 10 拍塞一个假回推帧）→ close。
  * @param filesDir 沙箱目录（报告落点）
  * @param ticks 拍数
+ * @param pushFrames `false` ⇒ **完全不推帧**（隔离诊断：区分"推帧"与"checkpoint"哪一步崩）
  */
-export function runVmSessionScene(filesDir: string, ticks: number): void {
+export function runVmSessionScene(filesDir: string, ticks: number, pushFrames: boolean = true, useJsStub: boolean = false, noBoot: boolean = false, autoMicrotask: boolean = true): void {
   const out: Record<string, Object> = {};
   out['scene'] = 'session';
   out['requestedTicks'] = ticks;
@@ -92,7 +93,10 @@ export function runVmSessionScene(filesDir: string, ticks: number): void {
   hilog.info(DOMAIN, TAG, 'SESSION_START ticks=%{public}d bundle=%{public}d', ticks, bundle.length);
 
   // ② open
-  const openRaw: string = hostVmSessionOpen(bundle, true);
+  // ★诊断：`useJsStub` ⇒ 用 JS 侧桩代替 C++ napi 回调（隔离"回调形态"这一个变量）
+  //   `noBoot` ⇒ 只 eval 不 boot（隔离"napi 回调"与"boot 产生的 Vue 微任务"两个变量）
+  const doBoot: boolean = !noBoot;
+  const openRaw: string = hostVmSessionOpen(bundle, doBoot, useJsStub, autoMicrotask);
   hilog.info(DOMAIN, TAG, 'SESSION_OPEN %{public}s', openRaw);
   let openR: TickReading | undefined = undefined;
   try { openR = JSON.parse(openRaw) as TickReading; } catch (e) { /* 下面统一报 */ }
@@ -112,7 +116,7 @@ export function runVmSessionScene(filesDir: string, ticks: number): void {
   let firstErr: string = '';
   const frameHex: string = minimalPrspFrameHex();
   for (let i = 0; i < ticks; i++) {
-    if (i % 10 === 0) {
+    if (pushFrames && i % 10 === 0) {
       const pr: string = hostVmSessionPushResolve(frameHex);
       if (pr.indexOf('"ok":true') >= 0) framesPushed++;
     }

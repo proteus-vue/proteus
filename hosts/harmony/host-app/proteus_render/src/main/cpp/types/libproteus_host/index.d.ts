@@ -90,10 +90,9 @@ export const hostVmSessionBundleProbe: (bundleJs: string, rounds?: number) => st
  * @param doBoot `true`（默认）⇒ eval 后 boot；`false` ⇒ 只 eval（诊断形态）
  * @returns 读数 JSON（`open/ticks/pushed/pendingDepth/heapKB/boot`）
  */
-export const hostVmSessionOpen: (bundleJs: string, doBoot?: boolean) => string;
+export const hostVmSessionOpen: (bundleJs: string, doBoot?: boolean, jsStubHost?: boolean, autoMicrotask?: boolean) => string;
 /** 会话节拍（推回推帧 + checkpoint）。@param maxPush 单拍最多推几帧（默认 64） */
-export const hostVmSessionTick: (maxPush?: number) => string;
-/** 诊断用：把一个 PRSP 帧（**十六进制字符串**）塞进待回推队列，验"队列→tick→JS"通路 */
+export const hostVmSessionTick: (maxPush?: number) => string;/** 诊断用：把一个 PRSP 帧（**十六进制字符串**）塞进待回推队列，验"队列→tick→JS"通路 */
 export const hostVmSessionPushResolve: (frameHex: string) => string;
 export const hostVmSessionClose: () => string;
 export const hostVmSessionStats: () => string;
