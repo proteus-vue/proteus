@@ -43,6 +43,22 @@ static inline void setInvokeBytesGenericHandler(ProteusGenericInvokeFn fn) {
 }
 
 /**
+ * ★★★#1344 B-2：**HTTP 异步钩子**（会话式 VM 专用）。
+ *
+ * 【它解决什么】一次性 VM 下 `http.request` 只能同步跑完（请求完成时 JS 上下文已销毁）；
+ *   会话式 VM 里 JS 上下文长活 ⇒ 可以让 `http.request` **立即返回 pending 帧**，
+ *   真实响应在之后某次 `sessionTick()` 里回推给 JS。
+ *
+ * 【为什么用函数指针】`proteus_vm_session.h` **包含**本头（要注入 `InvokeBytesCb`）
+ *   ⇒ 本头不能反向 include 它（循环依赖）。钩子让"何时走异步"由会话模块注册，本头只负责分派。
+ * 【未注册（一次性 VM 生产路径）】保持原样：同步跑完直接返回 resolve 帧 —— **零行为变化**。
+ */
+typedef std::string (*ProteusHttpAsyncFn)(const proteus::wire::InvokeFrame& f);
+static ProteusHttpAsyncFn g_proteusHttpAsync = nullptr;
+
+static inline void setHttpAsyncHandler(ProteusHttpAsyncFn fn) { g_proteusHttpAsync = fn; }
+
+/**
  * JSVM 回调：`proteusHost.invokeBytes(frame: Uint8Array) → Uint8Array`（同步返回回程帧）。
  *
  * 【覆盖】`http.request` 走 `proteus_http`（大载荷裸字节）；其余能力走**通用分发**（已注册的
@@ -82,12 +98,20 @@ static JSVM_Value InvokeBytesCb(JSVM_Env env, JSVM_CallbackInfo info) {
     }
     if (decoded) {
         if (f.method == "http.request") {
-            proteus::wire::ResolveFrame rf = proteus::http::handle(f);
-            outBytes = proteus::wire::encodeResolve(rf);
-            OH_LOG_INFO(LOG_APP,
-                        "PROTEUS_HTTP_REQUEST req=%{public}s ok=%{public}d status=%{public}u body=%{public}zu url=%{public}.160s",
-                        f.reqId.c_str(), rf.ok ? 1 : 0, rf.status ? *rf.status : 0u, rf.body.size(),
-                        f.url ? f.url.v.c_str() : "");
+            /* ★★★#1344 B-2：会话式 VM ⇒ 走**异步**（立即回 pending 帧，响应稍后由 tick 回推）。
+               ★一次性 VM（生产路径）`g_proteusHttpAsync == nullptr` ⇒ 仍是原来的同步跑完，
+                 **零行为变化**。 */
+            if (g_proteusHttpAsync != nullptr) {
+                const std::string asyncOut = g_proteusHttpAsync(f);
+                outBytes.assign(asyncOut.begin(), asyncOut.end());
+            } else {
+                proteus::wire::ResolveFrame rf = proteus::http::handle(f);
+                outBytes = proteus::wire::encodeResolve(rf);
+                OH_LOG_INFO(LOG_APP,
+                            "PROTEUS_HTTP_REQUEST req=%{public}s ok=%{public}d status=%{public}u body=%{public}zu url=%{public}.160s",
+                            f.reqId.c_str(), rf.ok ? 1 : 0, rf.status ? *rf.status : 0u, rf.body.size(),
+                            f.url ? f.url.v.c_str() : "");
+            }
         } else {
             // ★通用能力：帧 body = JSON 字节 ⇒ 交已注册的能力分发（与 JSON 腿**同一份**实现）⇒
             //   返回值（既有 `{"ok":…}` JSON 串）原样作回程 body。

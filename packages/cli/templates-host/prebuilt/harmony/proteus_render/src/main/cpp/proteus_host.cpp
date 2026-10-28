@@ -1075,7 +1075,7 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
         PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot), PROTEUS_PROBE_EXPORT(hostVmSessionProbe, HostVmSessionProbe), PROTEUS_PROBE_EXPORT(hostVmSessionBundleProbe, HostVmSessionBundleProbe),  // ★#1342-A/B-0：后两项 = #540 决策门
-        PROTEUS_PROBE_EXPORT(hostVmSessionOpen, HostVmSessionOpen), PROTEUS_PROBE_EXPORT(hostVmSessionTick, HostVmSessionTick), PROTEUS_PROBE_EXPORT(hostVmSessionPushResolve, HostVmSessionPushResolve), PROTEUS_PROBE_EXPORT(hostVmSessionClose, HostVmSessionClose), PROTEUS_PROBE_EXPORT(hostVmSessionStats, HostVmSessionStats),  // ★#1344 B-1 会话式 VM（一处：一个 VM 跨调用存活 ⇒ 异步回推有接收方）
+        PROTEUS_PROBE_EXPORT(hostVmSessionOpen, HostVmSessionOpen), PROTEUS_PROBE_EXPORT(hostVmSessionTick, HostVmSessionTick), PROTEUS_PROBE_EXPORT(hostVmSessionPushResolve, HostVmSessionPushResolve), PROTEUS_PROBE_EXPORT(hostVmSessionEval, HostVmSessionEval), PROTEUS_PROBE_EXPORT(hostVmSessionClose, HostVmSessionClose), PROTEUS_PROBE_EXPORT(hostVmSessionStats, HostVmSessionStats),  // ★#1344 B-1/B-2 会话式 VM
         // ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 / 取走待执行动作
         {"setDeviceSnapshot", nullptr, SetDeviceSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"drainDeviceActions", nullptr, DrainDeviceActions, nullptr, nullptr, nullptr, napi_default, nullptr},

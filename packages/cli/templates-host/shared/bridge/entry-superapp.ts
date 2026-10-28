@@ -20,6 +20,7 @@
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'; export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'
 import { appShareProbe } from './entry-superapp-probes-share'; export { appShareProbe } from './entry-superapp-probes-share'   // ★#1336 分享探针（单列：probes.ts 已 962 行）
+import { appSessionHttpGet } from './entry-superapp-probes-session'; export { appSessionHttpGet } from './entry-superapp-probes-session'   // ★#1344 B-2 会话最小 GET 探针（probes.ts 已 963 行）
 // ★★★#1150：RFC 5861 扩展指令探针**单列**（entry-superapp-probes.ts 已到 file-size 上限；
 //   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
 import { appStaleProbe } from './entry-superapp-probes-stale'; export { appStaleProbe } from './entry-superapp-probes-stale'
@@ -970,6 +971,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as { __proteusHostAppPhoneProbe?: () => string }).__proteusHostAppPhoneProbe = () => appPhoneProbe()
 // ★★★#1336 C22 分享面板探针（iOS 真机用）—— 同上压一行
 ;(globalThis as unknown as { __proteusHostAppShareProbe?: () => string }).__proteusHostAppShareProbe = () => appShareProbe()
+// ★★★#1344 B-2：会话最小 GET 探针（走 useFetch 门面，不带流式/取消 —— 见该文件头）
+;(globalThis as unknown as { __proteusHostAppSessionHttpGet?: (u: string) => string }).__proteusHostAppSessionHttpGet = (u: string) => appSessionHttpGet(u)
 // ★★★#1149：HTTP 条件请求缓存探针（宿主按中性名调；结果填 __proteusHostCacheProbeResult）
 ;(globalThis as unknown as {
   __proteusHostAppCacheProbe?: (b: string) => string

@@ -26,9 +26,7 @@ import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 // ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
-import { runTransportProbeScene } from '../runtime/TransportProbe';   // ★★★#1156 传输层取证（逻辑单列）
-import { runVmSessionProbeScene } from '../runtime/VmSessionProbe';   // ★★★#1342-A #540 决策门（持久 VM 探针）
-import { runVmSessionScene } from '../runtime/VmSessionScene';   // ★★★#1344 B-1 会话式 VM 判据
+import { tryRunProbeScene } from '../runtime/ProbeScenes';   // ★★★#1344 探针场景统一下发（本文件曾因此顶到 1004 行）
 import { runHttpProbe as runHttpProbeImpl } from '../runtime/HttpProbe';   // ★★★#1169 HTTP 探针（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
 import { readElementProbes, elementReportFragment, measureElementRect, ElementProbeReadout } from '../runtime/ElementProbe';
@@ -137,32 +135,24 @@ struct Superapp {
 
   aboutToAppear(): void {
     hilog.info(DOMAIN, TAG, 'SUPERAPP_PAGE_APPEAR scene=%{public}s', this.scene);
-    // ★T-app-fetch / #1156：探针场景（传输层取证逻辑在 `runtime/TransportProbe.ets`——本文件已到行数上限）
-    if (this.scene === 'superapp-http' || this.scene === 'superapp-transport') {
+    /* ★★★#1344：**所有探针场景**统一在 `runtime/ProbeScenes.ets` 分发（本文件曾因此顶到 1004 行）。
+       ★这里只保留"取 filesDir + 沙箱根 + 老 http 探针"这三个必须留在壳里的回调。 */
+    if (
+      this.scene === 'superapp-http' || this.scene === 'superapp-transport' ||
+      this.scene === 'superapp-vmprobe' || this.scene === 'superapp-session' ||
+      this.scene === 'superapp-session-http'
+    ) {
       try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
-      this.injectSandboxRoot();
-      if (this.scene === 'superapp-transport') runTransportProbeScene(this.filesDir); else this.runHttpProbe();
-      return;
-    }
-    // ★★★#1342-A：**#540 决策门**——持久 VM 探针（逻辑在 `runtime/VmSessionProbe.ets`）
-    if (this.scene === 'superapp-vmprobe') {
-      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
-      runVmSessionProbeScene(this.filesDir, this.vmProbeRounds, this.vmProbeMode);
-      return;
-    }
-    // ★★★#1344 B-1：**会话式 VM 判据**（逻辑在 `runtime/VmSessionScene.ets`）
-    if (this.scene === 'superapp-session') {
-      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
-      // ★诊断矩阵：noframes = 不推帧 · jsstub = JS 桩 · noboot = 只 eval · explicit = 退回 EXPLICIT 策略
-      //   ★生产/正式判据走缺省（AUTO 微任务策略 —— #540 的真因就是 EXPLICIT，见决策 #1344）
-      runVmSessionScene(
-        this.filesDir, this.vmProbeRounds,
-        this.vmProbeMode !== 'noframes',
-        this.vmProbeMode === 'jsstub' || this.vmProbeMode === 'noboot',
-        this.vmProbeMode === 'noboot',
-        this.vmProbeMode !== 'explicit',
-      );
-      return;
+      const handled: boolean = tryRunProbeScene({
+        scene: this.scene,
+        filesDir: this.filesDir,
+        rounds: this.vmProbeRounds,
+        mode: this.vmProbeMode,
+        url: AppStorage.get<string>('proteusProbeUrl') ?? '',
+        runHttpProbe: () => this.runHttpProbe(),
+        injectSandboxRoot: () => this.injectSandboxRoot(),
+      });
+      if (handled) return;
     }
     // ★★★C14 键盘推送判据场景（决策 #1077）：真实系统键盘 → keyboardHeightChange → env
     if (this.scene === 'superapp-keyboard') {

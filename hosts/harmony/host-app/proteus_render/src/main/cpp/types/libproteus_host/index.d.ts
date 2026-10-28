@@ -94,6 +94,12 @@ export const hostVmSessionOpen: (bundleJs: string, doBoot?: boolean, jsStubHost?
 /** 会话节拍（推回推帧 + checkpoint）。@param maxPush 单拍最多推几帧（默认 64） */
 export const hostVmSessionTick: (maxPush?: number) => string;/** 诊断用：把一个 PRSP 帧（**十六进制字符串**）塞进待回推队列，验"队列→tick→JS"通路 */
 export const hostVmSessionPushResolve: (frameHex: string) => string;
+/**
+ * ★★★#1344 B-2：**在会话内 eval 一段 JS**（业务接线的统一入口）。
+ * 例：`hostVmSessionEval('useFetch("/x").then(r => globalThis.r = r)')`
+ * @returns `{ok:true, value:"..."}` / `{ok:false, error:"..."}`
+ */
+export const hostVmSessionEval: (js: string) => string;
 export const hostVmSessionClose: () => string;
 export const hostVmSessionStats: () => string;
 /** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——

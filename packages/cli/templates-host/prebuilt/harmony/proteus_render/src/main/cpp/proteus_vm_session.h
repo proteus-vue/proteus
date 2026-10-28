@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <thread>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -278,6 +279,65 @@ inline int pushResolve(const std::string& frameBytes) {
     return depth;
 }
 
+/**
+ * ★★★B-2：**HTTP 异步分派**（注册进 `invoke_bytes_bridge.h` 的 `setHttpAsyncHandler`）。
+ *
+ * 做三件事：
+ *   ① 立即返回 **pending 帧**（JS 侧 `invokeHostAsyncBytes` 收到 `pending:true` 就等，不结算）
+ *   ② 起一个工作线程跑 `proteus::http::handle(f)`（**纯 HTTP，不碰 JSVM**）
+ *   ③ 跑完把 resolve 帧 `pushResolve()` 入队，等下一次 `sessionTick()` 推给 JS
+ *
+ * 【★★★线程边界（本函数唯一需要小心的地方）】
+ *   · 工作线程里**只**调 `http::handle`（不碰 `JSVM_Env`）+ `pushResolve`（加锁入队）
+ *   · **绝不在工作线程里碰 `env`** —— 那会随机崩（`JSVM_Env` 只能由创建它的线程用）
+ *   · 帧字节在入队时交出所有权（`pushResolve` 存 `std::string` 副本）⇒ 无悬垂
+ *
+ * 【诚实边界】
+ *   · 每个请求起一个线程并 detach。量小可接受；高频场景应换有界线程池（后续项，本轮先打通）。
+ */
+inline std::string httpAsyncDispatch(const proteus::wire::InvokeFrame& f) {
+    // ① 立即回 pending（让 JS 侧知道"已受理，等回推"）
+    const proteus::wire::ResolveFrame pf = proteus::wire::ResolveFrame::pendingOf(f.reqId);
+    const std::vector<uint8_t> pendingBytes = proteus::wire::encodeResolve(pf);
+
+    // ② 拷一份帧（调用方栈上的 `f` 在返回后失效）
+    auto* frameCopy = new proteus::wire::InvokeFrame(f);
+    // ③ 起工作线程（detach：会话关闭时若还有在飞请求，让它跑完自然退出；
+    //    `pushResolve` 在会话关闭后仍安全——只是入队没人取，下次 open 会 reset 清掉）
+    std::thread([frameCopy]() {
+        std::string outBytes;
+        try {
+            const proteus::wire::ResolveFrame rf = proteus::http::handle(*frameCopy);
+            const std::vector<uint8_t> enc = proteus::wire::encodeResolve(rf);
+            outBytes.assign(enc.begin(), enc.end());
+            OH_LOG_Print(LOG_APP, LOG_INFO, 0x0003, "ProteusSession",
+                         "SESSION_HTTP_DONE req=%{public}s ok=%{public}d status=%{public}u",
+                         rf.reqId.c_str(), rf.ok ? 1 : 0, rf.status ? *rf.status : 0u);
+        } catch (const std::exception& e) {
+            // ★异常必须转成错误帧（否则请求永远挂着，JS 侧等到超时）
+            const proteus::wire::ResolveFrame rf =
+                proteus::wire::ResolveFrame::err(frameCopy->reqId, std::string("http.request 宿主异常：") + e.what());
+            const std::vector<uint8_t> enc = proteus::wire::encodeResolve(rf);
+            outBytes.assign(enc.begin(), enc.end());
+            OH_LOG_Print(LOG_APP, LOG_ERROR, 0x0003, "ProteusSession",
+                         "SESSION_HTTP_THROW req=%{public}s err=%{public}s", frameCopy->reqId.c_str(), e.what());
+        } catch (...) {
+            const proteus::wire::ResolveFrame rf =
+                proteus::wire::ResolveFrame::err(frameCopy->reqId, "http.request 宿主未知异常");
+            const std::vector<uint8_t> enc = proteus::wire::encodeResolve(rf);
+            outBytes.assign(enc.begin(), enc.end());
+        }
+        delete frameCopy;
+        // ★只入队，不碰 JS（本线程不是 JS 线程）
+        pushResolve(outBytes);
+    }).detach();
+
+    std::string out(pendingBytes.begin(), pendingBytes.end());
+    return out;
+}
+
+/**
+ * 把一个完整回程帧（PRSP 原始字节）排队，等下一次 `sessionTick()` 推给 JS。
 /* ══════════════════════ 生命周期 ══════════════════════ */
 
 /**
@@ -443,6 +503,9 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true, 
 
     S.open = true;
     S.heapKB = heapUsedKB(S.vm);
+    /* ★★★B-2：注册 HTTP 异步钩子 —— 之后 `http.request` 走 pending + 工作线程 + tick 回推。
+       ★只在会话打开期间注册（close 时注销）⇒ 一次性 VM 生产路径零影响。 */
+    setHttpAsyncHandler(&httpAsyncDispatch);
     // ★关掉 open 阶段的内层 scope（状态全在 globalThis，句柄可以回收）
     if (openScope != nullptr) OH_JSVM_CloseHandleScope(S.env, openScope);
     VMS_LOG("open-scope-closed");
@@ -453,6 +516,35 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true, 
         #undef VMS_LOG
         return js;
     }
+}
+
+/**
+ * ★★★#1344 B-2：**在会话内 eval 一段 JS**（业务入口的统一接线点）。
+ *
+ * 【为什么需要它】会话打开后，要让 JS 侧发起真实请求（`useFetch(...)`）、注册回调、读状态，
+ *   都必须**在这个长活的 VM 里**跑。没有它，`http.request` 的异步链路就无法从 JS 侧发起
+ *   （只能在 C++ 侧伪造帧，验不到业务链）。
+ *
+ * 【语义】eval → `PerformMicrotaskCheckpoint`（AUTO 策略下 JSVM 自己也会跑，但显式推一次
+ *   让"刚 eval 出的 Promise 的 .then"立刻前进）→ 返回**结果字符串**。
+ * ★只能由 ArkTS 主线程调用（与 open/tick/close 同纪律）。
+ * ★返回值上限：结果太长会拖慢日志；调用方自己控制（本函数不截断，如实返回）。
+ */
+inline std::string sessionEval(const std::string& js) {
+    SessionState& S = state();
+    if (!S.open || S.env == nullptr) return "{\"ok\":false,\"error\":\"会话未打开\"}";
+    JSVM_HandleScope inner = nullptr;
+    if (OH_JSVM_OpenHandleScope(S.env, &inner) != JSVM_OK) {
+        return "{\"ok\":false,\"error\":\"OpenHandleScope(inner) 失败\"}";
+    }
+    std::string out, why;
+    const bool ok = vmsToString(S.env, js.c_str(), out, why);
+    // ★checkpoint 在**关闭 scope 之前**（与 sessionTick 同纪律：句柄必须有活着的 scope）
+    if (ok) OH_JSVM_PerformMicrotaskCheckpoint(S.vm);
+    OH_JSVM_CloseHandleScope(S.env, inner);
+    if (!ok) return "{\"ok\":false,\"error\":\"" + jsonEscape(why) + "\"}";
+    // ★结果包成 JSON 字符串返回（避免调用方猜格式）
+    return "{\"ok\":true,\"value\":\"" + jsonEscape(out) + "\"}";
 }
 
 /**
@@ -559,6 +651,8 @@ inline std::string sessionClose() {
     if (!S.open) return "{\"ok\":true,\"already\":true}";
     const int ticks = S.ticks;
     const int resolved = S.resolvedPushed;
+    // ★B-2：注销 HTTP 异步钩子（恢复一次性 VM 的同步语义）
+    setHttpAsyncHandler(nullptr);
     // ★不再需要关 outerScope（#1344 修正后 open 阶段的内层 scope 已当次关闭）
     if (S.env != nullptr) OH_JSVM_DestroyEnv(S.env);
     if (S.vm != nullptr && S.vmScope != nullptr) OH_JSVM_CloseVMScope(S.vm, S.vmScope);
@@ -674,6 +768,30 @@ inline napi_value HostVmSessionPushResolve(napi_env env, napi_callback_info info
     } else {
         const int depth = proteus::vmsess::pushResolve(bytes);
         out = "{\"ok\":true,\"queued\":true,\"pendingDepth\":" + std::to_string(depth) + "}";
+    }
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/** `hostVmSessionEval(js)` → `{ok, value}` / `{ok:false, error}`（会话内 eval，业务接线点） */
+inline napi_value HostVmSessionEval(napi_env env, napi_callback_info info) {
+    size_t argc = 1;
+    napi_value args[1] = {nullptr};
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    std::string js, out;
+    if (argc < 1 || args[0] == nullptr) {
+        out = "{\"ok\":false,\"error\":\"需要 (js)\"}";
+    } else {
+        size_t len = 0;
+        if (napi_get_value_string_utf8(env, args[0], nullptr, 0, &len) != napi_ok) {
+            out = "{\"ok\":false,\"error\":\"js 读取失败\"}";
+        } else {
+            js.resize(len + 1, '\0');
+            napi_get_value_string_utf8(env, args[0], &js[0], js.size(), &len);
+            js.resize(len);
+            out = proteus::vmsess::sessionEval(js);
+        }
     }
     napi_value r;
     napi_create_string_utf8(env, out.c_str(), out.size(), &r);

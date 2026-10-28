@@ -77,6 +77,7 @@ export {
   hostVmSessionOpen,
   hostVmSessionTick,
   hostVmSessionPushResolve,
+  hostVmSessionEval,
   hostVmSessionClose,
   hostVmSessionStats,
 } from 'libproteus_host.so'
