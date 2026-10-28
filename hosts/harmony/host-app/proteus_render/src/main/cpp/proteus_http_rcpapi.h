@@ -117,9 +117,43 @@ struct RcpApi {
   }
 };
 
+/**
+ * ★★★#1344 B-2c：**`librcp_c.so` 的唯一探测点**（多路径 + 进程级缓存）。
+ *
+ * 【为什么必须收敛到一处】此前 `handle()` 用下面的多候选探测，而 `cancelRcpRequestRaw`
+ *   自己又写了一遍 `dlopen("librcp_c.so", RTLD_NOW)`（**裸名**）⇒ 本机设备库在
+ *   `/system/lib64/ndk/` 子目录、裸名打不开 ⇒ 取消永远拿不到句柄，
+ *   而 HTTP 请求一切正常（它走的是这里）。**两条路径必须是同一个句柄**。
+ *
+ * 探测顺序（设备实测：`/system/lib64/ndk/librcp_c.so`；其余为本机/其它布局兜底）。
+ * ★`static` 缓存 + 只试一次：`dlopen` 失败也是结论（库不存在），不必反复打。
+ */
+inline void* openRcp() {
+  // ★本函数已在 `#if PROTEUS_RCPAPI_HAVE_H` 块内（无需再判）——
+  //   此前它在外部的 `proteus_http.h` 里用 `PROTEUS_HAVE_RCP`，而那个宏在
+  //   `rcpapi.h` 被 include 时还没定义 ⇒ 取消路径静默失效（#1344 B-2c 真机抓出）。
+  static void* lib = nullptr;
+  static bool tried = false;
+  if (!tried) {
+    tried = true;
+    const char* names[] = {
+        "librcp_c.so",
+        "/system/lib64/ndk/librcp_c.so",
+        "/system/lib64/librcp_c.so",
+    };
+    for (const char* n : names) {
+      lib = dlopen(n, RTLD_NOW | RTLD_LOCAL);
+      if (lib != nullptr) break;
+    }
+    if (lib == nullptr) {
+      fprintf(stderr, "[proteus-http] librcp_c.so 未找到（http.request 将诚实回 unsupported）\n");
+    }
+  }
+  return lib;
+}
+
 /** 一次性解析全部符号（`lib` 必须是已成功 `dlopen` 的句柄）。 */
-inline RcpApi loadRcpApi(void* lib) {
-  RcpApi api;
+inline RcpApi loadRcpApi(void* lib) {  RcpApi api;
   api.createSession = reinterpret_cast<RcpApi::CreateSessionFn>(dlsym(lib, "HMS_Rcp_CreateSession"));
   api.createRequest = reinterpret_cast<RcpApi::CreateRequestFn>(dlsym(lib, "HMS_Rcp_CreateRequest"));
   api.destroyRequest = reinterpret_cast<RcpApi::DestroyRequestFn>(dlsym(lib, "HMS_Rcp_DestroyRequest"));
@@ -219,13 +253,24 @@ inline Rcp_Session* acquireSession(const RcpApi& api, uint32_t* errCode, bool* c
  *
  * @param outRc 出参：RCP 的返回码（0 = 成功；非 0 也算"已发出"，只是平台报错）
  * @return `true` = 真的调到了取消符号（**不是**"已确认停止"，传输层异步生效）；
- *         `false` = 本机 RCP 库缺 `HMS_Rcp_CancelRequest`
+ *         `false` = 库打不开 / 缺 `HMS_Rcp_CancelRequest`
  * ★记账由调用方（`proteus_http.h` 的 `cancelRcpRequest`）做 —— 那层有 `stats()`。
+ *
+ * ★★★#1344 B-2c 缺陷修复（真机 `stage=host:rcp-cancel-symbol-missing` 抓出）：
+ *   本函数此前**自己再 `dlopen("librcp_c.so")` 一次（裸名）**，而 `handle()` 走的是
+ *   `openRcp()` —— 后者按三个候选路径依次试，本机设备命中
+ *   `/system/lib64/ndk/librcp_c.so`（库在 `ndk/` 子目录，**裸名打不开**）。
+ *   ⇒ cancel 必然拿不到句柄 ⇒ 回 false ⇒ `unsupported++`，而 HTTP 请求一切正常
+ *   （它用 `openRcp()` 的句柄）。症状极具误导性：JS 侧 `abortDiag` 四项全对
+ *   （`inPending/encoded/sent=true`、169 字节回执），只有宿主 `calls=0` —— 看起来像"帧丢了"。
+ *   **两条路径必须共用同一个句柄**（`openRcp()` 内部 static 缓存）。
  */
 inline bool cancelRcpRequestRaw(void* session, void* req, uint32_t* outRc) {
-#if PROTEUS_HAVE_RCP
+  // ★同 `openRcp()`：用本头自己的宏（不看包含者的定义顺序）
+#if PROTEUS_RCPAPI_HAVE_H
   if (session == nullptr || req == nullptr) return false;
-  void* lib = dlopen("librcp_c.so", RTLD_NOW);
+  // ★★★必须用 openRcp()（多路径探测 + 缓存），不能裸 dlopen（见上）
+  void* lib = proteus::http::openRcp();
   if (lib == nullptr) return false;
   const RcpApi api = loadRcpApi(lib);
   if (api.cancelRequest == nullptr) return false;

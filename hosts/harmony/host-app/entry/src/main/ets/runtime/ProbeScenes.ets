@@ -66,14 +66,15 @@ export function tryRunProbeScene(ctx: ProbeSceneCtx): boolean {
     return true;
   }
 
-  // ★★★#1344 B-2 / B-2c：会话内真实 HTTP + 真取消
-  //   `mode` 区分：`cancel` ⇒ 慢响应 + 中途 abort（验宿主真取消）；其余 ⇒ 最小 GET
+  // ★★★#1344 B-2 / B-2c / B-3：会话内真实 HTTP + 真取消 + 流式
+  //   `vmMode` 区分：`cancel` ⇒ 慢响应 + 中途 abort；`stream` ⇒ 逐块回推；其余 ⇒ 最小 GET
   if (s === 'superapp-session-http') {
+    const sceneMode: string = ctx.mode === 'cancel' ? 'cancel' : (ctx.mode === 'stream' ? 'stream' : 'get');
     void runVmSessionHttpScene(
       ctx.filesDir,
       ctx.url.length > 0 ? ctx.url : 'https://httpbin.org/get',
       ctx.rounds > 0 ? ctx.rounds : 400,
-      ctx.mode === 'cancel' ? 'cancel' : 'get',
+      sceneMode,
     );
     return true;
   }

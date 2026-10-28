@@ -18,6 +18,8 @@
 // 【诚实边界】
 //   · 验"宿主受理并发出取消"+"请求立即结束"；**不验**服务端是否收到 RST（需可控服务端）。
 //   · 一次性 VM 下宿主仍回 `harmony-sync-napi` ⇒ 如实报 `cancel_supported:false`（不伪造）。
+import { abortDiag, pendingHostCallCount } from '../../../packages/api/src/capability-invoke'
+
 export function appSessionCancelStart(base: string): string {
   const g = globalThis as Record<string, unknown>
   const out: Record<string, unknown> = { probe: 'session-cancel', phase: 'start', base }
@@ -73,6 +75,15 @@ export function appSessionCancelAbort(): string {
   const abortAt = Date.now()
   task.abort('probe:abort')
   out['aborted_at'] = abortAt
+  /* ★★★诊断（B-2c 定位"取消没打出去"的唯一证据）：abort 之后**立刻**读两条 JS 侧状态。
+     · `abortDiag`：取消帧走到哪一步（inPending / encoded / sent / error 原文）
+       —— 此前只有一个空 `catch`，`fn()` 抛错被永久吞掉，真机只能看到 `hostCancelCalls=0`。
+     · `pendingCount`：abort 后待决表还剩几条（该请求应从表里消失）
+     ★必须**同步**读（本函数是同步的，ArkTS 侧 `String(...)` 取值）⇒ 静态 import，
+       不能用 `await import(...)`（会返回 Promise 字符串）。 */
+  out['gate_hint'] = 'abort-called'
+  out['abortDiag'] = abortDiag()
+  out['pendingCount'] = pendingHostCallCount()
   void task.result
     .then((r) => {
       const totalMs = Date.now() - abortAt

@@ -213,39 +213,62 @@ describe('★#1121 取消 · 两端宿主', () => {
   })
 
   /**
-   * ★★★#1165 真机证据：**慢请求在同步 napi 内完整跑完**。
+   * ★★★#1165 → #1344 B-2c **翻转**：鸿蒙 abort 不再是 no-op（**会话式 VM 下真取消已成立**）。
    *
-   * 【这条证据回答什么】"abort 是 no-op"的最后一环：如果 napi 不是同步阻塞的，
-   *   那 8 秒的慢请求期间 JS 本该有机会跑 `onabort`。实测（2026-10-22 真机 KLE-AL00U）：
-   *   `http-probe.json` 记录 `status=200 · bodyBytes=655360 · chunks=92`，
-   *   那是 `GET /stream?chunks=40&size=1024&delayMs=200`（**约 8 秒**才发完）的**完整**响应体，
-   *   而 `cancelCalled=false`（没有取消发生）。
-   *   ⇒ 请求从发起到完成全程在**同一次同步调用**里 ⇒ 期间 JS 没有执行机会 ⇒ abort 无处介入。
+   * 【旧判据（#1165）说的是什么，为什么现在不成立】
+   *   当时宿主是**一次性 VM + 同步 napi**：请求在调用线程里同步跑完 ⇒ 期间 JS 没有执行机会
+   *   ⇒ `abort()` 连本地 reject 都不会发生。证据曾是「8s 慢请求完整返回 + `cancelCalled=false`」。
    *
-   * 【为什么把真机读数写进判据】它是"同步语义"的**行为证据**（① 源码结构 ② 真机行为）。
-   *   只有源码结构时，别人可以合理怀疑"也许 napi 内部让出了线程"；这条把疑问关掉。
-   *   ★诚实边界：本判据读的是**已入库的真机证据**（非现场跑）——
-   *     若鸿蒙宿主改成可重入/常驻 VM，这个文件会变（届时本判据要重评）。
+   * 【#1344 B-2c 推翻了它的前提】
+   *   会话式 VM 让 `http.request` 变成**异步**（宿主立即回 `pending`，响应由 tick 回推）⇒
+   *   JS 线程在请求期间是**空闲的** ⇒ `abort()` 有执行机会，且能真的打到宿主：
+   *   真机判据（`hosts/harmony/run-session-cancel-probe.sh`，2026-10-28 KLE-AL00U）：
+   *     `SESSION_CANCEL_DONE ok=true ... hostCancelCalls=1 noInflight=0 unsupported=0 stage=ok`
+   *     `settle_ms_after_abort=2`（慢响应 10s，取消后 2ms 结束）
+   *   ⇒ 现在断言的是「会话模式下取消**真的发生**」，而不是「不发生」。
+   *
+   * 【为什么改成读会话判据证据，不再读 http-probe.json】
+   *   ① `http-probe.json` 走的是**一次性 VM** 的 `superapp-http` 场景 —— 那条路径的 abort 确实
+   *      仍是 no-op（生产形态未变），但它**不能**用来断言"鸿蒙不支持取消"（会话模式已支持）；
+   *   ② 原判据把"慢流完整返回"当唯一证据，而那个读数会被**任何**能力探针覆盖（本轮还发现
+   *      `run-http-probe.sh --cap-method=*` 覆盖同名文件的装置缺陷，已修为独立文件名）；
+   *   ③ 真正的能力判据在 `vm-session-cancel.json`（会话场景专用文件，无覆盖风险）。
+   *
+   * ★诚实边界（不变）：**一次性 VM 生产路径**的 abort 仍是 no-op（`proteus_http_stubs.h`
+   *   的 `harmony-sync-napi` 分支，判据 `harmony-http-gaps.test.ts` 守着）。
+   *   取消能力只在**会话模式**成立 —— 两面都必须如实登记，不能只报好消息。
    */
-  it('★★★鸿蒙真机证据：慢请求（~8s）在同步 napi 内完整返回，且未发生取消', () => {
-    const p = 'hosts/harmony/results/http-probe.json'
+  it('★★★鸿蒙真机证据：会话模式下 abort **真的取消**（hostCancelCalls=1 + 早结算）', () => {
+    const p = 'hosts/harmony/results/vm-session-cancel.json'
     if (!fs.existsSync(path.join(ROOT, p))) {
-      // 证据文件缺失不判红（可能是干净的 clone / 未跑过真机）——但显式说明
-      expect(true, `⚠ 缺真机证据 ${p}（跑 bash hosts/harmony/run-http-probe.sh 生成）`).toBe(true)
+      // 证据文件缺失不判红（干净 clone 没跑过真机）——但显式说明，不静默通过
+      expect(true, `⚠ 缺会话取消真机证据 ${p}（跑 bash hosts/harmony/run-session-cancel-probe.sh）`).toBe(true)
       return
     }
-    const j = JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8')) as {
+    const d = JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8')) as {
       ok?: boolean
-      status?: number
-      bodyBytes?: number
-      limit?: { chunks?: number; cancelCalled?: boolean }
+      hostCancelCalls?: number
+      hostCancelNoInflight?: number
+      hostCancelUnsupported?: number
+      cancelStage?: string
+      jsTicks?: number
+      probeResult?: string
     }
-    expect(j.ok, `★鸿蒙 HTTP 腿未通（${p}）`).toBe(true)
-    expect(j.status, '★状态码应为 200').toBe(200)
-    // ★核心：慢速端点（40 块 × 200ms ≈ 8s）的**完整**响应体 → 证明请求在同步调用内跑完
-    expect(Number(j.bodyBytes), '★应收到完整慢响应体（40×1024×…=655360B）').toBeGreaterThan(600_000)
-    expect(Number(j.limit?.chunks), '★逐块回调应真的发生过').toBeGreaterThan(50)
-    expect(j.limit?.cancelCalled, '★本次不该有取消（abort 无从介入 ⇒ 请求照常跑完）').toBe(false)
+    let probe: { error_code?: string; stopped_early?: boolean; settle_ms_after_abort?: number } = {}
+    try {
+      probe = JSON.parse(String(d.probeResult ?? '{}'))
+    } catch {
+      /* 下面逐条断言会给出具体失败点 */
+    }
+    expect(probe.error_code, '★业务拿到的应是 fetch.aborted').toBe('fetch.aborted')
+    expect(probe.stopped_early, '★abort 后应立即结算（不是等满慢响应/超时）').toBe(true)
+    // ★核心（M7 破坏性验证的产物）：JS 侧读数**证明不了**宿主真的调了 cancel
+    //   （JS 是先本地 reject）⇒ 必须读宿主记账。
+    expect(Number(d.hostCancelCalls), '★★宿主必须真调 HMS_Rcp_CancelRequest（calls>0）').toBeGreaterThan(0)
+    expect(Number(d.hostCancelNoInflight), '★reqId 应在在途表里命中（noInflight=0）').toBe(0)
+    expect(Number(d.hostCancelUnsupported), '★RCP cancel 符号应可用（unsupported=0）').toBe(0)
+    expect(String(d.cancelStage), '★归因应为 ok（非某层断链）').toBe('ok')
+    expect(Number(d.jsTicks), '★会话态应保留（jsTicks>1）').toBeGreaterThan(1)
   })
 
   it('★探针必须验证"后续块停止"与"宿主命中"（只验 reject 太弱）', () => {

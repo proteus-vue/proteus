@@ -84,7 +84,7 @@ function sleepMs(ms: number): Promise<void> {
  */
 export async function runVmSessionHttpScene(filesDir: string, base: string, maxTicks: number, mode: string = 'get'): Promise<void> {
   const out: Record<string, Object> = {};
-  out['scene'] = mode === 'cancel' ? 'session-cancel' : 'session-http';
+  out['scene'] = mode === 'cancel' ? 'session-cancel' : (mode === 'stream' ? 'session-stream' : 'session-http');
   out['base'] = base;
 
   let bundle: string = '';
@@ -112,14 +112,20 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
   }
   out['boot'] = String(openR.boot ?? '');
 
-  /* 选探针：
-     · `mode != 'cancel'` ⇒ 最小 GET（验异步链路）
-     · `mode == 'cancel'` ⇒ **两阶段**：start（发慢请求）→ 等 600ms → abort（验 B-2c 真取消）
+  /* 选探针（按 `vmMode` 三选一）：
+     · `cancel` ⇒ **两阶段**：start（发慢请求）→ 等 ~320ms → abort（验 B-2c 真取消）
        ★两阶段的原因：App 精简引擎**没有 setTimeout**，JS 侧无法自己延迟；
-         而忙等会阻塞 JS 线程 ⇒ 请求发不出去。⇒ 延迟放到 ArkTS 侧（宿主事件循环）。 */
+         而忙等会阻塞 JS 线程 ⇒ 请求发不出去。⇒ 延迟放到 ArkTS 侧（宿主事件循环）。
+     · `stream` ⇒ **单阶段**：start（发本地 /stream）→ 由 tick 逐块推 → 块到齐自然结算（B-3）
+     · 其余 ⇒ 最小 GET（验异步链路 B-2） */
   const isCancel: boolean = mode === 'cancel';
-  const probeName: string = isCancel ? '__proteusHostAppSessionCancelStart' : '__proteusHostAppSessionHttpGet';
-  const resultKey: string = isCancel ? '__proteusHostSessionCancelProbeResult' : '__proteusHostSessionHttpGetResult';
+  const isStream: boolean = mode === 'stream';
+  const probeName: string = isCancel
+    ? '__proteusHostAppSessionCancelStart'
+    : (isStream ? '__proteusHostAppSessionStreamStart' : '__proteusHostAppSessionHttpGet');
+  const resultKey: string = isCancel
+    ? '__proteusHostSessionCancelProbeResult'
+    : (isStream ? '__proteusHostSessionStreamProbeResult' : '__proteusHostSessionHttpGetResult');
   const kickJs: string =
     "(typeof globalThis." + probeName + " === 'function'"
     + " ? String(globalThis." + probeName + "(" + JSON.stringify(base) + "))"
@@ -168,7 +174,7 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
       if (rr.ok === true && rr.value !== undefined && rr.value.length > 0) {
         /* ★★★结算判据按 mode 不同（第一版没区分 ⇒ CANCEL 模式在 `phase:'start'` 阶段
            就把回执当成最终结果 break 了，`jsTicks` 只有 1、`stoppedEarly=false`，看起来像"取消没生效"）：
-           · GET 模式：任何非空结果就是最终结果
+           · GET / STREAM 模式：任何非空结果就是最终结果（两者的探针都是"跑完才写结果"）
            · CANCEL 模式：必须等到 `phase:'abort'` **且**带 `stopped_early` 字段
              （start 阶段只回 `{phase:'start',started_at}`，那不是结论） */
         let settled: boolean = true;
@@ -198,16 +204,26 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
        新增 `hostVmSessionCancelStats()` napi 入口，直接返回 `stats().cancelCalls`。
        这比绕 JS 一圈更直接，也不给 JS 线程增加一次回调重入。 */
   let hostCancelCalls: number = -1;
+  let hostCancelNoInflight: number = -1;
+  let hostCancelUnsupported: number = -1;
   if (isCancel) {
     const statsRaw: string = hostVmSessionCancelStats();
     try {
       const sr = JSON.parse(statsRaw) as EvalReading;
       const payload = JSON.parse(String(sr.value ?? '{}')) as Record<string, Object>;
       hostCancelCalls = Number(payload['calls'] ?? -1);
+      hostCancelNoInflight = Number(payload['noInflight'] ?? -1);
+      hostCancelUnsupported = Number(payload['unsupported'] ?? -1);
     } catch (e) {
       hostCancelCalls = -1;
     }
     out['hostCancelCalls'] = hostCancelCalls;
+    /* ★★★#1344 B-2c：**三个分支各一个读数**（`calls=0` 本身是三义的，见宿主 `Stats` 注释）：
+       noInflight > 0 ⇒ 帧到了但 reqId 不在在途表（登记点是 `handle()`）
+       unsupported > 0 ⇒ 帧到了、命中表，但 RCP 库缺 cancel 符号
+       三者全 0 且 calls=0 ⇒ **帧根本没到宿主**（JS 侧通道问题，看 `abortDiag`） */
+    out['hostCancelNoInflight'] = hostCancelNoInflight;
+    out['hostCancelUnsupported'] = hostCancelUnsupported;
   }
   const closeRaw: string = hostVmSessionClose();
   out['jsTicks'] = lastJsTicks;
@@ -251,9 +267,63 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
     out['hostCancelOk'] = hostCanceled;
     // ★四条全过才算：JS 码对 + 早结算 + **宿主真调了 cancel** + 会话态保留
     out['ok'] = firstErr.length === 0 && probeOk && cancelCodeOk && stoppedEarly && hostCanceled && lastJsTicks > 1;
+    /* ★★★B-2c 归因：`calls=0` 时**直接说出断在哪一步**（不让下一个读日志的人再推一遍）。
+       顺序 = 从 JS 到宿主逐层：JS 没发帧 → 宿主没收到 → 收到但表里没有 → 表里有但没有符号。 */
+    let cancelStage: string = 'ok';
+    if (hostCancelCalls <= 0) {
+      const adText: string = (() => {
+        try {
+          const pr = JSON.parse(probeResult) as Record<string, Object>;
+          return JSON.stringify(pr['abortDiag'] ?? null);
+        } catch (e) { return 'null'; }
+      })();
+      if (hostCancelUnsupported > 0) cancelStage = 'host:rcp-cancel-symbol-missing';
+      else if (hostCancelNoInflight > 0) cancelStage = 'host:reqid-not-inflight';
+      else if (adText.indexOf('"sent":true') >= 0) cancelStage = 'host:frame-lost-in-channel';
+      else if (adText.indexOf('"inPending":false') >= 0) cancelStage = 'js:already-settled-before-abort';
+      else if (adText.indexOf('"encoded":false') >= 0) cancelStage = 'js:encode-threw';
+      else cancelStage = 'js:fn-threw-or-not-called';
+    }
+    out['cancelStage'] = cancelStage;
     hilog.info(DOMAIN, TAG,
-      'SESSION_CANCEL_DONE ok=%{public}s codeOk=%{public}s stoppedEarly=%{public}s hostCancelCalls=%{public}d jsTicks=%{public}d',
-      String(out['ok']), String(cancelCodeOk), String(stoppedEarly), hostCancelCalls, lastJsTicks);
+      'SESSION_CANCEL_DONE ok=%{public}s codeOk=%{public}s stoppedEarly=%{public}s hostCancelCalls=%{public}d noInflight=%{public}d unsupported=%{public}d stage=%{public}s jsTicks=%{public}d',
+      String(out['ok']), String(cancelCodeOk), String(stoppedEarly), hostCancelCalls,
+      hostCancelNoInflight, hostCancelUnsupported, cancelStage, lastJsTicks);
+  } else if (isStream) {
+    /**
+     * ★★★B-3 判据（逐块回推，四条缺一不可）：
+     *   ① `chunks > 1` —— **真的是多块**（1 块 = 整包一次给，等于没流式）
+     *   ② `seq_ok == true` —— seq 从 0 起连续（宿主没丢帧；跳号会被 JS 侧独立拒绝）
+     *   ③ `bytes` 与服务端声明的总字节一致（块数对但内容缺也算失败）
+     *   ④ 最终 `ok == true` + `status == 200`（流结束后照常结算）
+     * ★另记 `spread_ms`（首末块到达间隔）：服务端每块之间有 delay ⇒ 分散到达才说明是"逐块"，
+     *   `spread_ms == 0` 配合 `chunks == 1` 就是"末尾一次性给整包"的形态。
+     */
+    let stChunks: number = -1;
+    let stBytes: number = -1;
+    let stSeqOk: boolean = false;
+    let stOkFlag: boolean = false;
+    let stStatus: number = -1;
+    let stSpread: number = -1;
+    try {
+      const pr = JSON.parse(probeResult) as Record<string, Object>;
+      stChunks = Number(pr['chunks'] ?? -1);
+      stBytes = Number(pr['bytes'] ?? -1);
+      stSeqOk = pr['seq_ok'] === true;
+      stOkFlag = pr['ok'] === true;
+      stStatus = Number(pr['status'] ?? -1);
+      stSpread = Number(pr['spread_ms'] ?? -1);
+    } catch (e) { /* 未结算 */ }
+    out['streamChunks'] = stChunks;
+    out['streamBytes'] = stBytes;
+    out['streamSeqOk'] = stSeqOk;
+    out['streamStatus'] = stStatus;
+    out['streamSpreadMs'] = stSpread;
+    out['ok'] = firstErr.length === 0 && lastJsTicks > 1 && stOkFlag && stStatus === 200
+      && stChunks > 1 && stSeqOk && stBytes > 0;
+    hilog.info(DOMAIN, TAG,
+      'SESSION_STREAM_DONE ok=%{public}s chunks=%{public}d bytes=%{public}d seqOk=%{public}s status=%{public}d spreadMs=%{public}d jsTicks=%{public}d',
+      String(out['ok']), stChunks, stBytes, String(stSeqOk), stStatus, stSpread, lastJsTicks);
   } else {
     out['ok'] = firstErr.length === 0 && pushedTotal > 0 && probeOk && lastJsTicks > 1;
     hilog.info(DOMAIN, TAG,
@@ -263,5 +333,19 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
   // ★把探针原文打进 hilog（400 字符截断）：报告文件在沙箱里读不到，这是唯一取证通道
   hilog.info(DOMAIN, TAG, 'SESSION_HTTP_PROBE_RAW %{public}s',
     probeResult.length > 400 ? probeResult.slice(0, 400) : probeResult);
-  writeReport(filesDir, isCancel ? 'vm-session-cancel.json' : 'vm-session-http.json', JSON.stringify(out));
+  /* ★★★B-2c：取消帧的 JS 侧落点单独打一行（不挤在 400 字符窗口里被截掉）。
+     读数含义见 `AbortDiag`：`inPending=false` ⇒ 请求已结算（取消无意义）；
+     `encoded=false` ⇒ 编码抛错；`encoded=true,sent=false` ⇒ `fn()` 抛错（error 里有原文）；
+     `sent=true` 而宿主 `calls=0` ⇒ 帧进了通道但宿主没路由到（另一层问题）。 */
+  if (isCancel && probeResult.length > 0) {
+    try {
+      const pr = JSON.parse(probeResult) as Record<string, Object>;
+      const ad = pr['abortDiag'];
+      hilog.info(DOMAIN, TAG, 'SESSION_CANCEL_JS_DIAG %{public}s pending=%{public}s',
+        ad === undefined || ad === null ? 'null' : JSON.stringify(ad), String(pr['pendingCount'] ?? '?'));
+    } catch (e) { /* 结果不是 JSON ⇒ 上面 RAW 那行已够 */ }
+  }
+  writeReport(filesDir,
+    isCancel ? 'vm-session-cancel.json' : (isStream ? 'vm-session-stream.json' : 'vm-session-http.json'),
+    JSON.stringify(out));
 }

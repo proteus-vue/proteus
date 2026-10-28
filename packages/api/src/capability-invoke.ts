@@ -459,6 +459,38 @@ const PENDING_HOST_CALLS_MAX = 1024
  *   ★这条区分的意义：写成"只 reject 本地"会让业务以为取消能兜住、于是不设 `timeout`——
  *     **夸大与贬低同样是假信息**。判据：`tests/fetch-cancel.test.ts` 的「鸿蒙 abort 是 no-op」段。
  */
+/**
+ * ★★★#1344 B-2c 诊断：**最近一次 abort 的取消帧落地情况**（只读）。
+ *
+ * 【为什么必须有（本轮真机取证链）】真机读数：`abort()` 后 JS 侧 `fetch.aborted` +
+ *   `settle_ms_after_abort=3`（都"对"），而宿主 `cancelStats.calls=0`、hilog 里
+ *   `PROTEUS_INVOKE_BYTES_*` 一条都没有 ⇒ 结论只能是 `fn(cancelFrame)` 在**进 native 之前**
+ *   就抛了，而那个空 `catch`（"取消是尽力而为，不该产生二次错误"）把原因**永久吞掉**。
+ *   ★这是本仓反复踩的同一类坑：**只验"桥说成功"就是假绿**——这里反过来，
+ *     "桥静默失败"同样是假绿（看起来取消跑了，实际宿主没收到）。
+ *   ⇒ 记录 stage + 异常原文，真机一次运行即可定位，不必反复排除。
+ */
+export interface AbortDiag {
+  /** 被取消的 reqId */
+  reqId: string
+  /** abort 时该 reqId 是否还在待决表里（false ⇒ 请求已结算，取消无意义） */
+  inPending: boolean
+  /** 取消帧是否编码成功 */
+  encoded: boolean
+  /** 取消帧是否真的交给宿主通道（`fn()` 正常返回） */
+  sent: boolean
+  /** 宿主回执帧的字节数（0 = 空回执；-1 = 没走到取回执） */
+  replyBytes: number
+  /** 宿主回执的可读片段（UTF-8 直读，失败则空）——`no-inflight` 等判定直接可见 */
+  replyText: string
+  /** 编码或派发抛出的异常原文（空串 = 无异常） */
+  error: string
+}
+let lastAbortDiag: AbortDiag | null = null
+export function abortDiag(): AbortDiag | null {
+  return lastAbortDiag
+}
+
 function attachAbort(
   signal: AbortSignalImpl | undefined,
   reqId: string,
@@ -468,7 +500,12 @@ function attachAbort(
 ): void {
   if (!signal) return
   const doAbort = (): void => {
-    if (!pendingHostCalls.has(reqId)) return   // 已结算 ⇒ 取消无意义
+    const diag: AbortDiag = {
+      reqId, inPending: pendingHostCalls.has(reqId), encoded: false, sent: false,
+      replyBytes: -1, replyText: '', error: '',
+    }
+    lastAbortDiag = diag
+    if (!diag.inPending) return   // 已结算 ⇒ 取消无意义
     pendingHostCalls.delete(reqId)
     timer.clear()
     // ③ 尽力通知宿主（同步帧；失败不抛——取消是"尽力而为"，不该产生二次错误）
@@ -479,9 +516,24 @@ function attachAbort(
         meta: { contentType: 'application/json' },
         body: utf8Encode(JSON.stringify({ reqId })),
       })
-      fn(cancelFrame)
-    } catch {
-      /* 宿主不支持取消：如实不处理（JS 侧已 reject） */
+      diag.encoded = true
+      const out = fn(cancelFrame)
+      diag.sent = true
+      /* ★回执内容也是证据：宿主若回 `cancelled:false / no-inflight`，说明"帧到了但表里没有"
+         ——与"帧根本没到"是**完全不同的缺陷**，此前读不出来。 */
+      if (out instanceof Uint8Array) {
+        diag.replyBytes = out.length
+        try {
+          diag.replyText = utf8Decode(out).slice(0, 200)
+        } catch {
+          diag.replyText = ''
+        }
+      } else {
+        diag.replyBytes = 0
+      }
+    } catch (e) {
+      // ★仍然吞掉（取消失败不该改报别的错），但**必须留证**——否则"取消静默失效"无法定位
+      diag.error = e instanceof Error ? e.message : String(e)
     }
     // ① 立即 reject（**在通知宿主之后**——先通知能让宿主尽快停，减少白跑）
     // ★#1122：**必须带 `code`**——`capability-fetch.runFetch` 从 `e.code` 取错误码，

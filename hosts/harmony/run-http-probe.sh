@@ -29,6 +29,7 @@ RESULTS="$HERE/results"
 FILES_DEV="/data/app/el2/100/base/$BUNDLE/haps/entry/files"
 WAIT="$ROOT/.agents/skills/ai-efficiency-rules/scripts/wait_for.sh"
 
+
 URL=""
 DNS_IP=""
 DNS_HOST=""
@@ -72,6 +73,30 @@ for arg in "$@"; do
        elif [ "${shift_next_host:-0}" = "1" ]; then DNS_HOST="$arg"; shift_next_host=0; fi ;;
   esac
 done
+# ★★★#1344：**报告文件名必须随用途变化** —— 否则装置会污染生产证据。
+#
+# 【真机实证的缺陷（本轮排查时发现）】本脚本跑 `--cap-method=<能力>` 时（share / phone.call /
+#   fs.* …）**仍然把结果写进 `results/http-probe.json`** ⇒ 每跑一次能力探针就把上一次
+#   **HTTP 判据的证据覆盖掉**。后果不是"文件旧了"，而是：
+#     · `tests/fetch-cancel.test.ts` 的「鸿蒙慢请求 8s 完整返回」判据读到的是 share 的
+#       `{"status":0,...}` ⇒ **判据变红**，而真因是证据被另一个探针覆盖（装置缺陷，不是能力缺陷）；
+#     · 更危险的是反向：能力探针的 `ok:true` 可能让 HTTP 判据**假绿**。
+#   ⇒ 与 AGENTS.md「测试装置与生产产物文件系统级隔离」同源：能靠命名隔离消除的副作用，
+#     不要靠"记得别跑错"来管理。
+#   ★命名规则：`--cap-method=X` ⇒ `http-probe-cap-<X 安全化>.json`；否则 `http-probe.json`。
+#   ★向后兼容：不传 `--cap-method` 的调用（HTTP 判据主路径）文件名**完全不变**。
+#   ★★这段**必须在参数解析之后**（首版放在前面 ⇒ `CAP_METHOD` 还是空 ⇒ 又去等同名文件，
+#     而在设备已改写新名后**必然超时**——同一类"看着对但顺序错"的装置缺陷）。
+if [ -n "${CAP_METHOD:-}" ]; then
+  # 方法名里的 `.` 保留（可读性），其余非 [A-Za-z0-9._-] 一律换成 `_`
+  CAP_SLUG="$(printf '%s' "$CAP_METHOD" | tr -c 'A-Za-z0-9._-' '_')"
+  REPORT_FILE="http-probe-cap-${CAP_SLUG}.json"
+else
+  REPORT_FILE="http-probe.json"
+fi
+REPORT_DEV="$FILES_DEV/$REPORT_FILE"
+REPORT_LOCAL="$RESULTS/$REPORT_FILE"
+
 [ -n "$URL" ] || URL="https://httpbin.org/get"
 
 [ -f "$WAIT" ] || { echo "✗ 缺 wait_for.sh——本脚本禁止盲等"; exit 2; }
@@ -87,9 +112,9 @@ echo "==> ① 安装 + 清场 + 删旧报告"
 HDC install "$HAP" 2>&1 | grep -qiE "successfully|Success" || { echo "✗ 安装失败"; exit 1; }
 HDC shell "aa force-stop $BUNDLE" >/dev/null 2>&1 || true
 HDC shell "hilog -r" >/dev/null 2>&1 || true
-HDC shell "rm -f $FILES_DEV/http-probe.json" >/dev/null 2>&1 || true
-if HDC shell "test -f $FILES_DEV/http-probe.json && echo STILL_EXISTS" 2>/dev/null | grep -q STILL_EXISTS; then
-  echo "✗ 旧报告删不掉（$FILES_DEV/http-probe.json）——等待信号会命中陈旧文件，拒绝继续"; exit 1
+HDC shell "rm -f $REPORT_DEV" >/dev/null 2>&1 || true
+if HDC shell "test -f $REPORT_DEV && echo STILL_EXISTS" 2>/dev/null | grep -q STILL_EXISTS; then
+  echo "✗ 旧报告删不掉（$REPORT_DEV）——等待信号会命中陈旧文件，拒绝继续"; exit 1
 fi
 
 echo "==> ② 启动（scene=superapp-http）"
@@ -138,21 +163,21 @@ HDC shell "aa start -a EntryAbility -b $BUNDLE --ps scene superapp-http --ps url
   | grep -qi "successfully" || { echo "✗ 启动失败"; exit 1; }
 
 echo "==> ③ 等报告落盘（完成信号 = 文件存在；零盲等）"
-if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $FILES_DEV/http-probe.json && echo PROTEUS_HTTP_PROBE_READY' | grep -q PROTEUS_HTTP_PROBE_READY" --timeout 90 --interval 3; then
-  echo "✗ 90s 内未见 http-probe.json" >&2
+if ! bash "$WAIT" --cmd "bash '$HERE/hdc.sh' shell 'test -f $REPORT_DEV && echo PROTEUS_HTTP_PROBE_READY' | grep -q PROTEUS_HTTP_PROBE_READY" --timeout 90 --interval 3; then
+  echo "✗ 90s 内未见 $REPORT_FILE" >&2
   HDC shell "hilog -x | grep -E 'HTTP_PROBE|HTTP_REQUEST|INVOKE_BYTES|cppcrash' | tail -12" 2>&1 | sed 's/^/  /' >&2
   exit 1
 fi
 
 echo "==> ④ 取回报告 + 断言"
-rm -f "$RESULTS/http-probe.json"
-HDC file recv "$FILES_DEV/http-probe.json" "$RESULTS/http-probe.json" >/dev/null 2>&1 \
+rm -f "$REPORT_LOCAL"
+HDC file recv "$REPORT_DEV" "$REPORT_LOCAL" >/dev/null 2>&1 \
   || { echo "✗ file recv 失败"; exit 1; }
-[ -s "$RESULTS/http-probe.json" ] || { echo "✗ 报告为空"; exit 1; }
-echo "    http-probe.json $(wc -c < "$RESULTS/http-probe.json" | tr -d ' ') 字节"
-cat "$RESULTS/http-probe.json"; echo
+[ -s "$REPORT_LOCAL" ] || { echo "✗ 报告为空"; exit 1; }
+echo "    http-probe.json $(wc -c < "$REPORT_LOCAL" | tr -d ' ') 字节"
+cat "$REPORT_LOCAL"; echo
 
-EXPECT_REJECT="${EXPECT_REJECT:-}" python3 - "$RESULTS/http-probe.json" <<'PY'
+EXPECT_REJECT="${EXPECT_REJECT:-}" python3 - "$REPORT_LOCAL" <<'PY'
 import json, os, sys
 EXPECT_REJECT = os.environ.get("EXPECT_REJECT") == "1"
 d = json.load(open(sys.argv[1]))
@@ -381,7 +406,7 @@ if [ "$RC" = "0" ] && [ -n "$UPLOAD_PATH" ]; then
     echo "  ✗ 设备侧算不出源文件 sha256（$UPLOAD_PATH）——上传证据无法对拍"; RC=1
   else
     echo "  ✓ 设备侧源文件 sha256=${DEV_UPLOAD_SHA:0:16}…（第三方基准，供离线对拍）"
-    HDC_SHA="$DEV_UPLOAD_SHA" python3 - "$RESULTS/http-probe.json" <<'PY'
+    HDC_SHA="$DEV_UPLOAD_SHA" python3 - "$REPORT_LOCAL" <<'PY'
 import json, os, sys
 p = sys.argv[1]
 try:
@@ -397,7 +422,7 @@ fi
 if [ "$RC" = "0" ] && [ -n "$SAVE_PATH" ] && [ -z "$EXPECT_REJECT" ]; then
   SIZE_REPORTED="$(python3 -c "
 import json,sys,re
-d=json.load(open('$RESULTS/http-probe.json'))
+d=json.load(open('$REPORT_LOCAL'))
 m=re.search(r'\"size\":(\d+)', d.get('preview') or '')
 print(m.group(1) if m else '')" 2>/dev/null)"
   SIZE_ON_DEVICE="$(HDC shell "stat -c %s '$FILES_DEV/$SAVE_PATH'" 2>/dev/null | tr -d ' \r\n')"
@@ -412,7 +437,7 @@ print(m.group(1) if m else '')" 2>/dev/null)"
   #   上一轮我在校验**之前**就写 ⇒ `match:false` 的坏证据也会被写成一个正常字段，
   #   下游判据只看 `deviceStat` 存在就以为"验过了"。
   #   ⇒ 现在写全三态：`verified`（校验通过与否）+ `match` + 两个 size；判据要求 `verified:true`。
-  python3 - "$RESULTS/http-probe.json" "$SIZE_ON_DEVICE" "$SIZE_REPORTED" "$RC" <<'PY'
+  python3 - "$REPORT_LOCAL" "$SIZE_ON_DEVICE" "$SIZE_REPORTED" "$RC" <<'PY'
 import json, sys
 p, on_dev, reported, rc = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 try:

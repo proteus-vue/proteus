@@ -313,6 +313,12 @@ inline std::string cancelInflight(const std::string& reqId) {
         std::lock_guard<std::mutex> lk(inflightMu());
         auto it = inflightTable().find(reqId);
         if (it == inflightTable().end()) {
+            // ★诊断：**帧到了但表里没有** ⇒ 单独记账（否则与"帧没到"同形，见 Stats 注释）。
+            //   ★这条读数同时告诉我们"JS 侧的 reqId 与登记时用的 reqId 是否同一个"。
+            proteus::http::stats().cancelNoInflight++;
+            OH_LOG_Print(LOG_APP, LOG_INFO, 0x0003, "ProteusSession",
+                         "SESSION_CANCEL_NO_INFLIGHT req=%{public}s depth=%{public}d",
+                         reqId.c_str(), static_cast<int>(inflightTable().size()));
             return "{\"ok\":true,\"data\":{\"cancelled\":false,\"reason\":\"no-inflight\","
                    "\"note\":\"该 reqId 不在在途表中（可能已完成 / 或本端未经会话通道）\"}}";
         }
@@ -356,6 +362,35 @@ inline int pushResolve(const std::string& frameBytes) {
     }
     S.pendingDepth = depth;
     return depth;
+}
+
+/**
+ * ★★★#1344 B-3：**流式块入队**（注册进 `proteus_http_guard.h` 的 `setHttpStreamHandler`）。
+ *
+ * 【它做什么】把 RCP 逐块回调送来的一个数据块编成 **PRSP 块帧**（带 `streamSeq`）入队，
+ *   由下一次 `sessionTick()` 推给 JS 的 `__proteusHostResolveBytes` ⇒
+ *   `capability-invoke.settleHostCallBytes` 按 `onChunk` 交给业务。
+ *   语义与 Android/iOS 的流式对齐（**同一套 seq 连续性判据**：JS 侧跳号即报丢帧）。
+ *
+ * 【★★★线程纪律（本函数由 RCP 的**网络线程**调用）】
+ *   只能做纯内存操作 + 加锁入队，**绝不能碰 `JSVM_Env`**（那会随机崩）。
+ *   `pushResolve` 本身就是"唯一跨线程入口"，所以这里就是它的一个调用点。
+ *
+ * 【诚实边界】
+ *   · 块在**入队时拷贝**（`std::string`）⇒ 回调返回后 RCP 复用缓冲区不影响我们。
+ *   · 入队不做背压：JS 侧 `sessionTick(maxPush)` 每次最多推 64 帧，队列可能短期增长；
+ *     真正的上限由 JS 侧 `MAX_STREAM_CHUNKS`（超限即 reject）与宿主 `MAX_BODY_BYTES` 守。
+ *     ★"推得快、消费慢"的场景（高频大流）应换有界队列 + 反压（后续项，本轮先打通语义）。
+ *
+ * @return 已处理字节数（`recvGate` 契约：一律回 `len`）
+ */
+inline size_t pushStreamChunk(const std::string& reqId, uint32_t seq, const uint8_t* data, size_t len) {
+    proteus::wire::ResolveFrame f = proteus::wire::ResolveFrame::okOf(reqId);
+    f.streamSeq = seq;
+    if (data != nullptr && len > 0) f.body.assign(data, data + len);
+    const std::vector<uint8_t> enc = proteus::wire::encodeResolve(f);
+    pushResolve(std::string(enc.begin(), enc.end()));
+    return len;
 }
 
 /**
@@ -590,6 +625,8 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true, 
     proteus::http::setHttpUnregisterHandler(&unregisterInflightEntry);
     // ★B-2c：`http.cancel` 的分派钩子（一次性 VM 下为 nullptr ⇒ 仍是原来的 no-op 文案）
     proteus::http::setSessionCancelHandler(&cancelInflight);
+    // ★B-3：流式块回推钩子（注册后 `stream:true` 才被放行 —— 见 `proteus_http_guard.h`）
+    proteus::http::setHttpStreamHandler(&pushStreamChunk);
     // ★关掉 open 阶段的内层 scope（状态全在 globalThis，句柄可以回收）
     if (openScope != nullptr) OH_JSVM_CloseHandleScope(S.env, openScope);
     VMS_LOG("open-scope-closed");
@@ -741,6 +778,8 @@ inline std::string sessionClose() {
     proteus::http::setHttpRegisterHandler(nullptr);
     proteus::http::setHttpUnregisterHandler(nullptr);
     proteus::http::setSessionCancelHandler(nullptr);
+    // ★B-3：注销流式回推钩子（之后 stream 会恢复"如实拒绝"——不留下"看起来支持"的假象）
+    proteus::http::setHttpStreamHandler(nullptr);
     {
         std::lock_guard<std::mutex> lk(inflightMu());
         inflightTable().clear();
@@ -902,9 +941,13 @@ inline napi_value HostVmSessionEval(napi_env env, napi_callback_info info) {
 inline napi_value HostVmSessionCancelStats(napi_env env, napi_callback_info info) {
     (void)info;
     const proteus::http::Stats& st = proteus::http::stats();
+    /* ★★★#1344 B-2c：**三个分支各一个计数**（`calls=0` 本身是三义的——见 `Stats` 注释）。
+       `noInflight` / `unsupported` 任一非 0 ⇒ 取消没落地，且**直接指出是哪一步断的**。 */
     const std::string payload = "{\"calls\":" + std::to_string(st.cancelCalls) +
                                 ",\"hits\":" + std::to_string(st.cancelHits) +
-                                ",\"misses\":" + std::to_string(st.cancelMisses) + "}";
+                                ",\"misses\":" + std::to_string(st.cancelMisses) +
+                                ",\"noInflight\":" + std::to_string(st.cancelNoInflight) +
+                                ",\"unsupported\":" + std::to_string(st.cancelUnsupported) + "}";
     const std::string out = "{\"ok\":true,\"value\":\"" + jsonEscape(payload) + "\"}";
     napi_value r;
     napi_create_string_utf8(env, out.c_str(), out.size(), &r);

@@ -23,21 +23,60 @@ const ROOT = path.resolve(__dirname, '..')
 const read = (p: string): string => fs.readFileSync(path.join(ROOT, p), 'utf8')
 /**
  * ★#1191：从 `proteus_http_stubs.h` 里**只取某个方法的返回块**（不做整文件 grep）。
- *   起点 = `method == "<name>"` 那一行；终点 = 该 if 块的 `return true;` 之后。
+ *   起点 = `method == "<name>"` 那一行；终点 = 该 if 块的**闭合大括号**。
  *   ★这是修"注释里出现也算命中"的假绿所必需的：整文件 grep 会命中文件头注释。
+ *
+ * ★★★#1344 B-2c 修正：终点**不能**取"第一个 `return true;`" —— `http.cancel` 现在是
+ *   **两分支**（会话模式 `return true` 在前，一次性 VM 的 no-op 文案在后）⇒ 旧切法会把
+ *   后半段的 no-op 断言整个切掉，导致"不得伪造成功"那条**永远看不到要断言的文本**。
+ *   ★改用**花括号配平**取完整 if 块（字符串与注释里的括号不参与计数）。
  */
 function stubBlock(method: string): string {
   const s = read('hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_stubs.h')
   const at = s.indexOf(`method == "${method}"`)
   if (at < 0) return ''
-  const end = s.indexOf('return true;', at)
-  return end < 0 ? s.slice(at) : s.slice(at, end + 'return true;'.length)
+  // 从方法判断处找到该 if 的 `{`（跳过 `&&`/`||` 等表达式里的括号：只看第一个 `{`）
+  const braceAt = s.indexOf('{', at)
+  if (braceAt < 0) return ''
+  let depth = 0
+  let i = braceAt
+  let inStr: string | null = null
+  let inLineComment = false
+  for (; i < s.length; i++) {
+    const c = s[i]
+    const next = s[i + 1]
+    if (inLineComment) {
+      if (c === '\n') inLineComment = false
+      continue
+    }
+    if (inStr !== null) {
+      if (c === '\\') { i++; continue }
+      if (c === inStr) inStr = null
+      continue
+    }
+    if (c === '/' && next === '/') { inLineComment = true; i++; continue }
+    if (c === '/' && next === '*') {
+      const endC = s.indexOf('*/', i + 2)
+      if (endC < 0) break
+      i = endC + 1
+      continue
+    }
+    if (c === '"' || c === "'") { inStr = c; continue }
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return s.slice(at, i + 1)
+    }
+  }
+  return s.slice(at)
 }
 const HTTP = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h'
 const SAVE = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_save.h'
 const STUBS = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_stubs.h'
 /** ★#1203：「本端不支持的能力」前置拒绝实现（stream / tlsPins / upload 都在这里） */
 const GUARD_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_guard.h'
+/** ★#1344 B-2c/B-3：会话式 VM（在途表 / 真取消 / 流式块回推的注册处） */
+const SESSION_H = 'hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_vm_session.h'
 
 describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 ⇒ 必须做）', () => {
   it('★落盘走 SaveSession（逐块直写文件，不累积 body）', () => {
@@ -133,34 +172,54 @@ describe('★★★#1187 鸿蒙 savePath：逐块落盘（同步模型下可做 
   })
 })
 
-describe('★★★#1187 鸿蒙 stream：模型限制 ⇒ 必须如实拒绝（不得静默降级）', () => {
+describe('★★★#1187/#1344 鸿蒙 stream：**双口径**（会话模式放行 / 一次性 VM 如实拒绝）', () => {
   /**
    * ★★★#1191（独立验证 J1 修复）：**判据必须锚定返回值字面量，不能 grep 整个文件**。
    *   原版三条断言（正则匹配 `if (f.stream…)` / `一次性 VM` / `savePath`）的**首个命中全在注释**里
    *   ⇒ 变异实测：把 if 的**函数体清空**（= 恢复静默忽略）三条仍全绿。**假绿**。
    *   ⇒ 现在先取出 `f.stream` 那个 if 块，再断言块内**真的 return 了**带 unsupported 的 err。
+   *
+   * ★★★#1344 B-3 翻转：stream 在**会话式 VM** 里已实现（逐块回推）⇒ 判据从"一律拒绝"变成
+   *   **双口径**：
+   *     · 钩子**未注册**（一次性 VM / 生产路径）⇒ 必须仍如实拒绝（这条不能丢——否则
+   *       业务在一次性 VM 上以为 `onChunk` 会跑，实际一次都不触发）；
+   *     · 钩子**已注册**（会话模式）⇒ 必须放行。
+   *   ⇒ 断言要点：
+   *     ① 拒绝分支带 `!httpStreamAvailable()` 条件（**无条件拒绝**在会话模式下会误杀真实流式）；
+   *     ② 该分支仍 return 带 `fetch.unsupported` 的字面量（保留根因与替代方案）；
+   *     ③ `handle()` 确实调用了 guard；
+   *     ④ 会话侧**真的注册/注销**了钩子（注册缺失 ⇒ 会话里 stream 永远被拒；注销缺失 ⇒
+   *        会话关掉后仍"看起来支持"）。
    */
-  it('★`stream: true` 必须显式报 unsupported（此前是静默忽略）', () => {
-    /**
-     * ★★★#1203：`stream` 的拒绝已从 `proteus_http.h` 移到 `proteus_http_guard.h`
-     *   （与 `tlsPins` / `upload` 一起收口成「本端不支持的能力」前置拒绝）。
-     *   ⇒ 判据必须**两段联合**，任何一段缺失都说明这条能力又变成静默失效：
-     *     ① guard 里有拒绝分支且**真的 return 了** unsupported 字面量；
-     *     ② `handle()` **确实调用了** guard（否则 guard 写了也没人用——这正是本单修的那类缺陷）。
-     */
+  it('★`stream: true` 必须双口径：无回推接收方 ⇒ 拒绝；会话模式 ⇒ 放行', () => {
     const guard = read(GUARD_H)
-    const at = guard.indexOf('if (f.stream && *f.stream)')
-    expect(at, '★找不到 stream 分支（被删了？）').toBeGreaterThan(0)
+    const at = guard.indexOf('if (f.stream && *f.stream && !httpStreamAvailable())')
+    expect(at, '★找不到 stream 的双口径分支（条件必须含 !httpStreamAvailable()）').toBeGreaterThan(0)
     const block = guard.slice(at, guard.indexOf('\n  }', at) + 4)
     expect(block, '★stream 分支没有 return（= 静默忽略，请求照常成功）').toMatch(/return\s+"/)
     // 拒绝信息必须是**返回值里的字面量**（不是注释里的）
     expect(block, '★拒绝信息不是 fetch.unsupported 字面量').toContain('fetch.unsupported')
     expect(block, '★拒绝信息没点明根因（一次性 VM + 同步 napi）').toMatch(/一次性 VM[\s\S]{0,80}同步 napi/)
     expect(block, '★拒绝信息没给替代方案（savePath）').toContain('savePath')
+    // ★钩子与可用性判据必须同头（否则 guard 看不见它 ⇒ 又变成 include 顺序的隐式契约）
+    expect(guard, '★`httpStreamAvailable` 不在 guard 头里（可见性靠 include 顺序 = 脆弱）')
+      .toContain('httpStreamAvailable')
     // ② 调用点必须在 handle() 里（guard 写了不调用 = 静默失效原样保留）
     const h = read(HTTP)
     expect(h, '★handle() 没调用 unsupportedFeatureReason（guard 成了死代码）')
       .toContain('unsupportedFeatureReason(f)')
+    // ③ 会话侧真的注册 + 注销钩子
+    const sess = read(SESSION_H)
+    expect(sess, '★会话打开时没注册流式钩子（会话里 stream 会被误拒）')
+      .toContain('setHttpStreamHandler(&pushStreamChunk)')
+    expect(sess, '★会话关闭时没注销流式钩子（关掉后仍"看起来支持"）')
+      .toContain('setHttpStreamHandler(nullptr)')
+    // ④ 钩子实现必须真的把块编成**带 streamSeq 的 PRSP 帧**（不是只累加计数）
+    const pushAt = sess.indexOf('inline size_t pushStreamChunk(')
+    expect(pushAt, '★找不到 pushStreamChunk 实现').toBeGreaterThan(0)
+    const pushBlock = sess.slice(pushAt, sess.indexOf('\n}', pushAt) + 2)
+    expect(pushBlock, '★流式块帧没带 streamSeq（JS 侧无法判定块序/丢帧）').toContain('streamSeq')
+    expect(pushBlock, '★流式块没入队（pushResolve 未调用 ⇒ 永远到不了 JS）').toContain('pushResolve')
   })
 })
 
@@ -353,7 +412,7 @@ describe('★★★#1187 鸿蒙三个 http.* 方法：必须有分派（不再 m
       /#include "proteus_http_stubs\.h"/,
     )
     expect(read('hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h'), '★分派未接到 httpStubDispatch').toMatch(
-      /proteus::http::httpStubDispatch\(method, &o\)/,
+      /proteus::http::httpStubDispatch\(method, argsJson, &o\)/,
     )
   })
 
@@ -361,13 +420,26 @@ describe('★★★#1187 鸿蒙三个 http.* 方法：必须有分派（不再 m
    * ★★★#1191（独立验证 J2 修复）：**同样锚定返回块，不 grep 整文件**。
    *   原版 `no-op`/`timeout`/`pinning`/`CA` 的**首个命中全在文件头注释** ⇒ 变异实测：
    *   把三个返回值换成最小 JSON（删光文案）四条断言**仍全绿**。**假绿**。
+   *
+   * ★★★#1344 B-2c 翻转（**双口径**）：会话式 VM 起，`http.cancel` 在会话模式下**真能取消**
+   *   （查在途表 → `HMS_Rcp_CancelRequest`，真机 `cancelStats.calls=1` 已证）。
+   *   但**一次性 VM（生产路径）仍是 no-op** —— 那条分支绝不能改成伪造成功。
+   *   ⇒ 判据从"一律不得 ok:true"改为：
+   *     · `g_sessionCancel == nullptr` 分支 ⇒ 仍须 `ok:false` + `no-op` + 建议 `timeout`；
+   *     · `g_sessionCancel != nullptr` 分支 ⇒ 必须**真的调钩子**（`g_sessionCancel(stubReqId(...))`），
+   *       不能只写好文案却什么都不做。
    */
-  it('★★绝不伪造"取消成功"（鸿蒙 abort 是 no-op，这是模型限制不是能力）', () => {
+  it('★★双口径：会话模式真取消（调钩子）· 一次性 VM 仍如实报 no-op', () => {
     const blk = stubBlock('http.cancel')
     expect(blk, '★找不到 http.cancel 的返回块').toBeTruthy()
-    expect(blk, '★http.cancel 报了 ok:true（会让业务以为取消生效了）').toMatch(/ok\\":false/)
-    expect(blk, '★http.cancel 返回块里没点明 abort 是 no-op').toMatch(/no-op/)
-    expect(blk, '★返回块里没给出替代方案 timeout').toMatch(/timeout/)
+    // ① 一次性 VM 分支：不得伪造成功
+    expect(blk, '★一次 VM 分支报了 ok:true（会让业务以为取消生效了）').toMatch(/ok\\":false/)
+    expect(blk, '★一次 VM 分支没点明 abort 是 no-op').toMatch(/no-op/)
+    expect(blk, '★一次 VM 分支没给出替代方案 timeout').toMatch(/timeout/)
+    // ② 会话分支：必须真的调钩子（否则"支持取消"是文案摆设）
+    expect(blk, '★http.cancel 的会话分支没调 g_sessionCancel（写了文案但不取消）')
+      .toMatch(/g_sessionCancel\(\s*stubReqId\(/)
+    expect(blk, '★会话分支没把 reqId 解析出来（钩子拿不到要取消谁）').toContain('stubReqId')
   })
 
   it('★★tlsStats / cancelStats 的限制必须放进 `data`（桥结算会丢顶层 note）', () => {

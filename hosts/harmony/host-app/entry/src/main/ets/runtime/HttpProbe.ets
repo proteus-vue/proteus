@@ -185,10 +185,28 @@ export function runHttpProbe(filesDir: string): void {
     result = '{"ok":false,"host":"harmony","error":"' + JSON.stringify(e) + '"}';
   }
   try {
-    const path: string = filesDir + '/http-probe.json';
+    /* ★★★#1344：**报告文件名必须随用途变化**（否则装置污染生产证据）。
+       此前不管是 HTTP 判据还是 `--cap-method=<能力>` 直通，都写同一个 `http-probe.json`
+       ⇒ 跑一次 share / phone.call 探针就把 HTTP 判据的证据覆盖掉。
+       实测后果：`tests/fetch-cancel.test.ts` 的「慢请求 8s 完整返回」判据读到 share 的
+       `{"status":0,...}` 而变红——**装置缺陷伪装成能力缺陷**（等价于"证据被换成别人的"）。
+       ★主机侧 `run-http-probe.sh` 的 `REPORT_FILE` 与本处**同一命名规则**，两边必须一致。 */
+    let capSlug: string = '';
+    if (isCapProbe) {
+      const src: string = capMethodIn ?? '';
+      for (let i = 0; i < src.length; i++) {
+        const ch: string = src.charAt(i);
+        const safe: boolean = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+          || (ch >= '0' && ch <= '9') || ch === '.' || ch === '_' || ch === '-';
+        capSlug += safe ? ch : '_';
+      }
+    }
+    const reportName: string = capSlug.length > 0 ? ('http-probe-cap-' + capSlug + '.json') : 'http-probe.json';
+    const path: string = filesDir + '/' + reportName;
     const fd = fileIo.openSync(path, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
     fileIo.writeSync(fd.fd, result);
     fileIo.closeSync(fd.fd);
+    hilog.info(DOMAIN, TAG, 'HTTP_PROBE_PATH %{public}s', reportName);
   } catch (e) {
     hilog.error(DOMAIN, TAG, 'HTTP_PROBE_WRITE_FAIL %{public}s', JSON.stringify(e) ?? '');
   }

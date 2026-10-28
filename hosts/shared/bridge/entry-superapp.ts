@@ -14,6 +14,7 @@ import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCa
 import { appShareProbe } from './entry-superapp-probes-share'; export { appShareProbe } from './entry-superapp-probes-share'   // ★#1336 分享探针（单列：probes.ts 已 962 行）
 import { appSessionHttpGet } from './entry-superapp-probes-session'; export { appSessionHttpGet } from './entry-superapp-probes-session'   // ★#1344 B-2 会话最小 GET
 import { appSessionCancelStart, appSessionCancelAbort } from './entry-superapp-probes-session-cancel'; export { appSessionCancelStart, appSessionCancelAbort } from './entry-superapp-probes-session-cancel'   // ★#1344 B-2c 真取消（两阶段）
+import { appSessionStreamStart } from './entry-superapp-probes-session-stream'; export { appSessionStreamStart } from './entry-superapp-probes-session-stream'   // ★#1344 B-3 会话流式（逐块回推）
 // ★★★#1150：RFC 5861 扩展指令探针**单列**（entry-superapp-probes.ts 已到 file-size 上限；
 //   缓存基础 #1149 与缓存扩展 #1150 是两次独立交付，边界清晰）
 import { appStaleProbe } from './entry-superapp-probes-stale'; export { appStaleProbe } from './entry-superapp-probes-stale'
@@ -967,6 +968,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as { __proteusHostAppSessionHttpGet?: (u: string) => string }).__proteusHostAppSessionHttpGet = (u: string) => appSessionHttpGet(u)
 ;(globalThis as unknown as { __proteusHostAppSessionCancelStart?: (u: string) => string }).__proteusHostAppSessionCancelStart = (u: string) => appSessionCancelStart(u)
 ;(globalThis as unknown as { __proteusHostAppSessionCancelAbort?: () => string }).__proteusHostAppSessionCancelAbort = () => appSessionCancelAbort()
+// ★★★#1344 B-3：会话流式探针（单阶段：发起后由 tick 推块，块到齐自然结算）
+;(globalThis as unknown as { __proteusHostAppSessionStreamStart?: (u: string) => string }).__proteusHostAppSessionStreamStart = (u: string) => appSessionStreamStart(u)
 // ★★★#1149：HTTP 条件请求缓存探针（宿主按中性名调；结果填 __proteusHostCacheProbeResult）
 ;(globalThis as unknown as {
   __proteusHostAppCacheProbe?: (b: string) => string

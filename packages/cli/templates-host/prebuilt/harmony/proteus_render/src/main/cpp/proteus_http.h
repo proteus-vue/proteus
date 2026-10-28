@@ -44,15 +44,24 @@
 #include <vector>
 
 #include "invoke_wire.h"
-#include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
-#include "proteus_http_diag.h"   // ★#1194：VmHWM 读取（读数记账）
-#include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
-#include "proteus_http_doh.h"         // ★#1202：DoH 落点探针状态（取证专用，生产零影响）
-#include "proteus_http_guard.h"       // ★#1203：不支持能力的**前置拒绝**（stream / tlsPins）
-#include "proteus_http_rcpapi.h"      // ★#1204：RCP 符号表 + 进程级 session 槽（从 handle() 分出）
-#include "proteus_http_response.h"    // ★#1204：成功响应装配（从 handle() 分出）
-#include "proteus_http_upload.h"      // ★#1205：multipart 上传（路径交给平台流式读）
 
+/**
+ * ★★★#1344 B-2c 缺陷修复：**`PROTEUS_HAVE_RCP` 必须在 `proteus_http_rcpapi.h` 之前定义**。
+ *
+ * 【真机症状】`abort()` 后 JS 侧四项全对（`inPending/encoded/sent=true`、169 字节回执），
+ *   而宿主 `cancelStats.calls=0`、`unsupported=1` ⇒ 判据 `stage=host:rcp-cancel-symbol-missing`。
+ *
+ * 【根因】这段 `__has_include` 判定原先写在**所有子头 include 之后**，而 `proteus_http_rcpapi.h`
+ *   在**它之前**就被 include 了 ⇒ `rcpapi.h` 里的 `#if PROTEUS_HAVE_RCP` 在预处理时
+ *   看到的是**未定义**（C 预处理规则：#if 里未定义标识符 = 0）⇒
+ *   `cancelRcpRequestRaw` 的函数体整个被编成 `return false`。
+ *   ★注意：HTTP 请求本身正常，因为它的 `#if PROTEUS_HAVE_RCP`（本文件 266 行起）在定义**之后**。
+ *   ⇒ 同一份代码里同一宏有**两种取值**，只有"取消"这一条路径静默失效。
+ *   ★这是"宏的可见性随时间变化"型缺陷：单元测试与 `-fsyntax-only` 都看不见
+ *     （两个分支都能编译），只有真机跑到那条分支才暴露。
+ *
+ * ⇒ 定义/包含顺序必须是：先探 RCP 头 → 再 include 依赖该宏的子头。
+ */
 #if defined(__has_include)
 #if __has_include(<RemoteCommunicationKit/rcp.h>)
 #include <RemoteCommunicationKit/rcp.h>
@@ -67,14 +76,23 @@
 #include <dlfcn.h>
 #endif
 
+#include "proteus_http_save.h"   // ★#1187：savePath 落盘（沙箱路径校验 + 逐块直写）
+#include "proteus_http_diag.h"   // ★#1194：VmHWM 读取（读数记账）
+#include "proteus_http_transport.h"   // ★#1191：传输读数装配（区间换算 + DNS 来源映射）
+#include "proteus_http_doh.h"         // ★#1202：DoH 落点探针状态（取证专用，生产零影响）
+#include "proteus_http_guard.h"       // ★#1203：不支持能力的**前置拒绝**（stream / tlsPins）
+#include "proteus_http_rcpapi.h"      // ★#1204：RCP 符号表 + 进程级 session 槽（从 handle() 分出）
+#include "proteus_http_response.h"    // ★#1204：成功响应装配（从 handle() 分出）
+#include "proteus_http_upload.h"      // ★#1205：multipart 上传（路径交给平台流式读）
+
 namespace proteus {
 namespace http {
 
-/* ══════════════════════ 会话式 VM 的钩子（#1344 B-2 / B-2c） ══════════════════════
+/* ══════════════════════ 会话式 VM 的钩子（#1344 B-2 / B-2c / B-3） ══════════════════════
  *
  * 【为什么用函数指针】`proteus_vm_session.h` **包含**本文件；本文件不能反向 include 它
  *   （循环依赖）。钩子让"会话模式"由会话模块注册，本文件只负责在正确时机调用。
- * 【一次性 VM（生产路径）下两者都是 nullptr】⇒ 行为与改造前**逐字节等价**。
+ * 【一次性 VM（生产路径）下全部是 nullptr】⇒ 行为与改造前**逐字节等价**。
  */
 /**
  * ★B-2c：**在途登记**（`reqId` → 可取消的 RCP 请求）。
@@ -95,6 +113,11 @@ static inline void setHttpUnregisterHandler(ProteusHttpUnregisterFn fn) { g_prot
 static inline void unregisterInflight(const std::string& reqId) {
   if (g_proteusHttpUnregister != nullptr) g_proteusHttpUnregister(reqId);
 }
+
+/**
+ * ★★★#1344 B-3：流式块回推钩子的**声明在 `proteus_http_guard.h`**（那里才有"可用性判据"
+ *   需要它；而本文件在本头之后才定义 ⇒ 写在会这里看不见）。这里只补一句指针说明。
+ */
 
 /* ★B-2c 的 `cancelRcpRequest` 定义在文件末尾（它要用 `stats()`）；RCP 类型相关的实现在
    `proteus_http_rcpapi.h` 的 `cancelRcpRequestRaw`（本文件已 include 它）。 */
@@ -127,6 +150,17 @@ struct Stats {
   int cancelCalls = 0;
   int cancelHits = 0;
   int cancelMisses = 0;
+  /**
+   * ★★★#1344 B-2c 诊断：`http.cancel` **到了宿主但没调 cancel 符号**的两种成因。
+   *
+   * 【为什么必须分开记（本轮真机踩的坑）】此前判据只看 `cancelCalls`，而它是 **0 的三义**：
+   *   ① 帧根本没到宿主（JS 侧抛错被吞 / 通道没接）② 到了但 `reqId` 不在在途表
+   *   ③ 到了、命中表、但 RCP 库缺 `HMS_Rcp_CancelRequest` 符号。
+   *   三者对 `cancelCalls=0` **完全同形** ⇒ 只能靠"再跑一次"逐条排除（浪费真机轮次）。
+   *   ⇒ 每个分支各记一个数，一次运行就能定位（本仓纪律：读数必须可归因）。
+   */
+  int cancelNoInflight = 0;    // ② 请求不在在途表（已完成 / 非会话通道 / reqId 对不上）
+  int cancelUnsupported = 0;   // ③ RCP 库缺 cancel 符号（`cancelRcpRequest` 提前 return）
 };
 inline Stats& stats() {
   static Stats s;
@@ -352,6 +386,13 @@ struct RecvGate {
    * ★★★#1187：**落盘会话**（实现见 `proteus_http_save.h`）。非 null ⇒ 逐块直写文件、body 不累积。
    */
   SaveSession* save = nullptr;
+  /**
+   * ★★★#1344 B-3：**流式回推**（会话模式才有）。非空 ⇒ 每块经它入队（JS 侧 `onChunk` 消费），
+   *   而**不是**累积到 `body`。与 `save` 互斥由调用方保证（两者都要"逐块"，但目的不同）。
+   */
+  const std::string* streamReqId = nullptr;
+  uint32_t streamSeq = 0;
+  unsigned long long streamPushed = 0;
 };
 
 /**
@@ -390,6 +431,18 @@ inline size_t recvGate(void* usr, Rcp_Buffer* buf) {
     }
     return n;
   }
+  /**
+   * ★★★#1344 B-3：**流式模式 ⇒ 逐块回推**（会话模式才有；一次性 VM 下 `streamReqId` 恒 nullptr）。
+   *   ★不累积到 `body`：调用方按块消费，内存不随响应体增长（这正是流式的意义）。
+   *   ★seq **从 0 起连续**：JS 侧跳号即判丢帧（`capability-invoke.settleHostCallBytes`）。
+   *   ★即使 `pushResolve` 入队失败也不在这里 cancel —— 入队只是加锁 push_back，
+   *     失败只有 OOM；真出问题由 JS 侧的超时/`MAX_STREAM_CHUNKS` 兜底，不在网络线程做决策。
+   */
+  if (g->streamReqId != nullptr && g_proteusHttpStream != nullptr) {
+    g_proteusHttpStream(*g->streamReqId, g->streamSeq++, p, n);
+    g->streamPushed++;
+    return n;
+  }
   g->body.insert(g->body.end(), p, p + n);
   return n;
 }
@@ -406,31 +459,15 @@ inline std::string tooLargeReason(size_t seen) {
   return buf;
 }
 
-/** `librcp_c.so` 的探测顺序（设备实测：`/system/lib64/ndk/librcp_c.so`；其余为本机/其它布局兜底）。 */
-inline void* openRcp() {
-#if PROTEUS_HAVE_RCP
-  static void* lib = nullptr;
-  static bool tried = false;
-  if (!tried) {
-    tried = true;
-    const char* names[] = {
-        "librcp_c.so",
-        "/system/lib64/ndk/librcp_c.so",
-        "/system/lib64/librcp_c.so",
-    };
-    for (const char* n : names) {
-      lib = dlopen(n, RTLD_NOW | RTLD_LOCAL);
-      if (lib != nullptr) break;
-    }
-    if (lib == nullptr) {
-      fprintf(stderr, "[proteus-http] librcp_c.so 未找到（http.request 将诚实回 unsupported）\n");
-    }
-  }
-  return lib;
-#else
-  return nullptr;
-#endif
-}
+/**
+ * `librcp_c.so` 的探测 —— ★★★#1344 B-2c：**唯一实现在 `proteus_http_rcpapi.h` 的 `openRcp()`**。
+ *
+ * 【为什么下沉】本函数是"RCP 库句柄的唯一探测点"，而 `cancelRcpRequestRaw` 也需要同一个句柄。
+ *   此前它写在本文件（**晚于** `rcpapi.h` 的 include）⇒ `rcpapi.h` 里的 cancel
+ *   只能自己 `dlopen("librcp_c.so")` 裸名 ⇒ 设备上库在 `/system/lib64/ndk/` ⇒
+ *   取消永远拿不到句柄。⇒ 探测点下沉到 `rcpapi.h`（RCP 句柄与符号的职责落点），
+ *   这里与 `rcpapi.h` 同在 `namespace proteus::http` ⇒ 直接可见，无需转发。
+ */
 
 /* ────────────────────────── 小工具 ────────────────────────── */
 
@@ -772,6 +809,12 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
     gate.session = session;
     gate.req = req;
     gate.cancelFn = api.cancelRequest;
+    /* ★★★#1344 B-3：流式模式 ⇒ 装回推目标（与 save 互斥：savePath 优先落盘，见下）。
+       ★`streamReqId` 指向 `f.reqId`（`handle()` 的入参，活到请求结束）⇒ 无悬垂。 */
+    const bool wantStream = f.stream && *f.stream;
+    if (wantStream && save.fp == nullptr && g_proteusHttpStream != nullptr) {
+      gate.streamReqId = &f.reqId;
+    }
     Rcp_OnBinaryReceiveCallback ocb{};
     ocb.callback = &detail::recvGate;
     ocb.usrObject = &gate;
@@ -975,7 +1018,11 @@ inline std::string probe(const std::string& url) {
  */
 inline bool cancelRcpRequest(void* session, void* req) {
   uint32_t rc = 0;
-  if (!cancelRcpRequestRaw(session, req, &rc)) return false;
+  if (!cancelRcpRequestRaw(session, req, &rc)) {
+    // ★诊断：符号缺失 ⇒ 单独记账（否则与"帧没到"在 cancelCalls 上不可区分）——见 Stats 注释
+    stats().cancelUnsupported++;
+    return false;
+  }
   stats().cancelCalls++;
   if (rc == 0) stats().cancelHits++;
   else stats().cancelMisses++;

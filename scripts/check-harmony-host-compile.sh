@@ -98,5 +98,49 @@ for f in proteus_host.cpp proteus_render.cpp glass_vk.cpp; do
     fail=1
   fi
 done
+
+# ══════════════════ ★★★#1344 B-2c：**条件编译宏的"可见性顺序"检查** ══════════════════
+# 【为什么必须有这一条（`-fsyntax-only` 结构上看不见的真缺陷）】
+#   真机症状：`abort()` 后 JS 侧四项全对，宿主 `cancelStats.calls=0` / `unsupported=1`。
+#   根因：`proteus_http_rcpapi.h` 里的 `#if PROTEUS_HAVE_RCP` —— 而该宏由
+#   `proteus_http.h` 在本头 **include 之后**才定义 ⇒ 预处理时它还是"未定义"
+#   （C 规则：`#if` 里未定义标识符 = 0）⇒ `cancelRcpRequestRaw` 整个函数体被编成
+#   `return false`，而 HTTP 请求路径（定义**之后**的 `#if`）完全正常。
+#   ★两个分支都能编译 ⇒ `-fsyntax-only` 与单测全绿，只有跑到那条分支才暴露。
+# 【判据】预处理展开后，**带 HMS 头**时 `cancelRcpRequestRaw` 的函数体必须真的在代码里
+#   （`grep` 到 `loadRcpApi(lib)`）；且各子头**不得引用**由包含者定义的宏
+#   （头文件必须自给自足 —— 否则 include 顺序变成隐式契约）。
+check_macro_visibility() {
+  local probe=/tmp/proteus_rcp_macro_probe.cpp
+  # ① 每个子头的宏自给自足：不得出现外部 `PROTEUS_HAVE_RCP`（应各自探测或用自己的 HAVE_H）
+  local bad=0 h
+  for h in proteus_http_rcpapi.h proteus_http_response.h proteus_http_upload.h \
+           proteus_http_guard.h proteus_http_save.h proteus_http_transport.h \
+           proteus_http_doh.h proteus_http_diag.h; do
+    [ -f "$CPP_DIR/$h" ] || continue
+    # 只看**代码**里的 #if/#ifdef（注释行不算；本仓注释会提到该宏做解释）
+    if grep -nE '^[[:space:]]*#[[:space:]]*(if|ifdef|ifndef|elif)[[:space:]]+.*PROTEUS_HAVE_RCP' "$CPP_DIR/$h" \
+        | grep -v 'PROTEUS_RCPAPI_HAVE_H' | grep -q .; then
+      echo "  ✗ ${h}：引用了由包含者定义的 PROTEUS_HAVE_RCP（include 顺序成了隐式契约）"
+      grep -nE '^[[:space:]]*#[[:space:]]*(if|ifdef|ifndef|elif)[[:space:]]+.*PROTEUS_HAVE_RCP' "$CPP_DIR/$h" | sed 's/^/      /'
+      bad=1
+    fi
+  done
+  # ② 带 HMS 头预处理后，cancel 的实现体必须真的在（不是被编成 return false）
+  if [ -n "$HMS_INC" ]; then
+    printf '#include "proteus_http_rcpapi.h"\n' > "$probe"
+    if "$CLANG" --target=aarch64-linux-ohos --sysroot="$SYSROOT" -E -std=c++17 -P \
+        -I"$SYSROOT/usr/include" -I"$SYSROOT/usr/include/$ARCH_INC" -I"$CPP_DIR" "${HMS_FLAGS[@]+"${HMS_FLAGS[@]}"}" \
+        "$probe" 2>/dev/null | grep -q 'loadRcpApi(lib)'; then
+      echo "  ✅ RCP 取消分支在带 HMS 头时**真的被编进来了**（不是空壳 return false）"
+    else
+      echo "  ✗ RCP 取消分支被条件编译吃掉了（预处理后看不到 loadRcpApi(lib)）——宏可见性问题"
+      bad=1
+    fi
+  fi
+  [ "$bad" = 0 ] && echo "  ✅ 条件编译宏自给自足（无 include 顺序隐式契约）" || fail=1
+}
+check_macro_visibility
+
 [ "$fail" = 0 ] && { echo "✅ 鸿蒙宿主 C++ 编译检查通过（改动 proteus_host.cpp/proteus_render.cpp 后先跑本脚本，再上真机）"; exit 0; }
 echo "✗ 鸿蒙宿主 C++ 编译检查未过"; exit 1

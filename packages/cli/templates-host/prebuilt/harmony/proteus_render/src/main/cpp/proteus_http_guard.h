@@ -24,12 +24,37 @@
 //   而去查证书，方向就错了；`fetch.unsupported` 明确表达"本端没有这个能力"。
 //   ★必须在**发请求之前**拒绝（不发出任何未受 pin 保护的流量）。
 #pragma once
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include "invoke_wire.h"
 
 namespace proteus {
 namespace http {
+
+/**
+ * ★★★#1344 B-3：**流式块回推钩子**（会话式 VM 专用；本头是它的声明落点）。
+ *
+ * 【为什么放在 guard 里而不是 `proteus_http.h`】本头的 `unsupportedFeatureReason()` 必须知道
+ *   "本端现在**有没有**回推接收方"才能决定 stream 是拒绝还是放行。而 `proteus_http.h` 在本头
+ *   **之后**才定义各钩子 ⇒ 若把声明写在那儿，这里就看不见（同一份代码里"先后顺序决定可见性"
+ *   正是 #1344 B-2c 那个缺陷的形态）。⇒ 钩子与它的可用性判据同置一处。
+ *
+ * 【线程纪律】实现会被**网络线程**（RCP 的逐块回调）调用 ⇒ 只能入队，**绝不能碰 JSVM**。
+ *
+ * @param reqId 去程 reqId（JS 侧按它找回 pending 条目 + `lastStreamSeq`）
+ * @param seq   块序号（**从 0 起连续**；JS 侧跳号即判丢帧，不静默拼接）
+ * @param data  块字节（调用后即失效，实现必须自己拷走）
+ * @param len   块长度
+ * @return 已处理字节数（`recvGate` 契约：一律回 `len`）
+ */
+typedef size_t (*ProteusHttpStreamFn)(const std::string& reqId, uint32_t seq, const uint8_t* data, size_t len);
+static ProteusHttpStreamFn g_proteusHttpStream = nullptr;
+static inline void setHttpStreamHandler(ProteusHttpStreamFn fn) { g_proteusHttpStream = fn; }
+
+/** 流式回推是否可用（`unsupportedFeatureReason` 据此决定 stream 该拒绝还是该放行）。 */
+static inline bool httpStreamAvailable() { return g_proteusHttpStream != nullptr; }
 
 /**
  * 检查帧里要求了本端**结构上不支持**的能力，若命中则给出拒绝原因（空串 = 通过）。
@@ -42,10 +67,14 @@ namespace http {
  */
 inline std::string unsupportedFeatureReason(const proteus::wire::InvokeFrame& f) {
   /**
-   * ① `stream: true` —— 一次性 VM + 同步 napi ⇒ 无回推接收方。
-   *   （#1187 起如实拒绝；此处保留原文案，判据 `fetch.unsupported` + 根因关键词守着）
+   * ① `stream: true` —— ★★★#1344 B-3：**会话式 VM 下已实现**（逐块回推，见
+   *   `proteus_http.h` 的 `recvGate` 流式分支 + 会话钩子 `setHttpStreamHandler`）。
+   *   · **一次性 VM（生产路径）**：`httpStreamAvailable()` 为 false（没有回推接收方）
+   *     ⇒ **仍如实拒绝**，不静默降级成"看起来在流式"（那会让业务以为 `onChunk` 会跑）。
+   *   · **会话模式**：钩子已注册 ⇒ 放行，语义与 Android/iOS 对齐。
+   *   ★判据双口径：`tests/harmony-http-gaps.test.ts` 守着"无钩子时必须拒绝"这一条。
    */
-  if (f.stream && *f.stream) {
+  if (f.stream && *f.stream && !httpStreamAvailable()) {
     return "fetch.unsupported: 鸿蒙宿主暂不支持 stream（一次性 VM + 同步 napi ⇒ 无法逐块回推）。"
            "请改用 savePath（宿主逐块落盘）或默认整包";
   }
