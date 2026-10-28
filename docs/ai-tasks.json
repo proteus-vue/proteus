@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-10-28T03:07:51.421Z",
+  "updated_at": "2026-10-28T04:02:14.271Z",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -3827,6 +3827,43 @@
         "T-harmony-http-stream"
       ],
       "note": "【in_progress · 2026-10-28】用户「请求库这层就是针对当前主流请求库痛点提供我们自己的答案」。\n★**定位**：不做「又一个 axios」，做**平台方的请求治理层**。主流库优化「业务少写代码」，我们优化「一个 App 里几十个团队共用一套网络还管得住」。\n★**架构约束（四条硬约束，违反即第四套并行栈）**：① `FetchConfig`/`FetchResult` 是唯一契约；② `baseURL`/`bizId`/幂等等全在**门面层**，不进 `FetchConfig`（避免污染四层线格式白名单）；③ 结果永不抛（G-32.3），`requestOrThrow` 只是显式选择；④ 内部只调 `useFetch`/`useFetchTask`/pipeline，**绝不复刻 `IRequestAdapter`**。\n★**痛点→答案 20 条**（详见 docs/request-client-plan/01-pain-points.md）：可靠性 7 条（重试不分方法/确定性抖动/无幂等/无断路器/无离线队列/超时语义模糊/**无未知态**）· 数据获取 4 条（双套缓存打架/去重键不含 body/假 SWR/乐观更新手写回滚）· 安全合规 5 条（脱敏缺失/全局可变配置/无签名防重放/**WS 绕过加固**/无审计）· 平台化 4 条（无 bizId/共享额度/跨端各自找库/拿不到宿主能力）。\n★★**核心答案（差异化）**：**未知态建模** —— `fetch.unknown` + `meta.sent` 三态（未发出/确定失败/结果未知）。主流库把超时当失败，但对支付来说超时是**必须去查的状态**。这是支付级可靠性的唯一正确起点。\n★**三套入口收口**：`createApi` 保留 API 内部委托（`ApiError` 适配）；`createRequestEngineering` 保留 R1-R4 但删自带 TTL 缓存与 FIFO 队列（改走 pipeline）；`useFetch`+pipeline 成为唯一策略内核。\n★**已知实证痛点**（本仓取证）：pipeline 重试判定不看 method（`capability-fetch-pipeline.ts:185-195`）· 抖动是确定性符号（`:208-212`）· `request-engineering` 去重键不含 body（`request-engineering.ts:98-109`）· 其 clearCache 会清空业务全部存储（`:283-285`）· 日志通道无脱敏（`capability-app-log.ts:125-137`）· Android WS 连主机名校验都缺（`WebSocketCapability.java:196-199`）。\n★**范围外（明确）**：支付渠道 SDK（微信/支付宝/Apple IAP 原生集成）· schema/OpenAPI 代码生成（仓库零基础设施）。\n★**进度**：C1 骨架 → C2 收口 → A(P0 VM 决策门) → B(P1 会话式 VM)。C1/C2 与 VM 无依赖。"
+    },
+    {
+      "id": "T-harmony-persistent-vm",
+      "title": "鸿蒙持久 VM 决策门 + 会话式 VM（#540 已实证推翻；B 阶段待接）",
+      "type": "framework-feature",
+      "status": "in_progress",
+      "owner": "session:zcode-main-20261028b",
+      "scope": [
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/vm_session_probe.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/host_app_runtime_impl.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_host.cpp",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/invoke_bytes_bridge.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_stubs.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_http_guard.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/types/libproteus_host/index.d.ts",
+        "hosts/harmony/host-app/proteus_render/Index.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/VmSessionProbe.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/shell/Superapp.ets",
+        "hosts/harmony/host-app/entry/src/main/ets/shell/EntryAbility.ets",
+        "hosts/harmony/run-vm-probe.sh",
+        "tests/harmony-http-gaps.test.ts",
+        "tests/fetch-cancel.test.ts",
+        "tests/screen-runtime.test.ts",
+        "tests/app-host-cli.test.ts",
+        "docs/project-memory-archive/decisions.md",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1343,
+      "branch": null,
+      "verification": "bash hosts/harmony/run-vm-probe.sh --rounds=5000 --mode=plain（ok:true / roundsOk=5000 / firstFailureRound=-1 / 堆锯齿不漂移）+ bash hosts/harmony/run-vm-probe.sh --mode=nav 与 --mode=ref（待解锁补跑）+ bash scripts/check-harmony-host-compile.sh + node scripts/check-file-size.mjs + node scripts/harmony-runtime-prebuilt.mjs",
+      "related": [
+        "T-request-client-library",
+        "T-harmony-http-cancel",
+        "T-harmony-http-stream"
+      ],
+      "note": "【in_progress · 2026-10-28 · 决策 #1343】\n★**P0 决策门已通过**：#540 断言\"跨 napi 复用 JSVM 必崩\"在当前 SDK（API 24）**已被真机实证推翻**——\n  plain 负载 **1000 轮与 5000 轮全部零崩溃**（ok:true / roundsOk==rounds / firstFailureRound:-1），\n  堆曲线呈**锯齿状分代 GC**（基线不漂移、峰值封顶 2.7MB 不增长）⇒ 健康，非泄漏。\n★**怎么得出这个结论的**：没有直接接受 #540，而是注意到同 HAR 的持久壳 VM（proteus_host.cpp:23-28）\n  跨事件存活且真机已跑通 ⇒ 先用 `vm_session_probe.h` **只验一个变量**（严格复刻 HostAppBoot 的\n  VM 建立顺序，但每轮只开/关内层 HandleScope、VM 全程不销毁）。\n★**B 阶段（会话式 VM）尚未开始**：需要 `SessionOpen/Tick/Close` + pending 帧 + 真实 cancel/stream/WS。\n  ★关键发现：协议（invoke_wire.h 的 pending/streamSeq）与 JS 侧（capability-invoke.ts:922\n  处理 reply.pending）**早已支持异步**，只缺鸿蒙宿主发 pending 帧 + 有人 pump。\n【Handoff】\n- 做到哪：P0 决策门完成（探针 + napi 导出 + ArkTS 侧 + 脚本 + 四方一致）。\n- 未做：`nav`/`ref` 两形态的 3000 轮真机（**设备锁屏**中断；解锁后一条命令可补）；B 阶段全部。\n- 下一步：① 解锁设备跑 `bash hosts/harmony/run-vm-probe.sh --mode=nav`（这条最该先补——\n  它模拟 #540 记的\"跨启动导航的微任务重入\"崩溃路径）；② 通过后做 SessionOpen/Tick/Close；\n  ③ 再让 http.request 返回 pendingOf(reqId)、网络线程只写 C++ 队列、tick 里推 __proteusHostResolveBytes。\n- 坑（探针自身踩的四个，都有注释）：CompileScript 第 6 参数是 cacheRejected 不是成功标志 ·\n  CreateStringUtf8 必须 JSVM_AUTO_LENGTH · GetHeapStatistics 收 VM 且字段 usedHeapSize ·\n  aa start --ps 参数不会自动进 AppStorage（要 EntryAbility 显式转发）。\n- 判据状态：plain 5000 轮绿；nav/ref 待补。"
     }
   ]
 }

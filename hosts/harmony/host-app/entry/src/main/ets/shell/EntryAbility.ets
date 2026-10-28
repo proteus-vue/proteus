@@ -83,6 +83,20 @@ export default class EntryAbility extends UIAbility {
     if (probeDohSkip !== undefined) {
       AppStorage.setOrCreate('proteusProbeDohSkipCert', String(probeDohSkip) === '1' ? '1' : '');
     }
+    /**
+     * ★★★#1342-A：持久 VM 探针的两个参数（`--ps vmRounds 1000 --ps vmMode plain`）。
+     * ★必须在这里**显式**转进 AppStorage —— `aa start --ps` 的参数不会自动出现在 AppStorage
+     *   （实测：直接传 `--ps vmRounds 3000`，而 `Superapp.ets` 读 `AppStorage.get('proteusVmProbeRounds')`
+     *    拿到空 ⇒ 用了缺省 1000，日志显示 `rounds=1000` 才发现）。与 #1187 的 savePath 同族。
+     */
+    const vmRounds = want?.parameters?.['vmRounds'];
+    if (vmRounds !== undefined && String(vmRounds).length > 0) {
+      AppStorage.setOrCreate('proteusVmProbeRounds', String(vmRounds));
+    }
+    const vmMode = want?.parameters?.['vmMode'];
+    if (typeof vmMode === 'string' && vmMode.length > 0) {
+      AppStorage.setOrCreate('proteusVmProbeMode', vmMode);
+    }
     // ★★★#1187：`savePath`（宿主逐块落盘）与 `stream`（应被如实拒绝）——两个语义各需真机验证
     // ★#1187 诊断：把 want.parameters 的**全部键**打出来（判断是 key 名变了还是值丢了）
     try { hilog.info(DOMAIN, TAG, 'WANT_PARAMS %{public}s', JSON.stringify(want?.parameters ?? {})); } catch (e) { }

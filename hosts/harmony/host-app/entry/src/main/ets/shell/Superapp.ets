@@ -27,6 +27,7 @@ import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
 import { runTransportProbeScene } from '../runtime/TransportProbe';   // ★★★#1156 传输层取证（逻辑单列）
+import { runVmSessionProbeScene } from '../runtime/VmSessionProbe';   // ★★★#1342-A #540 决策门（持久 VM 探针）
 import { runHttpProbe as runHttpProbeImpl } from '../runtime/HttpProbe';   // ★★★#1169 HTTP 探针（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
 import { readElementProbes, elementReportFragment, measureElementRect, ElementProbeReadout } from '../runtime/ElementProbe';
@@ -53,6 +54,10 @@ struct Superapp {
   private nodesByPage: Map<string, string> = new Map<string, string>();
   /** 场景：'superapp'（常驻，桌面点开）/ 'superapp-drive'（脚本驱动切 tab + 落报告） */
   private scene: string = AppStorage.get<string>('proteusScene') ?? '';
+  /** ★★★#1342-A：持久 VM 探针的轮数（`--ps vmRounds N`；缺省 1000） */
+  private vmProbeRounds: number = Number(AppStorage.get<string>('proteusVmProbeRounds') ?? '1000') || 1000;
+  /** ★★★#1342-A：探针负载形态（`--ps vmMode plain|nav|ref`；缺省 plain） */
+  private vmProbeMode: string = AppStorage.get<string>('proteusVmProbeMode') ?? 'plain';
   /**
    * ★★★批 A⑤ 补齐（2026-10-08）：**待执行的滚动注入量**（vp；0 = 无）。
    *
@@ -136,6 +141,12 @@ struct Superapp {
       try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
       this.injectSandboxRoot();
       if (this.scene === 'superapp-transport') runTransportProbeScene(this.filesDir); else this.runHttpProbe();
+      return;
+    }
+    // ★★★#1342-A：**#540 决策门**——持久 VM 探针（逻辑在 `runtime/VmSessionProbe.ets`）
+    if (this.scene === 'superapp-vmprobe') {
+      try { this.filesDir = getContext(this).filesDir; } catch (e) { /* 取不到 ⇒ 报告写不出去 */ }
+      runVmSessionProbeScene(this.filesDir, this.vmProbeRounds, this.vmProbeMode);
       return;
     }
     // ★★★C14 键盘推送判据场景（决策 #1077）：真实系统键盘 → keyboardHeightChange → env

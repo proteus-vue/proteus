@@ -54,6 +54,17 @@ export const hostAppAnimAttach: () => string;
 export const hostAppAnimTick: (json: string) => string;
 /** ★动画/泵会话读数（判据/报告）：`{starts,attaches,ticks,changed,active,elapsed_ms,have_spec,pump:{…}}` */
 export const hostAppAnimStats: () => string;
+/**
+ * ★★★#1342-A：**#540 决策门**——持久 VM 探针（真机判据专用，**不参与生产路径**）。
+ *
+ * 验的是「跨 napi 调用复用同一个 JSVM 是否仍崩」这**一个**变量：
+ *   创建 VM 一次 → 循环 N 轮（每轮只开/关一个内层 HandleScope + 显式 checkpoint）→ 最后才销毁。
+ *
+ * @param argsJson `{ rounds?: number, mode?: 'plain' | 'nav' | 'ref' }`
+ * @returns 读数 JSON：`{ ok, rounds, roundsOk, firstFailureRound, firstFailureWhy,
+ *          heapBeforeKB, heapAfterKB, heapPeakKB, heapGrowthPct, samples }`
+ */
+export const hostVmSessionProbe: (argsJson: string) => string;
 /** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——
  *   不清会把旧页动画错打到新页同 id 节点）。壳每轮渲染/点按导航前调；返回 `{"ok":true}`。 */
 export const hostAppAnimReset: () => string;

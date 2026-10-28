@@ -15340,3 +15340,42 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     （那是业务的、也是文档必须教会的责任）。
   - **后续**：C2 收口（`createApi`/`createRequestEngineering` 内部委托本库）·
     A（P0 VM 决策门，真机验 #540）· B（鸿蒙会话式 VM）· P4 让 WebSocket 也走同一套安全链。
+
+1343. **★★★决策 #540 被真机实证推翻：鸿蒙持久 VM 可行（5000 轮零崩溃 + GC 锯齿稳定）**（2026-10-28 · 请求库 P0 决策门）:
+  - **背景**：`host_app_runtime_impl.h:19-21` 断言「跨 napi 调用复用同一 JSVM ⇒ V8 微任务排空
+    HandleScope 溢出/SIGSEGV（决策 #540 实测）⇒ 每次调用新建 VM 是**本机唯一稳定形态**」。
+    这条断言直接导致鸿蒙的 `http.cancel` 是 no-op、`stream` 前置拒绝、WebSocket 完全未实现
+    ——即"三端一致"在当前架构下不可能成立。
+  - **★为什么敢推翻**：同一 HAR 里存在**反例**——`proteus_host.cpp:23-28` 的持久壳 VM
+    （`hostRtShellInstall` 建立后**不销毁**、跨事件存活），且真机 C 组早已跑通。
+    ⇒ #540 很可能是当时的 **HandleScope 生命周期 / 销毁后 checkpoint / Vue 微任务重入**问题，
+      不是 JSVM 的平台边界。**不重验就改造 = 在未证实的前提上投入**（本仓「先取证再断言」）。
+  - **探针设计（只验一个变量）**：`vm_session_probe.h` 严格复刻 `HostAppBoot` 的 VM 建立顺序
+    （`CreateVM → OpenVMScope → CreateEnv → OpenHandleScope → SetMicrotaskPolicy(EXPLICIT)`），
+    但**每轮只开/关内层 HandleScope，VM/Env 全程不销毁**。三种负载：
+    `plain`（纯 Promise 链）· `nav`（模拟跨启动导航的微任务重入 = #540 记的崩溃路径）·
+    `ref`（跨轮 `CreateReference` 持有 JS 对象）。
+  - **★★★实测读数（真机 nova 15 Pro / HarmonyOS API 24）**：
+    · `plain` **1000 轮 → ok:true, roundsOk:1000, firstFailureRound:-1（零崩溃）**
+    · `plain` **5000 轮 → ok:true, roundsOk:5000, firstFailureRound:-1**
+    · 堆曲线呈**锯齿状分代 GC**：基线不漂移（每约 450 轮回落到 466~2006KB），
+      **峰值封顶 2.7MB 不再增长**（第 4500 轮见峰值 2707.7KB，第 4600 轮回落到 2006KB）
+      ⇒ 是**健康 GC**，不是泄漏（真泄漏的回落点会越来越高）。
+  - **★一条误读教训**：1000 轮时 `heapGrowthPct=1231.8%` 看起来像泄漏，实际是**采样窗口太短、
+    没看到一次完整 GC 周期**。⇒ 判"有没有泄漏"必须看**多个回落点是否漂移**，不能看首尾差值。
+  - **探针自身的四个坑（都花了往返，记下来）**：
+    ① `OH_JSVM_CompileScript` 第 6 个参数 `bool* cacheRejected` 是**输出**参数（缓存是否被拒），
+      **不是**"编译是否成功"——我把它当成功标志 ⇒ 永远判失败（status=JSM_OK、script 已生成却报错）；
+    ② `CreateStringUtf8` 必须传 `JSVM_AUTO_LENGTH`（传 `strlen(js)` 静默失败）；
+    ③ `OH_JSVM_GetHeapStatistics` 第一参数是 **VM 不是 Env**，字段是 **`usedHeapSize`**（驼峰）；
+    ④ `aa start --ps vmRounds 3000` **不会自动进 AppStorage** ⇒ 必须在 `EntryAbility.applyWant`
+      显式转发（与 #1187 的 savePath 同族），否则探针静默用缺省值（日志显示 rounds=1000 才发现）。
+  - **结论**：**#540 在当前 SDK 已不成立**（或至少已被后续纪律规避）⇒ **持久 VM 路线可行**，
+    请求库计划的 B 阶段（会话式 VM）可以启动。★但这只证明**本探针负载**下可行；
+    接入完整 App runtime（eval 整包 Vue bundle + 路由 + 异步驱动）前**仍须再验一轮**。
+  - **产物**：`vm_session_probe.h`（348 行，含 napi 入口）· `VmSessionProbe.ets`（ArkTS 侧，
+    报告写 `<filesDir>/vm-probe.json`）· `run-vm-probe.sh`（三结局判定：ok / 探针内失败 / **无报告=崩溃**）·
+    napi 导出 `hostVmSessionProbe`（四方一致：C++ ⇄ d.ts ⇄ Index.ets ⇄ ArkTS import）。
+  - **诚实边界**：探针读数走 **hilog 主通道**（报告文件在沙箱里 `hdc shell` 读不到，实测
+    Permission denied）· `nav`/`ref` 两形态的 3000 轮真机因**设备锁屏**未跑完，
+    解锁后一条命令可补（`bash hosts/harmony/run-vm-probe.sh --mode=nav`）。
