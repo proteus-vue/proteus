@@ -15376,6 +15376,19 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **产物**：`vm_session_probe.h`（348 行，含 napi 入口）· `VmSessionProbe.ets`（ArkTS 侧，
     报告写 `<filesDir>/vm-probe.json`）· `run-vm-probe.sh`（三结局判定：ok / 探针内失败 / **无报告=崩溃**）·
     napi 导出 `hostVmSessionProbe`（四方一致：C++ ⇄ d.ts ⇄ Index.ets ⇄ ArkTS import）。
+  - **★★三形态真机全绿（2026-10-28 · 设备解锁后补齐 `nav`/`ref`）**：
+    | 形态 | 轮数 | 结果 | 堆读数 |
+    |---|---|---|---|
+    | `plain`（纯 Promise 链） | 5000 | **ok · 5000/5000 · firstFail=-1** | 锯齿 GC，峰值 2.7MB 封顶不增长 |
+    | `nav`（**#540 记的微任务重入路径**） | 3000 | **ok · 3000/3000 · firstFail=-1** | 每次 GC 回落 ~310KB 基线，峰值 1.43MB 不漂移 |
+    | `ref`（跨轮 `CreateReference`） | 3000 | **ok · 3000/3000 · firstFail=-1** | 102.3→184.5KB（+2.7KB/100 轮 = 探测数组增长，非引用泄漏） |
+    ★`nav` 通过的意义最大：**它正是当初 #540 崩溃的路径**（`await` + 跨调用重入）。
+    ★`ref` 的判读：若真漏引用，每轮会涨几十 KB；实测 2.7KB/100 轮且线性平坦 ⇒ 是 `__probe.arr`
+      自身在长（每 50 轮清一次），不是 `JSVM_Ref` 泄漏。
+  - **★★探针自身的第 5 个坑**：用 `safe-edit --replace 's/__probe.tick()/__probeTick()/g'` 做重命名
+    ⇒ 把 `globalThis.__probeTick` 的**赋值语句**也改成了 `globalThis.__probeTick() = ...`（语法坏），
+    并在调用处叠成 `__probeTick()()()`。**与"sed 里 `&` 是整段匹配"同族**：
+    含括号/运算符的批量重命名不要用正则替换，用逐处精确编辑（本次 4 处全是 Edit 修回）。
   - **诚实边界**：探针读数走 **hilog 主通道**（报告文件在沙箱里 `hdc shell` 读不到，实测
-    Permission denied）· `nav`/`ref` 两形态的 3000 轮真机因**设备锁屏**未跑完，
-    解锁后一条命令可补（`bash hosts/harmony/run-vm-probe.sh --mode=nav`）。
+    Permission denied）。★本探针只证明**这三种负载形态**下持久 VM 可行；接入完整 App runtime
+    （eval 整包 Vue bundle + 路由 + 异步驱动）前**仍须再验一轮**。

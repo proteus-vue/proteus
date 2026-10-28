@@ -239,7 +239,7 @@ inline std::string run(int rounds, const std::string& mode) {
                     ".then(v=>v+1).then(v=>v+1).then(v=>v+1).then(v=>v+1)"
                     ".then(v=>v+1).then(v=>v+1).then(v=>v+1).then(v=>v+1)"
                     ".then(v=>v+1).then(v=>v+1).then(v=>v+1).then(v=>v+1)"
-                    ".then(v=>v+1).then(v=>{ globalThis.__probeTick()(); return v; }));"
+                    ".then(v=>v+1).then(v=>{ globalThis.__probeTick(); return v; }));"
                     // 每 50 轮清一次 arr（否则数组本身会撑爆堆，掩盖 VM 问题）
                     "if (globalThis.__probe.arr.length > 50) globalThis.__probe.arr.length = 0;";
                 if (!checkpointOrEval(env, js, why)) {
@@ -253,10 +253,10 @@ inline std::string run(int rounds, const std::string& mode) {
                 const char* js =
                     "(async () => {"
                     "  await Promise.resolve();"
-                    "  globalThis.__probeTick()();"
+                    "  globalThis.__probeTick();"
                     "  await Promise.resolve();"
                     "  await Promise.resolve();"
-                    "  globalThis.__probeTick()();"
+                    "  globalThis.__probeTick();"
                     "})();";
                 if (!checkpointOrEval(env, js, why)) {
                     R.firstFailureRound = i;
@@ -265,7 +265,7 @@ inline std::string run(int rounds, const std::string& mode) {
                     break;
                 }
                 // 重入：再 eval 一次（模拟导航回调里又发起新调用）
-                if (!checkpointOrEval(env, "globalThis.__probeTick()();", why)) {
+                if (!checkpointOrEval(env, "globalThis.__probeTick();", why)) {
                     R.firstFailureRound = i;
                     R.firstFailureWhy = why;
                     OH_JSVM_CloseHandleScope(env, inner);
