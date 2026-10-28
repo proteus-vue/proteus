@@ -54,6 +54,64 @@ export const hostAppAnimAttach: () => string;
 export const hostAppAnimTick: (json: string) => string;
 /** ★动画/泵会话读数（判据/报告）：`{starts,attaches,ticks,changed,active,elapsed_ms,have_spec,pump:{…}}` */
 export const hostAppAnimStats: () => string;
+/**
+ * ★★★#1342-A：**#540 决策门**——持久 VM 探针（真机判据专用，**不参与生产路径**）。
+ *
+ * 验的是「跨 napi 调用复用同一个 JSVM 是否仍崩」这**一个**变量：
+ *   创建 VM 一次 → 循环 N 轮（每轮只开/关一个内层 HandleScope + 显式 checkpoint）→ 最后才销毁。
+ *
+ * @param argsJson `{ rounds?: number, mode?: 'plain' | 'nav' | 'ref' }`
+ * @returns 读数 JSON：`{ ok, rounds, roundsOk, firstFailureRound, firstFailureWhy,
+ *          heapBeforeKB, heapAfterKB, heapPeakKB, heapGrowthPct, samples }`
+ */
+export const hostVmSessionProbe: (argsJson: string) => string;
+/**
+ * ★★★#1342 B-0：**整包 Vue bundle 版持久 VM 探针**。
+ *
+ * 与 `hostVmSessionProbe` 的区别：它把真实的 `bundle-superapp.js`（1.5MB）eval 进持久 VM，
+ * 每轮调 `__proteusHostAppBootJson()`（createAppNavigation + createRouter 启动链），
+ * 让**真实 Vue 运行时**产出微任务压力 —— 这是合成负载（plain/nav/ref）测不到的那一层。
+ *
+ * @param bundleJs 整包源码原文（**不走 JSON 转义**：1.5MB 转义既慢又易踩引号/换行坑）
+ * @param rounds 轮数（默认 1000）
+ * @returns 读数 JSON（比合成版多一个 `bootHook` 字段 = 整包入口的 typeof）
+ */
+export const hostVmSessionBundleProbe: (bundleJs: string, rounds?: number) => string;
+/**
+ * ★★★#1344 B-1：**会话式 VM**（一个 VM 跨 napi 调用存活）。
+ *
+ * 打开会话：建 VM → 注入 `proteusHost` → eval 整包 → boot，**不销毁**。
+ * 之后每拍 `hostVmSessionTick()` 只推进微任务 + 搬运待回推帧 ⇒ **异步回推有了接收方**。
+ *
+ * ★单线程纪律：open/tick/close 必须由 ArkTS 主线程**串行**调用；
+ *   网络线程只能 `hostVmSessionPushResolve()`（入队，不碰 JS）。
+ *
+ * @param bundleJs 整包源码原文（不走 JSON 转义）
+ * @param doBoot `true`（默认）⇒ eval 后 boot；`false` ⇒ 只 eval（诊断形态）
+ * @returns 读数 JSON（`open/ticks/pushed/pendingDepth/heapKB/boot`）
+ */
+export const hostVmSessionOpen: (bundleJs: string, doBoot?: boolean, jsStubHost?: boolean, autoMicrotask?: boolean) => string;
+/** 会话节拍（推回推帧 + checkpoint）。@param maxPush 单拍最多推几帧（默认 64） */
+export const hostVmSessionTick: (maxPush?: number) => string;/** 诊断用：把一个 PRSP 帧（**十六进制字符串**）塞进待回推队列，验"队列→tick→JS"通路 */
+export const hostVmSessionPushResolve: (frameHex: string) => string;
+/**
+ * ★★★#1344 B-2：**在会话内 eval 一段 JS**（业务接线的统一入口）。
+ * 例：`hostVmSessionEval('useFetch("/x").then(r => globalThis.r = r)')`
+ * @returns `{ok:true, value:"..."}` / `{ok:false, error:"..."}`
+ */
+export const hostVmSessionEval: (js: string) => string;
+/**
+ * ★★★#1344 B-2c：**宿主侧取消记账**（`calls`/`hits`/`misses`）。
+ *
+ * 【为什么单独一个入口】在会话里用 `hostVmSessionEval("proteusHost.invoke('http.cancelStats')")`
+ * **会崩**（会话内再触发宿主回调 = 重入）。⇒ 由宿主直接读 `stats()`。
+ * 【为什么判据必须读它】JS 侧"abort 后 3ms 结算"只证明**本地 Promise reject 了**；
+ * 把宿主的 `HMS_Rcp_CancelRequest` 摘掉，JS 侧读数一模一样（破坏性验证 M7 抓到）。
+ * 只有 `calls > 0` 才证明**宿主真的调了 RCP 取消**。
+ */
+export const hostVmSessionCancelStats: () => string;
+export const hostVmSessionClose: () => string;
+export const hostVmSessionStats: () => string;
 /** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——
  *   不清会把旧页动画错打到新页同 id 节点）。壳每轮渲染/点按导航前调；返回 `{"ok":true}`。 */
 export const hostAppAnimReset: () => string;

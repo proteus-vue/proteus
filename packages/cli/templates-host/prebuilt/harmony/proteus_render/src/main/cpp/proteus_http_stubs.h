@@ -26,10 +26,39 @@ namespace http {
 inline std::string httpStubResult;
 
 /**
+ * ★★★#1344 B-2c：**会话模式的真取消钩子**。
+ *   `g_sessionCancel(reqId)` ⇒ 查在途表 → `HMS_Rcp_CancelRequest`。
+ *   ★一次性 VM（生产路径）下为 nullptr ⇒ 仍如实回"同步模型 no-op"（**与改造前逐字节等价**）。
+ */
+typedef std::string (*ProteusSessionCancelFn)(const std::string& reqId);
+static ProteusSessionCancelFn g_sessionCancel = nullptr;
+static inline void setSessionCancelHandler(ProteusSessionCancelFn fn) { g_sessionCancel = fn; }
+
+/** 从 argsJson 里取 `reqId`（`{"reqId":"..."}`；取不到返回空） */
+inline std::string stubReqId(const std::string& argsJson) {
+  const char* key = "\"reqId\"";
+  const size_t at = argsJson.find(key);
+  if (at == std::string::npos) return std::string();
+  const size_t colon = argsJson.find(':', at + 7);
+  if (colon == std::string::npos) return std::string();
+  const size_t q1 = argsJson.find('"', colon + 1);
+  if (q1 == std::string::npos) return std::string();
+  const size_t q2 = argsJson.find('"', q1 + 1);
+  if (q2 == std::string::npos || q2 <= q1) return std::string();
+  return argsJson.substr(q1 + 1, q2 - q1 - 1);
+}
+
+/**
+ * @param argsJson 能力参数（`http.cancel` 用它取 `reqId`；其余方法可忽略）
  * @return true = 已处理（结果在 `out`）；false = 不是这三个方法，交回调用方继续分派
  */
-inline bool httpStubDispatch(const std::string& method, std::string* out) {
+inline bool httpStubDispatch(const std::string& method, const std::string& argsJson, std::string* out) {
   if (method == "http.cancel") {
+    /* ★★★#1344 B-2c：会话模式 ⇒ **真取消**（查在途表 → HMS_Rcp_CancelRequest）。 */
+    if (g_sessionCancel != nullptr) {
+      *out = g_sessionCancel(stubReqId(argsJson));
+      return true;
+    }
     *out =
         "{\"ok\":false,\"reason\":\"harmony-sync-napi\","
         "\"note\":\"鸿蒙请求在同步 napi 内跑完，abort() 是 no-op（连 JS 侧 reject 都不会发生）；"
@@ -43,7 +72,22 @@ inline bool httpStubDispatch(const std::string& method, std::string* out) {
      *   **整段被丢掉**。原来把限制写在顶层 ⇒ 业务只拿到 `{calls:0,hits:0,misses:0}`，
      *   无法区分"没发生取消"与"本端取消不可用"（后者正是事实）。
      *   ⇒ 限制字段一律塞进 `data`。
+     *
+     * ★★★#1344 B-2c：**会话模式下改为真实读数**（`stats().cancelCalls/Hits/Misses`）。
+     *   ★这条读数是"宿主真的调了 HMS_Rcp_CancelRequest"的**唯一直接证据** ——
+     *     JS 侧的 `settle_ms_after_abort` 只证明"本地 Promise 立刻 reject 了"，
+     *     它**不能**证明传输真的停了（实测：把 RCP 调用摘掉，JS 侧读数一模一样）。
+     *     ⇒ 判据必须读这里（破坏性验证 M7 就是靠它抓住的）。
      */
+    if (g_sessionCancel != nullptr) {
+      const proteus::http::Stats& st = proteus::http::stats();
+      *out = "{\"ok\":true,\"data\":{\"calls\":" + std::to_string(st.cancelCalls) +
+             ",\"hits\":" + std::to_string(st.cancelHits) +
+             ",\"misses\":" + std::to_string(st.cancelMisses) +
+             ",\"supported\":true,"
+             "\"note\":\"会话模式：calls = 调到 HMS_Rcp_CancelRequest 的次数（>0 证明宿主真取消）\"}}";
+      return true;
+    }
     *out =
         "{\"ok\":true,\"data\":{\"calls\":0,\"hits\":0,\"misses\":0,"
         "\"supported\":false,\"reason\":\"harmony-sync-napi\","

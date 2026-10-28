@@ -29,6 +29,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <map>
 #include <mutex>
 #include <thread>
 #include <cstdio>
@@ -37,6 +38,7 @@
 
 #include "proteus_host_helpers.h"
 #include "invoke_bytes_bridge.h"
+#include "proteus_http.h"   // ★B-2c：读 stats()（取消记账 = 判据的唯一直接证据）
 #include <hilog/log.h>
 #include <ark_runtime/jsvm.h>
 #include <ark_runtime/jsvm_types.h>
@@ -255,6 +257,83 @@ inline std::string statsJson(bool ok) {
     if (!S.lastError.empty()) out += ",\"lastError\":\"" + jsonEscape(S.lastError) + "\"";
     out += "}";
     return out;
+}
+
+/* ══════════════════════ B-2c：在途表 + 真取消 ══════════════════════ */
+
+/** 一条在途请求（`reqId` → 可取消的 RCP 句柄） */
+struct InflightEntry {
+    void* session = nullptr;
+    void* req = nullptr;
+};
+
+/**
+ * 在途表（`reqId` → 句柄）。★加锁：`handle()` 在**工作线程**登记/注销，`cancel` 在**主线程**查表。
+ *
+ * 【为什么必须加锁而不是"主线程独占"】登记发生在工作线程（`httpAsyncDispatch` 起的那个），
+ *   而 `abort()` 在主线程到达 ⇒ 两侧并发访问同一张表。
+ */
+inline std::map<std::string, InflightEntry>& inflightTable() {
+    static std::map<std::string, InflightEntry> t;
+    return t;
+}
+inline std::mutex& inflightMu() {
+    static std::mutex m;
+    return m;
+}
+
+/** 登记（由 `proteus_http.h` 在 createRequest 之后调用） */
+inline void registerInflight(const std::string& reqId, void* session, void* req) {
+    std::lock_guard<std::mutex> lk(inflightMu());
+    inflightTable()[reqId] = InflightEntry{session, req};
+}
+
+/** 注销（成功/失败/超时都调） */
+inline void unregisterInflightEntry(const std::string& reqId) {
+    std::lock_guard<std::mutex> lk(inflightMu());
+    inflightTable().erase(reqId);
+}
+
+/**
+ * ★★★B-2c：**真取消**（`http.cancel`）。
+ *
+ * 【它做了什么】查在途表 → 拿到该请求的 `Rcp_Session*` + `Rcp_Request*`
+ *   → 调 `HMS_Rcp_CancelRequest` ⇒ **宿主传输真的中止**（不是只 reject 本地 Promise）。
+ *
+ * 【诚实边界】
+ *   · 只在**会话模式**有在途表（一次性 VM 不登记）⇒ 一次性路径仍回 `supported:false`（如实）。
+ *   · 取消后那条请求的回推帧**不会再来**（工作线程会拿到 cancel 的错误码并 pushResolve 一个 err 帧）。
+ *     JS 侧 `abort()` 已在本地 reject，那个迟到帧会因 reqId 不在 pending 表而被丢弃（无害）。
+ *   · 返回 `{cancelled:true}` = **已向宿主发出取消**，不是"确认已经停了"（传输层异步）。
+ */
+inline std::string cancelInflight(const std::string& reqId) {
+    void* session = nullptr;
+    void* req = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(inflightMu());
+        auto it = inflightTable().find(reqId);
+        if (it == inflightTable().end()) {
+            return "{\"ok\":true,\"data\":{\"cancelled\":false,\"reason\":\"no-inflight\","
+                   "\"note\":\"该 reqId 不在在途表中（可能已完成 / 或本端未经会话通道）\"}}";
+        }
+        session = it->second.session;
+        req = it->second.req;
+    }
+    // ★调 RCP 的 cancel（符号缺 ⇒ 如实报 unsupported，不假装成功）
+    const bool called = proteus::http::cancelRcpRequest(session, req);
+    if (!called) {
+        return "{\"ok\":true,\"data\":{\"cancelled\":false,\"reason\":\"rcp-cancel-unavailable\","
+               "\"note\":\"本机 RCP 库缺 HMS_Rcp_CancelRequest 符号\"}}";
+    }
+    OH_LOG_Print(LOG_APP, LOG_INFO, 0x0003, "ProteusSession",
+                 "SESSION_CANCEL req=%{public}s called=1", reqId.c_str());
+    return "{\"ok\":true,\"data\":{\"cancelled\":true,\"note\":\"已向宿主发出取消（传输层异步生效）\"}}";
+}
+
+/** 在途表深度（诊断） */
+inline int inflightDepth() {
+    std::lock_guard<std::mutex> lk(inflightMu());
+    return static_cast<int>(inflightTable().size());
 }
 
 /* ══════════════════════ 回推搬运（唯一跨线程入口） ══════════════════════ */
@@ -506,6 +585,11 @@ inline std::string sessionOpen(const std::string& bundleJs, bool doBoot = true, 
     /* ★★★B-2：注册 HTTP 异步钩子 —— 之后 `http.request` 走 pending + 工作线程 + tick 回推。
        ★只在会话打开期间注册（close 时注销）⇒ 一次性 VM 生产路径零影响。 */
     setHttpAsyncHandler(&httpAsyncDispatch);
+    // ★B-2c：登记/注销钩子 —— `handle()` 借此把 (session, req) 交出来，cancel 才能真中止
+    proteus::http::setHttpRegisterHandler(&registerInflight);
+    proteus::http::setHttpUnregisterHandler(&unregisterInflightEntry);
+    // ★B-2c：`http.cancel` 的分派钩子（一次性 VM 下为 nullptr ⇒ 仍是原来的 no-op 文案）
+    proteus::http::setSessionCancelHandler(&cancelInflight);
     // ★关掉 open 阶段的内层 scope（状态全在 globalThis，句柄可以回收）
     if (openScope != nullptr) OH_JSVM_CloseHandleScope(S.env, openScope);
     VMS_LOG("open-scope-closed");
@@ -653,6 +737,14 @@ inline std::string sessionClose() {
     const int resolved = S.resolvedPushed;
     // ★B-2：注销 HTTP 异步钩子（恢复一次性 VM 的同步语义）
     setHttpAsyncHandler(nullptr);
+    // ★B-2c：注销登记钩子 + 清空在途表（会话关闭后没有"在途"可言）
+    proteus::http::setHttpRegisterHandler(nullptr);
+    proteus::http::setHttpUnregisterHandler(nullptr);
+    proteus::http::setSessionCancelHandler(nullptr);
+    {
+        std::lock_guard<std::mutex> lk(inflightMu());
+        inflightTable().clear();
+    }
     // ★不再需要关 outerScope（#1344 修正后 open 阶段的内层 scope 已当次关闭）
     if (S.env != nullptr) OH_JSVM_DestroyEnv(S.env);
     if (S.vm != nullptr && S.vmScope != nullptr) OH_JSVM_CloseVMScope(S.vm, S.vmScope);
@@ -793,6 +885,27 @@ inline napi_value HostVmSessionEval(napi_env env, napi_callback_info info) {
             out = proteus::vmsess::sessionEval(js);
         }
     }
+    napi_value r;
+    napi_create_string_utf8(env, out.c_str(), out.size(), &r);
+    return r;
+}
+
+/**
+ * ★★★B-2c：`hostVmSessionCancelStats()` → `{ok:true,value:'{"calls":N,"hits":N,"misses":N}'}`
+ *
+ * 【为什么单独一个 napi 入口，而不是让 JS 调 `proteusHost.invoke('http.cancelStats')`】
+ *   实测：在会话里用 `hostVmSessionEval("proteusHost.invoke('http.cancelStats',...)")`
+ *   **会崩**（会话内再触发一次宿主回调 = 重入，与 #540 那类微任务重入同族）。
+ *   ⇒ 由宿主侧**直接读** `stats()`，绕开 JS 那一圈。这条也是判据的**唯一直接证据**
+ *     （"宿主真的调了 HMS_Rcp_CancelRequest"），JS 侧读数证明不了。
+ */
+inline napi_value HostVmSessionCancelStats(napi_env env, napi_callback_info info) {
+    (void)info;
+    const proteus::http::Stats& st = proteus::http::stats();
+    const std::string payload = "{\"calls\":" + std::to_string(st.cancelCalls) +
+                                ",\"hits\":" + std::to_string(st.cancelHits) +
+                                ",\"misses\":" + std::to_string(st.cancelMisses) + "}";
+    const std::string out = "{\"ok\":true,\"value\":\"" + jsonEscape(payload) + "\"}";
     napi_value r;
     napi_create_string_utf8(env, out.c_str(), out.size(), &r);
     return r;

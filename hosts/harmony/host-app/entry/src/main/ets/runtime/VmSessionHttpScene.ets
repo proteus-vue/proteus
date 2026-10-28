@@ -19,7 +19,7 @@
 //   · 探针结果键是 `__proteusHostUseFetchProbeResult`（bundle 内既有约定）。
 
 import {
-  hostVmSessionOpen, hostVmSessionTick, hostVmSessionEval, hostVmSessionClose,
+  hostVmSessionOpen, hostVmSessionTick, hostVmSessionEval, hostVmSessionClose, hostVmSessionCancelStats,
 } from 'proteus_render';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -38,6 +38,13 @@ interface TickReading {
   jsTicks?: number;
   boot?: string;
   error?: string;
+}
+
+interface CancelChecks {
+  aborted: boolean;
+  codeOk: boolean;
+  stoppedEarly: boolean;
+  jsTicksKept: boolean;
 }
 
 interface EvalReading {
@@ -75,9 +82,9 @@ function sleepMs(ms: number): Promise<void> {
  * @param base 目标 URL
  * @param maxTicks 最多等多少拍（每拍之间让出 8ms ⇒ 上界 ≈ maxTicks × 8ms）
  */
-export async function runVmSessionHttpScene(filesDir: string, base: string, maxTicks: number): Promise<void> {
+export async function runVmSessionHttpScene(filesDir: string, base: string, maxTicks: number, mode: string = 'get'): Promise<void> {
   const out: Record<string, Object> = {};
-  out['scene'] = 'session-http';
+  out['scene'] = mode === 'cancel' ? 'session-cancel' : 'session-http';
   out['base'] = base;
 
   let bundle: string = '';
@@ -105,14 +112,18 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
   }
   out['boot'] = String(openR.boot ?? '');
 
-  /* ★发起真实请求：用**最简 GET 探针**（`useFetch(url)`，不带流式/取消）。
-     ★为什么不复用 `__proteusHostAppUseFetchProbe`：那是**流式 + 取消**探针，
-       而鸿蒙 `stream` 至今前置拒绝 ⇒ 会得到 `fetch.unsupported` 的**假失败**（实测踩过）。
-     ★会话式 VM 下宿主对 http.request 走异步：立即回 pending，真实响应靠 tick 回推。 */
+  /* 选探针：
+     · `mode != 'cancel'` ⇒ 最小 GET（验异步链路）
+     · `mode == 'cancel'` ⇒ **两阶段**：start（发慢请求）→ 等 600ms → abort（验 B-2c 真取消）
+       ★两阶段的原因：App 精简引擎**没有 setTimeout**，JS 侧无法自己延迟；
+         而忙等会阻塞 JS 线程 ⇒ 请求发不出去。⇒ 延迟放到 ArkTS 侧（宿主事件循环）。 */
+  const isCancel: boolean = mode === 'cancel';
+  const probeName: string = isCancel ? '__proteusHostAppSessionCancelStart' : '__proteusHostAppSessionHttpGet';
+  const resultKey: string = isCancel ? '__proteusHostSessionCancelProbeResult' : '__proteusHostSessionHttpGetResult';
   const kickJs: string =
-    "(typeof globalThis.__proteusHostAppSessionHttpGet === 'function'"
-    + " ? String(globalThis.__proteusHostAppSessionHttpGet(" + JSON.stringify(base) + "))"
-    + " : 'no-session-get-probe')";
+    "(typeof globalThis." + probeName + " === 'function'"
+    + " ? String(globalThis." + probeName + "(" + JSON.stringify(base) + "))"
+    + " : 'no-session-probe')";
   const kickRaw: string = hostVmSessionEval(kickJs);
   hilog.info(DOMAIN, TAG, 'SESSION_HTTP_KICK %{public}s', kickRaw.length > 200 ? kickRaw.slice(0, 200) : kickRaw);
   let kickR: EvalReading | undefined = undefined;
@@ -132,6 +143,13 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
   let firstErr: string = '';
   let probeResult: string = '';
   for (let i = 0; i < maxTicks; i++) {
+    // ★CANCEL 模式：第 40 拍（≈320ms 后）触发 abort —— 此时慢请求仍在飞
+    if (isCancel && i === 40) {
+      const abortRaw: string = hostVmSessionEval(
+        "(typeof globalThis.__proteusHostAppSessionCancelAbort === 'function'"
+        + " ? String(globalThis.__proteusHostAppSessionCancelAbort()) : 'no-abort-hook')");
+      hilog.info(DOMAIN, TAG, 'SESSION_CANCEL_ABORT %{public}s', abortRaw);
+    }
     const raw: string = hostVmSessionTick(64);
     let r: TickReading | undefined = undefined;
     try { r = JSON.parse(raw) as TickReading; } catch (e) { /* 统一报 */ }
@@ -142,20 +160,55 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
     lastJsTicks = r.jsTicks ?? -1;
     pushedTotal += r.pushed ?? 0;
     // 读探针结果（空 = 还没结算）
-    const readJs = "(typeof globalThis.__proteusHostSessionHttpGetResult === 'string'"
-      + " ? globalThis.__proteusHostSessionHttpGetResult : '')";
+    const readJs = "(typeof globalThis." + resultKey + " === 'string'"
+      + " ? globalThis." + resultKey + " : '')";
     const readRaw: string = hostVmSessionEval(readJs);
     try {
       const rr = JSON.parse(readRaw) as EvalReading;
       if (rr.ok === true && rr.value !== undefined && rr.value.length > 0) {
-        probeResult = rr.value;
-        break;   // 结算了
+        /* ★★★结算判据按 mode 不同（第一版没区分 ⇒ CANCEL 模式在 `phase:'start'` 阶段
+           就把回执当成最终结果 break 了，`jsTicks` 只有 1、`stoppedEarly=false`，看起来像"取消没生效"）：
+           · GET 模式：任何非空结果就是最终结果
+           · CANCEL 模式：必须等到 `phase:'abort'` **且**带 `stopped_early` 字段
+             （start 阶段只回 `{phase:'start',started_at}`，那不是结论） */
+        let settled: boolean = true;
+        if (isCancel) {
+          try {
+            const pr = JSON.parse(rr.value) as Record<string, Object>;
+            settled = pr['phase'] === 'abort' && pr['stopped_early'] !== undefined;
+          } catch (e) {
+            settled = false;
+          }
+        }
+        if (settled) {
+          probeResult = rr.value;
+          break;
+        }
       }
     } catch (e) { /* 继续等 */ }
     // ★让出 8ms（≈半帧）：给工作线程时间跑完 + 回推入队
     await sleepMs(8);
   }
 
+  /* ★★★CANCEL 模式：**宿主侧取证**（这是"传输真被取消"的唯一直接证据）。
+     JS 侧的 `settle_ms_after_abort` 只说明"本地 Promise 立刻 reject 了"——
+     实测：把宿主的 `HMS_Rcp_CancelRequest` 摘掉，JS 侧读数**一模一样**（破坏性验证 M7 抓到）。
+     ⇒ 必须在**宿主关掉会话之前**读 `http.cancelStats` 的 `calls`。
+     ★★取证方式：**不用 eval 调 invoke**（那条路在会话里崩过，见下），改用**宿主侧直接读** ——
+       新增 `hostVmSessionCancelStats()` napi 入口，直接返回 `stats().cancelCalls`。
+       这比绕 JS 一圈更直接，也不给 JS 线程增加一次回调重入。 */
+  let hostCancelCalls: number = -1;
+  if (isCancel) {
+    const statsRaw: string = hostVmSessionCancelStats();
+    try {
+      const sr = JSON.parse(statsRaw) as EvalReading;
+      const payload = JSON.parse(String(sr.value ?? '{}')) as Record<string, Object>;
+      hostCancelCalls = Number(payload['calls'] ?? -1);
+    } catch (e) {
+      hostCancelCalls = -1;
+    }
+    out['hostCancelCalls'] = hostCancelCalls;
+  }
   const closeRaw: string = hostVmSessionClose();
   out['jsTicks'] = lastJsTicks;
   out['pushed'] = pushedTotal;
@@ -164,22 +217,51 @@ export async function runVmSessionHttpScene(filesDir: string, base: string, maxT
   if (firstErr.length > 0) out['error'] = firstErr;
 
   /**
-   * ★★★判定
-   *   ① `pushed > 0`：会话真的消费了回推帧（异步链路走通）
-   *   ② `probeResult` 非空且 `ok:true`：业务层（useFetch 门面）拿到真实响应
-   *   ③ `jsTicks > 1`：会话态在请求期间保留
+   * ★★★判定（按 mode 分两套口径 —— 两者的"成功"含义完全不同）
+   *   **GET 模式**：① `pushed > 0`（回推帧被消费）② 探针 `ok:true`（拿到真实响应）③ `jsTicks > 1`
+   *   **CANCEL 模式**：① 探针 `ok:false`（请求失败）② `error_code == 'fetch.aborted'`（码对）
+   *     ③ `stopped_early == true`（**远早于超时结束** = 传输真被中止，不是自然超时）
+   *     ★第 ③ 条是核心：慢响应 10s / timeout 30s，若传输没停，totalMs 会接近 10s 或 30s。
    */
   let probeOk: boolean = false;
+  let cancelCodeOk: boolean = false;
+  let stoppedEarly: boolean = false;
   try {
     const pr = JSON.parse(probeResult) as Record<string, Object>;
-    probeOk = pr['ok'] === true;
+    if (isCancel) {
+      /* ★★★CANCEL 模式的三个判据（**不要**用探针的 `ok` 当"请求成功"：
+         探针里 `ok:true` 只表示"abort 流程跑完了"，而请求本身必然是失败的）：
+         ① `error_code == 'fetch.aborted'` —— 业务拿到的是取消码（不是 fetch.failed）
+         ② `stopped_early == true`        —— **abort 后立即结算**（3ms 实测）
+            ★这条是核心：若只 reject 本地而传输照跑，会等到 10s 慢响应或 30s 超时。
+         ③ `settle_ms_after_abort` 有值且很小 —— 同一件事的量化读数 */
+      cancelCodeOk = String(pr['error_code'] ?? '') === 'fetch.aborted';
+      stoppedEarly = pr['stopped_early'] === true;
+      probeOk = cancelCodeOk && stoppedEarly;
+    } else {
+      probeOk = pr['ok'] === true;
+    }
   } catch (e) { /* 未结算 */ }
-  out['ok'] = firstErr.length === 0 && pushedTotal > 0 && probeOk && lastJsTicks > 1;
+  if (isCancel) {
+    const hostCanceled: boolean = hostCancelCalls > 0;
+    const cc: CancelChecks = {
+      aborted: probeOk, codeOk: cancelCodeOk, stoppedEarly: stoppedEarly, jsTicksKept: lastJsTicks > 1,
+    };
+    out['checks'] = cc;
+    out['hostCancelOk'] = hostCanceled;
+    // ★四条全过才算：JS 码对 + 早结算 + **宿主真调了 cancel** + 会话态保留
+    out['ok'] = firstErr.length === 0 && probeOk && cancelCodeOk && stoppedEarly && hostCanceled && lastJsTicks > 1;
+    hilog.info(DOMAIN, TAG,
+      'SESSION_CANCEL_DONE ok=%{public}s codeOk=%{public}s stoppedEarly=%{public}s hostCancelCalls=%{public}d jsTicks=%{public}d',
+      String(out['ok']), String(cancelCodeOk), String(stoppedEarly), hostCancelCalls, lastJsTicks);
+  } else {
+    out['ok'] = firstErr.length === 0 && pushedTotal > 0 && probeOk && lastJsTicks > 1;
+    hilog.info(DOMAIN, TAG,
+      'SESSION_HTTP_DONE ok=%{public}s pushed=%{public}d jsTicks=%{public}d probeOk=%{public}s',
+      String(out['ok']), pushedTotal, lastJsTicks, String(probeOk));
+  }
   // ★把探针原文打进 hilog（400 字符截断）：报告文件在沙箱里读不到，这是唯一取证通道
   hilog.info(DOMAIN, TAG, 'SESSION_HTTP_PROBE_RAW %{public}s',
     probeResult.length > 400 ? probeResult.slice(0, 400) : probeResult);
-  hilog.info(DOMAIN, TAG,
-    'SESSION_HTTP_DONE ok=%{public}s pushed=%{public}d jsTicks=%{public}d probeOk=%{public}s',
-    String(out['ok']), pushedTotal, lastJsTicks, String(probeOk));
-  writeReport(filesDir, 'vm-session-http.json', JSON.stringify(out));
+  writeReport(filesDir, isCancel ? 'vm-session-cancel.json' : 'vm-session-http.json', JSON.stringify(out));
 }

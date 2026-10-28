@@ -211,5 +211,32 @@ inline Rcp_Session* acquireSession(const RcpApi& api, uint32_t* errCode, bool* c
 
 #endif  // PROTEUS_RCPAPI_HAVE_H
 
+/**
+ * ★★★#1344 B-2c：**对在途请求发真取消**（`HMS_Rcp_CancelRequest`）。
+ *
+ * 【为什么实现在这一层】RCP 的类型（`Rcp_Session` / `Rcp_Request`）只在这里可见；
+ *   `proteus_http.h` 只保留 `void*` 签名的前置声明（不让 RCP 类型泄露到会话模块）。
+ *
+ * @param outRc 出参：RCP 的返回码（0 = 成功；非 0 也算"已发出"，只是平台报错）
+ * @return `true` = 真的调到了取消符号（**不是**"已确认停止"，传输层异步生效）；
+ *         `false` = 本机 RCP 库缺 `HMS_Rcp_CancelRequest`
+ * ★记账由调用方（`proteus_http.h` 的 `cancelRcpRequest`）做 —— 那层有 `stats()`。
+ */
+inline bool cancelRcpRequestRaw(void* session, void* req, uint32_t* outRc) {
+#if PROTEUS_HAVE_RCP
+  if (session == nullptr || req == nullptr) return false;
+  void* lib = dlopen("librcp_c.so", RTLD_NOW);
+  if (lib == nullptr) return false;
+  const RcpApi api = loadRcpApi(lib);
+  if (api.cancelRequest == nullptr) return false;
+  const uint32_t rc = api.cancelRequest(static_cast<Rcp_Session*>(session), static_cast<const Rcp_Request*>(req));
+  if (outRc != nullptr) *outRc = rc;
+  return true;
+#else
+  (void)session; (void)req; (void)outRc;
+  return false;
+#endif
+}
+
 }  // namespace http
 }  // namespace proteus

@@ -148,7 +148,7 @@ static std::string screenInvokeDispatch(const std::string& method, const std::st
         return b;
     }
     // ★★★决策 #1081/#1083/#1187：元素几何 · 录屏截屏 · http.* 诚实分派
-    if (method == "device.capture") return proteus::capture::stateJson(); if (method.rfind("http.", 0) == 0) { std::string o; if (proteus::http::httpStubDispatch(method, &o)) return o; } else if (method.rfind("fs.", 0) == 0) { std::string o; if (proteus::fs::dispatch(method, argsJson, &o)) return o; }
+    if (method == "device.capture") return proteus::capture::stateJson(); if (method.rfind("http.", 0) == 0) { std::string o; if (proteus::http::httpStubDispatch(method, argsJson, &o)) return o; } else if (method.rfind("fs.", 0) == 0) { std::string o; if (proteus::fs::dispatch(method, argsJson, &o)) return o; }
     if (method == "element.rect") return scElementRect(argsJson);
     if (method == "screen.rect" || method == "screen.shared") {
         return "{\"ok\":false,\"missing\":true,\"reason\":\"未实现（e4 诚实跳过）\"}";

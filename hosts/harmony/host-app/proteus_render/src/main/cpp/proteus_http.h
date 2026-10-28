@@ -70,6 +70,38 @@
 namespace proteus {
 namespace http {
 
+/* ══════════════════════ 会话式 VM 的钩子（#1344 B-2 / B-2c） ══════════════════════
+ *
+ * 【为什么用函数指针】`proteus_vm_session.h` **包含**本文件；本文件不能反向 include 它
+ *   （循环依赖）。钩子让"会话模式"由会话模块注册，本文件只负责在正确时机调用。
+ * 【一次性 VM（生产路径）下两者都是 nullptr】⇒ 行为与改造前**逐字节等价**。
+ */
+/**
+ * ★B-2c：**在途登记**（`reqId` → 可取消的 RCP 请求）。
+ *   `handle()` 在 `createRequest` 之后立刻调用；在 `destroyRequest` 之前注销。
+ *   ★为什么需要：`HMS_Rcp_CancelRequest(session, req)` 需要**那个 req 指针**，
+ *     而它只活在 `handle()` 的栈上 ⇒ 不登记就永远拿不到，`abort()` 只能是 no-op。
+ */
+typedef void (*ProteusHttpRegisterFn)(const std::string& reqId, void* session, void* req);
+static ProteusHttpRegisterFn g_proteusHttpRegister = nullptr;
+static inline void setHttpRegisterHandler(ProteusHttpRegisterFn fn) { g_proteusHttpRegister = fn; }
+
+/** 注销在途登记（成功/失败/超时都要调，否则表泄漏） */
+typedef void (*ProteusHttpUnregisterFn)(const std::string& reqId);
+static ProteusHttpUnregisterFn g_proteusHttpUnregister = nullptr;
+static inline void setHttpUnregisterHandler(ProteusHttpUnregisterFn fn) { g_proteusHttpUnregister = fn; }
+
+/** 统一注销入口（各处 `destroyRequest` 前调；未注册时是 no-op） */
+static inline void unregisterInflight(const std::string& reqId) {
+  if (g_proteusHttpUnregister != nullptr) g_proteusHttpUnregister(reqId);
+}
+
+/* ★B-2c 的 `cancelRcpRequest` 定义在文件末尾（它要用 `stats()`）；RCP 类型相关的实现在
+   `proteus_http_rcpapi.h` 的 `cancelRcpRequestRaw`（本文件已 include 它）。 */
+inline bool cancelRcpRequestRaw(void* session, void* req, uint32_t* outRc);
+inline bool cancelRcpRequest(void* session, void* req);
+
+
 /** 宿主记账（判据/报告读它：证明"请求真的发出去过"，而非桥自造结果）。 */
 struct Stats {
   int calls = 0;             // 受理的 http.request 次数
@@ -91,6 +123,10 @@ struct Stats {
   int fetchTimeouts = 0;
   /** ★#1156：退化为同步 `FetchSync` 的次数（老版本库缺异步符号 ⇒ 该次**不复用连接**） */
   int syncFallback = 0;
+  /** ★★★#1344 B-2c：真取消的记账（`calls` = 调到 cancel 的次数；`hits` = RCP 回 0 的次数） */
+  int cancelCalls = 0;
+  int cancelHits = 0;
+  int cancelMisses = 0;
 };
 inline Stats& stats() {
   static Stats s;
@@ -529,6 +565,11 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
 
   // ② request + headers + content + 超时配置
   Rcp_Request* req = api.createRequest(url.c_str());
+  /* ★★★#1344 B-2c：**在途登记**（会话模式才有钩子；一次性 VM 下为 nullptr ⇒ 零行为变化）。
+     登记 `reqId → (session, req)`，让 `http.cancel` 能真的调 `HMS_Rcp_CancelRequest`。
+     ★必须在这里登记（req 刚建、还没发出）—— 太晚会漏掉"发出后立刻取消"的时序。
+     ★注销点在各处 `destroyRequest(req)` 之前（成功/失败/超时都要，否则表泄漏）。 */
+  if (g_proteusHttpRegister != nullptr) g_proteusHttpRegister(f.reqId, session, req);
   Rcp_Headers* headers = nullptr;
   Rcp_RequestContent content{};
   Rcp_Configuration cfg{};
@@ -570,6 +611,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
       stats().failures++;
       // ★清理：req 已建（headers 可能也建了）⇒ 按既有出口纪律销毁，不碰共享 session
       if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+      unregisterInflight(f.reqId);   // ★B-2c：注销在途登记（防表泄漏）
       api.destroyRequest(req);
       return proteus::wire::ResolveFrame::err(f.reqId, uploadParts.err);
     }
@@ -780,6 +822,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
       errCode = fetchRc;
       stats().failures++;
       if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+      unregisterInflight(f.reqId);   // ★B-2c
       api.destroyRequest(req);
       return proteus::wire::ResolveFrame::err(f.reqId, reasonOf(errCode));
     }
@@ -798,6 +841,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
         stats().fetchTimeouts++;
         if (api.cancelRequest != nullptr) api.cancelRequest(session, req);
         if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+        unregisterInflight(f.reqId);   // ★B-2c
         api.destroyRequest(req);
         return proteus::wire::ResolveFrame::err(f.reqId, "http.timeout: 宿主未在预算内收到响应回调");
       }
@@ -888,6 +932,7 @@ inline proteus::wire::ResolveFrame handle(const proteus::wire::InvokeFrame& f) {
   // ④ 释放（★#1156：只释放**单次请求**的资源；session 留给后续请求复用——
   //   关掉它就等于把连接池一起丢掉，连接复用会立刻归零（真机实测 3 请求/3 TCP 就是这个原因））
   if (headers != nullptr && api.destroyHeaders != nullptr) api.destroyHeaders(headers);
+  unregisterInflight(f.reqId);   // ★B-2c：注销在途登记（防表泄漏）
   api.destroyRequest(req);
   /**
    * ★★★#1194（独立验证第三轮 R3 修复）：**读数必须在 finish() 之后取**。
@@ -921,6 +966,20 @@ inline std::string probe(const std::string& url) {
            r.ok ? "true" : "false", r.status ? *r.status : 0u, r.body.size(),
            r.reason ? r.reason.v.c_str() : "");
   return buf;
+}
+
+/**
+ * ★★★B-2c：**对在途请求发真取消**（薄封装 + 记账）。
+ *   RCP 类型相关的实现在 `proteus_http_rcpapi.h` 的 `cancelRcpRequestRaw`（那层才看得见 RCP 类型）；
+ *   本函数只负责**记账**（`http.cancelStats` 读它 —— 判据的唯一直接证据）。
+ */
+inline bool cancelRcpRequest(void* session, void* req) {
+  uint32_t rc = 0;
+  if (!cancelRcpRequestRaw(session, req, &rc)) return false;
+  stats().cancelCalls++;
+  if (rc == 0) stats().cancelHits++;
+  else stats().cancelMisses++;
+  return true;
 }
 
 }  // namespace http

@@ -100,6 +100,16 @@ export const hostVmSessionPushResolve: (frameHex: string) => string;
  * @returns `{ok:true, value:"..."}` / `{ok:false, error:"..."}`
  */
 export const hostVmSessionEval: (js: string) => string;
+/**
+ * ★★★#1344 B-2c：**宿主侧取消记账**（`calls`/`hits`/`misses`）。
+ *
+ * 【为什么单独一个入口】在会话里用 `hostVmSessionEval("proteusHost.invoke('http.cancelStats')")`
+ * **会崩**（会话内再触发宿主回调 = 重入）。⇒ 由宿主直接读 `stats()`。
+ * 【为什么判据必须读它】JS 侧"abort 后 3ms 结算"只证明**本地 Promise reject 了**；
+ * 把宿主的 `HMS_Rcp_CancelRequest` 摘掉，JS 侧读数一模一样（破坏性验证 M7 抓到）。
+ * 只有 `calls > 0` 才证明**宿主真的调了 RCP 取消**。
+ */
+export const hostVmSessionCancelStats: () => string;
 export const hostVmSessionClose: () => string;
 export const hostVmSessionStats: () => string;
 /** ★★★切页残留动画修复（2026-10-11）：清动画会话（旧页 spec 的 nodeId 属旧页编号空间——
