@@ -30,7 +30,15 @@ export interface CapabilityRuntime {
  */
 export function makeCapabilityRuntime(opts: CapabilityHooksOptions): CapabilityRuntime {
   const resources = opts.resources ?? null
-  const appWs = createAppWebSocket({ resources: resources ?? undefined, owner: opts.owner })
+  /**
+   * ★★★#1344 P4：**白名单从装配层下传**（一处配置覆盖 HTTP + WS 两条通道）。
+   *   不传 ⇒ 不限制（与 HTTP 的 TenantPolicy 同口径）。
+   */
+  const appWs = createAppWebSocket({
+    resources: resources ?? undefined,
+    owner: opts.owner,
+    allowedDomains: opts.allowedDomains,
+  })
   return {
     resources,
     appWs,

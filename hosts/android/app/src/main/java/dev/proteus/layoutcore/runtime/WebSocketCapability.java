@@ -193,10 +193,37 @@ public final class WebSocketCapability {
                 String path = u.getRawPath() == null || u.getRawPath().isEmpty() ? "/" : u.getRawPath();
                 if (u.getRawQuery() != null) path += "?" + u.getRawQuery();
 
-                socket = tls
-                        ? SSLSocketFactory.getDefault().createSocket()
-                        : new Socket();
-                socket.connect(new InetSocketAddress(host, port), 15000);
+                if (tls) {
+                    /**
+                     * ★★★#1344 P4：**必须做主机名校验**（此前这里是真实的 MITM 漏洞）。
+                     *
+                     * 【缺陷形态（可对照 Android 文档复核）】原先写的是
+                     *   `SSLSocketFactory.getDefault().createSocket()`（**无参**）再 `connect()`。
+                     *   这条路径只做**证书链**校验（对系统 CA），**不做主机名比对** ——
+                     *   `setEndpointIdentificationAlgorithm` 默认是 null。
+                     *   ⇒ 任何持有**任意域名**合法证书的人都能冒充 `wss://api.bank.com`。
+                     *   ★这是 Android 的经典坑：`createSocket(host, port)` 重载会自动带上
+                     *     peerHost，而 `createSocket()` + `connect()` 不会。
+                     *
+                     * 【为什么自己设而不是换重载】`createSocket(host, port)` 没有连接超时参数，
+                     *   而本端要求 15s 有界（与 http.request 同口径）⇒ 保留 `connect(timeout)`，
+                     *   但**先显式设 HTTPS 端点识别**，并在 TCP 连上后**显式 startHandshake()**。
+                     *
+                     * 【★为什么显式 startHandshake】不显式调用时 TLS 握手是**首次读写时**惰性触发，
+                     *   于是"证书不匹配"会以 `握手失败：HTTP xxx` / 读到垃圾的形式冒出来，
+                     *   排查方向完全错（会以为服务端没开 WSS）。显式握手让错误归因到 TLS 层。
+                     */
+                    javax.net.ssl.SSLSocket s = (javax.net.ssl.SSLSocket) SSLSocketFactory.getDefault().createSocket();
+                    javax.net.ssl.SSLParameters params = s.getSSLParameters();
+                    params.setEndpointIdentificationAlgorithm("HTTPS");
+                    s.setSSLParameters(params);
+                    socket = s;
+                    socket.connect(new InetSocketAddress(host, port), 15000);
+                    s.startHandshake();
+                } else {
+                    socket = new Socket();
+                    socket.connect(new InetSocketAddress(host, port), 15000);
+                }
                 socket.setTcpNoDelay(true);
                 out = socket.getOutputStream();
                 in = socket.getInputStream();

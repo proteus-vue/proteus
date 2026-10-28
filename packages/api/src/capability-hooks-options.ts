@@ -17,4 +17,18 @@ export interface CapabilityHooksOptions {
    * ★不传 ⇒ 默认并发 10（与 `wx.request` 一致）、无重试、无去重、无拦截器——既有行为不变。
    */
   fetch?: import('./capability-fetch-pipeline').FetchPipelineOptions
+  /**
+   * ★★★#1344 P4：**出网域名白名单，覆盖 HTTP 与 WebSocket 两条通道**。
+   *
+   * 【为什么必须放在能力装配层而不是各 Hook 里】这是痛点 #15 的修法：
+   *   加固只做在 HTTP 那一层时，业务换个 API（`useWebSocket`）就绕过了全部限制。
+   *   放在装配层 ⇒ **一处配置、两条通道**，业务无法通过换 API 逃逸。
+   *
+   * 【语义与 `TenantPolicy.allowedDomains` 完全一致】（同一份 `isHostAllowed` 实现）：
+   *   · 不传 / 空数组 ⇒ 不限制（可选增强，否则现有业务全被拦死）
+   *   · `'api.example.com'` ⇒ 精确匹配
+   *   · `'*.example.com'` ⇒ **只**匹配任意一级子域（`a.b.example.com` 不匹配）
+   *   · `'*'` ⇒ 全放行（仅平台内部用）
+   */
+  allowedDomains?: string[]
 }

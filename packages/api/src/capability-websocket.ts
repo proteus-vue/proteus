@@ -22,6 +22,10 @@
 //   连接失败 ⇒ 推 `error` 事件 + 后续 `close`（与浏览器语义同形）；**不伪造 `open`**。
 
 import { invokeHost } from './capability-invoke'
+// ★★★#1344 P4：域名白名单与 HTTP 走**同一份实现**（一处规则，两条通道）
+import { hostOf, isHostAllowed } from './request/tenant'
+// ★★★#1344 P4：域名白名单与 HTTP 走**同一份实现**（一处规则，两条通道）
+import { hostOf, isHostAllowed } from './request/tenant'
 import type { CapabilityResourceRegistry } from './capability-resources'   // ★#1094 G-43 边界资源账本
 import { CapError as ProteusCapError } from './capability-types'
 import type { CapResult, WebSocketConnection } from './capability-types'
@@ -112,6 +116,13 @@ export interface WsStats {
   dispatchMs: number
   /** ② 单次分发因订阅者过多被截断的次数（超出 WS_MAX_DISPATCH_PER_PUSH） */
   dispatchTruncated: number
+  /**
+   * ★★★#1344 P4：因**域名不在白名单**被拒绝的连接次数。
+   *   【为什么单记一个数】WS 曾是"绕过全部 HTTP 加固"的洞（痛点 #15）：
+   *   业务以为平台配了域名白名单就管住了所有出网，而 WS 照连不误。
+   *   这条读数是"白名单真的拦住了 WS"的唯一直接证据（不是"代码里有那个函数"）。
+   */
+  rejectedByAllowlist: number
 }
 
 const wsStats: WsStats = {
@@ -126,6 +137,7 @@ const wsStats: WsStats = {
   slowDispatches: 0,
   dispatchMs: 0,
   dispatchTruncated: 0,
+  rejectedByAllowlist: 0,
 }
 
 /** 读规模读数（探针/判据用） */
@@ -146,6 +158,7 @@ export function __resetWsStats(): void {
   wsStats.slowDispatches = 0
   wsStats.dispatchMs = 0
   wsStats.dispatchTruncated = 0
+  wsStats.rejectedByAllowlist = 0
 }
 
 /**
@@ -280,10 +293,36 @@ function errOf(code: string, message: string): ProteusCapError {
  *   `open` 事件才是连接建立的证据（与浏览器 `WebSocket` 同语义）。
  */
 export function createAppWebSocket(
-  opts: { resources?: CapabilityResourceRegistry; owner?: string } = {},
+  opts: {
+    resources?: CapabilityResourceRegistry
+    owner?: string
+    /**
+     * ★★★#1344 P4：**域名白名单**（与 HTTP 的 `TenantPolicy.allowedDomains` 同一份语义）。
+     *
+     * 【为什么 WS 必须有这一条（痛点 #15）】此前 WS 是"绕过全部加固"的通道：
+     *   平台给 HTTP 配了域名白名单，业务换 `useWebSocket` 就能连任意域 ——
+     *   而且 `wss://` 出网在审计里看起来"只是条连接"，实际是常驻双向通道（最能外传数据）。
+     *   ★不配 ⇒ 不限制（白名单是可选增强，与 HTTP 同口径；否则现有业务全被拦死）。
+     */
+    allowedDomains?: string[]
+  } = {},
 ): (url: string, protocols?: string[]) => Promise<WebSocketConnection> {
   installWsChannel()
   return async (url, protocols) => {
+    /**
+     * ★★★#1344 P4：**域名白名单必须在发起之前判**（与连接数上界同一个时机）。
+     *   ★排在连接数上界**之前**：被白名单拒的连接根本不该占用并发额度
+     *     （否则恶意域名刷满额度，把合法业务挤掉 —— 那等于用一个洞换另一个洞）。
+     *   ★错误码 `websocket.forbidden`（不是 `unsupported`）：调用方传错了域，
+     *     与"本端没这个能力"是两件事。
+     */
+    if (!isHostAllowed(url, opts.allowedDomains)) {
+      wsStats.rejectedByAllowlist++
+      throw errOf(
+        'websocket.forbidden',
+        `域名不在白名单内：${hostOf(url) || '(无法解析)'} —— 请用平台配置的允许域名，或联系平台加成`,
+      )
+    }
     // ★★★#1244 ④ 连接数上界：**在发起之前**判（先连上再拒 = 宿主 socket 已建、还得再关一次）
     if (conns.size >= WS_MAX_CONNECTIONS) {
       wsStats.rejectedConnections++

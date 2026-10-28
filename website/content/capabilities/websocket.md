@@ -10,7 +10,7 @@ order: 2
 
 **什么时候用**：聊天、实时协作、行情推送。
 
-**端实现边界**：**四端可用**（Web / 微信 / App-iOS / App-Android，两端均已真机验证）；**鸿蒙未接线**（宿主没有 ws 通道）。用法上有个易错点：`useWebSocket()` 成功只代表**连接已受理**，`open` 事件才是"连上了"的证据——App 端尤其如此（`ws.open` 受理即返，不阻塞 JS 线程等握手）。发送失败走 `error` 事件（`send` 不抛，与浏览器一致）。实现上两端形态不同：iOS 用系统 `URLSessionWebSocketTask`，Android 因构建不允许引依赖而**手写 RFC 6455**（握手/Mask/分片/close 帧）。
+**端实现边界**：**四端可用**（Web / 微信 / App-iOS / App-Android，两端均已真机验证）；**鸿蒙未接线**（宿主没有 ws 通道）。用法上有个易错点：`useWebSocket()` 成功只代表**连接已受理**，`open` 事件才是"连上了"的证据——App 端尤其如此（`ws.open` 受理即返，不阻塞 JS 线程等握手）。发送失败走 `error` 事件（`send` 不抛，与浏览器一致）。实现上两端形态不同：iOS 用系统 `URLSessionWebSocketTask`，Android 因构建不允许引依赖而**手写 RFC 6455**（握手/Mask/分片/close 帧）。**安全链（#1344 P4）**：WebSocket 与 HTTP 走**同一套**出网治理 —— `createCapabilityHooks({ allowedDomains })` **一处配置、两条通道**（共用 `isHostAllowed`；不传=不限制；`*.example.com` 只匹配**一级**子域）。被拒时**宿主一次都不会被调用**（错误码 `websocket.forbidden`），且白名单检查**排在并发额度之前**（否则恶意域名能刷满 64 个额度挤掉合法业务）。传输层主机名校验在 Android 上是**真缺陷**并已修：`createSocket()` + `connect()` 只校验证书链、**不比对主机名** ⇒ 任意域名的合法证书都能冒充；现显式设 `setEndpointIdentificationAlgorithm("HTTPS")` 并调 `startHandshake()`。iOS 保持 `delegate: nil`（系统默认处理才含主机名比对）。**诚实边界**：`wss://` 的 SPKI pinning **三端都未实现**。
 
 > 技术标识：能力原语 C27 · `capability.websocket` · 返回 `WSConnection` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
