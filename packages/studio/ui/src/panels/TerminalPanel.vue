@@ -146,15 +146,55 @@ async function openSession() {
     opened.value = false
     return
   }
-  term.value.reset(c, r)
-  ver.value++
-  opened.value = true
-  exited.value = false
   try {
-    sid.value = await termOpen(c, r, shellSel.value)
+    const id = await termOpen(c, r, shellSel.value)
+    const t = new Terminal(c, r)
+    sessions.value = [...sessions.value, { id, title: shellSel.value, term: t }]
+    activeId.value = id
+    term.value = t
+    ver.value++
+    opened.value = true
+    exited.value = false
   } catch (e) {
     pushToast(`开终端失败：${String((e as Error)?.message ?? e)}`, 'err')
   }
+}
+
+/** 切到某个会话：只换渲染目标 + 按当前面板尺寸校准 pty */
+function switchTo(id: number) {
+  const s = sessions.value.find((x) => x.id === id)
+  if (!s) return
+  activeId.value = id
+  term.value = s.term
+  exited.value = false
+  ver.value++
+  const { cols: c, rows: r } = gridSize()
+  if (c >= 8 && r >= 3 && (s.term.cols !== c || s.term.rows !== r)) {
+    s.term.resize(c, r)
+    void termResize(id, c, r).catch(() => {})
+  }
+  void nextTick(() => focusInput())
+}
+
+/** 关掉某个会话（关完若是最后一个，就再开一个新的，避免面板空着） */
+async function closeSession(id: number) {
+  const rest = sessions.value.filter((x) => x.id !== id)
+  await termClose(id).catch(() => {})
+  sessions.value = rest
+  if (!rest.length) {
+    activeId.value = 0
+    opened.value = false
+    void openSession()
+    return
+  }
+  if (activeId.value === id) switchTo(rest[0].id)
+}
+
+/** 新建终端（⌘⇧T / 工具栏 +） */
+function newSession() {
+  if (!hasBridge) return
+  opened.value = false
+  void openSession()
 }
 
 function scheduleRender() {
@@ -173,7 +213,7 @@ function onResize() {
   if (c === term.value.cols && r === term.value.rows) return
   term.value.resize(c, r)
   ver.value++
-  if (hasBridge && !exited.value) void termResize(c, r).catch(() => {})
+  if (hasBridge && !exited.value) void termResize(activeId.value, c, r).catch(() => {})
 }
 
 /* ─── 键盘 → 终端字节 ────────────────────────────────────────────────────
@@ -275,12 +315,18 @@ onMounted(async () => {
   measure()
   await nextTick()
   offData = onTermData((id, d) => {
-      if (sid.value !== null && id !== sid.value) return
+      /* ★`id=0` = 浏览器桩/旧 payload（不带会话 id）⇒ 落到**当前活动会话**，
+         否则门禁那种"直接派发 studio:term-data"的场景会被当成"未知会话"丢掉。 */
+      const target =
+        sessions.value.find((x) => x.id === id) ??
+        sessions.value.find((x) => x.id === activeId.value)
+      if (target) target.term.write(d)
+      if (id !== 0 && id !== activeId.value) return
     term.value.write(d)
     scheduleRender()
   })
   offExit = onTermExit((id) => {
-      if (sid.value !== null && id !== sid.value) return
+      if (id !== activeId.value) return
     exited.value = true
     term.value.write('\r\n\x1b[2m[会话已结束，按回车重开]\x1b[0m\r\n')
     ver.value++
@@ -308,7 +354,8 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   if (raf) cancelAnimationFrame(raf)
   // ★卸载时才关：视图切换不该杀 shell（用户经常在 code/term 之间来回切）
-  if (hasBridge) if (sid.value !== null) void termClose(sid.value).catch(() => {})
+  /* 关掉**全部**会话（多会话后不能只关当前那个） */
+  for (const s of sessions.value) void termClose(s.id).catch(() => {})
 })
 
 /* ── 工具栏（决策 #1349）──────────────────────────────────────────────────
@@ -324,8 +371,15 @@ const shellOpts = [
   { value: 'sh', label: 'sh' },
 ]
 const findOpen = ref(false)
-/* 当前会话 id（决策 #1362 后端多会话化后，所有 term_* 调用都要带 id） */
-const sid = ref<number | null>(null)
+/* ── 多会话（决策 #1363）─────────────────────────────────────────────────
+ * 每个会话持有**独立的 `Terminal` 实例**（自己的网格/回滚/光标），
+ * 面板只渲染"当前活动"那一个；切会话只是换 `term.value` 的指向，不重排不丢内容。
+ * 后端已经是 id 化的会话表（#1362），所以这里只管 UI 层的列表与切换。 */
+type Sess = { id: number; title: string; term: Terminal }
+const sessions = shallowRef<Sess[]>([])
+const activeId = ref(0)
+/** 当前会话 id（term_* 调用都要带 id） */
+const sid = computed(() => (activeId.value || null))
 const findQ = ref('')
 /* 匹配规则（决策 #1358）：与 VS Code 一致 —— Aa 区分大小写 · ab 全字匹配 · .* 正则 */
 const fCase = ref(false)
@@ -342,7 +396,7 @@ async function switchShell(v: 'zsh' | 'bash' | 'sh') {
   shellSel.value = v
   if (!hasBridge) return
   try {
-    if (sid.value !== null) await termClose(sid.value)
+    if (sid.value !== null) await closeSession(sid.value)
   } catch {
     /* 已经关了也无所谓 */
   }
@@ -542,6 +596,13 @@ defineExpose({ focus: focusInput, term, openFind })
     @keydown.capture="
       (e) => {
         /* 焦点在终端里时 ⌘F 归终端（决策 #1358）：不该去开代码视图的搜索 */
+        /* ⇧⌘T = 新建终端（与 VS Code 一致），同样只在焦点位于终端时生效 */
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't') {
+          e.preventDefault()
+          e.stopPropagation()
+          newSession()
+          return
+        }
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
           e.preventDefault()
           e.stopPropagation()
@@ -552,6 +613,21 @@ defineExpose({ focus: focusInput, term, openFind })
   >
     <!-- 工具栏（决策 #1349）：关闭 / 最大化 / 终止 / 清屏 / shell / 查找 -->
     <div class="termbar" @click.stop>
+      <!-- 多终端标签（决策 #1363）：每个会话一个标签，✕ 单独关闭，+ 新建 -->
+      <div class="ttabs">
+        <button
+          v-for="s in sessions"
+          :key="s.id"
+          class="ttab"
+          :class="{ on: s.id === activeId }"
+          :title="`${s.title} · 会话 ${s.id}`"
+          @click="switchTo(s.id)"
+        >
+          <span class="tname">{{ s.title }}</span>
+          <span class="tx" title="关闭这个终端" @click.stop="closeSession(s.id)">✕</span>
+        </button>
+        <PButton size="sm" title="新建终端（⌘⇧T）" @click="newSession">＋</PButton>
+      </div>
       <!-- 全部换成 Studio 自己的控件（决策 #1350）：原生 select 在 macOS 上是系统绘制，
            样式不可控，且弹层会盖在原生层之上（画布在下层）。 -->
       <PSelect
@@ -785,4 +861,16 @@ defineExpose({ focus: focusInput, term, openFind })
 .frule:hover { background: var(--bg-overlay); color: var(--fg-muted); }
 .frule.on { background: rgb(96 165 250 / 30%); color: var(--fg); }
 .frule .ab { text-decoration: underline; text-underline-offset: 1px; }
+
+/* 终端标签：窄、可横向滚动（会话多了也不会把工具栏挤爆） */
+.ttabs { display: flex; align-items: center; gap: 2px; max-width: 45%; overflow-x: auto;
+         scrollbar-width: none; }
+.ttabs::-webkit-scrollbar { display: none; }
+.ttab { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 5px;
+        border: 1px solid transparent; border-radius: 5px; background: transparent;
+        color: var(--fg-subtle); font-size: 11px; cursor: pointer; white-space: nowrap; }
+.ttab:hover { background: var(--bg-overlay); color: var(--fg-muted); }
+.ttab.on { background: var(--bg-elevated); border-color: var(--border-subtle); color: var(--fg); }
+.ttab .tx { opacity: .45; font-size: 9px; }
+.ttab .tx:hover { opacity: 1; color: #f87171; }
 </style>
