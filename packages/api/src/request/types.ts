@@ -100,6 +100,26 @@ export interface OfflineQueuePolicy {
   order?: 'fifo'
   /** 队列容量上限（条）。默认 100；超限**丢最旧并计数**（不静默） */
   maxEntries?: number
+  /**
+   * ★★★#1344：**网络恢复时自动重放**（默认 **false**，需显式开启）。
+   *
+   * 【为什么这条必须有（本轮取证发现的承诺/实现不符）】本文件上面写着
+   *   "恢复后按序重放"，而 `client.flushOfflineQueue()` 此前**没有任何调用方**
+   *   —— 业务必须自己记得在网络恢复时调它，而绝大多数不会
+   *   ⇒ 断网时入队的请求**永久躺在队列里**，"离线队列"变成"离线黑洞"。
+   *   ★这是本仓反复抓的同一形态：**类型/API 都在，缺的是最后一根驱动线**。
+   *
+   * 【为什么默认关闭而不是默认开】
+   *   ① 自动重放会**在后台替业务发请求**（没有用户手势）——这是有副作用的默认行为，
+   *      对支付类业务必须由平台显式决定；
+   *   ② 它依赖平台提供"网络恢复"事件；Web 有 `online`、MP 有 `wx.onNetworkStatusChange`，
+   *      但**不是所有宿主都保证**（缺事件时静默不驱动，不会有假承诺）。
+   *
+   * 【开启后做什么】监听平台的网络恢复事件 → 调 `flushOfflineQueue()`。
+   *   重放用**原幂等键**（服务端据此去重）；同一条重放 ≥3 次仍失败 ⇒ 视为毒丸跳过并留在队列
+   *   （不静默丢弃）。见 `client.flushOfflineQueue` 的实现注释。
+   */
+  autoFlush?: boolean
 }
 
 /* ══════════════════════ 安全 ══════════════════════ */
@@ -300,6 +320,17 @@ export interface RequestClientOptions {
     /** 持久化后端（注入式；不传则只内存排队） */
     store?: OfflineQueueStore
   }
+  /**
+   * ★★★#1344：**网络状态订阅**（`offlineQueue.autoFlush` 用它知道"网回来了"）。
+   *
+   * 【为什么由调用方注入而不是 client 自己找】平台形态不同（Web 是 navigator.onLine
+   *   + online 事件；MP 是 wx.onNetworkStatusChange；App 三端是各宿主桥），
+   *   而 request/ 这一层**刻意不依赖任何平台**（它只认 hooks.useFetch）。
+   *   注入一个订阅函数就把平台细节留在装配层，本层保持可测（单测里传假订阅即可）。
+   *
+   * @returns 取消订阅函数
+   */
+  onNetworkStatusChange?: (cb: (status: { isConnected: boolean }) => void) => () => void
   /** 凭证托管。不传 ⇒ 不注入 `Authorization` */
   auth?: AuthManager
   /** 签名（平台强制） */
@@ -385,8 +416,16 @@ export interface RequestClient {
   delete<T = unknown>(url: string, options?: Omit<RequestOptions, 'method'>): Promise<RequestResult<T>>
   /** 只读快照（诊断用；不含 token/载荷） */
   stats(): RequestClientStats
-  /** 离线队列：手动触发重放（网络恢复事件也可由平台调用） */
+  /** 离线队列：手动触发重放（`autoFlush` 开启时网络恢复也会自动调用） */
   flushOfflineQueue(): Promise<{ replayed: number; failed: number; skipped: number }>
+  /**
+   * ★★★#1344：**释放副作用**（取消网络订阅）。
+   *
+   * 【为什么必须有】`autoFlush` 会注册一个网络状态回调，它持有整个 client 的闭包。
+   *   页面销毁而回调还在跑 ⇒ 泄漏 + 卸载后仍在后台发请求（G-43 边界资源纪律）。
+   *   ★实例本身是冻结的（配置不可变），但**订阅是副作用**，副作用必须有确定的释放点。
+   */
+  dispose(): void
 }
 
 /** 任务句柄（★与 `FetchTask` 同形状，但 `result` 是三态结果） */

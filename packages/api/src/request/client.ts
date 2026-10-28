@@ -177,6 +177,25 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
   const totals = { requests: 0, success: 0, failed: 0, unknown: 0 }
   let rejectedLocal = 0
 
+  /**
+   * ★★★#1344：**网络恢复 ⇒ 自动重放**（`offlineQueue.autoFlush`）。
+   *
+   * 【修的是什么（本轮取证发现）】类型里写着"恢复后按序重放"，而
+   *   `flushOfflineQueue()` 此前**没有任何调用方** —— 业务必须自己记得调，
+   *   而绝大多数不会 ⇒ 断网时入队的请求**永久躺在队列里**（"离线黑洞"）。
+   *   ★本仓反复抓的同一形态：类型/API 都在，缺的是最后一根驱动线。
+   *
+   * 【为什么放在这里而不是交给业务】业务会在 20 个页面各写一遍"网恢复就 flush"，
+   *   而那些副本一定会漂移（忘记 await / 忘记去重 / 连写错事件名）。
+   *   平台方一次配好，业务零负担 —— 这才叫"治理层"。
+   *
+   * 【防重入】网络抖动会连发多次恢复事件 ⇒ 用 `flushing` 闸门，一次只跑一轮；
+   *   期间再次触发只记一个"待补跑"标记，本轮结束后补一次（不丢事件、不并发重放）。
+   */
+  let unsubNet: (() => void) | undefined
+  let flushing = false
+  let flushPending = false
+
   function emitTrace(e: RequestTraceEvent): void {
     if (options.trace) {
       try {
@@ -555,6 +574,87 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
     }
   }
 
+  /**
+   * ★★★#1344：离线队列重放的**唯一实现**（手动 `flushOfflineQueue()` 与自动驱动共用）。
+   *
+   * 【防重入】网络抖动会连发多次"已恢复"事件。若每次都起一轮重放，
+   *   同一条队列会被多个并发的 `request()` 同时处理 ⇒ 重复发送
+   *   （虽有幂等键兜底，但那是在**服务端**去重；客户端不该制造这种流量）。
+   *   ⇒ `flushing` 闸门保证一次只跑一轮；期间来的事件记 `flushPending`，
+   *     本轮结束后补跑一次（不丢事件、不并发）。
+   */
+  async function doFlush(): Promise<{ replayed: number; failed: number; skipped: number }> {
+    if (!offline) return { replayed: 0, failed: 0, skipped: 0 }
+    if (flushing) {
+      flushPending = true
+      return { replayed: 0, failed: 0, skipped: 0 }
+    }
+    flushing = true
+    try {
+      const entries = await offline.peekAll()
+      const done: string[] = []
+      let replayed = 0
+      let failed = 0
+      for (const e of entries) {
+        // ★重放必须带原幂等键（服务端据此去重）；已重放太多次的条目视为毒丸 ⇒ 跳过并留在队列
+        if ((e.attempts ?? 0) >= 3) continue
+        const r = await request(e.url, {
+          method: e.method as RequestOptions['method'],
+          headers: e.headers,
+          data: e.body,
+          idempotencyKey: e.idempotencyKey,
+          allowOffline: false,
+        })
+        if (r.ok) {
+          done.push(e.idempotencyKey)
+          replayed++
+        } else {
+          failed++
+        }
+      }
+      if (done.length > 0) await offline.remove(done)
+      return { replayed, failed, skipped: entries.length - replayed - failed }
+    } finally {
+      flushing = false
+      if (flushPending) {
+        flushPending = false
+        // ★补跑一次（不 await：调用方可能已经不关心；但事件不能丢）
+        void doFlush()
+      }
+    }
+  }
+
+  /**
+   * ★★★#1344：**自动重放驱动**（`offlineQueue.autoFlush: true` 才启用）。
+   *
+   * 【为什么默认关】自动重放会**在后台替业务发请求**（没有用户手势）——
+   *   对有副作用的业务（支付/下单）必须由平台显式决定，不能默认替它做。
+   * 【为什么不在这里判断"当前是否在线"】`isConnected === true` 只说明"网卡通了"，
+   *   不代表目标服务可达（可能还要等 DNS/代理）。此时重放失败也无害：
+   *   条目**留在队列**（只有 `r.ok` 才 remove），下一次恢复事件会再试。
+   *   ★这比"等一个完美的在线判据"实际得多 —— 完美判据不存在。
+   */
+  if (offline && options.offlineQueue?.autoFlush === true && options.onNetworkStatusChange) {
+    try {
+      unsubNet = options.onNetworkStatusChange((st) => {
+        if (st.isConnected) void doFlush()
+      })
+    } catch {
+      // 订阅失败 ⇒ 退化为"只能手动 flush"（如实：不假装自动重放已生效）
+      unsubNet = undefined
+    }
+  }
+
+  /**
+   * ★取消网络订阅（实例是冻结的，但订阅是**副作用**：页面销毁后必须解掉，
+   *   否则回调还在跑、还持有整个 client 的闭包）。
+   * ★挂在 client 的 `dispose` 上由调用方调用 —— 与 CapabilityResourceRegistry 同一治理口径。
+   */
+  function dispose(): void {
+    unsubNet?.()
+    unsubNet = undefined
+  }
+
   const client: RequestClient = {
     request,
     task,
@@ -586,31 +686,9 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
       }
     },
     async flushOfflineQueue(): Promise<{ replayed: number; failed: number; skipped: number }> {
-      if (!offline) return { replayed: 0, failed: 0, skipped: 0 }
-      const entries = await offline.peekAll()
-      const done: string[] = []
-      let replayed = 0
-      let failed = 0
-      for (const e of entries) {
-        // ★重放必须带原幂等键（服务端据此去重）；已重放太多次的条目视为毒丸 ⇒ 跳过并留在队列
-        if ((e.attempts ?? 0) >= 3) continue
-        const r = await request(e.url, {
-          method: e.method as RequestOptions['method'],
-          headers: e.headers,
-          data: e.body,
-          idempotencyKey: e.idempotencyKey,
-          allowOffline: false,
-        })
-        if (r.ok) {
-          done.push(e.idempotencyKey)
-          replayed++
-        } else {
-          failed++
-        }
-      }
-      if (done.length > 0) await offline.remove(done)
-      return { replayed, failed, skipped: entries.length - replayed - failed }
+      return doFlush()
     },
+    dispose,
   }
 
   return Object.freeze(client)
