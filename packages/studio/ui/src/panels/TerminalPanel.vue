@@ -13,6 +13,39 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { Terminal, runsOf } from '../terminal'
 import { hasBridge, onTermData, onTermExit, termClose, termOpen, termResize, termWrite } from '../bridge'
+
+/**
+ * 统一的写入入口（决策 #1354）：**会话丢了就自己重开再重试一次**。
+ *
+ * 为什么需要：Rust 侧会话是**单例**，而"面板显示着" ≠ "会话还在"。
+ * 切 shell（关旧开新）、手机推流中断后的重启、应用重启后面板被恢复成打开态……
+ * 任一情形都会让 SESSION 变成 None，此时任何按键/按钮都返回"终端未打开"——
+ * 用户看到的就是"有时候正常、有时候一直报错"。
+ * 与其让人去理解会话状态，不如在这里**自愈**：重开一次，把这一击补发出去。
+ */
+async function writeToTerm(data: string) {
+  if (!hasBridge) return
+  try {
+    await termWrite(data)
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e)
+    if (msg.includes('终端未打开')) {
+      opened.value = false
+      openSession()
+      await new Promise((r) => setTimeout(r, 150))
+      try {
+        await termWrite(data)
+        return
+      } catch {
+        /* 仍然失败就走下面统一报错（此时确实开不起来） */
+      }
+    }
+    pushToast(msg, 'err')
+  }
+}
+import PButton from '../ui/PButton.vue'
+import PInput from '../ui/PInput.vue'
+import PSelect from '../ui/PSelect.vue'
 import { pushToast } from '../toast'
 
 /* ★`active` 由 App 传（`view === 'term'`）：面板用 v-show 常驻以保留会话，
@@ -106,12 +139,19 @@ async function openSession() {
     return
   }
   const { cols: c, rows: r } = gridSize()
+  /* ★尺寸不合法就别开（决策 #1354）：面板被 `v-show` 藏起来时量出来可能是 0×0，
+     拿这个尺寸去 openpty 只会得到一个畸形终端（ps1 刷屏/立刻 EOF）。
+     这时候**不开会话**，等它真正可见时（ResizeObserver 会再调 maybeOpen）再开。 */
+  if (c < 8 || r < 3) {
+    opened.value = false
+    return
+  }
   term.value.reset(c, r)
   ver.value++
   opened.value = true
   exited.value = false
   try {
-    await termOpen(c, r)
+    await termOpen(c, r, shellSel.value)
   } catch (e) {
     pushToast(`开终端失败：${String((e as Error)?.message ?? e)}`, 'err')
   }
@@ -159,7 +199,7 @@ const SEQ: Record<string, string> = {
 function send(data: string) {
   if (!data) return
   if (!hasBridge) return
-  void termWrite(data).catch((e) => pushToast(String((e as Error)?.message ?? e), 'err'))
+  void writeToTerm(data)
 }
 
 function onKeyDown(e: KeyboardEvent) {
@@ -269,18 +309,325 @@ onBeforeUnmount(() => {
   if (hasBridge) void termClose().catch(() => {})
 })
 
-defineExpose({ focus: focusInput, term })
+/* ── 工具栏（决策 #1349）──────────────────────────────────────────────────
+ * 用户指出：终端只有一块裸屏，没有关闭/终止/新建/拆分/shell 选择/搜索/多终端列表。
+ * 本轮先做**能真正生效**的部分（都基于已有的单会话后端）：
+ *   终止（^C）· 清屏（^L）· shell 选择（zsh/bash/sh，白名单，重开会话）· 查找 · 最大化 · 关闭。
+ * 多终端 / 拆分 / 会话列表需要后端**多会话 id**，是下一步（现在只有唯一会话）。 */
+const emit = defineEmits<{ close: []; maximize: [] }>()
+const shellSel = ref<'zsh' | 'bash' | 'sh'>('zsh')
+const shellOpts = [
+  { value: 'zsh', label: 'zsh' },
+  { value: 'bash', label: 'bash' },
+  { value: 'sh', label: 'sh' },
+]
+const findOpen = ref(false)
+const findQ = ref('')
+/* 匹配规则（决策 #1358）：与 VS Code 一致 —— Aa 区分大小写 · ab 全字匹配 · .* 正则 */
+const fCase = ref(false)
+const fWord = ref(false)
+const fRegex = ref(false)
+
+async function sendCtrl(seq: string) {
+  if (!hasBridge) return
+  await writeToTerm(seq)
+}
+
+/** 切 shell = 关掉当前会话再开一个新的（单会话后端只能这样换） */
+async function switchShell(v: 'zsh' | 'bash' | 'sh') {
+  shellSel.value = v
+  if (!hasBridge) return
+  try {
+    await termClose()
+  } catch {
+    /* 已经关了也无所谓 */
+  }
+  opened.value = false
+  openSession()
+}
+
+/**
+ * 把一行 run 按命中区间切开（决策 #1357 / #1358）。
+ *
+ * ★做法：先在**整行拼接文本**上算命中区间，再把区间映射回各个 run。
+ *   这样"跨 run 的词"（同一行里颜色不同把词切断）也能命中——之前按 run 单独找是找不全的。
+ * ★匹配规则与 VS Code 对齐：区分大小写 / 全字匹配 / 正则（正则非法时不报错、按无命中处理）。
+ */
+function matchRanges(text: string): [number, number][] {
+  const raw = findQ.value
+  if (!raw) return []
+  const out: [number, number][] = []
+  if (fRegex.value) {
+    let re: RegExp
+    try {
+      re = new RegExp(raw, fCase.value ? 'g' : 'gi')
+    } catch {
+      return [] // 正则写了一半就报错太吵；当作无命中
+    }
+    for (const m of text.matchAll(re)) {
+      if (m.index === undefined || !m[0].length) continue
+      out.push([m.index, m.index + m[0].length])
+    }
+    return out
+  }
+  const hay = fCase.value ? text : text.toLowerCase()
+  const needle = fCase.value ? raw : raw.toLowerCase()
+  let i = 0
+  while (i <= hay.length - needle.length) {
+    const k = hay.indexOf(needle, i)
+    if (k < 0) break
+    const end = k + needle.length
+    if (!fWord.value || (isWordBoundary(hay, k - 1) && isWordBoundary(hay, end))) {
+      out.push([k, end])
+    }
+    i = k + Math.max(1, needle.length)
+  }
+  return out
+}
+
+const isWordChar = (c: string) => /[A-Za-z0-9_$]/.test(c)
+function isWordBoundary(text: string, idx: number) {
+  if (idx < 0 || idx >= text.length) return true
+  return !isWordChar(text[idx])
+}
+
+function segmentsOf(line: { text: string; [k: string]: unknown }[]) {
+  const full = line.map((r) => r.text).join('')
+  const ranges = matchRanges(full)
+  if (!ranges.length) return line.map((r) => ({ text: r.text, style: runStyle(r), hit: false }))
+
+  const out: { text: string; style: Record<string, string>; hit: boolean }[] = []
+  let base = 0
+  for (const r of line) {
+    const t = r.text
+    const style = runStyle(r)
+    let i = 0
+    while (i < t.length) {
+      const abs = base + i
+      /* 找覆盖 abs 的那个区间 */
+      const hit = ranges.find(([a, b]) => abs >= a && abs < b)
+      if (!hit) {
+        /* 不在命中里：吃到下一个区间起点 */
+        const next = ranges.find(([a]) => a > abs)
+        const stop = next ? Math.min(t.length, next[0] - base) : t.length
+        out.push({ text: t.slice(i, stop), style, hit: false })
+        i = stop
+      } else {
+        const stop = Math.min(t.length, hit[1] - base)
+        out.push({ text: t.slice(i, stop), style, hit: true })
+        i = stop
+      }
+    }
+    base += t.length
+  }
+  return out
+}
+
+/* 查找（决策 #1355）：**自己在网格里搜**。
+   原本想用 WebKit 的 `window.find()`，但在 Tauri 的 WKWebView 里实测无效（用户："搜索无效"）。
+   我们的终端本来就是自己渲染的字符网格（`rows`），直接扫文本更可靠，还能给出 "2/7" 计数。 */
+const hitRows = ref<number[]>([]) // 命中的行号（去重，用来高亮整行）
+const hitIdx = ref(-1)
+const hitLine = computed(() => (hitIdx.value >= 0 ? hitRows.value[hitIdx.value] : -1))
+
+function computeHits() {
+  hitRows.value = []
+  hitIdx.value = -1
+  if (!findQ.value) return
+  rows.value.forEach((line, y) => {
+    const text = line.map((r) => r.text).join('')
+    if (matchRanges(text).length) hitRows.value.push(y)
+  })
+  if (hitRows.value.length) hitIdx.value = 0
+}
+
+/** 跳到第 n 个命中：滚动到那一行（居中一点），整行高亮 1.2s */
+function gotoHit(n: number) {
+  if (!hitRows.value.length) return
+  hitIdx.value = (n + hitRows.value.length) % hitRows.value.length
+  const y = hitRows.value[hitIdx.value]
+  const body = bodyEl.value
+  if (body) {
+    const top = y * cell.h - body.clientHeight / 2 + cell.h
+    body.scrollTop = Math.max(0, top)
+  }
+  flash.value = y
+  if (flashTimer) window.clearTimeout(flashTimer)
+  flashTimer = window.setTimeout(() => (flash.value = -1), 1200)
+}
+
+const flash = ref(-1)
+let flashTimer: number | undefined
+
+/** Enter = 下一个（重新计算命中）+ 跳；Shift+Enter = 上一个；输入变化时清空计数 */
+function doFind(back = false) {
+  const q = findQ.value.trim()
+  if (!q) return
+  if (!hitRows.value.length) {
+    computeHits()
+    searched.value = true
+    if (!hitRows.value.length) return
+    gotoHit(0)
+    return
+  }
+  gotoHit(hitIdx.value + (back ? -1 : 1))
+}
+
+/* ★**边打边搜**（决策 #1356）：用户对照 VS Code 期待"输进去就出命中数"。
+   之前只在 Enter 时才搜，而计数框在**还没搜**时就显示「无命中」（hitRows 初始为空）——
+   于是看起来"搜什么都无命中"。现在：
+     · 输入后 120ms 自动搜并跳到第一个命中；
+     · `searched` 标记"确实搜过"，避免把"还没搜"误报成"无命中"。 */
+const searched = ref(false)
+
+/** 切换匹配规则后**立刻重算**（否则要再敲一个字才生效） */
+function toggleRule(which: 'case' | 'word' | 'regex') {
+  if (which === 'case') fCase.value = !fCase.value
+  else if (which === 'word') fWord.value = !fWord.value
+  else fRegex.value = !fRegex.value
+  hitRows.value = []
+  hitIdx.value = -1
+  if (!findQ.value) return
+  computeHits()
+  searched.value = true
+  if (hitRows.value.length) gotoHit(0)
+}
+let findTimer: number | undefined
+
+watch(findQ, () => {
+  hitRows.value = []
+  hitIdx.value = -1
+  searched.value = false
+  if (findTimer) window.clearTimeout(findTimer)
+  if (!findQ.value.trim()) return
+  findTimer = window.setTimeout(() => {
+    computeHits()
+    searched.value = true
+    if (hitRows.value.length) gotoHit(0)
+  }, 120)
+})
+
+/** 关闭查找（决策 #1361）：收框、清掉命中高亮、焦点还给终端 —— 用户不必再点工具栏的「查找」 */
+function closeFind() {
+  findOpen.value = false
+  findQ.value = ''
+  hitRows.value = []
+  hitIdx.value = -1
+  searched.value = false
+  flash.value = -1
+  void nextTick(() => focusInput())
+}
+
+/** 打开查找框并聚焦输入（给 ⌘F 用：**焦点在终端**时才走这里） */
+async function openFind() {
+  findOpen.value = true
+  await nextTick()
+  const el = document.querySelector<HTMLInputElement>('.termfind input')
+  el?.focus()
+  el?.select()
+}
+
+defineExpose({ focus: focusInput, term, openFind })
 </script>
 
 <template>
-  <div class="termwrap" id="termWrap" @click="focusInput">
+  <div
+    class="termwrap"
+    id="termWrap"
+    @click="focusInput"
+    @keydown.capture="
+      (e) => {
+        /* 焦点在终端里时 ⌘F 归终端（决策 #1358）：不该去开代码视图的搜索 */
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+          e.preventDefault()
+          e.stopPropagation()
+          void openFind()
+        }
+      }
+    "
+  >
+    <!-- 工具栏（决策 #1349）：关闭 / 最大化 / 终止 / 清屏 / shell / 查找 -->
+    <div class="termbar" @click.stop>
+      <!-- 全部换成 Studio 自己的控件（决策 #1350）：原生 select 在 macOS 上是系统绘制，
+           样式不可控，且弹层会盖在原生层之上（画布在下层）。 -->
+      <PSelect
+        :model-value="shellSel"
+        :options="shellOpts"
+        size="sm"
+        title="切换 shell（会重开一个会话）"
+        :width="72"
+        @update:model-value="switchShell($event as 'zsh' | 'bash' | 'sh')"
+      />
+      <PButton size="sm" title="终止当前命令（Ctrl-C）" @click="sendCtrl('\x03')">终止</PButton>
+      <PButton size="sm" title="清屏（Ctrl-L）" @click="sendCtrl('\x0c')">清屏</PButton>
+      <PButton size="sm" :active="findOpen" title="在终端里查找" @click="findOpen = !findOpen">查找</PButton>
+      <span class="tfill" />
+      <PButton size="sm" title="最大化 / 还原（⌘⇧J）" @click="emit('maximize')">⤢</PButton>
+      <PButton size="sm" variant="ghost" title="关闭面板（⌘J）" @click="emit('close')">✕</PButton>
+    </div>
+    <div v-if="findOpen" class="termfind" @click.stop>
+      <!-- 查找框：规则开关**放在输入框内部右侧**（决策 #1359，对齐 VS Code 的观感） -->
+      <div class="findbox">
+        <PInput
+          v-model="findQ"
+          placeholder="查找（↑↓ 或 Enter 切换命中）"
+          @keydown.enter.prevent="doFind($event.shiftKey)"
+          @keydown.esc.prevent="closeFind"
+        />
+        <div class="frules" @click.stop>
+          <button
+            class="frule"
+            :class="{ on: fCase }"
+            title="区分大小写（⌥⌘C）"
+            @click="toggleRule('case')"
+          >
+            Aa
+          </button>
+          <button
+            class="frule"
+            :class="{ on: fWord }"
+            title="全字匹配（⌥⌘W）"
+            @click="toggleRule('word')"
+          >
+            <span class="ab">ab</span>
+          </button>
+          <button
+            class="frule"
+            :class="{ on: fRegex }"
+            title="正则表达式（⌥⌘R）"
+            @click="toggleRule('regex')"
+          >
+            .*
+          </button>
+        </div>
+      </div>
+      <span class="fcount">{{
+        hitRows.length ? `${hitIdx + 1}/${hitRows.length}` : searched && findQ.trim() ? '无命中' : ''
+      }}</span>
+      <PButton size="sm" title="上一个（⇧Enter）" :disabled="!hitRows.length" @click="doFind(true)">↑</PButton>
+      <PButton size="sm" title="下一个（Enter）" :disabled="!hitRows.length" @click="doFind(false)">↓</PButton>
+      <PButton size="sm" title="关闭查找（Esc）" @click="closeFind">✕</PButton>
+    </div>
+
     <!-- 标尺：只用来量"一个等宽字符多大"，不参与布局 -->
     <span id="termRuler" class="termruler" aria-hidden="true">WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW</span>
 
     <div class="termbody" ref="bodyEl" id="termBody" :style="{ '--cw': cell.w + 'px', '--ch': cell.h + 'px' }">
       <div class="termgrid" :style="{ width: cols * cell.w + 'px', height: rowsCount * cell.h + 'px' }" id="termGrid">
-        <div v-for="(line, y) in rows" :key="y" class="trow" :style="{ height: cell.h + 'px' }">
-          <span v-for="(r, i) in line" :key="i" :style="runStyle(r)">{{ r.text }}</span>
+        <div
+          v-for="(line, y) in rows"
+          :key="y"
+          class="trow"
+          :class="{ flash: y === flash }"
+          :style="{ height: cell.h + 'px' }"
+        >
+          <span
+            v-for="(seg, i) in segmentsOf(line)"
+            :key="i"
+            :style="seg.style"
+            :class="{ hit: seg.hit }"
+            >{{ seg.text }}</span
+          >
         </div>
         <div v-if="cursor.show" class="tcur" :style="{ left: cursor.left + 'px', top: cursor.top + 'px' }" id="termCursor" />
       </div>
@@ -400,4 +747,38 @@ defineExpose({ focus: focusInput, term })
   bottom: 6px;
   color: var(--fg-subtle);
 }
+
+/* 工具栏：窄、与面板同色，按钮 hover 才亮 */
+.termbar{display:flex;align-items:center;gap:4px;padding:3px 8px;flex:none;
+         border-bottom:1px solid var(--border-subtle);font-size:11px;color:var(--fg-dim)}
+.tfill{flex:1}
+
+/* 查找命中行：淡黄底闪一下（与终端配色兼容，不用刺眼的纯黄） */
+.trow.flash { background: rgb(250 204 21 / 22%); }
+/* ★用**网格定列**而不是 flex（决策 #1360）：`flex:1` + 输入框 `width:100%` 时，
+   输入框会一路顶出去，把右侧的计数/上下/关闭挤出可视区（用户截图：操作栏被盖住）。
+   网格里第一列 `minmax(0,1fr)` 会**自己收缩**，后四列 auto 永远保留。 */
+.termfind {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 6px;
+  align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--border-subtle);
+  flex: none; overflow: hidden;
+}
+.fcount { font-size: 10px; color: var(--fg-dim); min-width: 34px; text-align: right; }
+
+/* 命中词：暖黄底（与终端配色协调），所有命中都标 */
+.trow span.hit { background: rgb(250 204 21 / 32%); border-radius: 2px; color: var(--fg); }
+
+/* 查找框 + 内嵌规则按钮（决策 #1359） */
+.findbox { position: relative; min-width: 0; width: 100%; }
+.findbox :deep(input),
+.findbox :deep(.pinput) { padding-right: 78px; box-sizing: border-box; }
+.frules { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: flex; gap: 1px; }
+.frule {
+  height: 16px; min-width: 20px; padding: 0 4px; border: none; border-radius: 4px;
+  background: transparent; color: var(--fg-subtle); font-size: 10px; line-height: 16px;
+  cursor: pointer;
+}
+.frule:hover { background: var(--bg-overlay); color: var(--fg-muted); }
+.frule.on { background: rgb(96 165 250 / 30%); color: var(--fg); }
+.frule .ab { text-decoration: underline; text-underline-offset: 1px; }
 </style>

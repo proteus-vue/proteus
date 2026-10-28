@@ -169,7 +169,20 @@ python3 "$HERE/bundle-dylibs.py" "$APP"
   printf '工作区：%s\n' "$ROOT"
   printf '分支：%s\n' "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
   printf '提交：%s\n' "$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  # ★**工作区是否干净**（决策 #1352）：HEAD 只说明"基于哪个提交"，说明不了"有没有未提交改动"。
+  #   今天踩到：13:39 打的包里 HEAD 还是 3b8b959c（修复提交在 2 分钟后），
+  #   光看身份证根本分不清"包里有没有那个修复"。
+  if [ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null | head -1)" ]; then
+    printf '工作区：**含未提交改动**（HEAD 不完整代表包内容）\n'
+  else
+    printf '工作区：干净（包内容 = 该提交）\n'
+  fi
   printf 'UI chunk：%s\n' "$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$HERE/web-dist/index.html" | head -1)"
+  # ★二进制指纹（决策 #1352）：签过名的二进制与 target/release 的哈希不同（签名会改写文件），
+  #   所以直接记下**包内**二进制的哈希 —— 想知道"跑的是不是这个包"，算一下就对上。
+  # ★注意：这里是**签名前**的哈希（BUILD_INFO 必须在签名前写，否则破坏封印）。
+  #   签名后的最终哈希写到包外 sidecar，见 ⑤ 之后。
+  printf '二进制 sha256（签名前）：%s\n' "$(shasum -a 256 "$APP/Contents/MacOS/$EXE_NAME" 2>/dev/null | cut -c1-16)"
 } > "$APP/Contents/Resources/BUILD_INFO.txt" 2>/dev/null || true
 
 # ⑤ 签名：ad-hoc（`-`）。★这只是让本机能跑，**不能**消除 Gatekeeper 在别人机器上的拦截
@@ -190,6 +203,14 @@ if [ -n "$SIGN_ID" ]; then
     echo "  ⚠ 「$SIGN_ID」签名未生效（仍是 ad-hoc）⇒ 每次重编都会重新询问录屏权限"
   else
     echo "  ✓ 已用开发者证书签名（TCC 会记住，不再反复询问）"
+  # ★签名后指纹（决策 #1352）：签名会改写二进制，包内那份是"签名前"哈希。
+  #   想知道"正在跑的是不是这个包"，用这一行对账（放在包外，不破坏签名封印）。
+  {
+    printf 'Proteus Studio · 签名后指纹\n'
+    printf '时间：%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+    printf '包路径：%s\n' "$APP"
+    printf '二进制 sha256（签名后）：%s\n' "$(shasum -a 256 "$APP/Contents/MacOS/$EXE_NAME" 2>/dev/null | cut -c1-16)"
+  } > "$HERE/build-app/BUILD_INFO.signed.txt" 2>/dev/null || true
   fi
 else
   echo "  ⚠ 没找到 Apple Development 证书 ⇒ 回落 ad-hoc（每次重编都会重新询问录屏权限）"

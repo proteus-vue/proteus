@@ -276,7 +276,8 @@ export function onMenu(cb: (id: string) => void): MenuBridge {
    ⇒ 输出用 `emit("term:data")`，按键用 `term_write`。 */
 
 /** 打开会话。`cols/rows` 是字符格子数（前端按字宽量出来的，不是像素） */
-export const termOpen = (cols: number, rows: number): Promise<void> => invoke<void>('term_open', { cols, rows })
+export const termOpen = (cols: number, rows: number, shell?: 'zsh' | 'bash' | 'sh'): Promise<void> =>
+  invoke<void>('term_open', { cols, rows, shell: shell ?? null })
 /** 送键盘输入（字节语义由前端生成：`\r` / `\x1b[A` / `\x03` …） */
 export const termWrite = (data: string): Promise<void> => invoke<void>('term_write', { data })
 /** 面板尺寸变了：告诉 pty，让 `ls`/`vim` 之类按新宽度排版 */

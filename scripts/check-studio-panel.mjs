@@ -74,6 +74,36 @@ if (!fs.existsSync(path.join(DIST, 'index.html'))) {
   process.exit(2)
 }
 
+/* ★★`--no-build` 必须校验**产物不比源码旧**（决策 #1345）。
+   今天被这个坑了两次：改了 UI 源码却跑 `--no-build`，门禁读的是几百行之前的旧 bundle，
+   于是「明明写错了却绿」（假绿）和「明明写对了却红」（假红）都出现过——
+   一次是布局改动后报"文件树存在但不可见"，一次是模板注释写错却没报错。
+   ⇒ 产物旧于任何 UI 源码时**直接失败**，让调用方自己决定"构建"还是"别用 --no-build"。 */
+if (SKIP_BUILD) {
+  const newest = (dir) => {
+    let t = 0
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const f = path.join(d, e.name)
+        if (e.isDirectory()) walk(f)
+        else t = Math.max(t, fs.statSync(f).mtimeMs)
+      }
+    }
+    walk(dir)
+    return t
+  }
+  const srcT = newest(path.join(STUDIO, 'ui/src'))
+  const distT = newest(DIST)
+  if (srcT > distT) {
+    const mins = Math.round((srcT - distT) / 60000)
+    console.error(
+      `✗ 产物比源码旧（旧 ${mins} 分钟）：--no-build 会读到过期 bundle，判据红绿都不可信\n` +
+        `  ⇒ 去掉 --no-build（会自动构建），或先跑：bash packages/studio/build-ui.sh`,
+    )
+    process.exit(2)
+  }
+}
+
 // 机型：真实 adb 优先，回落 fixture（采集时机型）—— 采集段在 studio-panel-device.mjs
 const { device: deviceValue, from: deviceFrom } = resolveDevice(r.device)
 

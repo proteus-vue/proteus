@@ -103,14 +103,33 @@ fn close_current() {
     let old = SESSION.lock().ok().and_then(|mut g| g.take());
     if let Some(s) = old {
         unsafe {
+            /* ★**绝不无限阻塞**（决策 #1351：用户切到 bash 后整个应用卡死）：
+               这里是 Tauri 的**同步指令**，跑在主线程上 —— 一旦 `waitpid(..., 0)` 等到
+               子进程迟迟不退出，主线程就永久挂住 ⇒ 表现为"应用没有响应"（连菜单都点不动）。
+               现在：先 SIGTERM，**有界**（最多 30×10ms = 300ms）用 1 /* WNOHANG */ 探；到点就升级 SIGKILL，
+               再探 300ms；仍不退出就**放弃等待**（进程交给系统回收，绝不能拖住 UI）。 */
             kill(-s.pid, SIGTERM);
             kill(s.pid, SIGTERM);
             close(s.master);
             let mut st: c_int = 0;
-            // WNOHANG = 1：不阻塞；等不到就强杀（这里不做轮询，一次判断即可）
-            if waitpid(s.pid, &mut st, 1) == 0 {
+            let mut reaped = false;
+            for _ in 0..30 {
+                if waitpid(s.pid, &mut st, 1 /* WNOHANG */) != 0 {
+                    reaped = true;
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            if !reaped {
                 kill(-s.pid, SIGKILL);
-                waitpid(s.pid, &mut st, 0);
+                kill(s.pid, SIGKILL);
+                for _ in 0..30 {
+                    if waitpid(s.pid, &mut st, 1 /* WNOHANG */) != 0 {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                /* 还没回收就放它去 —— 僵尸由后续 waitpid 或系统处理，UI 不能等 */
             }
         }
     }
@@ -194,9 +213,14 @@ fn spawn_pty(path: &str, args: &[&str], cols: u16, rows: u16, cwd: &std::path::P
 }
 
 /// 打开会话：`cols x rows` 是**前端量出来的字符格子数**（pty 靠它排版，不是像素）。
-pub fn open(app: tauri::AppHandle, cols: u16, rows: u16) -> Result<(), String> {
+pub fn open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) -> Result<(), String> {
     close_current();
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    /* ★shell 可选（决策 #1349）：允许前端明确选 zsh/bash。
+       只接受**白名单**里的名字，绝不让调用方传任意路径（那等于给前端一个 exec 后门）。 */
+    let shell = match shell.as_deref() {
+        Some(s) if matches!(s, "zsh" | "bash" | "sh") => format!("/bin/{s}"),
+        _ => std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into()),
+    };
     let cwd = std::env::current_dir().map_err(|e| format!("取当前目录失败：{e}"))?;
     /* `-l`：登录 shell ⇒ 读到用户的 PATH/别名（否则 `pnpm` 之类直接找不到）。 */
     let (master, pid) = spawn_pty(&shell, &["-l"], cols, rows, &cwd)?;
@@ -333,12 +357,15 @@ pub fn info() -> TermInfo {
 // ── IPC 命令 ─────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn term_open(app: tauri::AppHandle, cols: u16, rows: u16) -> Result<(), String> {
+pub async fn term_open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Option<String>) -> Result<(), String> {
     /* 这一行是**接线证据**：前端到底有没有把 term_open 打进来。
        排"点终端没反应"时分两种：① 这行不出现 ⇒ 前端没调（视图/守卫/样式问题）；
        ② 这行出现但 `会话就绪` 不出现 ⇒ openpty/fork 失败（看紧随其后的错误）。 */
-    eprintln!("[term] term_open 收到 {cols}x{rows}");
-    open(app, cols, rows)
+    eprintln!("[term] term_open 收到 {cols}x{rows} shell={shell:?}");
+    /* ★放到工作线程：fork/kill 都可能慢，**绝不能占主线程**（决策 #1351） */
+    tauri::async_runtime::spawn_blocking(move || open(app, cols, rows, shell))
+        .await
+        .map_err(|e| format!("开终端失败：{e}"))?
 }
 
 #[tauri::command]
@@ -352,7 +379,7 @@ pub fn term_resize(cols: u16, rows: u16) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn term_close() {
+pub async fn term_close() {
     shutdown();
 }
 

@@ -22,6 +22,12 @@
   --fg:#e6e8ee;
   --fg-muted:#9aa1ad;
   --fg-subtle:#6d7480;
+  /* ★补齐两个**一直没定义**的别名（决策 #1359）：
+     历史代码里到处写 `var(--fg-dim)` / `var(--fg-faint)`，但变量表里没有它们 ⇒
+     `color: var(--fg-dim)` 是**无效声明**，颜色被继承成 `--fg`（近白）——
+     表现就是"占位文字、工具按钮全是纯白"。定义成别名即可一次修好所有引用处。 */
+  --fg-dim:var(--fg-muted);
+  --fg-faint:var(--fg-subtle);
   /* ── 边框 ── */
   --border-subtle:#22252b;
   --border:#2e3138;
@@ -61,8 +67,10 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
   user-select:none;-webkit-user-select:none}
 
 /* 顶部条 + 三栏 + 状态栏 */
+/* ★栏宽用变量（决策 #1343）：右栏可拖、可隐藏，宽度/显隐都持久化到 localStorage。
+   左（rail）也可拖宽——用户明确要求"中间栏左右边都能拖"。 */
 .app{display:grid;height:100vh;
-     grid-template-columns:48px minmax(0,1fr) 320px;
+     grid-template-columns:var(--rail-w,48px) minmax(0,1fr) var(--side-w,320px);
      grid-template-rows:40px minmax(0,1fr) 24px;
      grid-template-areas:"top top top" "rail main side" "status status status";}
 
@@ -84,6 +92,21 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 .chip.btn.on{color:var(--fg);border-color:var(--accent)}
 
 /* 活动栏（左）——48px 与 VS Code 同基线；图标按钮 36px 落在 4px 网格上 */
+/* 隐藏左右栏：把列宽设 0 并去掉内容（保留网格区域，避免 areas 报错） */
+/* ★列宽归零由**内联 style** 负责（决策 #1345）；这里只负责把内容藏掉。
+   早期在类里置 `--*-w:0` 是无效的（内联优先），导致"面板没了、白条还在"。 */
+.app.rail-hidden .rail{display:none}
+/* ★必须 `>`（决策 #1344）：代码视图里**也叫 `.side`**（文件树容器），
+   用后代选择器会把文件树一起隐藏掉（今天差点踩：门禁报"文件树存在但不可见"）。 */
+.app.side-hidden > .side{display:none}
+
+/* 拖拽分隔条：挂 `.app` 绝对定位，避开 rail/side 的子节点顺序（门禁用 nth-child 选按钮） */
+.app{position:relative}
+.grip{position:absolute;top:40px;bottom:24px;width:6px;cursor:col-resize;z-index:8;
+      background:transparent;transition:background .12s}
+.grip:hover,.grip.dragging{background:var(--accent);opacity:.35}
+.grip-off{display:none}
+
 .rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:var(--sp1);
       padding:var(--sp2) 0;background:var(--bg-surface);border-right:1px solid var(--border-subtle)}
 .rail button{position:relative;width:36px;height:36px;display:grid;place-items:center;
@@ -103,7 +126,27 @@ html,body,#app{margin:0;height:100%;overflow:hidden;background:transparent;
 /* ★★★`.main` **不能有背景色**（决策 #1257）：原生 GL 视图垫在 webview **下面**，
    这一层只要不透明，画布洞就被它整块糊掉——表现是"启动瞬间能看到投屏、页面一画上去就变黑"，
    而面板读数一切正常（出帧/帧率/解码都对）。底色改由 `.screen` 的超大 spread 阴影补（见下）。 */
-.main{grid-area:main;position:relative;background:transparent;overflow:hidden}
+.main{grid-area:main;position:relative;background:transparent;overflow:hidden;
+      display:flex;flex-direction:column}
+/* 上半区（画布/代码）：`position:relative` 让原本绝对定位的视图仍以它为锚 */
+.mainstage{position:relative;flex:1;min-height:0;overflow:hidden}
+.mainstage.hid{display:none}
+/* 下半区（终端面板）：固定高度由内联 style 给；全屏时 flex:1 撑满 */
+.termpane{position:relative;flex:none;min-height:0;overflow:hidden;
+          border-top:1px solid var(--border-subtle);background:var(--bg-surface)}
+.termpane.full{flex:1;height:auto !important;border-top:none}
+/* 代码视图：浮在编辑器列下方（left 由内联给），文件树因此可以占满整列 */
+.termpane.overlay{position:absolute;right:0;bottom:0;left:0;z-index:6;border-top:1px solid var(--border-subtle)}
+.termpane.overlay.full{top:0;height:auto !important;left:0 !important}
+/* 代码视图里，终端左侧让出文件树宽度后，那一条缝要用**侧栏底色**填上，
+   否则会露出一块纯白（用户第一眼会当成"布局坏了"）。 */
+.main.codeview{background:var(--bg-surface)}
+
+/* 上下拖高条：6px，hover 才亮 */
+.vhsplit{flex:none;height:6px;margin-top:-3px;cursor:row-resize;z-index:9;
+         background:transparent;transition:background .12s}
+.vhsplit:hover{background:var(--accent);opacity:.35}
+.vhsplit.overlay{position:absolute;margin:0;z-index:7}
 
 /* ── 设备舞台（2026-10-23 等比适配）────────────────────────────────────────
    舞台只管"居中 + 留白"；真正决定画面形状的是 .screen（宽高比 = 设备宽高比）。
@@ -337,3 +380,12 @@ kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:
 .devgroup{margin:var(--sp2) 0 2px;padding-left:var(--sp2);font-size:var(--fs-xs);color:var(--fg-subtle);
           letter-spacing:.04em;text-transform:none}
 .devgroup:first-child{margin-top:0}
+
+/* 标题栏布局开关（决策 #1344）：与 .chip 同高，但只有图标，hover 才亮 */
+.topbtns{display:flex;align-items:center;gap:2px;margin-left:var(--sp2)}
+.topbtn{display:grid;place-items:center;width:26px;height:24px;border-radius:6px;
+        border:1px solid transparent;background:transparent;color:var(--fg-dim);cursor:pointer}
+.topbtn:hover{background:var(--bg-overlay);color:var(--fg)}
+.topbtn:active{background:var(--bg-elevated)}
+.topbtn.on{color:var(--fg)}
+.topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}

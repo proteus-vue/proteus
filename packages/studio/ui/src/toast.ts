@@ -31,8 +31,20 @@ export function dismissToast(id: number): void {
   timers.delete(id)
 }
 
+/* ★**同一句话不重复堆**（决策 #1354）：终端会话丢失时，前端每条写入都会收到
+   "终端未打开" ⇒ 一屏能叠 4 个同样的错误卡（用户截图）。同一 (kind,text) 在 1.5s 内
+   只保留**最新**一条并重置它的计时器，既不去掉反馈、也不刷屏。 */
+const recent = new Map<string, { id: number; at: number }>()
+
 export function pushToast(text: string, kind: ToastKind = 'ok', ms?: number): number {
+  const key = `${kind}\u0000${text}`
+  const hit = recent.get(key)
+  if (hit && Date.now() - hit.at < 1500 && toasts.some((t) => t.id === hit.id)) {
+    hit.at = Date.now()
+    return hit.id
+  }
   const id = ++seq
+  recent.set(key, { id, at: Date.now() })
   toasts.push({ id, kind, text })
   // 最多 4 条：超出就把最老的丢掉（提示堆成墙比没有还糟）
   while (toasts.length > 4) dismissToast(toasts[0].id)

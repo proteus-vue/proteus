@@ -63,6 +63,7 @@ import { onMenuAction } from '../menu'
 import StudioIcon from '../icons/StudioIcon.vue'
 import SearchBox from './SearchBox.vue'
 import FileTree from './FileTree.vue'
+import { startDrag, termH, termMode, treeHidden, treeW } from '../layout'
 import TabBar from './TabBar.vue'
 import GitBar from './GitBar.vue'
 import { revealPath } from '../fileTree'
@@ -759,7 +760,15 @@ onBeforeUnmount(() => {
     <div class="split">
       <!-- 左栏（决策 #1222）：搜索框常驻顶部；一旦有查询，结果列表**替换**目录树
            （VS Code 同款：同一时刻只有一个列表，不叠浮层、不用管 z 序）。 -->
-      <div class="side">
+      <div
+        class="side"
+        :class="{ hidden: treeHidden }"
+        :style="{ width: (treeHidden ? 0 : treeW) + 'px' }"
+      >
+        <!-- 拖动条（决策 #1344）：代码视图的"左栏"就是这棵文件树，宽度可拖、可收起。
+             ★放在 `.side` 内部是安全的：门禁按 `#codeFiles button[data-file]` 选文件，
+               不做 nth-child 序号假设（与 rail 的情况不同，那里不能插节点）。 -->
+        <div class="treegrip" title="拖动调整文件树宽度（⌘B 收起/展开）" @pointerdown="startDrag('tree', $event)" />
         <!-- 搜索框常驻顶部；一旦有查询，结果列表**替换**目录树（VS Code 同款：同一时刻一个列表） -->
         <SearchBox ref="searchBox" @jump="jumpTo" @active="searchActive = $event" />
         <!-- Git 只读条（决策 #1246 · #1247 拆成组件）：分支 + 改动数；点清单项 = 打开 + 看 HEAD diff -->
@@ -777,7 +786,9 @@ onBeforeUnmount(() => {
       <!-- ★右栏 = 编辑器自己的区域（决策 #1218）：文件信息条 + 标签栏 + 编辑器**都在这里**。
            原先它们是 `.codepane` 的直接子元素 ⇒ 横跨整页、压在左栏树上面（用户截图指出）。
            IDE 的通用布局就是"左栏只有树，编辑器头部跟着编辑器"。 -->
-      <div class="pane">
+      <!-- ★编辑器列让出终端面板高度（决策 #1348）：终端浮在它下方，
+           不给 padding 的话最后几行代码会被盖住。文件树（.side）**不**让，所以它占满整列。 -->
+      <div class="pane" :style="{ paddingBottom: termMode !== 'off' ? termH + 'px' : undefined }">
         <div class="bar">
           <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
           <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
@@ -878,7 +889,8 @@ onBeforeUnmount(() => {
 }
 /* 左栏容器（决策 #1222/#1223）：上面是 SearchBox（它自带样式），下面要么目录树、要么结果 */
 .side {
-  width: 232px;
+  /* 宽度由内联 style 控制（决策 #1344）；这里只保留结构性约束 */
+  position: relative;
   flex: none;
   min-height: 0;
   display: flex;
@@ -918,4 +930,11 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   user-select: text;
 }
+
+/* 文件树收起时：不留边距与边框，否则会剩一条"空壳" */
+.side.hidden { padding: 0; border-right: none; overflow: hidden; }
+/* 拖拽条：贴在文件树右缘（6px 命中区，hover 才亮） */
+.treegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px;
+            cursor: col-resize; z-index: 5; background: transparent; transition: background .12s; }
+.treegrip:hover { background: var(--accent); opacity: .35; }
 </style>

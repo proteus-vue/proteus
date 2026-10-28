@@ -18,8 +18,11 @@ function staticParity(studioDir) {
   const main = fs.readFileSync(path.join(studioDir, 'src/main.rs'), 'utf8')
   const bridge = fs.readFileSync(path.join(studioDir, 'ui/src/bridge.ts'), 'utf8')
 
-  // term.rs 里 `#[tauri::command]` 之后紧跟的 `pub fn xxx`
-  const cmds = [...rust.matchAll(/#\[tauri::command\]\s*\n\s*pub fn (term_\w+)/g)].map((m) => m[1])
+  /* term.rs 里 `#[tauri::command]` 之后紧跟的 `pub fn xxx`。
+     ★要允许 `pub async fn`（决策 #1351：开/关会话改到工作线程，避免 fork/kill 卡住主线程）——
+       判据的本意是"三个文件里命令名一致"，跟同步/异步无关；
+       早先只认 `pub fn` 会把 async 命令漏掉，导致**假红**。 */
+  const cmds = [...rust.matchAll(/#\[tauri::command\]\s*\n\s*pub\s+(?:async\s+)?fn (term_\w+)/g)].map((m) => m[1])
   const registered = [...main.matchAll(/term::(term_\w+)/g)].map((m) => m[1])
   const invoked = [...bridge.matchAll(/invoke<[^>]*>\('(term_\w+)'/g)].map((m) => m[1])
   const uni = (a) => [...new Set(a)].sort()

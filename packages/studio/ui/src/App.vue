@@ -2,6 +2,24 @@
 // Studio 壳（决策 #1183）：纯 Vue 3 + Vite，**不接 Proteus**（自举死锁的红线）。
 // 布局仍是「顶部条 / 左栏 / 画布 / 右栏 / 状态栏」，画布位置由 HTML 驱动原生视图。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  loadLayout,
+  railHidden,
+  railW,
+  sideHidden,
+  sideW,
+  startDrag,
+  toggleRail,
+  toggleSide,
+  toggleTree,
+  termH,
+  termMode,
+  toggleTermMax,
+  toggleTermPane,
+  treeHidden,
+  treeW,
+  startDragTerm,
+} from './layout'
 import { capturePreset, copyText, deviceSwipe, deviceTap, iosKey, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
@@ -192,6 +210,22 @@ function onKey(e: KeyboardEvent) {
      放在最前面且**先于**快捷键判断：否则 Cmd+C 之类会先被 IDE 吃掉。 */
   if (canvasEl.value && document.activeElement === canvasEl.value && touchOn.value) {
     if (!(e.metaKey || e.ctrlKey || e.altKey) && sendKeyToDevice(e)) return
+  }
+  /* ⌘J 终端面板 · ⌘⇧J 终端最大化（决策 #1346）：VS Code 手感 */
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+    e.preventDefault()
+    if (e.shiftKey) toggleTermMax()
+    else toggleTermPane()
+    return
+  }
+  /* ⌘B 收起/展开右栏 · ⌘⇧B 收起/展开左栏（决策 #1343）：IDE 通用手感 */
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault()
+    /* ⌘B = 当前视图的"主侧栏"（VS Code 手感）：画布视图切右面板，代码视图切文件树 */
+    if (e.shiftKey) toggleRail()
+    else if (view.value === 'code') toggleTree()
+    else toggleSide()
+    return
   }
   if (nativeMenu) return
   if (view.value !== 'device' || !(e.metaKey || e.ctrlKey)) return
@@ -590,6 +624,28 @@ function flushKeys() {
 }
 
 
+/**
+ * 终端面板的**左偏移**（决策 #1347）：用户实测"终端把文件树那列也盖住了"。
+ *
+ * VS Code 的规则是：面板属于**编辑器组**，只占编辑器宽度，不横向跨到侧栏/文件树。
+ * 这里用"距中栏左侧 = 文件树宽度"来对齐：代码视图且文件树展开时才偏移，其它情况为 0。
+ */
+/**
+ * 终端面板几何（决策 #1348）：
+ *  · **代码视图**：绝对定位、只浮在**编辑器列**下方（left = 文件树宽度）⇒
+ *    文件树可以**占满整列高度**（左栏不再出现一大片空白）；
+ *    编辑器列自己加 `padding-bottom = termH`（见 CodePanel），所以内容不会被盖住。
+ *  · **画布视图**：仍是在文档流里的下半个区（原生画布要按 rect 收缩，不能被覆盖）。
+ */
+const paneStyle = computed(() => {
+  if (termMode.value === 'full') return undefined
+  if (termMode.value !== 'pane') return undefined
+  if (view.value === 'code') return { left: termLeft.value + 'px', height: termH.value + 'px' }
+  return { height: termH.value + 'px' }
+})
+
+const termLeft = computed(() => (view.value === 'code' && !treeHidden.value ? treeW.value : 0))
+
 /** 把一次按键送给设备；返回 true 表示"已消费"（调用方不再往下走快捷键） */
 function sendKeyToDevice(e: KeyboardEvent) {
   const special = ['Backspace', 'Enter', 'Tab', 'Escape', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
@@ -621,6 +677,7 @@ function sendKeyToDevice(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
+  loadLayout()
   // ★先恢复上次的视图，再量画布：顺序反了会先按设备视图同步一次 rect，
   //   而恢复成 code 视图时那次同步是白做的（还会让原生画布闪一下）。
   await hydrateWorkspace()
@@ -742,7 +799,35 @@ async function copyIosCmd() {
 </script>
 
 <template>
-  <div class="app">
+  <!-- ★布局宽度/收起由内联 style 统一计算（决策 #1345）：
+       内联优先级高于类规则 ⇒ "在类里把 --side-w 置 0"是无效的，
+       表现就是"面板没了、但 320px 的白色占位还在"（用户截图指出的问题）。 -->
+  <div
+    class="app"
+    :class="{ 'side-hidden': sideHidden, 'rail-hidden': railHidden }"
+        :style="{
+      '--rail-w': (railHidden ? 0 : railW) + 'px',
+      '--side-w': (sideHidden ? 0 : sideW) + 'px',
+    }"
+  >
+    <!-- ★分隔条挂在 `.app` 上并用**绝对定位**（决策 #1343）：
+         一开始塞进 `.rail` 当第一个子元素，结果把 `.rail button:nth-child(N)` 的序号整体后移，
+         门禁（用 `nth-child(2)` 点"代码"）点到了"设备" ⇒ 代码视图没打开、文件树不可见。
+         ⇒ **不要往 rail/side 里插节点**，改在 .app 层用 left/right 定位。 -->
+    <div
+      class="grip grip-rail"
+      :class="{ 'grip-off': railHidden }"
+      :style="{ left: railW - 3 + 'px' }"
+      title="拖动调整左栏宽度（⌘⇧B 收起/展开）"
+      @pointerdown="startDrag('rail', $event)"
+    />
+    <div
+      class="grip grip-side"
+      :class="{ 'grip-off': sideHidden }"
+      :style="{ right: sideW - 3 + 'px' }"
+      title="拖动调整右栏宽度（⌘B 收起/展开）"
+      @pointerdown="startDrag('side', $event)"
+    />
     <!-- 沉浸式标题栏（2026-10-25 · 决策 #1219）：窗口用 titleBarStyle=Overlay + hiddenTitle，
          内容一直画到窗口顶部，原生红绿灯（trafficLightPosition 14,13）浮在这条上。
          ★可拖拽区域靠 `data-tauri-drag-region="deep"` —— **必须带 `deep`**（2026-10-25 实测踩到）：
@@ -775,6 +860,40 @@ async function copyIosCmd() {
       </button>
       <div class="chip">镜像 60fps 上限</div>
       <div style="flex:1" />
+      <!-- ★布局开关放标题栏（决策 #1344）：`⌘B`/`⌘⇧B` 有快捷键，但**必须也有可点的图标**
+           （用户明确指出"标题栏里没有对应图标可操作"）。图标沿用 VS Code 那套语义：
+           方框 + 一侧被填充 = 那一侧的面板。
+           ★左按钮**按视图分流**：画布视图切左图标条，代码视图切文件树（那里才是"左栏"）。 -->
+      <div class="topbtns">
+        <button
+          class="topbtn"
+          id="toggleLeft"
+          :class="{ on: view === 'code' ? !treeHidden : !railHidden }"
+          aria-label="切换左栏"
+          :title="view === 'code' ? '切换文件树（⌘B）' : '切换左栏图标条（⌘⇧B）'"
+          @click="view === 'code' ? toggleTree() : toggleRail()"
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <rect x="1.6" y="2.6" width="12.8" height="10.8" rx="2.2" />
+            <path d="M6.1 2.9v10.2" />
+            <path d="M2 3.2h4v9.6H2z" fill="currentColor" stroke="none" opacity=".55" />
+          </svg>
+        </button>
+        <button
+          class="topbtn"
+          id="toggleRight"
+          :class="{ on: !sideHidden }"
+          aria-label="切换右栏"
+          title="切换右栏面板（⌘B）"
+          @click="toggleSide()"
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <rect x="1.6" y="2.6" width="12.8" height="10.8" rx="2.2" />
+            <path d="M9.9 2.9v10.2" />
+            <path d="M10 3.2h4v9.6h-4z" fill="currentColor" stroke="none" opacity=".55" />
+          </svg>
+        </button>
+      </div>
       <div class="chip">画布由 HTML 布局驱动 · 等比适配</div>
     </div>
 
@@ -798,12 +917,12 @@ async function copyIosCmd() {
         <StudioIcon name="code" :size="18" />
       </button>
       <button
-        :class="{ on: view === 'term' }"
-        :aria-pressed="view === 'term'"
+        :class="{ on: termMode !== 'off' }"
+        :aria-pressed="termMode !== 'off'"
         aria-label="终端"
-        title="终端（⌘`）"
+        title="终端面板（⌘J）· ⌘⇧J 最大化"
         id="railTerm"
-        @click="switchView('term')"
+        @click="toggleTermPane()"
       >
         <StudioIcon name="terminal" :size="18" />
       </button>
@@ -817,7 +936,11 @@ async function copyIosCmd() {
       </button>
     </div>
 
-    <div class="main">
+    <div class="main" :class="{ codeview: view === 'code' }">
+      <!-- ★主轴改为**垂直分割**（决策 #1346）：上面是当前视图（画布/代码），下面是终端面板。
+           `mainstage.hid` 在终端全屏时把上半区藏掉 ⇒ 原生画布被 set_canvas_rect 收成 0×0，
+           不会浮在终端上（这是旧判据 ㊼ 关注的那条风险）。 -->
+      <div class="mainstage" :class="{ hid: termMode === 'full' }">
       <template v-if="view === 'device'">
         <!-- 舞台：只负责居中与留白；设备屏幕（#canvas）是它的等比子元素 -->
         <div class="stage" ref="stageEl">
@@ -916,7 +1039,28 @@ async function copyIosCmd() {
            会在重新可见时重新测量，不需要额外通知。 -->
       <CodePanel v-show="view === 'code'" />
       <!-- 终端：v-show 而不是 v-if —— 会话状态在组件里，卸载即丢（决策 #1279） -->
-      <TerminalPanel v-show="view === 'term'" :active="view === 'term'" />
+      </div>
+
+      <!-- 拖高分割线（只在面板态出现；全屏时没有下半区可拖） -->
+      <!-- 拖高条：代码视图里贴在"面板顶边"（绝对定位在编辑器列），画布视图里在文档流中 -->
+      <div
+        v-if="termMode === 'pane'"
+        class="vhsplit"
+        :class="{ overlay: view === 'code' }"
+        :style="view === 'code' ? { left: termLeft + 'px', bottom: termH + 'px' } : undefined"
+        title="拖动调整终端高度"
+        @pointerdown="startDragTerm($event)"
+      />
+
+      <!-- 终端面板（**唯一实例**：三种模式共用同一个组件，切模式不会丢会话） -->
+      <div
+        v-show="termMode !== 'off'"
+        class="termpane"
+        :class="{ full: termMode === 'full', overlay: view === 'code' }"
+        :style="paneStyle"
+      >
+        <TerminalPanel :active="termMode !== 'off'" @close="toggleTermPane()" @maximize="toggleTermMax()" />
+      </div>
     </div>
 
     <div class="side">
