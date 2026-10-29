@@ -12,6 +12,7 @@
       {
         "label": "main",
         "title": "Proteus Studio",
+        "backgroundColor": "#0b0c0f",
         "width": 1440,
         "height": 900,
         "minWidth": 1080,

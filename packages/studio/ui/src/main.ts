@@ -13,3 +13,16 @@ import './styles.css'
 const injected = (window as { __PROTEUS_VIEW__?: string }).__PROTEUS_VIEW__
 const view = injected ?? new URLSearchParams(location.search).get('view')
 createApp(view === 'settings' ? SettingsApp : App).mount('#app')
+
+/* ★启动画面收尾（决策 #1381）：等**两帧**再淡出。
+   为什么要两帧：`mount()` 返回时 DOM 已插入，但**首帧还没画出来**；
+   立刻移除遮罩会露出"还没绘制的空白" —— 那正是另一种白闪。
+   两帧后（rAF→rAF）浏览器已完成一次绘制，这时淡出才是无缝的。 */
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    const sp = document.getElementById('splash')
+    if (!sp) return
+    sp.classList.add('done')
+    window.setTimeout(() => sp.remove(), 260)
+  })
+})

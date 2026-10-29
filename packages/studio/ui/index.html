@@ -3,8 +3,52 @@
 <head>
 <meta charset="utf-8">
 <title>Proteus Studio</title>
+<style>
+  /* ★★首帧底色必须**内联在 head 里**（决策 #1381）：
+     WebView 在应用我们的 CSS 之前是**白底** —— 那就是用户看到的"启动白屏"。
+     这里与 styles.css 的 `--bg-canvas` 同值，保证从第一帧起就是 Studio 的底色。 */
+  html, body { margin: 0; height: 100%; background: #0b0c0f; }
+
+  /* ★启动画面（#1381）：纯内联、零外部资源，保证立刻能画出来。
+     主流 IDE 的做法都是"先给一张暗色标记 + 轻微动效"，界面就绪后淡出 ——
+     等待期间用户看到的是"正在启动"，而不是空白。 */
+  #splash {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px; background: #0b0c0f; color: #e6e8ee;
+    font: 13px/1.45 -apple-system, "PingFang SC", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    transition: opacity .2s ease;
+  }
+  #splash.done { opacity: 0; pointer-events: none; }
+  #splash .mark { font-size: 14px; letter-spacing: .18em; opacity: .9; }
+  #splash .mark b { font-weight: 600; }
+  #splash .mark span { color: #6d7480; }
+  #splash .dots { display: flex; gap: 7px; height: 10px; align-items: center; }
+  #splash .dots i {
+    width: 6px; height: 6px; border-radius: 50%; background: #39414d;
+    animation: sp 1.05s ease-in-out infinite;
+  }
+  #splash .dots i:nth-child(2) { animation-delay: .14s; }
+  #splash .dots i:nth-child(3) { animation-delay: .28s; }
+  @keyframes sp {
+    0%, 100% { opacity: .28; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-3px); }
+  }
+  #splash .hint { font-size: 11px; color: #6d7480; letter-spacing: .04em; }
+
+  /* 尊重系统"减少动态效果" */
+  @media (prefers-reduced-motion: reduce) {
+    #splash .dots i { animation: none; opacity: .6; }
+  }
+</style>
 </head>
 <body>
+<div id="splash">
+  <div class="mark"><b>PROTEUS</b> <span>STUDIO</span></div>
+  <div class="dots"><i></i><i></i><i></i></div>
+  <div class="hint">正在启动…</div>
+</div>
 <div id="app"></div>
 <script type="module" src="./src/main.ts"></script>
 </body>
