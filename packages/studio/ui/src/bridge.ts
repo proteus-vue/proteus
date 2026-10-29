@@ -279,7 +279,8 @@ export function onMenu(cb: (id: string) => void): MenuBridge {
 export const termOpen = (cols: number, rows: number, shell?: 'zsh' | 'bash' | 'sh'): Promise<number> =>
   invoke<number>('term_open', { cols, rows, shell: shell ?? null })
 /** 送键盘输入（字节语义由前端生成：`\r` / `\x1b[A` / `\x03` …） */
-export const termWrite = (id: number, data: string): Promise<void> => invoke<void>('term_write', { id, data })
+export const termWrite = (id: number, data: string, src = ''): Promise<void> =>
+  invoke<void>('term_write', { id, src: src || null, data })
 /** 面板尺寸变了：告诉 pty，让 `ls`/`vim` 之类按新宽度排版 */
 export const termResize = (id: number, cols: number, rows: number): Promise<void> =>
   invoke<void>('term_resize', { id, cols, rows })
@@ -294,16 +295,16 @@ export const termInfo = (): Promise<TermInfo> => invoke<TermInfo>('term_info')
  *  ★浏览器/门禁兜底走 `studio:term-data` 自定义事件 —— 与 `onMenu` 同一套路子，
  *    这样 Playwright 能驱动"字节进来 → 屏幕画对"这整段（但**证明不了** pty 真的产出了字节，
  *    那一段由 Rust 侧单测 `pty_runs_echo_and_reads_back` 兜住）。 */
-export function onTermData(cb: (id: number, data: string) => void): () => void {
+export function onTermData(cb: (id: number, data: string, seq?: number) => void): () => void {
   const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
   if (ev?.listen) {
     let off: (() => void) | undefined
     /* 多会话（#1362）：payload 是 `{id, data}`；兼容旧的纯字符串（浏览器桩/老版本） */
     void ev
       .listen('term:data', (e) => {
-        const p = e.payload as { id?: number; data?: string } | string
+        const p = e.payload as { id?: number; data?: string; seq?: number } | string
         if (typeof p === 'string') cb(0, p)
-        else cb(Number(p?.id ?? 0), String(p?.data ?? ''))
+        else cb(Number(p?.id ?? 0), String(p?.data ?? ''), Number(p?.seq ?? 0))
       })
       .then((f) => (off = f))
     return () => off?.()
@@ -311,7 +312,12 @@ export function onTermData(cb: (id: number, data: string) => void): () => void {
   const h = (e: Event) => {
     const d = (e as CustomEvent).detail
     if (typeof d === 'string') cb(0, d)
-    else cb(Number((d as { id?: number })?.id ?? 0), String((d as { data?: string })?.data ?? ''))
+    else
+      cb(
+        Number((d as { id?: number })?.id ?? 0),
+        String((d as { data?: string })?.data ?? ''),
+        Number((d as { seq?: number })?.seq ?? 0),
+      )
   }
   addEventListener('studio:term-data', h)
   return () => removeEventListener('studio:term-data', h)

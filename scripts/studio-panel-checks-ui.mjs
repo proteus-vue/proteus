@@ -74,9 +74,12 @@ export function checksUiGuides({ ios, term: termProbe }) {
   // ㊼ 内置终端（决策 #1279）：命令名三方对齐 + 真点真敲 + ANSI 上色 + resize
   //   ★颜色断言用 `rgb(...)` 而不是源码里的 `#e5534b`：`el.style.color` 读回来是浏览器**规范化后**的值
   [
-    `㊼ 终端：命令名对齐 ${termProbe.parity.ok}（${termProbe.parity.cmds.join('/')}）· 点 rail ⇒ term_open ${termProbe.opened.cols}×${termProbe.opened.rows}（状态栏「${termProbe.opened.stat}」）· 上色 ERROR=${termProbe.painted.errColor} OK=${termProbe.painted.okColor} 默认色='${termProbe.painted.plainColor}' · 屏幕「${termProbe.painted.text.replace(/\s+/g, ' ').trim().slice(0, 40)}」· 光标 ${termProbe.painted.cursorLeft},${termProbe.painted.cursorTop} · 按键 ${JSON.stringify(termProbe.sent)} · resize ${termProbe.resizeBefore}→${termProbe.resized.count} 次（${termProbe.resized.cols} 列）· 真实 zsh 字节回放：提示符${termProbe.replay.hasPrompt ? '在' : '没了'}／分支名${termProbe.replay.hasBranch ? '在' : '没了'}／${termProbe.replay.rows} 行有内容`,
+    `㊼ 终端：命令名对齐 ${termProbe.parity.ok}（${termProbe.parity.cmds.join('/')}）· 点 rail ⇒ term_open ${termProbe.opened.cols}×${termProbe.opened.rows}（状态栏「${termProbe.opened.stat}」）· 上色 ERROR=${termProbe.painted.errColor} OK=${termProbe.painted.okColor} 默认色='${termProbe.painted.plainColor}' · 屏幕「${termProbe.painted.text.replace(/\s+/g, ' ').trim().slice(0, 40)}」· 次数 ${JSON.stringify(termProbe.painted.counts ?? {})}（每个词应为 1，>1 = 输出被应用多次）· 光标 ${termProbe.painted.cursorLeft},${termProbe.painted.cursorTop} · 按键 ${JSON.stringify(termProbe.sent)} · resize ${termProbe.resizeBefore}→${termProbe.resized.count} 次（${termProbe.resized.cols} 列）· 真实 zsh 字节回放：提示符${termProbe.replay.hasPrompt ? '在' : '没了'}／分支名${termProbe.replay.hasBranch ? '在' : '没了'}／${termProbe.replay.rows} 行有内容`,
     termProbe.parity.ok &&
       termProbe.parity.cmds.length === 5 &&
+      /* ★**每个词恰好出现一次**（决策 #1378）：包含 ≠ 数量对。
+         #1376 的"每块输出被应用两次"就是靠这一条才能被抓住 —— 之前只断言"包含"，门禁全绿。 */
+      Object.values(termProbe.painted.counts ?? {}).every((n) => n === 1) &&
       termProbe.opened.called &&
       termProbe.opened.cols > 40 &&
       termProbe.opened.rows > 10 &&

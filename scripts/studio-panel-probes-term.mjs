@@ -84,6 +84,15 @@ export async function probeTerminal(page, studioDir) {
       cursorTop: cur ? parseFloat(cur.style.top) : -1,
       cursorLeft: cur ? parseFloat(cur.style.left) : -1,
       rowCount: document.querySelectorAll('#termGrid .trow').length,
+      /* ★**计数断言**（决策 #1378）：每个词只喂了 1 次 ⇒ 屏幕上必须**恰好出现 1 次**。
+         之前只断言"包含"，于是"每块输出被应用两次"的 bug（#1376，屏幕整段重复）
+         门禁照样绿 —— 这是判据太弱的典型：包含 ≠ 数量正确。 */
+      counts: {
+        ERROR: txt.split('ERROR').length - 1,
+        plain: txt.split('plain').length - 1,
+        zh: txt.split('中文正常').length - 1,
+        OK: txt.split('OK').length - 1,
+      },
     }
   })
 

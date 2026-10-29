@@ -23,22 +23,29 @@ import { hasBridge, onTermData, onTermExit, termClose, termOpen, termResize, ter
  * 用户看到的就是"有时候正常、有时候一直报错"。
  * 与其让人去理解会话状态，不如在这里**自愈**：重开一次，把这一击补发出去。
  */
+/* ★写入去重（决策 #1365）：实测"输入 cd 显示 cccd、命令执行两次"，
+   说明同一批字节被重复发送。4ms 窗口远低于人手/系统重复率，不会误吞正常输入。
+   （根因仍在查：可能是重复的事件源；这里先把"确定性重复"挡住。） */
+let lastOut = { d: '', at: 0 }
+let lastIn = { d: '', at: 0 }
+const lastSeq = new Map<number, number>()
+let applied = 0
+
 async function writeToTerm(data: string) {
   if (!hasBridge) return
+  const now = performance.now()
+  if (data === lastOut.d && now - lastOut.at < 4) return
+  lastOut = { d: data, at: now }
   try {
-    await termWrite(sid.value ?? 0, data)
+    await termWrite(sid.value ?? 0, data, 'send')
   } catch (e) {
     const msg = String((e as Error)?.message ?? e)
+    /* ★★**绝不重发用户输入**（决策 #1366）：原来的"重开 + 重发"会让一次按键进两次 shell
+       （实测日志：单个按键后端收到两次 `write len=1`）⇒ 字符重复、命令执行两次。
+       现在只重开会话（让下一次按键可用）+ 提示一次，**不重发这一批字节**。 */
     if (msg.includes('终端未打开')) {
       opened.value = false
       openSession()
-      await new Promise((r) => setTimeout(r, 150))
-      try {
-        await termWrite(sid.value ?? 0, data)
-        return
-      } catch {
-        /* 仍然失败就走下面统一报错（此时确实开不起来） */
-      }
     }
     pushToast(msg, 'err')
   }
@@ -130,7 +137,22 @@ function gridSize() {
   }
 }
 
+/** ★并发守卫（决策 #1364）：`opened` 在 await 之后才置位，期间 ResizeObserver
+ *  会反复触发 `maybeOpen()` ⇒ 每触发一次就多开一个会话（截图里 4 个 zsh 标签就是这么来的）。
+ *  多出来的会话还会让写入撞上"终端未打开 → 自愈重发"，表现为**字符重复、命令执行两次**。 */
+let opening = false
+
 async function openSession() {
+  if (opening) return
+  opening = true
+  try {
+    await doOpen()
+  } finally {
+    opening = false
+  }
+}
+
+async function doOpen() {
   if (!hasBridge) {
     // 浏览器直开：给一段说明 + 本地回显，避免一片空白让人以为坏了
     term.value.reset(80, 24)
@@ -155,6 +177,9 @@ async function openSession() {
     ver.value++
     opened.value = true
     exited.value = false
+    /* ★新建后**立刻把焦点交给输入框**（决策 #1377）：`＋` 按钮被点过之后焦点在按钮上，
+       用户得再点一下终端才能打字 —— 这是"新建终端后要点击才能输入"的原因。 */
+    void nextTick(() => focusInput())
   } catch (e) {
     pushToast(`开终端失败：${String((e as Error)?.message ?? e)}`, 'err')
   }
@@ -236,8 +261,17 @@ const SEQ: Record<string, string> = {
   Escape: '\x1b',
 }
 
+/* ★**唯一出口去重**（决策 #1368）：实测一次按键仍产生两次 `term_write`，
+   说明 `beforeinput` 与输入法的 `compositionend` **各发了一次**（ASCII 在中文输入源下
+   也会走一遍 IME 组合）。30ms 窗口下人不可能重复输入同一个字符（键盘连发也 ≥33ms），
+   所以这里合并是安全的。所有输入路径（按键/IME/粘贴）都经过本函数。 */
+let lastSend = { d: '', at: 0 }
+
 function send(data: string) {
   if (!data) return
+  const now = performance.now()
+  if (data === lastSend.d && now - lastSend.at < 30) return
+  lastSend = { d: data, at: now }
   if (!hasBridge) return
   void writeToTerm(data)
 }
@@ -290,14 +324,36 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-/** 打印字符统一从这里进（物理键盘 + 输入法 + 粘贴三条路汇合） */
-function onInput() {
-  const el = inputEl.value
-  if (!el) return
-  const v = el.value
-  if (!v) return
-  el.value = ''
-  send(v)
+/**
+ * 打印字符入口（决策 #1367）：用 **`beforeinput`** 而不是 `input`。
+ *
+ * ★为什么换：原实现 `@input` + 处理里 `el.value = ''`，在 WKWebView 里一次按键会派发
+ *   **两次 input**（实测后端日志：单个按键收到 `write len=1` 两次 ⇒ 字符重复、命令执行两次）。
+ *   `beforeinput` 的 `e.data` 就是"这一次要插入的文本"，`preventDefault()` 后 textarea 永远是空的，
+ *   既不会累积、也不会因为"清值"再触发一轮事件。
+ * ★输入法：`isComposing` 时放行给 `compositionend`（中文一次上屏要整段发，不能逐字）。
+ * ★粘贴：Cmd+V 走 `insertFromPaste`，同样带 `data` ⇒ 一次发完整段。
+ */
+function onBeforeInput(e: InputEvent) {
+  if (e.isComposing) return
+  const d = e.data
+  if (d == null) return
+  e.preventDefault()
+  if (d) send(d)
+}
+
+/** 输入法上屏：整段一起发（逐字发会把候选词的中间态也送进 shell）。
+ *
+ * ★**必须跳过"刚发过的同一段"**（决策 #1369）：ASCII 字符在中文输入源下会先触发
+ *   `beforeinput`（我们已发），紧接着再触发 `compositionend`（同一字符）——
+ *   这是我加 `compositionend` 时自己造出来的第二个重复源。
+ *   200ms 窗口只用于"这串字符刚刚发过就不再发"，不影响真正的输入法上屏。
+ */
+function onCompositionEnd(e: CompositionEvent) {
+  const d = e.data
+  if (!d) return
+  if (d === lastSend.d && performance.now() - lastSend.at < 200) return
+  send(d)
 }
 
 /** 懒开：`active` 且量得到真实尺寸时才开会话（隐藏时 clientHeight=0，开出来只有 20×4） */
@@ -314,16 +370,42 @@ function focusInput() {
 onMounted(async () => {
   measure()
   await nextTick()
-  offData = onTermData((id, d) => {
+  /* ★每个会话的"已见最大序号"（决策 #1373）：seq <= 已见 ⇒ 重复投递，丢弃。
+     这是幂等判据，不依赖时间窗/内容比较，重复多少次都只画一次。 */
+  offData = onTermData((id, d, seq) => {
+      if (seq) {
+        const seen = lastSeq.get(id) ?? 0
+        if (seq <= seen) return
+        lastSeq.set(id, seq)
+      }
       /* ★`id=0` = 浏览器桩/旧 payload（不带会话 id）⇒ 落到**当前活动会话**，
          否则门禁那种"直接派发 studio:term-data"的场景会被当成"未知会话"丢掉。 */
+      /* 同一块输出 4ms 内只画一次（防止重复投递把每行画两遍） */
+      const tn = performance.now()
+      if (d === lastIn.d && tn - lastIn.at < 4) return
+      lastIn = { d, at: tn }
       const target =
         sessions.value.find((x) => x.id === id) ??
         sessions.value.find((x) => x.id === activeId.value)
-      if (target) target.term.write(d)
-      if (id !== 0 && id !== activeId.value) return
-    term.value.write(d)
-    scheduleRender()
+      /* ★★**只能写一次**（决策 #1376）：这里历史上残留了第二处 `term.value.write(d)`，
+         导致**每块输出被应用两次** ⇒ 屏幕整段重复、echo 里字符翻倍（p,w → ppw）。
+         排查 8 轮都没找到，因为它藏在处理函数**末尾**、跟在 early-return 之后。 */
+      if (!target) return
+      target.term.write(d)
+      /* ★网格取样（决策 #1374）：每 10 块输出把**网格里真实的最后几行**发到日志（不进 shell），
+         用来判定"重复发生在 pty 输出 / 网格 / DOM 渲染"里的哪一层。 */
+      applied++
+      if (applied % 10 === 0) {
+        const lines = term.value
+          .text()
+          .split('\n')
+          .filter((t) => t.trim().length > 0)
+          .slice(-6)
+          .join(' ⏎ ')
+        void termWrite(activeId.value, lines, 'diag').catch(() => {})
+      }
+      /* 只有**当前活动会话**才需要重绘（后台会话继续累积，切过去时统一重绘） */
+      if (id === 0 || id === activeId.value) scheduleRender()
   })
   offExit = onTermExit((id) => {
       if (id !== activeId.value) return
@@ -723,7 +805,8 @@ defineExpose({ focus: focusInput, term, openFind })
       autocorrect="off"
       autocapitalize="off"
       @keydown="onKeyDown"
-      @input="onInput"
+      @beforeinput="onBeforeInput"
+      @compositionend="onCompositionEnd"
       @focus="focused = true"
       @blur="focused = false"
     />

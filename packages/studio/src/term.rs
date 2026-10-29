@@ -61,6 +61,12 @@ extern "C" {
 #[derive(serde::Serialize, Clone)]
 struct TermData {
     id: u64,
+    /* ★**序号**（决策 #1373）：前端据此做**幂等去重**（seq <= 已见 ⇒ 丢弃）。
+       为什么加它：昨天"输出整段重复"查了 8 轮，写入侧已证明每键只发一次，
+       但屏幕上整段重复 —— 说明同一块输出**被投递了不止一次**。
+       与其猜是哪条路径重复，不如让投递**带序号**：重复投递同一个 seq，前端直接忽略。
+       这是"可证明的幂等"，不是靠时间窗或内容比较去猜。 */
+    seq: u64,
     data: String,
 }
 
@@ -76,6 +82,8 @@ struct Session {
    单例做不到（新开就把旧的顶掉）。事件也带 id，前端按 id 分发到各自的网格。 */
 static SESSIONS: Mutex<Option<HashMap<u64, Session>>> = Mutex::new(None);
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+static EMIT_N: AtomicU64 = AtomicU64::new(0);
+static EMIT_SEQ: AtomicU64 = AtomicU64::new(1);
 
 fn with_sessions<T>(f: impl FnOnce(&mut HashMap<u64, Session>) -> T) -> Option<T> {
     let mut g = SESSIONS.lock().ok()?;
@@ -288,7 +296,19 @@ fn reader_loop(app: tauri::AppHandle, master: c_int, id: u64, gen: u64) {
                     let head: String = s.chars().take(120).collect();
                     eprintln!("[term] 首段输出（{} 字符）：{:?}", s.chars().count(), head);
                 }
-                let _ = app.emit("term:data", TermData { id, data: s });
+                EMIT_N.fetch_add(1, Ordering::Relaxed);
+                let seq = EMIT_SEQ.fetch_add(1, Ordering::Relaxed);
+                /* ★每块都记（决策 #1375）：网格里已证重复，但 seq 去重没拦住
+                   ⇒ 怀疑"同一内容被发了两个不同 seq"。这条日志能直接判定。 */
+                {
+                    let head: String = s.chars().take(24).collect();
+                    eprintln!(
+                        "[term][probe] emit id={id} seq={seq} len={} head={:?}",
+                        s.len(),
+                        head
+                    );
+                }
+                let _ = app.emit("term:data", TermData { id, seq, data: s });
             }
         } else if n == 0 {
             break; // EOF：shell 退出
@@ -307,7 +327,13 @@ fn reader_loop(app: tauri::AppHandle, master: c_int, id: u64, gen: u64) {
 }
 
 /// 把前端按键送进 pty（原样字节：`\r` / `\x1b[A` / `\x03` 都由前端按终端语义生成）。
-pub fn write_str(id: u64, data: &str) -> Result<(), String> {
+pub fn write_str(id: u64, src: Option<&str>, data: &str) -> Result<(), String> {
+    /* ★诊断通道（决策 #1374）：`src=diag` 只把内容打到日志，**不写进 pty**。
+       用途：把前端网格的真实内容取样出来，跟 pty 输出对照，定位"重复发生在哪一层"。 */
+    if src == Some("diag") {
+        eprintln!("[term][diag] grid id={id} {:?}", data);
+        return Ok(());
+    }
     let fd = with_sessions(|m| m.get(&id).map(|s| s.master))
         .flatten()
         .ok_or("终端未打开")?;
@@ -382,8 +408,15 @@ pub async fn term_open(app: tauri::AppHandle, cols: u16, rows: u16, shell: Optio
 }
 
 #[tauri::command]
-pub fn term_write(id: u64, data: String) -> Result<(), String> {
-    write_str(id, &data)
+pub fn term_write(id: u64, src: Option<String>, data: String) -> Result<(), String> {
+    /* ★临时取证（决策 #1366/#1370）：带来源，定位"第二次写入"到底来自哪条路径。 */
+    eprintln!(
+        "[term][probe] write id={id} src={} len={} data={:?}",
+        src.as_deref().unwrap_or("?"),
+        data.len(),
+        data
+    );
+    write_str(id, src.as_deref(), &data)
 }
 
 #[tauri::command]
