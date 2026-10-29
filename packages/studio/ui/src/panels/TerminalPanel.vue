@@ -21,6 +21,7 @@ import PButton from '../ui/PButton.vue'
 import PInput from '../ui/PInput.vue'
 import PSelect from '../ui/PSelect.vue'
 import TermPane from './TermPane.vue'
+import Icon from '../ui/Icon.vue'
 import { termSplit, termSplitW } from '../layout'
 
 const props = defineProps<{ active: boolean }>()
@@ -123,7 +124,18 @@ async function closeSession(id: number) {
   const rest = sessions.value.filter((s) => s.id !== id)
   await termClose(id).catch(() => {})
   sessions.value = rest
-  panes.value = panes.value.filter((p) => p !== id)
+  /* ★**补位而不是留空**（决策 #1391）：用户报"删除要点两次"，
+     原因是删掉的会话如果正显示在某栏里，那一栏会变成空白 —— 看起来像"没删掉"。
+     现在：该栏用"另一个还没上屏的会话"顶上；没有可顶的就收掉这一栏。 */
+  const at = panes.value.indexOf(id)
+  if (at >= 0) {
+    const used = new Set(panes.value.filter((p) => p !== id))
+    const spare = rest.find((x) => !used.has(x.id))
+    const next = [...panes.value]
+    if (spare) next[at] = spare.id
+    else next.splice(at, 1)
+    panes.value = next
+  }
   if (focusIdx.value >= panes.value.length) focusIdx.value = Math.max(0, panes.value.length - 1)
   if (!panes.value.length) {
     termSplit.value = false
@@ -443,7 +455,7 @@ defineExpose({ focus: focusCurrent })
           <span class="tname">{{ s.title }}</span>
           <span class="tx" title="关闭这个终端" @click.stop="closeSession(s.id)">✕</span>
         </button>
-        <PButton size="sm" title="新建终端（⌘⇧T）" @click="newSession">＋</PButton>
+        <PButton size="sm" title="新建终端（⌘⇧T）" @click="newSession"><Icon name="plus" :size="12" /></PButton>
       </div>
 
       <span class="tfill" />
@@ -458,9 +470,15 @@ defineExpose({ focus: focusCurrent })
       <PButton size="sm" title="终止当前命令（Ctrl-C）" @click="sendCtrl('\x03')">终止</PButton>
       <PButton size="sm" title="清屏（Ctrl-L）" @click="sendCtrl('\x0c')">清屏</PButton>
       <PButton size="sm" :active="findOpen" title="在终端里查找" @click="findOpen = !findOpen">查找</PButton>
-      <PButton size="sm" :active="splitOn" title="拆分终端（右侧新会话）" @click="toggleSplit">◫</PButton>
-      <PButton size="sm" title="最大化 / 还原（⌘⇧J）" @click="emit('maximize')">⤢</PButton>
-      <PButton size="sm" variant="ghost" title="关闭面板（⌘J）" @click="emit('close')">✕</PButton>
+      <PButton size="sm" :active="splitOn" title="拆分终端（在右侧新开一栏）" @click="toggleSplit">
+        <Icon name="split" :size="12" />
+      </PButton>
+      <PButton size="sm" title="最大化 / 还原（⌘⇧J）" @click="emit('maximize')">
+        <Icon name="maximize" :size="12" />
+      </PButton>
+      <PButton size="sm" variant="ghost" title="关闭面板（⌘J）" @click="emit('close')">
+        <Icon name="close" :size="12" />
+      </PButton>
     </div>
 
     <div v-if="findOpen" class="termfind" @click.stop>
@@ -535,7 +553,7 @@ defineExpose({ focus: focusCurrent })
             @click="switchTo(s.id)"
             @dblclick="startRename(s.id)"
           >
-            <span class="licon">▣</span>
+            <Icon class="licon" name="terminal" :size="12" />
             <input
               v-if="renamingId === s.id"
               v-model="renameText"
@@ -546,8 +564,12 @@ defineExpose({ focus: focusCurrent })
               @blur="commitRename(s.id)"
             />
             <span v-else class="lname">{{ s.title }}</span>
-            <span class="lact" title="重命名" @click.stop="startRename(s.id)">✎</span>
-            <span class="lact" title="关闭这个终端" @click.stop="closeSession(s.id)">🗑</span>
+            <button class="lact" title="重命名" @click.stop="startRename(s.id)">
+              <Icon name="pencil" :size="12" />
+            </button>
+            <button class="lact danger" title="关闭这个终端" @click.stop="closeSession(s.id)">
+              <Icon name="trash" :size="12" />
+            </button>
           </div>
         </div>
       </template>
@@ -713,6 +735,7 @@ defineExpose({ focus: focusCurrent })
 }
 .litem .licon { color: var(--fg-subtle); font-size: 10px; }
 .litem.on .licon { color: var(--accent); }
+.litem .licon { color: var(--fg-subtle); }
 .lname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .linput {
   flex: 1;
@@ -727,7 +750,20 @@ defineExpose({ focus: focusCurrent })
   padding: 0 4px;
 }
 /* 操作按钮：hover 才显形，避免列表噪音 */
-.lact { opacity: 0; font-size: 10px; color: var(--fg-subtle); padding: 0 2px; }
+.lact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-subtle);
+  opacity: 0;
+  cursor: pointer;
+}
+.lact.danger:hover { background: rgb(248 113 113 / 14%); color: #f87171; }
 .litem:hover .lact { opacity: 0.8; }
 .lact:hover { opacity: 1; color: var(--fg); }
 .tpane { position: relative; flex: 1 1 0; min-width: 0; }
