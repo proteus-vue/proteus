@@ -15528,3 +15528,50 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ★**不做 `resolveActivity` 前置判断**（#1285 包可见性教训：能查询到 ≠ 能解析到）。
   - **并发改号（规范 §3.5 第 2 条实战）**：立项按 #1379 定号，实施期间并发会话已占用
     #1379（term 线 #1378/#1379）⇒ 本单临提交前复核改为 **#1384**，只改自己新增的内容。
+
+1385. **★★请求库 C3：生产路径接上单一事实源 —— 修"POST 会被重试（可能下两单）"与"抖动名存实亡"**（2026-10-29 · 用户「先完成上次做的那个请求库」）:
+  - **缺陷形态（本轮最值得记的一条）**：C1 把正确答案写进了 `request/reliability.ts`
+    （`canRetry` 非幂等拒重试 · `computeBackoffMs` 真随机抖动 · `shouldRetryResult` 单一事实源），
+    **但生产路径（`capability-fetch-pipeline.ts`）仍跑着旧逻辑**。这与 #1344
+    「离线队列 `flushOfflineQueue()` 没有任何调用方」**完全同构**：
+    **新库写对了、测试全绿、生产没用上**。★同族第三种形态（前两种是"类型有实现无""底层做完门面没接"）。
+  - **两处真缺陷（都能造成业务损失，不只是"不够优雅"）**：
+    ① **重试不看 method**：`DEFAULT_RETRY_ON` 只判结果（非 aborted/unsupported/tooLarge/intercepted 即可重试）
+       ⇒ 一开 `retry` 就把 `POST /order` **重发** ⇒ 超时后可能**下两单**。
+       HTTP 语义上只有幂等方法（GET/HEAD/OPTIONS/PUT/DELETE/TRACE）可无条件重试。
+    ② **抖动是确定性符号**：`sign = attempt % 2` ⇒ 所有客户端同一时刻失败、退避**同样长度**、
+       再**同时**重试 ⇒ jitter 存在的唯一目的（去同步 / 防重试风暴）**完全没实现**。
+  - **修法（接单一事实源，不另写第三套）**：
+    · 重试判定 = `canRetry(method, hasIdempotencyKey=false, policy)`；结果判定仍由 `retryOn`
+      （分工与 `shouldRetryResult` 一致：先方法门禁、再结果判定）；
+    · 退避 = `computeBackoffMs(attempt + 1, policy)`（★口径换算：pipeline 的 attempt 从 0 起，
+      那边从 1 起——本仓曾在 `shouldRetryResult` 因同类 off-by-one 少重试一次）；
+    · **被拒时 `meta.retryRefused = { reason }`**（不静默）：否则业务只看到 `attempts: 1`
+      会误判成"重试没生效 / 库有 bug"，排查方向全错。
+  - **★幂等键的口径（架构约束的后果，必须说清）**：pipeline **看不到** `idempotencyKey`
+    （门面层字段，按 #1342 的硬约束**不进 `FetchConfig`**）⇒ 门面层 `createApi` 在
+    **有幂等键 / 非幂等方法已判定可重试**时把 `retryNonIdempotent: true` 传下去
+    （`request/client.ts` 的 retry 交接处）。这条路径仍能对 POST **安全**重试；
+    业务直接调 `useFetch` 想重试非幂等请求，必须自己显式打开（默认拦住）。
+  - **判据**：`tests/fetch-pipeline.test.ts` 新增 5 条（POST 不重试 / 显式放行后重试 /
+    幂等方法照常重试 / 抖动真随机 / `jitter=0` 可精确断言）；请求库全套 **110/110**。
+  - **★★★破坏性验证抓出我自己写的假绿（本轮第二次同族）**：
+    抖动那条**第一版判据是假绿** —— 它把所有 attempt 的退避值混进一个 Set 断言 `size>1`。
+    而确定性抖动下**不同 attempt** 本来就给不同值（1000/2000/4000 × 各自符号）⇒ 旧实现照样通过。
+    **M2 变异（改回 `attempt % 2`）时该断言不红** ⇒ 才发现。
+    正解 = **只盯同一个 attempt 跨多次运行**是否变化（实得恒为单值 1500 = 确定性符号的铁证）。
+    ★这与 #1344「三条自造假绿」、#1336「断言锚在注释里的字符串」是**同一条纪律的第 N 次复发**：
+    **新写判据必须先做破坏性验证**，而且验证要看"变异后它真的红了吗"。
+  - **顺带修掉两条 stale 判据**（判据比实现旧，会**反向惩罚真接线**）：
+    · `tests/gen-content-bridge-keys.test.ts`：写死「document-preview 的 iOS 应为 🟡」——
+      而 #1384 已把 C84 接上。★原文注释自己就写着"写死 🟡 会让真接线被测试反向惩罚"，结果还是写死了。
+      改法 = 不再锁 App 列状态，只守"Web+MP 两列 ✅ + 旧谎报表述消失"（用例标题原本就说的是这两件事）。
+    · `tests/gen-content-harmony-host.test.ts`：要求 fetch 页写「abort() 是 no-op」「stream 如实拒绝」——
+      而 #1344 已实现真取消 + 真流式。改法 = 要求"如实交代可用性边界"（no-op/真取消/取决于形态 至少一种）。
+  - **诚实边界**：
+    ① 无法端到端验证"服务端真的只收到一单"（那要后端幂等表配合，超出本仓范围）——
+       判据只到"管线**没有**发第二次请求"这一层；
+    ② `retryRefused` 只覆盖"方法不允许"这一种拒绝原因，其它（达到上限 / deadline）仍靠 `attempts` 表达；
+    ③ 断路器与配额仍是**进程内**状态（单实例），跨进程共享需宿主支持（沿用 #1342 的边界）。
+  - **文件大小**：改完 `capability-fetch-pipeline.ts` 一度到 1031 行（越 1000 硬上限）——
+    按纪律**压回 999**（压缩注释、内联 `backoffOf`），而不是加 `ALLOW` 豁免。

@@ -196,6 +196,112 @@ describe('★#1133 请求管线 · 重试（可恢复失败才重试）', () => 
   })
 })
 
+/**
+ * ★★★#1385：重试的两条**安全语义**（此前 pipeline 全都没有）。
+ *
+ * 【这两条为什么必须单独一组】它们守的不是"重试能工作"，而是"重试不会造成业务损失"：
+ *   ① 非幂等 + 没幂等键 ⇒ **不许**重发（否则 `POST /order` 超时重试 = 可能下两单）；
+ *   ② 抖动必须是**真随机**（否则所有客户端同时失败、同时退避**同样长度**、再同时重试
+ *      = 退避完全没能去同步，重试风暴照旧）。
+ */
+describe('★★★#1385 请求管线 · 重试安全语义（方法维度 + 真随机抖动）', () => {
+  /** 用可控 setTimeout 记录退避时长（不真等）。
+   *  ★★★装置要点：`setTimeout` 必须在 **createFetchPipeline 之前**替换——
+   *  pipeline 创建时通过 `makeDelay()` 捕获一次全局 `setTimeout` 快照（`capability-fetch-pipeline.ts:198`）。
+   *  第一版把替换放在创建之后 ⇒ 采集到空数组（重试确实发生了，只是没经过我的桩）⇒ 假红。
+   *  ⇒ 这里把"建管线"也包进来：`withDelayCapture((p) => run(p, ...))`。 */
+  async function withDelayCapture(
+    build: () => ReturnType<typeof createFetchPipeline>,
+    drive: (p: ReturnType<typeof createFetchPipeline>) => Promise<unknown>,
+  ): Promise<number[]> {
+    const delays: number[] = []
+    const origSetTimeout = globalThis.setTimeout
+    ;(globalThis as { setTimeout: unknown }).setTimeout = ((fn: () => void, ms: number) => {
+      delays.push(ms)
+      return origSetTimeout(fn, 0)
+    }) as typeof setTimeout
+    try {
+      const p = build()
+      await drive(p)
+    } finally {
+      ;(globalThis as { setTimeout: unknown }).setTimeout = origSetTimeout
+    }
+    return delays
+  }
+
+  it('★★① POST 失败**不重试**（非幂等 + 无幂等键 ⇒ 防重复下单），且 meta 如实说明原因', async () => {
+    const { bridge, count } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 3, delayMs: 1, jitter: 0 } })
+    const res = await run(p, '/order', { method: 'POST', data: { sku: 'A' } })
+    expect(count(), '★POST 只应发 1 次（旧实现会重试 4 次 ⇒ 可能下 4 单）').toBe(1)
+    expect(res.meta?.attempts).toBe(1)
+    // ★不静默：业务要能看出"不是没重试，是不允许重试"
+    expect(res.meta?.retryRefused?.reason, '★被拒原因必须带出来（否则业务误判成库有 bug）').toMatch(/非幂等/)
+  })
+
+  it('★★①b POST 显式 `retryNonIdempotent: true` ⇒ 允许重试（业务确认服务端幂等）', async () => {
+    const { bridge, count } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+    const p = createFetchPipeline(bridge, { retry: { attempts: 2, delayMs: 1, jitter: 0, retryNonIdempotent: true } })
+    const res = await run(p, '/order', { method: 'POST', data: { sku: 'A' } })
+    expect(count(), '★显式打开后应重试到上限（1 首次 + 2 重试）').toBe(3)
+    expect(res.meta?.retryRefused, '★放行时不该有拒绝原因').toBeUndefined()
+  })
+
+  it('①c 幂等方法（GET/PUT/DELETE）照常重试', async () => {
+    for (const method of ['GET', 'PUT', 'DELETE', 'HEAD'] as const) {
+      const { bridge, count } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+      const p = createFetchPipeline(bridge, { retry: { attempts: 1, delayMs: 1, jitter: 0 } })
+      await run(p, '/x', { method })
+      expect(count(), `★${method} 是幂等方法，应重试（共 2 次）`).toBe(2)
+    }
+  })
+
+  it('★★② 抖动是**真随机**（同一 attempt 多次计算不恒等；旧实现是 attempt%2 的确定性符号）', async () => {
+    /* ★为什么这么断言：旧实现 `sign = attempt % 2 === 0 ? 1 : -1` ⇒ 同样的 attempt
+       永远得到**同一个**退避值。而 jitter 存在的唯一目的就是"让同时失败的客户端错开"，
+       确定性符号下所有客户端仍会同步重试 ⇒ 功能名存实亡。
+       ⇒ 采集多轮同一 attempt 的实际 setTimeout 时长，必须出现**不止一个**取值。 */
+    /* ★★★断言设计（第一版写错，自我修正记录）：
+       第一版把所有 attempt 的退避值丢进一个 Set 断言 size>1 —— 那是**假绿**：
+       确定性抖动下**不同 attempt** 本来就给不同值（1000、2000、4000 × 各自符号）
+       ⇒ 清空法照样 size>1 ⇒ 旧实现也能过。实测：M2 变异（改回 `attempt % 2`）时该断言**不红**。
+       ⇒ 正解：**只盯同一个 attempt**（第 0 轮退避），跨 12 次运行看取值是否变化。
+          确定性符号下它恒为同一个数；真随机下才会散开。 */
+    const firstDelays = new Set<number>()
+    for (let i = 0; i < 12; i++) {
+      const delays = await withDelayCapture(
+        () => {
+          const { bridge } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+          return createFetchPipeline(bridge, { retry: { attempts: 3, delayMs: 1000, jitter: 0.5 } })
+        },
+        (p) => run(p, '/x'),
+      )
+      expect(delays.length, '应有 3 次退避').toBe(3)
+      firstDelays.add(delays[0]!)
+    }
+    expect(
+      firstDelays.size,
+      `★第 0 轮退避跨 12 次运行必须抖动（实得 ${[...firstDelays].join(',')}；确定性符号下恒为单值）`,
+    ).toBeGreaterThan(1)
+    // ★同时必须是"合理范围"内抖（不是乱数）：jitter=0.5、base=1000 ⇒ 第 0 轮落 [500,1500]
+    for (const d of firstDelays) {
+      expect(d, `首轮退避 ${d}ms 超出 [500,1500] 的抖动区间`).toBeGreaterThanOrEqual(500)
+      expect(d, `首轮退避 ${d}ms 超出 [500,1500] 的抖动区间`).toBeLessThanOrEqual(1500)
+    }
+  })
+
+  it('②b jitter=0 ⇒ 退避精确可断言（不抖动时仍可复现）', async () => {
+    const delays = await withDelayCapture(
+      () => {
+        const { bridge } = makeBridge({ reply: (_n, config) => ({ data: 'x', status: 500, headers: {}, config }) })
+        return createFetchPipeline(bridge, { retry: { attempts: 2, delayMs: 100, backoff: 'exponential', jitter: 0 } })
+      },
+      (p) => run(p, '/x'),
+    )
+    expect(delays, '★jitter=0 时应精确等于 base/2base').toEqual([100, 200])
+  })
+})
+
 describe('★#1133 请求管线 · 并发与优先级', () => {
   it('★并发上限真的限住（3 个额度，6 个请求 ⇒ 峰值 ≤3）', async () => {
     const { bridge } = makeBridge({ latencyMs: 20 })

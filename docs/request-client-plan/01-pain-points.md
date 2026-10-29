@@ -110,9 +110,33 @@ t.abort()                                              // 真取消
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **C1 骨架** | `packages/api/src/request/`（types·reliability·security·tenant·query·client·index） | ✅ 完成（63 条判据全绿） |
-| **C2 收口** | `createApi` / `createRequestEngineering` 内部委托本库；删自带 TTL 缓存与 FIFO 队列 | 待做 |
-| **A（P0）** | 真机验 #540：持久 VM 是否仍崩（决定"多端一致"能否成立） | 待做 |
-| **B（P1）** | 鸿蒙会话式 VM：真实 cancel/stream/WS | 待 A 通过 |
+| **C2 收口** | `createApi` / `createRequestEngineering` 内部委托本库；删自带 TTL 缓存与 FIFO 队列 | ✅ 完成（`47f20f6a` · 决策 #1342） |
+| **C3 生产路径接线** | ★★★#1385：**pipeline 接 `request/reliability.ts` 的单一事实源** | ✅ 完成（见下） |
+| **A（P0）** | 真机验 #540：持久 VM 是否仍崩（决定"多端一致"能否成立） | ✅ 通过（真机实证推翻 #540 · 决策 #1343） |
+| **B（P1）** | 鸿蒙会话式 VM：真实 cancel/stream/WS | ◐ cancel/stream 已成立；WS 仍 🟡（前置=会话 open 后进程存活，未成立） |
+
+### ★★★C3（#1385）：新库写对了、生产路径却没用上
+
+C1 把正确答案写进了 `request/reliability.ts`，但**生产路径**（`capability-fetch-pipeline.ts`）
+仍跑着旧逻辑 —— 与 #1344「离线队列 `flushOfflineQueue()` 没有任何调用方」**完全同构**的缺陷形态。
+本轮把两处接上：
+
+| 缺陷 | 旧行为（生产路径） | 修法 |
+|---|---|---|
+| **重试不看 method** | `POST /order` 超时被重试 ⇒ **可能下 N 单** | 委托 `canRetry`（幂等方法 / 有幂等键 / 显式 `retryNonIdempotent`）；被拒时 `meta.retryRefused` **如实说明原因**（不静默当"没重试过"） |
+| **抖动是确定性符号** | `sign = attempt % 2` ⇒ 所有客户端退避**同样长度** ⇒ 重试风暴照旧（jitter 名存实亡） | 委托 `computeBackoffMs`（真随机 `[1-j, 1+j]`） |
+
+★**幂等键的口径**：pipeline 看不到 `idempotencyKey`（架构约束：门面层字段不进 `FetchConfig`），
+⇒ 门面层 `createApi` 在**有幂等键**时把 `retryNonIdempotent: true` 传下去（`request/client.ts`），
+这条路径仍能对 POST 安全重试；业务直接调 `useFetch` 想重试非幂等请求，必须自己显式打开。
+
+★**判据**：`tests/fetch-pipeline.test.ts` 新增 5 条（POST 不重试 / 显式放行后重试 / 幂等方法照常重试 /
+抖动真随机 / `jitter=0` 可精确断言）；全套 110/110。破坏性验证 2 层（M1 摘方法门禁 ⇒ "防重复下单"红；
+M2 换回确定性符号 ⇒ "真随机"红，实得恒为单值 1500）。
+
+★★**我第一版判据是假绿，被 M2 抓出**：初版把所有 attempt 的退避值混进一个 Set 断言 `size>1`——
+确定性抖动下**不同 attempt** 本来就给不同值（1000/2000/4000 × 各自符号）⇒ 旧实现也能过。
+正解 = **只盯同一个 attempt 跨多次运行**是否变化。同族纪律：**新写判据必须先做破坏性验证**。
 
 ---
 

@@ -3804,7 +3804,7 @@
       "id": "T-request-client-library",
       "title": "请求库：基于 useFetch 的高级封装（实例配置 · 幂等/熔断/离线/未知态 · 签名防重放脱敏 · bizId 隔离 · 三套入口收口）",
       "type": "framework-feature",
-      "status": "in_progress",
+      "status": "done",
       "owner": "session:zcode-main-20261028b",
       "scope": [
         "packages/api/src/request/**",
@@ -3818,15 +3818,15 @@
         "scripts/lib/contract-units.mjs",
         "docs/request-client-plan/**"
       ],
-      "decision": 1342,
+      "decision": 1385,
       "branch": null,
-      "verification": "npx vitest run tests/request-*.test.ts（含幂等键跨重试稳定 / 未知态三态分类 / 断路器状态机 / 域名白名单 / 脱敏 / useQuery 状态机）+ 每条破坏性验证（改坏必红）+ node scripts/check-file-size.mjs + node scripts/check-script-compile.mjs + npx vitest run tests/fetch-wire-fields.test.ts（确认未污染四层链）",
+      "verification": "npx vitest run tests/fetch-pipeline.test.ts tests/request-client.test.ts tests/request-reliability.test.ts tests/request-security.test.ts tests/request-tenant.test.ts tests/request-engineering.test.ts tests/request-offline-autoflush.test.ts（110/110）；pnpm test:coupled（283 + 4 跨端门禁）；破坏性验证 2 层（摘方法门禁 ⇒ 防重复下单红；换回确定性符号 ⇒ 真随机红）",
       "related": [
         "T-fetch-pipeline",
         "T-harmony-http-cancel",
         "T-harmony-http-stream"
       ],
-      "note": "【in_progress · 2026-10-28】用户「请求库这层就是针对当前主流请求库痛点提供我们自己的答案」。\n★**定位**：不做「又一个 axios」，做**平台方的请求治理层**。主流库优化「业务少写代码」，我们优化「一个 App 里几十个团队共用一套网络还管得住」。\n★**架构约束（四条硬约束，违反即第四套并行栈）**：① `FetchConfig`/`FetchResult` 是唯一契约；② `baseURL`/`bizId`/幂等等全在**门面层**，不进 `FetchConfig`（避免污染四层线格式白名单）；③ 结果永不抛（G-32.3），`requestOrThrow` 只是显式选择；④ 内部只调 `useFetch`/`useFetchTask`/pipeline，**绝不复刻 `IRequestAdapter`**。\n★**痛点→答案 20 条**（详见 docs/request-client-plan/01-pain-points.md）：可靠性 7 条（重试不分方法/确定性抖动/无幂等/无断路器/无离线队列/超时语义模糊/**无未知态**）· 数据获取 4 条（双套缓存打架/去重键不含 body/假 SWR/乐观更新手写回滚）· 安全合规 5 条（脱敏缺失/全局可变配置/无签名防重放/**WS 绕过加固**/无审计）· 平台化 4 条（无 bizId/共享额度/跨端各自找库/拿不到宿主能力）。\n★★**核心答案（差异化）**：**未知态建模** —— `fetch.unknown` + `meta.sent` 三态（未发出/确定失败/结果未知）。主流库把超时当失败，但对支付来说超时是**必须去查的状态**。这是支付级可靠性的唯一正确起点。\n★**三套入口收口**：`createApi` 保留 API 内部委托（`ApiError` 适配）；`createRequestEngineering` 保留 R1-R4 但删自带 TTL 缓存与 FIFO 队列（改走 pipeline）；`useFetch`+pipeline 成为唯一策略内核。\n★**已知实证痛点**（本仓取证）：pipeline 重试判定不看 method（`capability-fetch-pipeline.ts:185-195`）· 抖动是确定性符号（`:208-212`）· `request-engineering` 去重键不含 body（`request-engineering.ts:98-109`）· 其 clearCache 会清空业务全部存储（`:283-285`）· 日志通道无脱敏（`capability-app-log.ts:125-137`）· Android WS 连主机名校验都缺（`WebSocketCapability.java:196-199`）。\n★**范围外（明确）**：支付渠道 SDK（微信/支付宝/Apple IAP 原生集成）· schema/OpenAPI 代码生成（仓库零基础设施）。\n★**进度**：C1 骨架 → C2 收口 → A(P0 VM 决策门) → B(P1 会话式 VM)。C1/C2 与 VM 无依赖。"
+      "note": "【done · 2026-10-29 · 决策 #1385】C1 骨架（#1342）→ C2 收口（#1342）→ **C3 生产路径接单一事实源（本单）**。\n★★**缺陷形态**：C1 把正确答案写进 `request/reliability.ts`（canRetry 非幂等拒重试 / computeBackoffMs 真随机 / shouldRetryResult 单一事实源），但**生产路径 `capability-fetch-pipeline.ts` 仍跑旧逻辑** —— 与 #1344「离线队列 flushOfflineQueue() 无调用方」完全同构（第三种\"写对了没用上\"）。\n★两处真缺陷：① **重试不看 method** ⇒ `POST /order` 超时被重发 = 可能**下两单**；② **抖动是确定性符号**（`attempt % 2`）⇒ 所有客户端同时退避同样长度 ⇒ jitter 名存实亡。\n★修法：方法门禁 `canRetry(method, false, policy)` + 退避 `computeBackoffMs(attempt+1, policy)`（口径换算）；**被拒时 `meta.retryRefused={reason}` 不静默**（否则业务误判成\"重试坏了\"）。\n★★幂等键口径：pipeline 看不到 `idempotencyKey`（架构约束）⇒ 门面层 `createApi` 在有键时传 `retryNonIdempotent: true`，POST 仍能安全重试；`useFetch` 直调需显式打开（默认拦）。\n★★★**破坏性验证抓出我自己写的假绿**：抖动初版把所有 attempt 混进一个 Set 断言 size>1 —— 确定性抖动下不同 attempt 本就不同值 ⇒ 旧实现照样过（M1 变异不红才发现）；正解=**只盯同一 attempt 跨运行**（改后 M2 变异红，实得恒为 1500）。\n★顺带修两条 stale 判据（判据比实现旧 = 反向惩罚真接线）：gen-content-bridge-keys 写死「document-preview iOS 应 🟡」（#1384 已接上）；gen-content-harmony-host 要求「abort 是 no-op / stream 如实拒绝」（#1344 已真取消+真流式）。\n★诚实边界：无法端到端验\"服务端只收到一单\"（需后端幂等表）· retryRefused 只覆盖\"方法不允许\"· 断路器/配额仍进程内 · pipeline 曾越 1000 行已压回 999（不加 ALLOW）。"
     },
     {
       "id": "T-harmony-persistent-vm",

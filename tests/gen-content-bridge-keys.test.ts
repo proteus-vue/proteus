@@ -156,13 +156,21 @@ describe('平台桥成员集抽取（生成器 ↔ 源码 显式契约 · 两源
         const s = seg(slug)
         expect(s, `${dir}/${slug} 的 Web 应为 ✅`).toMatch(/\|\s*(Web SPA)\s*\|\s*✅/)
         expect(s, `${dir}/${slug} 的 MP 应为 ✅`).toMatch(/\|\s*(微信小程序|WeChat Mini Program)\s*\|\s*✅/)
-        // ★2026-10-19（决策 #1067）：App 端状态按**源码事实**分档，不再一律断言 🟡——
-        //   keep-screen-on 的桥方法（setKeepScreenOn）已真接 App 三端 ⇒ ✅；
-        //   document-preview 的 openDocument 仍未接 ⇒ 保持 🟡。写死 🟡 会让"真接线"被测试反向惩罚。
-        const expectIos = slug === 'keep-screen-on' ? '✅' : '🟡'
-        expect(s, `${dir}/${slug} 的 iOS 应为 ${expectIos}`).toMatch(
-          new RegExp(`\\|\\s*(iOS 原生|iOS native)\\s*\\|\\s*${expectIos}`),
-        )
+        /* ★★#1384（2026-10-29）：**不再写死 App 列的具体状态**。
+           原写法 `expectIos = slug === 'keep-screen-on' ? '✅' : '🟡'` 把
+           「document-preview 的 openDocument 未接」当成了判据本身——而 #1384 把它真接上后，
+           这条断言反过来**惩罚真接线**（注释自己就写着"写死 🟡 会让真接线被测试反向惩罚"，
+           结果还是写死了）。⇒ 本判据只守它**真正关心**的两件事（见本用例标题）：
+             · Web + MP 两列 ✅（这是 NC1 修复的落点）；
+             · 旧"桥未提供"谎报表述消失（这是漏抽造成的）。
+           App 列的状态由 `app-bridge-keys` / `harmony-host-keys` 的**源码派生**决定，
+           那边有各自的判据（`gen-content-harmony-host` / `appEndStatus`），不在这里重复锁死。 */
+        const iosCell = new RegExp(`\\|\\s*(iOS 原生|iOS native)\\s*\\|\\s*([^|]+)\\|`).exec(s)
+        expect(iosCell, `${dir}/${slug} 应有 iOS 行`).toBeTruthy()
+        expect(
+          ['✅', '🟡', '⚠️', '⬜'].some((m) => iosCell![2]!.includes(m)),
+          `${dir}/${slug} 的 iOS 状态应是合法枚举之一（实得：${iosCell![2]?.trim().slice(0, 40)}）`,
+        ).toBe(true)
       }
       // 旧的「桥未提供」表述在这两页必须消失（那是漏抽造成的谎报）
       for (const slug of ['keep-screen-on', 'document-preview']) {

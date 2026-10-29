@@ -419,6 +419,18 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
       ...(deadline !== undefined ? { deadline } : {}),
       // ★retry 交给 pipeline（它有自己的退避/抖动/retryOn）；本库只负责"能不能重试"这个前置门
       retry: attemptsAllowed > 0 ? attemptsAllowed : 0,
+      /**
+       * ★★★#1385：把"本请求可安全重发"这条**只有门面层知道的信息**传下去。
+       *
+       * 【为什么必须传】pipeline 看不到 `idempotencyKey`（架构约束：门面层字段不进 FetchConfig），
+       *   而它现在按 HTTP 语义**默认拒绝对非幂等方法重试**（防重复下单）。
+       *   若不带这条，`createApi` 里**有幂等键的 POST 也会被拦**——
+       *   那等于把一个已经安全的场景判成不安全（过度保守，业务会以为"重试坏了"）。
+       *   门面层已经用 `canRetry` 判过一次（`attemptsAllowed`），这里只是把结论告诉下一层。
+       */
+      ...(attemptsAllowed > 0 && (effectiveIdemKey !== undefined || !isIdempotentSafe(method))
+        ? { retryNonIdempotent: true }
+        : {}),
       // 清掉门面层字段，防止误透传（★这一步是硬要求：pipeline 会把这些当业务字段）
       ...({} as Record<string, never>),
     }

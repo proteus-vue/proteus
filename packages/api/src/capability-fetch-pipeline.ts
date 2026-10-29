@@ -33,6 +33,9 @@ import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
 import { cacheMissError, cachedResponseOf, createFetchCache, entryAgeMs } from './capability-fetch-cache'
 import type { CacheLookup, FetchCacheController, FetchCacheEntry, FetchCacheMeta, FetchCacheMode, FetchCacheOptions } from './capability-fetch-cache'
 import { createAbortController } from './capability-invoke'
+// ★#1385 重试的两个判定委托请求库（单一事实源）——此前本文件自己写了一套，与 reliability.ts 冲突
+//   （那边"非幂等不重试 + 真随机抖动"，这边"不看 method + 确定性抖动"）⇒ 新库写对了、生产没用上。
+import { canRetry, computeBackoffMs } from './request/reliability'
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
 /** 桥的最小面（与 `runFetch` 一致）。 */
@@ -182,6 +185,11 @@ export interface FetchPipelineConfigExt {
   priority?: number
 }
 
+/**
+ * 默认重试判定（**只管"这次结果值不值得重试"**，不管"这个方法允许不允许重试"）。
+ * ★#1385：方法维度由 `request/reliability.ts::canRetry` 单独把（此前本函数是唯一判定且**不看 method**
+ *   ⇒ 一开 retry 就把 `POST /order` 重发）。
+ */
 const DEFAULT_RETRY_ON = (res: FetchResult<unknown>): boolean => {
   if (!res.ok) {
     const code = res.error.code
@@ -201,16 +209,8 @@ function makeDelay(): { delay: (ms: number) => Promise<boolean> } {
   return { delay: (ms) => new Promise<boolean>((resolve) => st(() => resolve(true), ms)) }
 }
 
-function backoffOf(p: RetryPolicy, attempt: number): number {
-  const base = p.delayMs ?? 300
-  const curve = p.backoff ?? 'exponential'
-  const raw = curve === 'fixed' ? base : curve === 'linear' ? base * (attempt + 1) : base * Math.pow(2, attempt)
-  const jitter = p.jitter ?? 0.2
-  if (jitter <= 0) return raw
-  // 确定性抖动（不引随机数——判据可复现）：按 attempt 交替 ±jitter
-  const sign = attempt % 2 === 0 ? 1 : -1
-  return Math.max(0, Math.round(raw * (1 + sign * jitter)))
-}
+/** 退避 —— ★#1385 委托 `computeBackoffMs`（真随机；此前 `attempt % 2` 确定性符号 ⇒ 去同步失效）。 */
+const backoffOf = (p: RetryPolicy, attempt: number): number => computeBackoffMs(attempt + 1, p)
 
 /** 去重键：方法 + URL + query + body（**不含** headers——鉴权头由拦截器加，同资源应共享）。 */
 function dedupeKey(url: string, config: FetchConfig): string {
@@ -473,6 +473,7 @@ export function createFetchPipeline(
     const ctx: FetchRequestContext = { id, url, config, attempt: 0, elapsedMs: 0 }
     const attemptMs: number[] = []
     let retryDelaySkipped = false
+    let retryRefusedReason: string | undefined   // ★#1385 本可重试但方法不允许 ⇒ 带原因进 meta（不静默）
     const deduped = false
     // ★#1134 重定向记账（跨重试累计）
     const traceHops: RedirectHop[] = []
@@ -774,9 +775,17 @@ export function createFetchPipeline(
        *   ★不累加、不平均：跨轮的 DNS/连接是可复用的，平均出来的数**不对应任何一次真实请求**。
        */
       transportMeta = parseTransportReadout((res as { transport?: Record<string, string> }).transport)
-      // ④ 可重试判定      //   ★★★这里**不能写 `if (last.ok) break`**：HTTP 429/5xx 在 `runFetch` 里是 `ok:true` +
-      //   status（不是异常）⇒ 先 break 就永远不重试。判定交给 `retryOn`（默认对 429/5xx 返 true）。
-      const shouldRetry = (retryCfg.retryOn ?? DEFAULT_RETRY_ON)(res, attempt)
+      // ④ 可重试判定 ★不能写 `if (last.ok) break`：429/5xx 在 runFetch 里是 ok:true + status。
+      // ★★★#1385 方法维度门禁：「结果值得重试」≠「方法允许重试」——旧实现只看结果 ⇒
+      //   `POST /order` 超时被重发 = 可能下两单。委托 `canRetry`（单一事实源）；
+      //   ★幂等键不进 FetchConfig（架构约束）⇒ 门面层有键时传 `retryNonIdempotent` 下来。
+      const resultRetryable = (retryCfg.retryOn ?? DEFAULT_RETRY_ON)(res, attempt)
+      const method = String((curConfig.method ?? 'GET')).toUpperCase()
+      const methodGate = canRetry(method, false, retryCfg)
+      const shouldRetry = resultRetryable && methodGate.ok
+      if (!methodGate.ok && resultRetryable && attempt + 1 < maxAttempts) {
+        retryRefusedReason = methodGate.reason   // 本可重试但方法不允许 ⇒ 如实记账（不静默）
+      }
       if (!task.aborted && attempt + 1 < maxAttempts && shouldRetry) {
         // ★deadline：退避等待前先算"等完还够不够一轮最小预算"——不够就别等了（早失败比空等有用）
         const waitMs = backoffOf(retryCfg, attempt)
@@ -799,6 +808,7 @@ export function createFetchPipeline(
       deduped,
       priority,
       ...(retryDelaySkipped ? { retryDelaySkipped: true } : {}),
+      ...(retryRefusedReason ? { retryRefused: { reason: retryRefusedReason } } : {}),   // ★#1385 方法不可重试
       ...(deadlineMs !== undefined ? { deadlineMs } : {}),
       ...(cacheMeta ? { cache: cacheMeta } : {}),
       // ★★★#1158：宿主侧传输读数（解析成类型化形态；一项都解析不出 ⇒ 字段不出现）

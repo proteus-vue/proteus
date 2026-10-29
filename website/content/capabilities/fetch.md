@@ -131,6 +131,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `backoff` | `'fixed' \| 'linear' \| 'exponential'` | ``exponential`` | 退避曲线（默认 `exponential`） |
 | `jitter` | `number` | `0.2` | 抖动比例 0~1（默认 0.2；避免重试风暴同步打点） |
 | `retryOn` | `(res: FetchResult<unknown>, attempt: number) => boolean` | `网络类失败` | 判定是否重试（默认：网络类失败 + 429/5xx；**不重试** aborted/unsupported/tooLarge/intercepted） |
+| `retryNonIdempotent` | `boolean` | `false` | ★★★#1385：允许对**非幂等方法**（POST/PATCH 等）重试。默认 false。  【为什么默认禁止（这是本仓实证的痛点 #1）】此前 pipeline 的判定**完全不看 method**： 只要不是 aborted/unsupported/tooLarge/intercepted 就一律可重试 ⇒ 一开 `retry` 就把 `POST /order` **重新提交一遍**（超时后重试 = 可能下两单）。 HTTP 语义上只有**幂等方法**（GET/HEAD/PUT/DELETE/OPTIONS/TRACE）可以无条件重试。  【什么时候可以打开】调用方**已经提供了幂等键**（服务端按它去重）时才是安全的 —— 门面层 `createApi` 在有 idempotencyKey 时会自动把它置 true。 业务直接调 `useFetch` 时想对 POST 重试，必须自己确认服务端幂等，再显式打开。  ★与 `request/reliability.ts::canRetry` **同一参数名与同一语义**（单一事实源）： `isIdempotentMethod(m) || hasIdempotencyKey || retryNonIdempotent === true`。 |
 
 ### `RedirectHop`
 
@@ -187,6 +188,7 @@ useFetch 配置。★#1122：S3 能力（流式/落盘/上传/取消）此前底
 | `deduped` | `boolean` | — | 是否命中去重（本次没真发请求，用的是别人在飞的结果） |
 | `priority` | `number` | — | 排队优先级（观测用） |
 | `retryDelaySkipped` | `boolean` | — | ★App 精简引擎无 `setTimeout` ⇒ 重试未等待（如实标记，不谎称退避过） |
+| `retryRefused` | `{ reason: string }` | — | ★★★#1385：**本可以重试但被策略拒绝**的原因（不静默）。  【为什么不静默跳过】把 `POST + retry` 拦下来是对的行为，但如果业务只看到 `attempts: 1`，会误判成"重试没生效 / 库有 bug"——排查方向完全错。 ⇒ 明确告诉它"因为你没给幂等键，所以按 HTTP 语义不重试"。 |
 | `redirects` | `RedirectTrace` | — | ★#1134：重定向轨迹（仅在发生过跳转/被拦截/超限时出现）。`hops` 是逐跳审计记录。 |
 | `deadlineMs` | `number` | — | ★#1135：本次请求的总时限预算（ms；未设置则不出现）。 |
 | `deadlineHit` | `boolean` | — | ★#1135：是否因总时限耗尽而失败（`fetch.deadline`）。 |
