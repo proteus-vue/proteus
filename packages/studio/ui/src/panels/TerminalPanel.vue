@@ -228,6 +228,9 @@ function newSession() {
   void openSession()
 }
 
+/* 拆分时：只有聚焦的栏显示光标；单栏时保持原行为（点别处也留着光标，便于定位） */
+const cursorOn = computed(() => (props.split ? focused.value : true))
+
 function scheduleRender() {
   if (raf) return
   raf = requestAnimationFrame(() => {
@@ -798,7 +801,14 @@ defineExpose({ focus: focusInput, term, openFind })
             >{{ seg.text }}</span
           >
         </div>
-        <div v-if="cursor.show" class="tcur" :style="{ left: cursor.left + 'px', top: cursor.top + 'px' }" id="termCursor" />
+        <!-- ★只有聚焦的那一栏才显示光标（决策 #1385）：拆分后两栏同时闪，
+             用户分不清键盘输入落在哪一边；VS Code 也只给聚焦的终端画光标。 -->
+        <div
+          v-if="cursor.show && cursorOn"
+          class="tcur"
+          :style="{ left: cursor.left + 'px', top: cursor.top + 'px' }"
+          :id="props.minimal ? 'termCursorSide' : 'termCursor'"
+        />
       </div>
     </div>
 
