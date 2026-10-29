@@ -29,16 +29,22 @@ const emit = defineEmits<{ close: []; maximize: [] }>()
 /* ── 会话表 ─────────────────────────────────────────────────────────────── */
 type Sess = { id: number; title: string; term: Terminal }
 const sessions = shallowRef<Sess[]>([])
-/** 左栏 / 右栏（拆分时）各自绑定的会话；键盘落在哪栏由 focusPane 决定 */
-const mainId = ref(0)
-const sideId = ref(0)
-const focusPane = ref<1 | 2>(1)
+/** ★**栏位模型**（决策 #1387）：`panes` 是**有序**的会话 id 列表，一个元素 = 一栏。
+    支持**无限横向拆分**（VS Code 的 split 也是这种"列表/树"结构，我们这里用扁平列表）。
+    `focusIdx` 指向键盘当前落在哪一栏。 */
+const panes = ref<number[]>([])
+/** 每栏宽度（px，0 表示 flex 平均分）；拖动某个分隔条只改它左边那栏 */
+const paneBasis = ref<number[]>([])
+const focusIdx = ref(0)
 const ver = ref(0)
 const opened = ref(false)
 const exited = ref(false)
 
-const splitOn = computed(() => termSplit.value && sideId.value !== 0)
-const sid = computed(() => (focusPane.value === 2 && sideId.value ? sideId.value : mainId.value))
+const splitCount = computed(() => panes.value.length)
+const splitOn = computed(() => panes.value.length > 1)
+const sid = computed(() => panes.value[focusIdx.value] ?? panes.value[0] ?? 0)
+/** 每栏至少这么宽；不够宽就不再允许拆（否则挤成一条缝） */
+const MIN_PANE_W = 220
 const termOf = (id: number) => sessions.value.find((s) => s.id === id)?.term
 
 /* ── 开启会话 ───────────────────────────────────────────────────────────── */
@@ -77,17 +83,14 @@ async function doOpen() {
     const id = Number(await termOpen(c, 24, shellSel.value)) || 1000 + localSeq
     const t = new Terminal(c, 24)
     sessions.value = [...sessions.value, { id, title: shellSel.value, term: t }]
-    if (focusPane.value === 2 && termSplit.value) sideId.value = id
-    else if (!mainId.value) mainId.value = id
-    else if (termSplit.value && !sideId.value) sideId.value = id
-    else if (focusPane.value === 2) sideId.value = id
-    else mainId.value = id
+    /* 插到**聚焦栏右侧**（与 VS Code 的"在活动终端右边拆分"一致） */
+    const at = panes.value.length ? focusIdx.value + 1 : 0
+    panes.value = [...panes.value.slice(0, at), id, ...panes.value.slice(at)]
+    focusIdx.value = at
     ver.value++
     opened.value = true
     exited.value = false
     void nextTick(() => focusCurrent())
-    /* 恢复"上次是拆分状态"时，第一栏开好后自动补开第二栏（否则 splitOn 永远 false） */
-    if (termSplit.value && !sideId.value) window.setTimeout(() => void openSession(), 0)
   } catch (e) {
     pushToast(`开终端失败：${String((e as Error)?.message ?? e)}`, 'err')
   }
@@ -98,8 +101,19 @@ function newSession() {
 }
 
 function switchTo(id: number) {
-  if (focusPane.value === 2 && termSplit.value) sideId.value = id
-  else mainId.value = id
+  const i = panes.value.indexOf(id)
+  if (i >= 0) {
+    /* 已在该列表里 ⇒ 只是把焦点移过去（标签/列表点击都走这条） */
+    focusIdx.value = i
+  } else if (panes.value.length) {
+    /* 不在任何栏里（被关掉了）⇒ 替换当前栏 */
+    const next = [...panes.value]
+    next[focusIdx.value] = id
+    panes.value = next
+  } else {
+    panes.value = [id]
+    focusIdx.value = 0
+  }
   exited.value = false
   ver.value++
   void nextTick(() => focusCurrent())
@@ -109,9 +123,9 @@ async function closeSession(id: number) {
   const rest = sessions.value.filter((s) => s.id !== id)
   await termClose(id).catch(() => {})
   sessions.value = rest
-  if (mainId.value === id) mainId.value = rest[0]?.id ?? 0
-  if (sideId.value === id) sideId.value = 0
-  if (!rest.length) {
+  panes.value = panes.value.filter((p) => p !== id)
+  if (focusIdx.value >= panes.value.length) focusIdx.value = Math.max(0, panes.value.length - 1)
+  if (!panes.value.length) {
     termSplit.value = false
     opened.value = false
     void openSession()
@@ -135,14 +149,14 @@ onMounted(() => {
        否则门禁那种"直接派发 studio:term-data"的场景会被当成未知会话丢掉（实测必红）。 */
     const s =
       sessions.value.find((x) => x.id === id) ??
-      (id === 0 ? sessions.value.find((x) => x.id === mainId.value) : undefined)
+      (id === 0 ? sessions.value.find((x) => x.id === (panes.value[0] ?? 0)) : undefined)
     if (!s) return
     /* ★**只写一次**（决策 #1376）：这里曾残留第二处 write，导致整段输出重复、命令执行两次。 */
     s.term.write(d)
     ver.value++
   })
   offExit = onTermExit((id) => {
-    if (id === mainId.value || id === sideId.value) exited.value = true
+    if (panes.value.includes(id)) exited.value = true
   })
   if (props.active) void openSession()
 })
@@ -162,23 +176,24 @@ watch(
 )
 
 /* ── 输入 / 尺寸（TermPane 上报）────────────────────────────────────────── */
-const mainPane = ref<InstanceType<typeof TermPane> | null>(null)
-const sidePane = ref<InstanceType<typeof TermPane> | null>(null)
+const paneRefs = ref<(InstanceType<typeof TermPane> | null)[]>([])
+function setPaneRef(i: number, el: unknown) {
+  paneRefs.value[i] = el as InstanceType<typeof TermPane> | null
+}
 
 function focusCurrent() {
-  if (focusPane.value === 2 && splitOn.value) sidePane.value?.focus()
-  else mainPane.value?.focus()
+  paneRefs.value[focusIdx.value]?.focus()
 }
 
 let lastOut = { d: '', at: 0 }
-async function writeToTerm(data: string) {
+async function writeToTerm(data: string, target = sid.value) {
   if (!hasBridge() || !data) return
   const now = performance.now()
   if (data === lastOut.d && now - lastOut.at < 4) return
   lastOut = { d: data, at: now }
   try {
     /* ★绝不重发用户输入（决策 #1366）：失败只重开会话，不把这一批再发一遍 */
-    await termWrite(sid.value, data)
+    await termWrite(target, data)
   } catch (e) {
     const msg = String((e as Error)?.message ?? e)
     if (msg.includes('终端未打开')) {
@@ -189,9 +204,10 @@ async function writeToTerm(data: string) {
   }
 }
 
-const onPaneInput = (data: string) => void writeToTerm(data)
-const onPaneResize = (c: number, r: number) => {
-  if (hasBridge()) void termResize(sid.value, c, r).catch(() => {})
+/* ★按**该栏的会话 id** 发送/校准（不是"当前焦点栏"）：后台栏的 resize 也要落到自己身上 */
+const onPaneInput = (id: number, data: string) => void writeToTerm(data, id)
+const onPaneResize = (id: number, c: number, r: number) => {
+  if (hasBridge()) void termResize(id, c, r).catch(() => {})
 }
 
 /* ── 工具栏动作 ─────────────────────────────────────────────────────────── */
@@ -199,31 +215,45 @@ const sendCtrl = (seq: string) => void writeToTerm(seq)
 
 async function switchShell(v: 'zsh' | 'bash' | 'sh') {
   shellSel.value = v
-  const cur = focusPane.value === 2 ? sideId.value : mainId.value
+  const cur = sid.value
   if (cur) await closeSession(cur)
   void openSession()
 }
 
+/** 拆分（决策 #1387）：**可无限横向拆**
+    · 点一次 = 在聚焦栏右侧新开一栏（宽度不够就提示，不再硬塞）；
+    · 已经拆过时，点同一按钮 = 合并回单栏（会话不关，仍留在标签/列表里）。 */
+/** 拆分（决策 #1387）：**每次点都继续拆**（与 VS Code 一致），撤销靠每栏右上角的 ✕ */
 function toggleSplit() {
-  termSplit.value = !termSplit.value
-  if (termSplit.value) {
-    if (!sideId.value) void openSession()
-    else focusPane.value = 2
-  } else {
-    termSplitW.value = 0
-    focusPane.value = 1
+  const roomy = (wrapEl.value?.clientWidth ?? 1200) / (panes.value.length + 1) >= MIN_PANE_W
+  if (!roomy) {
+    pushToast(`面板太窄，放不下第 ${panes.value.length + 1} 栏（每栏至少 ${MIN_PANE_W}px）`, 'err')
+    return
   }
-  void nextTick(() => focusCurrent())
+  termSplit.value = true
+  void openSession()
 }
 
-/** 拖动两栏分隔条：与栏宽拖动同一套 pointer 手势，不引第三方依赖 */
-function startDragSplit(e: PointerEvent) {
+/** 关掉某一栏（同时结束它的 pty —— 与 VS Code「关闭终端」一致） */
+function closePane(idx: number) {
+  const id = panes.value[idx]
+  if (id) void closeSession(id)
+}
+
+const wrapEl = ref<HTMLElement>()
+
+/** 拖动第 i 个分隔条：只改它**左边那栏**的像素宽（其余栏继续 flex 平分剩余空间） */
+function startDragSplit(i: number, e: PointerEvent) {
   const wrap = (e.currentTarget as HTMLElement).parentElement
   if (!wrap) return
   const rect = wrap.getBoundingClientRect()
+  const others = Math.max(0, panes.value.length - i - 1)
+  const maxW = rect.width - others * MIN_PANE_W - 8 * (panes.value.length - 1)
   const move = (ev: PointerEvent) => {
-    const w = ev.clientX - rect.left
-    termSplitW.value = Math.round(Math.min(Math.max(240, w), rect.width - 240))
+    const w = Math.round(Math.min(Math.max(MIN_PANE_W, ev.clientX - rect.left), Math.max(MIN_PANE_W, maxW)))
+    const next = [...paneBasis.value]
+    next[i] = w
+    paneBasis.value = next
   }
   const up = () => {
     window.removeEventListener('pointermove', move)
@@ -380,10 +410,10 @@ defineExpose({ focus: focusCurrent })
             v-for="s in sessions"
             :key="s.id"
             class="sitem"
-            :class="{ on: s.id === mainId || s.id === sideId }"
+            :class="{ on: panes.includes(s.id) }"
             @click="pickFromList(s.id)"
           >
-            <span class="sdot" :class="{ live: s.id === mainId || s.id === sideId }" />
+            <span class="sdot" :class="{ live: panes.includes(s.id) }" />
             <span class="sname">{{ s.title }}</span>
             <span class="sid">#{{ s.id }}</span>
           </button>
@@ -396,7 +426,7 @@ defineExpose({ focus: focusCurrent })
           v-for="s in sessions"
           :key="s.id"
           class="ttab"
-          :class="{ on: s.id === mainId || s.id === sideId }"
+          :class="{ on: panes.includes(s.id) }"
           :title="`${s.title} · 会话 ${s.id}`"
           @click="switchTo(s.id)"
         >
@@ -406,6 +436,7 @@ defineExpose({ focus: focusCurrent })
         <PButton size="sm" title="新建终端（⌘⇧T）" @click="newSession">＋</PButton>
       </div>
 
+      <span class="tfill" />
       <PSelect
         :model-value="shellSel"
         :options="shellOpts"
@@ -417,7 +448,6 @@ defineExpose({ focus: focusCurrent })
       <PButton size="sm" title="终止当前命令（Ctrl-C）" @click="sendCtrl('\x03')">终止</PButton>
       <PButton size="sm" title="清屏（Ctrl-L）" @click="sendCtrl('\x0c')">清屏</PButton>
       <PButton size="sm" :active="findOpen" title="在终端里查找" @click="findOpen = !findOpen">查找</PButton>
-      <span class="tfill" />
       <PButton size="sm" :active="splitOn" title="拆分终端（右侧新会话）" @click="toggleSplit">◫</PButton>
       <PButton size="sm" title="最大化 / 还原（⌘⇧J）" @click="emit('maximize')">⤢</PButton>
       <PButton size="sm" variant="ghost" title="关闭面板（⌘J）" @click="emit('close')">✕</PButton>
@@ -447,45 +477,36 @@ defineExpose({ focus: focusCurrent })
       <PButton size="sm" title="关闭查找（Esc）" @click="closeFind">✕</PButton>
     </div>
 
-    <div class="tpanes" :class="{ split: splitOn }">
-      <div
-        class="tpane"
-        :style="splitOn && termSplitW ? { flex: `0 0 ${termSplitW}px` } : undefined"
-        @click="focusPane = 1"
-      >
-        <TermPane
-          v-if="mainId && termOf(mainId)"
-          ref="mainPane"
-          id-prefix="term"
-          :term="termOf(mainId)!"
-          :ver="ver"
-          :find-q="findQ"
-          :find-case="fCase"
-          :find-word="fWord"
-          :find-regex="fRegex"
-          :show-cursor="!splitOn || focusPane === 1"
-          @input="onPaneInput"
-          @resize="onPaneResize"
-          @focus="focusPane = 1"
+    <div class="tpanes" ref="wrapEl">
+      <template v-for="(pid, idx) in panes" :key="pid">
+        <div
+          v-if="idx > 0"
+          class="vsplit"
+          title="拖动调整左栏宽度"
+          @pointerdown="startDragSplit(idx - 1, $event)"
         />
-      </div>
-      <template v-if="splitOn">
-        <div class="vsplit" title="拖动调整两栏宽度" @pointerdown="startDragSplit($event)" />
-        <div class="tpane" @click="focusPane = 2">
+        <div
+          class="tpane"
+          :style="paneBasis[idx] ? { flex: `0 0 ${paneBasis[idx]}px` } : undefined"
+          @click="focusIdx = idx"
+        >
+          <button v-if="panes.length > 1" class="pclose" title="关闭这一栏" @click.stop="closePane(idx)">
+            ✕
+          </button>
           <TermPane
-            v-if="sideId && termOf(sideId)"
-            ref="sidePane"
-            id-prefix="termSide"
-            :term="termOf(sideId)!"
+            v-if="termOf(pid)"
+            :ref="(el) => setPaneRef(idx, el)"
+            :id-prefix="idx === 0 ? 'term' : 'termSide' + idx"
+            :term="termOf(pid)!"
             :ver="ver"
             :find-q="findQ"
             :find-case="fCase"
             :find-word="fWord"
             :find-regex="fRegex"
-            :show-cursor="focusPane === 2"
-            @input="onPaneInput"
-            @resize="onPaneResize"
-            @focus="focusPane = 2"
+            :show-cursor="focusIdx === idx"
+            @input="(d: string) => onPaneInput(pid, d)"
+            @resize="(c: number, r: number) => onPaneResize(pid, c, r)"
+            @focus="focusIdx = idx"
           />
         </div>
       </template>
@@ -494,7 +515,7 @@ defineExpose({ focus: focusCurrent })
     <div class="termstat">
       <!-- ★`#termStat` 的文本必须是 `146×12 · 运行中`（门禁 ⑦ 用锚定正则校验）；
            拆分标记放在**它外面**，别污染这个判据。 -->
-      <span v-if="splitOn" class="tbadge">拆分·2栏</span>
+      <span v-if="splitOn" class="tbadge">拆分·{{ panes.length }}栏</span>
       <span id="termStat">{{ statText }}</span>
     </div>
   </div>
@@ -615,6 +636,26 @@ defineExpose({ focus: focusCurrent })
 .tpane { position: relative; flex: 1 1 0; min-width: 0; }
 .vsplit { flex: 0 0 6px; cursor: col-resize; border-left: 1px solid var(--border-subtle); }
 .vsplit:hover { background: var(--border-subtle); }
+/* 单栏关闭（>1 栏才出现）：hover 才显形，避免平时干扰 */
+.pclose {
+  position: absolute;
+  z-index: 5;
+  right: 4px;
+  top: 4px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--fg-subtle);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.tpane:hover .pclose { opacity: 1; }
+.pclose:hover { color: #f87171; border-color: #f87171; }
 .termstat {
   flex: none;
   display: flex;
