@@ -14,8 +14,6 @@ import {
   toggleTree,
   termH,
   termMode,
-  termSplit,
-  termSplitW,
   toggleTermMax,
   toggleTermPane,
   treeHidden,
@@ -559,29 +557,6 @@ function sendKeyToDevice(e: KeyboardEvent): boolean {
  *    编辑器列自己加 `padding-bottom = termH`（见 CodePanel），所以内容不会被盖住。
  *  · **画布视图**：仍是在文档流里的下半个区（原生画布要按 rect 收缩，不能被覆盖）。
  */
-/** 拆分开关：拆开时副栏会**新开一个会话**（副栏自己的 TerminalPanel 负责） */
-function toggleTermSplit() {
-  termSplit.value = !termSplit.value
-  if (!termSplit.value) termSplitW.value = 0
-}
-
-/** 拖动两栏分隔条（与栏宽拖动同一套 pointer 手势，不引入新依赖） */
-function startDragTermSplit(e: PointerEvent) {
-  const wrap = (e.currentTarget as HTMLElement).parentElement
-  if (!wrap) return
-  const rect = wrap.getBoundingClientRect()
-  const move = (ev: PointerEvent) => {
-    const w = ev.clientX - rect.left
-    termSplitW.value = Math.round(Math.min(Math.max(240, w), rect.width - 240))
-  }
-  const up = () => {
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-}
-
 const paneStyle = computed(() => {
   if (termMode.value === 'full') return undefined
   if (termMode.value !== 'pane') return undefined
@@ -974,23 +949,12 @@ async function copyIosCmd() {
         :class="{ full: termMode === 'full', overlay: view === 'code' }"
         :style="paneStyle"
       >
-        <!-- ★拆分（决策 #1384）：左右各一个 TerminalPanel，**各自持有自己的会话**。
-             主栏带工具栏，副栏 minimal（不重复工具栏/查找条）。 -->
-        <div class="tpane main" :style="termSplit && termSplitW ? { flex: `0 0 ${termSplitW}px` } : undefined">
-          <TerminalPanel
-            :active="termMode !== 'off'"
-            :split="termSplit"
-            @close="toggleTermPane()"
-            @maximize="toggleTermMax()"
-            @split="toggleTermSplit()"
-          />
-        </div>
-        <template v-if="termSplit">
-          <div class="tsplit" title="拖动调整两栏宽度" @pointerdown="startDragTermSplit($event)" />
-          <div class="tpane side">
-            <TerminalPanel :active="termMode !== 'off'" minimal />
-          </div>
-        </template>
+        <!-- 终端面板（**唯一实例**；拆栏由面板内部处理，工具栏横跨两栏） -->
+        <TerminalPanel
+          :active="termMode !== 'off'"
+          @close="toggleTermPane()"
+          @maximize="toggleTermMax()"
+        />
       </div>
     </div>
 
