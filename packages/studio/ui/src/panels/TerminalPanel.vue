@@ -121,8 +121,12 @@ function switchTo(id: number) {
 }
 
 async function closeSession(id: number) {
+  /* ★**先更新 UI，再异步关 pty**（决策 #1392）：
+     原实现 `await termClose(id)` 在前 —— 真机上这个 IPC 走 spawn_blocking（有界 300ms，
+     极端情况更久），期间列表/面板**一点变化都没有**，用户看到的就是"第一次点击无反应"，
+     再点一次（第二次的 close 也许瞬间返回）才生效。
+     现在：立刻从 sessions/panes 里摘掉（乐观更新），关 pty 丢到后台。 */
   const rest = sessions.value.filter((s) => s.id !== id)
-  await termClose(id).catch(() => {})
   sessions.value = rest
   /* ★**补位而不是留空**（决策 #1391）：用户报"删除要点两次"，
      原因是删掉的会话如果正显示在某栏里，那一栏会变成空白 —— 看起来像"没删掉"。
@@ -143,6 +147,7 @@ async function closeSession(id: number) {
     void openSession()
   }
   ver.value++
+  void termClose(id).catch(() => {})
 }
 
 /* ── pty → 网格 ─────────────────────────────────────────────────────────── */
@@ -553,7 +558,7 @@ defineExpose({ focus: focusCurrent })
             @click="switchTo(s.id)"
             @dblclick="startRename(s.id)"
           >
-            <Icon class="licon" name="terminal" :size="12" />
+            <Icon class="licon" name="terminal" :size="15" />
             <input
               v-if="renamingId === s.id"
               v-model="renameText"
@@ -564,11 +569,11 @@ defineExpose({ focus: focusCurrent })
               @blur="commitRename(s.id)"
             />
             <span v-else class="lname">{{ s.title }}</span>
-            <button class="lact" title="重命名" @click.stop="startRename(s.id)">
-              <Icon name="pencil" :size="12" />
+            <button class="lact" title="重命名" @pointerdown.stop @click.stop="startRename(s.id)">
+              <Icon name="pencil" :size="14" />
             </button>
-            <button class="lact danger" title="关闭这个终端" @click.stop="closeSession(s.id)">
-              <Icon name="trash" :size="12" />
+            <button class="lact danger" title="关闭这个终端" @pointerdown.stop @click.stop="closeSession(s.id)">
+              <Icon name="trash" :size="14" />
             </button>
           </div>
         </div>
@@ -713,9 +718,9 @@ defineExpose({ focus: focusCurrent })
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: 30px;
   padding: 0 6px 0 10px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--fg-muted);
   cursor: pointer;
   user-select: none;
@@ -733,7 +738,7 @@ defineExpose({ focus: focusCurrent })
   border-radius: 1px;
   background: var(--accent);
 }
-.litem .licon { color: var(--fg-subtle); font-size: 10px; }
+.litem .licon { color: var(--fg-subtle); }
 .litem.on .licon { color: var(--accent); }
 .litem .licon { color: var(--fg-subtle); }
 .lname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -754,10 +759,10 @@ defineExpose({ focus: focusCurrent })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 5px;
   background: transparent;
   color: var(--fg-subtle);
   opacity: 0;
