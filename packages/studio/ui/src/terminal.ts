@@ -65,6 +65,13 @@ export class Terminal {
   private altGrid: Cell[][] | null = null
   private savedCursor = { x: 0, y: 0, fg: null as string | null, bg: null as string | null }
   cursorVisible = true
+  /** ★回滚缓冲（决策 #1393）：滚出屏幕顶部的整行留在这里，供鼠标滚轮回看。
+      为什么之前"滚不动"：网格只有 rows 行，超出的行**直接被丢掉**，没有历史可滚。 */
+  scrollback: Cell[][] = []
+  /** 视口偏移：0 = 贴底（实时）；>0 = 向上回看这么多行 */
+  viewOffset = 0
+  /** 缓冲上限（行）。2000 行 ≈ 常见终端默认值，内存占用可忽略（每行 cols 个对象） */
+  static readonly SCROLLBACK_MAX = 2000
   /** 解析状态机 */
   private state: 'ground' | 'esc' | 'csi' | 'osc' | 'osc_st' | 'charset' = 'ground'
   private params = ''
@@ -118,6 +125,35 @@ export class Terminal {
   }
 
   /** 纯文本（判据/复制用）：每行去掉尾部空白 */
+  /** 滚轮回看：delta>0 向上看历史；返回是否真的动了（供 UI 决定是否重绘） */
+  scrollView(delta: number): boolean {
+    const max = this.scrollback.length
+    const next = Math.max(0, Math.min(max, this.viewOffset + delta))
+    if (next === this.viewOffset) return false
+    this.viewOffset = next
+    return true
+  }
+
+  /** 回到实时（贴底）—— 用户一敲键、或切会话时调用 */
+  resetView() {
+    this.viewOffset = 0
+  }
+
+  /** 当前视口要画的 rows 行（历史 + 实时）；offset=0 时就是 grid 本身 */
+  visibleRows(): Cell[][] {
+    const off = this.viewOffset
+    if (!off) return this.grid
+    const fromHistory = this.scrollback.slice(Math.max(0, this.scrollback.length - off))
+    const need = this.rows - fromHistory.length
+    const live = need > 0 ? this.grid.slice(0, need) : []
+    const out = [...fromHistory, ...live]
+    /* 行数不足时补空行（回看顶部时下方没有实时内容） */
+    while (out.length < this.rows) {
+      out.push(Array.from({ length: this.cols }, () => ({ ...DEFAULT_CELL })))
+    }
+    return out
+  }
+
   text(): string {
     return this.grid.map((row) => row.map((c) => c.ch).join('').replace(/\s+$/, '')).join('\n')
   }
@@ -269,6 +305,14 @@ export class Terminal {
   /** 滚动区整体上移 n 行（新行填空白） */
   private scrollUp(n: number) {
     for (let i = 0; i < n; i++) {
+      /* 主屏滚动才进历史；备用屏（altGrid）里滚出去的是 vim/less 的临时画面，不该进 */
+      if (!this.altGrid && this.top === 0) {
+        const gone = this.grid[0]
+        if (gone) {
+          this.scrollback.push(gone)
+          if (this.scrollback.length > Terminal.SCROLLBACK_MAX) this.scrollback.shift()
+        }
+      }
       this.grid.splice(this.top, 1)
       this.grid.splice(this.bottom, 0, Array.from({ length: this.cols }, () => ({ ...DEFAULT_CELL })))
     }

@@ -46,9 +46,13 @@ const bodyEl = ref<HTMLElement>()
 const inputEl = ref<HTMLTextAreaElement>()
 const cell = ref({ w: 7.2, h: 16 })
 
+/* ★滚动是**本组件内部**的视口变化，不能依赖父组件的 ver（那是 pty 输出驱动） */
+const localVer = ref(0)
+
 const rows = computed(() => {
   void props.ver
-  return props.term.grid.map((row) => runsOf(row))
+  void localVer.value
+  return props.term.visibleRows().map((row) => runsOf(row))
 })
 const cols = computed(() => {
   void props.ver
@@ -136,7 +140,7 @@ const cursor = computed(() => {
   void props.ver
   const t = props.term
   return {
-    show: t.cursorVisible !== false,
+    show: t.cursorVisible !== false && t.viewOffset === 0,
     left: t.cx * cell.value.w,
     top: t.cy * cell.value.h,
   }
@@ -202,7 +206,21 @@ const SEQ: Record<string, string> = {
   Escape: '\x1b',
 }
 
+/** 滚轮回看历史（决策 #1393）：每格 3 行，与主流终端一致；到顶/到底不再吞事件 */
+function onWheel(e: WheelEvent) {
+  const step = e.deltaY > 0 ? -3 : 3
+  if (props.term.scrollView(step)) {
+    e.preventDefault()
+    localVer.value++
+  }
+}
+
 function onKeyDown(e: KeyboardEvent) {
+  /* 一敲键就回到实时（否则用户以为打字没反应） */
+  if (props.term.viewOffset !== 0) {
+    props.term.resetView()
+    localVer.value++
+  }
   if (e.metaKey && ['c', 'v', 'a', 'x'].includes(e.key.toLowerCase())) return
   if (e.ctrlKey && !e.metaKey && !e.altKey) {
     const k = e.key
@@ -262,7 +280,14 @@ defineExpose({ focus, syncSize })
     <!-- 标尺：只用来量"一个字多宽"，不参与布局（每栏各一个，避免量到别栏的字体） -->
     <span class="ruler" :id="pre + 'Ruler'" aria-hidden="true">WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW</span>
 
-    <div class="body" :id="pre + 'Body'" ref="bodyEl" :style="{ '--cw': cell.w + 'px', '--ch': cell.h + 'px' }" @click="focus">
+    <div
+      class="body"
+      :id="pre + 'Body'"
+      ref="bodyEl"
+      :style="{ '--cw': cell.w + 'px', '--ch': cell.h + 'px' }"
+      @click="focus"
+      @wheel.prevent="onWheel"
+    >
       <div class="grid" :id="pre + 'Grid'" :style="{ width: cols * cell.w + 'px', height: rowsCount * cell.h + 'px' }">
         <div v-for="(line, y) in rows" :key="y" class="trow" :style="{ height: cell.h + 'px' }">
           <span
