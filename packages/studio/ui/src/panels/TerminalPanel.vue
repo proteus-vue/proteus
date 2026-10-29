@@ -264,22 +264,38 @@ function startDragSplit(i: number, e: PointerEvent) {
 }
 
 /* ── 会话列表（VS Code 那条 ▾）─────────────────────────────────────────── */
-const listOpen = ref(false)
-/* ★**悬停即展开**（决策 #1388）：用户反馈"看会话还得点一下"，麻烦。
-   现在鼠标移到 ▾ 上就展开、移开 220ms 后收起（延迟是给"把鼠标移进列表"留通路）；
-   点击仍然保留（触屏/键盘用户仍可用）。 */
-let listCloseTimer: number | undefined
-function enterList() {
-  if (listCloseTimer) window.clearTimeout(listCloseTimer)
-  listOpen.value = true
-}
-function leaveList() {
-  listCloseTimer = window.setTimeout(() => (listOpen.value = false), 220)
+/** ★**常驻会话侧栏**（决策 #1389）：多会话时**自动出现**在右侧（不再需要点 ▾），
+    当前会话行左侧有蓝条高亮，每项 hover 出现「重命名 / 删除」，宽度可拖（VS Code 同款）。 */
+const listVisible = computed(() => sessions.value.length > 1)
+const listW = ref(190)
+const renamingId = ref(0)
+const renameText = ref('')
+
+function startRename(id: number) {
+  renamingId.value = id
+  renameText.value = sessions.value.find((s) => s.id === id)?.title ?? ''
+  void nextTick(() => document.querySelector<HTMLInputElement>('.litem input')?.select())
 }
 
-function pickFromList(id: number) {
-  listOpen.value = false
-  switchTo(id)
+function commitRename(id: number) {
+  const t = renameText.value.trim()
+  if (t) sessions.value = sessions.value.map((s) => (s.id === id ? { ...s, title: t } : s))
+  renamingId.value = 0
+}
+
+/** 拖动会话列表的宽度（贴着 pane 区右边） */
+function startDragList(e: PointerEvent) {
+  const move = (ev: PointerEvent) => {
+    const rect = (wrapEl.value as HTMLElement | undefined)?.getBoundingClientRect()
+    if (!rect) return
+    listW.value = Math.round(Math.min(Math.max(140, rect.right - ev.clientX), Math.min(420, rect.width - 260)))
+  }
+  const up = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
 }
 
 /* ── 查找 ───────────────────────────────────────────────────────────────── */
@@ -415,24 +431,6 @@ defineExpose({ focus: focusCurrent })
   >
     <!-- ★面板级工具栏：一条，横跨左右两栏（VS Code 同款布局） -->
     <div class="termbar" @click.stop>
-      <div class="slistwrap" @pointerenter="enterList" @pointerleave="leaveList">
-        <PButton size="sm" :active="listOpen" title="会话列表" @click="listOpen = !listOpen">▾</PButton>
-        <div v-if="listOpen" class="slist" @click.stop>
-          <button
-            v-for="s in sessions"
-            :key="s.id"
-            class="sitem"
-            :class="{ on: panes.includes(s.id) }"
-            @click="pickFromList(s.id)"
-          >
-            <span class="sdot" :class="{ live: panes.includes(s.id) }" />
-            <span class="sname">{{ s.title }}</span>
-            <span class="sid">#{{ s.id }}</span>
-          </button>
-          <button class="sitem new" @click="((listOpen = false), newSession())">＋ 新建终端</button>
-        </div>
-      </div>
-
       <div class="ttabs">
         <button
           v-for="s in sessions"
@@ -489,7 +487,8 @@ defineExpose({ focus: focusCurrent })
       <PButton size="sm" title="关闭查找（Esc）" @click="closeFind">✕</PButton>
     </div>
 
-    <div class="tpanes" ref="wrapEl">
+    <div class="tmain">
+      <div class="tpanes" ref="wrapEl">
       <template v-for="(pid, idx) in panes" :key="pid">
         <div
           v-if="idx > 0"
@@ -520,6 +519,36 @@ defineExpose({ focus: focusCurrent })
             @resize="(c: number, r: number) => onPaneResize(pid, c, r)"
             @focus="focusIdx = idx"
           />
+        </div>
+      </template>
+      </div>
+
+      <!-- ★常驻会话侧栏（决策 #1389）：**多会话时自动出现**，不用点；宽度可拖 -->
+      <template v-if="listVisible">
+        <div class="tlistdrag" title="拖动调整列表宽度" @pointerdown="startDragList" />
+        <div class="tlist" :style="{ width: listW + 'px' }">
+          <div
+            v-for="s in sessions"
+            :key="s.id"
+            class="litem"
+            :class="{ on: s.id === sid, inuse: panes.includes(s.id) }"
+            @click="switchTo(s.id)"
+            @dblclick="startRename(s.id)"
+          >
+            <span class="licon">▣</span>
+            <input
+              v-if="renamingId === s.id"
+              v-model="renameText"
+              class="linput"
+              @click.stop
+              @keydown.enter.prevent="commitRename(s.id)"
+              @keydown.esc.prevent="renamingId = 0"
+              @blur="commitRename(s.id)"
+            />
+            <span v-else class="lname">{{ s.title }}</span>
+            <span class="lact" title="重命名" @click.stop="startRename(s.id)">✎</span>
+            <span class="lact" title="关闭这个终端" @click.stop="closeSession(s.id)">🗑</span>
+          </div>
         </div>
       </template>
     </div>
@@ -644,7 +673,63 @@ defineExpose({ focus: focusCurrent })
 .fcount { font-size: 10px; color: var(--fg-dim); min-width: 34px; text-align: right; }
 
 /* 视图区 */
-.tpanes { display: flex; flex: 1; min-height: 0; position: relative; }
+.tmain { display: flex; flex: 1; min-height: 0; }
+.tpanes { display: flex; flex: 1; min-height: 0; position: relative; min-width: 0; }
+
+/* ── 会话侧栏（VS Code 同款）────────────────────────────────────────── */
+.tlistdrag { flex: 0 0 4px; cursor: col-resize; }
+.tlistdrag:hover { background: var(--border-subtle); }
+.tlist {
+  flex: none;
+  overflow: auto;
+  padding: 4px 0;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
+}
+.litem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px 0 10px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.litem:hover { background: var(--bg-overlay); }
+/* 当前会话：左侧蓝条 + 提亮（VS Code 的高亮样式） */
+.litem.on { color: var(--fg); background: var(--bg-elevated); }
+.litem.on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.litem .licon { color: var(--fg-subtle); font-size: 10px; }
+.litem.on .licon { color: var(--accent); }
+.lname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.linput {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  padding: 0 4px;
+}
+/* 操作按钮：hover 才显形，避免列表噪音 */
+.lact { opacity: 0; font-size: 10px; color: var(--fg-subtle); padding: 0 2px; }
+.litem:hover .lact { opacity: 0.8; }
+.lact:hover { opacity: 1; color: var(--fg); }
 .tpane { position: relative; flex: 1 1 0; min-width: 0; }
 .vsplit { flex: 0 0 6px; cursor: col-resize; border-left: 1px solid var(--border-subtle); }
 .vsplit:hover { background: var(--border-subtle); }
