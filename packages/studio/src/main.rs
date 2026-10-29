@@ -554,13 +554,52 @@ fn chrono_stamp() -> String {
         .unwrap_or_default()
 }
 
+/* ★启动计时（决策 #1379）：先量出"哪一段占了 10 秒"，再决定改什么。
+   用户痛点：点图标后**要 ~10 秒才出窗口**，观感像"没启动"。 */
+static BOOT_T0: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+/* ★live source 就绪信号（决策 #1379）：把 `default_live_source()`（simctl 枚举 + boot 模拟器 +
+   adb 探测，本机实测 **4.5 秒**）挪到**窗口创建之后**的后台线程；自动重连必须等它完成，
+   用条件变量而不是 sleep —— 符合仓规"有条件等待，禁止盲等"。 */
+static SRC_READY: std::sync::OnceLock<(std::sync::Mutex<bool>, std::sync::Condvar)> =
+    std::sync::OnceLock::new();
+
+fn src_ready_pair() -> &'static (std::sync::Mutex<bool>, std::sync::Condvar) {
+    SRC_READY.get_or_init(|| (std::sync::Mutex::new(false), std::sync::Condvar::new()))
+}
+
+fn mark_src_ready() {
+    let (m, cv) = src_ready_pair();
+    if let Ok(mut g) = m.lock() {
+        *g = true;
+        cv.notify_all();
+    }
+}
+
+/// 等 live source 初始化完成（最多 `timeout`）；已就绪立刻返回。
+fn wait_src_ready(timeout: std::time::Duration) {
+    let (m, cv) = src_ready_pair();
+    if let Ok(g) = m.lock() {
+        if !*g {
+            let _ = cv.wait_timeout(g, timeout);
+        }
+    }
+}
+
+fn boot_mark(what: &str) {
+    if let Some(t) = BOOT_T0.get() {
+        eprintln!("[boot] {:>6}ms  {what}", t.elapsed().as_millis());
+    }
+}
+
 fn main() {
+    BOOT_T0.set(std::time::Instant::now()).ok();
     init_log_file();
+    boot_mark("日志文件就绪");
     live_source::ensure_tool_path();
     /* ★读设置要在**所有子进程之前**（决策 #1266）：DEVELOPER_DIR 决定 xcrun 用哪个 Xcode，
        而 adb 路径决定设备探测能不能跑。放后面就晚了——那正是"默认路径"假设的来源。 */
     settings::load_and_apply();
-    live_source::default_live_source();
+    boot_mark("设置加载（含 Xcode/adb 探测）");
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
         // 自有菜单栏（决策 #1221）。★必须在 setup 里 `set_menu` 之外另走这条：
@@ -616,6 +655,15 @@ fn main() {
             search_text
         ])
         .setup(|app| {
+            boot_mark("setup 开始（窗口即将创建）");
+            /* ★重活挪到**窗口之后**（决策 #1379）：它要枚举模拟器（simctl）、必要时 boot 模拟器、
+               再探 adb，本机实测 4.5s ⇒ 放在窗口前就是"点图标 10 秒没反应"的主因。
+               现在窗口先出来（~1.2s），这条在后台跑，跑完再让自动重连往下走。 */
+            std::thread::spawn(move || {
+                live_source::default_live_source();
+                boot_mark("live source 就绪（后台）");
+                mark_src_ready();
+            });
             let handle = app.handle().clone();
             let h = handle.clone();
             std::thread::spawn(move || {
@@ -655,7 +703,8 @@ fn main() {
             {
                 let h4 = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(900));
+                    /* ★等 live source 就绪（上限 12s），不盲等固定 900ms（决策 #1379） */
+                    wait_src_ready(Duration::from_secs(12));
                     if std::env::var("POC_LIVE").is_ok() {
                         return;
                     }
@@ -768,6 +817,7 @@ fn poll_window(handle: tauri::AppHandle, tries: u32) {
             Some(w) => match w.ns_window() {
                 Ok(p) => {
                     let rc = unsafe { poc_attach(p as *mut c_void) };
+                    boot_mark("webview 就绪 + 原生画布已挂载");
                     eprintln!("[studio] attach rc={rc}");
                     start_ticks(h.clone());
                     // 取数模式（真机实时流没有容器、没法用 ffmpeg 侧统计，只能自己上报）：
