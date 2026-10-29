@@ -58,7 +58,13 @@ import { pushToast } from '../toast'
 /* ★`active` 由 App 传（`view === 'term'`）：面板用 v-show 常驻以保留会话，
    但**不能在启动时就开 shell** —— 用户可能整天不开终端，白起一个登录 shell
    （它会读 .zshrc、可能打印一堆东西）。所以"第一次真正显示"时才开。 */
-const props = defineProps<{ active: boolean }>()
+const props = defineProps<{
+  active: boolean
+  /** 副栏（拆分右侧）：不显示工具栏/查找条，避免两套工具条重复 */
+  minimal?: boolean
+  /** 当前是否处于左右拆分（主栏据此高亮"拆分"按钮） */
+  split?: boolean
+}>()
 const opened = ref(false)
 const bodyEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
@@ -445,7 +451,7 @@ onBeforeUnmount(() => {
  * 本轮先做**能真正生效**的部分（都基于已有的单会话后端）：
  *   终止（^C）· 清屏（^L）· shell 选择（zsh/bash/sh，白名单，重开会话）· 查找 · 最大化 · 关闭。
  * 多终端 / 拆分 / 会话列表需要后端**多会话 id**，是下一步（现在只有唯一会话）。 */
-const emit = defineEmits<{ close: []; maximize: [] }>()
+const emit = defineEmits<{ close: []; maximize: []; split: [] }>()
 const shellSel = ref<'zsh' | 'bash' | 'sh'>('zsh')
 const shellOpts = [
   { value: 'zsh', label: 'zsh' },
@@ -694,7 +700,7 @@ defineExpose({ focus: focusInput, term, openFind })
     "
   >
     <!-- 工具栏（决策 #1349）：关闭 / 最大化 / 终止 / 清屏 / shell / 查找 -->
-    <div class="termbar" @click.stop>
+    <div v-if="!props.minimal" class="termbar" @click.stop>
       <!-- 多终端标签（决策 #1363）：每个会话一个标签，✕ 单独关闭，+ 新建 -->
       <div class="ttabs">
         <button
@@ -724,10 +730,11 @@ defineExpose({ focus: focusInput, term, openFind })
       <PButton size="sm" title="清屏（Ctrl-L）" @click="sendCtrl('\x0c')">清屏</PButton>
       <PButton size="sm" :active="findOpen" title="在终端里查找" @click="findOpen = !findOpen">查找</PButton>
       <span class="tfill" />
+      <PButton size="sm" :active="props.split" title="拆分终端（左右各一个会话）" @click="emit('split')">◫</PButton>
       <PButton size="sm" title="最大化 / 还原（⌘⇧J）" @click="emit('maximize')">⤢</PButton>
       <PButton size="sm" variant="ghost" title="关闭面板（⌘J）" @click="emit('close')">✕</PButton>
     </div>
-    <div v-if="findOpen" class="termfind" @click.stop>
+    <div v-if="findOpen && !props.minimal" class="termfind" @click.stop>
       <!-- 查找框：规则开关**放在输入框内部右侧**（决策 #1359，对齐 VS Code 的观感） -->
       <div class="findbox">
         <PInput

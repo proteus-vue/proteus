@@ -389,3 +389,15 @@ kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:
 .topbtn:active{background:var(--bg-elevated)}
 .topbtn.on{color:var(--fg)}
 .topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ── 终端拆分（决策 #1384）────────────────────────────────────────────
+   为什么写在这里而不是 App.vue：App.vue 没有 <style> 块（骨架样式统一在 styles.css）。 */
+.termpane { display: flex; }
+.tpane { position: relative; min-width: 0; flex: 1 1 0; height: 100%; }
+.tpane.side { border-left: 1px solid var(--border-subtle); }
+.tsplit {
+  flex: 0 0 6px; cursor: col-resize; background: transparent;
+  border-left: 1px solid var(--border-subtle);
+  transition: background .12s ease;
+}
+.tsplit:hover { background: var(--border-subtle); }

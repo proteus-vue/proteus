@@ -25,6 +25,14 @@ export const sideHidden = ref(false)
  *   布尔表达不了"从面板一键最大化"。 */
 export type TermMode = 'off' | 'pane' | 'full'
 export const termMode = ref<TermMode>('off')
+/* ★终端**拆分**（决策 #1384）：左右两栏各一个 TerminalPanel（各自持有会话）。
+   为什么用"两个组件实例"而不是把网格渲染抽成子组件：
+   渲染逻辑（find 高亮、滚动、光标、resize）都在 TerminalPanel 内部，抽出子组件要动 300+ 行、
+   容易碰坏刚修好的输入/输出链路；而"两个实例"天然隔离，风险最小。
+   `splitW`：左栏宽度（px），0 表示 50/50。 */
+export const termSplit = ref(false)
+export const termSplitW = ref(0)
+
 export const termH = ref(260)
 
 /* ── 代码视图 ─────────────────────────────────────────────────────────── */
