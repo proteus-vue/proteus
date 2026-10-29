@@ -265,6 +265,18 @@ function startDragSplit(i: number, e: PointerEvent) {
 
 /* ── 会话列表（VS Code 那条 ▾）─────────────────────────────────────────── */
 const listOpen = ref(false)
+/* ★**悬停即展开**（决策 #1388）：用户反馈"看会话还得点一下"，麻烦。
+   现在鼠标移到 ▾ 上就展开、移开 220ms 后收起（延迟是给"把鼠标移进列表"留通路）；
+   点击仍然保留（触屏/键盘用户仍可用）。 */
+let listCloseTimer: number | undefined
+function enterList() {
+  if (listCloseTimer) window.clearTimeout(listCloseTimer)
+  listOpen.value = true
+}
+function leaveList() {
+  listCloseTimer = window.setTimeout(() => (listOpen.value = false), 220)
+}
+
 function pickFromList(id: number) {
   listOpen.value = false
   switchTo(id)
@@ -403,7 +415,7 @@ defineExpose({ focus: focusCurrent })
   >
     <!-- ★面板级工具栏：一条，横跨左右两栏（VS Code 同款布局） -->
     <div class="termbar" @click.stop>
-      <div class="slistwrap">
+      <div class="slistwrap" @pointerenter="enterList" @pointerleave="leaveList">
         <PButton size="sm" :active="listOpen" title="会话列表" @click="listOpen = !listOpen">▾</PButton>
         <div v-if="listOpen" class="slist" @click.stop>
           <button
