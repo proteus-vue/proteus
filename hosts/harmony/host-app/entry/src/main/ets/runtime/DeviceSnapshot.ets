@@ -33,6 +33,11 @@ import { common, Want } from '@kit.AbilityKit';
 //   不在 `openharmony/ets/api` 下。★这是本次取证纠正的一处错误结论：
 //   上一轮记「鸿蒙 SDK 没有 systemShare」是**只搜了 openharmony 目录**导致的误判（"搜不到" ≠ "不存在"）。
 import { systemShare } from '@kit.ShareKit';
+// ★★★#1384 C84：文档预览 —— `filePreview` 在 **HMS kit**（`@kit.PreviewKit`），
+//   同样不在 `openharmony/ets/api` 下（与 #1336 的 systemShare 同一条取证教训）。
+//   `fileUri` 用来把沙箱绝对路径转成 `file://` URI（`PreviewInfo.uri` 要 URI 不是路径）。
+import { filePreview } from '@kit.PreviewKit';
+import { fileUri } from '@kit.CoreFileKit';
 import { setDeviceSnapshot, drainDeviceActions } from 'proteus_render';
 // ★★决策 #1083：录屏/画中画状态（C71）——快照随设备快照一起交给 C++
 import { readCaptureSnapshot, CaptureSnapshotData } from './CaptureSnapshot';
@@ -52,6 +57,9 @@ interface DeviceAction {
    *  ★正文复用上面的 `text` 字段（与 `clipboard.write` 同名字段，都是"文本载荷"） */
   title?: string;
   url?: string;
+  /** ★#1384 `document.open`：沙箱相对路径 + 已由 C++ 推出的 MIME（白名单校验已过） */
+  path?: string;
+  mimeType?: string;
 }
 
 /** 采集同步可读读数并交给 C++（渲染前调用；失败不阻断渲染）。 */
@@ -314,6 +322,69 @@ export function runDeviceActions(win: window.Window | undefined): void {
           });
       } catch (e) {
         hilog.error(0x0000, 'proteus-share', 'PROTEUS_SHARE_THROW %{public}s', JSON.stringify(e) ?? '');
+      }
+    } else if (a.action === 'document.open') {
+      /**
+       * ★★★#1384 C84：文档预览（鸿蒙侧）。
+       *
+       * 【API 出处（已取证）】`filePreview` 在 **HMS kit**
+       *   `hms/ets/api/@hms.filemanagement.filepreview.d.ts`，经 `@kit.PreviewKit` 导出，
+       *   `@since 4.1.0(11)`；本机 SDK API 24。
+       *     · `openPreview(context, { uri, mimeType, title? })` → `Promise<void>`
+       *     · `canPreview(context, uri)` → `Promise<boolean>`
+       *
+       * 【★路径 → URI】C++ 已做完沙箱校验（拒绝对路径 / `..` / 非白名单扩展名），
+       *   这里把**沙箱相对路径**拼到 `ctx.filesDir` 后用 `fileUri.getUriFromPath()` 转成
+       *   `file://` URI —— `PreviewInfo.uri` 要的是 URI，不是文件路径。
+       *   ★`getUriFromPath` 是同步的（`@ohos.file.fileuri`），所以这里不引入额外 await 链。
+       *
+       * 【★为什么先 `canPreview` 再 `openPreview`】
+       *   设备上没有对应预览能力时 `openPreview` 会 reject（错误码含义在 ROM 间不稳），
+       *   分两步能让失败**有明确归因**（`PROTEUS_DOC_PREVIEW_UNSUPPORTED`），
+       *   而不是一个笼统的 THROW —— 判据据此能区分"本机不支持"与"代码坏了"。
+       *
+       * 【★语义边界】只**拉起预览器**。`openPreview` 的 Promise resolve 只代表"预览器已显示"，
+       *   不等待用户关闭，也没有"用户看完了"的回调（与 Android/iOS 同一语义）。
+       *   失败只记日志（与震动/拨号/分享同一"已受理"语义）——诚实性由日志 + 真机判据共同保证。
+       */
+      try {
+        const ctx = getContext() as common.UIAbilityContext;
+        const rel: string = a.path ?? '';
+        const abs: string = ctx.filesDir + '/' + rel;
+        /* ★不能用 `return` 提前退出：本函数是整个动作队列的循环，
+             一个动作失败不该跳过后面排队的动作（与其它分支一致，只记日志）。
+           ⇒ 用 `uri` 是否为空来表达"本动作失败"。 */
+        let uri: string = '';
+        try {
+          uri = fileUri.getUriFromPath(abs);
+        } catch (e) {
+          hilog.error(0x0000, 'proteus-document', 'PROTEUS_DOC_PREVIEW_URI_FAIL %{public}s', JSON.stringify(e) ?? '');
+        }
+        if (uri !== '') {
+          const info: filePreview.PreviewInfo = {
+            uri: uri,
+            mimeType: a.mimeType ?? 'application/octet-stream',
+            title: a.title ?? '',
+          };
+          filePreview.canPreview(ctx, uri).then((ok: boolean) => {
+            if (!ok) {
+              hilog.error(0x0000, 'proteus-document', 'PROTEUS_DOC_PREVIEW_UNSUPPORTED mime=%{public}s',
+                a.mimeType ?? '');
+              return;
+            }
+            filePreview.openPreview(ctx, info).then(() => {
+              hilog.info(0x0000, 'proteus-document', 'PROTEUS_DOC_PREVIEW_OK mime=%{public}s', a.mimeType ?? '');
+            }).catch((err: BusinessError) => {
+              hilog.error(0x0000, 'proteus-document', 'PROTEUS_DOC_PREVIEW_FAIL code=%{public}s',
+                JSON.stringify(err) ?? '');
+            });
+          }).catch((err: BusinessError) => {
+            hilog.error(0x0000, 'proteus-document', 'PROTEUS_DOC_PREVIEW_CAN_FAIL code=%{public}s',
+              JSON.stringify(err) ?? '');
+          });
+        }
+      } catch (e) {
+        hilog.error(0x0000, 'proteus-document', 'PROTEUS_DOC_PREVIEW_THROW %{public}s', JSON.stringify(e) ?? '');
       }
     }
   }

@@ -95,6 +95,17 @@ enum SuperappProbes {
       deadlineSeconds: 60,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1384 C84 文档预览（`--document-probe=1`）
+    //   ★deadline 给 90s：探针要**自己造夹具**（`fs.writeBytes` 写最小 PDF）+ 6 次 Hook 往返
+    //     + 5 次宿主直调，比 share 多一倍的调用量；给足余量但不长等。
+    ProbeConfig(
+      argPrefix: "--document-probe=",
+      kickFormat: "__proteusHostAppDocumentProbe()",
+      resultKey: "__proteusHostDocumentProbeResult",
+      reportPrefix: "document",
+      deadlineSeconds: 90,
+      extraReadings: { _ in [:] },
+    ),
     ProbeConfig(
       argPrefix: "--cancel-probe=",
       kickFormat: "__proteusHostAppCancelProbe(%@)",

@@ -60,5 +60,22 @@
             android:exported="true"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" />
+        <!-- ★★★#1384 C84 文档预览：给系统预览器一个可授予读权限的 content:// URI。
+             ★为什么必须自建（不用 androidx FileProvider）：本仓无 androidx 依赖，
+               classpath 只有 android.jar + okhttp/okio ⇒ 引 androidx 要连带决定打包/体积/许可证。
+               框架自带的 ContentProvider + openFile() 就够（见 DocumentProvider 头注释）。
+             ★★安全：exported="false" + grantUriPermissions="true" ⇒ 外部默认读不到，
+               只有 FLAG_GRANT_READ_URI_PERMISSION 那一次授权生效，且只对**那一个 URI**。
+             ★authorities 必须与 DocumentProvider.AUTHORITY 逐字一致（改一处要改两处）。
+             ★★`android:name` 必须写**全限定名**（不能写 `.DocumentProvider`）：本 manifest 会被
+               `build-and-run.sh` 的变体构建用 sed 改写 `package=dev.proteus.lights` 等，
+               相对类名会跟着变成 `dev.proteus.lights.DocumentProvider`（不存在）⇒
+               那些变体启动即 `ClassNotFoundException`（Provider 在 Application.onCreate 之前实例化）。
+               与既有 `dev.proteus.layoutcore.LightsDemoActivity` 同款处理。 -->
+        <provider
+            android:name="dev.proteus.layoutcore.DocumentProvider"
+            android:authorities="dev.proteus.layoutcore.docfiles"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

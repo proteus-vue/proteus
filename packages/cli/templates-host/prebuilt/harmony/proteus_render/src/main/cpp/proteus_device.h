@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "proteus_host_helpers.h"
+#include "proteus_document.h"   // ★★★#1384 C84 文档预览（校验 + 入队；本文件只在 deviceInvoke 里调它）
 
 namespace proteus {
 namespace device {
@@ -307,6 +308,22 @@ inline std::string dispatch(const std::string& method, const std::string& argsJs
     return out;
   }
 
+  /**
+   * ★★★#1384 C84 `document.open` —— 文档预览（鸿蒙侧）。
+   *
+   * ★实现与校验在 `proteus_document.h`（本文件只做一行分派）：
+   *   那边负责白名单/沙箱/大小校验 + 入队；真正的 `filePreview.openPreview` 由 ArkTS
+   *   在渲染后 drain 执行（同步 napi 里不能 await Promise）。
+   * ★为什么用**回调注入** `enqueue`：本文件的 `enqueue` 是文件内 `static`，
+   *   而 `proteus_document.h` 被本文件 include ⇒ 直接引用会形成"互相 include"。
+   *   传一个 lambda 进去最省事，也不把队列实现暴露给能力文件。
+   */
+  if (method == "document.open") {
+    int q = 0;
+    return proteus::document::openDocument(
+        argsJson, [](const std::string& item) { return enqueue(item); }, &q);
+  }
+
   return std::string("{\"ok\":false,\"missing\":true,\"reason\":\"未实现的设备方法：") + method + "\"}";
 }
 
@@ -318,7 +335,11 @@ inline bool isDeviceMethod(const std::string& method) {
          method == "phone.call" ||
          // ★★★#1336：`share` 与 `phone.call` 同因——走本文件的分派（动作队列），
          //   不进这个白名单就会在 dispatch 前回落 `missing`（"写了没人调"）。
-         method == "share";
+         method == "share" ||
+         // ★★★#1384：`document.open` 同因（动作队列）。★这一行漏了会是什么样：
+         //   实现全写了、编译也过，但运行时永远回落 `missing` ⇒ JS 侧读成 unsupported，
+         //   而"本机不支持"看起来完全合理 ⇒ **最难发现的一类假绿**。
+         method == "document.open";
 }
 
 }  // namespace device

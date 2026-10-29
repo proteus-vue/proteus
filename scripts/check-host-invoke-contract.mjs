@@ -82,8 +82,46 @@ function extractFsDispatch(file) {
 
 function extractMethodEq(file) {
   const out = []
-  for (const m of fs.readFileSync(path.join(ROOT, file), 'utf-8').matchAll(/method\s*==\s*"([^"]+)"/g)) out.push(m[1])
+  for (const m of maskRoutingWhitelists(fs.readFileSync(path.join(ROOT, file), 'utf-8')).matchAll(/method\s*==\s*"([^"]+)"/g)) out.push(m[1])
   return out
+}
+
+/**
+ * ★★★#1384（本单破坏性验证抓出的**门禁自身假绿**）：把"路由白名单"里的方法名遮掉。
+ *
+ * 【它防什么（实测复现步骤）】
+ *   鸿蒙宿主有两处 `method == "…"` 形态：① `deviceInvoke()` 里的**真分派**（有实现）；
+ *   ② `isDeviceMethod()` 里的**路由白名单**（只回答"这个名字该不该交给 deviceInvoke"）。
+ *   而本门禁只按文本形态抽取 ⇒ ② 里的名字被当成"已实现"。
+ *   **实测**：把 `if (method == "document.open") { …真实现… }` 整段删掉、**只留白名单那一行**，
+ *   覆盖率仍是 35/62、`document.open` 照样算已覆盖 —— 即"实现删了、门禁还绿"。
+ *   ★这与本仓反复记的「门禁覆盖面必须跟着实际形态走」同族：白名单的语义是**路由**，
+ *     不是**实现**；把它算成实现，等于给"写了没人调"发绿灯（正是 #1285/#1336 想防的形态）。
+ *
+ * 【做法】按花括号配对找出 `isDeviceMethod()` 的函数体，把整段替换成空白（保留换行，行号不变）。
+ *   找不到该函数 ⇒ 原样返回（其它端没有这个形态，不该因为本端特例而报错）。
+ */
+function maskRoutingWhitelists(text) {
+  const marker = /\bbool\s+isDeviceMethod\s*\(/g
+  const m = marker.exec(text)
+  if (!m) return text
+  // 从左花括号开始配对（跳过参数表里的括号）
+  let i = text.indexOf('{', m.index)
+  if (i < 0) return text
+  let depth = 0
+  let end = -1
+  for (let j = i; j < text.length; j++) {
+    const c = text[j]
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) { end = j; break }
+    }
+  }
+  if (end < 0) return text
+  // 用空白（保留换行）替换，避免行号漂移与"名字残留在注释里"
+  const masked = text.slice(i, end + 1).replace(/[^\n]/g, ' ')
+  return text.slice(0, i) + masked + text.slice(end + 1)
 }
 
 const ENDS = {

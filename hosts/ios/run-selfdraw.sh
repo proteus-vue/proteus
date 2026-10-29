@@ -219,7 +219,7 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -o "$APP/ProteusSelfDraw" $PLATFORM_SRC "$HS/runtime/selfdraw-scene.swift" \
   "$HS/runtime/host-runtime-bridge.swift" "$HS/runtime/interaction-feedback.swift" "$HS/runtime/superapp-runtime-host.swift" "$HS/runtime/proteus-host-controller.swift" "$HS/runtime/host-capabilities.swift" "$HS/runtime/device-capability.swift" "$HS/runtime/keyboard-watch.swift" "$HS/runtime/element-rect.swift" "$HS/runtime/capture-capability.swift" "$HS/runtime/websocket-capability.swift" "$HS/runtime/http-credential-guard.swift" "$HS/runtime/phone-call-capability.swift" "$HS/runtime/file-transfer-capability.swift" \
   "$HS/runtime/local-service-capability.swift" "$HS/runtime/js-task-sampler.swift" "$HS/runtime/host-tree-diff.swift" "$HS/runtime/host-abi.swift" "$HS/runtime/host-support.swift" "$HS/runtime/host-exports-protocol.swift" "$HS/runtime/selfdraw-glass.swift" \
-  "$HS/runtime/share-capability.swift" \
+  "$HS/runtime/share-capability.swift" "$HS/runtime/document-preview-capability.swift" \
   "$HS/runtime/InvokeWire.swift" "$HS/runtime/invoke-bytes-bridge.swift" "$HS/runtime/http-capability.swift" "$HS/runtime/upload-backpressure.swift" "$HS/runtime/tls-pinning.swift" "$HS/runtime/HttpDnsProxy.swift" "$HS/runtime/http-capability-dns-session.swift" \
   "$HS/runtime/host-lifecycle-events.swift" "$HS/runtime/log-capability.swift" "$HS/runtime/screen-host.swift" "$HS/runtime/tab-chrome.swift" \
   "$HS/runtime/screen-stream.swift" "$HS/runtime/touch-control.swift" \

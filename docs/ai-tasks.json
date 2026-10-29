@@ -3864,6 +3864,44 @@
         "T-harmony-http-stream"
       ],
       "note": "【in_progress · 2026-10-28 · 决策 #1343】\n★**P0 决策门已通过**：#540 断言\"跨 napi 复用 JSVM 必崩\"在当前 SDK（API 24）**已被真机实证推翻**——\n  plain 负载 **1000 轮与 5000 轮全部零崩溃**（ok:true / roundsOk==rounds / firstFailureRound:-1），\n  堆曲线呈**锯齿状分代 GC**（基线不漂移、峰值封顶 2.7MB 不增长）⇒ 健康，非泄漏。\n★**怎么得出这个结论的**：没有直接接受 #540，而是注意到同 HAR 的持久壳 VM（proteus_host.cpp:23-28）\n  跨事件存活且真机已跑通 ⇒ 先用 `vm_session_probe.h` **只验一个变量**（严格复刻 HostAppBoot 的\n  VM 建立顺序，但每轮只开/关内层 HandleScope、VM 全程不销毁）。\n★**B 阶段（会话式 VM）尚未开始**：需要 `SessionOpen/Tick/Close` + pending 帧 + 真实 cancel/stream/WS。\n  ★关键发现：协议（invoke_wire.h 的 pending/streamSeq）与 JS 侧（capability-invoke.ts:922\n  处理 reply.pending）**早已支持异步**，只缺鸿蒙宿主发 pending 帧 + 有人 pump。\n★★三形态真机全绿（2026-10-28 设备解锁后补齐 nav/ref）：\n  · plain 5000 轮 → ok:true/5000/5000，锯齿 GC 峰值 2.7MB 封顶\n  · **nav 3000 轮 → ok:true/3000/3000**（★这条正是 #540 崩溃路径：await + 跨调用重入）\n  · ref 3000 轮 → ok:true/3000/3000（+2.7KB/100 轮 = 数组增长，非引用泄漏）\n【Handoff】\n- 做到哪：**P0 决策门完整通过**（三形态 + 探针 + napi + ArkTS + 脚本 + 四方一致）。\n- 未做：B 阶段全部（会话式 VM）。\n- 下一步：① 先跑一次「完整 bundle 版」探针（eval 整包 Vue bundle，验真实微任务压力下仍稳）；\n  ② 做 SessionOpen/Tick/Close；③ http.request 返回 pendingOf(reqId)、网络线程只写 C++ 队列、\n  tick 里推 __proteusHostResolveBytes；④ 再落地真实 cancel/stream/WS。\n- 坑（探针自身踩的四个，都有注释）：CompileScript 第 6 参数是 cacheRejected 不是成功标志 ·\n  CreateStringUtf8 必须 JSVM_AUTO_LENGTH · GetHeapStatistics 收 VM 且字段 usedHeapSize ·\n  aa start --ps 参数不会自动进 AppStorage（要 EntryAbility 显式转发）。\n- 判据状态：plain 5000 轮绿；nav/ref 待补。"
+    },
+    {
+      "id": "T-app-capability-open-document",
+      "title": "App 能力 C84 openDocument 三端落地（文档预览：Android ACTION_VIEW / iOS QLPreviewController / 鸿蒙 PreviewKit）",
+      "type": "capability",
+      "status": "done",
+      "owner": "session:zcode-main-20261029",
+      "scope": [
+        "packages/api/src/capability-app-document.ts",
+        "packages/api/src/capability-app-device.ts",
+        "packages/render-backend/src/host-invoke-contract.ts",
+        "website/scripts/lib/app-bridge-keys.mjs",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/DocumentCapability.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/DocumentProvider.java",
+        "hosts/android/app/src/main/java/dev/proteus/layoutcore/runtime/HostCapabilities.java",
+        "hosts/android/app/src/main/AndroidManifest.xml",
+        "hosts/android/run-document-probe.sh",
+        "hosts/ios/ProteusHost/runtime/document-preview-capability.swift",
+        "hosts/ios/ProteusHost/runtime/host-capabilities.swift",
+        "hosts/ios/ProteusHost/shell/superapp-probes.swift",
+        "hosts/ios/run-selfdraw.sh",
+        "hosts/ios/check-selfdraw-compile.sh",
+        "hosts/ios/run-document-probe.sh",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_document.h",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_device.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/DeviceSnapshot.ets",
+        "hosts/harmony/run-document-probe.sh",
+        "hosts/shared/bridge/entry-superapp.ts",
+        "hosts/shared/bridge/entry-superapp-probes-document.ts",
+        "tests/capability-app-document.test.ts",
+        "docs/ai-tasks.json"
+      ],
+      "decision": 1384,
+      "verification": "三端真机：bash hosts/android/run-document-probe.sh（8/8）· bash hosts/ios/run-document-probe.sh（12/12）· bash hosts/harmony/run-document-probe.sh（11/11）；单测：npx vitest run tests/capability-app-document.test.ts（11/11）；零设备：bash hosts/android/check-host-compile.sh · bash hosts/ios/check-selfdraw-compile.sh · bash scripts/check-harmony-host-compile.sh · node scripts/check-ios-source-lists.mjs · node scripts/check-host-invoke-contract.mjs · node scripts/check-file-size.mjs · pnpm test:coupled",
+      "related": [
+        "T-app-capability-batch1"
+      ],
+      "note": "【done · 2026-10-29 · 决策 #1384】C84 `openDocument` 的 **App 腿**落地（MP `wx.openDocument` / Web `window.open` 两腿在 NC1 已有）。\n★选型依据：`capability-app-feasibility` 把 50 个真缺口全归 C 类（三端都要写原生），C84 是其中**唯一**「MP/Web 已实现、只差 App 宿主」的一项。\n★三端落点：Android `Intent.ACTION_VIEW` + **自建 ContentProvider**（本仓无 androidx ⇒ 不能用 FileProvider；Android 7+ 传 file:// 会 FileUriExposedException，所以用 `content://` + per-URI 授权）；iOS `QLPreviewController`（**本进程内**预览，避开 `UIApplication.open(file:)` 的跨 App 授权面；dataSource 是 weak ⇒ 需要 PreviewHost 强持有，否则空白预览器）；鸿蒙 `filePreview.openPreview`（HMS `@kit.PreviewKit`，API 11+；与 #1336 systemShare 同一取证教训：HMS API 在 `hms/ets/api`）。\n★语义边界：只拉起预览器（`{dispatched|presented|accepted:true}` = 已交给系统），**不返回「用户看完」**；**不是文件选择器**（picker 是另一个能力）。\n★安全基线（四层各自独立校验）：① 只接受沙箱相对路径（拒绝对路径与 `..`）；② 扩展名白名单 pdf/doc/docx/xls/xlsx/ppt/pptx/txt，不在白名单**直接报错、不降级 octet-stream**（降级会让\"点了没反应\"，最难归因）；③ 单文件 64 MiB；④ 三端宿主各自再校验一遍（业务可直接调 `__proteusHostInvoke` 绕过 JS）。\n★真机证据（三端齐）：Android **8/8**（含 `dumpsys` 顶层 Activity 变 `ResolverActivity` = 系统真收到；证明 content:// Provider 工作正常）· iOS **12/12**（含宿主直调 5 条，绕过 JS 白名单）· 鸿蒙 **11/11**（含 `hilog` 见 `PROTEUS_DOC_PREVIEW_OK` = 预览器真拉起）。\n★破坏性验证 8 层：M1 放行绝对路径（单测 2 红）· M2 降级 octet-stream（单测 2 红）· M3 鸿蒙 MIME 漂移（跨端判据指名）· M4 Android MIME 漂移（同上）· M5b 删分派留白名单（契约门禁覆盖率 35→34）· M6 摘 Android 扩展名白名单（真机 7/8，精确红）· M7 摘鸿蒙白名单（真机 9/11，精确红）· M8 探针装置自身（首版把已剥摘要再剥一次 ⇒ 改为存原文，见脚本头注释）。\n★★**顺带修掉一处门禁自身假绿**（本单 M5b 破坏性验证抓出）：`check-host-invoke-contract` 只按文本形态抽 `method == \"...\"`，而鸿蒙 `isDeviceMethod()` 的**路由白名单**恰好同形态 ⇒ 把真分派整段删掉、只留白名单，覆盖率仍然算 `document.open` 已实现（\"实现删了、门禁还绿\"）。修法 = 抽取前把 `isDeviceMethod()` 函数体遮罩掉（路由 ≠ 实现）。修复后同样的变异覆盖率 35→34 且当场指名。\n★读数：App 桥 51→**52** · 真缺口 50→**49** · 可接线 43（不变，C84 走的是\"新写宿主\"路径）· 契约 harmony 34→35 · 能力页 App 原生 🟡→✅（iOS/Android/鸿蒙三列）· 概览 iOS/Android 39/45→**41/43**、鸿蒙 19/65→20/64。\n★诚实边界：① 鸿蒙首次真机跑通前**设备锁屏**（`AA 10106102` 开发者模式无法自动解锁）⇒ 需人工解锁后重跑；② 不证明\"用户真的看了文档\"（三端预览器都没有「看完」回调）；③ Android 的 MIME 处理者取决于设备装了哪些 App（本机有 WPS + MT 管理器，`ResolverActivity` 弹出），换机可能无接收方 ⇒ 那时如实 `document.open.unsupported`（不做 `resolveActivity` 前置判断，见 #1285 包可见性教训）。"
     }
   ]
 }

@@ -15466,3 +15466,65 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     1000 拍稳定性一次性验证；堆 `heapOk=true`（不线性漂移）。
   - **诚实边界（更新）**：仍**不做真实网络请求**（只用假帧证明搬运链）；
     真实 HTTP pending 帧 + 真 `http.cancel` + `stream` + WebSocket 属下一步。
+
+1384. **★★App 能力 C84 `openDocument` 三端落地（文档预览）+ 修掉契约门禁自身一处假绿**（2026-10-29 · 用户「继续 App 能力主线，现在三端设备都在线的」）:
+  - **选型（先核可行性再动手）**：`capability-app-feasibility` 把 50 个真缺口**全归 C 类**
+    （三端各写一套平台集成）。C84 是其中**唯一**「MP/Web 两腿已实现（NC1）、只差 App 宿主」
+    的一项 ⇒ 收益/成本比最高，故选它。
+  - **三端落点（都先取证源码级存在，不是猜）**：
+    · Android `Intent.ACTION_VIEW` + **自建 `ContentProvider`**。★**不能用 androidx 的
+      `FileProvider`**：本仓 `hosts/android/thirdparty/` 只有 okhttp/okio，
+      `check-host-compile.sh` 的 classpath 也只有 android.jar ⇒ 引 androidx 要连带决定
+      打包/体积/许可证。框架自带的 `ContentProvider` + `openFile()` 就够。
+      ★**必须走 `content://`**：Android 7+ 传 `file://` 给别的 App 会抛
+      `FileUriExposedException`（对方进程没有你的私有目录权限）。
+    · iOS `QLPreviewController`（**本进程内**预览）。★不用
+      `UIApplication.open(file://)`：那条路要 Info.plist 声明且多数 App 读不到
+      （与 Android 的授权问题是**同族**）。
+      ★★`QLPreviewController.dataSource` 是 **weak** ⇒ 必须有人强持有
+      （`PreviewHost`），否则表现为**空白预览器**（不崩溃、不报错，极难归因）。
+    · 鸿蒙 `filePreview.openPreview`（HMS **`@kit.PreviewKit`**，`@since 4.1.0(11)`）。
+      ★与 #1336 的 `systemShare` **同一条取证教训**：HMS 的 API 在 `hms/ets/api/`，
+      只搜 `openharmony/ets/api` 会得出"没有"的**错误结论**（"搜不到" ≠ "不存在"）。
+  - **安全基线（四层各自独立校验，不信任单侧）**：
+    ① **只接受沙箱相对路径**（拒绝对路径与 `..`）—— 预览会把文件字节交给**另一个 App**，
+       放开绝对路径等于给业务一个"把任意私有文件递出去"的接口；
+    ② **扩展名白名单**（pdf/doc/docx/xls/xlsx/ppt/pptx/txt）⇒ 由扩展名推 MIME。
+       ★不在白名单**直接报错，不降级成 `application/octet-stream`**：猜不出 MIME 时硬塞
+       octet-stream，多数设备没有接收方 ⇒ 表现是"点了没反应"（**最难归因的失败形态**）；
+    ③ 单文件 64 MiB（与 `fs.readBytes` 同值）；
+    ④ 三端宿主**各自再校验一遍**（业务可直接调 `__proteusHostInvoke` 绕过 JS）。
+  - **语义边界（别混三件事）**：本方法 = **预览**，不是"选择文件"（picker 是另一个能力）；
+    返回只代表**预览器已交给系统**（`{dispatched|presented|accepted:true}`），
+    **不是"用户看完了"**——三端预览器都没有「看完」回调，本方法不谎称能感知。
+  - **★★★本单最值钱的产出：门禁自身的假绿被破坏性验证抓出**。
+    `check-host-invoke-contract` 只按**文本形态**抽 `method == "..."`，而鸿蒙
+    `isDeviceMethod()` 的**路由白名单**恰好同形态。**实测**：把 `if (method == "document.open")`
+    的真分派整段删掉、**只留白名单那一行** ⇒ 覆盖率仍算 `document.open` 已实现（35/62 不变）
+    —— 「实现删了、门禁还绿」。
+    **修法**：抽取前把 `isDeviceMethod()` 的**函数体按花括号配对遮罩掉**
+    （**路由 ≠ 实现**）。修复后同样的变异覆盖率 35→**34** 且当场指名。
+    ★这是本仓「**门禁覆盖面必须跟着实际形态走**」（#1067/#1081/#1090/#1379 同族）的第 N 次复发：
+    形态一换（这次是"同一种写法承担两种语义"），旧门禁就静默失效，而它输出的"覆盖率"
+    看起来仍然权威。
+  - **判据（三端真机齐 + 8 层破坏性验证）**：
+    · Android **8/8**（★含 `dumpsys` 顶层 Activity 变 `com.android.intentresolver/.ResolverActivity`
+      = **系统真的收到了**；这同时证明自建 Provider 的 `content://` 授权链工作正常）；
+    · iOS **12/12**（含**宿主直调 5 条**，绕过 JS 白名单，证明宿主那层也在拦）；
+    · 鸿蒙 **11/11**（含 `hilog` 见 `PROTEUS_DOC_PREVIEW_OK` = 预览器**真拉起**，
+      不是只看"已入队"回执）；
+    · 破坏性验证 8 层：M1 放行绝对路径（单测 2 红）· M2 降级 octet-stream（单测 2 红）·
+      M3/M4 三端 MIME 漂移（跨端判据逐端指名）· M5b 删分派留白名单（门禁 35→34）·
+      M6 摘 Android 扩展名白名单（真机 7/8 精确红）· M7 摘鸿蒙白名单（真机 9/11 精确红）·
+      M8 探针装置自身（首版把已剥摘要再剥一次 ⇒ 判据永远命中不了 ⇒ 改存原文）。
+  - **读数**：App 桥 51→**52** · 真缺口 50→**49** · 契约 harmony 34→35 ·
+    能力页 App 原生三列 🟡→✅ · 概览 iOS/Android 39/45→**41/43**、鸿蒙 19/65→20/64。
+  - **诚实边界**：
+    ① **鸿蒙首次真机跑通前设备锁屏**（`aa start` 报 `10106102`：开发者模式下无法自动解锁）
+    ⇒ 必须人工解锁后重跑（不是代码问题）；
+    ② 不证明"用户真的看了文档"（三端预览器都没有关闭回调）；
+    ③ Android 的 MIME 处理者取决于设备装了哪些 App（本机 WPS + MT 管理器）——
+    换机可能无接收方 ⇒ 那时**如实 `document.open.unsupported`**；
+    ★**不做 `resolveActivity` 前置判断**（#1285 包可见性教训：能查询到 ≠ 能解析到）。
+  - **并发改号（规范 §3.5 第 2 条实战）**：立项按 #1379 定号，实施期间并发会话已占用
+    #1379（term 线 #1378/#1379）⇒ 本单临提交前复核改为 **#1384**，只改自己新增的内容。

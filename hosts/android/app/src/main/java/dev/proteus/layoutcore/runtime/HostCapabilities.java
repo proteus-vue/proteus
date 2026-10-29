@@ -216,6 +216,14 @@ public final class HostCapabilities {
             //   ★与 #1285 同一教训：不做 resolveActivity 前置判断（包可见性会误判为"无分享目标"）
             case "share":
                 return ok(dev.proteus.layoutcore.runtime.ShareCapability.share(activity, args));
+            // ★★★#1384 C84 文档预览（ACTION_VIEW + content:// 自建 Provider；只拉起预览器）
+            //   ★必须走 content://：Android 7+ 传 file:// 会抛 FileUriExposedException
+            //     （对方进程没有你的私有目录权限）——见 DocumentCapability 与 DocumentProvider 头注释
+            //   ★同样不做 resolveActivity 前置判断（#1285 包可见性教训）
+            //   ★全限定名是父包（不是 .runtime）：该类要复用 package-private 的
+            //     `FileTransferCapability.resolve()`（沙箱唯一实现）⇒ 声明在父包，见其文件头
+            case "document.open":
+                return ok(dev.proteus.layoutcore.DocumentCapability.open(activity, args));
             // ── #1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request ──
             case "http.cancel":
                 return ok(HttpCapability.cancel(args));

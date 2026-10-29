@@ -108,6 +108,18 @@ final class HostCapabilities: NSObject {
                 }
             }
             catch { return fail("\(error)") }
+        // ★★★#1384 C84 文档预览（QLPreviewController；只拉起预览器，不等"用户看完"）
+        //   ★用本进程内的 QuickLook 而不是 `UIApplication.open(file://)`：后者要 Info.plist 声明
+        //     且多数 App 读不到（与 Android 的 FileUriExposedException 同族授权面）
+        case "document.open":
+            do { return ok(try DocumentPreviewCapability.open(args)) }
+            catch let e as WsError {
+                switch e {
+                case .unsupported(let m): return miss(m)
+                case .invalid(let m): return fail(m)
+                }
+            }
+            catch { return fail("\(error)") }
         // ★#1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request
         case "http.cancel":
             return ok(HttpCapability.cancel(args))

@@ -12,6 +12,7 @@
 import { createAppNavigation } from '@proteus-vue/render-backend/app-navigation'
 import { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'; export { appFetchLimitProbe, appStreamProbe, appSaveProbe, appUploadProbe, appCancelProbe, appUseFetchProbe, appRedirectProbe, appCacheProbe, appPhoneProbe } from './entry-superapp-probes'
 import { appShareProbe } from './entry-superapp-probes-share'; export { appShareProbe } from './entry-superapp-probes-share'   // ★#1336 分享探针（单列：probes.ts 已 962 行）
+import { appDocumentProbe } from './entry-superapp-probes-document'; export { appDocumentProbe } from './entry-superapp-probes-document'   // ★#1384 文档预览探针（单列：同上）
 import { appSessionHttpGet } from './entry-superapp-probes-session'; export { appSessionHttpGet } from './entry-superapp-probes-session'   // ★#1344 B-2 会话最小 GET
 import { appSessionCancelStart, appSessionCancelAbort } from './entry-superapp-probes-session-cancel'; export { appSessionCancelStart, appSessionCancelAbort } from './entry-superapp-probes-session-cancel'   // ★#1344 B-2c 真取消（两阶段）
 import { appSessionStreamStart } from './entry-superapp-probes-session-stream'; export { appSessionStreamStart } from './entry-superapp-probes-session-stream'   // ★#1344 B-3 会话流式（逐块回推）
@@ -964,6 +965,8 @@ __HOSTAPP.__proteusHostAppElementRegistry = __HOSTAPP.__proteusSuperappElementRe
 ;(globalThis as unknown as { __proteusHostAppPhoneProbe?: () => string }).__proteusHostAppPhoneProbe = () => appPhoneProbe()
 // ★★★#1336 C22 分享面板探针（iOS 真机用）—— 同上压一行
 ;(globalThis as unknown as { __proteusHostAppShareProbe?: () => string }).__proteusHostAppShareProbe = () => appShareProbe()
+// ★★★#1384 C84 文档预览探针（iOS 真机用）—— 同上压一行
+;(globalThis as unknown as { __proteusHostAppDocumentProbe?: () => string }).__proteusHostAppDocumentProbe = () => appDocumentProbe()
 // ★★★#1344 B-2/B-2c：会话探针（最小 GET + 两阶段真取消 start/abort —— 引擎无 setTimeout，见各文件头）
 ;(globalThis as unknown as { __proteusHostAppSessionHttpGet?: (u: string) => string }).__proteusHostAppSessionHttpGet = (u: string) => appSessionHttpGet(u)
 ;(globalThis as unknown as { __proteusHostAppSessionCancelStart?: (u: string) => string }).__proteusHostAppSessionCancelStart = (u: string) => appSessionCancelStart(u)

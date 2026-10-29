@@ -159,6 +159,17 @@ export const APP_PHONE_TO_HOST = { makePhoneCall: 'phone.call' }
 export const APP_SHARE_FACTORY = 'createAppShare'
 export const APP_SHARE_TO_HOST = { share: 'share' }
 
+/** ★#1384：文档预览（C84）的桥成员 → 鸿蒙宿主方法
+ *  ★为什么**要登记**：本单把 C++ 校验/入队（`proteus_document.h`）+ ArkTS
+ *    `filePreview.openPreview`（HMS `@kit.PreviewKit`，API 11+）都写了、都过了编译。
+ *  ★★登记口径（与其它条目一致）：登记只表示"**宿主源码里有该分派**"，本模块从不声称"真机验过"。
+ *    真机结论由 `hosts/harmony/run-document-probe.sh` 给；**本轮该脚本因设备锁屏未能跑完**
+ *    ⇒ 真机证据仍标 🟡（见任务板 note 与归档「诚实边界」）。
+ *  ★若不登记：即便将来真机跑通，页面也会永远显示"鸿蒙宿主壳未接线"（代码做了、文档不认，
+ *    与 #1285/#1336 同族）。 */
+export const APP_DOCUMENT_FACTORY = 'createAppDocument'
+export const APP_DOCUMENT_TO_HOST = { openDocument: 'document.open' }
+
 export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
@@ -173,6 +184,8 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-phone.ts', factory: APP_PHONE_FACTORY, map: APP_PHONE_TO_HOST },
   // ★#1336：分享域（share → share）——不登记则永远 🟡（代码做了、文档不认，与 #1285 同族）
   { file: 'packages/api/src/capability-app-share.ts', factory: APP_SHARE_FACTORY, map: APP_SHARE_TO_HOST },
+  // ★#1384：文档预览域（openDocument → document.open）——不登记则永远 🟡
+  { file: 'packages/api/src/capability-app-document.ts', factory: APP_DOCUMENT_FACTORY, map: APP_DOCUMENT_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */

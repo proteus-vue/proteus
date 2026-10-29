@@ -109,6 +109,16 @@ export const HOST_CAPABILITY_METHODS = [
   //   ★输入白名单（JS 层与三端宿主各校验一遍）：至少一项内容 · 文本 8 KiB / 标题 256 ·
   //     **url 只允许 http/https**（分享会把链接交给别的 App，`file:`/自定义 scheme 属注入面）。
   'share',
+  // ★★★#1384 C84 文档预览（`useOpenDocument`）：把**沙箱内**一个文件交给系统预览器。
+  //   ★语义边界：返回只代表"预览器已交给系统"，不是"用户看完了"（系统预览器无回调通道）；
+  //     也**不是**"选择文件"（picker 是另一个能力）。MP `wx.openDocument` / Web `window.open` 是既有两腿。
+  //   ★三端各自实现：Android `Intent.ACTION_VIEW` + 自建 ContentProvider（`content://`）/
+  //     iOS `QLPreviewController` / 鸿蒙 `filePreview.openPreview`（HMS `@kit.PreviewKit`，API 11+）。
+  //   ★路径纪律（JS 层与三端宿主各校验一遍）：只接受**沙箱相对路径**（拒绝对路径与 `..`）——
+  //     预览会把文件字节交给**另一个 App**，放开绝对路径等于"把任意私有文件递出去"。
+  //   ★扩展名白名单（pdf/doc/docx/xls/xlsx/ppt/pptx/txt）⇒ 由扩展名推 MIME；不在白名单直接报错，
+  //     **不猜、不降级成 octet-stream**（无接收方时表现为"点了没反应"，最难归因）。
+  'document.open',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',
