@@ -22,7 +22,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   createAppWebSocket, installWsChannel, resetWsConnections, wsStatsSnapshot, __resetWsStats,
-  wsConnectionCount,
+  wsConnectionCount, dispatchWsPush,
 } from '../packages/api/src/capability-websocket'
 import { HOST_INVOKE_KEY } from '../packages/api/src/capability-invoke'
 import { isHostAllowed, hostOf } from '../packages/api/src/request/tenant'
@@ -254,5 +254,105 @@ describe('★★★#1344 P4 各端 TLS 安全链取证（源码级，防"将来�
       .toContain('主机名校验')
     expect(String(d.hostname_verification_guarded_by ?? ''), '★没指出主机名校验由谁守')
       .toContain('websocket-security-chain')
+  })
+})
+
+
+/**
+ * ★★★#1386：**WS 的策略链后半段** —— 审计 / bizId / 配额。
+ *
+ * 【为什么单独一组】上面那组锁的是「域名白名单」（#1344 P4）。而痛点 #15 要求的是
+ *   WS 与 HTTP 走**同一套**策略链：白名单只是其中一条。实测 #1344 收口后
+ *   `grep audit|redact|quota` 在 `capability-websocket.ts` 里仍然**零命中** ⇒
+ *   HTTP 的调用进审计、脱敏、占配额，**WS 不进**。而 WS 是最能外传数据的常驻双向通道
+ *   ⇒ 这块空着比 HTTP 空着更危险（它出网时在审计里"只是条连接"，看起来更干净）。
+ */
+describe('★★★#1386 WS 接入策略链后半段（审计 · bizId · 配额）', () => {
+  it('★★① open 成功 ⇒ 审计记一条（含 bizId / host / 脱敏 url）', async () => {
+    installFakeHost()
+    const entries: Array<Record<string, unknown>> = []
+    const open = createAppWebSocket({ bizId: 'order-center', audit: (e) => entries.push(e as never) })
+    await open('wss://api.example.com/socket?token=secret')
+    const openEv = entries.find((e) => e.event === 'open')
+    expect(openEv, '★open 必须进审计（否则"谁连了哪儿"查不出来）').toBeTruthy()
+    expect(openEv!.bizId, '★审计必须带 bizId（多业务隔离轴）').toBe('order-center')
+    expect(openEv!.host).toBe('api.example.com')
+    expect(openEv!.outcome).toBe('success')
+    // ★脱敏：query 整体不在审计 url 里（token 不得进日志）
+    expect(String(openEv!.url), '★审计 URL 不得带 query（token 会进日志）').not.toContain('secret')
+  })
+
+  it('★★★② 白名单拒 ⇒ 也要进审计（失败的尝试同样是安全事件）', async () => {
+    installFakeHost()
+    const entries: Array<Record<string, unknown>> = []
+    const open = createAppWebSocket({ allowedDomains: ['api.example.com'], audit: (e) => entries.push(e as never) })
+    await expect(open('wss://evil.example.net/x')).rejects.toMatchObject({ code: 'websocket.forbidden' })
+    const ev = entries.find((e) => e.event === 'open')
+    expect(ev, '★被拒的连接也必须留痕（否则探测行为完全不可见）').toBeTruthy()
+    expect(ev!.outcome).toBe('failed')
+    expect(ev!.errorCode).toBe('websocket.forbidden')
+  })
+
+  it('★★③ 连接关闭 ⇒ 审计记 close（存活时长 + 收发条数，**不含内容**）', async () => {
+    installFakeHost()
+    const entries: Array<Record<string, unknown>> = []
+    const open = createAppWebSocket({ bizId: 'im', audit: (e) => entries.push(e as never) })
+    const conn = await open('wss://api.example.com/ws')
+    dispatchWsPush({ id: 1, event: 'open' })
+    dispatchWsPush({ id: 1, event: 'message', data: 'secret-payload-1' })
+    dispatchWsPush({ id: 1, event: 'message', data: 'secret-payload-2' })
+    await conn.send('out-1')
+    dispatchWsPush({ id: 1, event: 'close', code: 1000 })
+    const closeEv = entries.find((e) => e.event === 'close')
+    expect(closeEv, '★关闭必须审计（连接存活多久是安全分析的关键）').toBeTruthy()
+    expect(closeEv!.closeCode).toBe(1000)
+    expect(closeEv!.messagesReceived).toBe(2)
+    expect(closeEv!.messagesSent).toBe(1)
+    // ★★消息正文**绝不进日志**（那是把数据复制到第二个地方）
+    const dump = JSON.stringify(entries)
+    expect(dump, '★审计里出现了消息正文（WS 是最能外传数据的通道，正文绝不能进日志）').not.toContain('secret-payload')
+    expect(dump).not.toContain('out-1')
+  })
+
+  it('★★④ 配额取不到 ⇒ websocket.quotaExceeded，且宿主未被调用', async () => {
+    const { calls } = installFakeHost()
+    const open = createAppWebSocket({
+      bizId: 'order-center',
+      quota: { acquire: () => { throw new Error('配额已满') } },
+    })
+    await expect(open('wss://api.example.com/ws')).rejects.toMatchObject({ code: 'websocket.quotaExceeded' })
+    expect(calls, '★配额不足时不该发起连接').toHaveLength(0)
+  })
+
+  it('★★★⑤ 配额在**连接真正关闭时**释放（不是 open 返回时）', async () => {
+    installFakeHost()
+    let acquired = 0
+    let released = 0
+    const open = createAppWebSocket({
+      quota: { acquire: () => { acquired++; return () => { released++ } } },
+    })
+    await open('wss://api.example.com/ws')
+    expect(acquired).toBe(1)
+    // ★open 已返回但连接还活着 ⇒ **不能**释放（否则长连接会让额度算错）
+    expect(released, '★open 返回时就释放了 —— 长连接会把额度永久算作空闲').toBe(0)
+    dispatchWsPush({ id: 1, event: 'close', code: 1000 })
+    expect(released, '★连接关闭后必须释放配额（否则长跑后新连接全连不上）').toBe(1)
+  })
+
+  it('★★⑤b 重复 close 推送 ⇒ 配额只释放一次（幂等）', async () => {
+    installFakeHost()
+    let released = 0
+    const open = createAppWebSocket({ quota: { acquire: () => () => { released++ } } })
+    await open('wss://api.example.com/ws')
+    dispatchWsPush({ id: 1, event: 'close', code: 1000 })
+    dispatchWsPush({ id: 1, event: 'close', code: 1000 })
+    expect(released, '★重复 close 把配额减了两次 —— 会"超发"额度').toBe(1)
+  })
+
+  it('★★⑥ 审计回调抛错 ⇒ 不影响连接（审计是旁路，不是关键路径）', async () => {
+    installFakeHost()
+    const open = createAppWebSocket({ audit: () => { throw new Error('审计实现崩了') } })
+    await expect(open('wss://api.example.com/ws')).resolves.toBeTruthy()
+    expect(wsConnectionCount()).toBe(1)
   })
 })

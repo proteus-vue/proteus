@@ -367,6 +367,67 @@ describe('★#1133 请求管线 · 去重', () => {
     await Promise.all([run(p, '/same', { signal: ctl.signal }), run(p, '/same', { signal: ctl.signal })])
     expect(count(), '★带 signal 的请求不该被合并').toBe(2)
   })
+
+  /* ══════════ ★★★#1386 痛点 #9 残余：去重键必须代表**完整请求身份** ══════════
+     【为什么这组必须有】旧键只有 method+url+params+body，注释理由是"鉴权头由拦截器加，
+       同资源应共享"——那条理由只在**同一鉴权域内**成立。多租户下（本库核心卖点 #17/#18），
+       两个 bizId 打同一 URL、带不同 Authorization ⇒ 键相同 ⇒ 被合并 ⇒
+       **A 拿到 B 的应答**（跨租户数据泄漏）。这是"正确性 > 效率"的典型取舍点。 */
+
+  it('★★★① 不同 Authorization ⇒ **不合并**（多租户同 URL 不得串号）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    await Promise.all([
+      run(p, '/api/me', { headers: { Authorization: 'Bearer tenant-a' } }),
+      run(p, '/api/me', { headers: { Authorization: 'Bearer tenant-b' } }),
+    ])
+    expect(count(), '★★★跨租户请求被合并了 —— A 会拿到 B 的应答').toBe(2)
+  })
+
+  it('★★①b 相同 Authorization ⇒ 仍然合并（加了身份维度不等于去重失效）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    await Promise.all([
+      run(p, '/api/me', { headers: { Authorization: 'Bearer same' } }),
+      run(p, '/api/me', { headers: { Authorization: 'Bearer same' } }),
+    ])
+    expect(count(), '同身份同请求应当合并（否则去重名存实亡）').toBe(1)
+  })
+
+  it('★①c 非身份头（x-request-id / traceparent）**不影响**去重', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    await Promise.all([
+      run(p, '/api/x', { headers: { 'x-request-id': 'r1', traceparent: 'a' } }),
+      run(p, '/api/x', { headers: { 'x-request-id': 'r2', traceparent: 'b' } }),
+    ])
+    expect(count(), '★每请求都变的追踪头不该让去重失效（那是反方向的过度保守）').toBe(1)
+  })
+
+  it('★★①d responseType / 流式形态不同 ⇒ 不合并（应答形态不同）', async () => {
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, { dedupe: true })
+    await Promise.all([
+      run(p, '/blob', { responseType: 'arraybuffer' }),
+      run(p, '/blob', { responseType: 'text' }),
+    ])
+    expect(count(), '★应答形态不同（arraybuffer vs text）不该共享同一份在飞结果').toBe(2)
+  })
+
+  it('★★★② 配了请求拦截器 ⇒ **跳过去重**，且 meta 如实说明原因（不静默）', async () => {
+    /* 【为什么必须跳过】拦截器可以改 url/headers（鉴权头最常见），而它在**去重键算好之后**才执行
+       ⇒ 键代表不了最终请求身份 ⇒ 继续合并就有跨租户串号风险。
+       正确性 > 效率：宁可少一次去重，也不冒错合并。但必须**说出来**，
+       否则业务会以为"去重没生效"是 bug。 */
+    const { bridge, count } = makeBridge({ latencyMs: 20 })
+    const p = createFetchPipeline(bridge, {
+      dedupe: true,
+      requestInterceptors: [(ctx) => ({ url: ctx.url, config: ctx.config })],
+    })
+    const [a] = await Promise.all([run(p, '/same'), run(p, '/same')])
+    expect(count(), '★有拦截器时不该合并（拦截器可改身份）').toBe(2)
+    expect(a.meta?.dedupeSkipped?.reason, '★跳过原因必须写进 meta（不静默）').toMatch(/拦截器/)
+  })
 })
 
 describe('★#1133 请求管线 · 任务句柄（FetchTask）', () => {

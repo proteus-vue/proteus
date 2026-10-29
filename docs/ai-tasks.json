@@ -3805,7 +3805,7 @@
       "title": "请求库：基于 useFetch 的高级封装（实例配置 · 幂等/熔断/离线/未知态 · 签名防重放脱敏 · bizId 隔离 · 三套入口收口）",
       "type": "framework-feature",
       "status": "done",
-      "owner": "session:zcode-main-20261028b",
+      "owner": "session:zcode-main-20261029",
       "scope": [
         "packages/api/src/request/**",
         "packages/api/src/index.ts",
@@ -3818,15 +3818,15 @@
         "scripts/lib/contract-units.mjs",
         "docs/request-client-plan/**"
       ],
-      "decision": 1385,
+      "decision": 1386,
       "branch": null,
-      "verification": "npx vitest run tests/fetch-pipeline.test.ts tests/request-client.test.ts tests/request-reliability.test.ts tests/request-security.test.ts tests/request-tenant.test.ts tests/request-engineering.test.ts tests/request-offline-autoflush.test.ts（110/110）；pnpm test:coupled（283 + 4 跨端门禁）；破坏性验证 2 层（摘方法门禁 ⇒ 防重复下单红；换回确定性符号 ⇒ 真随机红）",
+      "verification": "npx vitest run tests/fetch-pipeline.test.ts tests/websocket-security-chain.test.ts tests/request-client.test.ts tests/request-reliability.test.ts tests/request-security.test.ts tests/request-tenant.test.ts tests/request-engineering.test.ts tests/request-offline-autoflush.test.ts tests/capability-app-socket-task.test.ts（193/193）；node scripts/build-packages.mjs（类型必须过——vitest 不做类型检查）；破坏性验证 4 层：M-D1 身份头不进键 · M-D2 拦截器仍去重 · M-W2 不释放配额 · M2 确定性抖动",
       "related": [
         "T-fetch-pipeline",
         "T-harmony-http-cancel",
         "T-harmony-http-stream"
       ],
-      "note": "【done · 2026-10-29 · 决策 #1385】C1 骨架（#1342）→ C2 收口（#1342）→ **C3 生产路径接单一事实源（本单）**。\n★★**缺陷形态**：C1 把正确答案写进 `request/reliability.ts`（canRetry 非幂等拒重试 / computeBackoffMs 真随机 / shouldRetryResult 单一事实源），但**生产路径 `capability-fetch-pipeline.ts` 仍跑旧逻辑** —— 与 #1344「离线队列 flushOfflineQueue() 无调用方」完全同构（第三种\"写对了没用上\"）。\n★两处真缺陷：① **重试不看 method** ⇒ `POST /order` 超时被重发 = 可能**下两单**；② **抖动是确定性符号**（`attempt % 2`）⇒ 所有客户端同时退避同样长度 ⇒ jitter 名存实亡。\n★修法：方法门禁 `canRetry(method, false, policy)` + 退避 `computeBackoffMs(attempt+1, policy)`（口径换算）；**被拒时 `meta.retryRefused={reason}` 不静默**（否则业务误判成\"重试坏了\"）。\n★★幂等键口径：pipeline 看不到 `idempotencyKey`（架构约束）⇒ 门面层 `createApi` 在有键时传 `retryNonIdempotent: true`，POST 仍能安全重试；`useFetch` 直调需显式打开（默认拦）。\n★★★**破坏性验证抓出我自己写的假绿**：抖动初版把所有 attempt 混进一个 Set 断言 size>1 —— 确定性抖动下不同 attempt 本就不同值 ⇒ 旧实现照样过（M1 变异不红才发现）；正解=**只盯同一 attempt 跨运行**（改后 M2 变异红，实得恒为 1500）。\n★顺带修两条 stale 判据（判据比实现旧 = 反向惩罚真接线）：gen-content-bridge-keys 写死「document-preview iOS 应 🟡」（#1384 已接上）；gen-content-harmony-host 要求「abort 是 no-op / stream 如实拒绝」（#1344 已真取消+真流式）。\n★诚实边界：无法端到端验\"服务端只收到一单\"（需后端幂等表）· retryRefused 只覆盖\"方法不允许\"· 断路器/配额仍进程内 · pipeline 曾越 1000 行已压回 999（不加 ALLOW）。"
+      "note": "【done · 2026-10-29 · 决策 #1386】20 条痛点**逐条点过**：18 条早已落地、2 条本轮补完。\n★★**过程教训**：上一轮我按\"C3 一单收口\"就把本任务标了 done，用户追问「请求库都做完了？」后逐条核对才发现 2 条缺口。「某一单收口」≠「父任务完成」—— 标 done 前必须按计划验收口径逐条点过。\n★**#9 去重键（两个方向都会坏）**：旧键漏身份 ⇒ 多租户下两个 bizId 打同一 URL 带不同 Authorization 会被合并（A 拿到 B 的应答）；但全量 headers 进键又会让 x-request-id/traceparent 使去重永不命中 ⇒ 只收\"会改变应答内容\"的 10 个身份头 + responseType + 流式形态。**第二层**：配了请求拦截器时**跳过去重**（拦截器在键算好之后才跑，可改 url/headers）并写 meta.dedupeSkipped 说明原因。\n★**#15 WS 策略链后半段**：#1344 只给了白名单，实测 grep audit|redact|quota 零命中 ⇒ HTTP 进审计/占配额、WS 不进。本轮补：审计（open 成败都记 / close 记时长与收发**条数**，★**绝不记消息正文**）· bizId 贯穿 · 配额（★释放点=连接真正关闭，不是 open 返回时；finalizeWsConn 幂等）。\n★踩的两个坑：① M-W1 变异不彻底（p.audit undefined 仍继续）⇒ 审计红了但配额没红，改 M-W2 才精确 —— 变异必须真的删掉被测行为；② vitest 不做类型检查 ⇒ 写了 FetchConfig 里不存在的 config.stream，45 条测试全绿而 build-packages 报 TS2339。\n★文件大小：pipeline 涨到 1058 行 ⇒ **按职责拆**出 capability-fetch-dedupe.ts（纯函数），回落 991 行（不是压注释）。\n★官网产品页：website/content/system/13-request-governance.md（+en），**产品叙事而非 API 手册**（用户明确要求）。\n★判据：fetch-pipeline 45 · websocket-security-chain 19 · 全套 193/193 · 破坏性验证 4 层。"
     },
     {
       "id": "T-harmony-persistent-vm",

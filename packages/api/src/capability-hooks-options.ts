@@ -31,4 +31,21 @@ export interface CapabilityHooksOptions {
    *   · `'*'` ⇒ 全放行（仅平台内部用）
    */
   allowedDomains?: string[]
+  /**
+   * ★★★#1386（痛点 #15 后半段）：**WebSocket 也归业务管**——bizId · 审计 · 配额。
+   *
+   * 【为什么必须有（这正是"绕过全部加固"没修完的部分）】#1344 P4 只给 WS 加了域名白名单，
+   *   实测 `grep audit|redact|quota` 在 `capability-websocket.ts` 里**零命中** ⇒
+   *   HTTP 的调用进审计、脱敏、占配额，而 **WS 不进**。而 WS 恰恰是最能外传数据的
+   *   常驻双向通道 ⇒ 这块空着比 HTTP 空着更危险。
+   */
+  bizId?: string
+  /** WS 审计出口（已脱敏；**不含消息内容**，只记谁开的/连哪/存活多久/收发条数） */
+  wsAudit?: (entry: import('./capability-websocket').WsAuditEntry) => void
+  /**
+   * WS 连接配额闸门（与 HTTP 的 `QuotaTree` 同一形态）。
+   * `acquire()` 取不到槽位应**抛错** ⇒ 连接被拒（`websocket.quotaExceeded`）。
+   * ★返回的释放函数在连接**真正关闭**时调用（不是 open 返回时）。
+   */
+  wsQuota?: { acquire(): () => void }
 }

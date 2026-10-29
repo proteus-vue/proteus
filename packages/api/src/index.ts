@@ -23,6 +23,8 @@ export type {
   ResponseInterceptor,
   PipelineBridge,
 } from './capability-fetch-pipeline'
+// ★★★#1386：去重身份计算（拆出的纯函数；`DEDUPE_IDENTITY_HEADERS` 可被业务审计/扩展）
+export { dedupeKey, DEDUPE_IDENTITY_HEADERS } from './capability-fetch-dedupe'
 // ★★★#1149：HTTP 条件请求缓存（P2）——store 契约 + 语义函数（业务可注入自定义持久层）
 export { createFetchCache, createMemoryFetchCache, parseCacheControl, freshnessLifetimeMs, isFresh, fetchCacheKey } from './capability-fetch-cache'
 // ★★★#1151：缓存持久层（L2）——持久化 store + KV/文件后端 + 按端探测（业务只需 `cache: { persist: true }`）

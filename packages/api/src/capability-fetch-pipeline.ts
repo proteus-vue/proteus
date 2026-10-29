@@ -33,6 +33,8 @@ import type { RedirectHop, RedirectTrace } from './capability-fetch-redirect'
 import { cacheMissError, cachedResponseOf, createFetchCache, entryAgeMs } from './capability-fetch-cache'
 import type { CacheLookup, FetchCacheController, FetchCacheEntry, FetchCacheMeta, FetchCacheMode, FetchCacheOptions } from './capability-fetch-cache'
 import { createAbortController } from './capability-invoke'
+// ★★★#1386：去重身份计算拆到独立文件（纯函数、无共享状态，见其头注释）
+import { dedupeKey } from './capability-fetch-dedupe'
 // ★#1385 重试的两个判定委托请求库（单一事实源）——此前本文件自己写了一套，与 reliability.ts 冲突
 //   （那边"非幂等不重试 + 真随机抖动"，这边"不看 method + 确定性抖动"）⇒ 新库写对了、生产没用上。
 import { canRetry, computeBackoffMs } from './request/reliability'
@@ -211,27 +213,6 @@ function makeDelay(): { delay: (ms: number) => Promise<boolean> } {
 
 /** 退避 —— ★#1385 委托 `computeBackoffMs`（真随机；此前 `attempt % 2` 确定性符号 ⇒ 去同步失效）。 */
 const backoffOf = (p: RetryPolicy, attempt: number): number => computeBackoffMs(attempt + 1, p)
-
-/** 去重键：方法 + URL + query + body（**不含** headers——鉴权头由拦截器加，同资源应共享）。 */
-function dedupeKey(url: string, config: FetchConfig): string {
-  const p = config.params
-  const params = p
-    ? Object.keys(p)
-        .filter((k) => p[k] !== undefined)
-        .sort()
-        .map((k) => `${k}=${String(p[k])}`)
-        .join('&')
-    : ''
-  let body = ''
-  if (config.data !== undefined) {
-    try {
-      body = JSON.stringify(config.data)
-    } catch {
-      body = String(config.data)
-    }
-  }
-  return `${config.method ?? 'GET'} ${url}?${params} ${body}`
-}
 
 /** 可被宿主设置 `onabort` 的合并信号（`attachAbort` 依赖这个赋值通道）。 */
 interface LinkedSignal extends AbortSignalLike {
@@ -868,6 +849,7 @@ export function createFetchPipeline(
      *   因为 register 发生在同一函数体内、release 最早也要到账本 dispose）。
      */
     let abortTask: (() => void) | null = null
+    let dedupeSkippedReason: string | undefined   // ★#1386 去重被跳过的原因（不静默）
     if (opts.resources) {
       ledger = opts.resources.register({
         type: 'http-request',
@@ -889,8 +871,20 @@ export function createFetchPipeline(
       resolveOuter(v)
     }
 
-    // ★去重：只合并"无用户信号"的相同在飞请求
-    const key = opts.dedupe && !userSig ? dedupeKey(url, config) : ''
+    /** ★#1386：把"去重被跳过"的原因补进 meta（不静默；不改动其它字段） */
+    const withDedupeNote = (v: FetchResult<T>): FetchResult<T> =>
+      dedupeSkippedReason && v.meta
+        ? ({ ...v, meta: { ...v.meta, dedupeSkipped: { reason: dedupeSkippedReason } } } as FetchResult<T>)
+        : v
+
+    /* ★去重：只合并"无用户信号"的相同在飞请求。
+       ★★★#1386：**配了请求拦截器时不去重**——拦截器可以改 url/headers（鉴权头最常见），
+         而它在去重键算好**之后**才执行 ⇒ 键代表不了最终请求身份 ⇒ 继续合并就有
+         跨租户串号风险（A 拿到 B 的应答）。宁可少一次去重，也不冒错合并（正确性 > 效率）。
+       ★不静默：把原因写进 meta.dedupeSkipped，否则业务会以为"去重没生效"是 bug。 */
+    const dedupeBlockedByInterceptors = opts.dedupe === true && reqInterceptors.length > 0
+    const key = opts.dedupe && !userSig && !dedupeBlockedByInterceptors ? dedupeKey(url, config) : ''
+    if (dedupeBlockedByInterceptors && !userSig) dedupeSkippedReason = '配了请求拦截器（可改 url/headers ⇒ 键无法代表最终身份）'
     if (key) {
       const shared = inflightMap.get(key)
       if (shared) {
@@ -923,7 +917,7 @@ export function createFetchPipeline(
         void p.then(
           (v) => {
             if (key) inflightMap.delete(key)
-            finish(v)
+            finish(withDedupeNote(v))
           },
           (e) => {
             if (key) inflightMap.delete(key)

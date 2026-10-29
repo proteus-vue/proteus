@@ -23,7 +23,8 @@
 
 import { invokeHost } from './capability-invoke'
 // ★★★#1344 P4：域名白名单与 HTTP 走**同一份实现**（一处规则，两条通道）
-import { hostOf, isHostAllowed } from './request/tenant'
+// ★★★#1386（痛点 #15）：审计脱敏也复用 HTTP 的同一份（`redactAuditUrl`/`hostOf`）——不另写一套
+import { hostOf, isHostAllowed, redactAuditUrl } from './request/tenant'
 import type { CapabilityResourceRegistry } from './capability-resources'   // ★#1094 G-43 边界资源账本
 import { CapError as ProteusCapError } from './capability-types'
 import type { CapResult, WebSocketConnection } from './capability-types'
@@ -44,6 +45,53 @@ export const APP_WS_PUSH_KEY = '__proteusHostWs'
 /** 一条连接的事件订阅表（id → handlers） */
 type EventName = 'open' | 'message' | 'close' | 'error'
 const conns = new Map<number, Map<EventName, Set<(payload?: unknown) => void>>>()
+
+/**
+ * ★★★#1386：每条连接的**策略上下文**（审计出口 / 配额释放 / 计数 / 建连时刻）。
+ *
+ * 【为什么需要一张独立表】close 事件在模块级 `dispatchWsPush()` 里（壳推进来，拿不到
+ *   创建时的 `opts`）⇒ 关连接时无法知道"这条连接属于哪个业务、要不要释放配额、审计发到哪"。
+ *   ★不放在 `conns` 的 value 里：那会改变既有订阅表结构（多处代码按 Map<EventName,Set> 用）。
+ */
+interface WsConnPolicy {
+  bizId?: string
+  audit?: (e: WsAuditEntry) => void
+  host: string
+  url: string
+  openedAt: number
+  releaseQuota: (() => void) | null
+  sent: number
+  received: number
+  /** 审计只发一次（open→close 配对）；重复 close 推送不该记两条 */
+  closed: boolean
+}
+const connPolicy = new Map<number, WsConnPolicy>()
+
+/**
+ * ★★★#1386：连接结束时统一收尾（**唯一收尾点**）——释放配额 + 发审计。
+ * ★幂等：壳可能重复推 close / 资源账本也可能在 dispose 时走一次，只认第一次。
+ */
+function finalizeWsConn(id: number, closeCode?: number): void {
+  const p = connPolicy.get(id)
+  if (!p || p.closed) return
+  p.closed = true
+  if (p.releaseQuota) {
+    try { p.releaseQuota() } catch { /* 释放失败不阻断收尾 */ }
+    p.releaseQuota = null
+  }
+  emitWsAudit(p.audit, {
+    bizId: p.bizId,
+    event: 'close',
+    host: p.host,
+    url: p.url,
+    outcome: 'success',
+    durationMs: Date.now() - p.openedAt,
+    closeCode,
+    messagesSent: p.sent,
+    messagesReceived: p.received,
+  })
+  connPolicy.delete(id)
+}
 
 /* ══════════════ ★★★#1244 §1.0 S3 四项必答（ws 此前是 S1）══════════════ */
 
@@ -208,6 +256,8 @@ export function dispatchWsPush(payload: unknown): number {
   // ★#1244：解析失败的推送也计数（否则"收到多少条"与"处理了多少条"对不上）
   if (!n) { wsStats.messagesDropped++; return 0 }
   wsStats.messagesReceived++
+  // ★#1386：按连接累计接收条数（关闭审计用；**不含内容**）
+  { const p = connPolicy.get(n.id); if (p && n.event === 'message') p.received++ }
   // ★状态型事件（open/close/error）先记账——即使此刻没人订阅，晚到的 on() 也能补感知
   if (n.event !== 'message') {
     let s = happened.get(n.id)
@@ -223,7 +273,11 @@ export function dispatchWsPush(payload: unknown): number {
     if (n.event === 'close' || n.event === 'error') {
       conns.delete(n.id)
       happened.delete(n.id)
-      if (n.event === 'close') releaseConnResource(n.id)
+      if (n.event === 'close') {
+        releaseConnResource(n.id)
+        // ★★★#1386：配额释放 + 关闭审计（唯一收尾点；幂等）
+        finalizeWsConn(n.id, (n.payload as { code?: number } | undefined)?.code)
+      }
     }
     return 0
   }
@@ -248,6 +302,8 @@ export function dispatchWsPush(payload: unknown): number {
     happened.delete(n.id)
     // ★#1094：连接真正关闭 ⇒ 资源账本销账（否则账本会把已关连接当泄漏）
     releaseConnResource(n.id)
+    // ★★★#1386：配额释放 + 关闭审计（唯一收尾点；幂等）
+    finalizeWsConn(n.id, (n.payload as { code?: number } | undefined)?.code)
   }
   return handlers.size
 }
@@ -285,6 +341,49 @@ function errOf(code: string, message: string): ProteusCapError {
 }
 
 /**
+ * ★★★#1386（痛点 #15）：**WebSocket 审计条目**。
+ *
+ * 【与 HTTP 的 `RequestAuditEntry` 的关系】同一套脱敏纪律（URL 剥路径与 query、
+ *   只留 host、不含任何载荷），但**形状不同**：WS 是长连接，有"建立/关闭"两个时刻、
+ *   没有 HTTP status、有开-关时长。硬套 HTTP 形状会丢掉"关的时候是谁关的"这条关键信息。
+ *
+ * 【★绝不记录消息正文】WS 是最能外传数据的通道，但把正文写进日志等于
+ *   把数据复制到第二个地方（日志会被采集、导出、存更久）⇒ 只记**条数**，不记内容。
+ */
+export interface WsAuditEntry {
+  /** 业务标识（与 HTTP 的 `TenantPolicy.bizId` 同一轴） */
+  bizId?: string
+  /** `open` = 一次连接尝试（成败都记）· `close` = 连接结束 */
+  event: 'open' | 'close'
+  /** 只留 host（不含路径与 query 细节） */
+  host: string
+  /** 脱敏后的 URL（路径只留前两段，见 `redactAuditUrl`） */
+  url: string
+  /** 建立结果：`success` / `failed` */
+  outcome: 'success' | 'failed'
+  /** 失败原因码（不含 message，避免泄漏服务端细节） */
+  errorCode?: string
+  /** open 阶段：从调用到受理耗时；close 阶段：连接存活时长 */
+  durationMs: number
+  /** 仅 close 时：关闭码（1000 正常 / 1001 页面卸载 / 1006 异常断开…） */
+  closeCode?: number
+  /** 仅 close 时：本连接累计收发条数（**不含内容**） */
+  messagesSent?: number
+  messagesReceived?: number
+  at: number
+}
+
+/** 安全地发审计：回调抛错**不阻断**业务（与 HTTP 侧同款姿态） */
+function emitWsAudit(fn: ((e: WsAuditEntry) => void) | undefined, entry: Omit<WsAuditEntry, 'at'>): void {
+  if (!fn) return
+  try {
+    fn({ ...entry, at: Date.now() })
+  } catch {
+    /* 审计实现自己崩了不该影响连接 */
+  }
+}
+
+/**
  * App 端 `connectWebSocket` 实现。
  *
  * @returns 连接句柄（`send`/`close`/`on`）；**句柄不等于已连上**——
@@ -303,10 +402,31 @@ export function createAppWebSocket(
      *   ★不配 ⇒ 不限制（白名单是可选增强，与 HTTP 同口径；否则现有业务全被拦死）。
      */
     allowedDomains?: string[]
+    /**
+     * ★★★#1386（痛点 #15 的**后半段**）：本连接归属于哪个业务（配额与审计维度）。
+     * HTTP 侧由 `TenantPolicy.bizId` 提供；WS 此前**完全没有这个概念** ⇒
+     * 审计里看不出"哪条业务开的连接"，配额也管不到它。
+     */
+    bizId?: string
+    /**
+     * ★★★#1386：**WS 审计出口**（与 HTTP 的同名语义：已脱敏，不含消息内容）。
+     * ★只记"连接的建立/关闭/失败 + 谁开的 + 连了哪个 host"，
+     *   **绝不记录消息正文**（那才是 WS 最能外传的东西，但正文进日志等于把数据搬到第二个地方）。
+     */
+    audit?: (entry: WsAuditEntry) => void
+    /**
+     * ★★★#1386：**连接配额闸门**（与 HTTP 的 `QuotaTree.global` 同一形态）。
+     * 取得槽位失败 ⇒ `websocket.quotaExceeded`（不静默排队：WS 是长连接，
+     *   排队等待毫无意义——业务要的是"现在就告诉我能不能连"）。
+     * ★释放点 = 连接**真正关闭**（壳推 close / 资源账本释放 / send 发现宿主没有该方法），
+     *   而不是 open 返回时——否则长连接会把额度永久算作"在飞"。
+     */
+    quota?: { acquire(): () => void }
   } = {},
 ): (url: string, protocols?: string[]) => Promise<WebSocketConnection> {
   installWsChannel()
   return async (url, protocols) => {
+    const startedAt = Date.now()
     /**
      * ★★★#1344 P4：**域名白名单必须在发起之前判**（与连接数上界同一个时机）。
      *   ★排在连接数上界**之前**：被白名单拒的连接根本不该占用并发额度
@@ -316,6 +436,15 @@ export function createAppWebSocket(
      */
     if (!isHostAllowed(url, opts.allowedDomains)) {
       wsStats.rejectedByAllowlist++
+      emitWsAudit(opts.audit, {
+        bizId: opts.bizId,
+        event: 'open',
+        host: hostOf(url) || '(unparsed)',
+        url: redactAuditUrl(url),
+        outcome: 'failed',
+        errorCode: 'websocket.forbidden',
+        durationMs: Date.now() - startedAt,
+      })
       throw errOf(
         'websocket.forbidden',
         `域名不在白名单内：${hostOf(url) || '(无法解析)'} —— 请用平台配置的允许域名，或联系平台加成`,
@@ -324,14 +453,55 @@ export function createAppWebSocket(
     // ★★★#1244 ④ 连接数上界：**在发起之前**判（先连上再拒 = 宿主 socket 已建、还得再关一次）
     if (conns.size >= WS_MAX_CONNECTIONS) {
       wsStats.rejectedConnections++
+      emitWsAudit(opts.audit, {
+        bizId: opts.bizId,
+        event: 'open',
+        host: hostOf(url) || '(unparsed)',
+        url: redactAuditUrl(url),
+        outcome: 'failed',
+        errorCode: 'websocket.tooManyConnections',
+        durationMs: Date.now() - startedAt,
+      })
       throw errOf(
         'websocket.tooManyConnections',
         `并发连接已达上界 ${WS_MAX_CONNECTIONS}（当前 ${conns.size}）——疑似泄漏或异常重连`,
       )
     }
+    /**
+     * ★★★#1386（痛点 #15）：**业务连接配额**（与 HTTP 的 QuotaTree 同一形态）。
+     * ★取下槽位失败 ⇒ 直接拒（WS 是长连接，排队等待没有意义）；拒绝也要进审计。
+     * ★释放点在连接真正关闭时（见下方 releaseQuota），不在 open 返回时。
+     */
+    let releaseQuota: (() => void) | null = null
+    if (opts.quota) {
+      try {
+        releaseQuota = opts.quota.acquire()
+      } catch (e) {
+        emitWsAudit(opts.audit, {
+          bizId: opts.bizId,
+          event: 'open',
+          host: hostOf(url) || '(unparsed)',
+          url: redactAuditUrl(url),
+          outcome: 'failed',
+          errorCode: 'websocket.quotaExceeded',
+          durationMs: Date.now() - startedAt,
+        })
+        throw errOf('websocket.quotaExceeded', `业务 ${opts.bizId ?? '(none)'} 的并发配额已满：${(e as Error).message}`)
+      }
+    }
     const r = invokeHost(APP_WS_METHODS.open, { url, protocols: protocols ?? [] })
     if (!r.ok) {
       // ★missing ⇒ unsupported（该类业务的正常降级）；其它 ⇒ failed
+      if (releaseQuota) { releaseQuota(); releaseQuota = null }   // ★失败不占额度
+      emitWsAudit(opts.audit, {
+        bizId: opts.bizId,
+        event: 'open',
+        host: hostOf(url) || '(unparsed)',
+        url: redactAuditUrl(url),
+        outcome: 'failed',
+        errorCode: r.missing ? 'websocket.unsupported' : 'websocket.failed',
+        durationMs: Date.now() - startedAt,
+      })
       throw errOf(
         r.missing ? 'websocket.unsupported' : 'websocket.failed',
         `ws.open 失败：${r.reason}`,
@@ -340,10 +510,43 @@ export function createAppWebSocket(
     const d = (r.data ?? {}) as { id?: unknown; protocol?: unknown }
     const id = Number(d.id)
     if (!Number.isFinite(id) || id <= 0) {
+      if (releaseQuota) { releaseQuota(); releaseQuota = null }
+      emitWsAudit(opts.audit, {
+        bizId: opts.bizId,
+        event: 'open',
+        host: hostOf(url) || '(unparsed)',
+        url: redactAuditUrl(url),
+        outcome: 'failed',
+        errorCode: 'websocket.failed',
+        durationMs: Date.now() - startedAt,
+      })
       throw errOf('websocket.failed', `ws.open 未返回有效连接 id（收到 ${JSON.stringify(d)}）`)
     }
+    // ★#1386：open 成功也记一条（审计要能回答"谁在什么时候连了哪儿"）
+    emitWsAudit(opts.audit, {
+      bizId: opts.bizId,
+      event: 'open',
+      host: hostOf(url) || '(unparsed)',
+      url: redactAuditUrl(url),
+      outcome: 'success',
+      durationMs: Date.now() - startedAt,
+    })
+    const openedAt = Date.now()
     const table = new Map<EventName, Set<(payload?: unknown) => void>>()
     conns.set(id, table)
+    // ★★★#1386：登记策略上下文（close 时用它释放配额 + 发审计）
+    const policy: WsConnPolicy = {
+      bizId: opts.bizId,
+      audit: opts.audit,
+      host: hostOf(url) || '(unparsed)',
+      url: redactAuditUrl(url),
+      openedAt,
+      releaseQuota,
+      sent: 0,
+      received: 0,
+      closed: false,
+    }
+    connPolicy.set(id, policy)
     wsStats.connections = conns.size
     if (conns.size > wsStats.peakConnections) wsStats.peakConnections = conns.size
     // ★★★#1094：登记为**边界资源**（G-43.1 禁止无主资源）。
@@ -359,6 +562,9 @@ export function createAppWebSocket(
           conns.delete(id)
           happened.delete(id)
           connResource.delete(id)
+          // ★★★#1386：页面卸载也是"连接结束" ⇒ 必须释放配额 + 记一条关闭审计
+          //   （否则配额被永久占住，长跑后新页面全连不上）
+          finalizeWsConn(id, 1001)
         },
       })
       connResource.set(id, { registry: opts.resources, resourceId: res.id })
@@ -403,11 +609,19 @@ export function createAppWebSocket(
           ? { id, binary: Array.from(new Uint8Array(data as ArrayBuffer)), binaryFlag: true }
           : { id, data }
         const s = invokeHost(APP_WS_METHODS.send, args)
-        if (s.ok) { wsStats.messagesSent++ } else {
+        if (s.ok) {
+          wsStats.messagesSent++
+          policy.sent++   // ★#1386：关闭审计里的条数（**不含内容**）
+        } else {
           wsStats.sendFailures++
           // ★发送失败**经 error 事件回报**（不抛：send 的签名是 void，与浏览器一致）
           for (const h of [...(table.get('error') ?? [])]) h({ message: s.reason, missing: s.missing })
-          if (s.missing) conns.delete(id)
+          if (s.missing) {
+            conns.delete(id)
+            // ★#1386：宿主没这个方法 ⇒ 连接实质不可用 ⇒ 走统一收尾（释放配额 + 审计），
+            //   否则额度被一条"永远不会 close"的连接永久占住。
+            finalizeWsConn(id, 1006)
+          }
         }
       },
       close: (code, reason) => {

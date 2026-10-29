@@ -624,7 +624,7 @@
     "bodyLines": 44
   },
   "website/content/capabilities/fetch.md": {
-    "tableRows": 159,
+    "tableRows": 160,
     "headings": 21,
     "codeBlocks": 4,
     "bodyLines": 43
@@ -1608,7 +1608,7 @@
     "bodyLines": 36
   },
   "website/en/capabilities/fetch.md": {
-    "tableRows": 125,
+    "tableRows": 126,
     "headings": 16,
     "codeBlocks": 4,
     "bodyLines": 38

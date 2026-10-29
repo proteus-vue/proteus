@@ -33,11 +33,16 @@ export function makeCapabilityRuntime(opts: CapabilityHooksOptions): CapabilityR
   /**
    * ★★★#1344 P4：**白名单从装配层下传**（一处配置覆盖 HTTP + WS 两条通道）。
    *   不传 ⇒ 不限制（与 HTTP 的 TenantPolicy 同口径）。
+   * ★★★#1386（痛点 #15 后半段）：**审计 / bizId / 配额也一并下传** ——
+   *   此前 WS 只拿到白名单 ⇒ 连接不进审计、不占业务配额（"绕过全部加固"只修了一半）。
    */
   const appWs = createAppWebSocket({
     resources: resources ?? undefined,
     owner: opts.owner,
     allowedDomains: opts.allowedDomains,
+    bizId: opts.bizId,
+    audit: opts.wsAudit,
+    quota: opts.wsQuota,
   })
   return {
     resources,
