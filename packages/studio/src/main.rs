@@ -710,6 +710,17 @@ fn main() {
                     }
                     let last = settings::current().last_device.clone();
                     let list = device::list(false);
+                    /* ★上次是**未启动的模拟器** ⇒ 本次启动不接管它（决策 #1380）：
+                       否则 `auto_connect` 会把它 boot 起来 —— 就是"每次打开 Studio 都拉起模拟器"。 */
+                    let last = match last {
+                        Some(s) if s != "MIRROR-IPHONE" && !device::sim_is_booted(&s)
+                            && list.iter().any(|d| d.platform == "simulator" && d.serial == s) =>
+                        {
+                            eprintln!("[studio] 上次的模拟器 {s} 未启动：启动时跳过（点设备列表可启动）");
+                            None
+                        }
+                        other => other,
+                    };
                     let pick = last
                         .filter(|s| list.iter().any(|d| &d.serial == s))
                         .or_else(|| {
@@ -719,7 +730,16 @@ fn main() {
                                 .collect();
                             (ready.len() == 1).then(|| ready[0].serial.clone())
                         })
-                        .or_else(|| list.iter().find(|d| d.platform == "simulator" && d.size.is_none()).map(|d| d.serial.clone()));
+                        .or_else(|| {
+                            /* 只挑**已经在跑**的模拟器（决策 #1380：不再自动 boot） */
+                            list.iter()
+                                .find(|d| {
+                                    d.platform == "simulator"
+                                        && d.size.is_none()
+                                        && d.state.eq_ignore_ascii_case("Booted")
+                                })
+                                .map(|d| d.serial.clone())
+                        });
                     let Some(serial) = pick else {
                         eprintln!("[studio] 没有可自动连接的设备（列表里点一台即可）");
                         return;

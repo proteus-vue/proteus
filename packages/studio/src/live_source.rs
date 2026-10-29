@@ -88,9 +88,18 @@ pub(crate) fn default_live_source() {
         }
         let is_sim = crate::device::sim_serials().iter().any(|s| s == &last);
         if is_sim {
-            if let Err(e) = start_simulator(&last) {
-                eprintln!("[studio] 接上次的模拟器失败：{e}（继续按 adb 探测）");
+            /* ★启动时**不主动 boot 模拟器**（决策 #1380）：只有它**已经在跑**才接上。
+               之前这里会 `start_simulator`（boot + 起录屏），结果是"每次打开 Studio
+               都把模拟器拉起来"，既慢又抢 CPU —— 用户明确反对这种捆绑。
+               要看模拟器请在设备列表里点它（那是有意为之的动作）。 */
+            if crate::device::sim_is_booted(&last) {
+                if let Err(e) = start_simulator(&last) {
+                    eprintln!("[studio] 接上次的模拟器失败：{e}（继续按 adb 探测）");
+                } else {
+                    return;
+                }
             } else {
+                eprintln!("[studio] 上次的模拟器未启动 —— 启动时不再自动 boot（点设备列表里的它即可）");
                 return;
             }
         }

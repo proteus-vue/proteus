@@ -530,6 +530,15 @@ pub(crate) fn sim_serials() -> Vec<String> {
     simulators().into_iter().map(|d| d.serial).collect()
 }
 
+/// 这台模拟器**当前是否已启动**（`simctl list` 的 state == "Booted"）。
+/// ★用途（决策 #1380）：Studio 启动时**只复用已启动的模拟器**，不再替用户 boot ——
+///   boot 一台模拟器要几秒 + 持续吃 CPU，而用户可能只是打开 Studio 看代码。
+pub(crate) fn sim_is_booted(serial: &str) -> bool {
+    simulators()
+        .into_iter()
+        .any(|d| d.serial == serial && d.state.eq_ignore_ascii_case("Booted"))
+}
+
 pub(crate) fn auto_simulator() -> Option<String> {
     let sims = simulators();
     /* ★上次那台**即使没启动**也要用（决策 #1308）：实测踩到——用户上次看的是 iPhone 17 Pro，
