@@ -495,6 +495,16 @@ async function copyPath(p: string) {
   }
 }
 
+/** 标签拖拽重排（决策 #1408）：只改 `tabs` 顺序（= 恢复时的顺序），不动 EditorState 池 */
+function onTabReorder(from: number, to: number) {
+  const arr = [...tabs.value]
+  if (from < 0 || from >= arr.length || to < 0 || to >= arr.length) return
+  const [moved] = arr.splice(from, 1)
+  arr.splice(to, 0, moved)
+  tabs.value = arr
+  ws.openFiles = [...arr]
+}
+
 function onTabMenu(e: MouseEvent, p: string) {
   const i = tabs.value.indexOf(p)
   openMenu(
@@ -904,7 +914,15 @@ onBeforeUnmount(() => {
         </div>
         <!-- 标签栏（2026-10-25 · 决策 #1217 · #1247 拆成组件）：点=切换，×=关闭，小圆点=未保存。
              ★标签只负责"切换文件"，缓冲与 undo 历史在 states 池里，切标签不重建 state。 -->
-        <TabBar :tabs="tabs" :cur="cur" :dirty="dirtySet" @open="open" @close="close" @menu="onTabMenu" />
+        <TabBar
+          :tabs="tabs"
+          :cur="cur"
+          :dirty="dirtySet"
+          @open="open"
+          @close="close"
+          @menu="onTabMenu"
+          @reorder="onTabReorder"
+        />
         <div v-if="err" class="err" id="codeErr">{{ err }}</div>
         <!-- ★编辑器宿主：#canvas 之类都不在这里，CodeMirror 自己管滚动与测量 -->
         <div v-show="!err && !showDiff" class="host" id="codeHost" ref="host" @contextmenu.prevent="onEditorMenu" />

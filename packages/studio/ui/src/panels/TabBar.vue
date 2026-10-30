@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 // ui/src/panels/TabBar.vue —— 编辑器标签栏（决策 #1217 引入，#1247 从 CodePanel.vue 拆出）
 //
 // 【职责边界】只画标签 + 发事件。**缓冲与 undo 历史在 CodePanel 的 states 池里**，
@@ -17,16 +18,54 @@ const emit = defineEmits<{
   open: [path: string]
   close: [path: string]
   menu: [e: MouseEvent, path: string]
+  /** 拖拽重排（决策 #1408）：只报"从第几个到第几个"，数组由父组件（唯一真源）改 */
+  reorder: [from: number, to: number]
 }>()
+
+/* 标签拖拽重排：与终端标签同一套 HTML5 drag 手法（标签少、无需跨窗口）。
+   ★`setData` 必须调，否则 Safari/Firefox 不启动拖拽；★重排只改顺序，
+   不动 EditorState 池（切换标签时按路径取 state，顺序无关）。 */
+const dragIdx = ref(-1)
+const overIdx = ref(-1)
+
+function onDragStart(i: number, e: DragEvent) {
+  dragIdx.value = i
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(i))
+  }
+}
+function onDragOver(i: number, e: DragEvent) {
+  if (dragIdx.value < 0) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  overIdx.value = i
+}
+function onDrop(i: number) {
+  const from = dragIdx.value
+  dragIdx.value = -1
+  overIdx.value = -1
+  if (from < 0 || from === i) return
+  emit('reorder', from, i)
+}
+function onDragEnd() {
+  dragIdx.value = -1
+  overIdx.value = -1
+}
 </script>
 
 <template>
   <div v-if="tabs.length" class="tabs" id="codeTabs">
     <button
-      v-for="p in tabs"
+      v-for="(p, ti) in tabs"
       :key="p"
       class="tab"
-      :class="{ on: p === cur }"
+      :class="{ on: p === cur, drag: dragIdx === ti, over: overIdx === ti && dragIdx !== ti }"
+      draggable="true"
+      @dragstart="onDragStart(ti, $event)"
+      @dragover="onDragOver(ti, $event)"
+      @drop.prevent="onDrop(ti)"
+      @dragend="onDragEnd"
       :title="p"
       :data-tab="p"
       @click="emit('open', p)"
@@ -53,6 +92,10 @@ const emit = defineEmits<{
   border-bottom: 1px solid var(--border-subtle);
   scrollbar-width: none;
 }
+/* 拖拽中/落点：与终端标签保持同一语汇（左缘 2px 强调条） */
+.tab.drag { opacity: .45; }
+.tab.over { box-shadow: inset 2px 0 0 var(--accent); }
+
 .tabs::-webkit-scrollbar {
   display: none;
 }
