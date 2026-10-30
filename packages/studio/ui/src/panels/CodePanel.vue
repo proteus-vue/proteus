@@ -77,7 +77,7 @@ import GitBar from './GitBar.vue'
 import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
-import { diagAt, diagsOf, refreshAfterSave, runDiag } from '../diag'
+import { diagAt, diagsOf, ensureDiagFresh, refreshAfterSave, runDiag } from '../diag'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
@@ -424,6 +424,9 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     /* ★打开文件后主动催一次 lint：诊断通常**先于**打开文件就绪（进代码视图即自动跑），
        而 `linter` 只在文档变化时回调 ⇒ 不催的话波浪线要等你敲一个字才出现（决策 #1413）。 */
     if (view) forceLinting(view)
+    /* 打开文件时若"这个文件还没有诊断"且结果已过期 ⇒ 立刻重跑（用户反馈：不能只在保存后才检查）。
+       放在 forceLinting 之后：先按现有数据画一次（有就立刻显示），再决定要不要刷新数据。 */
+    ensureDiagFresh()
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
     await syncDiffAfterOpen(opts.diff)
@@ -910,6 +913,15 @@ onMounted(() => window.addEventListener('keydown', onQuickKey, true))
 watch(diagAt, () => {
   if (view) forceLinting(view)
 })
+
+/* 用户切进代码视图时也刷新一次：CodePanel 用 v-show 常驻，挂载早于"进视图"，
+   只靠挂载那一次会出现"进视图看到的是旧结果/空结果"（用户实测反馈）。 */
+watch(
+  () => ws.view,
+  (v) => {
+    if (v === 'code') ensureDiagFresh()
+  },
+)
 
 /* 首次挂载顺手跑一次类型诊断（非强制，60s 内复用结果）—— 用户不用再手动点（决策 #1412） */
 void runDiag()

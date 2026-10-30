@@ -47,7 +47,7 @@ function pick(d: Diag) {
     <p v-else-if="!diagList.length && checkedAt" class="ok">没有类型问题</p>
     <button v-for="d in diagList" :key="d.path + d.line + d.col + d.code" class="ditem" @click="pick(d)" :title="d.message">
       <span class="dmsg">{{ d.message }}</span>
-      <span class="dloc">{{ d.path.split('/').pop() }}:{{ d.line }}</span>
+      <span class="dloc" :title="d.path">{{ d.path }}:{{ d.line }}</span>
     </button>
     <template #note>
       只读检查（vue-tsc --noEmit，范围限定 Studio UI）。命令与参数写在后端，不接受前端传入。

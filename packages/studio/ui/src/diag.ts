@@ -20,7 +20,9 @@ import { ref } from 'vue'
 import { diagTsc, hasBridge, type Diag } from './bridge'
 
 /** 结果新鲜度：超过这个时间，进入代码视图时重跑一次 */
-const STALE_MS = 60_000
+/** 进入代码视图/打开文件时允许复用的最大年龄：太长会出现"看着是新的、其实是旧的"（用户实测反馈）。
+ *  增量诊断实测只要 3s 左右，所以这个值可以小。 */
+const STALE_MS = 10_000
 
 export const diagList = ref<Diag[]>([])
 /** 上次成功检查的时间戳（0 = 从未跑过） */
@@ -65,10 +67,19 @@ export function runDiag(force = false): Promise<void> {
   return inflight
 }
 
+/** 归一化路径：去掉前导 `./`，避免"看起来同一个文件、字符串却不相等"导致波浪线不画 */
+const norm = (p: string) => p.replace(/^\.\//, '')
+
 /** 某个文件的诊断（编辑器画波浪线用） */
 export function diagsOf(path: string): Diag[] {
   if (!path) return []
-  return diagList.value.filter((d) => d.path === path)
+  const want = norm(path)
+  return diagList.value.filter((d) => norm(d.path) === want)
+}
+
+/** 需要"现在就是新的"时用（切到代码视图 / 打开文件）：超过 maxAge 才真跑 */
+export function ensureDiagFresh(maxAgeMs = STALE_MS): void {
+  if (Date.now() - diagAt.value > maxAgeMs) void runDiag(true)
 }
 
 /** 保存之后调用：结果已过期，后台静默重跑（不阻塞保存反馈） */
