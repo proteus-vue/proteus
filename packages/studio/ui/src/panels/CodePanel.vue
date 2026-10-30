@@ -23,7 +23,7 @@
 //     否则"红=错误"和"红=字符串"会在同一屏上互相误导。
 //   ★仍然不自己写分词器（G-56.1 红线：编辑器内核只用现成的）。
 
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorState, type Extension } from '@codemirror/state'
 import {
   EditorView,
@@ -110,6 +110,13 @@ function onQuickKey(e: KeyboardEvent) {
     e.preventDefault()
     e.stopPropagation()
     searchBox.value?.focus()
+    return
+  }
+  /* ⌥⌘S：保存全部（决策 #1407） */
+  if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    e.stopPropagation()
+    void saveAll()
     return
   }
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
@@ -582,6 +589,36 @@ async function savePath(path: string): Promise<boolean> {
   }
 }
 
+/** 面包屑（决策 #1407）：把 `cur` 拆成目录段 + 文件名。
+ *  ★**textContent 必须仍等于完整路径** —— 门禁把 `#codePath` 的文本当"当前文件"比对，
+ *    所以分隔符用内联 `/` 文本、模板不换行，避免多余空白把路径弄脏。 */
+const crumbs = computed(() => {
+  if (!cur.value) return []
+  const parts = cur.value.split('/').filter(Boolean)
+  let acc = ''
+  return parts.map((name, i) => {
+    acc = acc ? `${acc}/${name}` : name
+    return { name, dir: i === parts.length - 1 ? '' : acc }
+  })
+})
+
+/** 保存全部（⌥⌘S）：VS Code 的 ⌘K S 是和弦键，网页里用 ⌥⌘S 更直接 */
+async function saveAll() {
+  const targets = [...new Set(dirtySet.value.filter((p) => tabs.value.includes(p)))]
+  if (!targets.length) {
+    pushToast('没有未保存的文件')
+    return
+  }
+  saving.value = true
+  let ok = 0
+  for (const p of targets) {
+    if (await savePath(p)) ok++
+  }
+  saving.value = false
+  void refreshGit()
+  pushToast(`已保存 ${ok}/${targets.length} 个文件`)
+}
+
 async function save() {
   if (!cur.value || saving.value) return
   saving.value = true
@@ -849,7 +886,8 @@ onBeforeUnmount(() => {
       <div class="pane" :style="{ paddingBottom: termMode !== 'off' ? termH + 'px' : undefined }">
 
         <div class="bar">
-          <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
+          <!-- 面包屑（决策 #1407）：目录段可点（在树里定位），末段是文件名。★保持单行，textContent 才会正好等于完整路径（门禁按它比对当前文件）。 -->
+          <span class="path" id="codePath" :title="cur"><template v-if="cur"><template v-for="(c, i) in crumbs" :key="c.name + i"><button class="crumb" :class="{ leaf: !c.dir }" @click.stop="c.dir && revealPath(c.dir)">{{ c.name }}</button><span v-if="i < crumbs.length - 1" class="csep">/</span></template></template><template v-else>—</template></span>
           <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
           <!-- 未保存：可点的 chip（⌘S 之外的第二条路径） -->
           <button v-if="dirty" class="dirty" id="codeDirty" title="保存（⌘S）" @click="save">
@@ -1044,5 +1082,19 @@ onBeforeUnmount(() => {
 :deep(.cm-searchMatch) { background: rgb(96 165 250 / 22%); border-radius: 2px; }
 :deep(.cm-searchMatch-selected) { background: rgb(96 165 250 / 55%); }
 :deep(.cm-selectionMatch) { background: rgb(250 204 21 / 18%); border-radius: 2px; }
+
+.crumb {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.crumb:hover { color: var(--accent); text-decoration: underline; }
+.crumb.leaf { color: var(--fg); cursor: default; }
+.crumb.leaf:hover { color: var(--fg); text-decoration: none; }
+.csep { color: var(--fg-subtle); }
 
 </style>
