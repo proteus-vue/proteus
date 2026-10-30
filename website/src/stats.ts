@@ -25,11 +25,11 @@ export interface StatItem {
 export const STATS: StatItem[] = [
   {
     id: 'packages',
-    value: '48',
+    value: '49',
     label: '@proteus-vue/* 包',
     labelEn: '@proteus-vue/* packages',
-    source: 'pnpm check:pkg（48 包 0 error；48 个 packages/* 目录——含 @proteus-vue/consistency 与 @proteus-vue/tokens（Proteus UI 宪法）+ @proteus-vue/icons（Keryx 图标库）+ @proteus-vue/animation（MA1 动画原语））',
-    sourceEn: 'pnpm check:pkg (48 packages, 0 errors; 48 packages/* dirs — incl. @proteus-vue/consistency, @proteus-vue/tokens (Proteus UI constitution), @proteus-vue/icons (Keryx icons) and @proteus-vue/animation (MA1 animation primitives))',
+    source: 'pnpm check:pkg（49 包 0 error；49 个 packages/* 目录——含 @proteus-vue/consistency 与 @proteus-vue/tokens（Proteus UI 宪法）+ @proteus-vue/icons（Keryx 图标库）+ @proteus-vue/animation（MA1 动画原语）+ @proteus-vue/request（请求库 Vue 产品层））',
+    sourceEn: 'pnpm check:pkg (49 packages, 0 errors; 49 packages/* dirs — incl. @proteus-vue/consistency, @proteus-vue/tokens (Proteus UI constitution), @proteus-vue/icons (Keryx icons), @proteus-vue/animation (MA1 animation primitives) and @proteus-vue/request (Vue product layer for the request library))',
   },
   {
     id: 'tests',

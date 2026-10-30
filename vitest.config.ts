@@ -125,6 +125,8 @@ export default defineConfig({
       { find: '@proteus-vue/test-ir', replacement: fileURLToPath(new URL('./packages/test-ir/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
+      // ★★★#1394：请求库 Vue 产品层（与 tsconfig paths 两处都配才对得上）
+      { find: '@proteus-vue/request', replacement: fileURLToPath(new URL('./packages/request/src/index.ts', import.meta.url)) },
       // ★子路径必须在父路径之前（前缀匹配）
       { find: '@proteus-vue/renderer-app/adapters/selfdraw', replacement: fileURLToPath(new URL('./packages/renderer-app/src/adapters/selfdraw.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },

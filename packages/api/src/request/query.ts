@@ -53,10 +53,19 @@ export interface QueryOptions {
 }
 
 /**
- * `useQuery`：把"一次 GET + 可订阅状态"包成句柄。
+ * `createQuery`：把"一次 GET + 可订阅状态"包成句柄（**平台中立版**）。
  *
  * ★它**不是** SWR：不自己管缓存、不做后台刷新。真正的缓存语义在 pipeline（HTTP 缓存）。
  *   这样删掉了 `request-engineering` 的假 SWR 标签（痛点 #10）。
+ *
+ * ★★★#1394 **重要：这不是 Vue 的 composable，state 不是响应式的。**
+ *   返回的 `state` 是**普通对象**（`{ data, loading, ... }`）——它变化**不会触发任何框架重渲染**。
+ *   ⇒ 在 Vue / React / 任何有响应式系统的框架里，请用 `@proteus-vue/request` 的 `useQuery`
+ *     （真响应式版本，模板可直接绑）。
+ *   本函数的适用场景只有两个：① 非 UI 环境（Node 脚本 / 后台任务 / 服务端逻辑）；
+ *   ② 自己接响应式系统（把 `state` 手动桥到你的 ref/store）。
+ *   ★此前本函数**零测试、零消费者**，而文档字符串容易让人误以为"这就是给 Vue 用的"——
+ *     这正是 #1394 抓出的产品缺口（内核有、产品层没有）。
  */
 export function createQuery<T>(
   client: RequestClient,

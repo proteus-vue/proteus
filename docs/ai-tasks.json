@@ -3902,6 +3902,36 @@
         "T-app-capability-batch1"
       ],
       "note": "【done · 2026-10-29 · 决策 #1384】C84 `openDocument` 的 **App 腿**落地（MP `wx.openDocument` / Web `window.open` 两腿在 NC1 已有）。\n★选型依据：`capability-app-feasibility` 把 50 个真缺口全归 C 类（三端都要写原生），C84 是其中**唯一**「MP/Web 已实现、只差 App 宿主」的一项。\n★三端落点：Android `Intent.ACTION_VIEW` + **自建 ContentProvider**（本仓无 androidx ⇒ 不能用 FileProvider；Android 7+ 传 file:// 会 FileUriExposedException，所以用 `content://` + per-URI 授权）；iOS `QLPreviewController`（**本进程内**预览，避开 `UIApplication.open(file:)` 的跨 App 授权面；dataSource 是 weak ⇒ 需要 PreviewHost 强持有，否则空白预览器）；鸿蒙 `filePreview.openPreview`（HMS `@kit.PreviewKit`，API 11+；与 #1336 systemShare 同一取证教训：HMS API 在 `hms/ets/api`）。\n★语义边界：只拉起预览器（`{dispatched|presented|accepted:true}` = 已交给系统），**不返回「用户看完」**；**不是文件选择器**（picker 是另一个能力）。\n★安全基线（四层各自独立校验）：① 只接受沙箱相对路径（拒绝对路径与 `..`）；② 扩展名白名单 pdf/doc/docx/xls/xlsx/ppt/pptx/txt，不在白名单**直接报错、不降级 octet-stream**（降级会让\"点了没反应\"，最难归因）；③ 单文件 64 MiB；④ 三端宿主各自再校验一遍（业务可直接调 `__proteusHostInvoke` 绕过 JS）。\n★真机证据（三端齐）：Android **8/8**（含 `dumpsys` 顶层 Activity 变 `ResolverActivity` = 系统真收到；证明 content:// Provider 工作正常）· iOS **12/12**（含宿主直调 5 条，绕过 JS 白名单）· 鸿蒙 **11/11**（含 `hilog` 见 `PROTEUS_DOC_PREVIEW_OK` = 预览器真拉起）。\n★破坏性验证 8 层：M1 放行绝对路径（单测 2 红）· M2 降级 octet-stream（单测 2 红）· M3 鸿蒙 MIME 漂移（跨端判据指名）· M4 Android MIME 漂移（同上）· M5b 删分派留白名单（契约门禁覆盖率 35→34）· M6 摘 Android 扩展名白名单（真机 7/8，精确红）· M7 摘鸿蒙白名单（真机 9/11，精确红）· M8 探针装置自身（首版把已剥摘要再剥一次 ⇒ 改为存原文，见脚本头注释）。\n★★**顺带修掉一处门禁自身假绿**（本单 M5b 破坏性验证抓出）：`check-host-invoke-contract` 只按文本形态抽 `method == \"...\"`，而鸿蒙 `isDeviceMethod()` 的**路由白名单**恰好同形态 ⇒ 把真分派整段删掉、只留白名单，覆盖率仍然算 `document.open` 已实现（\"实现删了、门禁还绿\"）。修法 = 抽取前把 `isDeviceMethod()` 函数体遮罩掉（路由 ≠ 实现）。修复后同样的变异覆盖率 35→34 且当场指名。\n★读数：App 桥 51→**52** · 真缺口 50→**49** · 可接线 43（不变，C84 走的是\"新写宿主\"路径）· 契约 harmony 34→35 · 能力页 App 原生 🟡→✅（iOS/Android/鸿蒙三列）· 概览 iOS/Android 39/45→**41/43**、鸿蒙 19/65→20/64。\n★诚实边界：① 鸿蒙首次真机跑通前**设备锁屏**（`AA 10106102` 开发者模式无法自动解锁）⇒ 需人工解锁后重跑；② 不证明\"用户真的看了文档\"（三端预览器都没有「看完」回调）；③ Android 的 MIME 处理者取决于设备装了哪些 App（本机有 WPS + MT 管理器，`ResolverActivity` 弹出），换机可能无接收方 ⇒ 那时如实 `document.open.unsupported`（不做 `resolveActivity` 前置判断，见 #1285 包可见性教训）。"
+    },
+    {
+      "id": "T-request-vue-product-layer",
+      "title": "请求库产品接线：Vue composable 层（useQuery/useMutation/useRequest）+ 示例页 + 官网产品页与使用手册",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:zcode-main-20261030",
+      "scope": [
+        "packages/request/src/index.ts",
+        "packages/request/src/client.ts",
+        "packages/request/src/support.ts",
+        "packages/request/src/use-query.ts",
+        "packages/request/src/use-mutation.ts",
+        "packages/request/src/use-request.ts",
+        "packages/request/package.json",
+        "packages/request/README.md",
+        "packages/api/src/request/query.ts",
+        "examples/pages/request-vue-demo.vue",
+        "tests/request-vue-composables.test.ts",
+        "tsconfig.json",
+        "vitest.config.ts",
+        "website/content/system/13-request-governance.md",
+        "website/content/system/14-request-quickstart.md"
+      ],
+      "decision": 1394,
+      "verification": "npx vitest run tests/request-vue-composables.test.ts（15/15，含真 Vue watchEffect 响应式判据）；npx vue-tsc --noEmit（根零错误）；node scripts/build-packages.mjs（packages/request 产物）；破坏性验证 3 层：M-V1 拆响应式（shallowRef→普通对象）· M-V2 拆竞态裁决 · M-V3 unknown 也回滚",
+      "related": [
+        "T-request-client-library"
+      ],
+      "note": "【in_progress · 2026-10-30 · 决策 #1387】用户原话：「只有内核，没有产品接线那相当于没做啊」「说了不能做成API手册那种，结果还是做成了那样，而且没有详细的前端使用教程」。\n★★**起因：内核 20 条痛点做完、官网也写了，但产品层是空的**。取证结论：① `createQuery`/`createMutation`（packages/api/src/request/query.ts，191 行）**零测试、零消费者**，且其 `state` 是**普通对象字面量** ⇒ 在 Vue 模板里数据到了**不重渲染**（在最主要的目标环境里不工作）；② 全仓无 Vue composable（搜 useRequest/useApi 零命中）；③ `examples/` 里零使用（只有直接调 cap.useFetch）。\n★**架构落点**：新建 `@proteus-vue/request`（vue 为 peerDependency，与 `@proteus-vue/pinia-sync` 同范式）——内核 `packages/api` 保持**零 vue 依赖**（它要能跑 MP 逻辑层/Node/任意环境），响应式是 Vue 特有 ⇒ 必须分层。\n★**本层只做三件内核不做的事**：① 响应式容器（shallowRef，大列表不做深代理）；② 竞态裁决（快速切筛选时旧响应不得覆盖新响应）；③ 组件卸载取消在飞请求。**不重实现任何策略**。\n★**三态语义落到 UI**：`failed` 保留旧数据+回滚乐观值；★`unknown` **不回滚**（可能已成功）并要求用户确认。\n★判据 15/15：含★用**真 Vue `watchEffect` 计触发次数**验响应式（这是内核那层做不到的），并附一条自检证明\"普通对象不触发 effect\"（防该断言恒真）。\n★破坏性验证：M-V1 shallowRef→普通对象 ⇒ 响应式那条红；M-V2 拆竞态裁决 ⇒ 竞态那条红；M-V3 unknown 也回滚 ⇒ 三态回滚那条红。三层都精确翻红。\n★**决策号改号**：立项按 #1387，实施期间并发会话（Studio 终端线）已占用 #1387–#1393 ⇒ 临提交前改为 **#1394**。\n★**产出清单**：新建 `@proteus-vue/request` 包（6 个源文件）· 示例页 `examples/pages/request-vue-demo.vue` · 判据 `tests/request-vue-composables.test.ts`（19 条）· 官网产品页重写（中英，含可视化对比）· 使用手册新增（中英）。\n★**顺带**：给内核 `createQuery`/`createMutation`（此前**零测试**）补 4 条判据，并在其文档字符串写明\"这不是 Vue composable、state 非响应式、Vue 里请用 @proteus-vue/request\"。"
     }
   ]
 }

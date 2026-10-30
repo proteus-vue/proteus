@@ -1,0 +1,30 @@
+{
+  "name": "@proteus-vue/request",
+  "version": "0.3.0-beta.28",
+  "description": "Proteus 请求库的 Vue 产品层：useQuery / useMutation / useRequest —— 真响应式（模板可直接绑）+ 三态结果（含 unknown）· 内核在 @proteus-vue/api 的 request/（平台中立·零 vue 依赖）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "@proteus-vue/api": "0.3.0-beta.28"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --external:vue --external:@proteus-vue/api --outfile=dist/index.js"
+  }
+}

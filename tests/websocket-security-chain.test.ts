@@ -171,7 +171,7 @@ describe('★★★#1344 P4 各端 TLS 安全链取证（源码级，防"将来�
    *   ② 一旦失守，"白名单放行了一个域名"会变成"白名单放行了**任何人**冒充那个域名"。
    *   三端形态不同，各自的坑也不同 —— 必须分别锚定。
    */
-  async function readHostFile(rel) {
+  async function readHostFile(rel: string): Promise<string> {
     const fs = await import('node:fs')
     const path = await import('node:path')
     const { fileURLToPath } = await import('node:url')

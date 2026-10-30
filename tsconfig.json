@@ -63,6 +63,8 @@
       "@proteus-vue/i18n": ["packages/i18n/src/index.ts"],
       "@proteus-vue/module": ["packages/module/src/index.ts"],
       "@proteus-vue/pinia-sync": ["packages/pinia-sync/src/index.ts"],
+      // ★★★#1387：请求库的 Vue 产品层（内核在 api 包 · 本包只做响应式/竞态/生命周期）
+      "@proteus-vue/request": ["packages/request/src/index.ts"],
       "@proteus-vue/renderer-app": ["packages/renderer-app/src/index.ts"],
       // ★子路径必须单列（与 vitest.config.ts 的 alias 对齐——两处都配才既有类型又有运行时解析）
       "@proteus-vue/renderer-app/adapters/selfdraw": ["packages/renderer-app/src/adapters/selfdraw.ts"],
