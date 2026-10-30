@@ -35,6 +35,9 @@ import {
   lineNumbers,
 } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo, selectAll, undo } from '@codemirror/commands'
+/* 官方查找/替换（决策 #1401）：全量高亮、正则、替换、⌘D 选中同词都由它提供 ——
+   之前自制的"选中即高亮"版只是临时方案，装好依赖就该换掉（少一套自己维护的状态机）。 */
+import { gotoLine, highlightSelectionMatches, search, searchKeymap, selectNextOccurrence } from '@codemirror/search'
 import {
   HighlightStyle,
   StreamLanguage,
@@ -89,110 +92,8 @@ function onQuickPick(path: string) {
   void open(path)
 }
 
-/* ── 编辑器内查找 / 跳行（决策 #1400）────────────────────────────────────────
- * 【为什么不用 @codemirror/search】它没装（加依赖要在用户终端跑 pnpm），而"⌘F 在文件里找"
- *   是编辑器最基本的操作。这里用 doc 文本 + selection 实现：
- *   **每按一次 Enter 就把命中区间选中并滚进视野** —— 选中本身就是最清晰的高亮，
- *   不需要额外 decoration 层（那样要引 StateField/ViewPlugin，代码与风险都更大）。
- * 代价（已知）：不做全量高亮、不支持正则/替换 —— 等 search 包装上再补。 */
-const edFindOpen = ref(false)
-const edFindQ = ref('')
-const edFindTotal = ref(0)
-const edFindAt = ref(-1)
-
-function edMatches(): { from: number; to: number }[] {
-  const q = edFindQ.value
-  if (!q || !view) return []
-  const text = view.state.doc.toString()
-  const hay = text.toLowerCase()
-  const needle = q.toLowerCase()
-  const out: { from: number; to: number }[] = []
-  let i = 0
-  while (i <= hay.length - needle.length) {
-    const k = hay.indexOf(needle, i)
-    if (k < 0) break
-    out.push({ from: k, to: k + q.length })
-    i = k + Math.max(1, needle.length)
-  }
-  return out
-}
-
-function edFindStep(back = false) {
-  if (!view) return
-  const ms = edMatches()
-  edFindTotal.value = ms.length
-  if (!ms.length) {
-    edFindAt.value = -1
-    return
-  }
-  const sel = view.state.selection.main
-  let idx: number
-  if (back) {
-    idx = ms.map((m) => m.from).filter((f) => f < sel.from).pop() ?? ms[ms.length - 1].from
-    idx = ms.findIndex((m) => m.from === idx)
-  } else {
-    const next = ms.find((m) => m.from >= sel.to) ?? ms[0]
-    idx = ms.indexOf(next)
-  }
-  const m = ms[idx]
-  edFindAt.value = idx
-  view.dispatch({ selection: { anchor: m.from, head: m.to }, scrollIntoView: true })
-  view.focus()
-}
-
-watch(edFindQ, () => {
-  edFindTotal.value = edMatches().length
-  edFindAt.value = -1
-})
-
-function edFindOpenBox() {
-  edFindOpen.value = true
-  void nextTick(() => document.querySelector<HTMLInputElement>('#edFindInput')?.select())
-}
-
-function edFindClose() {
-  edFindOpen.value = false
-  edFindQ.value = ''
-  edFindTotal.value = 0
-  edFindAt.value = -1
-  view?.focus()
-}
-
-/** ⌘G：跳行（1-based）。★用**内联输入框**而不是 `window.prompt`
- *  —— WKWebView 里 `prompt()` 不实现、静默返回 null，那样快捷键等于没有。 */
-const edGotoOpen = ref(false)
-const edGotoVal = ref('')
-
-function gotoOpen() {
-  edGotoOpen.value = true
-  if (view) edGotoVal.value = String(view.state.doc.lineAt(view.state.selection.main.head).number)
-  void nextTick(() => document.querySelector<HTMLInputElement>('#edGotoInput')?.select())
-}
-
-function gotoCommit() {
-  const n = Number(edGotoVal.value)
-  if (view && Number.isFinite(n) && n >= 1) {
-    const line = view.state.doc.line(Math.min(Math.round(n), view.state.doc.lines))
-    view.dispatch({ selection: { anchor: line.from }, scrollIntoView: true })
-  }
-  edGotoOpen.value = false
-  view?.focus()
-}
-
 /** ⌘P 打开快速面板；Esc 由面板自己处理。只在代码视图里监听（组件只在代码视图挂载）。 */
 function onQuickKey(e: KeyboardEvent) {
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
-    e.preventDefault()
-    e.stopPropagation()
-    edFindOpenBox()
-    return
-  }
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'g') {
-    e.preventDefault()
-    e.stopPropagation()
-    gotoOpen()
-    return
-  }
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
     e.preventDefault()
     e.stopPropagation()
@@ -357,6 +258,8 @@ function makeState(doc: string, path: string) {
       bracketMatching(),
       indentOnInput(),
       langFor(path),
+      search({ top: true }),
+      highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
       // ⌘S 放最前：它能 preventDefault 掉浏览器/宿主的保存行为
@@ -369,6 +272,10 @@ function makeState(doc: string, path: string) {
             return true
           },
         },
+        /* ⌘D：选中下一个同样的词（多光标）；⌘F/⌘G 走官方面板（⌘G 是面板内的跳行，不弹 window.prompt） */
+        { key: 'Mod-d', preventDefault: true, run: selectNextOccurrence },
+        { key: 'Mod-g', preventDefault: true, run: gotoLine },
+        ...searchKeymap,
         ...defaultKeymap,
         ...historyKeymap,
         indentWithTab,
@@ -915,36 +822,6 @@ onBeforeUnmount(() => {
            不给 padding 的话最后几行代码会被盖住。文件树（.side）**不**让，所以它占满整列。 -->
       <div class="pane" :style="{ paddingBottom: termMode !== 'off' ? termH + 'px' : undefined }">
 
-        <!-- 跳行（⌘G）：内联输入，不用 window.prompt（WKWebView 不支持） -->
-        <div v-if="edGotoOpen" class="edfind goto" @click.stop>
-          <span class="lbl">行</span>
-          <input
-            id="edGotoInput"
-            v-model="edGotoVal"
-            placeholder="行号"
-            inputmode="numeric"
-            @keydown.enter.prevent="gotoCommit"
-            @keydown.esc.prevent="((edGotoOpen = false), view?.focus())"
-          />
-          <button title="跳转（Enter）" @click="gotoCommit">↵</button>
-          <button title="取消（Esc）" @click="((edGotoOpen = false), view?.focus())">✕</button>
-        </div>
-
-        <!-- 编辑器内查找（决策 #1400）：⌘F 打开；Enter/⇧Enter 逐个命中（每次选中并滚入视野） -->
-        <div v-if="edFindOpen" class="edfind" @click.stop>
-          <input
-            id="edFindInput"
-            v-model="edFindQ"
-            placeholder="在文件中查找"
-            spellcheck="false"
-            @keydown.enter.prevent="edFindStep($event.shiftKey)"
-            @keydown.esc.prevent="edFindClose"
-          />
-          <span class="cnt">{{ edFindQ ? (edFindTotal ? `${edFindAt + 1}/${edFindTotal}` : '无命中') : '' }}</span>
-          <button title="上一个（⇧Enter）" @click="edFindStep(true)">↑</button>
-          <button title="下一个（Enter）" @click="edFindStep(false)">↓</button>
-          <button title="关闭（Esc）" @click="edFindClose">✕</button>
-        </div>
         <div class="bar">
           <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
           <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
@@ -1096,24 +973,19 @@ onBeforeUnmount(() => {
 .treegrip:hover { background: var(--accent); opacity: .35; }
 
 /* 编辑器内查找框（决策 #1400）：贴右上角，不遮代码首行（下面是 .bar 的高度） */
-.edfind {
-  position: absolute;
-  right: 10px;
-  top: 34px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
+/* ── CodeMirror 官方查找面板的深色适配（决策 #1401）─────────────────────
+   官方面板默认是浅色（白底黑字），放进 Studio 会像"外挂控件"。
+   这里只覆盖颜色与尺寸，不动它的布局逻辑。 */
+:deep(.cm-panels) {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 8px 22px rgb(0 0 0 / 40%);
+  color: var(--fg);
+  border-color: var(--border);
+  font-size: 11px;
 }
-.edfind.goto .lbl { font-size: 10px; color: var(--fg-subtle); }
-.edfind.goto input { width: 72px; }
-.edfind input {
-  width: 168px;
+:deep(.cm-panels.cm-panels-top) { border-bottom: 1px solid var(--border-subtle); }
+:deep(.cm-panel.cm-search) { padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+:deep(.cm-panel.cm-search label) { display: inline-flex; align-items: center; gap: 3px; color: var(--fg-muted); }
+:deep(.cm-textfield) {
   height: 20px;
   padding: 0 5px;
   border: 1px solid var(--border-subtle);
@@ -1122,20 +994,29 @@ onBeforeUnmount(() => {
   color: var(--fg);
   font: inherit;
   font-size: 11px;
-  outline: none;
 }
-.edfind input:focus { border-color: var(--accent); }
-.edfind .cnt { min-width: 34px; font-size: 10px; color: var(--fg-subtle); text-align: right; }
-.edfind button {
-  width: 18px;
-  height: 18px;
-  border: 0;
+:deep(.cm-textfield:focus) { border-color: var(--accent); outline: none; }
+:deep(.cm-button) {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  background: transparent;
-  color: var(--fg-subtle);
+  background: var(--bg-overlay);
+  color: var(--fg-muted);
+  font: inherit;
   font-size: 10px;
-  line-height: 1;
   cursor: pointer;
 }
-.edfind button:hover { background: var(--bg-overlay); color: var(--fg); }
+:deep(.cm-button:hover) { background: var(--bg-elevated); color: var(--fg); }
+:deep(.cm-panel.cm-search [name='close']) {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  color: var(--fg-subtle);
+}
+/* 命中高亮：所有命中淡蓝，当前命中加深；⌘D 命中同词用淡黄区分 */
+:deep(.cm-searchMatch) { background: rgb(96 165 250 / 22%); border-radius: 2px; }
+:deep(.cm-searchMatch-selected) { background: rgb(96 165 250 / 55%); }
+:deep(.cm-selectionMatch) { background: rgb(250 204 21 / 18%); border-radius: 2px; }
+
 </style>
