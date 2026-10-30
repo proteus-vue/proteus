@@ -3190,7 +3190,6 @@
       "scope": [
         "packages/studio/package-app.sh",
         "packages/studio/bundle-dylibs.py",
-        "packages/studio/icons/make-icon.py",
         "packages/studio/icons/icon.icns",
         "packages/studio/tauri.conf.json",
         "packages/studio/src/main.rs",
@@ -3205,7 +3204,7 @@
         "T-studio-ui-vue",
         "T-studio-inspector-real"
       ],
-      "note": "【done · 决策 #1184（2026-10-22）】出门清单 G2。★陷阱1：二进制硬链接 Homebrew ffmpeg ⇒ bundle-dylibs.py 收 65 个 dylib/59MB 进 Frameworks，改 182 处引用为 @rpath，加 LC_RPATH，逐个重签。★陷阱2：双击启动 PATH 只有 /usr/bin:/bin:… ⇒ adb 找不到 ⇒ ensure_tool_path 补 /opt/homebrew/bin、/usr/local/bin。★陷阱3：双击带不了环境变量 ⇒ default_live_source 探测 adb devices，有设备默认接真机，无设备明确打印。★打包器自己也错了两次：① 只收绝对路径依赖，漏了 libwebp 里以 @rpath/libsharpyuv 写的库 ⇒ 启动 Library not loaded；② 收尾判据把 @rpath（目标状态）当失败 ⇒ 永远报错。改成「无绝对 Homebrew 路径 + 每条 @rpath 都在包内」。★干净环境实测：PATH 补充 → 默认接真机 → 参数集 108 字节 → 硬解=1；otool 外部引用 0 条；@rpath 4 条全在包内；plutil 通过；adhoc 签名；产物 70MB。★测量纪律：屏幕静止时 screenrecord 3 秒只出 2 帧；每 0.3s 新起 adb 会话造滑动会抢占流（aus 275→6）。性能读数必须在持续运动下取。★边界：ad-hoc 非公证（别人机器仍被 Gatekeeper 拦）；仍依赖 adb；只测 arm64。"
+      "note": "【done · 决策 #1184（2026-10-22）】出门清单 G2。★陷阱1：二进制硬链接 Homebrew ffmpeg ⇒ bundle-dylibs.py 收 65 个 dylib/59MB 进 Frameworks，改 182 处引用为 @rpath，加 LC_RPATH，逐个重签。★陷阱2：双击启动 PATH 只有 /usr/bin:/bin:… ⇒ adb 找不到 ⇒ ensure_tool_path 补 /opt/homebrew/bin、/usr/local/bin。★陷阱3：双击带不了环境变量 ⇒ default_live_source 探测 adb devices，有设备默认接真机，无设备明确打印。★打包器自己也错了两次：① 只收绝对路径依赖，漏了 libwebp 里以 @rpath/libsharpyuv 写的库 ⇒ 启动 Library not loaded；② 收尾判据把 @rpath（目标状态）当失败 ⇒ 永远报错。改成「无绝对 Homebrew 路径 + 每条 @rpath 都在包内」。★干净环境实测：PATH 补充 → 默认接真机 → 参数集 108 字节 → 硬解=1；otool 外部引用 0 条；@rpath 4 条全在包内；plutil 通过；adhoc 签名；产物 70MB。★测量纪律：屏幕静止时 screenrecord 3 秒只出 2 帧；每 0.3s 新起 adb 会话造滑动会抢占流（aus 275→6）。性能读数必须在持续运动下取。★边界：ad-hoc 非公证（别人机器仍被 Gatekeeper 拦）；仍依赖 adb；只测 arm64。 ★2026-10-30：scope 移除已删除的 packages/studio/icons/make-icon.py（文件早已不存在，留着只会误导后续会话，且挡 check:ai-tasks）。"
     },
     {
       "id": "T-studio-out-of-poc",
@@ -3853,7 +3852,9 @@
         "tests/screen-runtime.test.ts",
         "tests/app-host-cli.test.ts",
         "docs/project-memory-archive/decisions.md",
-        "docs/ai-tasks.json"
+        "docs/ai-tasks.json",
+        "hosts/harmony/host-app/proteus_render/src/main/cpp/proteus_vm_session_drive.h",
+        "hosts/harmony/host-app/entry/src/main/ets/runtime/RenderPath.ets"
       ],
       "decision": 1343,
       "branch": null,
@@ -3861,9 +3862,10 @@
       "related": [
         "T-request-client-library",
         "T-harmony-http-cancel",
-        "T-harmony-http-stream"
+        "T-harmony-http-stream",
+        "T-request-perf-bench"
       ],
-      "note": "【in_progress · 2026-10-28 · 决策 #1343】\n★**P0 决策门已通过**：#540 断言\"跨 napi 复用 JSVM 必崩\"在当前 SDK（API 24）**已被真机实证推翻**——\n  plain 负载 **1000 轮与 5000 轮全部零崩溃**（ok:true / roundsOk==rounds / firstFailureRound:-1），\n  堆曲线呈**锯齿状分代 GC**（基线不漂移、峰值封顶 2.7MB 不增长）⇒ 健康，非泄漏。\n★**怎么得出这个结论的**：没有直接接受 #540，而是注意到同 HAR 的持久壳 VM（proteus_host.cpp:23-28）\n  跨事件存活且真机已跑通 ⇒ 先用 `vm_session_probe.h` **只验一个变量**（严格复刻 HostAppBoot 的\n  VM 建立顺序，但每轮只开/关内层 HandleScope、VM 全程不销毁）。\n★**B 阶段（会话式 VM）尚未开始**：需要 `SessionOpen/Tick/Close` + pending 帧 + 真实 cancel/stream/WS。\n  ★关键发现：协议（invoke_wire.h 的 pending/streamSeq）与 JS 侧（capability-invoke.ts:922\n  处理 reply.pending）**早已支持异步**，只缺鸿蒙宿主发 pending 帧 + 有人 pump。\n★★三形态真机全绿（2026-10-28 设备解锁后补齐 nav/ref）：\n  · plain 5000 轮 → ok:true/5000/5000，锯齿 GC 峰值 2.7MB 封顶\n  · **nav 3000 轮 → ok:true/3000/3000**（★这条正是 #540 崩溃路径：await + 跨调用重入）\n  · ref 3000 轮 → ok:true/3000/3000（+2.7KB/100 轮 = 数组增长，非引用泄漏）\n【Handoff】\n- 做到哪：**P0 决策门完整通过**（三形态 + 探针 + napi + ArkTS + 脚本 + 四方一致）。\n- 未做：B 阶段全部（会话式 VM）。\n- 下一步：① 先跑一次「完整 bundle 版」探针（eval 整包 Vue bundle，验真实微任务压力下仍稳）；\n  ② 做 SessionOpen/Tick/Close；③ http.request 返回 pendingOf(reqId)、网络线程只写 C++ 队列、\n  tick 里推 __proteusHostResolveBytes；④ 再落地真实 cancel/stream/WS。\n- 坑（探针自身踩的四个，都有注释）：CompileScript 第 6 参数是 cacheRejected 不是成功标志 ·\n  CreateStringUtf8 必须 JSVM_AUTO_LENGTH · GetHeapStatistics 收 VM 且字段 usedHeapSize ·\n  aa start --ps 参数不会自动进 AppStorage（要 EntryAbility 显式转发）。\n- 判据状态：plain 5000 轮绿；nav/ref 待补。"
+      "note": "★★2026-10-30（#1344b）：**会话式渲染已真机跑通**，两处崩因定位并修复 —— ① `trySessionDrive` 用 `sessionEval` 跑 await 链（只做一次 checkpoint ⇒ 微任务栈撑爆）⇒ 新增 `hostVmSessionDrive`（宿主侧有界泵）； ② `trySessionRender` 把 1,717,167 字节 argsJson（含 1.5MB bundle）拼进 JS 表达式跨 napi 传 ⇒ `slim()` 剥掉 bundle/filesDir。 真机验过 `scene=superapp-screen-index`（报告 775B·ok:true），M-H1/M-H2 变异各自精确复现崩溃。 ★待办（明天接续，按顺序）： ① 设备恢复**开发者模式**后，对**重构后**的构建复跑 —— 成功读数来自重构前的构建；    之后为过 check:file-size 做了纯搬移拆分（sessionDrive → 独立头文件、driveApp 收敛），    编译通过但未再跑真机（\"纯搬移不改行为\"是理论不是证据）。 ② 四条路径逐条真机：superapp-screen-* / superapp-pump-* / superapp-drive / switchTab（目前只有第一条有真机证据）。 ③ 量会话式 vs 一次性 VM 的渲染耗时对比（一次性 115–135ms/次，会话式省掉整包 eval，预期明显更优但未测）。 ④ ①②③ 都绿后再考虑把默认值从 oneshot 翻成 session。 ★默认仍 oneshot（--ps renderMode session 显式开启）。"
     },
     {
       "id": "T-app-capability-open-document",
