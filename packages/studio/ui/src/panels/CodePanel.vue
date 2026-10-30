@@ -69,6 +69,7 @@ import FileTree from './FileTree.vue'
 import { startDrag, termH, termMode, treeHidden, treeW } from '../layout'
 import TabBar from './TabBar.vue'
 import QuickOpen from './QuickOpen.vue'
+import { cmPhrases } from '../ui/i18n'
 import GitBar from './GitBar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
@@ -258,6 +259,7 @@ function makeState(doc: string, path: string) {
       bracketMatching(),
       indentOnInput(),
       langFor(path),
+      cmPhrases,
       search({ top: true }),
       highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
