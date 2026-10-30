@@ -14,6 +14,7 @@ import SearchBox from './SearchBox.vue'
 import GitBar from './GitBar.vue'
 import FileTree from './FileTree.vue'
 import { startDrag, treeHidden, treeW } from '../layout'
+import type { SearchHit } from '../bridge'
 
 const props = defineProps<{
   files: string[]
@@ -23,7 +24,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   open: [path: string]
   changed: [path: string]
-  jump: [path: string, line: number]
+  /** 原样转发 SearchBox 的跳转请求（`SearchHit` 带 path/line/col，语义由父组件解释） */
+  jump: [hit: SearchHit]
   refresh: []
   copy: [path: string]
   active: [v: boolean]
@@ -48,7 +50,7 @@ defineExpose({ focusSearch })
              不做 nth-child 序号假设（与 rail 的情况不同，那里不能插节点）。 -->
       <div class="treegrip" title="拖动调整文件树宽度（⌘B 收起/展开）" @pointerdown="startDrag('tree', $event)" />
       <!-- 搜索框常驻顶部；一旦有查询，结果列表**替换**目录树（VS Code 同款：同一时刻一个列表） -->
-      <SearchBox ref="searchBox" @jump="(p, l) => emit('jump', p, l)" @active="(v) => emit('active', v)" />
+      <SearchBox ref="searchBox" @jump="(hit) => emit('jump', hit)" @active="(v) => emit('active', v)" />
       <!-- Git 只读条（决策 #1246 · #1247 拆成组件）：分支 + 改动数；点清单项 = 打开 + 看 HEAD diff -->
       <GitBar :cur="props.cur" @open="(p) => emit('changed', p)" />
       <!-- 文件树（#1247 拆成组件）：只在没有搜索查询时显示（同一时刻只有一个列表） -->

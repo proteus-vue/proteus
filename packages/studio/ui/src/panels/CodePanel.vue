@@ -38,6 +38,9 @@ import { defaultKeymap, history, historyKeymap, indentWithTab, redo, selectAll, 
 /* 官方查找/替换（决策 #1401）：全量高亮、正则、替换、⌘D 选中同词都由它提供 ——
    之前自制的"选中即高亮"版只是临时方案，装好依赖就该换掉（少一套自己维护的状态机）。 */
 import { gotoLine, highlightSelectionMatches, search, searchKeymap, selectNextOccurrence } from '@codemirror/search'
+/* 类型诊断的**渲染层**（决策 #1413）：数据在 `diag.ts`，这里只负责"画波浪线 + 悬浮提示"。
+   `linter` 会在文档变化/调用 `forceLinting` 时回调我们给的 source，从共享 store 现取现算。 */
+import { forceLinting, lintGutter, linter, type Diagnostic } from '@codemirror/lint'
 import {
   HighlightStyle,
   StreamLanguage,
@@ -74,7 +77,7 @@ import GitBar from './GitBar.vue'
 import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
-import { refreshAfterSave, runDiag } from '../diag'
+import { diagAt, diagsOf, refreshAfterSave, runDiag } from '../diag'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
@@ -287,6 +290,8 @@ function makeState(doc: string, path: string) {
       langFor(path),
       cmPhrases,
       search({ top: true }),
+      lintGutter(),
+      linter((v) => buildDiags(v), { delay: 300 }),
       highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
@@ -416,6 +421,9 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     states.set(path, st)
     await nextTick()
     view?.setState(st)
+    /* ★打开文件后主动催一次 lint：诊断通常**先于**打开文件就绪（进代码视图即自动跑），
+       而 `linter` 只在文档变化时回调 ⇒ 不催的话波浪线要等你敲一个字才出现（决策 #1413）。 */
+    if (view) forceLinting(view)
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
     await syncDiffAfterOpen(opts.diff)
@@ -623,6 +631,34 @@ async function savePath(path: string): Promise<boolean> {
 /** 面包屑（决策 #1407）：把 `cur` 拆成目录段 + 文件名。
  *  ★**textContent 必须仍等于完整路径** —— 门禁把 `#codePath` 的文本当"当前文件"比对，
  *    所以分隔符用内联 `/` 文本、模板不换行，避免多余空白把路径弄脏。 */
+/**
+ * 把 `diag.ts` 里当前文件的诊断换算成 CodeMirror 的 Diagnostic。
+ * ★行/列是 **1-based**（tsc 口径），CodeMirror 要**绝对偏移**；行号超界要夹紧
+ *   （用户刚删了几行时，旧诊断会指到不存在的行，不夹紧会抛错）。
+ */
+function buildDiags(v: EditorView): Diagnostic[] {
+  const path = cur.value
+  if (!path) return []
+  const doc = v.state.doc
+  const out: Diagnostic[] = []
+  for (const d of diagsOf(path)) {
+    const ln = Math.min(Math.max(1, d.line), doc.lines)
+    const line = doc.line(ln)
+    const from = Math.min(line.from + Math.max(0, d.col - 1), line.to)
+    /* 波浪线覆盖一个词（到空白/标点为止），比单字符好点中 */
+    let to = from
+    while (to < line.to && !/[\s,;()\[\]{}.:'"`]/.test(doc.sliceString(to, to + 1))) to++
+    out.push({
+      from,
+      to: Math.max(to, Math.min(from + 1, line.to)),
+      severity: 'error',
+      source: 'tsc',
+      message: `${d.code}: ${d.message}`,
+    })
+  }
+  return out
+}
+
 const crumbs = computed(() => {
   if (!cur.value) return []
   const parts = cur.value.split('/').filter(Boolean)
@@ -647,8 +683,6 @@ async function saveAll() {
   }
   saving.value = false
   void refreshGit()
-/* 首次挂载顺手跑一次类型诊断（非强制，60s 内复用结果）—— 用户不用再手动点 */
-void runDiag()
   pushToast(`已保存 ${ok}/${targets.length} 个文件`)
 }
 
@@ -872,6 +906,13 @@ onMounted(boot)
 /* ⌘P 监听（决策 #1396）：与 boot 分开挂，避免把启动流程改成 async 包装 */
 onMounted(() => window.addEventListener('keydown', onQuickKey, true))
 // 首帧后拉一次 git 状态（只读；非仓库会自己降级）
+/* 诊断数据一到就重画波浪线：`linter` 只在文档变化时回调，数据外部更新时要显式催一次（决策 #1413） */
+watch(diagAt, () => {
+  if (view) forceLinting(view)
+})
+
+/* 首次挂载顺手跑一次类型诊断（非强制，60s 内复用结果）—— 用户不用再手动点（决策 #1412） */
+void runDiag()
 void refreshGit()
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onQuickKey, true)
