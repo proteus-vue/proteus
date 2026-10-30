@@ -89,8 +89,110 @@ function onQuickPick(path: string) {
   void open(path)
 }
 
+/* ── 编辑器内查找 / 跳行（决策 #1400）────────────────────────────────────────
+ * 【为什么不用 @codemirror/search】它没装（加依赖要在用户终端跑 pnpm），而"⌘F 在文件里找"
+ *   是编辑器最基本的操作。这里用 doc 文本 + selection 实现：
+ *   **每按一次 Enter 就把命中区间选中并滚进视野** —— 选中本身就是最清晰的高亮，
+ *   不需要额外 decoration 层（那样要引 StateField/ViewPlugin，代码与风险都更大）。
+ * 代价（已知）：不做全量高亮、不支持正则/替换 —— 等 search 包装上再补。 */
+const edFindOpen = ref(false)
+const edFindQ = ref('')
+const edFindTotal = ref(0)
+const edFindAt = ref(-1)
+
+function edMatches(): { from: number; to: number }[] {
+  const q = edFindQ.value
+  if (!q || !view) return []
+  const text = view.state.doc.toString()
+  const hay = text.toLowerCase()
+  const needle = q.toLowerCase()
+  const out: { from: number; to: number }[] = []
+  let i = 0
+  while (i <= hay.length - needle.length) {
+    const k = hay.indexOf(needle, i)
+    if (k < 0) break
+    out.push({ from: k, to: k + q.length })
+    i = k + Math.max(1, needle.length)
+  }
+  return out
+}
+
+function edFindStep(back = false) {
+  if (!view) return
+  const ms = edMatches()
+  edFindTotal.value = ms.length
+  if (!ms.length) {
+    edFindAt.value = -1
+    return
+  }
+  const sel = view.state.selection.main
+  let idx: number
+  if (back) {
+    idx = ms.map((m) => m.from).filter((f) => f < sel.from).pop() ?? ms[ms.length - 1].from
+    idx = ms.findIndex((m) => m.from === idx)
+  } else {
+    const next = ms.find((m) => m.from >= sel.to) ?? ms[0]
+    idx = ms.indexOf(next)
+  }
+  const m = ms[idx]
+  edFindAt.value = idx
+  view.dispatch({ selection: { anchor: m.from, head: m.to }, scrollIntoView: true })
+  view.focus()
+}
+
+watch(edFindQ, () => {
+  edFindTotal.value = edMatches().length
+  edFindAt.value = -1
+})
+
+function edFindOpenBox() {
+  edFindOpen.value = true
+  void nextTick(() => document.querySelector<HTMLInputElement>('#edFindInput')?.select())
+}
+
+function edFindClose() {
+  edFindOpen.value = false
+  edFindQ.value = ''
+  edFindTotal.value = 0
+  edFindAt.value = -1
+  view?.focus()
+}
+
+/** ⌘G：跳行（1-based）。★用**内联输入框**而不是 `window.prompt`
+ *  —— WKWebView 里 `prompt()` 不实现、静默返回 null，那样快捷键等于没有。 */
+const edGotoOpen = ref(false)
+const edGotoVal = ref('')
+
+function gotoOpen() {
+  edGotoOpen.value = true
+  if (view) edGotoVal.value = String(view.state.doc.lineAt(view.state.selection.main.head).number)
+  void nextTick(() => document.querySelector<HTMLInputElement>('#edGotoInput')?.select())
+}
+
+function gotoCommit() {
+  const n = Number(edGotoVal.value)
+  if (view && Number.isFinite(n) && n >= 1) {
+    const line = view.state.doc.line(Math.min(Math.round(n), view.state.doc.lines))
+    view.dispatch({ selection: { anchor: line.from }, scrollIntoView: true })
+  }
+  edGotoOpen.value = false
+  view?.focus()
+}
+
 /** ⌘P 打开快速面板；Esc 由面板自己处理。只在代码视图里监听（组件只在代码视图挂载）。 */
 function onQuickKey(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
+    e.preventDefault()
+    e.stopPropagation()
+    edFindOpenBox()
+    return
+  }
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'g') {
+    e.preventDefault()
+    e.stopPropagation()
+    gotoOpen()
+    return
+  }
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
     e.preventDefault()
     e.stopPropagation()
@@ -812,6 +914,37 @@ onBeforeUnmount(() => {
       <!-- ★编辑器列让出终端面板高度（决策 #1348）：终端浮在它下方，
            不给 padding 的话最后几行代码会被盖住。文件树（.side）**不**让，所以它占满整列。 -->
       <div class="pane" :style="{ paddingBottom: termMode !== 'off' ? termH + 'px' : undefined }">
+
+        <!-- 跳行（⌘G）：内联输入，不用 window.prompt（WKWebView 不支持） -->
+        <div v-if="edGotoOpen" class="edfind goto" @click.stop>
+          <span class="lbl">行</span>
+          <input
+            id="edGotoInput"
+            v-model="edGotoVal"
+            placeholder="行号"
+            inputmode="numeric"
+            @keydown.enter.prevent="gotoCommit"
+            @keydown.esc.prevent="((edGotoOpen = false), view?.focus())"
+          />
+          <button title="跳转（Enter）" @click="gotoCommit">↵</button>
+          <button title="取消（Esc）" @click="((edGotoOpen = false), view?.focus())">✕</button>
+        </div>
+
+        <!-- 编辑器内查找（决策 #1400）：⌘F 打开；Enter/⇧Enter 逐个命中（每次选中并滚入视野） -->
+        <div v-if="edFindOpen" class="edfind" @click.stop>
+          <input
+            id="edFindInput"
+            v-model="edFindQ"
+            placeholder="在文件中查找"
+            spellcheck="false"
+            @keydown.enter.prevent="edFindStep($event.shiftKey)"
+            @keydown.esc.prevent="edFindClose"
+          />
+          <span class="cnt">{{ edFindQ ? (edFindTotal ? `${edFindAt + 1}/${edFindTotal}` : '无命中') : '' }}</span>
+          <button title="上一个（⇧Enter）" @click="edFindStep(true)">↑</button>
+          <button title="下一个（Enter）" @click="edFindStep(false)">↓</button>
+          <button title="关闭（Esc）" @click="edFindClose">✕</button>
+        </div>
         <div class="bar">
           <span class="path" id="codePath" :title="cur">{{ cur || '—' }}</span>
           <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
@@ -928,6 +1061,7 @@ onBeforeUnmount(() => {
 .dtoggle:hover{background:var(--bg-overlay);border-color:var(--border-subtle);color:var(--fg)}
 .dtoggle.on{background:rgba(255,255,255,.08);border-color:var(--border);color:var(--fg)}
 .pane {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -960,4 +1094,48 @@ onBeforeUnmount(() => {
 .treegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px;
             cursor: col-resize; z-index: 5; background: transparent; transition: background .12s; }
 .treegrip:hover { background: var(--accent); opacity: .35; }
+
+/* 编辑器内查找框（决策 #1400）：贴右上角，不遮代码首行（下面是 .bar 的高度） */
+.edfind {
+  position: absolute;
+  right: 10px;
+  top: 34px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 40%);
+}
+.edfind.goto .lbl { font-size: 10px; color: var(--fg-subtle); }
+.edfind.goto input { width: 72px; }
+.edfind input {
+  width: 168px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+.edfind input:focus { border-color: var(--accent); }
+.edfind .cnt { min-width: 34px; font-size: 10px; color: var(--fg-subtle); text-align: right; }
+.edfind button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.edfind button:hover { background: var(--bg-overlay); color: var(--fg); }
 </style>
