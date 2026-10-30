@@ -15808,3 +15808,47 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
       ④ 徽记/背景**在演示产品本身**（不是装饰）；
       ⑤ `prefers-reduced-motion` 有终态。
     ★第 ③ 条最容易忘：**"数字排列整齐"看起来像文档，"长度可比"才像仪表盘**。
+
+1398. **★★请求层拦截器入口：产品层补上 `interceptors`（旧行为是静默忽略）+ 手册补章节**（2026-10-30 · 用户「好像在请求层使用手册里面没看到请求拦截这些」）:
+  - **★用户看到的是文档缺口，取证发现的是产品缺口**。两件事都真：
+    ① 手册里 `grep 拦截|interceptor` **零命中**；
+    ② **产品层 `createRequestClient` 根本没有拦截器入口** —— `RequestClientOptions` 15 个字段里没有
+       `interceptors`。**运行时探针**（不只看类型）：
+       \`createRequestClient({ interceptors })\` ⇒ 拦截器**调用 0 次**（静默忽略）；
+       \`createRequestClient({ hooks })\` 且 hooks 带 \`fetch.requestInterceptors\` ⇒ 调用 1 次 ✅。
+    ⇒ 业务要加公共 header / 统一错误处理 / 刷新 token，得先知道一条**内核秘径**
+      （自建 hooks → 塞 \`fetch.requestInterceptors\` → 再传给 client）。
+    ★这与本库自己的定位矛盾：\`retry\`/\`trace\`/\`redact\` 都能直接配，唯独最常用的扩展点不能。
+  - **这是"承诺与实现不符"的同族**（本仓已记过多次）：**不是漏文档，是产品层漏 API**。
+    只写文档只能把秘径写清楚 —— 解决不了"拦截器为什么不能像 retry 那样直接配"。
+  - **修法**：给 `RequestClientOptions` 加 \`interceptors: { request?, response? }\`，
+    内部映射到内核 \`fetch.requestInterceptors\` / \`fetch.responseInterceptors\`（**不重实现**）。
+    **三种情况且不静默**：
+    · 没 hooks + 有 interceptors ⇒ 自建 hooks 时塞进 fetch 选项 ⇒ 走内核原生实现
+      （**含"配了拦截器就跳过去重"的保护**）；
+    · 有 hooks + 没 interceptors ⇒ 原行为零变化；
+    · **有 hooks + 有 interceptors ⇒ 明确抛 `request.interceptors.conflict`**，并给两条可执行出路。
+      ★为什么不静默忽略：**那正是本单要修的缺陷形态**。静默的"配了但没生效"比报错难查十倍。
+      （根因：\`CapabilityHooks\` 不暴露管线配置，本层无法把拦截器注入**已建好**的管线。）
+  - **★过程中自己抓到一处类型漂移（很值）**：我第一版把 \`RequestInterceptorLike\` 的返回值收窄成
+    \`{url, config}\`，而内核 \`RequestInterceptor\` 返回**完整的 \`FetchRequestContext\`**
+    （\`id\`/\`url\`/\`config\`/\`attempt\`/\`elapsedMs\`）⇒ 业务按窄类型写会在后续拦截器里读到
+    \`ctx.attempt === undefined\`、日志串不起 id。**是 \`vue-tsc\` 报的 3 条 TS2322 抓出来的**。
+    修法：产品层声明 \`RequestInterceptorContext\`（与内核逐字段一致），并补判据 ⑨
+    **用文本抽取比对两处字段集**（契约层刻意不 import 实现层 ⇒ 只能靠判据守）。
+  - **判据 10 条**（\`tests/request-interceptors.test.ts\`）：
+    ① interceptors 真映射进管线（mock \`createCapabilityHooks\` 捕获第二参数 —— 最直接的证据）·
+    ①b 不传则零变化 · ② 能改 url/config 且到达传输层 · ③ 返回 null 短路（\`fetch.intercepted\`）·
+    ④ 响应拦截器逆序（洋葱出口）· ⑤ **配拦截器 ⇒ 跳去重 + \`meta.dedupeSkipped\` 可见** ·
+    ⑥ hooks+interceptors 冲突报错且给出路 · ⑦ 向后兼容 · ⑧ 空数组视为没配 · ⑨ 两处类型逐字段一致。
+    ★①最初被我写成空壳（只断言"能构造"）——**自己发现并重写**（否则又是假绿）。
+  - **破坏性验证 3 层，全部精确翻红**：M-I1 拆掉 interceptors→pipeline 映射 ⇒ ①红；
+    M-I2 把冲突报错退化成静默忽略 ⇒ ⑥红；M-I3 删掉 context 一个字段 ⇒ ⑨红并报出少哪个。
+  - **文档**：手册新增「八、拦截器：统一加料与统一收口」（中英双版，后续节号顺延），含
+    四类常见用法 · 短路 · 洋葱顺序 · **"配了拦截器就不去重"这个取舍** · **"不要同时传 hooks 与 interceptors"及两条出路**；
+    README 同步一节。
+  - **读数**：判据 **172 → 182 条**、分组 **9 → 10 组**（数字 SSOT 自动重算，页面同步）。
+  - **诚实边界**：① 本层不做拦截器的**优先级/命名分组**（内核按注册序，没有 `interceptors.order`）；
+    ② 拦截器里**抛错**会怎样未在本单判据内覆盖（内核行为是冒泡成 failed，属既有语义）；
+    ③ 产品页 \`/phylax\` 的"五道闸"未把拦截器列为一闸 —— 它是**扩展点**，不是通过/拒绝的判定，
+       写进闸门序列会混淆语义，故只在手册与 README 描述。

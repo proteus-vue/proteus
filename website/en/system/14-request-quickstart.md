@@ -179,7 +179,114 @@ useQuery('/api/me', { request: { headers: { 'X-Request-Domain': 'vip' } } })
 
 Credentials never reach logs — redaction happens in the transport layer (headers/query/body, on by default). You also never see the raw token; it comes from `auth`.
 
-## 8. Retries and idempotency (read this before writing POSTs)
+## 8. Interceptors: one place to add and to settle
+
+The most-used extension point in this layer. Two kinds, opposite directions:
+
+| | When it runs | Typical use |
+|---|---|---|
+| **Request interceptor** | **Before** the request leaves (registration order) | Add common headers, sign, instrument, rewrite by host |
+| **Response interceptor** | **After** the response arrives (**reverse** order) | Central error handling, refresh token on 401, unwrap envelope |
+
+```ts
+provideRequestClient({
+  baseURL: import.meta.env.VITE_API,
+
+  interceptors: {
+    request: [
+      // ① Tag every request with a client header
+      (ctx) => ({
+        url: ctx.url,
+        config: {
+          ...ctx.config,
+          headers: { ...(ctx.config.headers ?? {}), 'X-Client': 'web' },
+        },
+      }),
+    ],
+    response: [
+      // ② Central logging — observe, do not alter the result
+      (res, ctx) => {
+        if (!res.ok) console.warn('[api]', ctx.url, res.error.code)
+        return res
+      },
+    ],
+  },
+})
+```
+
+### Short-circuit: a request interceptor returning `null`
+
+Returning `null` means "do not send this request". The result carries `fetch.intercepted` —
+the business can tell it was blocked on purpose, not an ambiguous failure.
+
+```ts
+interceptors: {
+  request: [
+    (ctx) => {
+      if (!navigator.onLine && ctx.url.includes('/pay')) return null
+      return { url: ctx.url, config: ctx.config }
+    },
+  ],
+}
+```
+
+### The order is an onion, not a queue
+
+Request interceptors run in **registration order**; response interceptors run in **reverse order** —
+the last one in is the first one to see the response.
+
+```ts
+interceptors: {
+  request:  [A, B],   // runs A → B
+  response: [X, Y],   // runs Y → X
+}
+```
+
+### ⚠️ One trade-off you must know: request interceptors disable dedupe
+
+A request interceptor can rewrite the URL and headers, and it runs **after** the dedupe key is computed —
+so the key can no longer represent the final request identity. Merging anyway risks cross-tenant leakage
+(A receiving B's response).
+
+So whenever request interceptors are configured, deduplication is **skipped entirely**, and the reason is
+written into `meta.dedupeSkipped`:
+
+```ts
+if (r.meta?.dedupeSkipped) {
+  // Not a misconfiguration — it is the deliberate "dedupe is unsafe with interceptors" decision
+  console.info('dedupe skipped:', r.meta.dedupeSkipped.reason)
+}
+```
+
+**Correctness over efficiency**: one fewer merge beats any chance of cross-tenant leakage.
+
+### Do not pass both `hooks` and `interceptors`
+
+```ts
+// ❌ throws request.interceptors.conflict
+createRequestClient({
+  hooks: myHooks,
+  interceptors: { request: [fn] },
+})
+```
+
+Why: `hooks` is an **already-constructed** pipeline; this layer cannot reach into it to inject interceptors.
+(The old behaviour was to **silently ignore** them — zero interceptor calls, no warning. It now throws.)
+
+Two ways out:
+
+```ts
+// ① Do not pass hooks — let the client build its own (recommended)
+createRequestClient({ interceptors: { request: [fn] } })
+
+// ② Build hooks yourself and put interceptors in the fetch options
+const hooks = createCapabilityHooks(undefined, {
+  fetch: { requestInterceptors: [fn] },
+})
+createRequestClient({ hooks })
+```
+
+## 9. Retries and idempotency (read this before writing POSTs)
 
 ```ts
 provideRequestClient({
@@ -199,7 +306,7 @@ useMutation('/api/order', {
 
 The key must be **stable**: the same logical request reuses the same value across retries. Use a draft id or a client-generated uuid — never regenerate per attempt.
 
-## 9. Offline queue
+## 10. Offline queue
 
 ```ts
 provideRequestClient({
@@ -215,7 +322,7 @@ provideRequestClient({
 
 Only idempotent requests enter the queue (GET/PUT/DELETE, or POST with a key). Non-idempotent requests without a key are rejected — replaying them would duplicate the write.
 
-## 10. Cancellation
+## 11. Cancellation
 
 ```ts
 const q = useQuery('/api/slow')
@@ -224,7 +331,7 @@ q.abort('navigated away')
 
 Components cancel automatically on unmount — you don't need to manage it.
 
-## 11. Known boundaries
+## 12. Known boundaries
 
 - **No reactive-url auto-refetch.** The url is evaluated at creation; changing `page`/`keyword` needs your own `watch` + `refresh`. A known boundary, not a bug.
 - **No SWR background-refresh scheduler.** That needs timers plus visibility awareness — a separate capability. The kernel has HTTP-level RFC 5861 SWR (cache semantics), which is not the same thing.
@@ -232,7 +339,7 @@ Components cancel automatically on unmount — you don't need to manage it.
 - **SSR must call provide explicitly.** Without it you get a process-wide fallback singleton, and quota/breaker counters accumulate across requests.
 - **What to do after `unknown` is the business's responsibility.** This layer keeps the state honest; it cannot decide whether to reconcile.
 
-## 12. Troubleshooting checklist
+## 13. Troubleshooting checklist
 
 1. **Did `loading` go back to `false`?** Stuck `true` means the request never settled (network hang, or the platform lacks support).
 2. **What is `outcome`?** `undefined` means it never fired (`immediate: false` without `refresh`); `unknown` means the result is uncertain — reconcile, don't retry.

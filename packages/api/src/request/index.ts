@@ -88,6 +88,8 @@ export type {
   RequestSigningPolicy,
   RequestTask,
   RequestTimeoutPolicy,
+  RequestInterceptorLike,
+  ResponseInterceptorLike,
   RequestTraceEvent,
   TenantPolicy,
 } from './types'

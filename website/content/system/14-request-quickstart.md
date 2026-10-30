@@ -257,7 +257,114 @@ useQuery('/api/me', { request: { headers: { 'X-Request-Domain': 'vip' } } })
 
 **凭证不会进日志**：内核在通道层做脱敏（header / query / body 三层，默认开）。你也拿不到明文 token —— 它只从 `auth` 取。
 
-## 八、重试与幂等（写操作必读）
+## 八、拦截器：统一加料与统一收口
+
+拦截器是这一层最常用的扩展点。两种，方向相反：
+
+| | 什么时候跑 | 典型用途 |
+|---|---|---|
+| **请求拦截器** | 请求发出**之前**（按注册序） | 加公共 header、拼签名、打埋点、按域名改写地址 |
+| **响应拦截器** | 响应回来**之后**（按注册**逆序**） | 统一错误处理、401 刷新 token、解包业务包体 |
+
+```ts
+provideRequestClient({
+  baseURL: import.meta.env.VITE_API,
+
+  interceptors: {
+    request: [
+      // ① 每个请求加一个追踪头
+      (ctx) => ({
+        url: ctx.url,
+        config: {
+          ...ctx.config,
+          headers: { ...(ctx.config.headers ?? {}), 'X-Client': 'web' },
+        },
+      }),
+    ],
+    response: [
+      // ② 统一错误处理：只做记录，不改变结果
+      (res, ctx) => {
+        if (!res.ok) console.warn('[api]', ctx.url, res.error.code)
+        return res
+      },
+    ],
+  },
+})
+```
+
+### 短路：请求拦截器返回 `null`
+
+返回 `null` 表示"这个请求不发出去"。结果码是 `fetch.intercepted` ——
+业务测得出"被自己拦了"，而不是一个含糊的失败。
+
+```ts
+interceptors: {
+  request: [
+    (ctx) => {
+      // 离线时直接拦下发钱的请求，交给其他机制处理
+      if (!navigator.onLine && ctx.url.includes('/pay')) return null
+      return { url: ctx.url, config: ctx.config }
+    },
+  ],
+}
+```
+
+### 顺序是洋葱，不是队列
+
+请求拦截器**按注册序**进入，响应拦截器**按逆序**出来 —— 和洋葱一样，最后进去的最先看到响应。
+
+```ts
+interceptors: {
+  request:  [A, B],   // 执行 A → B
+  response: [X, Y],   // 执行 Y → X
+}
+```
+
+这条顺序很实用：如果你有两个响应拦截器，**后注册的那个**能看到更"原始"的响应。
+
+### ⚠️ 一个必须知道的取舍：配了请求拦截器就不去重
+
+请求拦截器可以改 URL 和 header，而它在**去重键算好之后**才执行 ——
+键代表不了最终请求身份。继续合并就有跨租户串号的风险（A 拿到 B 的响应）。
+
+所以只要配了请求拦截器，去重会**整体跳过**，并在结果的 `meta.dedupeSkipped` 里写明原因：
+
+```ts
+if (r.meta?.dedupeSkipped) {
+  // 不是你配错了 —— 是"有拦截器时合并有风险"这个设计决定
+  console.info('去重已跳过：', r.meta.dedupeSkipped.reason)
+}
+```
+
+**正确性优先于效率**：宁可少一次合并，也不冒险串号。
+
+### 不要同时传 `hooks` 和 `interceptors`
+
+```ts
+// ❌ 会抛 request.interceptors.conflict
+createRequestClient({
+  hooks: myHooks,
+  interceptors: { request: [fn] },
+})
+```
+
+原因：`hooks` 是**已经建好的**管线，这一层拿不到它的配置，没法把拦截器塞进去。
+（曾经的行为是**静默忽略** —— 拦截器一次都不跑，也没有任何提示。现在改成显式报错。）
+
+两条出路，任选：
+
+```ts
+// ① 不传 hooks，让 client 自建（推荐）
+createRequestClient({ interceptors: { request: [fn] } })
+
+// ② 自己建 hooks，把拦截器放进 fetch 选项
+const hooks = createCapabilityHooks(undefined, {
+  fetch: { requestInterceptors: [fn] },
+})
+createRequestClient({ hooks })
+```
+
+## 九、重试与幂等（写操作必读）
 
 ```ts
 provideRequestClient({
@@ -279,7 +386,7 @@ useMutation('/api/order', {
 
 **注意**：`idempotencyKey` 必须是**稳定的** —— 同一次下单的所有重试要复用同一个值。用草稿 id / 客户端生成的 uuid，不要每次重试重新生成。
 
-## 九、离线队列
+## 十、离线队列
 
 ```ts
 provideRequestClient({
@@ -300,7 +407,7 @@ provideRequestClient({
 
 **只有幂等请求能进队列**（带幂等键的 POST / 所有 GET/PUT/DELETE）。非幂等且无 key 的请求会被拒 —— 重放它等于重复提交。
 
-## 十、取消请求
+## 十一、取消请求
 
 ```ts
 const q = useQuery('/api/slow')
@@ -314,7 +421,7 @@ ctl.abort()
 
 组件卸载时**自动取消**（`useQuery` / `useMutation` / `useRequest` 都接管了 `onScopeDispose`）。不用手动管。
 
-## 十一、已知边界
+## 十二、已知边界
 
 写清楚不做什么，比列功能更有用。
 
@@ -324,7 +431,7 @@ ctl.abort()
 - **SSR 必须显式 provide**。零配置时用的是进程级兜底单例，多请求共享会让配额/断路器计数跨请求累积。
 - **`unknown` 之后怎么处置是业务的责任**。这一层保证状态诚实，不能替你决定"去查单还是忽略"。
 
-## 十二、从零排查清单
+## 十三、从零排查清单
 
 请求不工作时，按顺序看这五项：
 

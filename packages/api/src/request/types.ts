@@ -343,7 +343,68 @@ export interface RequestClientOptions {
   tenant?: TenantPolicy
   /** trace 回调（每次请求一条；载荷已脱敏） */
   trace?: (event: RequestTraceEvent) => void
+  /**
+   * ★★★#1398：**请求/响应拦截器**（洋葱模型：请求按注册序、响应按**逆序**）。
+   *
+   * 【为什么必须有这个字段（本单起因）】内核管线早就有 `requestInterceptors` / `responseInterceptors`，
+   *   但**产品层没有入口** —— `createRequestClient({ interceptors })` 会被**静默忽略**
+   *   （实测拦截器调用 0 次），只有自建 `hooks` 并塞进 `hooks.fetch.requestInterceptors` 才生效。
+   *   ⇒ 业务想加公共 header / 统一错误处理 / 刷新 token，得先知道一条内核秘径。
+   *   这与本库自己的定位矛盾：`retry` / `trace` / `redact` 都能直接配，唯独最常用的扩展点不能。
+   *
+   * 【语义与内核完全一致，本层只做映射（不重实现）】
+   *   · 请求拦截器可改 url / config；返回 `null` ⇒ **短路**（不发请求，结果 `fetch.intercepted`）
+   *   · 响应拦截器成功与失败都会经过，可改写结果
+   *   · 执行顺序：请求按注册序、响应按**逆序**（洋葱模型）
+   *
+   * 【★与去重的关系（重要）】配了请求拦截器 ⇒ 内核会**跳过请求去重**并给出原因。
+   *   理由：拦截器可改 url/headers，而它在去重键算好**之后**才执行 ⇒ 键代表不了最终请求身份
+   *   ⇒ 继续合并有跨租户串号风险。**正确性 > 效率**。
+   */
+  interceptors?: {
+    /** 请求拦截器（按注册序执行） */
+    request?: RequestInterceptorLike[]
+    /** 响应拦截器（按注册**逆序**执行） */
+    response?: ResponseInterceptorLike[]
+  }
 }
+
+/**
+ * ★#1398：请求拦截器签名（与内核 `RequestInterceptor` **同一形状**）。
+ *
+ * ★这里重新声明而不是 import：`request/types.ts` 是**类型契约层**，
+ *   不应反向依赖 `capability-fetch-pipeline`（那是实现层，会形成循环）。
+ *   两处形状必须一致 —— 有判据守着（`tests/request-interceptors.test.ts`）。
+ */
+export interface RequestInterceptorContext {
+  /** 请求 id（同一任务多轮重试同 id；日志/埋点用它串起来） */
+  id: string
+  url: string
+  config: FetchConfig
+  /** 当前轮次（0 起） */
+  attempt: number
+  /** 本次任务已消耗的墙钟（ms，从入队算起） */
+  elapsedMs: number
+}
+
+/**
+ * ★#1398：请求拦截器签名（与内核 `RequestInterceptor` **逐字段一致**）。
+ *
+ * ★★这里重新声明而不是 import：`request/types.ts` 是**类型契约层**，
+ *   不应反向依赖 `capability-fetch-pipeline`（实现层，会形成循环）。
+ *   ⇒ 两处形状必须一致 —— `tests/request-interceptors.test.ts` ⑨ 守着这条。
+ * ★第一版把返回值收窄成 `{ url, config }` 是**错的**：内核返回的是完整 context，
+ *   业务按窄类型写就会丢掉 `id` / `attempt` / `elapsedMs`（后续拦截器读到 undefined）。
+ */
+export type RequestInterceptorLike = (
+  ctx: RequestInterceptorContext,
+) => RequestInterceptorContext | null | Promise<RequestInterceptorContext | null>
+
+/** ★#1398：响应拦截器签名（与内核 `ResponseInterceptor` 同一形状，同上） */
+export type ResponseInterceptorLike = (
+  res: FetchResult<unknown>,
+  ctx: { id: string; url: string; config: FetchConfig; attempt: number; elapsedMs: number },
+) => FetchResult<unknown> | Promise<FetchResult<unknown>>
 
 /** 离线队列持久化后端（★注入式：不假设 `getStorage` 存在——鸿蒙就没有 `fs.*`） */
 export interface OfflineQueueStore {

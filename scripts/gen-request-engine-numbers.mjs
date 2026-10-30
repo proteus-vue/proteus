@@ -33,6 +33,7 @@ const TEST_FILES = [
   'tests/fetch-pipeline.test.ts',
   'tests/websocket-security-chain.test.ts',
   'tests/request-vue-composables.test.ts',
+  'tests/request-interceptors.test.ts',
 ]
 
 /** 每个判据文件守什么（页面按这个分组展示——比"共 172 条"有信息量） */
@@ -45,6 +46,7 @@ const GROUPS = [
   { file: 'tests/request-offline-autoflush.test.ts', zh: '离线队列驱动线', en: 'Offline queue driver', what: '网络恢复自动重放 · 防重入 · dispose 释放订阅 · 抖动不并发重放', whatEn: 'auto-replay on reconnect · reentrancy guard · dispose releases subscription · network flapping does not replay concurrently' },
   { file: 'tests/fetch-pipeline.test.ts', zh: '管线安全语义', en: 'Pipeline safety', what: '方法门禁（POST 不重试）· 真随机抖动 · 去重身份（多租户不串号）· 拦截器时跳过去重 · 退避可精确断言', whatEn: 'method gate (no POST retry) · real jitter · dedupe identity (no cross-tenant merge) · dedupe skipped with interceptors · exact backoff assertion' },
   { file: 'tests/websocket-security-chain.test.ts', zh: 'WS 与 HTTP 同套策略', en: 'WS shares HTTP policy', what: '域名白名单 · 白名单先于连接 · 审计（开/关/条数，不含正文）· bizId · 配额在关闭时释放 · 幂等', whatEn: 'domain allowlist · allowlist before connect · audit (open/close/counts, no content) · bizId · quota released on close · idempotent' },
+  { file: 'tests/request-interceptors.test.ts', zh: '拦截器入口', en: 'Interceptor entry', what: '产品层 interceptors 真映射进管线 · 短路 · 洋葱顺序 · 配拦截器跳去重 · hooks+interceptors 冲突报错 · 两处类型逐字段一致', whatEn: 'product-layer interceptors truly mapped · short-circuit · onion order · dedupe skipped · hooks+interceptors conflict throws · contract/kernel types field-identical' },
   { file: 'tests/request-vue-composables.test.ts', zh: 'Vue 产品层', en: 'Vue product layer', what: '真响应式（watchEffect 触发）· 竞态裁决 · 失败不清空数据 · unknown 不回滚 · useRequest 不自动发', whatEn: 'true reactivity (watchEffect fires) · race adjudication · failure keeps data · unknown not rolled back · useRequest does not auto-fire' },
 ]
 

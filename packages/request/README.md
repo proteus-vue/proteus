@@ -57,6 +57,20 @@ const create = useMutation<Todo, { title: string }>('/api/todos', {
 await create.mutate({ title: '买菜' })
 ```
 
+## 拦截器
+
+```ts
+provideRequestClient({
+  interceptors: {
+    request: [(ctx) => ({ url: ctx.url, config: { ...ctx.config, headers: { ...(ctx.config.headers ?? {}), 'X-Client': 'web' } } })],
+    response: [(res, ctx) => { if (!res.ok) console.warn(ctx.url, res.error.code); return res }],
+  },
+})
+```
+
+请求按注册序、响应按**逆序**（洋葱）。请求拦截器返回 `null` ⇒ 短路（`fetch.intercepted`）。
+★配了请求拦截器会**跳过去重**（拦截器可改身份，合并有串号风险），原因写在 `meta.dedupeSkipped`。
+
 ## 三个必须知道的语义
 
 **① 失败不清空数据。** 刷新失败时 `data` 保留上一次成功的值 —— 否则页面从"有内容"变成"空白"，用户以为数据没了，实际只是刷新失败。

@@ -11,8 +11,8 @@ export const REQUEST_ENGINE_PAGE = {
     },
     "version": 1,
     "criteria": {
-      "total": 172,
-      "files": 9,
+      "total": 182,
+      "files": 10,
       "groups": [
         {
           "file": "tests/request-reliability.test.ts",
@@ -77,6 +77,14 @@ export const REQUEST_ENGINE_PAGE = {
           "what": "域名白名单 · 白名单先于连接 · 审计（开/关/条数，不含正文）· bizId · 配额在关闭时释放 · 幂等",
           "whatEn": "domain allowlist · allowlist before connect · audit (open/close/counts, no content) · bizId · quota released on close · idempotent",
           "count": 19
+        },
+        {
+          "file": "tests/request-interceptors.test.ts",
+          "zh": "拦截器入口",
+          "en": "Interceptor entry",
+          "what": "产品层 interceptors 真映射进管线 · 短路 · 洋葱顺序 · 配拦截器跳去重 · hooks+interceptors 冲突报错 · 两处类型逐字段一致",
+          "whatEn": "product-layer interceptors truly mapped · short-circuit · onion order · dedupe skipped · hooks+interceptors conflict throws · contract/kernel types field-identical",
+          "count": 10
         },
         {
           "file": "tests/request-vue-composables.test.ts",

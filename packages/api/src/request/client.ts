@@ -157,7 +157,42 @@ function serializeBody(data: unknown): string {
  *   这是对痛点 #13 的结构性回答——没有"全局可变默认值"这种东西可被业务偷改。
  */
 export function createRequestClient(options: RequestClientOptions = {}): RequestClient {
-  const hooks: CapabilityHooks = options.hooks ?? createCapabilityHooks()
+  /**
+   * ★★★#1398：拦截器 → 内核管线（本层只做映射，不重实现）
+   *
+   * 【三种情况，且**不静默**】：
+   *   ① 没传 hooks + 传了 interceptors ⇒ 自建 hooks 时把拦截器塞进 `fetch.*Interceptors`
+   *      ⇒ 走内核原生实现（含"配了拦截器就跳过去重"的保护）。
+   *   ② 传了 hooks + 没传 interceptors ⇒ 原行为，零变化。
+   *   ③ **传了 hooks + 又传 interceptors ⇒ 明确报错**。
+   *      理由：`CapabilityHooks` 不暴露管线配置，本层无法把拦截器注入**已建好**的管线。
+   *      ★为什么不静默忽略：那正是本单要修的缺陷形态（`createRequestClient({ interceptors })`
+   *        拦截器调用 0 次、毫无提示）。静默的"配了但没生效"比报错难查十倍。
+   *      错误信息给两条可执行出路，不让业务自己猜。
+   */
+  const wantsInterceptors =
+    (options.interceptors?.request?.length ?? 0) > 0 || (options.interceptors?.response?.length ?? 0) > 0
+  let hooks: CapabilityHooks
+  if (options.hooks) {
+    if (wantsInterceptors) {
+      throw new Error(
+        'request.interceptors.conflict: 同时传了 hooks 与 interceptors —— 本层无法把拦截器注入已建好的管线。'
+        + '二选一：① 不传 hooks（让 client 自建，interceptors 自动生效）；'
+        + '② 自己 createCapabilityHooks(undefined, { fetch: { requestInterceptors, responseInterceptors } })，'
+        + '再把结果作为 hooks 传入。',
+      )
+    }
+    hooks = options.hooks
+  } else if (wantsInterceptors) {
+    hooks = createCapabilityHooks(undefined, {
+      fetch: {
+        requestInterceptors: options.interceptors?.request as never,
+        responseInterceptors: options.interceptors?.response as never,
+      },
+    })
+  } else {
+    hooks = createCapabilityHooks()
+  }
   const baseURL = options.baseURL
   const defaultHeaders = { ...(options.headers ?? {}) }
   const retryPolicy = options.retry
