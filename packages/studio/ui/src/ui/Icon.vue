@@ -18,6 +18,7 @@ type IconName =
   | 'plus'
   | 'chevron-down'
   | 'maximize'
+  | 'search'
 
 const props = withDefaults(defineProps<{ name: IconName; size?: number }>(), { size: 14 })
 
@@ -33,6 +34,8 @@ const PATHS: Record<IconName, string> = {
   'chevron-down': 'M4 6.5l4 3.5 4-3.5',
   /* 最大化/还原：四角括号 */
   maximize: 'M3 6V3.5h2.5 M13 6V3.5h-2.5 M3 10v2.5h2.5 M13 10v2.5h-2.5',
+  /* 放大镜 */
+  search: 'M7.2 2.6a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2z M10.7 10.7l2.8 2.8',
 }
 </script>
 

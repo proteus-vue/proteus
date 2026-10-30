@@ -65,6 +65,7 @@ import SearchBox from './SearchBox.vue'
 import FileTree from './FileTree.vue'
 import { startDrag, termH, termMode, treeHidden, treeW } from '../layout'
 import TabBar from './TabBar.vue'
+import QuickOpen from './QuickOpen.vue'
 import GitBar from './GitBar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
@@ -80,6 +81,22 @@ const ROOTS = ['packages/studio/ui/src', 'packages/studio/src', 'packages/studio
 
 const files = ref<string[]>([])
 const cur = ref('')
+/** ⌘P 快速打开（决策 #1396） */
+const quickOpen = ref(false)
+
+function onQuickPick(path: string) {
+  quickOpen.value = false
+  void open(path)
+}
+
+/** ⌘P 打开快速面板；Esc 由面板自己处理。只在代码视图里监听（组件只在代码视图挂载）。 */
+function onQuickKey(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
+    e.preventDefault()
+    e.stopPropagation()
+    quickOpen.value = true
+  }
+}
 const err = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -745,9 +762,13 @@ const offCloseBlocked = onCloseBlocked((n) => {
 })
 
 onMounted(boot)
+/* ⌘P 监听（决策 #1396）：与 boot 分开挂，避免把启动流程改成 async 包装 */
+onMounted(() => window.addEventListener('keydown', onQuickKey, true))
 // 首帧后拉一次 git 状态（只读；非仓库会自己降级）
 void refreshGit()
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onQuickKey, true)
+  window.removeEventListener('keydown', onQuickKey, true)
   offCloseBlocked()
   view?.destroy()
   view = null
@@ -757,6 +778,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="codepane">
+    <!-- ⌘P 快速打开（决策 #1396）：浮在编辑器之上，不挡文件树 -->
+    <QuickOpen v-if="quickOpen" :files="files" :cur="cur" @pick="onQuickPick" @close="quickOpen = false" />
     <div class="split">
       <!-- 左栏（决策 #1222）：搜索框常驻顶部；一旦有查询，结果列表**替换**目录树
            （VS Code 同款：同一时刻只有一个列表，不叠浮层、不用管 z 序）。 -->
