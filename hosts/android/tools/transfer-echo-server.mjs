@@ -198,6 +198,21 @@ const server = http.createServer((req, res) => {
     })
     return
   }
+  /**
+   * ★★★#1404 请求层**并发吞吐**端点：`GET /perf?i=N`
+   *   · 极小的 200 JSON（无延迟）——量的是**宿主管道 + 连接复用**，不是服务端业务耗时
+   *   · 回显序号 ⇒ 客户端能核对"响应确实属于本次请求"（不只看个数）
+   *   · ★之前没有本路由，探针打到 404 兜底：`useFetch` 只要传输成功就 `ok:true`，
+   *     所以旧读数**也是完整的 HTTP 往返**，但"404 也能当成功"不该是吞吐口径的默认形态。
+   *   · ★content-length 用 Buffer.byteLength 实测——写死常量在 i 跨位数时会**短报**，
+   *     客户端按该长度截断 ⇒ 响应体不完整（假绿型缺陷）。
+   */
+  if (url.pathname === '/perf') {
+    const body = Buffer.from('{"ok":1,"i":' + String(Number(url.searchParams.get('i') ?? 0) | 0) + '}')
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': String(body.length) })
+    res.end(body)
+    return
+  }
   res.writeHead(404)
   res.end('not found')
 })

@@ -294,6 +294,46 @@ pnpm check:vapor-three-end              # 证据齐 + 同一判据三端全过 +
 ★★**判据口径（上界类通用）**：必须**同时**断言"第 N 个成功"与"第 N+1 个被拒"。
 只断言后者时，**把上界写成 0** 也能通过（那种实现第 1 个就全拒，是更糟的 bug）。
 
+## 8c. 真机探针登记（Android · **需要 bundle 的探针** = Java 探针类，第四种形态）
+
+**触发**：要验的能力**依赖 bundle 装进 JS 上下文后的全局**（`__proteusHostXxxProbe` 这类），
+或需要**在 JS 侧做异步循环/并发**（吞吐、长稳、串联多步）。
+
+**形态对比（★选错形态会白跑一轮）**：
+
+| 形态 | 入口 | 能调到的范围 | 适用 |
+|---|---|---|---|
+| `capprobe "<method>\|<json>"` | `SuperappActivity` 的 intent extra | **宿主 `caps.invoke`** | 单个宿主方法语义 |
+| `capprobe "js:<expr>"` | 同上（**裸 eval**） | ❌ 拿不到 `__proteusHostInvoke` / 探针全局 | 纯 JS 表达式（不碰宿主桥） |
+| `capprobe "loop:<method>\|<json>\|<n>"` | 同上（同实例连调） | 宿主 `caps.invoke` ×n | 上界/配额类 |
+| ★★★ **Java 探针类**（`hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/PerfProbe.java`） | `--es path <name>` + 广播 `dev.proteus.RUN` | ✅ bundle 全部全局 + 宿主桥 | **吞吐/并发/多步异步** |
+
+**Java 探针类的固定四件套**（照 `hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/UseFetchProbe.java` 抄，逐件相同）：
+
+1. `static void setReportSink(BiConsumer<String,String>)` —— MainActivity 注入 `writeReport`；
+2. 装配宿主环境：`VaporRenderHost` + `EnvVars.collect` + `HostCapabilities` + `ScreenHost` +
+   `HostBridge` + `SuperappRuntimeHost`，然后 `QuickJsEngine.evalWithHost(bundle, rtHost)`；
+   ★少任何一件桥就不通（`HostBridge` 漏了 = `invoke` 未注入 ⇒ JS 侧所有能力 `undefined`）；
+3. `QuickJsEngine.eval("__proteusSuperappBootJson()")` + `nativeRunPendingJobs()`；
+4. **异步收口**：调探针后结果回填 `globalThis.__proteusHostXxxProbeResult`，
+   主线程 Handler **循环驱动** `nativeRunPendingJobs()` 直到该全局非空，**带确定上界**（到界报"装置不确定"）。
+
+**注册点（两处，缺一静默不跑）**：
+- `hosts/android/app/src/main/java/dev/proteus/layoutcore/dev/MainActivity.java` 的 `testPath` 分支链（`} else if ("<name>".equals(testPath)) { … }`）；
+- 脚本侧 `am start --es path <name>` **并且**再发一次 `am broadcast -a dev.proteus.RUN --es path <name>`
+  （★`onCreate` 只组装环境，实际跑要等广播；只 start 不 broadcast ⇒ 报告永远不生成）。
+
+**必须跑**：`bash hosts/android/check-host-compile.sh`（零设备）+ 对应 `run-*.sh`（真机）。
+**★接线判定**：`perf-probe` 这条同时跑 `bash hosts/android/run-perf-probe.sh`；
+iOS 对应 `hosts/ios/run-perf-probe.sh`（同一份 JS 探针，两个宿主各自调用）。
+
+**★★#1404 的两条真机教训（都会伪装成"能力坏了"）**：
+1. **`capprobe js:` 拿不到探针全局** ⇒ 别为图省事复用它验 bundle 层能力（该分支注释里早就写着）。
+2. **Android targetSdk 34 禁明文**：`--es base http://<局域网IP>:…` ⇒
+   `java.net.UnknownServiceException: CLEARTEXT … not permitted by network security policy`。
+   回环例外 ⇒ 仓内探针都走 `127.0.0.1`（+`adb reverse`）。★走局域网时**先把失败原因打出来**
+   （只记 `failed=N` 会让你以为是能力问题）。
+
 ★**这一类不能一条命令闭环**：要 USB 设备 + 已构建 APK（`bash hosts/android/build-and-run.sh`）。
 ★`build-and-run.sh` 末尾会自己 `am start MainActivity` 并提示 `sleep 6`——
 跑探针脚本前它**已结束**，不会抢占你的 `am start`；但若手动并行跑两者，后面的会顶掉前面的 intent。

@@ -173,3 +173,6 @@ hosts/android/results/nav-router-raw.mp4
 hosts/*/results/*-certs/*.key
 hosts/*/results/*-certs/*.crt
 hosts/*/results/*-certs/args.json
+# ★#1404：压测脚本的**单轮中间产物**（每轮一份 raw，仅用于取中位后即删）。
+#   入库的是取中位后的 perf-probe.json；raw 只是过程件，混进结果目录会让人误当证据。
+hosts/*/results/perf-probe-raw*.json

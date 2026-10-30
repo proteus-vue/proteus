@@ -85,18 +85,50 @@ const gauges = computed(() => {
 })
 
 const groups = computed(() => N.criteria.groups)
+type ThroughputEnd = {
+  end: string
+  transportMode: string
+  points: Array<{ concurrency: number; qps: number; p50Ms: number; p99Ms: number }>
+  best?: { concurrency: number; qps: number }
+  knee?: { at: number; qps: number } | null
+  /** ★#1404 形状三分：rising / plateau / knee-drop（"没拐点"是合法结论，但必须说清是哪一种） */
+  shape?: string
+}
+type Attribution = { end: string; verdict: string; reason: string; clientTopQps: number; serverFloorQps?: number }
+
+/**
+ * ★#1404 通路 → 人话标签。
+ *   ★为什么必须显示：Android 走 adb reverse 回环（targetSdk 34 拦局域网明文），iOS 走 WiFi。
+ *     两个数字并排却不标通路 = 暗示"Android 快 4 倍"，而那是**测量通路差异**不是框架差异。
+ */
+const modeLabel = (m: string, zh: boolean): string => {
+  if (m === 'loopback-usb') return zh ? 'USB 回环' : 'USB loopback'
+  if (m === 'lan-wifi') return zh ? '局域网 WiFi' : 'LAN WiFi'
+  return m
+}
+
 /** ★#1404：性能读数（来自 SSOT；缺则整块不渲染 —— 不显示假数据） */
 const perf = computed(() => (D as unknown as { perf?: unknown }).perf as {
   jsLayer?: { concurrency: number; bareP50Ms: number; fullP50Ms: number; p50Ratio: number; noiseFloorP50Ms: number; belowNoiseFloor: boolean; qpsDropPct: number; p99Unstable: boolean } | null
-  throughput?: { points: Array<{ concurrency: number; qps: number; p50Ms: number; p99Ms: number }>; best?: { concurrency: number; qps: number }; knee?: { at: number; qps: number } | null } | null
+  throughput?: {
+    points: Array<{ concurrency: number; qps: number; p50Ms: number; p99Ms: number }>
+    best?: { concurrency: number; qps: number }
+    knee?: { at: number; qps: number } | null
+    /** ★#1404：逐端（iOS + Android）· 每端带 transportMode（WiFi / 回环）——不标注就是误导 */
+    ends?: ThroughputEnd[]
+    attribution?: Attribution[]
+  } | null
   highPressure?: { rateLimitPass: boolean; quotaPass: boolean; quotaPeak: number; quotaConfigured: number; auditPass: boolean; auditWritten: number; auditAttempted: number; allPass: boolean } | null
   devices?: Array<{ end: string; verified: boolean; ttfbMs: number | null; reason: string | null }>
   notProven?: string[]
 } | null)
-/** 条形宽度：相对**最大 QPS**（长度可比） */
-const qpsWidth = (qps: number): string => {
-  const pts = perf.value?.throughput?.points ?? []
-  const max = Math.max(...pts.map((p) => p.qps), 1)
+/**
+ * 条形宽度：相对**同一端内部**的最大 QPS。
+ * ★多端不能共用一个 max —— 那会让快的那端永远满格、慢的那端永远接近零，
+ *   看起来像"慢端性能差"，实际只是通路不同。
+ */
+const qpsWidth = (qps: number, series: Array<{ qps: number }>): string => {
+  const max = Math.max(...series.map((p) => p.qps), 1)
   return `${Math.max(8, Math.round((qps / max) * 100))}%`
 }
 /** 条形宽度：相对**最大组**的百分比（长度可比，而不是随便画一根） */
@@ -286,26 +318,67 @@ const barWidth = (n: number): string => `${Math.max(6, Math.round((n / maxGroup.
           <span class="perf-note">{{ isEn ? 'benchmarked, not claimed — every figure recomputed by a script' : '不是宣称，是量出来的 —— 每个数字都由脚本重算' }}</span>
         </div>
 
-        <!-- 真机并发吞吐（最强的一块：真设备 + 真网络） -->
-        <div v-if="perf.throughput" class="perf-block">
+        <!-- 真机并发吞吐（最强的一块：真设备 + 真网络）· ★逐端，各自标通路 -->
+        <div v-for="e in (perf.throughput?.ends ?? [])" :key="e.end" class="perf-block">
           <div class="pb-head">
-            <span class="pb-title">{{ isEn ? 'Real-device throughput · iOS' : '真机并发吞吐 · iOS' }}</span>
-            <span v-if="perf.throughput.knee" class="pb-knee">
-              {{ isEn ? 'knee at concurrency' : '拐点在并发' }} {{ perf.throughput.knee.at }}
+            <span class="pb-title">
+              {{ isEn ? 'Real-device throughput' : '真机并发吞吐' }} · {{ e.end }}
+              <span class="pb-mode">{{ modeLabel(e.transportMode, isEn) }}</span>
+            </span>
+            <!-- ★#1404：形状三分（平台期与拐点是**不同结论**；旧版只有一个 knee 徽标，
+                 平台期会被显示成"没有徽标"⇒ 读者以为数据没测完） -->
+            <span v-if="e.shape === 'plateau'" class="pb-knee pb-knee--flat">
+              {{ isEn ? 'plateau' : '平台期' }}
+            </span>
+            <span v-else-if="e.shape === 'knee-drop' && e.knee" class="pb-knee">
+              {{ isEn ? 'knee at concurrency' : '拐点在并发' }} {{ e.knee.at }}
+            </span>
+            <span v-else-if="e.shape === 'rising'" class="pb-knee pb-knee--rise">
+              {{ isEn ? 'still rising' : '仍在上升' }}
             </span>
           </div>
           <div class="pb-bars">
-            <div v-for="p in perf.throughput.points" :key="p.concurrency" class="pb-row" :class="{ 'pb-row--best': perf.throughput.best && p.concurrency === perf.throughput.best.concurrency }">
+            <div v-for="p in e.points" :key="p.concurrency" class="pb-row" :class="{ 'pb-row--best': e.best && p.concurrency === e.best.concurrency }">
               <span class="pb-conc">×{{ p.concurrency }}</span>
-              <div class="pb-track"><div class="pb-fill" :style="{ width: qpsWidth(p.qps) }" /></div>
+              <div class="pb-track"><div class="pb-fill" :style="{ width: qpsWidth(p.qps, e.points) }" /></div>
               <span class="pb-qps">{{ p.qps }}</span>
-              <span class="pb-lat">p50 {{ p.p50Ms }}ms</span>
+              <span class="pb-lat">p50 {{ p.p50Ms }}ms · p99 {{ p.p99Ms }}ms</span>
             </div>
           </div>
           <p class="pb-foot">
+            <span v-if="e.shape === 'plateau'">
+              {{ isEn
+                ? 'Throughput is flat from concurrency 4 to 16 — pushing harder buys latency, not throughput. Where it saturates beyond this range is not claimed.'
+                : '并发 4→16 吞吐**几乎不变** —— 继续加压只买到延迟，买不到吞吐。更高并发下饱和点在哪，本页不作宣称。' }}
+            </span>
+            <span v-else-if="e.shape === 'knee-drop' && e.best">
+              {{ isEn
+                ? 'Peak ' + e.best.qps + ' QPS at concurrency ' + e.best.concurrency + '; beyond the knee you only pay in p50/p99.'
+                : '峰值 ' + e.best.qps + ' QPS 出现在并发 ' + e.best.concurrency + '；越过拐点只会在 p50/p99 上加价。' }}
+            </span>
+            <span v-else-if="e.best">
+              {{ isEn
+                ? 'Still climbing: ' + e.best.qps + ' QPS at the highest concurrency measured — no saturation observed in this range.'
+                : '仍在上升：最高 ' + e.best.qps + ' QPS 出现在测到的最大并发 —— 该范围内未观察到饱和。' }}
+            </span>
+          </p>
+        </div>
+
+        <!-- ★归属：这不是"性能更高"，这是"瓶颈不在服务端" -->
+        <div v-if="(perf.throughput?.attribution ?? []).length" class="perf-attrib">
+          <div v-for="a in (perf.throughput?.attribution ?? [])" :key="a.end" class="pa-row" :class="{ 'pa-row--ok': a.verdict === 'client-bound' }">
+            <span class="pa-end">{{ a.end }}</span>
+            <span class="pa-v">
+              {{ a.verdict === 'client-bound'
+                ? (isEn ? 'bottleneck is the client' : '瓶颈在客户端')
+                : (isEn ? 'server may saturate first' : '服务端可能先饱和') }}
+            </span>
+            <span class="pa-n">{{ a.clientTopQps }} QPS {{ isEn ? 'vs server floor' : '对服务端下限' }} {{ a.serverFloorQps ?? '-' }}</span>
+          </div>
+          <p class="pa-foot">
             {{ isEn
-              ? 'Concurrency 4 → 8 nearly doubles throughput; 8 → 16 adds latency without throughput. The knee is where this stack saturates — beyond it you only pay in p50/p99.'
-              : '并发 4→8 吞吐近翻倍；8→16 只涨延迟不涨吞吐。拐点就是这套栈的饱和点 —— 越过它只会在 p50/p99 上加价。' }}
+              ? 'The echo server was benchmarked separately on the same machine: if the device reports a fraction of that, the number describes this stack, not the test rig.'
+              : '同机单独量过 echo 服务端天花板：设备读数只占其一小部分 ⇒ 这个数字描述的是这套栈，不是测试装置。' }}
           </p>
         </div>
 
@@ -615,6 +688,73 @@ const barWidth = (n: number): string => `${Math.max(6, Math.round((n / maxGroup.
 .pb-qps { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
 .pb-lat { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: rgba(244, 244, 247, 0.4); text-align: right; }
 .pb-foot { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.5); }
+/**
+ * ★#1404 通路徽标：iOS 走 WiFi、Android 走 USB 回环。
+ *   ★视觉上必须**弱于标题**（它是限定条件，不是产品卖点）——但不可省略：
+ *     两个数字并排却不标通路，等于暗示"Android 快 4 倍"。
+ */
+/**
+ * ★#1404 形状徽标三态：平台期 / 拐点 / 仍在上升。
+ *   ★三色不同是**语义**不是装饰：
+ *     · 拐点（warn 橙）= "越过就只加价"
+ *     · 平台期（中性）= "这一段没收益，但没说饱和在哪"
+ *     · 仍在上升（ok 绿）= "还没到顶"
+ *   平台期**不用**绿色 —— 它既不是好消息也不是坏消息，用绿会读成"性能优秀"。
+ */
+.pb-knee--flat {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  color: rgba(244, 244, 247, 0.55) !important;
+}
+.pb-knee--rise {
+  border-color: rgba(74, 222, 128, 0.32) !important;
+  color: rgba(74, 222, 128, 0.85) !important;
+}
+
+.pb-mode {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: rgba(244, 244, 247, 0.45);
+  vertical-align: 1px;
+}
+
+/* ── 平台期归属（"这个 QPS 描述的是栈，不是装置"） ── */
+.perf-attrib {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.012);
+}
+.pa-row {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.pa-end { font-weight: 600; color: rgba(244, 244, 247, 0.8); }
+.pa-v { color: rgba(244, 244, 247, 0.55); }
+/* 归因成立（瓶颈在客户端）才点亮 —— 未归属成功不该假装是结论 */
+.pa-row--ok .pa-v { color: var(--ok, #4ade80); }
+.pa-n {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: rgba(244, 244, 247, 0.35);
+  font-variant-numeric: tabular-nums;
+}
+.pa-foot {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: rgba(244, 244, 247, 0.42);
+}
 .pb-metrics { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
 .pm { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, 0.022); border: 1px solid rgba(255, 255, 255, 0.06); min-width: 108px; }
 .pm--warn { border-color: rgba(255, 180, 84, 0.28); }

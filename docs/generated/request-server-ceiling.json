@@ -1,0 +1,42 @@
+{
+  "note": "服务端天花板基准 —— 用于把真机压测的\"平台期\"归属到客户端还是装置。★本机回环，不代表生产服务端。",
+  "generatedBy": "scripts/bench-echo-server.mjs",
+  "generatedAt": "2026-10-30T08:16:27.699Z",
+  "endpoint": "http://127.0.0.1:8978/perf?i=N",
+  "server": "hosts/android/tools/transfer-echo-server.mjs（单进程 node）",
+  "totalPerPoint": 1000,
+  "points": [
+    {
+      "concurrency": 4,
+      "completed": 1000,
+      "failed": 0,
+      "wallMs": 107.23,
+      "qps": 9325.5,
+      "p50Ms": 0.3,
+      "p99Ms": 2.055
+    },
+    {
+      "concurrency": 8,
+      "completed": 1000,
+      "failed": 0,
+      "wallMs": 57.91,
+      "qps": 17269.6,
+      "p50Ms": 0.393,
+      "p99Ms": 1.387
+    },
+    {
+      "concurrency": 16,
+      "completed": 1000,
+      "failed": 0,
+      "wallMs": 45.89,
+      "qps": 21791.5,
+      "p50Ms": 0.547,
+      "p99Ms": 2.932
+    }
+  ],
+  "floorQps": 9325.5,
+  "honestBoundaries": [
+    "本机回环 ≠ 生产服务端（生产有反代/DB/鉴权，吞吐通常更低）",
+    "只用于归属\"平台期在哪一侧\"，不是产品性能承诺"
+  ]
+}

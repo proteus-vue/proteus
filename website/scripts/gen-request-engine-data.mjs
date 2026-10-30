@@ -52,10 +52,26 @@ const PAGE = {
         qpsDropPct: r.jsLayer.overhead.qpsDropPct,
         p99Unstable: r.jsLayer.p99Stability?.p99Unstable ?? false,
       } : null,
+      /**
+       * ★★★#1404：逐端吞吐（`ends`）+ 平台期归属（`attribution`）。
+       *   ★页面必须逐端渲染并标注通路（iOS WiFi / Android USB 回环）——
+       *     只给出一个 QPS 而不说哪一端、哪条通路，是最容易被误引用的形态。
+       *   ★保留顶层 points/best/knee（兼容旧字段）：消费方若只读旧字段不会变成空白。
+       */
       throughput: r.throughput?.measured ? {
         points: r.throughput.points,
         best: r.throughput.best,
         knee: r.throughput.knee,
+        ends: (r.throughput.ends ?? []).map((e) => ({
+          end: e.end,
+          transportMode: e.transportMode,
+          points: e.points,
+          best: e.best ?? null,
+          knee: e.knee ?? null,
+          /** ★#1404 形状三分必须透出——页面靠它区分"平台期"与"仍在上升"（缺了就两种都显示成空的） */
+          shape: e.shape ?? null,
+        })),
+        attribution: r.throughput.attribution ?? [],
       } : null,
       highPressure: r.highPressure ? {
         rateLimitPass: r.highPressure.rateLimit.pass,

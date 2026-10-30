@@ -41,7 +41,26 @@ type Report = {
   jsLayer: { overhead: Perf['overhead'] } | null
   highPressure: { allPass: boolean } | null
   devices: Array<{ end: string; verified: boolean; reason?: string; steadyTtfbMs?: number; serialQpsCeiling?: number }>
-  throughput: { measured: boolean; points?: Array<{ concurrency: number; qps: number; failed: number }>; best?: { concurrency: number; qps: number }; knee?: { at: number; qps: number } | null; reason?: string }
+  throughput: {
+    measured: boolean
+    points?: Array<{ concurrency: number; qps: number; failed: number }>
+    best?: { concurrency: number; qps: number }
+    knee?: { at: number; qps: number } | null
+    reason?: string
+    /** ★#1404 曲线形状（rising / plateau / knee-drop）——"没拐点"也是合法结论，但必须说清形状 */
+    shape?: string
+    /** ★#1404 逐端（iOS + Android），每端带通路 */
+    ends?: Array<{
+      end: string
+      transportMode: string
+      points: Array<{ concurrency: number; qps: number; failed: number; p50Ms: number; p99Ms: number }>
+      best?: { concurrency: number; qps: number }
+      knee?: { at: number; qps: number } | null
+      shape?: string
+    }>
+    attribution?: Array<{ end: string; verdict: string; reason: string; clientTopQps: number; serverFloorQps?: number }>
+    serverCeilingSource?: string | null
+  }
   deviceCaveats: string[]
   notProven: string[]
 }
@@ -108,10 +127,16 @@ describe('★★★#1404 请求层性能产物（防数字说谎）', () => {
       } else {
         /* ★★声称已验 ⇒ 必须有**实际读数**。
            M-P4（把 Android 的 verified 伪造成 true）原本没被判红，因为判据只查了"未验时要有原因"。
-           ⇒ 补这条：已验的端至少要有 ttfb（或并发的 QPS 读数）。 */
+           ⇒ 补这条：已验的端至少要有 ttfb、串行上限、**或该端的并发实测 QPS**。
+           ★#1404 为什么加第三条：Android 的稳定 ttfb 实测为 **0ms**（adb reverse 回环低于
+             计时分辨率）⇒ 前两条都拿不到，但并发压测**确实有读数**（2439 QPS）。
+             把它判红等于"因为读数太好看而宣布它不存在"——这里要防的是**凭空声称**，
+             不是惩罚"读数小于计时精度"。 */
+        const concQps = (r.throughput?.ends ?? []).find((e) => e.end === d.end)
         const hasReading =
           (typeof d.steadyTtfbMs === 'number' && d.steadyTtfbMs > 0)
           || (typeof d.serialQpsCeiling === 'number' && d.serialQpsCeiling > 0)
+          || (!!concQps && concQps.points.some((p) => p.qps > 0))
         expect(hasReading, `★★★${d.end} 声称已验但**没有任何读数** —— 这是凭空声称，不是证据`).toBe(true)
       }
     }
@@ -129,9 +154,82 @@ describe('★★★#1404 请求层性能产物（防数字说谎）', () => {
         if (p.failed > 0) expect(String(t.best?.concurrency)).not.toBe(String(p.concurrency))
       }
       expect(t.best, '★必须给出最优档').toBeTruthy()
-      expect(t.knee, '★必须给出拐点（QPS 不再随并发上升的那档）').toBeTruthy()
+      /* ★★★#1404 修正：旧断言写的是「必须给出拐点」——它把**上一轮的假结论**（"拐点在 8"）
+         固化成了判据：真实曲线若没拐点（平台期/仍在上升），判据反而判红。
+         ⇒ 改成**形状必须被显式判定**（`shape` ∈ rising/plateau/knee-drop），
+           而不是"必须存在拐点"。曲线没有拐点是**合法结论**，只是必须说清是哪一种形状。
+         ★同时保留一致性：声称 knee-drop 就必须真有 knee，且 knee 必须与峰值档一致。 */
+      expect(String(t.shape ?? ''), '★必须显式判定曲线形状（rising / plateau / knee-drop）').not.toBe('')
+      if (t.shape === 'knee-drop') {
+        expect(t.knee, '★声称有回落拐点就必须给出 knee').toBeTruthy()
+      } else {
+        expect(t.knee ?? null, '★非 knee-drop 时 knee 必须为空（否则形状与拐点自相矛盾）').toBeNull()
+      }
     } else {
       expect(String(t.reason ?? ''), '★未测必须给出原因').not.toBe('')
+    }
+  })
+
+  /**
+   * ★★★#1404：逐端吞吐必须**逐端列出并标注通路**。
+   *
+   * 【为什么必须机器判】
+   *   Android 走 `adb reverse` 回环（targetSdk 34 拦局域网明文），iOS 走 WiFi。
+   *   两端数字差 4 倍是**测量通路差异**，不是框架差异 —— 而只给一个 QPS 或
+   *   只写 "iOS" 的形态，会让读者把两者当成同口径横比。
+   *   ★同时守住"新端加入必须出现"：加了端却没进 ends ⇒ 那条端的证据被静默丢弃。
+   */
+  it('★★★⑦b 逐端吞吐：每端必须出现且标注通路（WiFi / 回环不可混为一谈）', () => {
+    const r = read('docs/generated/request-perf-report.json') as Report
+    const t = r.throughput
+    if (!t.measured) return
+    const ends = t.ends ?? []
+    expect(ends.length, '★有吞吐读数就必须逐端列出（ends）').toBeGreaterThanOrEqual(1)
+
+    /* ★每端都必须有 transportMode：不标通路 = 默许跨通路横比 */
+    for (const e of ends) {
+      expect(String(e.transportMode ?? ''), `★${e.end} 缺 transportMode（通路不写明会被当成同口径横比）`).not.toBe('')
+      expect(e.points.length, `★${e.end} 至少两档（单档看不出拐点）`).toBeGreaterThanOrEqual(2)
+      for (const p of e.points) expect(p.qps, `★${e.end} 的 QPS 必须为正`).toBeGreaterThan(0)
+    }
+
+    /* ★★端集合必须覆盖所有**有产物**的端 —— 防"加了 Android 探针但报告不认" */
+    const produced = [
+      ['iOS', 'hosts/ios/results/perf-probe.json'],
+      ['Android', 'hosts/android/results/perf-probe.json'],
+    ].filter(([, rel]) => fs.existsSync(path.join(ROOT, rel as string))).map(([end]) => end)
+    for (const end of produced) {
+      expect(ends.map((e) => e.end), `★★${end} 已有压测产物，但报告 ends 里没有它`).toContain(end)
+    }
+  })
+
+  /**
+   * ★★★#1404：吞吐读数**必须归属**（客户端饱和 vs 服务端饱和）。
+   *
+   * 【为什么这条比 QPS 本身更重要】
+   *   平台期在两种情况下**读数完全同形**：#1103「队列从未满过」与「没有队列」同族的陷阱。
+   *   若瓶颈其实是单进程 echo 服务端，那 QPS 只是装置指标，绝不能当框架结论引用。
+   *   ⇒ 判据：有吞吐 ⇒ 必须有服务端天花板产物，且每端 verdict 不能是 'unknown'。
+   */
+  it('★★★⑦c 吞吐必须归属：缺服务端天花板 ⇒ 不得把 QPS 当框架结论', () => {
+    const r = read('docs/generated/request-perf-report.json') as Report
+    const t = r.throughput
+    if (!t.measured) return
+
+    expect(t.serverCeilingSource, '★★缺服务端天花板产物（跑 node scripts/bench-echo-server.mjs）—— 没有它无法排除"装置先饱和"').toBeTruthy()
+    const ceil = read('docs/generated/request-server-ceiling.json') as { floorQps?: number; points?: unknown[] } | null
+    expect(ceil, '★缺 request-server-ceiling.json').toBeTruthy()
+    expect(typeof ceil!.floorQps, '★天花板产物必须给出 floorQps').toBe('number')
+
+    const attr = t.attribution ?? []
+    expect(attr.length, '★有吞吐就必有归属条目').toBeGreaterThan(0)
+    for (const a of attr) {
+      expect(a.verdict, `★★${a.end} 的归属判定不能是 unknown（否则 QPS 不可引用）`).not.toBe('unknown')
+      /* ★★归属为 client-bound ⇒ 服务端下限必须**明显高于**客户端读数（否则判定自相矛盾） */
+      if (a.verdict === 'client-bound') {
+        expect(typeof a.serverFloorQps, '★client-bound 必须给出服务端下限').toBe('number')
+        expect(a.serverFloorQps! > a.clientTopQps, '★★判定为"瓶颈在客户端"却服务端下限更低 —— 归属自相矛盾').toBe(true)
+      }
     }
   })
 

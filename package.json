@@ -269,6 +269,7 @@
     "check:request-engine-data": "node website/scripts/gen-request-engine-data.mjs --check",
     "bench:request": "node scripts/bench-request.mjs",
     "bench:request-load": "node scripts/bench-request-load.mjs",
+    "bench:request-ceiling": "node scripts/bench-echo-server.mjs",
     "gen:request-perf-report": "node scripts/report-request-perf.mjs",
     "check:request-perf": "node scripts/bench-request.mjs --check && node scripts/bench-request-load.mjs --check && node scripts/report-request-perf.mjs --check"
   },

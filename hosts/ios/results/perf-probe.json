@@ -5,85 +5,167 @@
       "end": "iOS",
       "verified": true,
       "concurrency": 4,
-      "total": 100,
-      "base": "http://192.168.1.136:8977",
-      "completed": 100,
+      "total": 1000,
+      "base": "http://192.168.1.136:8979",
+      "rounds": [
+        {
+          "qps": 371.1,
+          "p50Ms": 10,
+          "p99Ms": 23,
+          "failed": 0,
+          "completed": 1000
+        },
+        {
+          "qps": 408.5,
+          "p50Ms": 9,
+          "p99Ms": 25,
+          "failed": 0,
+          "completed": 1000
+        },
+        {
+          "qps": 340,
+          "p50Ms": 10,
+          "p99Ms": 29,
+          "failed": 0,
+          "completed": 1000
+        }
+      ],
+      "roundsCount": 3,
+      "qpsSpreadPct": 16.8,
+      "completed": 1000,
       "failed": 0,
       "failRatePct": 0,
-      "wallMs": 266,
-      "qps": 375.9,
-      "meanMs": 10.52,
+      "wallMs": 2695,
+      "qps": 371.1,
+      "meanMs": 10.76,
       "p50Ms": 10,
-      "p95Ms": 17,
-      "p99Ms": 24,
-      "maxMs": 28,
-      "measuredAt": "2026-10-30T06:32:15.346Z",
+      "p95Ms": 15,
+      "p99Ms": 25,
+      "maxMs": 133,
+      "measuredAt": "2026-10-30T08:39:44.767Z",
       "server": "单进程 node（transfer-echo-server.mjs）· 本机局域网",
+      "transportMode": "lan-wifi",
       "honestBoundaries": [
         "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
-        "服务端为单进程 node，可能先成为瓶颈",
-        "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+        "服务端为单进程 node，可能先成为瓶颈（报告侧另有服务端天花板归属）",
+        "局域网 ≠ 公网（公网另有 RTT 与中间设备）",
+        "iOS 走局域网 WiFi、Android 走 adb reverse 回环 ⇒ 两端 QPS 不可直接比大小"
       ]
     },
     {
       "end": "iOS",
       "verified": true,
       "concurrency": 8,
-      "total": 200,
-      "base": "http://192.168.1.136:8977",
-      "completed": 200,
+      "total": 1000,
+      "base": "http://192.168.1.136:8979",
+      "rounds": [
+        {
+          "qps": 567.5,
+          "p50Ms": 13,
+          "p99Ms": 36,
+          "failed": 0,
+          "completed": 1000
+        },
+        {
+          "qps": 589.3,
+          "p50Ms": 12,
+          "p99Ms": 36,
+          "failed": 0,
+          "completed": 1000
+        },
+        {
+          "qps": 514.4,
+          "p50Ms": 14,
+          "p99Ms": 40,
+          "failed": 0,
+          "completed": 1000
+        }
+      ],
+      "roundsCount": 3,
+      "qpsSpreadPct": 12.7,
+      "completed": 1000,
       "failed": 0,
       "failRatePct": 0,
-      "wallMs": 347,
-      "qps": 576.4,
-      "meanMs": 13.66,
+      "wallMs": 1762,
+      "qps": 567.5,
+      "meanMs": 14.06,
       "p50Ms": 13,
-      "p95Ms": 20,
-      "p99Ms": 23,
-      "maxMs": 24,
-      "measuredAt": "2026-10-30T06:33:52.101Z",
+      "p95Ms": 21,
+      "p99Ms": 36,
+      "maxMs": 135,
+      "measuredAt": "2026-10-30T08:44:54.309Z",
       "server": "单进程 node（transfer-echo-server.mjs）· 本机局域网",
+      "transportMode": "lan-wifi",
       "honestBoundaries": [
         "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
-        "服务端为单进程 node，可能先成为瓶颈",
-        "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+        "服务端为单进程 node，可能先成为瓶颈（报告侧另有服务端天花板归属）",
+        "局域网 ≠ 公网（公网另有 RTT 与中间设备）",
+        "iOS 走局域网 WiFi、Android 走 adb reverse 回环 ⇒ 两端 QPS 不可直接比大小"
       ]
     },
     {
       "end": "iOS",
       "verified": true,
       "concurrency": 16,
-      "total": 400,
-      "base": "http://192.168.1.136:8977",
-      "completed": 400,
+      "total": 1000,
+      "base": "http://192.168.1.136:8979",
+      "rounds": [
+        {
+          "qps": 507.9,
+          "p50Ms": 29,
+          "p99Ms": 88,
+          "failed": 0,
+          "completed": 1000
+        },
+        {
+          "qps": 552.5,
+          "p50Ms": 27,
+          "p99Ms": 72,
+          "failed": 0,
+          "completed": 1000
+        },
+        {
+          "qps": 544.7,
+          "p50Ms": 28,
+          "p99Ms": 49,
+          "failed": 0,
+          "completed": 1000
+        }
+      ],
+      "roundsCount": 3,
+      "qpsSpreadPct": 8.1,
+      "completed": 1000,
       "failed": 0,
       "failRatePct": 0,
-      "wallMs": 705,
-      "qps": 567.4,
-      "meanMs": 27.83,
-      "p50Ms": 27,
-      "p95Ms": 39,
-      "p99Ms": 45,
-      "maxMs": 48,
-      "measuredAt": "2026-10-30T06:35:32.451Z",
+      "wallMs": 1836,
+      "qps": 544.7,
+      "meanMs": 29.11,
+      "p50Ms": 28,
+      "p95Ms": 41,
+      "p99Ms": 72,
+      "maxMs": 151,
+      "measuredAt": "2026-10-30T08:50:39.976Z",
       "server": "单进程 node（transfer-echo-server.mjs）· 本机局域网",
+      "transportMode": "lan-wifi",
       "honestBoundaries": [
         "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
-        "服务端为单进程 node，可能先成为瓶颈",
-        "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+        "服务端为单进程 node，可能先成为瓶颈（报告侧另有服务端天花板归属）",
+        "局域网 ≠ 公网（公网另有 RTT 与中间设备）",
+        "iOS 走局域网 WiFi、Android 走 adb reverse 回环 ⇒ 两端 QPS 不可直接比大小"
       ]
     }
   ],
   "honestBoundaries": [
     "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
-    "服务端为单进程 node，可能先成为瓶颈",
-    "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+    "服务端为单进程 node，可能先成为瓶颈（报告侧另有服务端天花板归属）",
+    "局域网 ≠ 公网（公网另有 RTT 与中间设备）",
+    "iOS 走局域网 WiFi、Android 走 adb reverse 回环 ⇒ 两端 QPS 不可直接比大小"
   ],
   "best": {
     "concurrency": 8,
-    "qps": 576.4,
+    "qps": 567.5,
     "p50Ms": 13,
-    "p99Ms": 23
+    "p99Ms": 36
   },
   "verified": true
 }
