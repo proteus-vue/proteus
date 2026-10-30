@@ -280,6 +280,48 @@ function startDragSplit(i: number, e: PointerEvent) {
   window.addEventListener('pointerup', up)
 }
 
+/* ── 标签拖拽排序（决策 #1403）────────────────────────────────────────────
+ * 用原生 HTML5 drag：标签只有几个、不需要跨窗口拖拽，pointer 手写反而更多代码。
+ * 拖拽只调整 `sessions` 的顺序（= 标签顺序 = 侧栏列表顺序），不动 pty 与会话 id。 */
+const dragIdx = ref(-1)
+const dropIdx = ref(-1)
+
+function onDragStart(i: number, e: DragEvent) {
+  dragIdx.value = i
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    /* Firefox/Safari 需要设置数据才会真正开始拖拽 */
+    e.dataTransfer.setData('text/plain', String(i))
+  }
+}
+
+function onDragOver(i: number, e: DragEvent) {
+  if (dragIdx.value < 0) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dropIdx.value = i
+}
+
+function onDragLeave(i: number) {
+  if (dropIdx.value === i) dropIdx.value = -1
+}
+
+function onDrop(i: number) {
+  const from = dragIdx.value
+  dragIdx.value = -1
+  dropIdx.value = -1
+  if (from < 0 || from === i) return
+  const arr = [...sessions.value]
+  const [moved] = arr.splice(from, 1)
+  arr.splice(i, 0, moved)
+  sessions.value = arr
+}
+
+function onDragEnd() {
+  dragIdx.value = -1
+  dropIdx.value = -1
+}
+
 /* ── 会话列表（VS Code 那条 ▾）─────────────────────────────────────────── */
 /** ★**常驻会话侧栏**（决策 #1389）：多会话时**自动出现**在右侧（不再需要点 ▾），
     当前会话行左侧有蓝条高亮，每项 hover 出现「重命名 / 删除」，宽度可拖（VS Code 同款）。 */
@@ -513,12 +555,18 @@ defineExpose({ focus: focusCurrent })
     <div class="termbar" @click.stop>
       <div class="ttabs">
         <button
-          v-for="s in sessions"
+          v-for="(s, ti) in sessions"
           :key="s.id"
           class="ttab"
-          :class="{ on: panes.includes(s.id) }"
-          :title="`${s.title} · 会话 ${s.id}`"
+          :class="{ on: panes.includes(s.id), drag: dragIdx === ti, over: dropIdx === ti && dragIdx !== ti }"
+          :title="`${s.title} · 会话 ${s.id}（可拖动排序）`"
+          draggable="true"
           @click="switchTo(s.id)"
+          @dragstart="onDragStart(ti, $event)"
+          @dragover.prevent="onDragOver(ti, $event)"
+          @dragleave="onDragLeave(ti)"
+          @drop.prevent="onDrop(ti)"
+          @dragend="onDragEnd"
         >
           <span class="tname">{{ s.title }}</span>
           <span class="tx" title="关闭这个终端" @click.stop="closeSession(s.id)">✕</span>
@@ -729,6 +777,9 @@ defineExpose({ focus: focusCurrent })
 }
 .ttab:hover { background: var(--bg-overlay); color: var(--fg-muted); }
 .ttab.on { background: var(--bg-elevated); border-color: var(--border-subtle); color: var(--fg); }
+/* 拖拽中的标签与落点指示（左侧 2px 竖条，和会话侧栏的高亮语汇一致） */
+.ttab.drag { opacity: .45; }
+.ttab.over { border-left: 2px solid var(--accent); padding-left: 3px; }
 .ttab .tx { opacity: 0.45; font-size: 9px; }
 .ttab .tx:hover { opacity: 1; color: #f87171; }
 
