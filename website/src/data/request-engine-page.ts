@@ -170,6 +170,96 @@ export const REQUEST_ENGINE_PAGE = {
       }
     ]
   },
+  "perf": {
+    "jsLayer": {
+      "concurrency": 32,
+      "bareP50Ms": 0.0903,
+      "fullP50Ms": 0.1256,
+      "p50Ratio": 1.391,
+      "noiseFloorP50Ms": 0.0374,
+      "belowNoiseFloor": true,
+      "qpsDropPct": 33.3,
+      "p99Unstable": true
+    },
+    "throughput": {
+      "points": [
+        {
+          "concurrency": 4,
+          "qps": 375.9,
+          "p50Ms": 10,
+          "p99Ms": 24,
+          "failed": 0
+        },
+        {
+          "concurrency": 8,
+          "qps": 576.4,
+          "p50Ms": 13,
+          "p99Ms": 23,
+          "failed": 0
+        },
+        {
+          "concurrency": 16,
+          "qps": 567.4,
+          "p50Ms": 27,
+          "p99Ms": 45,
+          "failed": 0
+        }
+      ],
+      "best": {
+        "concurrency": 8,
+        "qps": 576.4,
+        "p50Ms": 13,
+        "p99Ms": 23
+      },
+      "knee": {
+        "at": 8,
+        "qps": 576.4
+      }
+    },
+    "highPressure": {
+      "rateLimitPass": true,
+      "quotaPass": true,
+      "quotaPeak": 8,
+      "quotaConfigured": 8,
+      "auditPass": true,
+      "auditWritten": 1000,
+      "auditAttempted": 1000,
+      "allPass": true
+    },
+    "devices": [
+      {
+        "end": "iOS",
+        "verified": true,
+        "ttfbMs": 11.1,
+        "reason": null
+      },
+      {
+        "end": "鸿蒙",
+        "verified": true,
+        "ttfbMs": 7.3,
+        "reason": null
+      },
+      {
+        "end": "Android",
+        "verified": false,
+        "ttfbMs": null,
+        "reason": "adb devices 为空（设备未连接）——如实标未验，不伪造"
+      }
+    ],
+    "notProven": [
+      "端到端 QPS：JS 层基准不含网络/序列化/宿主往返；真机数字是**单连接串行理论上限**（ttfb 倒数）",
+      "并发吞吐：**iOS 已实测**（见 throughput）· **鸿蒙/Android 未测**（鸿蒙一次性 VM 无法 JS 侧并发循环；Android 无设备）",
+      "Android：设备未连接，本端未验",
+      "长稳（soak）：没有跑\"持续 N 小时\"的内存/句柄曲线",
+      "App 精简引擎（QuickJS/JSC）的 JS 层开销：本机基准是 Node V8，不外推"
+    ],
+    "deviceCaveats": [
+      "serialQpsCeiling 是 1000/ttfb 的**推导值**，前提是单连接串行 —— 不是压测结果",
+      "ttfb 为单次测量（非 p50/p99），抖动未知",
+      "真机数字来自**已入库旧产物**（鸿蒙 10-22 / iOS 10-29），非本单重跑；代码可能已变",
+      "要真实并发吞吐必须新写真机压测探针（并发 N 连接 + 计时），本轮未做"
+    ]
+  },
   "gates": [
     {
       "no": "01",

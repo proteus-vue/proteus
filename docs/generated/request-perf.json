@@ -1,0 +1,203 @@
+{
+  "note": "请求层**JS 层治理开销**基准 —— 由 scripts/bench-request.mjs 生成，页面与文档只读本件。\n★口径：假 hooks（内存立即返回，零网络）· 固定并发 · 交替轮次（bare/full 交错，抵消机器负载漂移）· 报分位数不报均值。\n★★这不是端到端 QPS：不含真实网络、序列化、宿主往返。真机吞吐另测（hosts/*）。",
+  "generatedBy": "scripts/bench-request.mjs",
+  "runtime": {
+    "node": "v22.22.0",
+    "platform": "darwin-arm64",
+    "measuredAt": "2026-10-30T06:15:15.782Z"
+  },
+  "params": {
+    "requestsPerRound": 2000,
+    "rounds": 7,
+    "concurrency": 32,
+    "warmup": 200
+  },
+  "bare": {
+    "medianP50Ms": 0.0903,
+    "medianP99Ms": 0.3483,
+    "medianQps": 329423.7,
+    "allRounds": [
+      {
+        "count": 2000,
+        "wallMs": 8.53,
+        "qps": 234581.2,
+        "meanMs": 0.1351,
+        "p50Ms": 0.1272,
+        "p95Ms": 0.2737,
+        "p99Ms": 0.2937,
+        "maxMs": 0.2953,
+        "auditEntries": 0
+      },
+      {
+        "count": 2000,
+        "wallMs": 8.3,
+        "qps": 240893.7,
+        "meanMs": 0.1315,
+        "p50Ms": 0.1215,
+        "p95Ms": 0.2393,
+        "p99Ms": 0.3584,
+        "maxMs": 0.3865,
+        "auditEntries": 0
+      },
+      {
+        "count": 2000,
+        "wallMs": 6.07,
+        "qps": 329423.7,
+        "meanMs": 0.0962,
+        "p50Ms": 0.09,
+        "p95Ms": 0.1724,
+        "p99Ms": 0.4123,
+        "maxMs": 0.508,
+        "auditEntries": 0
+      },
+      {
+        "count": 2000,
+        "wallMs": 5.8,
+        "qps": 344961.4,
+        "meanMs": 0.0919,
+        "p50Ms": 0.0898,
+        "p95Ms": 0.1739,
+        "p99Ms": 0.2495,
+        "maxMs": 0.2513,
+        "auditEntries": 0
+      },
+      {
+        "count": 2000,
+        "wallMs": 6.66,
+        "qps": 300482.7,
+        "meanMs": 0.1049,
+        "p50Ms": 0.0941,
+        "p95Ms": 0.1515,
+        "p99Ms": 0.5971,
+        "maxMs": 0.6054,
+        "auditEntries": 0
+      },
+      {
+        "count": 2000,
+        "wallMs": 5.75,
+        "qps": 347876.5,
+        "meanMs": 0.0913,
+        "p50Ms": 0.09,
+        "p95Ms": 0.115,
+        "p99Ms": 0.3145,
+        "maxMs": 0.3162,
+        "auditEntries": 0
+      },
+      {
+        "count": 2000,
+        "wallMs": 5.95,
+        "qps": 336235.7,
+        "meanMs": 0.0945,
+        "p50Ms": 0.0903,
+        "p95Ms": 0.1352,
+        "p99Ms": 0.3483,
+        "maxMs": 0.3505,
+        "auditEntries": 0
+      }
+    ]
+  },
+  "full": {
+    "medianP50Ms": 0.1256,
+    "medianP99Ms": 0.3398,
+    "medianQps": 219738,
+    "allRounds": [
+      {
+        "count": 2000,
+        "wallMs": 14.98,
+        "qps": 133548.5,
+        "meanMs": 0.2377,
+        "p50Ms": 0.1934,
+        "p95Ms": 0.4316,
+        "p99Ms": 0.6243,
+        "maxMs": 0.7564,
+        "auditEntries": 2000
+      },
+      {
+        "count": 2000,
+        "wallMs": 13.2,
+        "qps": 151549.1,
+        "meanMs": 0.2097,
+        "p50Ms": 0.1782,
+        "p95Ms": 0.3759,
+        "p99Ms": 0.4897,
+        "maxMs": 0.5257,
+        "auditEntries": 2000
+      },
+      {
+        "count": 2000,
+        "wallMs": 9.51,
+        "qps": 210334.4,
+        "meanMs": 0.1508,
+        "p50Ms": 0.1319,
+        "p95Ms": 0.2557,
+        "p99Ms": 0.3355,
+        "maxMs": 0.3365,
+        "auditEntries": 2000
+      },
+      {
+        "count": 2000,
+        "wallMs": 9.1,
+        "qps": 219738,
+        "meanMs": 0.143,
+        "p50Ms": 0.1256,
+        "p95Ms": 0.2524,
+        "p99Ms": 0.2886,
+        "maxMs": 0.3001,
+        "auditEntries": 2000
+      },
+      {
+        "count": 2000,
+        "wallMs": 8.8,
+        "qps": 227339.5,
+        "meanMs": 0.1393,
+        "p50Ms": 0.1247,
+        "p95Ms": 0.1827,
+        "p99Ms": 0.413,
+        "maxMs": 0.4174,
+        "auditEntries": 2000
+      },
+      {
+        "count": 2000,
+        "wallMs": 8.64,
+        "qps": 231394.4,
+        "meanMs": 0.1372,
+        "p50Ms": 0.1252,
+        "p95Ms": 0.271,
+        "p99Ms": 0.3215,
+        "maxMs": 0.3313,
+        "auditEntries": 2000
+      },
+      {
+        "count": 2000,
+        "wallMs": 8.3,
+        "qps": 240891.3,
+        "meanMs": 0.1318,
+        "p50Ms": 0.1235,
+        "p95Ms": 0.146,
+        "p99Ms": 0.3398,
+        "maxMs": 0.3408,
+        "auditEntries": 2000
+      }
+    ]
+  },
+  "overhead": {
+    "p50DeltaMs": 0.0353,
+    "p99DeltaMs": -0.0085,
+    "p50Ratio": 1.391,
+    "qpsDropPct": 33.3,
+    "noiseFloorP50Ms": 0.0374,
+    "belowNoiseFloor": true
+  },
+  "p99Stability": {
+    "note": "p99 在重复运行间波动达 10 倍（GC/事件循环长尾主导）⇒ 只可引用量级，不可引用单次精确值",
+    "p50Stable": true,
+    "p99Unstable": true
+  },
+  "honestBoundaries": [
+    "JS 层开销，不含真实网络/序列化/宿主往返 —— 不能当端到端 QPS 宣传",
+    "Node 的 V8 ≠ App 精简引擎（QuickJS/JSC）⇒ 真机 JS 开销可能更高，本结果不外推",
+    "审计 write 为空函数：量的是缓冲/采样开销，不含 IO",
+    "拦截器不在本基准内（假 hooks 与 interceptors 按 #1398 冲突保护不能同时传）",
+    "★★治理开销 **低于本机噪声底（±0.0374ms）** ⇒ 只能宣称\"在这个量级下测不出差异\"，不得宣称具体倍数"
+  ]
+}

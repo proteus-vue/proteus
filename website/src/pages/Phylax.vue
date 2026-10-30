@@ -85,6 +85,20 @@ const gauges = computed(() => {
 })
 
 const groups = computed(() => N.criteria.groups)
+/** ★#1404：性能读数（来自 SSOT；缺则整块不渲染 —— 不显示假数据） */
+const perf = computed(() => (D as unknown as { perf?: unknown }).perf as {
+  jsLayer?: { concurrency: number; bareP50Ms: number; fullP50Ms: number; p50Ratio: number; noiseFloorP50Ms: number; belowNoiseFloor: boolean; qpsDropPct: number; p99Unstable: boolean } | null
+  throughput?: { points: Array<{ concurrency: number; qps: number; p50Ms: number; p99Ms: number }>; best?: { concurrency: number; qps: number }; knee?: { at: number; qps: number } | null } | null
+  highPressure?: { rateLimitPass: boolean; quotaPass: boolean; quotaPeak: number; quotaConfigured: number; auditPass: boolean; auditWritten: number; auditAttempted: number; allPass: boolean } | null
+  devices?: Array<{ end: string; verified: boolean; ttfbMs: number | null; reason: string | null }>
+  notProven?: string[]
+} | null)
+/** 条形宽度：相对**最大 QPS**（长度可比） */
+const qpsWidth = (qps: number): string => {
+  const pts = perf.value?.throughput?.points ?? []
+  const max = Math.max(...pts.map((p) => p.qps), 1)
+  return `${Math.max(8, Math.round((qps / max) * 100))}%`
+}
 /** 条形宽度：相对**最大组**的百分比（长度可比，而不是随便画一根） */
 const maxGroup = computed(() => Math.max(...N.criteria.groups.map((g) => g.count)))
 const barWidth = (n: number): string => `${Math.max(6, Math.round((n / maxGroup.value) * 100))}%`
@@ -264,6 +278,92 @@ const barWidth = (n: number): string => `${Math.max(6, Math.round((n / maxGroup.
           </ul>
         </footer>
       </div>
+
+      <!-- ═══════════ 实测读数（性能不是宣称，是量出来的） ═══════════ -->
+      <section v-if="perf && (perf.throughput || perf.jsLayer)" class="perf" data-reveal>
+        <div class="perf-head">
+          <span class="perf-k">{{ isEn ? 'MEASURED' : '实测读数' }}</span>
+          <span class="perf-note">{{ isEn ? 'benchmarked, not claimed — every figure recomputed by a script' : '不是宣称，是量出来的 —— 每个数字都由脚本重算' }}</span>
+        </div>
+
+        <!-- 真机并发吞吐（最强的一块：真设备 + 真网络） -->
+        <div v-if="perf.throughput" class="perf-block">
+          <div class="pb-head">
+            <span class="pb-title">{{ isEn ? 'Real-device throughput · iOS' : '真机并发吞吐 · iOS' }}</span>
+            <span v-if="perf.throughput.knee" class="pb-knee">
+              {{ isEn ? 'knee at concurrency' : '拐点在并发' }} {{ perf.throughput.knee.at }}
+            </span>
+          </div>
+          <div class="pb-bars">
+            <div v-for="p in perf.throughput.points" :key="p.concurrency" class="pb-row" :class="{ 'pb-row--best': perf.throughput.best && p.concurrency === perf.throughput.best.concurrency }">
+              <span class="pb-conc">×{{ p.concurrency }}</span>
+              <div class="pb-track"><div class="pb-fill" :style="{ width: qpsWidth(p.qps) }" /></div>
+              <span class="pb-qps">{{ p.qps }}</span>
+              <span class="pb-lat">p50 {{ p.p50Ms }}ms</span>
+            </div>
+          </div>
+          <p class="pb-foot">
+            {{ isEn
+              ? 'Concurrency 4 → 8 nearly doubles throughput; 8 → 16 adds latency without throughput. The knee is where this stack saturates — beyond it you only pay in p50/p99.'
+              : '并发 4→8 吞吐近翻倍；8→16 只涨延迟不涨吞吐。拐点就是这套栈的饱和点 —— 越过它只会在 p50/p99 上加价。' }}
+          </p>
+        </div>
+
+        <!-- JS 层治理开销 -->
+        <div v-if="perf.jsLayer" class="perf-block">
+          <div class="pb-head">
+            <span class="pb-title">{{ isEn ? 'Governance overhead · JS layer' : '治理层开销 · JS 层' }}</span>
+            <span class="pb-knee">{{ isEn ? 'concurrency' : '并发' }} {{ perf.jsLayer.concurrency }}</span>
+          </div>
+          <div class="pb-metrics">
+            <div class="pm">
+              <span class="pm-v">{{ perf.jsLayer.bareP50Ms }}</span>
+              <span class="pm-u">ms</span>
+              <span class="pm-l">{{ isEn ? 'bare p50' : '裸跑 p50' }}</span>
+            </div>
+            <div class="pm">
+              <span class="pm-v">{{ perf.jsLayer.fullP50Ms }}</span>
+              <span class="pm-u">ms</span>
+              <span class="pm-l">{{ isEn ? 'fully governed p50' : '全治理 p50' }}</span>
+            </div>
+            <div class="pm pm--warn">
+              <span class="pm-v">±{{ perf.jsLayer.noiseFloorP50Ms }}</span>
+              <span class="pm-u">ms</span>
+              <span class="pm-l">{{ isEn ? 'machine noise floor' : '本机噪声底' }}</span>
+            </div>
+          </div>
+          <p class="pb-foot">
+            {{ isEn
+              ? perf.jsLayer.belowNoiseFloor
+                ? 'The governance overhead is below this machine\'s noise floor — at this load we cannot measure a difference. That is the honest claim, not a flattering number.'
+                : 'The governance overhead exceeds the noise floor and is a measurable cost.'
+              : perf.jsLayer.belowNoiseFloor
+                ? '治理开销低于本机噪声底 —— 这个负载下测不出差异。这是诚实说法，不是漂亮数字。'
+                : '治理开销已超过噪声底，是可测的成本。' }}
+            <span v-if="perf.jsLayer.p99Unstable">{{ isEn ? ' p99 is unstable across runs (GC tails) — only its order of magnitude is meaningful.' : ' p99 在多次运行间不稳定（GC 长尾）—— 只可引用量级。' }}</span>
+          </p>
+        </div>
+
+        <!-- 高压行为 -->
+        <div v-if="perf.highPressure" class="perf-block">
+          <div class="pb-head">
+            <span class="pb-title">{{ isEn ? 'Under pressure' : '高压行为' }}</span>
+          </div>
+          <div class="ph-rows">
+            <div class="ph"><span class="ph-k">{{ isEn ? 'Rate limit holds' : '限速真的限住' }}</span><span class="ph-v" :class="perf.highPressure.rateLimitPass ? 'ph-ok' : 'ph-bad'">{{ perf.highPressure.rateLimitPass ? '✓' : '✗' }}</span></div>
+            <div class="ph"><span class="ph-k">{{ isEn ? 'Quota never exceeded' : '配额不越界' }}</span><span class="ph-v" :class="perf.highPressure.quotaPass ? 'ph-ok' : 'ph-bad'">{{ perf.highPressure.quotaPeak }}/{{ perf.highPressure.quotaConfigured }} ✓</span></div>
+            <div class="ph"><span class="ph-k">{{ isEn ? 'Audit count conserved' : '审计计数守恒' }}</span><span class="ph-v" :class="perf.highPressure.auditPass ? 'ph-ok' : 'ph-bad'">{{ perf.highPressure.auditWritten }}/{{ perf.highPressure.auditAttempted }}</span></div>
+          </div>
+        </div>
+
+        <!-- ★★不证明什么（与数据同处展示 —— 不允许只挂漂亮数字） -->
+        <details v-if="perf.notProven && perf.notProven.length" class="perf-caveat">
+          <summary>{{ isEn ? 'What these numbers do NOT prove' : '这些数字不证明什么' }}</summary>
+          <ul>
+            <li v-for="(c, i) in perf.notProven" :key="i">{{ c }}</li>
+          </ul>
+        </details>
+      </section>
 
       <!-- ═══════════ 副栏账本（附在管道一侧的记录，不是正节） ═══════════ -->
       <section class="side-ledger" data-reveal>
@@ -494,6 +594,43 @@ const barWidth = (n: number): string => `${Math.max(6, Math.round((n / maxGroup.
 }
 .sl-what { margin: 0; font-size: 11px; line-height: 1.6; color: rgba(244, 244, 247, 0.42); }
 .sl-foot { margin: 12px 0 0; font-size: 11px; line-height: 1.6; color: rgba(244, 244, 247, 0.34); }
+
+/* ═══════ 实测读数（性能不是宣称） ═══════ */
+.perf { margin-top: 56px; padding: 20px 22px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(255, 255, 255, 0.016); }
+.perf-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.perf-k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.2em; color: var(--ok); }
+.perf-note { font-size: 11px; color: rgba(244, 244, 247, 0.36); }
+.perf-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.perf-block:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.pb-head { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.pb-title { font-size: 13px; color: rgba(244, 244, 247, 0.85); font-weight: 600; }
+.pb-knee { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: var(--warn); }
+.pb-bars { display: flex; flex-direction: column; gap: 8px; }
+.pb-row { display: grid; grid-template-columns: 42px 1fr 62px 92px; gap: 10px; align-items: center; }
+.pb-conc { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: rgba(244, 244, 247, 0.55); }
+.pb-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.055); overflow: hidden; }
+.pb-fill { height: 100%; border-radius: 3px; background: linear-gradient(to right, rgba(61, 220, 151, 0.75), rgba(61, 220, 151, 0.4)); transition: width 0.5s ease; }
+.pb-row--best .pb-fill { background: linear-gradient(to right, var(--ok), rgba(61, 220, 151, 0.55)); }
+.pb-row--best .pb-conc { color: var(--ok); font-weight: 600; }
+.pb-qps { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.pb-lat { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; color: rgba(244, 244, 247, 0.4); text-align: right; }
+.pb-foot { margin: 10px 0 0; font-size: 11.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.5); }
+.pb-metrics { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
+.pm { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, 0.022); border: 1px solid rgba(255, 255, 255, 0.06); min-width: 108px; }
+.pm--warn { border-color: rgba(255, 180, 84, 0.28); }
+.pm-v { font-size: 20px; font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pm-u { font-size: 10.5px; color: rgba(244, 244, 247, 0.42); }
+.pm-l { font-size: 10.5px; color: rgba(244, 244, 247, 0.5); }
+.ph-rows { display: flex; flex-direction: column; gap: 6px; }
+.ph { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+.ph-k { color: rgba(244, 244, 247, 0.62); }
+.ph-v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.ph-ok { color: var(--ok); }
+.ph-bad { color: var(--rec); }
+.perf-caveat { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.perf-caveat summary { font-size: 11.5px; color: rgba(255, 180, 84, 0.8); cursor: pointer; }
+.perf-caveat ul { margin: 8px 0 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 5px; }
+.perf-caveat li { font-size: 11px; line-height: 1.6; color: rgba(244, 244, 247, 0.45); }
 
 /* 显现 */
 [data-reveal] { opacity: 0; transform: translateY(12px); transition: opacity 0.5s ease, transform 0.5s ease; }

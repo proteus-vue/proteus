@@ -421,6 +421,11 @@ final class SuperappScene: NSObject {
             // ★各探针的额外参数（顺序与 JS 侧函数签名一致）
             let extra: String
             switch cfg.argPrefix {
+            case "--perf-probe=":
+                // ★#1404 真机并发吞吐：`--perf-probe=<concurrency>,<total>`
+                let perfConc = parts.count >= 2 ? (Int(parts[1]) ?? 8) : 8
+                let perfTotal = parts.count >= 3 ? (Int(parts[2]) ?? 200) : 200
+                extra = "\(perfConc),\(perfTotal)"
             case "--fetch-limit-probe=":
                 extra = String(parts.count >= 2 ? (Double(parts[1]) ?? 64) : 64)
             case "--stream-probe=":

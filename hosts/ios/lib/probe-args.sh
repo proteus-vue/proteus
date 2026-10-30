@@ -51,6 +51,7 @@ IOS_PROBES=(
   "PHONE_PROBE_ARG:phone-probe"         # #1285 C21 拨号盘（合法受理 / 非法号码被拒）
   "SHARE_PROBE_ARG:share-probe"         # #1336 C22 分享面板（合法受理 / 危险 scheme 被拒）
   "DOCUMENT_PROBE_ARG:document-probe"   # #1384 C84 文档预览（合法受理 / 越界与非白名单被拒）
+  "PERF_PROBE_ARG:perf-probe"           # #1404 真机并发吞吐（QPS + p50/p95/p99）
 )
 
 # 所有探针参数都设置过之后，是否有**任一**非空（决定是否 `--console` 阻塞等报告）

@@ -1,0 +1,89 @@
+{
+  "end": "iOS",
+  "points": [
+    {
+      "end": "iOS",
+      "verified": true,
+      "concurrency": 4,
+      "total": 100,
+      "base": "http://192.168.1.136:8977",
+      "completed": 100,
+      "failed": 0,
+      "failRatePct": 0,
+      "wallMs": 266,
+      "qps": 375.9,
+      "meanMs": 10.52,
+      "p50Ms": 10,
+      "p95Ms": 17,
+      "p99Ms": 24,
+      "maxMs": 28,
+      "measuredAt": "2026-10-30T06:32:15.346Z",
+      "server": "单进程 node（transfer-echo-server.mjs）· 本机局域网",
+      "honestBoundaries": [
+        "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
+        "服务端为单进程 node，可能先成为瓶颈",
+        "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+      ]
+    },
+    {
+      "end": "iOS",
+      "verified": true,
+      "concurrency": 8,
+      "total": 200,
+      "base": "http://192.168.1.136:8977",
+      "completed": 200,
+      "failed": 0,
+      "failRatePct": 0,
+      "wallMs": 347,
+      "qps": 576.4,
+      "meanMs": 13.66,
+      "p50Ms": 13,
+      "p95Ms": 20,
+      "p99Ms": 23,
+      "maxMs": 24,
+      "measuredAt": "2026-10-30T06:33:52.101Z",
+      "server": "单进程 node（transfer-echo-server.mjs）· 本机局域网",
+      "honestBoundaries": [
+        "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
+        "服务端为单进程 node，可能先成为瓶颈",
+        "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+      ]
+    },
+    {
+      "end": "iOS",
+      "verified": true,
+      "concurrency": 16,
+      "total": 400,
+      "base": "http://192.168.1.136:8977",
+      "completed": 400,
+      "failed": 0,
+      "failRatePct": 0,
+      "wallMs": 705,
+      "qps": 567.4,
+      "meanMs": 27.83,
+      "p50Ms": 27,
+      "p95Ms": 39,
+      "p99Ms": 45,
+      "maxMs": 48,
+      "measuredAt": "2026-10-30T06:35:32.451Z",
+      "server": "单进程 node（transfer-echo-server.mjs）· 本机局域网",
+      "honestBoundaries": [
+        "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
+        "服务端为单进程 node，可能先成为瓶颈",
+        "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+      ]
+    }
+  ],
+  "honestBoundaries": [
+    "只走 useFetch 门面，不经过治理层（配额/限速/审计）",
+    "服务端为单进程 node，可能先成为瓶颈",
+    "局域网 ≠ 公网（公网另有 RTT 与中间设备）"
+  ],
+  "best": {
+    "concurrency": 8,
+    "qps": 576.4,
+    "p50Ms": 13,
+    "p99Ms": 23
+  },
+  "verified": true
+}

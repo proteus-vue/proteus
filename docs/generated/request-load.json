@@ -1,0 +1,46 @@
+{
+  "note": "请求层**高压行为**验证 —— 由 scripts/bench-request-load.mjs 生成。\n★口径：假 hooks（零网络）· 用**精确等式**断言（不是\"约等于\"）· 容差只在必要处写明理由。\n★★这三条比\"QPS 多少\"更重要：QPS 只说明跑得快，这三条说明**跑再快也不会打爆下游**。",
+  "generatedBy": "scripts/bench-request-load.mjs",
+  "runtime": {
+    "node": "v22.22.0",
+    "platform": "darwin-arm64",
+    "measuredAt": "2026-10-30T06:14:55.922Z"
+  },
+  "rateLimit": {
+    "configured": {
+      "permitsPerSecond": 2000,
+      "burst": 200
+    },
+    "attempted": 5000,
+    "elapsedMs": 28.63,
+    "allowed": 230,
+    "rejected": 4770,
+    "rejectedAsRateLimited": 4770,
+    "pass": true,
+    "theoreticalMax": 259,
+    "note": "放行应 ≤ burst + 速率×实际耗时（按定义推导，不是拍容差）；被拒必须全部归因 request.rateLimited"
+  },
+  "quota": {
+    "configuredConcurrency": 8,
+    "attempted": 200,
+    "served": 200,
+    "peakInflight": 8,
+    "wallMs": 85,
+    "pass": true,
+    "note": "峰值在飞数不得超过 concurrency；所有请求最终都要被服务（不能静默丢）"
+  },
+  "audit": {
+    "attempted": 1000,
+    "written": 1000,
+    "dropped": 0,
+    "batches": 28,
+    "pass": true,
+    "note": "written 必须恰好等于发出条数（不丢不重）；缓冲够大时 dropped 必须为 0"
+  },
+  "allPass": true,
+  "honestBoundaries": [
+    "假 hooks：验的是治理层在高压下的行为，不含真实网络",
+    "限速用例的容差（+5）是给事件循环调度留余量 —— 补令牌按真实时间流逝，整批不可能\"零耗时\"",
+    "审计用例串行发：验的是**计数守恒**，并发下的条数对账另有单测覆盖"
+  ]
+}

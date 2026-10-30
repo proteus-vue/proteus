@@ -4012,6 +4012,38 @@
         "T-request-interceptors"
       ],
       "note": "【done · 2026-10-30 · 决策 #1403】起因：用户问「我们现在这个请求库产品能承载大厂超级应用吗？」。\n★取证结论（不是感觉）：能承载中等规模，但差三块硬的 —— 都是**平台化最后一段**（单团队永远碰不到）。\n① **全局配额不全局**：`tenant.ts` 注释写\"必须在所有实例之上再有一层\"，而 QuotaTree/CircuitBreaker 都在 `createRequestClient` **内部** new ⇒ 每实例一份 ⇒ N 实例 = N 份额度，全局上限形同虚设。修：新增 `request/shared.ts` 跨实例池注册表 + `sharedQuotaKey`（显式启用，不改默认）；stats 回显 key（null = 独占）。\n② **没有速率限制**：`for` 循环发 100 个时并发闸门只是排队后全部发出，总量一个不少。修：新增 `request/rate-limit.ts`（令牌桶，三级全局/业务/域）。★排在并发**之前**（被限速的不占额度）；★默认 maxWaitMs=0 立即拒绝不静默排队（要不要等是业务决策）；拒绝带 retryAfterMs。\n③ **审计只有逐条同步回调**：回调做 IO 拖慢请求路径，且无采样（千万级不可能全量上报）。修：新增 `request/audit.ts`（有界缓冲+批量+采样+定时+dispose）。★★**失败与未知永不采样**（采样若对失败生效会漏掉\"错误率 1% 里的 90%\"）；配 audit 就不再调 onAudit（不重复）。\n★判据 13 条；共享配额那条**第一版只验\"key 回显+池数量\"证明不了额度真共享，自己发现并重写成「同一对象身份 + 计数联动」**。★破坏性验证 3 层全精确翻红（M-P1/M-P2/M-P3）。\n★读数：判据 182→195 条、分组 10→11 组。★诚实边界：**没有吞吐/压测数据**（唯一没补的缺口，需压测环境）· 配额与令牌桶是进程内 · 令牌桶基于 Date.now()（系统时间调整会有偏差）· 审计缓冲进程被杀会丢未刷出条目。\n★并发改号第三次（#1399→#1403）⇒ 决策号必须临提交前复核。"
+    },
+    {
+      "id": "T-request-perf-bench",
+      "title": "请求层压测：JS 层治理开销基准（隔离/限速/审计的 p50/p99 与吞吐）+ 真机吞吐（iOS/鸿蒙）",
+      "type": "verification",
+      "status": "done",
+      "owner": "session:zcode-main-20261030",
+      "scope": [
+        "scripts/bench-request.mjs",
+        "scripts/bench-request-load.mjs",
+        "scripts/report-request-perf.mjs",
+        "docs/generated/request-perf.json",
+        "docs/generated/request-load.json",
+        "docs/generated/request-perf-report.json",
+        "tests/request-perf.test.ts",
+        "hosts/ios/run-perf-probe.sh",
+        "hosts/ios/results/perf-probe.json",
+        "hosts/shared/bridge/entry-superapp-probes-perf.ts",
+        "hosts/ios/ProteusHost/shell/superapp-probes.swift",
+        "hosts/ios/ProteusHost/shell/superapp-scene.swift",
+        "hosts/ios/lib/probe-args.sh",
+        "website/src/pages/Phylax.vue",
+        "website/scripts/gen-request-engine-data.mjs",
+        "package.json"
+      ],
+      "decision": 1404,
+      "verification": "pnpm check:request-perf（三道：基准结论自洽 + 高压三条全过 + 报告自洽）；npx vitest run tests/request-perf.test.ts（8/8）；bash hosts/ios/run-perf-probe.sh <并发> <总数>；破坏性验证 4 层：M-P1 不认 sharedQuotaKey · M-P2 限速永不拒 · M-B1 burst 失效 · M-P4 伪造 verified",
+      "related": [
+        "T-request-client-library",
+        "T-request-platform-hardening"
+      ],
+      "note": "【in_progress · 2026-10-30 · 决策 #1404】用户「继续压测数据」。\n★**已完成（#1404）**：三层分开量 —— JS 层治理开销（假 hooks）· 高压行为（限速/配额/审计）· **iOS 真机并发吞吐实测**。\n★**iOS 实测曲线（iPhone 12 · 局域网）：并发 4→375.9 QPS · 8→576.4 · 16→567.4** ⇒ **拐点在并发 8**（再加压只涨延迟不涨吞吐，p50 13→27ms）。\n★JS 层治理开销：p50 增量 +0.03~0.07ms，**与噪声底同量级** ⇒ 诚实口径是\"测不出稳定差异\"；**p99 不可引用精确值**（三次运行间 0.55/1.75/5.40ms 跳，10 倍差）已在产物标 `p99Unstable`。\n★高压三条用**精确等式**：限速（burst 200 打 5000 ⇒ 放行 230 其余全 rateLimited）· 配额（并发 8 打 200 ⇒ 峰值恰好 8）· 审计（1000 条 ⇒ 写入恰好 1000）。\n★★★**三次自己抓到的判据缺陷**：① 首版基准先跑完 bare 再跑 full ⇒ 负载漂移导致 full 比 bare 还快（0.76×）⇒ 改**交替轮次** + 引入**噪声底**概念；② 限速判据**拍容差**（+5）⇒ 实测放行 229 判红，取证后令牌桶精确（冻结时钟恰好 200），上限须按 `burst + rate×耗时` **推导**；③ \"声称已验\"判据假绿（只查未验时有原因，伪造 verified=true 就绕过）⇒ 改**双向一致**（已验必须有读数）。\n★装置缺陷：探针参数顺序错（本仓约定 **base 第一参**，我传成最后）⇒ 回执 `base:\"4\"` 全部失败 40/40。是装置不是能力，但不看回执字段值会误判成能力坏了。\n★门禁 `check:request-perf` 已接 verify；判据 8 条**只验结构与结论方向，不断言绝对 QPS**（机器会变，绝对阈值制造假红，假红让人忽略判据）。\n★产品页新增「实测读数」段：数据与 **\"不证明什么\"折叠同处展示**，不允许只挂漂亮数字。\n★诚实边界：**鸿蒙并发吞吐未测**（一次性 VM 无法 JS 侧并发循环，需先解决会话式 VM）· **Android 未测**（无设备）· 长稳未做 · iOS 是局域网+单进程服务端（不代表公网）· JS 层是 Node V8（不外推精简引擎）。\n★**并发改号第四次**（1399→1403→1404）⇒ 人工复核已被证明无效，必须工具化。"
     }
   ]
 }

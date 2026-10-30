@@ -33,6 +33,46 @@ const N = JSON.parse(fs.readFileSync(NUMBERS, 'utf8'))
 const PAGE = {
   numbers: N,
   /**
+   * ★★★#1404：**性能读数**（来自 docs/generated/request-perf-report.json）
+   * ★只放"能对外宣称"的部分；"不证明什么"清单原样带上（页面必须和它一起展示）。
+   */
+  perf: (() => {
+    // ★ESM：本文件已有顶层 `fs`/`path` import（见文件头）—— 不再 require
+    const p = path.join(ROOT, 'docs/generated/request-perf-report.json')
+    if (!fs.existsSync(p)) return null
+    const r = JSON.parse(fs.readFileSync(p, 'utf8'))
+    return {
+      jsLayer: r.jsLayer ? {
+        concurrency: r.jsLayer.params.concurrency,
+        bareP50Ms: r.jsLayer.bare.p50Ms,
+        fullP50Ms: r.jsLayer.full.p50Ms,
+        p50Ratio: r.jsLayer.overhead.p50Ratio,
+        noiseFloorP50Ms: r.jsLayer.overhead.noiseFloorP50Ms,
+        belowNoiseFloor: r.jsLayer.overhead.belowNoiseFloor,
+        qpsDropPct: r.jsLayer.overhead.qpsDropPct,
+        p99Unstable: r.jsLayer.p99Stability?.p99Unstable ?? false,
+      } : null,
+      throughput: r.throughput?.measured ? {
+        points: r.throughput.points,
+        best: r.throughput.best,
+        knee: r.throughput.knee,
+      } : null,
+      highPressure: r.highPressure ? {
+        rateLimitPass: r.highPressure.rateLimit.pass,
+        quotaPass: r.highPressure.quota.pass,
+        quotaPeak: r.highPressure.quota.peakInflight,
+        quotaConfigured: r.highPressure.quota.configuredConcurrency,
+        auditPass: r.highPressure.audit.pass,
+        auditWritten: r.highPressure.audit.written,
+        auditAttempted: r.highPressure.audit.attempted,
+        allPass: r.highPressure.allPass,
+      } : null,
+      devices: r.devices.map((d) => ({ end: d.end, verified: d.verified, ttfbMs: d.steadyTtfbMs ?? null, reason: d.reason ?? null })),
+      notProven: r.notProven ?? [],
+      deviceCaveats: r.deviceCaveats ?? [],
+    }
+  })(),
+  /**
    * ★★★#1396：**闸门序列** —— 本页的主轴。一条请求依次穿过它们。
    * ★为什么是有序列表而不是并列卡片：请求治理是**一个运行时过程**，不是一组静态能力。
    *   页面的结构必须复现这个过程**顺序与分岔**，否则它就只是"一篇文章在讲一个流程"。

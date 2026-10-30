@@ -95,6 +95,17 @@ enum SuperappProbes {
       deadlineSeconds: 60,
       extraReadings: { _ in [:] },
     ),
+    // ★★★#1404 请求层**真机并发吞吐**（`--perf-probe=<concurrency>,<total>`）
+    //   ★与其它探针的区别：它量的是**吞吐**（QPS），其它量的是功能。deadline 给足 120s：
+    //     200 个请求 × 并发 8 在真机上通常 <5s，但弱网/冷启动会慢一个量级。
+    ProbeConfig(
+      argPrefix: "--perf-probe=",
+      kickFormat: "__proteusHostAppPerfProbe(%@)",
+      resultKey: "__proteusHostPerfProbeResult",
+      reportPrefix: "perf",
+      deadlineSeconds: 120,
+      extraReadings: { _ in [:] },
+    ),
     // ★★★#1384 C84 文档预览（`--document-probe=1`）
     //   ★deadline 给 90s：探针要**自己造夹具**（`fs.writeBytes` 写最小 PDF）+ 6 次 Hook 往返
     //     + 5 次宿主直调，比 share 多一倍的调用量；给足余量但不长等。
