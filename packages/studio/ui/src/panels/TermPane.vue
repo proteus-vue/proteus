@@ -45,6 +45,9 @@ const emit = defineEmits<{
 
 const pre = computed(() => props.idPrefix ?? 'term')
 const bodyEl = ref<HTMLElement>()
+/** 本栏**是否真的持有键盘焦点**（决策 #1399）：光标只在聚焦时实心闪烁。
+    之前单栏无条件画光标 ⇒ 点进编辑器后终端光标还在闪，误导"输入会进终端"。 */
+const hasFocus = ref(false)
 const inputEl = ref<HTMLTextAreaElement>()
 const cell = ref({ w: 7.2, h: 16 })
 
@@ -313,9 +316,16 @@ defineExpose({ focus, syncSize })
         </div>
         <!-- 光标：拆分时只有聚焦那栏由父组件传 showCursor=true -->
         <div
-          v-if="cursor.show && (props.showCursor ?? true)"
+          v-if="cursor.show && (props.showCursor ?? true) && hasFocus"
           class="cur"
           :id="pre + 'Cursor'"
+          :style="{ left: cursor.left + 'px', top: cursor.top + 'px' }"
+        />
+        <!-- 失焦时画**空心**光标：既告诉用户"光标在这"，又不暗示"现在能直接打字"（不闪） -->
+        <div
+          v-else-if="cursor.show && (props.showCursor ?? true)"
+          class="cur hollow"
+          :id="pre + 'CursorIdle'"
           :style="{ left: cursor.left + 'px', top: cursor.top + 'px' }"
         />
       </div>
@@ -333,7 +343,8 @@ defineExpose({ focus, syncSize })
       @keydown="onKeyDown"
       @beforeinput="onBeforeInput"
       @compositionend="onCompositionEnd"
-      @focus="emit('focus')"
+      @focus="((hasFocus = true), emit('focus'))"
+      @blur="hasFocus = false"
     />
   </div>
 </template>
@@ -372,6 +383,12 @@ defineExpose({ focus, syncSize })
   background: rgb(250 204 21 / 32%);
   border-radius: 2px;
   color: var(--fg);
+}
+.cur.hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(230 232 238 / 55%);
+  mix-blend-mode: normal;
+  animation: none;
 }
 .cur {
   position: absolute;
