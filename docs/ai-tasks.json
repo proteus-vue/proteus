@@ -3954,12 +3954,12 @@
         "website/en/system/14-request-quickstart.md",
         "docs/generated/request-engine-numbers.json"
       ],
-      "decision": 1395,
+      "decision": 1396,
       "verification": "真浏览器打开 /phylax 截图（首屏 + 整页）· DOM 快照 1 个 h1 / 1 个 .px-wrap / 8 个 section（无重复渲染）· 导航 DOM 实测并列 · pnpm check:request-engine-numbers · pnpm check:request-engine-data · pnpm check:content · pnpm check:doc-links · node scripts/check-file-size.mjs · pnpm build:web",
       "related": [
         "T-request-vue-product-layer"
       ],
-      "note": "【done · 2026-10-30 · 决策 #1395】用户第二次纠正：「产品页怎么还是手册风格啊？……请求库是我们的框架衍生产品体系中的，和动画引擎，CSS引擎，图标库这些是同等地位的」。\n★我上次错在哪：只改了**文案风格**（加叙事、去参数表），**页面形态没变**——还是一篇 markdown。产品形态由**结构位置**决定（独立路由 + 导航并列 + 视觉语言 + codename），不由文案语气决定。\n★交付：codename Phylax（φύλαξ 守卫）· /phylax 沉浸式产品页（关卡闸门视觉语言：横向栅线 + 竖向光缝，Hero = 三态闸门）· 导航并列（与 Kairos/Themis/Aether/Keryx 同列表）· 数字 SSOT 两道门禁已接 verify。\n★★被自家门禁抓到的两处：① CSE lint E-CSS-004（模板字符串拼类名不可编译期枚举 ⇒ 白屏）——这正是 Themis 产品页在讲的规则，我在写它的产品页时自己违反了；② check:doc-links 4 处死链（slug 缺 NN- 前缀等）。\n★工具坑：npx vite 不加载 plugin-vue ⇒ 必须用 proteus dev --target web；cua.scroll 在 IAB 反复超时；fullPage 截图在长页有拼接伪影 ⇒ 判断\"是否重复渲染\"要用 DOM 计数而非整页截图。"
+      "note": "【done · 2026-10-30 · 决策 #1395】用户第二次纠正：「产品页怎么还是手册风格啊？……请求库是我们的框架衍生产品体系中的，和动画引擎，CSS引擎，图标库这些是同等地位的」。\n★我上次错在哪：只改了**文案风格**（加叙事、去参数表），**页面形态没变**——还是一篇 markdown。产品形态由**结构位置**决定（独立路由 + 导航并列 + 视觉语言 + codename），不由文案语气决定。\n★交付：codename Phylax（φύλαξ 守卫）· /phylax 沉浸式产品页（关卡闸门视觉语言：横向栅线 + 竖向光缝，Hero = 三态闸门）· 导航并列（与 Kairos/Themis/Aether/Keryx 同列表）· 数字 SSOT 两道门禁已接 verify。\n★★被自家门禁抓到的两处：① CSE lint E-CSS-004（模板字符串拼类名不可编译期枚举 ⇒ 白屏）——这正是 Themis 产品页在讲的规则，我在写它的产品页时自己违反了；② check:doc-links 4 处死链（slug 缺 NN- 前缀等）。\n★工具坑：npx vite 不加载 plugin-vue ⇒ 必须用 proteus dev --target web；cua.scroll 在 IAB 反复超时；fullPage 截图在长页有拼接伪影 ⇒ 判断\"是否重复渲染\"要用 DOM 计数而非整页截图。\n★**#1396 补记**：用户第三次纠正「不能每个产品页都用一个模版」⇒ 产品页整体重做成**单轴纵向管道**（结构即产品：一条请求穿过 5 道闸门 → SVG 分岔成三态 → 出口告示牌），删掉上一版遗留的死数据（claims/outcomes/channelRows/layers/links）。判据：删掉任一节管道就断（套模板的页删掉一节毫无影响）。"
     }
   ]
 }
