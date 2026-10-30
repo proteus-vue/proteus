@@ -34,6 +34,9 @@ export const termSplit = ref(false)
 export const termSplitW = ref(0)
 
 export const termH = ref(260)
+/** 终端字号（决策 #1397）：⌘= / ⌘- / ⌘0 调整。改它必须让 TermPane 重新量格子并 term_resize，
+    否则 pty 的 cols/rows 与画面不一致（旧行会被截断或留白）。 */
+export const termFont = ref(12)
 
 /* ── 代码视图 ─────────────────────────────────────────────────────────── */
 export const treeW = ref(232) // 文件树宽度
@@ -55,9 +58,10 @@ export function loadLayout() {
     }
     const c = localStorage.getItem(TERM_KEY)
     if (c) {
-      const s = JSON.parse(c) as Partial<{ termMode: TermMode; termH: number }>
+      const s = JSON.parse(c) as Partial<{ termMode: TermMode; termH: number; termFont: number }>
       if (s.termMode === 'off' || s.termMode === 'pane' || s.termMode === 'full') termMode.value = s.termMode
       if (typeof s.termH === 'number') termH.value = clampNum(s.termH, 120, 900)
+      if (typeof s.termFont === 'number') termFont.value = clampNum(s.termFont, 9, 22)
     }
     const b = localStorage.getItem(CODE_KEY)
     if (b) {
@@ -137,7 +141,10 @@ export function startDrag(which: 'side' | 'rail' | 'tree', e: PointerEvent) {
 /* ── 终端开关/拖高 ─────────────────────────────────────────────────────── */
 export function saveTermLayout() {
   try {
-    localStorage.setItem(TERM_KEY, JSON.stringify({ termMode: termMode.value, termH: termH.value }))
+    localStorage.setItem(
+      TERM_KEY,
+      JSON.stringify({ termMode: termMode.value, termH: termH.value, termFont: termFont.value }),
+    )
   } catch {
     /* 同上 */
   }

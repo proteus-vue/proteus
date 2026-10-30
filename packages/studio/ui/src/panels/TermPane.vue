@@ -14,7 +14,7 @@
  *   ③ 量自己的格子数 → `emit('resize', {cols, rows})`（父组件据此调 pty resize）。
  * 【它不知道】会话 id 怎么来的、pty 怎么开的、rt 事件怎么订阅 —— 那些都在父组件。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { runsOf, type Terminal } from '../terminal'
 
 const props = defineProps<{
@@ -30,6 +30,8 @@ const props = defineProps<{
   focused?: boolean
   /** 是否显示光标（拆分时由父组件按"是否聚焦"算好传进来） */
   showCursor?: boolean
+  /** 字号（px）：父组件用 ⌘= / ⌘- 调整后传进来，本组件据此**重新量格子** */
+  font?: number
   /** DOM id 前缀：主栏用 `term`（门禁 ⑦ 依赖 #termBody/#termGrid/#termInput/#termCursor），
    *  副栏用 `termSide` 避免重复 id */
   idPrefix?: string
@@ -178,6 +180,17 @@ function syncSize() {
   }
 }
 
+/* ★字号变了必须重新量：格子尺寸来自标尺的 40 个 W，`font-size` 一变 cell 就变，
+   不重量就会「画面按旧字号排、pty 按旧 cols 断行」（决策 #1397）。 */
+watch(
+  () => props.font,
+  async () => {
+    await nextTick()
+    measure()
+    syncSize()
+  },
+)
+
 let ro: ResizeObserver | null = null
 onMounted(() => {
   syncSize()
@@ -276,7 +289,7 @@ defineExpose({ focus, syncSize })
 </script>
 
 <template>
-  <div class="tp" @click="focus">
+  <div class="tp" :style="{ '--fs-term': (props.font ?? 12) + 'px' }" @click="focus">
     <!-- 标尺：只用来量"一个字多宽"，不参与布局（每栏各一个，避免量到别栏的字体） -->
     <span class="ruler" :id="pre + 'Ruler'" aria-hidden="true">WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW</span>
 

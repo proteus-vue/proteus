@@ -22,7 +22,7 @@ import PInput from '../ui/PInput.vue'
 import PSelect from '../ui/PSelect.vue'
 import TermPane from './TermPane.vue'
 import Icon from '../ui/Icon.vue'
-import { termSplit, termSplitW } from '../layout'
+import { termFont, termSplit, termSplitW } from '../layout'
 
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{ close: []; maximize: [] }>()
@@ -449,6 +449,25 @@ function onPanelKey(e: KeyboardEvent) {
     toggleSplit()
     return
   }
+  /* 字号缩放（决策 #1397）：⌘= 放大 / ⌘- 缩小 / ⌘0 复位。与浏览器缩放无关，只影响终端网格 */
+  if (mod && (e.key === '=' || e.key === '+')) {
+    e.preventDefault()
+    e.stopPropagation()
+    termFont.value = Math.min(22, termFont.value + 1)
+    return
+  }
+  if (mod && e.key === '-') {
+    e.preventDefault()
+    e.stopPropagation()
+    termFont.value = Math.max(9, termFont.value - 1)
+    return
+  }
+  if (mod && e.key === '0') {
+    e.preventDefault()
+    e.stopPropagation()
+    termFont.value = 12
+    return
+  }
   if (mod && e.key.toLowerCase() === 'w') {
     e.preventDefault()
     e.stopPropagation()
@@ -488,6 +507,7 @@ defineExpose({ focus: focusCurrent })
     class="termwrap"
     id="termWrap"
     @keydown.capture="onPanelKey"
+    :style="{ '--fs-term': termFont + 'px' }"
   >
     <!-- ★面板级工具栏：一条，横跨左右两栏（VS Code 同款布局） -->
     <div class="termbar" @click.stop>
@@ -576,6 +596,7 @@ defineExpose({ focus: focusCurrent })
             :id-prefix="idx === 0 ? 'term' : 'termSide' + idx"
             :term="termOf(pid)!"
             :ver="ver"
+            :font="termFont"
             :find-q="findQ"
             :find-case="fCase"
             :find-word="fWord"
