@@ -28,6 +28,7 @@ export const routes: RouteRecord[] = [
   { name: "platform-api-demo", path: "pages/platform-api-demo", component: "../pages/platform-api-demo.vue", parent: "index", meta: {"title":"PlatformAPI 收口"} },
   { name: "provide-inject-demo", path: "pages/provide-inject-demo", component: "../pages/provide-inject-demo.vue", parent: "index", meta: {"title":"注入演示"} },
   { name: "render-backend-demo", path: "pages/render-backend-demo", component: "../pages/render-backend-demo.vue", parent: "index" },
+  { name: "request-vue-demo", path: "pages/request-vue-demo", component: "../pages/request-vue-demo.vue", parent: "index" },
   { name: "semantic-primitives-demo", path: "pages/semantic-primitives-demo", component: "../pages/semantic-primitives-demo.vue", parent: "index" },
   { name: "showcase", path: "pages/showcase", component: "../pages/showcase.vue", parent: "index", meta: {"title":"转场演示"} },
   { name: "svg-showcase-demo", path: "pages/svg-showcase-demo", component: "../pages/svg-showcase-demo.vue", parent: "index" },
@@ -147,6 +148,10 @@ export const screens: Record<string, AppScreenSpec> = {
     "name": "render-backend-demo",
     "path": "pages/render-backend-demo"
   },
+  "request-vue-demo": {
+    "name": "request-vue-demo",
+    "path": "pages/request-vue-demo"
+  },
   "semantic-primitives-demo": {
     "name": "semantic-primitives-demo",
     "path": "pages/semantic-primitives-demo"
@@ -240,7 +245,7 @@ export const screens: Record<string, AppScreenSpec> = {
 }
 
 /** 路由名数组（App 深栈/压测按它循环取屏——顺序与 routes 一致） */
-export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","gp3-global-layer-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-gp4-auth-gate-demo","svg-lab-pages-gp4-loading-demo","svg-lab-pages-gp4-toast-queue-demo","svg-lab-pages-gp5-scenarios-demo","svg-lab-pages-image-spike","svg-lab-pages-module-import-demo","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
+export const screenNames: string[] = ["builtin-components-demo","components-demo","config-demo","consistency-stress","dev-host-demo","devtools-open-api-demo","docs-engine-demo","fluid-layout-demo","fluid-system-demo","forms","glass-demo","gp0-root-portal","gp3-global-layer-demo","i18n-demo","index","mine","mp-semantics-demo","native-components-demo","pinia-demo","platform-api-demo","provide-inject-demo","render-backend-demo","request-vue-demo","semantic-primitives-demo","showcase","svg-showcase-demo","svg-skeleton-demo","user","user-profile","virtual-list-demo","vmodel-mp-test","vue-compat-demo","order-pages-list","svg-lab-pages-gp4-auth-gate-demo","svg-lab-pages-gp4-loading-demo","svg-lab-pages-gp4-toast-queue-demo","svg-lab-pages-gp5-scenarios-demo","svg-lab-pages-image-spike","svg-lab-pages-module-import-demo","svg-lab-pages-svg-anim-probe","svg-lab-pages-svg-canvas-probe","svg-lab-pages-svg-canvas-test","svg-lab-pages-svg-hit-test","svg-lab-pages-svg-p2-spike","svg-lab-pages-svg-spike"]
 
 /** tab 根屏（meta.isTab）—— App 端 tab 语义（switchTab/reset）的合法目标 */
 export const tabNames: string[] = ["index","mine"]
@@ -282,6 +287,7 @@ declare module '@proteus-vue/router/types' {
     'platform-api-demo': {  },
     'provide-inject-demo': {  },
     'render-backend-demo': {  },
+    'request-vue-demo': {  },
     'semantic-primitives-demo': {  },
     'showcase': {  },
     'svg-showcase-demo': {  },

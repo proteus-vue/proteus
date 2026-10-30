@@ -12,7 +12,9 @@ group: 柔性系统
 
 这三个问题主流库都答不上来。不是做得不好，是它们的设计目标里没有这个位置。
 
-> 想直接上手？跳到 [使用手册](/docs/system/request-quickstart)。本页讲**为什么这样设计**。
+> **产品主页：[Phylax 请求治理层](/phylax)**（沉浸式产品页，含三态闸门可视化与机器数字）。
+> **想直接上手：** [使用手册](/docs/system/14-request-quickstart)。
+> 本页讲**为什么这样设计** —— 是上面两处的补充，不是门面。
 
 ---
 
@@ -229,6 +231,6 @@ HTTP 语义上只有幂等方法（GET / HEAD / OPTIONS / PUT / DELETE / TRACE�
 
 ## 相关
 
-- [请求层使用手册](/docs/system/request-quickstart) —— 从零到第一个请求，含分页/错误/取消/排查清单
-- [能力系统](/docs/system/capabilities) —— 这层依赖的宿主能力如何按端分档
+- [请求层使用手册](/docs/system/14-request-quickstart) —— 从零到第一个请求，含分页/错误/取消/排查清单
+- [能力系统](/docs/system/08-capabilities) —— 这层依赖的宿主能力如何按端分档
 - [`useFetch`](/docs/capability/fetch) —— 底层的单请求门面

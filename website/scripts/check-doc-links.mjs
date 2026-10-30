@@ -48,6 +48,7 @@ const STATIC_ROUTES = new Set([
   '/themis',
   '/icons',
   '/liquid-glass',
+  '/phylax',
   '/changelog',
   '/docs',
 ])

@@ -1,0 +1,149 @@
+{
+  "note": "Phylax（请求治理层）对外数字单一事实源 —— 由 scripts/gen-request-engine-numbers.mjs 从已入库产物读出；产品页与文档只读本件，不得手写数字。",
+  "generatedFrom": {
+    "criteria": "tests/{request-*,fetch-pipeline,websocket-security-chain}.test.ts 的 it( 计数",
+    "painPoints": "docs/request-client-plan/01-pain-points.md 的痛点表行数",
+    "packages": "packages/request/src/*.ts + packages/api/src/request/*.ts"
+  },
+  "version": 1,
+  "criteria": {
+    "total": 172,
+    "files": 9,
+    "groups": [
+      {
+        "file": "tests/request-reliability.test.ts",
+        "zh": "可靠性内核",
+        "en": "Reliability kernel",
+        "what": "幂等键跨重试稳定 · 未知态三态 · 非幂等不重试 · 真随机抖动 · 断路器状态机 · 离线队列只收幂等 · Retry-After",
+        "whatEn": "stable idempotency keys · tri-state unknown · no retry for non-idempotent · real jitter · breaker state machine · offline queue accepts only idempotent · Retry-After",
+        "count": 21
+      },
+      {
+        "file": "tests/request-security.test.ts",
+        "zh": "安全通道",
+        "en": "Security channel",
+        "what": "默认黑名单 · header/query/body 三级脱敏 · 规范化串可复算 · 篡改检测 · nonce 真随机 · 签名失败不发送 · 头注入防护",
+        "whatEn": "default denylist · three-level redaction · recomputable canonical string · tamper detection · real-random nonce · no send on signing failure · header injection guard",
+        "count": 14
+      },
+      {
+        "file": "tests/request-tenant.test.ts",
+        "zh": "多业务隔离",
+        "en": "Multi-tenant isolation",
+        "what": "通配只匹配一级 · 未配不拦 · 闸门排队/幂等释放/取消退出 · 一业务打满不阻塞另一业务 · 审计脱敏",
+        "whatEn": "wildcard matches one level only · no policy means no block · gate queue/idempotent release/cancel exit · one tenant saturating does not block another · audit redaction",
+        "count": 16
+      },
+      {
+        "file": "tests/request-client.test.ts",
+        "zh": "门面装配",
+        "en": "Facade assembly",
+        "what": "白名单先于网络 · 断路器后续不发 · 三态贯通 · 门面字段不污染 FetchConfig · 凭证托管 · abort ⇒ unknown",
+        "whatEn": "allowlist before network · breaker stops later calls · tri-state carried through · facade fields never pollute FetchConfig · credential custody · abort yields unknown",
+        "count": 12
+      },
+      {
+        "file": "tests/request-engineering.test.ts",
+        "zh": "数据获取层",
+        "en": "Data fetching",
+        "what": "缓存键含 body · 去重含完整身份 · 真 SWR · 乐观更新回滚",
+        "whatEn": "cache key includes body · dedupe uses full identity · real SWR · optimistic rollback",
+        "count": 19
+      },
+      {
+        "file": "tests/request-offline-autoflush.test.ts",
+        "zh": "离线队列驱动线",
+        "en": "Offline queue driver",
+        "what": "网络恢复自动重放 · 防重入 · dispose 释放订阅 · 抖动不并发重放",
+        "whatEn": "auto-replay on reconnect · reentrancy guard · dispose releases subscription · network flapping does not replay concurrently",
+        "count": 7
+      },
+      {
+        "file": "tests/fetch-pipeline.test.ts",
+        "zh": "管线安全语义",
+        "en": "Pipeline safety",
+        "what": "方法门禁（POST 不重试）· 真随机抖动 · 去重身份（多租户不串号）· 拦截器时跳过去重 · 退避可精确断言",
+        "whatEn": "method gate (no POST retry) · real jitter · dedupe identity (no cross-tenant merge) · dedupe skipped with interceptors · exact backoff assertion",
+        "count": 45
+      },
+      {
+        "file": "tests/websocket-security-chain.test.ts",
+        "zh": "WS 与 HTTP 同套策略",
+        "en": "WS shares HTTP policy",
+        "what": "域名白名单 · 白名单先于连接 · 审计（开/关/条数，不含正文）· bizId · 配额在关闭时释放 · 幂等",
+        "whatEn": "domain allowlist · allowlist before connect · audit (open/close/counts, no content) · bizId · quota released on close · idempotent",
+        "count": 19
+      },
+      {
+        "file": "tests/request-vue-composables.test.ts",
+        "zh": "Vue 产品层",
+        "en": "Vue product layer",
+        "what": "真响应式（watchEffect 触发）· 竞态裁决 · 失败不清空数据 · unknown 不回滚 · useRequest 不自动发",
+        "whatEn": "true reactivity (watchEffect fires) · race adjudication · failure keeps data · unknown not rolled back · useRequest does not auto-fire",
+        "count": 19
+      }
+    ]
+  },
+  "painPoints": {
+    "total": 20,
+    "answered": 20
+  },
+  "outcomes": {
+    "states": [
+      "success",
+      "failed",
+      "unknown"
+    ],
+    "unknownIsNotFailure": true
+  },
+  "channels": {
+    "http": true,
+    "websocket": true,
+    "note": "两条出网通道共用同一套策略链（白名单 / 审计 / 配额 / bizId）"
+  },
+  "packages": {
+    "kernel": {
+      "dir": "packages/api/src/request",
+      "files": [
+        "client.ts",
+        "index.ts",
+        "query.ts",
+        "reliability.ts",
+        "security.ts",
+        "tenant.ts",
+        "types.ts"
+      ],
+      "note": "平台中立 · 零 vue 依赖（要能跑小程序逻辑层 / Node）"
+    },
+    "vueLayer": {
+      "dir": "packages/request/src",
+      "files": [
+        "client.ts",
+        "index.ts",
+        "support.ts",
+        "use-mutation.ts",
+        "use-query.ts",
+        "use-request.ts"
+      ],
+      "note": "Vue 产品层 · vue 为 peerDependency"
+    }
+  },
+  "gates": [
+    {
+      "cmd": "npx vitest run tests/request-*.test.ts tests/fetch-pipeline.test.ts tests/websocket-security-chain.test.ts",
+      "what": "判据"
+    },
+    {
+      "cmd": "pnpm test:coupled",
+      "what": "内核改动 → 配套断言真跑"
+    },
+    {
+      "cmd": "node scripts/check-deps.mjs",
+      "what": "依赖声明完整性"
+    },
+    {
+      "cmd": "node scripts/check-package-health.js",
+      "what": "包可发布形态"
+    }
+  ]
+}

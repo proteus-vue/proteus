@@ -8,7 +8,7 @@ group: 柔性系统
 
 从零到第一个能跑的请求。每一节都能独立对照，遇到问题可以直接跳到对应小节。
 
-本手册对应 `@proteus-vue/request`（Vue 产品层）。内核的**设计理由**（为什么这样设计、边界在哪）见 [请求治理层](/docs/system/request-governance)。
+本手册对应 `@proteus-vue/request`（Vue 产品层）。内核的**设计理由**（为什么这样设计、边界在哪）见 [请求治理层](/docs/system/13-request-governance)。
 
 ## 一、安装与最小可用
 
@@ -336,5 +336,5 @@ ctl.abort()
 
 ## 相关
 
-- [请求治理层](/docs/system/request-governance) —— 为什么这样设计，以及这层的边界
+- [请求治理层](/docs/system/13-request-governance) —— 为什么这样设计，以及这层的边界
 - [`useFetch`](/docs/capability/fetch) —— 底层的单请求门面（不需要三态/幂等/审计时可以直接用）

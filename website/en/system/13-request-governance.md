@@ -12,7 +12,9 @@ Mainstream request libraries optimize "write fewer lines of business code". This
 
 Mainstream libraries cannot answer those three questions. Not because they are badly built, but because those questions were never in their design space.
 
-> Want to start coding? Jump to the [Cookbook](/docs/system/request-quickstart). This page explains **why it is designed this way**.
+> **Product page: [Phylax Request Governance](/phylax)** (immersive product page with the three-lane gate and machine-read numbers).
+> **Start coding:** [Cookbook](/docs/system/14-request-quickstart).
+> This page explains **why it is designed this way** — a companion to those two, not the front door.
 
 ---
 
@@ -213,6 +215,6 @@ That last one matters most: the tri-state model exists to make the need to recon
 
 ## Related
 
-- [Request Layer Cookbook](/docs/system/request-quickstart) — zero to first request, with paging/errors/cancellation/troubleshooting
-- [Capabilities](/docs/system/capabilities) — how the host capabilities this layer depends on are graded per platform
+- [Request Layer Cookbook](/docs/system/14-request-quickstart) — zero to first request, with paging/errors/cancellation/troubleshooting
+- [Capabilities](/docs/system/08-capabilities) — how the host capabilities this layer depends on are graded per platform
 - [`useFetch`](/docs/capability/fetch) — the underlying single-request facade

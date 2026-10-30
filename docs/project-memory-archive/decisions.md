@@ -15683,3 +15683,44 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     配额/断路器会跨请求累积）；⑤ `unknown` 之后怎么处置仍是业务责任。
   - **并发改号**：立项称 #1387，实施期间 Studio 终端线连续占用 #1387–#1393 ⇒ 改为 **#1394**。
     ★这是本仓第二次遇到（上次 #1379→#1384）⇒ 多人并行时决策号必须**临提交前**复核。
+
+1395. **★★★请求库成为与动画/CSS/图标**平级的产品线：Codename `Phylax` · 独立沉浸式产品页 `/phylax` · 数字 SSOT 门禁**（2026-10-30 · 用户「产品页怎么还是手册风格啊？……请求库是我们的框架衍生产品体系中的，和动画引擎，CSS引擎，图标库这些是同等地位的」）:
+  - **★用户两次纠正（第一次我只改了文档内容，没改产品形态）**：
+    ① 「官网体现的太简陋了……还是做成了 API 手册」→ 我重写了内容但**仍是 markdown 文档页**；
+    ② 「正式产品页一般都是沉浸式通栏那种啊，不是这种在柔性系统里面隐藏起来，
+       请求库……和动画引擎、CSS 引擎、图标库这些是同等地位的」→ 这才是真正的要求。
+    ★教训：**"文档写得像产品"≠"它就是产品"**。产品形态由**它在站点结构里的位置**决定
+    （独立路由 + 导航并列 + 自己的视觉语言 + codename），不由文案风格决定。
+  - **★取证：引擎产品线的既有范式**（先看清范式再动手，不另造一套）：
+    · `website/src/pages/*.vue` 是产品页（不是 `content/*.md`）：Animation 1562 行 / CssEngine 608 / LiquidGlass 562 / Icons 302；
+    · 每个产品 = **独立路由 + 导航"引擎"下拉注册 + codename + 自己的视觉语言**：
+      Kairos(`/animation` 星场) · Themis(`/themis` **案卷台账纸**) · Aether(`/liquid-glass`) · Keryx(`/icons`)；
+    · 文档仍在 `/docs/*`，产品页与文档**职责分开**（前者讲"为什么+长什么样"，后者是查阅）。
+  - **本单交付**：
+    · **codename = `Phylax`**（φύλαξ = 古希腊守卫/守备官）。`grep` 全仓零占用（Hermes/Stratos/Okeanos 等候选已核）。
+      ★选它的理由：本层不"替你把请求发出去"（那是传输层），而是**守住边界、验明身份、留下记录** —— 名字与职责精确对应。
+    · **`/phylax` 沉浸式产品页**（`website/src/pages/Phylax.vue`，~490 行）：
+      背景 = **关卡闸门**（横向栅线 + 一道竖向光缝），**刻意区别于** Themis 的案卷横线纸与动画页的星场；
+      分节 = `CP-01…CP-07` 哨位标头；卡片 = 闸门票据（左侧通行/拦截色带）；
+      Hero 视觉 = **三态闸门**（一个请求到闸口 → 四条检查 → 放行/拦下/挂账三路），直接演示核心动作而非装饰。
+    · **导航并列**：`ENGINES` 里加 `{ to: '/phylax', labelKey: 'app.phylax', code: 'Phylax' }` —— 与
+      Kairos/Themis/Aether/Keryx 同一列表（实测 DOM：`请求治理 Phylax` 紧随 `图标库 Keryx`）。i18n 中英双 key。
+    · **数字 SSOT + 两道门禁**（与 Themis 同一纪律）：
+      `scripts/gen-request-engine-numbers.mjs` 从**产物**读数字（判据数 = 真的去数测试文件的 `it(`；
+      痛点 = 数计划文档的表行），产出 `docs/generated/request-engine-numbers.json`；
+      `website/scripts/gen-request-engine-data.mjs` → `website/src/data/request-engine-page.ts`；
+      `check:request-engine-numbers` / `check:request-engine-data` **已接 `verify` 链**。
+      ★页面**没有一个手写数字**：172 条判据 / 20 条痛点 / 9 组，全部可复算。
+  - **★过程中被自家门禁抓到的两处**：
+    ① **CSE lint `E-CSS-004`**：我写了 `` :class="`lane--${l.tone}`" `` 模板字符串拼类名 ⇒ 编译期无法枚举候选类
+       ⇒ 白屏 + overlay 报错。改成对象语法（`{ 'lane--ok': l.tone === 'ok', … }`）后通过。
+       ★**这正是 Themis 产品页在讲的那条规则**——我在写它的产品页时自己违反了它。
+    ② **`check:doc-links`** 抓到 4 处死链：`/docs/system/request-governance`（应带 `NN-` 前缀）
+       + `/docs/system/capabilities`（应为 `08-capabilities`）+ `/phylax` 未进静态路由白名单。
+  - **诚实边界**：
+    ① 产品页的"三态闸门"是**静态演示**（展示三路结局），不是可交互 demo —— Themis 的层叠裁决台同理；
+    ② 本页**不重复**手册内容：配置项/错误码表仍在 `system/14-request-quickstart`，产品页只讲为什么与长什么样；
+    ③ `check:codename` 白名单里 Phylax 属"已登记但正式检索未做"（与 Kairos/Themis/Keryx/Aether 同一存量口径）。
+  - **验证**：真浏览器打开 `/phylax` 截图（首屏 + 整页）· DOM 快照确认 1 个 h1 / 1 个 wrap / 8 个 section
+    （**无重复渲染**）· 导航 DOM 实测并列顺序 · `vue-tsc` 相关零错误 · `build:web` 通过 ·
+    5 道门禁（numbers/data/content/doc-links/file-size）全绿。

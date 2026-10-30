@@ -8,7 +8,7 @@ group: Flexible System
 
 From zero to your first working request. Each section stands alone — jump to whatever you need.
 
-This is the `@proteus-vue/request` guide (the Vue product layer). For **why it is designed this way**, see [Request Governance](/docs/system/request-governance).
+This is the `@proteus-vue/request` guide (the Vue product layer). For **why it is designed this way**, see [Request Governance](/docs/system/13-request-governance).
 
 ## 1. Install and the minimum that works
 
@@ -242,5 +242,5 @@ Components cancel automatically on unmount — you don't need to manage it.
 
 ## Related
 
-- [Request Governance](/docs/system/request-governance) — design rationale and boundaries
+- [Request Governance](/docs/system/13-request-governance) — design rationale and boundaries
 - [`useFetch`](/docs/capability/fetch) — the underlying single-request facade

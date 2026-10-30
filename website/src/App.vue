@@ -49,6 +49,8 @@ const ENGINES: EngineLink[] = [
   { to: '/liquid-glass', key: 'liquid-glass', labelKey: 'app.liquidGlass', code: 'Aether' },
   { to: '/consistency', key: 'consistency', labelKey: 'app.consistency', code: 'CS6' },
   { to: '/icons', key: 'icons', labelKey: 'app.icons', code: 'Keryx' },
+  // ★★★#1394：请求治理层与其它引擎**同等地位**（用户明确要求：产品体系里平级，不藏在 docs 里）
+  { to: '/phylax', key: 'phylax', labelKey: 'app.phylax', code: 'Phylax' },
 ]
 const isEngineActive = computed(() => ENGINES.some((e) => route.name === e.key))
 /** 导航文案（双语 key） */

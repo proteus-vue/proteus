@@ -78,5 +78,6 @@ await create.mutate({ title: '买菜' })
 
 ## 相关
 
-- 内核与设计理由：[官网 · 请求治理层](/docs/system/request-governance)
-- 逐个场景的教程：[使用手册](/docs/guides/request-quickstart)
+- **产品主页**：[Phylax 请求治理层](/phylax)（沉浸式产品页）
+- 内核与设计理由：[官网 · 请求治理层](/docs/system/13-request-governance)
+- 逐个场景的教程：[使用手册](/docs/system/14-request-quickstart)

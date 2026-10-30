@@ -3931,7 +3931,35 @@
       "related": [
         "T-request-client-library"
       ],
-      "note": "【in_progress · 2026-10-30 · 决策 #1387】用户原话：「只有内核，没有产品接线那相当于没做啊」「说了不能做成API手册那种，结果还是做成了那样，而且没有详细的前端使用教程」。\n★★**起因：内核 20 条痛点做完、官网也写了，但产品层是空的**。取证结论：① `createQuery`/`createMutation`（packages/api/src/request/query.ts，191 行）**零测试、零消费者**，且其 `state` 是**普通对象字面量** ⇒ 在 Vue 模板里数据到了**不重渲染**（在最主要的目标环境里不工作）；② 全仓无 Vue composable（搜 useRequest/useApi 零命中）；③ `examples/` 里零使用（只有直接调 cap.useFetch）。\n★**架构落点**：新建 `@proteus-vue/request`（vue 为 peerDependency，与 `@proteus-vue/pinia-sync` 同范式）——内核 `packages/api` 保持**零 vue 依赖**（它要能跑 MP 逻辑层/Node/任意环境），响应式是 Vue 特有 ⇒ 必须分层。\n★**本层只做三件内核不做的事**：① 响应式容器（shallowRef，大列表不做深代理）；② 竞态裁决（快速切筛选时旧响应不得覆盖新响应）；③ 组件卸载取消在飞请求。**不重实现任何策略**。\n★**三态语义落到 UI**：`failed` 保留旧数据+回滚乐观值；★`unknown` **不回滚**（可能已成功）并要求用户确认。\n★判据 15/15：含★用**真 Vue `watchEffect` 计触发次数**验响应式（这是内核那层做不到的），并附一条自检证明\"普通对象不触发 effect\"（防该断言恒真）。\n★破坏性验证：M-V1 shallowRef→普通对象 ⇒ 响应式那条红；M-V2 拆竞态裁决 ⇒ 竞态那条红；M-V3 unknown 也回滚 ⇒ 三态回滚那条红。三层都精确翻红。\n★**决策号改号**：立项按 #1387，实施期间并发会话（Studio 终端线）已占用 #1387–#1393 ⇒ 临提交前改为 **#1394**。\n★**产出清单**：新建 `@proteus-vue/request` 包（6 个源文件）· 示例页 `examples/pages/request-vue-demo.vue` · 判据 `tests/request-vue-composables.test.ts`（19 条）· 官网产品页重写（中英，含可视化对比）· 使用手册新增（中英）。\n★**顺带**：给内核 `createQuery`/`createMutation`（此前**零测试**）补 4 条判据，并在其文档字符串写明\"这不是 Vue composable、state 非响应式、Vue 里请用 @proteus-vue/request\"。"
+      "note": "【in_progress · 2026-10-30 · 决策 #1394】用户原话：「只有内核，没有产品接线那相当于没做啊」「说了不能做成API手册那种，结果还是做成了那样，而且没有详细的前端使用教程」。\n★★**起因：内核 20 条痛点做完、官网也写了，但产品层是空的**。取证结论：① `createQuery`/`createMutation`（packages/api/src/request/query.ts，191 行）**零测试、零消费者**，且其 `state` 是**普通对象字面量** ⇒ 在 Vue 模板里数据到了**不重渲染**（在最主要的目标环境里不工作）；② 全仓无 Vue composable（搜 useRequest/useApi 零命中）；③ `examples/` 里零使用（只有直接调 cap.useFetch）。\n★**架构落点**：新建 `@proteus-vue/request`（vue 为 peerDependency，与 `@proteus-vue/pinia-sync` 同范式）——内核 `packages/api` 保持**零 vue 依赖**（它要能跑 MP 逻辑层/Node/任意环境），响应式是 Vue 特有 ⇒ 必须分层。\n★**本层只做三件内核不做的事**：① 响应式容器（shallowRef，大列表不做深代理）；② 竞态裁决（快速切筛选时旧响应不得覆盖新响应）；③ 组件卸载取消在飞请求。**不重实现任何策略**。\n★**三态语义落到 UI**：`failed` 保留旧数据+回滚乐观值；★`unknown` **不回滚**（可能已成功）并要求用户确认。\n★判据 15/15：含★用**真 Vue `watchEffect` 计触发次数**验响应式（这是内核那层做不到的），并附一条自检证明\"普通对象不触发 effect\"（防该断言恒真）。\n★破坏性验证：M-V1 shallowRef→普通对象 ⇒ 响应式那条红；M-V2 拆竞态裁决 ⇒ 竞态那条红；M-V3 unknown 也回滚 ⇒ 三态回滚那条红。三层都精确翻红。\n★**决策号改号**：立项按 #1394，实施期间并发会话（Studio 终端线）已占用 #1394–#1393 ⇒ 临提交前改为 **#1394**。\n★**产出清单**：新建 `@proteus-vue/request` 包（6 个源文件）· 示例页 `examples/pages/request-vue-demo.vue` · 判据 `tests/request-vue-composables.test.ts`（19 条）· 官网产品页重写（中英，含可视化对比）· 使用手册新增（中英）。\n★**顺带**：给内核 `createQuery`/`createMutation`（此前**零测试**）补 4 条判据，并在其文档字符串写明\"这不是 Vue composable、state 非响应式、Vue 里请用 @proteus-vue/request\"。"
+    },
+    {
+      "id": "T-request-product-page",
+      "title": "请求库升格为产品线：Phylax codename + /phylax 沉浸式产品页 + 导航并列 + 数字 SSOT 门禁",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:zcode-main-20261030",
+      "scope": [
+        "website/src/pages/Phylax.vue",
+        "website/src/data/request-engine-page.ts",
+        "website/src/router.ts",
+        "website/src/App.vue",
+        "website/src/i18n.ts",
+        "scripts/gen-request-engine-numbers.mjs",
+        "website/scripts/gen-request-engine-data.mjs",
+        "website/scripts/check-doc-links.mjs",
+        "website/content/system/13-request-governance.md",
+        "website/content/system/14-request-quickstart.md",
+        "website/en/system/13-request-governance.md",
+        "website/en/system/14-request-quickstart.md",
+        "docs/generated/request-engine-numbers.json"
+      ],
+      "decision": 1395,
+      "verification": "真浏览器打开 /phylax 截图（首屏 + 整页）· DOM 快照 1 个 h1 / 1 个 .px-wrap / 8 个 section（无重复渲染）· 导航 DOM 实测并列 · pnpm check:request-engine-numbers · pnpm check:request-engine-data · pnpm check:content · pnpm check:doc-links · node scripts/check-file-size.mjs · pnpm build:web",
+      "related": [
+        "T-request-vue-product-layer"
+      ],
+      "note": "【done · 2026-10-30 · 决策 #1395】用户第二次纠正：「产品页怎么还是手册风格啊？……请求库是我们的框架衍生产品体系中的，和动画引擎，CSS引擎，图标库这些是同等地位的」。\n★我上次错在哪：只改了**文案风格**（加叙事、去参数表），**页面形态没变**——还是一篇 markdown。产品形态由**结构位置**决定（独立路由 + 导航并列 + 视觉语言 + codename），不由文案语气决定。\n★交付：codename Phylax（φύλαξ 守卫）· /phylax 沉浸式产品页（关卡闸门视觉语言：横向栅线 + 竖向光缝，Hero = 三态闸门）· 导航并列（与 Kairos/Themis/Aether/Keryx 同列表）· 数字 SSOT 两道门禁已接 verify。\n★★被自家门禁抓到的两处：① CSE lint E-CSS-004（模板字符串拼类名不可编译期枚举 ⇒ 白屏）——这正是 Themis 产品页在讲的规则，我在写它的产品页时自己违反了；② check:doc-links 4 处死链（slug 缺 NN- 前缀等）。\n★工具坑：npx vite 不加载 plugin-vue ⇒ 必须用 proteus dev --target web；cua.scroll 在 IAB 反复超时；fullPage 截图在长页有拼接伪影 ⇒ 判断\"是否重复渲染\"要用 DOM 计数而非整页截图。"
     }
   ]
 }
