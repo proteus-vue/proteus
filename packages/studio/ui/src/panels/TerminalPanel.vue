@@ -423,6 +423,63 @@ const statText = computed(() => {
   return `${c}×${r} · ${exited.value ? '已退出' : '运行中'}`
 })
 
+/** 终端面板内的快捷键（决策 #1394）：
+ *  · ⌘⇧T 新建会话 · ⌘F 查找（原有）
+ *  · ⌘\ 拆分（在右侧新开一栏，VS Code 的 split 键位）
+ *  · ⌘W 关闭**当前栏**的会话（面板里按才生效，不会误关窗口）
+ *  · ⌘1…⌘9 切到第 N 个会话 · ⌘⇧[ / ⌘⇧] 上一个/下一个会话
+ */
+function onPanelKey(e: KeyboardEvent) {
+  const mod = e.metaKey || e.ctrlKey
+  if (mod && e.shiftKey && e.key.toLowerCase() === 't') {
+    e.preventDefault()
+    e.stopPropagation()
+    newSession()
+    return
+  }
+  if (mod && e.key.toLowerCase() === 'f') {
+    e.preventDefault()
+    e.stopPropagation()
+    void openFind()
+    return
+  }
+  if (mod && (e.key === '\\' || e.key === '|')) {
+    e.preventDefault()
+    e.stopPropagation()
+    toggleSplit()
+    return
+  }
+  if (mod && e.key.toLowerCase() === 'w') {
+    e.preventDefault()
+    e.stopPropagation()
+    const cur = sid.value
+    if (cur) void closeSession(cur)
+    return
+  }
+  if (mod && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+    const idx = Number(e.key) - 1
+    const target = sessions.value[idx]
+    if (target) {
+      e.preventDefault()
+      e.stopPropagation()
+      switchTo(target.id)
+    }
+    return
+  }
+  /* ★按下 Shift 时 `e.key` 是 `{` / `}`（US 布局），不是 `[` / `]` —— 两种都要认（踩过一次） */
+  if (mod && e.shiftKey && ['[', ']', '{', '}'].includes(e.key)) {
+    const i = sessions.value.findIndex((x) => x.id === sid.value)
+    if (i >= 0) {
+      const n = sessions.value.length
+      const fwd = e.key === ']' || e.key === '}'
+      const next = (i + (fwd ? 1 : -1) + n) % n
+      e.preventDefault()
+      e.stopPropagation()
+      switchTo(sessions.value[next].id)
+    }
+  }
+}
+
 defineExpose({ focus: focusCurrent })
 </script>
 
@@ -430,21 +487,7 @@ defineExpose({ focus: focusCurrent })
   <div
     class="termwrap"
     id="termWrap"
-    @keydown.capture="
-      (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't') {
-          e.preventDefault()
-          e.stopPropagation()
-          newSession()
-          return
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
-          e.preventDefault()
-          e.stopPropagation()
-          void openFind()
-        }
-      }
-    "
+    @keydown.capture="onPanelKey"
   >
     <!-- ★面板级工具栏：一条，横跨左右两栏（VS Code 同款布局） -->
     <div class="termbar" @click.stop>
