@@ -95,6 +95,23 @@ function onQuickPick(path: string) {
 
 /** ⌘P 打开快速面板；Esc 由面板自己处理。只在代码视图里监听（组件只在代码视图挂载）。 */
 function onQuickKey(e: KeyboardEvent) {
+  /* ⌘W：关闭**当前标签**（决策 #1406）。终端聚焦时它由终端自己处理（关那一栏的会话），
+     两者互不干扰：这里判 target 是否在 .termwrap 内。 */
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'w') {
+    if ((e.target as HTMLElement | null)?.closest?.('.termwrap')) return
+    if (!cur.value) return
+    e.preventDefault()
+    e.stopPropagation()
+    void close(cur.value)
+    return
+  }
+  /* ⇧⌘F：仓库搜索（VS Code 同键位）——把焦点送进左栏搜索框 */
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+    e.preventDefault()
+    e.stopPropagation()
+    searchBox.value?.focus()
+    return
+  }
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
     e.preventDefault()
     e.stopPropagation()

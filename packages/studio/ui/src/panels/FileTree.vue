@@ -10,7 +10,7 @@
 //   ① **不画折叠箭头**（决策 #1238）：目录图标本身就是开关，闭合与展开是两套形状；
 //      去掉 12px 箭头后，同级文件名的左边界才真正对齐。
 //   ② **布局必须有几何判据**（决策 #1218 的教训）：文件树宽度/行高变化会被判据 ㉓ 盯住。
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { buildTree, flatten, toggleCollapsed, type TreeNode } from '../fileTree'
 import { useWorkspaceState } from '../useWorkspaceState'
 import { git } from '../git'
@@ -42,6 +42,19 @@ const mark = (p: string) => gitMark.value.get(p) ?? ''
 
 const tree = computed(() => buildTree(props.files))
 const rows = computed(() => flatten(tree.value, ws.codeCollapsed))
+
+/* ★文件树过滤（决策 #1406）：仓库上千文件时，靠折叠点进去找太慢。
+   过滤时改为**平铺匹配文件**（全路径），不再维护"过滤后的树形"——
+   树形过滤要处理"父目录保留但只剩一个子项"的合并规则，复杂度远高于收益。 */
+const q = ref('')
+const filteredRows = computed(() => {
+  const needle = q.value.trim().toLowerCase()
+  if (!needle) return rows.value
+  return props.files
+    .filter((f) => f.toLowerCase().includes(needle))
+    .slice(0, 300)
+    .map((f) => ({ node: { path: f, name: f.slice(f.lastIndexOf('/') + 1), dir: false, children: [] } as TreeNode, depth: 0 }))
+})
 
 function toggle(dir: string) {
   toggleCollapsed(dir, ws.codeCollapsed)
@@ -77,9 +90,19 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
 </script>
 
 <template>
+  <div class="ffilter">
+    <input
+      id="fileFilter"
+      v-model="q"
+      placeholder="过滤文件（按路径）"
+      spellcheck="false"
+      @keydown.esc.prevent="q = ''"
+    />
+    <span v-if="q" class="fcount">{{ filteredRows.length }}</span>
+  </div>
   <nav class="files" id="codeFiles">
     <button
-      v-for="r in rows"
+      v-for="r in filteredRows"
       :key="r.node.path"
       :class="{ on: r.node.path === cur, dir: r.node.dir }"
       :style="{ paddingLeft: `${8 + r.depth * 14}px` }"
@@ -93,7 +116,7 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     >
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
       <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
-      <span class="name">{{ r.node.name }}</span>
+      <span class="name" :title="q ? r.node.path : undefined">{{ q ? r.node.path : r.node.name }}</span>
       <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
         mark(r.node.path)
       }}</span>
@@ -110,6 +133,28 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
   overflow: auto;
   padding: var(--sp1) 0;
 }
+.ffilter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: var(--sp1) var(--sp2) 2px;
+}
+.ffilter input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+.ffilter input:focus { border-color: var(--accent); }
+.fcount { margin-left: 5px; font-size: 10px; color: var(--fg-subtle); }
+
 .gst {
   margin-left: auto;
   padding-left: 6px;

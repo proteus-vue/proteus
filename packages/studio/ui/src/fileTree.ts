@@ -50,7 +50,7 @@ export function flatten(nodes: TreeNode[], collapsed: readonly string[]): { node
       if (n.dir && !collapsed.includes(n.path)) walk(n.children, depth + 1)
     }
   }
-  walk(nodes, 0)111
+  walk(nodes, 0)
   return out
 }
 
