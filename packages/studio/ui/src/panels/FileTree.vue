@@ -13,6 +13,7 @@
 import { computed } from 'vue'
 import { buildTree, flatten, toggleCollapsed, type TreeNode } from '../fileTree'
 import { useWorkspaceState } from '../useWorkspaceState'
+import { git } from '../git'
 import { openMenu } from '../contextmenu'
 import FileIcon from '../icons/FileIcon.vue'
 import FolderIcon from '../icons/FolderIcon.vue'
@@ -29,6 +30,15 @@ const emit = defineEmits<{
 }>()
 
 const ws = useWorkspaceState()
+/* ★文件树上的改动徽标（决策 #1404）：`git_status` 已经是**只读**查询（决策 #1246 的安全边界：
+   只跑 status/rev-parse/show，永不 stage/commit），所以这里只是把它显示到树上。
+   用 Map 而不是每次 find：树有上千行，render 里线性查会明显卡。 */
+const gitMark = computed(() => {
+  const m = new Map<string, string>()
+  for (const f of git.value?.files ?? []) m.set(f.path, f.status)
+  return m
+})
+const mark = (p: string) => gitMark.value.get(p) ?? ''
 
 const tree = computed(() => buildTree(props.files))
 const rows = computed(() => flatten(tree.value, ws.codeCollapsed))
@@ -84,6 +94,9 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
       <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
       <span class="name">{{ r.node.name }}</span>
+      <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
+        mark(r.node.path)
+      }}</span>
     </button>
   </nav>
 </template>
@@ -97,6 +110,21 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
   overflow: auto;
   padding: var(--sp1) 0;
 }
+.gst {
+  margin-left: auto;
+  padding-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: .95;
+}
+.gst[data-s='M'] { color: #e0b341; }
+.gst[data-s='A'] { color: #4ade80; }
+.gst[data-s='D'] { color: #f87171; }
+.gst[data-s='R'] { color: #60a5fa; }
+.gst[data-s='U'] { color: #c084fc; }
+.gst[data-s='?'] { color: var(--fg-subtle); }
+
 .files button {
   display: flex;
   align-items: center;

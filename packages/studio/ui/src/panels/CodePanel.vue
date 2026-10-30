@@ -377,6 +377,13 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
   // ② 第一次打开：读盘，建 state + 基线
   try {
     const f = await readText(path)
+    /* ★空返回要当成"读不到"处理（决策 #1404）：`read_text` 在某些降级路径（文件刚被删、
+       桥不可用）会返回 null，直接取 `.text` 会抛 TypeError —— 用户看到的是
+       "Cannot read properties of null"，比"读不到文件"难懂得多。 */
+    if (!f || typeof f.text !== 'string') {
+      err.value = `读不到文件：${path}`
+      return
+    }
     recs.set(path, { base: f.text, mtime: f.mtime_us })
     const st = makeState(f.text, path)
     states.set(path, st)

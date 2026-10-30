@@ -95,7 +95,15 @@ export interface GitStatusInfo {
   files: GitFileStatus[]
 }
 
-export const gitStatus = (): Promise<GitStatusInfo> => invoke<GitStatusInfo>('git_status')
+/** ★必须在这里**归一化字段名**（决策 #1404）：
+ *  Rust 侧 `GitStatus` 是 `#[derive(Serialize)]` 且没有 rename ⇒ 线格式是 `is_repo`（蛇形），
+ *  这里却按 `isRepo` 读 ⇒ `git?.isRepo` 永远 undefined ⇒ **GitBar 从来没渲染过**
+ *  （用户看不到分支/改动数，而判据也没覆盖到这一条，所以一直没被发现）。
+ *  归一化放在**边界**（bridge）而不是各处 `?? is_repo`：线格式只在一处翻译。 */
+export const gitStatus = async (): Promise<GitStatusInfo> => {
+  const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
+  return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }
+}
 
 /** 某个文件在 HEAD 里的内容；未跟踪/不存在 ⇒ null。 */
 export const gitHead = (path: string): Promise<string | null> => invoke<string | null>('git_head', { path })
