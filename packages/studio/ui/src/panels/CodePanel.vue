@@ -74,6 +74,7 @@ import GitBar from './GitBar.vue'
 import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
+import { refreshAfterSave, runDiag } from '../diag'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
@@ -646,6 +647,8 @@ async function saveAll() {
   }
   saving.value = false
   void refreshGit()
+/* 首次挂载顺手跑一次类型诊断（非强制，60s 内复用结果）—— 用户不用再手动点 */
+void runDiag()
   pushToast(`已保存 ${ok}/${targets.length} 个文件`)
 }
 
@@ -657,6 +660,8 @@ async function save() {
   if (ok) {
     pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
     void refreshGit()
+    /* 保存后类型结果已过期：后台静默重跑（决策 #1412） */
+    refreshAfterSave()
   }
 }
 

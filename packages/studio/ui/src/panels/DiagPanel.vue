@@ -10,41 +10,23 @@
  *
  * 【边界】只发事件、只显示；不写文件、不修代码（`--fix` 这类能力一律不做，见 diag.rs 的安全边界）。
  */
-import { computed, ref } from 'vue'
-import { diagTsc, hasBridge, type Diag } from '../bridge'
+import { computed } from 'vue'
+import { diagAt, diagCost, diagErr, diagList, diagRunning, runDiag } from '../diag'
 import PanelShell from './PanelShell.vue'
 import Icon from '../ui/Icon.vue'
 import { pushToast } from '../toast'
+import type { Diag } from '../bridge'
 
 const emit = defineEmits<{ jump: [path: string, line: number] }>()
 
-const list = ref<Diag[]>([])
-const running = ref(false)
-const err = ref('')
-const checkedAt = ref('')
-const cost = ref(0)
-
-const title = computed(() => (list.value.length ? `问题（${list.value.length}）` : '问题'))
+const title = computed(() => (diagList.value.length ? `问题（${diagList.value.length}）` : '问题'))
+const checkedAt = computed(() =>
+  diagAt.value ? new Date(diagAt.value).toLocaleTimeString('zh-CN', { hour12: false }) : '',
+)
 
 async function run() {
-  if (running.value) return
-  if (!hasBridge()) {
-    err.value = '需要在 Studio 里运行（浏览器直开没有后端）'
-    return
-  }
-  running.value = true
-  err.value = ''
-  const t0 = performance.now()
-  try {
-    list.value = await diagTsc()
-    cost.value = Math.round(performance.now() - t0)
-    checkedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-  } catch (e) {
-    err.value = String((e as Error)?.message ?? e).slice(0, 200)
-    pushToast(`诊断失败：${err.value}`, 'err')
-  } finally {
-    running.value = false
-  }
+  await runDiag(true)
+  if (diagErr.value) pushToast(`诊断失败：${diagErr.value}`, 'err')
 }
 
 function pick(d: Diag) {
@@ -55,15 +37,15 @@ function pick(d: Diag) {
 <template>
   <PanelShell :title="title">
     <div class="dbar">
-      <button class="run" :disabled="running" @click="run">
+      <button class="run" :disabled="diagRunning" @click="run">
         <Icon name="search" :size="12" />
-        {{ running ? '检查中…' : '检查类型' }}
+        {{ diagRunning ? '检查中…' : '检查类型' }}
       </button>
-      <span v-if="checkedAt" class="meta">{{ checkedAt }} · {{ cost }}ms</span>
+      <span v-if="checkedAt" class="meta">{{ checkedAt }} · {{ diagCost }}ms</span>
     </div>
-    <p v-if="err" class="err">{{ err }}</p>
-    <p v-else-if="!list.length && checkedAt" class="ok">没有类型问题</p>
-    <button v-for="d in list" :key="d.path + d.line + d.col + d.code" class="ditem" @click="pick(d)" :title="d.message">
+    <p v-if="diagErr" class="err">{{ diagErr }}</p>
+    <p v-else-if="!diagList.length && checkedAt" class="ok">没有类型问题</p>
+    <button v-for="d in diagList" :key="d.path + d.line + d.col + d.code" class="ditem" @click="pick(d)" :title="d.message">
       <span class="dmsg">{{ d.message }}</span>
       <span class="dloc">{{ d.path.split('/').pop() }}:{{ d.line }}</span>
     </button>
