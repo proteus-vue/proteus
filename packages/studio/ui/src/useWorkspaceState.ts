@@ -26,12 +26,14 @@ export interface WorkspaceState {
   codeCollapsed: string[]
   /** 代码视图里打开的标签（顺序 = 标签栏顺序）。★只存路径：内容/undo 属于内存态，不落盘。 */
   openFiles: string[]
+  /** 待跳转（问题面板点击后交给代码视图执行；不落盘，跳完即清） */
+  jump: { path: string; line: number } | null
 }
 
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 4
 
-const state = reactive<WorkspaceState>({ view: 'device', codeFile: '', zoom: 1, codeCollapsed: [], openFiles: [] })
+const state = reactive<WorkspaceState>({ view: 'device', codeFile: '', zoom: 1, codeCollapsed: [], openFiles: [], jump: null })
 /** 读到磁盘状态之前不要回写（否则会用默认值覆盖用户上次的设置） */
 let hydrated = false
 /** ★"恢复完成"的信号：子组件的 onMounted 会**早于**父组件的，直接读 state 会拿到默认值。

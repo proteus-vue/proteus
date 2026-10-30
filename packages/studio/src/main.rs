@@ -35,6 +35,7 @@ mod ios_stream;
 mod ios_touch;
 /// ★#1344：Git **只读**查询（从本文件抽出——曾 1103 行越过 1000 行上限）。
 ///   ★只查询不写：stage/commit/push 一律不加（本仓纪律：push 必须人工批准）。
+mod diag;
 mod git;
 /// ★#1344：仓库内文件读写 + 路径沙箱（同一组抽出；共享**同一条**安全边界）。
 ///   ★新增任何文件系统能力必须复用 `resolve_in_repo`，不要自己拼路径。
@@ -618,6 +619,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             set_canvas_rect,
             set_ui_zoom,
+            diag::diag_tsc,
             stats,
             dump_frame,
             read_text,

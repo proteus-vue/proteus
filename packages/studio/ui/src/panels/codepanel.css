@@ -1,0 +1,176 @@
+/* CodePanel 的样式（决策 #1410：从 .vue 里抽出，避免单文件越过 1000 行上限）。
+   scoped 由 `<style scoped src>` 保证，选择器语义不变。 */
+.codepane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp2);
+  height: 32px;
+  padding: 0 var(--sp3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: var(--fs-xs);
+  color: var(--fg-subtle);
+}
+.path {
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.meta {
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  color: var(--fg-subtle);
+}
+/* 未保存：chip 形态（可点保存），比一个纯圆点更明确 */
+.dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp1);
+  height: 20px;
+  padding: 0 var(--sp2);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-pill);
+  background: var(--warn-weak);
+  color: var(--warn);
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+}
+.dirty:hover {
+  background: var(--warn);
+  color: var(--bg-canvas);
+}
+.bullet {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* 左栏容器（决策 #1222/#1223）：上面是 SearchBox（它自带样式），下面要么目录树、要么结果 */
+.side {
+  /* 宽度由内联 style 控制（决策 #1344）；这里只保留结构性约束 */
+  position: relative;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+}
+/* Diff 开关：低存在感的文字按钮，开了才亮（和"未保存"chip 区分开，别抢注意力） */
+.dtoggle{flex:none;height:18px;padding:0 6px;border:1px solid transparent;border-radius:var(--r-sm);
+  background:transparent;color:var(--fg-subtle);font:11px/16px -apple-system,'PingFang SC',sans-serif;
+  cursor:pointer}
+.dtoggle:hover{background:var(--bg-overlay);border-color:var(--border-subtle);color:var(--fg)}
+.dtoggle.on{background:rgba(255,255,255,.08);border-color:var(--border);color:var(--fg)}
+.pane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 编辑器宿主：撑满剩余空间；滚动交给 .cm-scroller */
+.host {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  user-select: text;
+}
+.err {
+  margin: var(--sp4);
+  padding: var(--sp2) var(--sp3);
+  border: 1px solid var(--bad);
+  border-radius: var(--r-md);
+  background: var(--bad-weak);
+  color: var(--bad);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* 文件树收起时：不留边距与边框，否则会剩一条"空壳" */
+.side.hidden { padding: 0; border-right: none; overflow: hidden; }
+/* 拖拽条：贴在文件树右缘（6px 命中区，hover 才亮） */
+.treegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px;
+            cursor: col-resize; z-index: 5; background: transparent; transition: background .12s; }
+.treegrip:hover { background: var(--accent); opacity: .35; }
+
+/* 编辑器内查找框（决策 #1400）：贴右上角，不遮代码首行（下面是 .bar 的高度） */
+/* ── CodeMirror 官方查找面板的深色适配（决策 #1401）─────────────────────
+   官方面板默认是浅色（白底黑字），放进 Studio 会像"外挂控件"。
+   这里只覆盖颜色与尺寸，不动它的布局逻辑。 */
+:deep(.cm-panels) {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border-color: var(--border);
+  font-size: 11px;
+}
+:deep(.cm-panels.cm-panels-top) { border-bottom: 1px solid var(--border-subtle); }
+:deep(.cm-panel.cm-search) { padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+:deep(.cm-panel.cm-search label) { display: inline-flex; align-items: center; gap: 3px; color: var(--fg-muted); }
+:deep(.cm-textfield) {
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+}
+:deep(.cm-textfield:focus) { border-color: var(--accent); outline: none; }
+:deep(.cm-button) {
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-overlay);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+:deep(.cm-button:hover) { background: var(--bg-elevated); color: var(--fg); }
+:deep(.cm-panel.cm-search [name='close']) {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  color: var(--fg-subtle);
+}
+/* 命中高亮：所有命中淡蓝，当前命中加深；⌘D 命中同词用淡黄区分 */
+:deep(.cm-searchMatch) { background: rgb(96 165 250 / 22%); border-radius: 2px; }
+:deep(.cm-searchMatch-selected) { background: rgb(96 165 250 / 55%); }
+:deep(.cm-selectionMatch) { background: rgb(250 204 21 / 18%); border-radius: 2px; }
+
+.crumb {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.crumb:hover { color: var(--accent); text-decoration: underline; }
+.crumb.leaf { color: var(--fg); cursor: default; }
+.crumb.leaf:hover { color: var(--fg); text-decoration: none; }
+.csep { color: var(--fg-subtle); }
+

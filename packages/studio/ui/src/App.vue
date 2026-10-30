@@ -30,8 +30,11 @@ import DeviceSwitcher from './panels/DeviceSwitcher.vue'
 import PipelinePanel from './panels/PipelinePanel.vue'
 import RuntimePanel from './panels/RuntimePanel.vue'
 import InspectorPanel from './panels/InspectorPanel.vue'
+import DiagPanel from './panels/DiagPanel.vue'
 import CodePanel from './panels/CodePanel.vue'
 import TerminalPanel from './panels/TerminalPanel.vue'
+import Rail from './Rail.vue'
+import Grips from './Grips.vue'
 import StudioIcon from './icons/StudioIcon.vue'
 import StudioMark from './icons/StudioMark.vue'
 import ContextMenu from './ContextMenu.vue'
@@ -740,20 +743,7 @@ async function copyIosCmd() {
          一开始塞进 `.rail` 当第一个子元素，结果把 `.rail button:nth-child(N)` 的序号整体后移，
          门禁（用 `nth-child(2)` 点"代码"）点到了"设备" ⇒ 代码视图没打开、文件树不可见。
          ⇒ **不要往 rail/side 里插节点**，改在 .app 层用 left/right 定位。 -->
-    <div
-      class="grip grip-rail"
-      :class="{ 'grip-off': railHidden }"
-      :style="{ left: railW - 3 + 'px' }"
-      title="拖动调整左栏宽度（⌘⇧B 收起/展开）"
-      @pointerdown="startDrag('rail', $event)"
-    />
-    <div
-      class="grip grip-side"
-      :class="{ 'grip-off': sideHidden }"
-      :style="{ right: sideW - 3 + 'px' }"
-      title="拖动调整右栏宽度（⌘B 收起/展开）"
-      @pointerdown="startDrag('side', $event)"
-    />
+    <Grips />
     <!-- 沉浸式标题栏（2026-10-25 · 决策 #1219）：窗口用 titleBarStyle=Overlay + hiddenTitle，
          内容一直画到窗口顶部，原生红绿灯（trafficLightPosition 14,13）浮在这条上。
          ★可拖拽区域靠 `data-tauri-drag-region="deep"` —— **必须带 `deep`**（2026-10-25 实测踩到）：
@@ -823,44 +813,7 @@ async function copyIosCmd() {
       <div class="chip">画布由 HTML 布局驱动 · 等比适配</div>
     </div>
 
-    <div class="rail">
-      <button
-        :class="{ on: view === 'device' }"
-        :aria-pressed="view === 'device'"
-        aria-label="设备画布"
-        title="设备画布"
-        @click="switchView('device')"
-      >
-        <StudioIcon name="device" :size="18" />
-      </button>
-      <button
-        :class="{ on: view === 'code' }"
-        :aria-pressed="view === 'code'"
-        aria-label="代码（只读）"
-        title="代码（只读）"
-        @click="switchView('code')"
-      >
-        <StudioIcon name="code" :size="18" />
-      </button>
-      <button
-        :class="{ on: termMode !== 'off' }"
-        :aria-pressed="termMode !== 'off'"
-        aria-label="终端"
-        title="终端面板（⌘J）· ⌘⇧J 最大化"
-        id="railTerm"
-        @click="toggleTermPane()"
-      >
-        <StudioIcon name="terminal" :size="18" />
-      </button>
-      <div class="sep" />
-      <button aria-label="断言（未实现）" title="断言（未实现）" disabled><StudioIcon name="assert" :size="18" /></button>
-      <button aria-label="录制（未实现）" title="录制（未实现）" disabled><StudioIcon name="record" :size="18" /></button>
-      <div class="sep" />
-      <!-- 设置（决策 #1267）：开**独立窗口**，不是右栏小面板 -->
-      <button id="openSettings" aria-label="设置" title="设置（⌘,）" @click="openSettings">
-        <StudioIcon name="settings" :size="18" />
-      </button>
-    </div>
+    <Rail :view="view" :term-mode="termMode" @device="switchView('device')" @code="switchView('code')" @term="toggleTermPane()" @settings="openSettings" />
 
     <div class="main" :class="{ codeview: view === 'code' }">
       <!-- ★主轴改为**垂直分割**（决策 #1346）：上面是当前视图（画布/代码），下面是终端面板。
@@ -1000,6 +953,8 @@ async function copyIosCmd() {
       <PipelinePanel :s="stats" />
       <RuntimePanel :s="stats" />
       <InspectorPanel />
+      <!-- 问题面板（决策 #1409）：点条目 → 切到代码视图并跳行 -->
+      <DiagPanel @jump="async (p, l) => { await switchView('code'); ws.jump = { path: p, line: l } }" />
     </div>
 
     <div class="status">

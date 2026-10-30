@@ -100,6 +100,16 @@ export interface GitStatusInfo {
  *  这里却按 `isRepo` 读 ⇒ `git?.isRepo` 永远 undefined ⇒ **GitBar 从来没渲染过**
  *  （用户看不到分支/改动数，而判据也没覆盖到这一条，所以一直没被发现）。
  *  归一化放在**边界**（bridge）而不是各处 `?? is_repo`：线格式只在一处翻译。 */
+/** 问题面板（决策 #1409）：跑 Studio UI 的类型诊断。**只读**，命令与参数全在后端写死。 */
+export interface Diag {
+  path: string
+  line: number
+  col: number
+  code: string
+  message: string
+}
+export const diagTsc = (): Promise<Diag[]> => invoke<Diag[]>('diag_tsc')
+
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
   return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }

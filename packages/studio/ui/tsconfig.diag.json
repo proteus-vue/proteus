@@ -1,0 +1,18 @@
+{
+  // packages/studio/ui/tsconfig.diag.json —— 只用给 Studio 的「问题面板」做类型诊断（决策 #1409）
+  //
+  // 【为什么单独一份】根 `tsconfig.json` 的 include 覆盖 6+ 个包，`vue-tsc --noEmit` 要跑几十秒到几分钟；
+  //   问题面板如果按根配置查，用户每次点一下都要等一两分钟，功能等于不可用。
+  //   这里**只收 Studio UI**，并开启 `incremental`（tsbuildinfo 落在 /tmp），第二次起通常降到几秒。
+  //
+  // 【不改根配置】extends 继承全部 compilerOptions / paths，避免两套别名漂移。
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": true,
+    // ★`types` 里的相对路径是相对**本文件目录**解析的（继承来的 "./packages/..." 会指错），必须按 ui/ 重写
+    "types": ["vite/client", "../../shared/src/shims/mp.d.ts"],
+    "tsBuildInfoFile": "../../../node_modules/.cache/studio-diag.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
+}

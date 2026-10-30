@@ -15,7 +15,7 @@
  * 【它不知道】会话 id 怎么来的、pty 怎么开的、rt 事件怎么订阅 —— 那些都在父组件。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { runsOf, type Terminal } from '../terminal'
+import { runsOf, type Run, type Terminal } from '../terminal'
 
 const props = defineProps<{
   term: Terminal
@@ -100,7 +100,7 @@ function matchRanges(text: string): [number, number][] {
   return out
 }
 
-function segmentsOf(line: { text: string; [k: string]: unknown }[]) {
+function segmentsOf(line: Run[]) {
   const full = line.map((r) => r.text).join('')
   const ranges = matchRanges(full)
   if (!ranges.length) return line.map((r) => ({ text: r.text, style: runStyle(r), hit: false }))
@@ -129,7 +129,7 @@ function segmentsOf(line: { text: string; [k: string]: unknown }[]) {
   return out
 }
 
-function runStyle(r: { fg: string | null; bg: string | null; bold: boolean; dim: boolean; italic: boolean; underline: boolean }) {
+function runStyle(r: Run) {
   const s: Record<string, string> = {}
   if (r.fg) s.color = r.fg
   if (r.bg) s.background = r.bg

@@ -71,6 +71,7 @@ import TabBar from './TabBar.vue'
 import QuickOpen from './QuickOpen.vue'
 import { cmPhrases } from '../ui/i18n'
 import GitBar from './GitBar.vue'
+import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
 import { openMenu } from '../contextmenu'
@@ -109,7 +110,7 @@ function onQuickKey(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
     e.preventDefault()
     e.stopPropagation()
-    searchBox.value?.focus()
+    sidebar.value?.focusSearch()
     return
   }
   /* ⌥⌘S：保存全部（决策 #1407） */
@@ -165,7 +166,7 @@ const setTabDirty = (p: string, on: boolean) => {
  *   ② `jumpTo` —— 真正跳转，因为只有这里持有 `EditorView`。
  */
 const searchActive = ref(false)
-const searchBox = ref<{ focus: () => void } | null>(null)
+const sidebar = ref<{ focusSearch: () => void } | null>(null)
 
 /** 跳到某条命中：打开文件 → 把光标放到**行:列**（列是字符列，这里换成 UTF-16 偏移）。 */
 async function jumpTo(h: SearchHit) {
@@ -339,7 +340,8 @@ function mountEditor() {
 const idle = (fn: () => void) =>
   'requestIdleCallback' in window
     ? window.requestIdleCallback(fn, { timeout: 250 })
-    : window.setTimeout(fn, 16)
+    : /* ★TS 把 `window` 窄化成 never（`requestIdleCallback` 在 lib.dom 里必存在），
+        这里用全局 setTimeout 绕开窄化，行为不变 */ setTimeout(fn, 16)
 
 function warmParse(v: EditorView) {
   const total = v.state.doc.length
@@ -496,6 +498,24 @@ async function copyPath(p: string) {
 }
 
 /** 标签拖拽重排（决策 #1408）：只改 `tabs` 顺序（= 恢复时的顺序），不动 EditorState 池 */
+/* 问题面板 → 跳转（决策 #1409）：父组件只写 `ws.jump`，真正打开文件/定位的活在这里做。
+   `flush: 'post'` 是因为要等编辑器 DOM 就绪后再 dispatch。 */
+watch(
+  () => ws.jump,
+  async (j) => {
+    if (!j) return
+    ws.jump = null
+    await open(j.path)
+    await nextTick()
+    if (!view) return
+    const n = Math.min(Math.max(1, j.line), view.state.doc.lines)
+    const lineInfo = view.state.doc.line(n)
+    view.dispatch({ selection: { anchor: lineInfo.from }, scrollIntoView: true })
+    view.focus()
+  },
+  { flush: 'post' },
+)
+
 function onTabReorder(from: number, to: number) {
   const arr = [...tabs.value]
   if (from < 0 || from >= arr.length || to < 0 || to >= arr.length) return
@@ -806,7 +826,7 @@ function inPlainInput(): boolean {
 
 const menuOffs = [
   onMenuAction('file.save', () => void save()),
-  onMenuAction('edit.find', () => searchBox.value?.focus()),
+  onMenuAction('edit.find', () => sidebar.value?.focusSearch()),
   // 撤销/重做/全选：菜单加速键会把 ⌘Z 吃掉（见 src/menu.rs 注释），所以真正的实现在这里。
   onMenuAction('edit.undo', () => {
     if (inPlainInput()) document.execCommand('undo')
@@ -865,29 +885,18 @@ onBeforeUnmount(() => {
     <div class="split">
       <!-- 左栏（决策 #1222）：搜索框常驻顶部；一旦有查询，结果列表**替换**目录树
            （VS Code 同款：同一时刻只有一个列表，不叠浮层、不用管 z 序）。 -->
-      <div
-        class="side"
-        :class="{ hidden: treeHidden }"
-        :style="{ width: (treeHidden ? 0 : treeW) + 'px' }"
-      >
-        <!-- 拖动条（决策 #1344）：代码视图的"左栏"就是这棵文件树，宽度可拖、可收起。
-             ★放在 `.side` 内部是安全的：门禁按 `#codeFiles button[data-file]` 选文件，
-               不做 nth-child 序号假设（与 rail 的情况不同，那里不能插节点）。 -->
-        <div class="treegrip" title="拖动调整文件树宽度（⌘B 收起/展开）" @pointerdown="startDrag('tree', $event)" />
-        <!-- 搜索框常驻顶部；一旦有查询，结果列表**替换**目录树（VS Code 同款：同一时刻一个列表） -->
-        <SearchBox ref="searchBox" @jump="jumpTo" @active="searchActive = $event" />
-        <!-- Git 只读条（决策 #1246 · #1247 拆成组件）：分支 + 改动数；点清单项 = 打开 + 看 HEAD diff -->
-        <GitBar :cur="cur" @open="openChanged" />
-        <!-- 文件树（#1247 拆成组件）：只在没有搜索查询时显示（同一时刻只有一个列表） -->
-        <FileTree
-          v-if="!searchActive"
-          :files="files"
-          :cur="cur"
-          @open="open"
-          @copy="copyPath"
-          @refresh="refreshFiles"
-        />
-      </div>
+      <CodeSidebar
+        ref="sidebar"
+        :files="files"
+        :cur="cur"
+        :search-active="searchActive"
+        @open="open"
+        @changed="openChanged"
+        @jump="jumpTo"
+        @refresh="refreshFiles"
+        @copy="copyPath"
+        @active="searchActive = $event"
+      />
       <!-- ★右栏 = 编辑器自己的区域（决策 #1218）：文件信息条 + 标签栏 + 编辑器**都在这里**。
            原先它们是 `.codepane` 的直接子元素 ⇒ 横跨整页、压在左栏树上面（用户截图指出）。
            IDE 的通用布局就是"左栏只有树，编辑器头部跟着编辑器"。 -->
@@ -897,7 +906,7 @@ onBeforeUnmount(() => {
 
         <div class="bar">
           <!-- 面包屑（决策 #1407）：目录段可点（在树里定位），末段是文件名。★保持单行，textContent 才会正好等于完整路径（门禁按它比对当前文件）。 -->
-          <span class="path" id="codePath" :title="cur"><template v-if="cur"><template v-for="(c, i) in crumbs" :key="c.name + i"><button class="crumb" :class="{ leaf: !c.dir }" @click.stop="c.dir && revealPath(c.dir)">{{ c.name }}</button><span v-if="i < crumbs.length - 1" class="csep">/</span></template></template><template v-else>—</template></span>
+          <span class="path" id="codePath" :title="cur"><template v-if="cur"><template v-for="(c, i) in crumbs" :key="c.name + i"><button class="crumb" :class="{ leaf: !c.dir }" @click.stop="c.dir && revealPath(c.dir, ws.codeCollapsed)">{{ c.name }}</button><span v-if="i < crumbs.length - 1" class="csep">/</span></template></template><template v-else>—</template></span>
           <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
           <!-- 未保存：可点的 chip（⌘S 之外的第二条路径） -->
           <button v-if="dirty" class="dirty" id="codeDirty" title="保存（⌘S）" @click="save">
@@ -940,179 +949,4 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
-.codepane {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-canvas);
-}
-.bar {
-  display: flex;
-  align-items: center;
-  gap: var(--sp2);
-  height: 32px;
-  padding: 0 var(--sp3);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  font-size: var(--fs-xs);
-  color: var(--fg-subtle);
-}
-.path {
-  max-width: 34%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.meta {
-  font-variant-numeric: tabular-nums;
-}
-.note {
-  color: var(--fg-subtle);
-}
-/* 未保存：chip 形态（可点保存），比一个纯圆点更明确 */
-.dirty {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp1);
-  height: 20px;
-  padding: 0 var(--sp2);
-  border: 1px solid var(--warn);
-  border-radius: var(--r-pill);
-  background: var(--warn-weak);
-  color: var(--warn);
-  font-size: var(--fs-2xs);
-  cursor: pointer;
-}
-.dirty:hover {
-  background: var(--warn);
-  color: var(--bg-canvas);
-}
-.bullet {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.split {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-/* 左栏容器（决策 #1222/#1223）：上面是 SearchBox（它自带样式），下面要么目录树、要么结果 */
-.side {
-  /* 宽度由内联 style 控制（决策 #1344）；这里只保留结构性约束 */
-  position: relative;
-  flex: none;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-surface);
-  border-right: 1px solid var(--border-subtle);
-}
-/* Diff 开关：低存在感的文字按钮，开了才亮（和"未保存"chip 区分开，别抢注意力） */
-.dtoggle{flex:none;height:18px;padding:0 6px;border:1px solid transparent;border-radius:var(--r-sm);
-  background:transparent;color:var(--fg-subtle);font:11px/16px -apple-system,'PingFang SC',sans-serif;
-  cursor:pointer}
-.dtoggle:hover{background:var(--bg-overlay);border-color:var(--border-subtle);color:var(--fg)}
-.dtoggle.on{background:rgba(255,255,255,.08);border-color:var(--border);color:var(--fg)}
-.pane {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* 编辑器宿主：撑满剩余空间；滚动交给 .cm-scroller */
-.host {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  user-select: text;
-}
-.err {
-  margin: var(--sp4);
-  padding: var(--sp2) var(--sp3);
-  border: 1px solid var(--bad);
-  border-radius: var(--r-md);
-  background: var(--bad-weak);
-  color: var(--bad);
-  font-size: var(--fs-sm);
-  white-space: pre-wrap;
-  user-select: text;
-}
-
-/* 文件树收起时：不留边距与边框，否则会剩一条"空壳" */
-.side.hidden { padding: 0; border-right: none; overflow: hidden; }
-/* 拖拽条：贴在文件树右缘（6px 命中区，hover 才亮） */
-.treegrip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px;
-            cursor: col-resize; z-index: 5; background: transparent; transition: background .12s; }
-.treegrip:hover { background: var(--accent); opacity: .35; }
-
-/* 编辑器内查找框（决策 #1400）：贴右上角，不遮代码首行（下面是 .bar 的高度） */
-/* ── CodeMirror 官方查找面板的深色适配（决策 #1401）─────────────────────
-   官方面板默认是浅色（白底黑字），放进 Studio 会像"外挂控件"。
-   这里只覆盖颜色与尺寸，不动它的布局逻辑。 */
-:deep(.cm-panels) {
-  background: var(--bg-elevated);
-  color: var(--fg);
-  border-color: var(--border);
-  font-size: 11px;
-}
-:deep(.cm-panels.cm-panels-top) { border-bottom: 1px solid var(--border-subtle); }
-:deep(.cm-panel.cm-search) { padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-:deep(.cm-panel.cm-search label) { display: inline-flex; align-items: center; gap: 3px; color: var(--fg-muted); }
-:deep(.cm-textfield) {
-  height: 20px;
-  padding: 0 5px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  background: var(--bg-canvas);
-  color: var(--fg);
-  font: inherit;
-  font-size: 11px;
-}
-:deep(.cm-textfield:focus) { border-color: var(--accent); outline: none; }
-:deep(.cm-button) {
-  height: 20px;
-  padding: 0 7px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  background: var(--bg-overlay);
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 10px;
-  cursor: pointer;
-}
-:deep(.cm-button:hover) { background: var(--bg-elevated); color: var(--fg); }
-:deep(.cm-panel.cm-search [name='close']) {
-  position: absolute;
-  right: 6px;
-  top: 4px;
-  color: var(--fg-subtle);
-}
-/* 命中高亮：所有命中淡蓝，当前命中加深；⌘D 命中同词用淡黄区分 */
-:deep(.cm-searchMatch) { background: rgb(96 165 250 / 22%); border-radius: 2px; }
-:deep(.cm-searchMatch-selected) { background: rgb(96 165 250 / 55%); }
-:deep(.cm-selectionMatch) { background: rgb(250 204 21 / 18%); border-radius: 2px; }
-
-.crumb {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-.crumb:hover { color: var(--accent); text-decoration: underline; }
-.crumb.leaf { color: var(--fg); cursor: default; }
-.crumb.leaf:hover { color: var(--fg); text-decoration: none; }
-.csep { color: var(--fg-subtle); }
-
-</style>
+<style scoped src="./codepanel.css"></style>
