@@ -30,6 +30,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { locale } from '../i18n'
 import FeatureIcon from '../components/FeatureIcon.vue'
+import PhylaxSigil from '../components/phylax/PhylaxSigil.vue'
 import { REQUEST_ENGINE_PAGE as D } from '../data/request-engine-page'
 
 const isEn = computed(() => locale.value === 'en')
@@ -84,6 +85,9 @@ const gauges = computed(() => {
 })
 
 const groups = computed(() => N.criteria.groups)
+/** 条形宽度：相对**最大组**的百分比（长度可比，而不是随便画一根） */
+const maxGroup = computed(() => Math.max(...N.criteria.groups.map((g) => g.count)))
+const barWidth = (n: number): string => `${Math.max(6, Math.round((n / maxGroup.value) * 100))}%`
 </script>
 
 <template>
@@ -94,7 +98,15 @@ const groups = computed(() => N.criteria.groups)
     <div class="px-doc">
       <!-- ═══════════ 道口标题（通栏，不再双栏 hero） ═══════════ -->
       <header class="px-head">
-        <span class="px-badge"><FeatureIcon name="shield" />{{ isEn ? 'REQUEST GOVERNANCE' : '请求治理层' }} · PHYLAX</span>
+        <!-- ★品牌锚点：本产品自己的徽记（六边形守卫框 + 纵向轴 + 三闸 + 三态分岔），
+             与 Kairos 的圆形叠层徽记几何完全不同 —— 见组件头注释 -->
+        <div class="px-brand">
+          <PhylaxSigil :size="168" />
+          <div class="px-brand-copy">
+            <span class="px-badge"><FeatureIcon name="shield" />{{ isEn ? 'REQUEST GOVERNANCE' : '请求治理层' }} · PHYLAX</span>
+            <span class="px-brand-name">PHYLAX<span class="px-brand-gloss">φύλαξ · {{ isEn ? 'the guard' : '守卫' }}</span></span>
+          </div>
+        </div>
         <h1 class="px-title">
           {{ isEn ? 'One request. Five gates. Three fates.' : '一条请求，五道闸，三种命。' }}
         </h1>
@@ -130,6 +142,42 @@ const groups = computed(() => N.criteria.groups)
 
           <div class="gate-body">
             <div class="gate-head">
+              <!-- 闸口微图：每道闸一个（几何各不相同，表达"它在检什么"），下面按序号切换 -->
+              <svg class="gate-glyph" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <g v-if="g.no === '01'" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <!-- 白名单：三行条目 + 右侧一道闸线（"逐条筛过闸"） -->
+                  <path d="M5 9h9M5 16h9M5 23h9" stroke-opacity="0.5" />
+                  <path d="M20 5v22" />
+                  <path d="M25 16h4" stroke-opacity="0.8" />
+                </g>
+                <g v-else-if="g.no === '02'" fill="currentColor">
+                  <!-- 配额：两条计量条（上满下空） -->
+                  <rect x="5" y="9" width="22" height="5" rx="2.5" fill-opacity="0.22" />
+                  <rect x="5" y="9" width="15" height="5" rx="2.5" fill-opacity="0.95" />
+                  <rect x="5" y="19" width="22" height="5" rx="2.5" fill-opacity="0.22" />
+                  <rect x="5" y="19" width="6" height="5" rx="2.5" fill-opacity="0.6" />
+                </g>
+                <g v-else-if="g.no === '03'" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none">
+                  <!-- 幂等键：指纹（三条弧 + 核心点） -->
+                  <path d="M16 6c-5 0-9 4-9 9 0 3 .8 5.6 2.2 7.8" />
+                  <path d="M16 6c5 0 9 4 9 9 0 3-.8 5.6-2.2 7.8" />
+                  <path d="M16 12c-1.7 0-3 1.3-3 3 0 4 1 7 2.4 9.4" stroke-opacity="0.55" />
+                  <circle cx="16" cy="15.6" r="1.6" fill="currentColor" stroke="none" />
+                </g>
+                <g v-else-if="g.no === '04'" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <!-- 重试门禁：循环箭头 + 一道斜杠（不可重试） -->
+                  <path d="M10 8.5a9 9 0 1 1-1.4 12" stroke="currentColor" stroke-width="2" />
+                  <path d="M9 4.6v4.6h4.6" stroke="currentColor" stroke-width="2" />
+                  <path d="M23 24 9 8" stroke="#ff6b6b" stroke-width="2" stroke-opacity="0.9" />
+                </g>
+                <g v-else fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <!-- 去重身份：两条线汇成一点（合并点） -->
+                  <path d="M5 8c6 0 5 8 11 8" stroke-opacity="0.5" />
+                  <path d="M5 24c6 0 5-8 11-8" stroke-opacity="0.5" />
+                  <path d="M16 16h9" />
+                  <circle cx="27" cy="16" r="2.4" fill="currentColor" stroke="none" />
+                </g>
+              </svg>
               <span class="gate-no">{{ g.no }}</span>
               <h2 class="gate-name">{{ isEn ? g.en : g.zh }}</h2>
             </div>
@@ -223,11 +271,16 @@ const groups = computed(() => N.criteria.groups)
           <span class="sl-k">{{ isEn ? 'THE LEDGER' : '判据账本' }}</span>
           <span class="sl-note">{{ isEn ? 'every figure is counted from repository artifacts' : '每个数字都从仓库产物重新数出' }}</span>
         </div>
-        <div class="sl-rows">
-          <div v-for="g in groups" :key="g.file" class="sl-row">
-            <span class="sl-count">{{ g.count }}</span>
-            <span class="sl-name">{{ isEn ? g.en : g.zh }}</span>
-            <span class="sl-what">{{ isEn ? g.whatEn : g.what }}</span>
+        <div class="sl-bars">
+          <div v-for="g in groups" :key="g.file" class="sl-bar-row">
+            <div class="sl-bar-meta">
+              <span class="sl-name">{{ isEn ? g.en : g.zh }}</span>
+              <span class="sl-count">{{ g.count }}</span>
+            </div>
+            <div class="sl-bar-track">
+              <div class="sl-bar-fill" :style="{ width: barWidth(g.count) }" />
+            </div>
+            <p class="sl-what">{{ isEn ? g.whatEn : g.what }}</p>
           </div>
         </div>
         <p class="sl-foot">
@@ -257,6 +310,31 @@ const groups = computed(() => N.criteria.groups)
 
 /* ═══════ 标题：通栏（不再双栏 hero），左缘对齐管道 ═══════ */
 .px-head { display: flex; flex-direction: column; gap: 16px; padding-bottom: 44px; }
+/* ★品牌区：徽记 + 名称（与其它引擎页的"纯文字 chip"区分开 —— 产品要有自己的品牌锚点） */
+.px-brand {
+  display: flex; flex-direction: row; align-items: center; gap: 22px;
+  margin: 0 0 10px -18px;   /* 徽记略超出正文左缘 —— 形成品牌重心 */
+}
+.px-brand-copy { display: flex; flex-direction: column; gap: 8px; }
+.px-brand-name {
+  display: flex; align-items: baseline; gap: 10px;
+  font-size: 26px; font-weight: 700; letter-spacing: 0.2em;
+  color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.px-brand-gloss {
+  font-size: 11.5px; font-weight: 400; letter-spacing: 0.06em;
+  color: rgba(171, 155, 255, 0.62); font-family: inherit;
+}
+/* ★闸口微图：每道闸一个（几何各不同，见模板） */
+.gate-glyph {
+  width: 34px; height: 34px; flex: none;
+  color: var(--brand-ink); opacity: 0.92;
+  /* ★从"文字流里的小图标"抬到"节点标记"：与 gate-name 基线对齐，左侧微留白 */
+  align-self: center; margin-top: 1px;
+}
+.gate--bad .gate-glyph { color: rgba(255, 107, 107, 0.92); }
+.gate--warn .gate-glyph { color: rgba(255, 180, 84, 0.92); }
+.gate--ok .gate-glyph { color: rgba(61, 220, 151, 0.92); }
 .px-badge {
   display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
   padding: 5px 11px; border-radius: 3px; font-size: 10.5px; letter-spacing: 0.16em;
@@ -301,7 +379,7 @@ const groups = computed(() => N.criteria.groups)
 /* 闸门节点 */
 .gate { position: relative; display: flex; flex-direction: row; padding: 0 0 40px 0; }
 .gate-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
-.gate-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; }
+.gate-head { display: flex; flex-direction: row; align-items: center; gap: 11px; }
 .gate-no {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
   letter-spacing: 0.14em; color: rgba(244, 244, 247, 0.34); flex: none;
@@ -396,15 +474,25 @@ const groups = computed(() => N.criteria.groups)
 .sl-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .sl-k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.2em; color: var(--brand-ink); }
 .sl-note { font-size: 11px; color: rgba(244, 244, 247, 0.36); }
-.sl-rows { display: flex; flex-direction: column; }
-.sl-row {
-  display: grid; grid-template-columns: 42px 120px 1fr; gap: 12px; align-items: baseline;
-  padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.045);
+/* ★判据账本 = 横向条形（不是三列文字表 —— 表格读起来像 changelog，条形才有"仪表盘"感） */
+.sl-bars { display: flex; flex-direction: column; gap: 14px; }
+.sl-bar-row { display: flex; flex-direction: column; gap: 5px; }
+.sl-bar-meta { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sl-name { font-size: 12.5px; color: rgba(244, 244, 247, 0.82); }
+.sl-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  color: var(--brand-ink); font-variant-numeric: tabular-nums;
 }
-.sl-row:first-child { border-top: none; }
-.sl-count { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--brand-ink); text-align: right; }
-.sl-name { font-size: 12.5px; color: rgba(244, 244, 247, 0.78); }
-.sl-what { font-size: 11.5px; line-height: 1.65; color: rgba(244, 244, 247, 0.45); }
+.sl-bar-track {
+  position: relative; height: 5px; border-radius: 3px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.055);
+}
+.sl-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(to right, rgba(124, 92, 255, 0.85), rgba(171, 155, 255, 0.55));
+  transition: width 0.5s ease;
+}
+.sl-what { margin: 0; font-size: 11px; line-height: 1.6; color: rgba(244, 244, 247, 0.42); }
 .sl-foot { margin: 12px 0 0; font-size: 11px; line-height: 1.6; color: rgba(244, 244, 247, 0.34); }
 
 /* 显现 */
