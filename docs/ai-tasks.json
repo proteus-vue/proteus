@@ -3985,6 +3985,33 @@
         "T-request-vue-product-layer"
       ],
       "note": "【in_progress · 2026-10-30 · 决策 #1398】用户：「好像在请求层使用手册里面没看到请求拦截这些」。\n★取证（先跑运行时探针，不只读类型）：① 手册里 grep 拦截|interceptor **零命中**；② 更严重 —— **产品层 `createRequestClient` 没有拦截器入口**：`RequestClientOptions` 15 个字段里没有 `interceptors`；实测 `createRequestClient({ interceptors })` 拦截器**调用 0 次**（静默忽略），只有 `createRequestClient({ hooks })` 且 hooks 里带 `fetch.requestInterceptors` 才生效（调用 1 次）。\n★这是\"承诺与实现不符\"的同族：不是漏文档，是产品层漏 API —— 写文档只能把秘径写清楚，解决不了\"拦截器为什么不能像 retry/trace 那样直接配\"。\n★本单：给 `RequestClientOptions` 加 `interceptors: { request?, response? }`，内部映射到内核 `fetch.requestInterceptors` / `fetch.responseInterceptors`；同时确保「配了拦截器 ⇒ 跳过去重」这条保护在产品层用户那里也**可见**（meta.dedupeSkipped 能读到原因）。\n★然后写手册那一节 —— 那时它描述的是真 API，不是秘径。\n★**已完成（#1398）**：`RequestClientOptions` 加 `interceptors`（请求/响应）→ 映射内核 `fetch.*Interceptors`；hooks+interceptors 冲突**显式报错**并给出两条出路（旧行为是静默忽略 = 本单要修的形态）。\n★**过程中自己抓到一处类型漂移**：第一版把 `RequestInterceptorLike` 返回值收窄成 `{url, config}`，而内核返回完整 `FetchRequestContext`（含 id/attempt/elapsedMs）⇒ `vue-tsc` 3 条 TS2322 抓出；补 `RequestInterceptorContext` + 判据 ⑨（文本抽取比对两处字段集）。\n★判据 10 条 · 破坏性验证 3 层（M-I1 拆映射 / M-I2 冲突退化成静默 / M-I3 删字段）全部精确翻红。\n★手册新增「八、拦截器」（中英双版，含短路/洋葱顺序/去重取舍/冲突两条出路）· README 同步 · 判据 172→182 条。"
+    },
+    {
+      "id": "T-request-platform-hardening",
+      "title": "请求层平台化三件：全局配额真全局（sharedQuotaKey）· 速率限制（令牌桶）· 审计出口（批量+采样）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:zcode-main-20261030",
+      "scope": [
+        "packages/api/src/request/shared.ts",
+        "packages/api/src/request/rate-limit.ts",
+        "packages/api/src/request/audit.ts",
+        "packages/api/src/request/client.ts",
+        "packages/api/src/request/types.ts",
+        "packages/api/src/request/index.ts",
+        "tests/request-platform.test.ts",
+        "scripts/gen-request-engine-numbers.mjs",
+        "website/content/system/14-request-quickstart.md",
+        "website/en/system/14-request-quickstart.md"
+      ],
+      "decision": 1403,
+      "verification": "npx vitest run tests/request-platform.test.ts（13/13）；破坏性验证 3 层：M-P1 不认 sharedQuotaKey · M-P2 限速永不拒绝 · M-P3 失败也采样；npx vue-tsc --noEmit；node scripts/build-packages.mjs；pnpm check:request-engine-numbers / check:request-engine-data / check:content / check:doc-links",
+      "related": [
+        "T-request-client-library",
+        "T-request-vue-product-layer",
+        "T-request-interceptors"
+      ],
+      "note": "【done · 2026-10-30 · 决策 #1403】起因：用户问「我们现在这个请求库产品能承载大厂超级应用吗？」。\n★取证结论（不是感觉）：能承载中等规模，但差三块硬的 —— 都是**平台化最后一段**（单团队永远碰不到）。\n① **全局配额不全局**：`tenant.ts` 注释写\"必须在所有实例之上再有一层\"，而 QuotaTree/CircuitBreaker 都在 `createRequestClient` **内部** new ⇒ 每实例一份 ⇒ N 实例 = N 份额度，全局上限形同虚设。修：新增 `request/shared.ts` 跨实例池注册表 + `sharedQuotaKey`（显式启用，不改默认）；stats 回显 key（null = 独占）。\n② **没有速率限制**：`for` 循环发 100 个时并发闸门只是排队后全部发出，总量一个不少。修：新增 `request/rate-limit.ts`（令牌桶，三级全局/业务/域）。★排在并发**之前**（被限速的不占额度）；★默认 maxWaitMs=0 立即拒绝不静默排队（要不要等是业务决策）；拒绝带 retryAfterMs。\n③ **审计只有逐条同步回调**：回调做 IO 拖慢请求路径，且无采样（千万级不可能全量上报）。修：新增 `request/audit.ts`（有界缓冲+批量+采样+定时+dispose）。★★**失败与未知永不采样**（采样若对失败生效会漏掉\"错误率 1% 里的 90%\"）；配 audit 就不再调 onAudit（不重复）。\n★判据 13 条；共享配额那条**第一版只验\"key 回显+池数量\"证明不了额度真共享，自己发现并重写成「同一对象身份 + 计数联动」**。★破坏性验证 3 层全精确翻红（M-P1/M-P2/M-P3）。\n★读数：判据 182→195 条、分组 10→11 组。★诚实边界：**没有吞吐/压测数据**（唯一没补的缺口，需压测环境）· 配额与令牌桶是进程内 · 令牌桶基于 Date.now()（系统时间调整会有偏差）· 审计缓冲进程被杀会丢未刷出条目。\n★并发改号第三次（#1399→#1403）⇒ 决策号必须临提交前复核。"
     }
   ]
 }

@@ -11,8 +11,8 @@ export const REQUEST_ENGINE_PAGE = {
     },
     "version": 1,
     "criteria": {
-      "total": 182,
-      "files": 10,
+      "total": 195,
+      "files": 11,
       "groups": [
         {
           "file": "tests/request-reliability.test.ts",
@@ -87,6 +87,14 @@ export const REQUEST_ENGINE_PAGE = {
           "count": 10
         },
         {
+          "file": "tests/request-platform.test.ts",
+          "zh": "平台化三件",
+          "en": "Platform hardening",
+          "what": "跨实例共享配额（同 key 同池 + 计数联动）· 令牌桶速率限制（maxWaitMs=0 立即拒绝 · retryAfterMs）· 速率先于并发 · 审计批量/有界/失败不采样 · dispose 不丢条目",
+          "whatEn": "cross-instance shared quota (same key ⇒ same pool + linked counters) · token-bucket rate limit (maxWaitMs=0 rejects now · retryAfterMs) · rate before concurrency · audit batching/bounded/no-failure-sampling · dispose flushes",
+          "count": 13
+        },
+        {
           "file": "tests/request-vue-composables.test.ts",
           "zh": "Vue 产品层",
           "en": "Vue product layer",
@@ -117,11 +125,14 @@ export const REQUEST_ENGINE_PAGE = {
       "kernel": {
         "dir": "packages/api/src/request",
         "files": [
+          "audit.ts",
           "client.ts",
           "index.ts",
           "query.ts",
+          "rate-limit.ts",
           "reliability.ts",
           "security.ts",
+          "shared.ts",
           "tenant.ts",
           "types.ts"
         ],

@@ -421,7 +421,104 @@ ctl.abort()
 
 组件卸载时**自动取消**（`useQuery` / `useMutation` / `useRequest` 都接管了 `onScopeDispose`）。不用手动管。
 
-## 十二、已知边界
+## 十二、多实例共享额度（平台化）
+
+默认每个 client 一份额度。**多页面/多业务各建一个 client 时，全局上限就失效了** ——
+N 个实例 = N 份额度，`concurrency: 6` 变成"每实例 6"。
+
+要真的全局，传一个共享键：
+
+```ts
+// 全应用同 key ⇒ 共用同一份配额树 + 断路器
+provideRequestClient({ baseURL, sharedQuotaKey: 'prod', tenant: { concurrency: 6 } })
+```
+
+- 同 key ⇒ 同池；不同 key ⇒ 各自独立（测试 client 和生产 client 应当分开）
+- **全局上限只在首次创建时生效** —— 后到的实例传入的 `concurrency` 会被忽略
+  （改上限会让已在飞请求的计数失去意义）。要改上限请换 key
+- 断路器也一起共享：A 实例熔断了某个 host，B 实例也会跳过
+
+怎么确认生效了：
+
+```ts
+client.stats().sharedQuotaKey   // 'prod' = 共享；null = 本实例独占
+```
+
+## 十三、速率限制（每秒几次）
+
+**并发上限和速率限制是两件事。** 并发回答"同时最多几个在飞"，
+速率回答"每秒最多几个"。
+
+```ts
+// 只限并发：for 循环发 100 个 → 排队 → 匀速全部发出，总量一个不少
+// 加了速率：每秒最多 50 个，第 51 个当场被拒
+provideRequestClient({
+  rateLimit: {
+    permitsPerSecond: 50,   // 桶按这个速率补令牌
+    burst: 100,             // 桶容量（突发上限），缺省 = permitsPerSecond
+    maxWaitMs: 0,           // ★0 = 立即拒绝（默认），不静默排队
+  },
+})
+```
+
+三级限速（与配额树同构，任一超限只影响自己）：
+
+```ts
+rateLimit: {
+  permitsPerSecond: 500,                          // 全局
+  tenant: { permitsPerSecond: 50 },               // 每业务
+  host:   { permitsPerSecond: 20 },               // 每域名
+}
+```
+
+超限的结果：
+
+```ts
+if (!r.ok && r.error.code === 'request.rateLimited') {
+  r.error.retryAfterMs   // 还要等多久 —— 据此退避，不要盲目立即重试
+}
+```
+
+**为什么不默认排队**：速率超限时"要不要等"是**业务决策**（下单可以等，埋点不该等）。
+库不能替业务决定"让它等 5 秒"。需要等就显式给 `maxWaitMs`（有上界，超了仍拒绝）。
+
+## 十四、审计出口（批量 + 采样）
+
+不配 `audit` 时，审计走 `tenant.onAudit` —— **逐条同步回调**。
+回调里做 IO（发日志、写文件）会直接拖慢请求路径，量级一上来就雪崩。
+
+配了 `audit` 就变成**有界缓冲 + 批量写 + 采样**：
+
+```ts
+provideRequestClient({
+  audit: {
+    sampleRate: 0.01,        // 成功条目采 1%（★失败/未知不受影响，全留）
+    batchSize: 50,           // 攒够 50 条写一次
+    flushIntervalMs: 5000,   // 或者每 5 秒强制刷一次
+    maxBuffer: 1000,         // 缓冲上限，超了丢最旧并计数（不静默）
+    write: (entries) => sendToCollector(entries),
+  },
+})
+```
+
+### ★ 采样只作用于成功
+
+**失败与未知永不采样。** 采样若对失败也生效，就会漏掉"错误率 1% 里的 90%"——
+而那 1% 正是合规与排障最需要的。代价是错误风暴时审计量会涨，所以缓冲有上限。
+
+这条和三态设计是同一套思路：**宁可多留，不能让关键状态消失。**
+
+### 读数
+
+```ts
+client.stats().audit
+// { buffered, written, dropped, sampled, timer }
+```
+
+`timer: false` 表示本环境没有 `setInterval`（App 精简引擎）——
+这时只按 `batchSize` 刷。
+
+## 十五、已知边界
 
 写清楚不做什么，比列功能更有用。
 
@@ -431,7 +528,7 @@ ctl.abort()
 - **SSR 必须显式 provide**。零配置时用的是进程级兜底单例，多请求共享会让配额/断路器计数跨请求累积。
 - **`unknown` 之后怎么处置是业务的责任**。这一层保证状态诚实，不能替你决定"去查单还是忽略"。
 
-## 十三、从零排查清单
+## 十六、从零排查清单
 
 请求不工作时，按顺序看这五项：
 

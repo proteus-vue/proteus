@@ -296,6 +296,24 @@ export interface RequestMeta {
  *   之所以危险，是因为它允许**任意代码**在任何时刻改全局默认值，绕过托管层。
  *   本库的实例是冻结的：要换 token 走 `auth`，要换配置新建实例。
  */
+/**
+ * ★#1403：速率限制策略（令牌桶）。
+ *
+ * ★与 `ConcurrencyGate` 的语义差别：并发 = "同时最多几个在飞"；**速率 = "每秒最多几个"**。
+ *   两者**叠加**生效（都要过）。
+ */
+export interface RateLimitPolicy {
+  /** 每秒允许的请求数。`<= 0` ⇒ 不限速（显式关闭，与并发 `limit === 0` 的 0=不限 同语义） */
+  permitsPerSecond: number
+  /** 桶容量（突发上限）。缺省 = `permitsPerSecond`（即最多攒 1 秒的量） */
+  burst?: number
+  /**
+   * 超限时最多等多久（ms）。**缺省 0 = 立即拒绝**（不静默排队）。
+   * ★设了上界才允许等待：无上界的等待等于把"被限速"变成"莫名挂起"。
+   */
+  maxWaitMs?: number
+}
+
 export interface RequestClientOptions {
   /**
    * ★底座：必须是既有的能力 Hook 实例（内部只调 `useFetch`/`useFetchTask`）。
@@ -361,6 +379,48 @@ export interface RequestClientOptions {
    *   理由：拦截器可改 url/headers，而它在去重键算好**之后**才执行 ⇒ 键代表不了最终请求身份
    *   ⇒ 继续合并有跨租户串号风险。**正确性 > 效率**。
    */
+  /**
+   * ★★★#1403：**共享状态键** —— 同一 key 的多个 client 实例**共用一份配额树与断路器**。
+   *
+   * 【它修的是什么】`QuotaTree` / `CircuitBreaker` 原先在 `createRequestClient` **内部** new
+   *   ⇒ 每个实例一份。超级应用里"每页一个 client"⇒ N 个实例 = N 份额度，
+   *   平台的"全局并发不超过 6"变成"每实例 6"，**全局上限形同虚设**；断路器同理
+   *   （A 实例熔断了 api.x，B 实例照样继续打）。
+   * 【★为什么不改默认】多实例互不干扰在某些场景是**期望行为**（两个独立业务各跑各的额度）。
+   *   本仓纪律零回归 ⇒ 默认仍每实例一份；需要全局治理时显式传本键。
+   * 【语义】同 key ⇒ 同池；**全局上限只在首次创建时生效**（后到者传入的值被忽略，
+   *   因为改上限会让已在飞请求的计数失去意义）。要改上限请换 key。
+   */
+  sharedQuotaKey?: string
+  /**
+   * ★★★#1403：**速率限制**（令牌桶）—— 与并发上限是两件事。
+   *
+   * 【为什么并发不够】并发回答"同时最多几个在飞"，**不是"每秒最多几个"**。
+   *   `for` 循环发 100 个：并发闸门只是让它们**排队**，然后匀速**全部发出**，总量一个不少。
+   *   合规要的"该业务每秒最多 50 次"用并发表达不了。
+   *
+   * 【三级】（与 `QuotaTree` 同构）：全局 → 业务（bizId）→ 域（host），任一超限只影响自己。
+   *
+   * 【★等待是有界的，默认 0 = 立即拒绝】`maxWaitMs` 缺省 0 ⇒ 超限立刻返回
+   *   `request.rateLimited`（带 `retryAfterMs`），**不静默排队**。
+   *   理由：速率超限时"要不要等"是**业务决策**（下单可以等，埋点不该等），库不能替业务决定。
+   */
+  rateLimit?: RateLimitPolicy & {
+    /** 业务级（同 bizId 共享一个桶） */
+    tenant?: RateLimitPolicy
+    /** 域级（同 host 共享一个桶） */
+    host?: RateLimitPolicy
+  }
+  /**
+   * ★★★#1403：**审计出口**（缓冲 + 批量 + 采样）。
+   *
+   * 【为什么需要】改之前 `tenant.onAudit` 是**逐条同步回调**：回调里做 IO 就拖慢请求路径；
+   *   且**没有采样**（日均千万请求不可能全量上报，而关掉审计等于放弃合规）。
+   * 【★★关键口径】**失败与未知永不采样**（成功按 `sampleRate` 采）——
+   *   采样若对失败生效，就会漏掉"错误率 1% 里的 90%"，而那 1% 正是合规与排障最需要的。
+   * 【有界】缓冲上限 `maxBuffer`（默认 1000），超限**丢最旧**并计入 `dropped`（不静默）。
+   */
+  audit?: import('./audit').AuditPolicy
   interceptors?: {
     /** 请求拦截器（按注册序执行） */
     request?: RequestInterceptorLike[]
@@ -509,8 +569,14 @@ export interface RequestClientStats {
   offlineQueueSize: number
   /** 累计请求/成功/失败/未知 */
   totals: { requests: number; success: number; failed: number; unknown: number }
-  /** 因本地策略被拒绝的次数（白名单/断路器/未授权） */
+  /** 因本地策略被拒绝的次数（白名单/断路器/速率限制/未授权） */
   rejectedLocal: number
+  /** ★#1403：共享配额键（`null` = 本实例独占额度）。★这是"全局上限有没有生效"的唯一线索 */
+  sharedQuotaKey?: string | null
+  /** ★#1403：速率限制读数 */
+  rateLimit?: { enabled: boolean; tenants: number; hosts: number }
+  /** ★#1403：审计出口读数（未配 ⇒ `null`） */
+  audit?: { buffered: number; written: number; dropped: number; sampled: number; timer: boolean } | null
 }
 
 /* ══════════════════════ 内部：需要用到 pipeline 类型的地方 ══════════════════════ */

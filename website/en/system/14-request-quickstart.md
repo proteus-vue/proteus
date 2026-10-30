@@ -331,7 +331,106 @@ q.abort('navigated away')
 
 Components cancel automatically on unmount — you don't need to manage it.
 
-## 12. Known boundaries
+## 12. Sharing quota across instances
+
+By default each client gets its own quota. **With one client per page or per business, the global limit stops being global** —
+N instances means N quotas, and `concurrency: 6` becomes "6 per instance".
+
+Pass a shared key to make it actually global:
+
+```ts
+// Same key across the app ⇒ one quota tree + one circuit breaker
+provideRequestClient({ baseURL, sharedQuotaKey: 'prod', tenant: { concurrency: 6 } })
+```
+
+- Same key ⇒ same pool; different keys ⇒ independent (keep test and production clients apart)
+- **The global limit only takes effect on first creation** — later instances' `concurrency` is ignored
+  (changing a limit would invalidate in-flight counts). Use a new key to change it
+- The circuit breaker is shared too: if instance A trips a host, instance B skips it as well
+
+Confirm it took effect:
+
+```ts
+client.stats().sharedQuotaKey   // 'prod' = shared; null = this instance only
+```
+
+## 13. Rate limiting (how many per second)
+
+**Concurrency and rate are two different things.** Concurrency answers "how many in flight at once";
+rate answers "how many per second".
+
+```ts
+// Concurrency only: a loop of 100 requests queues, then all go out at network speed — none are dropped
+// With a rate: at most 50 per second, the 51st is rejected immediately
+provideRequestClient({
+  rateLimit: {
+    permitsPerSecond: 50,   // refill rate
+    burst: 100,             // bucket capacity; defaults to permitsPerSecond
+    maxWaitMs: 0,           // ★0 = reject immediately (default); never queues silently
+  },
+})
+```
+
+Three levels (same shape as the quota tree; exceeding one only affects itself):
+
+```ts
+rateLimit: {
+  permitsPerSecond: 500,                          // global
+  tenant: { permitsPerSecond: 50 },               // per business
+  host:   { permitsPerSecond: 20 },               // per host
+}
+```
+
+When it rejects:
+
+```ts
+if (!r.ok && r.error.code === 'request.rateLimited') {
+  r.error.retryAfterMs   // how long to wait — back off with it, do not retry blindly
+}
+```
+
+**Why it does not queue by default**: whether to wait is a **business decision**
+(a checkout may wait; analytics should not). The library must not decide "let it wait 5s".
+Pass `maxWaitMs` when waiting is acceptable (bounded — over the bound it still rejects).
+
+## 14. Audit sink (batching + sampling)
+
+Without `audit`, entries go through `tenant.onAudit` — a **per-entry synchronous callback**.
+Doing IO there (logging, file writes) slows the request path directly, and it collapses at scale.
+
+With `audit` you get **bounded buffer + batching + sampling**:
+
+```ts
+provideRequestClient({
+  audit: {
+    sampleRate: 0.01,        // sample 1% of successes (★failures/unknown are always kept)
+    batchSize: 50,           // write once 50 are buffered
+    flushIntervalMs: 5000,   // or force a flush every 5s
+    maxBuffer: 1000,         // buffer cap; oldest dropped and counted (never silent)
+    write: (entries) => sendToCollector(entries),
+  },
+})
+```
+
+### ★ Sampling applies to successes only
+
+**Failures and unknown outcomes are never sampled.** Applying the sample rate to failures would drop
+90% of the 1% error rate — exactly the data compliance and debugging need most.
+The trade-off is higher audit volume during an error storm, hence the buffer cap.
+
+Same reasoning as the tri-state design: **keep more rather than lose a critical state.**
+
+### Readout
+
+```ts
+client.stats().audit
+// { buffered, written, dropped, sampled, timer }
+```
+
+`timer: false` means this environment has no `setInterval` (App slim engines) —
+only `batchSize` triggers a flush there.
+
+## 15. Known boundaries
 
 - **No reactive-url auto-refetch.** The url is evaluated at creation; changing `page`/`keyword` needs your own `watch` + `refresh`. A known boundary, not a bug.
 - **No SWR background-refresh scheduler.** That needs timers plus visibility awareness — a separate capability. The kernel has HTTP-level RFC 5861 SWR (cache semantics), which is not the same thing.
@@ -339,7 +438,7 @@ Components cancel automatically on unmount — you don't need to manage it.
 - **SSR must call provide explicitly.** Without it you get a process-wide fallback singleton, and quota/breaker counters accumulate across requests.
 - **What to do after `unknown` is the business's responsibility.** This layer keeps the state honest; it cannot decide whether to reconcile.
 
-## 13. Troubleshooting checklist
+## 16. Troubleshooting checklist
 
 1. **Did `loading` go back to `false`?** Stuck `true` means the request never settled (network hang, or the platform lacks support).
 2. **What is `outcome`?** `undefined` means it never fired (`immediate: false` without `refresh`); `unknown` means the result is uncertain — reconcile, don't retry.

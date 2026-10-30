@@ -48,6 +48,10 @@ import {
   signRequest,
 } from './security'
 import { QuotaTree, createTenantContext, makeAuditEntry } from './tenant'
+// ★★★#1403：平台化三件（共享配额池 / 速率限制 / 审计出口）
+import { AuditSink } from './audit'
+import { RateLimiter } from './rate-limit'
+import { acquireSharedPool } from './shared'
 import type { TenantContext } from './tenant'
 import type {
   OfflineQueueEntry,
@@ -200,10 +204,35 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
   const auth: AuthManager | undefined = options.auth
   const redactPolicy = options.redact
   const tenant: TenantContext | undefined = createTenantContext(options.tenant)
-  const breaker = options.circuitBreaker === false ? undefined : new CircuitBreaker(options.circuitBreaker ?? {})
-  const quota: QuotaTree = new QuotaTree(
-    options.tenant?.concurrency ?? DEFAULT_GLOBAL_CONCURRENCY,
-  )
+  /**
+   * ★★★#1403：**配额树与断路器的归属**
+   *
+   * 传了 `sharedQuotaKey` ⇒ 从**跨实例注册表**取（同 key 的多个 client 共用一份）；
+   * 不传 ⇒ 每实例一份（**默认**，零回归 —— 见 types.ts 里为什么不改默认）。
+   */
+  const sharedKey = options.sharedQuotaKey?.trim()
+  const globalLimit = options.tenant?.concurrency ?? DEFAULT_GLOBAL_CONCURRENCY
+  const wantBreaker = options.circuitBreaker !== false
+  const shared = sharedKey
+    ? acquireSharedPool(sharedKey, globalLimit, {
+        enabled: wantBreaker,
+        options: (options.circuitBreaker === false ? {} : (options.circuitBreaker ?? {})) as Record<string, unknown>,
+      })
+    : undefined
+  const breaker = shared
+    ? shared.breaker
+    : (wantBreaker ? new CircuitBreaker((options.circuitBreaker === false ? {} : (options.circuitBreaker ?? {}))) : undefined)
+  const quota: QuotaTree = shared ? shared.quota : new QuotaTree(globalLimit)
+  /**
+   * ★★★#1403：**速率限制**（与并发是两件事 —— 见 types.ts 的说明）。
+   * 未配 ⇒ `RateLimiter.enabled === false`，请求路径上整段短路（零开销）。
+   */
+  const limiter = new RateLimiter(options.rateLimit ?? { permitsPerSecond: 0 })
+  /**
+   * ★★★#1403：**审计出口**（缓冲 + 批量 + 采样）。
+   * 配了 `audit` ⇒ 走批量出口；没配 ⇒ 保持旧的逐条 `tenant.onAudit` 回调（零回归）。
+   */
+  const auditSink = options.audit ? new AuditSink(options.audit) : undefined
   const offlineEnabled = options.offlineQueue?.enabled === true
   const offline = offlineEnabled ? new OfflineQueue({ policy: options.offlineQueue!, store: options.offlineQueue!.store }) : undefined
   const defaultTimeout = normalizeTimeout(options.timeout)
@@ -242,6 +271,15 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
   }
 
   function audit(entry: RequestAuditEntry): void {
+    /**
+     * ★★★#1403：配了 `audit` ⇒ 走**批量出口**（缓冲/采样/批量写）；
+     *   否则保持旧的逐条 `tenant.onAudit`（**零回归** —— 不配就完全同以前）。
+     * ★两者不叠加：配了 audit 就不调 onAudit（否则业务会收到两份，去重责任落到业务侧）。
+     */
+    if (auditSink) {
+      auditSink.push(entry)
+      return
+    }
     if (tenant) {
       try {
         tenant.audit(entry)
@@ -418,7 +456,33 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
       }
     }
 
-    // ── 3. 并发闸门（全局 → 业务 → host） ──────────────────────
+    /**
+     * ── 3a. 速率限制（★排在并发闸门**之前**）──────────────────────
+     *
+     * 【为什么先限速再排队】
+     *   反过来的话：被限速的请求先占住并发额度、等完再被拒 ⇒ 白白挤掉别人的额度，
+     *   而且"排队 5 秒后被限速"对业务是最糟的体验。
+     *   速率是**更便宜的前置判断**（纯计算，无副作用）⇒ 不过就立刻返回，不占任何额度。
+     * ★`limiter.enabled === false`（没配）时整段短路，零开销。
+     */
+    if (limiter.enabled) {
+      const decision = await limiter.acquire({ bizId: tenant?.bizId, host })
+      if (!decision.ok) {
+        rejectedLocal++
+        return finish('failed', {
+          error: {
+            code: 'request.rateLimited',
+            message: decision.reason,
+            // ★把"还要等多久"给业务：可据此退避，而不是盲目重试
+            retryAfterMs: decision.retryAfterMs,
+          } as never,
+          phase: 'rejected-local',
+          sent: false,
+        })
+      }
+    }
+
+    // ── 3b. 并发闸门（全局 → 业务 → host） ──────────────────────
     try {
       const gGate = await quota.global.acquire(opts.signal ?? undefined)
       releaseGates.push(gGate)
@@ -700,6 +764,12 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
   function dispose(): void {
     unsubNet?.()
     unsubNet = undefined
+    /**
+     * ★★★#1403：**必须释放审计定时器**（否则 client 被丢弃后定时器仍在跑 = 泄漏，
+     *   且会持续对已销毁的出口写数据）。`dispose` 里会先 flush 一次再停表 ——
+     *   不丢已缓冲的条目。
+     */
+    auditSink?.dispose()
   }
 
   const client: RequestClient = {
@@ -730,6 +800,14 @@ export function createRequestClient(options: RequestClientOptions = {}): Request
         offlineQueueSize: offline ? offline.size() : 0,
         totals: { ...totals },
         rejectedLocal,
+        /**
+         * ★★★#1403：平台化三件的读数（诊断用，**不含请求内容**）。
+         * ★`sharedQuotaKey` 回显是刻意的：它是"这份额度是全局的还是本实例的"的**唯一线索**。
+         *   不显示的话，运维无法判断"为什么全局上限没生效"。
+         */
+        sharedQuotaKey: sharedKey ?? null,
+        rateLimit: limiter.snapshot(),
+        audit: auditSink ? auditSink.snapshot() : null,
       }
     },
     async flushOfflineQueue(): Promise<{ replayed: number; failed: number; skipped: number }> {

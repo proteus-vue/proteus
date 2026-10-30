@@ -65,6 +65,13 @@ export type { TenantContext } from './tenant'
 
 export { createMutation, createQuery } from './query'
 
+// ★★★#1403：平台化三件（共享配额池 / 速率限制 / 审计出口）
+export { acquireSharedPool, sharedPoolCount, resetSharedPools } from './shared'
+export { TokenBucket, RateLimiter, defaultRateLimitClock } from './rate-limit'
+export type { RateLimitClock, RateLimitDecision } from './rate-limit'
+export { AuditSink } from './audit'
+export type { AuditPolicy, AuditStats } from './audit'
+
 export type { MutationHandle, MutationOptions, QueryHandle, QueryOptions, QueryReactivity, QueryState } from './query'
 
 export type {
@@ -89,6 +96,7 @@ export type {
   RequestTask,
   RequestTimeoutPolicy,
   RequestInterceptorLike,
+  RateLimitPolicy,
   ResponseInterceptorLike,
   RequestTraceEvent,
   TenantPolicy,

@@ -34,6 +34,7 @@ const TEST_FILES = [
   'tests/websocket-security-chain.test.ts',
   'tests/request-vue-composables.test.ts',
   'tests/request-interceptors.test.ts',
+  'tests/request-platform.test.ts',
 ]
 
 /** 每个判据文件守什么（页面按这个分组展示——比"共 172 条"有信息量） */
@@ -47,6 +48,7 @@ const GROUPS = [
   { file: 'tests/fetch-pipeline.test.ts', zh: '管线安全语义', en: 'Pipeline safety', what: '方法门禁（POST 不重试）· 真随机抖动 · 去重身份（多租户不串号）· 拦截器时跳过去重 · 退避可精确断言', whatEn: 'method gate (no POST retry) · real jitter · dedupe identity (no cross-tenant merge) · dedupe skipped with interceptors · exact backoff assertion' },
   { file: 'tests/websocket-security-chain.test.ts', zh: 'WS 与 HTTP 同套策略', en: 'WS shares HTTP policy', what: '域名白名单 · 白名单先于连接 · 审计（开/关/条数，不含正文）· bizId · 配额在关闭时释放 · 幂等', whatEn: 'domain allowlist · allowlist before connect · audit (open/close/counts, no content) · bizId · quota released on close · idempotent' },
   { file: 'tests/request-interceptors.test.ts', zh: '拦截器入口', en: 'Interceptor entry', what: '产品层 interceptors 真映射进管线 · 短路 · 洋葱顺序 · 配拦截器跳去重 · hooks+interceptors 冲突报错 · 两处类型逐字段一致', whatEn: 'product-layer interceptors truly mapped · short-circuit · onion order · dedupe skipped · hooks+interceptors conflict throws · contract/kernel types field-identical' },
+  { file: 'tests/request-platform.test.ts', zh: '平台化三件', en: 'Platform hardening', what: '跨实例共享配额（同 key 同池 + 计数联动）· 令牌桶速率限制（maxWaitMs=0 立即拒绝 · retryAfterMs）· 速率先于并发 · 审计批量/有界/失败不采样 · dispose 不丢条目', whatEn: 'cross-instance shared quota (same key ⇒ same pool + linked counters) · token-bucket rate limit (maxWaitMs=0 rejects now · retryAfterMs) · rate before concurrency · audit batching/bounded/no-failure-sampling · dispose flushes' },
   { file: 'tests/request-vue-composables.test.ts', zh: 'Vue 产品层', en: 'Vue product layer', what: '真响应式（watchEffect 触发）· 竞态裁决 · 失败不清空数据 · unknown 不回滚 · useRequest 不自动发', whatEn: 'true reactivity (watchEffect fires) · race adjudication · failure keeps data · unknown not rolled back · useRequest does not auto-fire' },
 ]
 
