@@ -37,6 +37,9 @@ export const termH = ref(260)
 /** 终端字号（决策 #1397）：⌘= / ⌘- / ⌘0 调整。改它必须让 TermPane 重新量格子并 term_resize，
     否则 pty 的 cols/rows 与画面不一致（旧行会被截断或留白）。 */
 export const termFont = ref(12)
+/** 上次选的 shell（决策 #1405）：新会话沿用，避免每次切到 bash 都要再点一次。
+    注意它只影响**新开**的会话（已有会话的 shell 不会变）。 */
+export const termShell = ref<'zsh' | 'bash' | 'sh'>('zsh')
 
 /* ── 代码视图 ─────────────────────────────────────────────────────────── */
 export const treeW = ref(232) // 文件树宽度
@@ -62,10 +65,11 @@ export function loadLayout() {
     }
     const c = localStorage.getItem(TERM_KEY)
     if (c) {
-      const s = JSON.parse(c) as Partial<{ termMode: TermMode; termH: number; termFont: number }>
+      const s = JSON.parse(c) as Partial<{ termMode: TermMode; termH: number; termFont: number; termShell: 'zsh' | 'bash' | 'sh' }>
       if (s.termMode === 'off' || s.termMode === 'pane' || s.termMode === 'full') termMode.value = s.termMode
       if (typeof s.termH === 'number') termH.value = clampNum(s.termH, 120, 900)
       if (typeof s.termFont === 'number') termFont.value = clampNum(s.termFont, 9, 22)
+      if (s.termShell === 'zsh' || s.termShell === 'bash' || s.termShell === 'sh') termShell.value = s.termShell
     }
     const b = localStorage.getItem(CODE_KEY)
     if (b) {
@@ -148,7 +152,12 @@ export function saveTermLayout() {
   try {
     localStorage.setItem(
       TERM_KEY,
-      JSON.stringify({ termMode: termMode.value, termH: termH.value, termFont: termFont.value }),
+      JSON.stringify({
+        termMode: termMode.value,
+        termH: termH.value,
+        termFont: termFont.value,
+        termShell: termShell.value,
+      }),
     )
   } catch {
     /* 同上 */

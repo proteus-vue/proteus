@@ -22,7 +22,7 @@ import PInput from '../ui/PInput.vue'
 import PSelect from '../ui/PSelect.vue'
 import TermPane from './TermPane.vue'
 import Icon from '../ui/Icon.vue'
-import { termFont, termSplit, termSplitW } from '../layout'
+import { saveLayout, termFont, termShell, termSplit, termSplitW } from '../layout'
 
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{ close: []; maximize: [] }>()
@@ -49,7 +49,8 @@ const MIN_PANE_W = 220
 const termOf = (id: number) => sessions.value.find((s) => s.id === id)?.term
 
 /* ── 开启会话 ───────────────────────────────────────────────────────────── */
-const shellSel = ref<'zsh' | 'bash' | 'sh'>('zsh')
+/* shell 选择持久化（决策 #1405）：真实状态在 layout.termShell，这里只是别名，避免大改模板 */
+const shellSel = termShell
 const shellOpts = [
   { value: 'zsh', label: 'zsh' },
   { value: 'bash', label: 'bash' },
@@ -232,6 +233,7 @@ const sendCtrl = (seq: string) => void writeToTerm(seq)
 
 async function switchShell(v: 'zsh' | 'bash' | 'sh') {
   shellSel.value = v
+  saveLayout()
   const cur = sid.value
   if (cur) await closeSession(cur)
   void openSession()
@@ -333,7 +335,10 @@ const renameText = ref('')
 function startRename(id: number) {
   renamingId.value = id
   renameText.value = sessions.value.find((s) => s.id === id)?.title ?? ''
-  void nextTick(() => document.querySelector<HTMLInputElement>('.litem input')?.select())
+  /* 侧栏列表与标签栏都会用到重命名 —— 选择器同时覆盖两处 */
+  void nextTick(() =>
+    document.querySelector<HTMLInputElement>('.litem input, .ttab .tinput')?.select(),
+  )
 }
 
 function commitRename(id: number) {
@@ -510,6 +515,13 @@ function onPanelKey(e: KeyboardEvent) {
     termFont.value = 12
     return
   }
+  /* ⌘K 清屏（决策 #1405）：与 VS Code 一致发 Ctrl-L，**保留回滚缓冲**（还能往上翻翻旧输出） */
+  if (mod && !e.shiftKey && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    e.stopPropagation()
+    void sendCtrl('\x0c')
+    return
+  }
   if (mod && e.key.toLowerCase() === 'w') {
     e.preventDefault()
     e.stopPropagation()
@@ -559,16 +571,26 @@ defineExpose({ focus: focusCurrent })
           :key="s.id"
           class="ttab"
           :class="{ on: panes.includes(s.id), drag: dragIdx === ti, over: dropIdx === ti && dragIdx !== ti }"
-          :title="`${s.title} · 会话 ${s.id}（可拖动排序）`"
+          :title="`${s.title} · 会话 ${s.id}（可拖动排序，双击重命名）`"
           draggable="true"
           @click="switchTo(s.id)"
+          @dblclick.stop="startRename(s.id)"
           @dragstart="onDragStart(ti, $event)"
           @dragover.prevent="onDragOver(ti, $event)"
           @dragleave="onDragLeave(ti)"
           @drop.prevent="onDrop(ti)"
           @dragend="onDragEnd"
         >
-          <span class="tname">{{ s.title }}</span>
+          <input
+            v-if="renamingId === s.id"
+            v-model="renameText"
+            class="tinput"
+            @click.stop
+            @keydown.enter.prevent="commitRename(s.id)"
+            @keydown.esc.prevent="renamingId = 0"
+            @blur="commitRename(s.id)"
+          />
+          <span v-else class="tname">{{ s.title }}</span>
           <span class="tx" title="关闭这个终端" @click.stop="closeSession(s.id)">✕</span>
         </button>
         <PButton size="sm" title="新建终端（⌘⇧T）" @click="newSession"><Icon name="plus" :size="12" /></PButton>
@@ -778,6 +800,17 @@ defineExpose({ focus: focusCurrent })
 .ttab:hover { background: var(--bg-overlay); color: var(--fg-muted); }
 .ttab.on { background: var(--bg-elevated); border-color: var(--border-subtle); color: var(--fg); }
 /* 拖拽中的标签与落点指示（左侧 2px 竖条，和会话侧栏的高亮语汇一致） */
+.ttab .tinput {
+  width: 78px;
+  height: 16px;
+  padding: 0 3px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--bg-canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+}
 .ttab.drag { opacity: .45; }
 .ttab.over { border-left: 2px solid var(--accent); padding-left: 3px; }
 .ttab .tx { opacity: 0.45; font-size: 9px; }
