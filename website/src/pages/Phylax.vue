@@ -1,29 +1,32 @@
 <script setup lang="ts">
-// website/src/pages/Phylax.vue —— ★★★Phylax：请求治理层 · 产品页（#1394）
+// website/src/pages/Phylax.vue —— ★★★Phylax：请求治理层 · 产品页
 //
-// 【★为什么它必须和 /themis、/animation 平级，而不是藏在 /docs/system/ 里】
-//   用户原话：「请求库是我们的框架衍生产品体系中的，和动画引擎、CSS 引擎、图标库这些是同等地位的」
-//   「正式产品页一般都是沉浸式通栏那种啊，不是这种在柔性系统里面隐藏起来」。
-//   ⇒ 引擎产品线的结构是：每个产品 = **独立路由 + 导航并列 + 自己的视觉语言 + 自己的 codename**。
-//     动画 = Kairos(/animation) · CSS = Themis(/themis) · 玻璃 = Aether(/liquid-glass) ·
-//     图标 = Keryx(/icons) · **请求治理 = Phylax(/phylax)**。文档仍在 /docs/*，两处职责分开。
+// 【★★★#1396：这一版为什么整个推翻重做（用户 2026-10-30 第三次纠正）】
+//   用户原话：「你不能每个产品页都用一个模版啊，每个产品本身就是完全独立的，
+//   不应该都去套用一个模版，应该是产品自己的特色匹配的产品页风格」。
+//   ★第一版我错在哪：骨架照抄 CssEngine（`hero` 双栏 + `sec` 等权分节 + 卡片网格 +
+//     表格 + 终端 + 边界列表），只换了配色与文案 —— **那就是套模板**。
+//     取证也证实四个产品页骨架本来就各不相同：
+//       Animation = 演示工作台（`demo-grid` + `curve-svg`）· LiquidGlass = 端舞台（`ends-stage`）·
+//       Icons = 工具界面（`ic-bar` 搜索筛选 + `ic-grid`）· CssEngine = 案卷（`verdict` + `§NN` 案号）。
 //
-// 【Phylax 是谁】φύλαξ = 古希腊的守卫/守备官。本层不"替你把请求发出去"（那是传输层），
-//   而是守住边界、验明身份、留下记录 —— 视觉语言因此是 **哨卡（Checkpoint）**：
-//     · 背景 = **关卡闸门**（横向栅线 + 一道竖向光缝），不是 Themis 的案卷横线纸、也不是动画页的星场；
-//     · 分节 = **`CP-01` 哨位标头**（mono），不是 § 案号；
-//     · 卡片 = **闸门票据**（左侧一条通行/拦截色带），不是案卷判词竖线；
-//     · Hero 视觉 = **三态闸门**（一个请求走到闸口，被判定为 pass / reject / hold 三种放行结果），
-//       直接演示本层的核心动作，而不是装饰图形。
-//   ★配色沿用仓内单品牌纪律（`--brand` 紫）；三态语义色（ok green / rec red / warn amber）是本页签名。
+// 【★★本页的结构就是产品本身（没有"英雄区 + 并列分节"）】
+//   请求治理的本质是**一个运行时过程**：一条请求发出，依次穿过若干道闸门，落到三种结局之一。
+//   ⇒ 页面改成**单轴纵向管道**：
+//     · 每个闸门节点的 `.gate-axis` 首尾相接画出**一条实体竖线**贯穿整页 —— 滚动 = 请求在前进；
+//       ★判据（怎么算"没套模板"）：删掉任一节，管道就断；而套模板的页删掉一节毫无影响。
+//     · 每道闸门是竖线上的节点（不是并列卡片），右侧直接标"不通过时会怎样"；
+//     · 管道末端用 SVG **分叉成三条支路**（放行 / 拦下 / 挂账）—— 三态是同一流程的分岔，不是三张卡片；
+//     · 判据数字不是大表格，是**贴在管道旁的仪表** + 末尾的副栏账本；
+//     · 边界不是列表节，是管道尽头的**出口告示牌**。
 //
-// 【★数据纪律】页面**没有一个手写数字** —— 全部来自 `../data/request-engine-page`
-//   （由 `website/scripts/gen-request-engine-data.mjs` 从 `docs/generated/request-engine-numbers.json` 读出，
-//   后者由 `scripts/gen-request-engine-numbers.mjs` **数**测试文件里的 `it(` 得出）。
-//   防漂移：`pnpm check:request-engine-data` / `check:request-engine-numbers`。
+// 【Phylax 是谁】φύλαξ = 古希腊的守卫/守备官。本层不替你把请求发出去（那是传输层），
+//   而是守住边界、验明身份、留下记录 —— 所以视觉语言是**关卡**：栅格地面 + 一条纵向通路。
 //
-// 【D-2 门禁】零 @media · 三方 UI · 裸平台 API；布局一律落在原生 div/section
-//   （`p-view` 默认 `flex-direction:column` 会盖掉行布局）。卡片网格用 `p-grid`（auto-fit）。
+// 【★数据纪律】数字全部来自 `../data/request-engine-page`（SSOT：docs/generated/request-engine-numbers.json，
+//   由 `scripts/gen-request-engine-numbers.mjs` **数**测试文件的 `it(` 得出）。防漂移：check:request-engine-*。
+//
+// 【★CSE lint】模板里**不得**用模板字符串拼类名（E-CSS-004：编译期无法枚举候选类）⇒ 一律对象语法。
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { locale } from '../i18n'
 import FeatureIcon from '../components/FeatureIcon.vue'
@@ -49,255 +52,188 @@ onMounted(() => {
         if (en.isIntersecting) { en.target.classList.add('revealed'); revealObserver?.unobserve(en.target) }
       }
     },
-    { threshold: 0.12 },
+    { threshold: 0.1 },
   )
   targets.forEach((el) => revealObserver?.observe(el))
 })
 onUnmounted(() => { revealObserver?.disconnect(); revealObserver = null })
 
-/* ── Hero 视觉：三态闸门（一个请求走到闸口 → 三种放行结果） ── */
-const gate = computed(() => {
+/** 管道末端的三种结局（同一流程的分岔，不是三张并列卡片） */
+const lanes = computed(() => {
   const zh = !isEn.value
-  return {
-    reqLabel: zh ? '一个请求到达闸口' : 'A request reaches the gate',
-    checks: zh
-      ? ['域名在白名单内？', '业务配额未满？', '方法允许重试？', '身份头参与去重？']
-      : ['Domain allowlisted?', 'Quota available?', 'Method retryable?', 'Identity in dedupe key?'],
-    lanes: [
-      { tone: 'ok', label: zh ? '放行' : 'PASS', text: zh ? 'success · 确定成功' : 'success · definitely succeeded' },
-      { tone: 'bad', label: zh ? '拦下' : 'REJECT', text: zh ? 'failed · 确定失败，可重试' : 'failed · never processed, retry safe' },
-      { tone: 'warn', label: zh ? '挂账' : 'HOLD', text: zh ? 'unknown · 可能已生效，去查单' : 'unknown · may have landed, reconcile' },
-    ],
-    note: zh
-      ? '判不出来时保守挂账（unknown）——宁可多查一次单，不能重复扣款'
-      : 'When we cannot tell, we hold it as unknown — one extra reconciliation beats one duplicate charge',
-  }
+  return [
+    { id: 'success', tone: 'ok', label: zh ? '放行' : 'PASS', title: zh ? '确定成功' : 'Succeeded', desc: zh ? '业务正常走完。' : 'Business proceeds as normal.' },
+    { id: 'failed', tone: 'bad', label: zh ? '拦下' : 'REJECT', title: zh ? '确定失败' : 'Failed', desc: zh ? '请求没被处理 ⇒ 回滚乐观值，可安全重试。' : 'Never processed ⇒ roll back the optimistic value; retry is safe.' },
+    { id: 'unknown', tone: 'warn', label: zh ? '挂账' : 'HOLD', title: zh ? '结果未知' : 'Unknown', desc: zh ? '可能已生效 ⇒ 不回滚、不重试，去查单。' : 'May have taken effect ⇒ no rollback, no retry — reconcile.' },
+  ]
 })
 
-/* ── 机器数字（原样来自 SSOT，一个都不手写） ── */
-const metrics = computed(() => {
+/** 闸门（有序 —— 顺序就是产品语义） */
+const gates = computed(() => D.gates)
+
+/** 贴在管道旁的仪表（不是大表格） */
+const gauges = computed(() => {
   const c = N.criteria
   const zh = !isEn.value
   return [
-    { icon: 'shield', value: String(c.total), unit: zh ? '条判据' : 'criteria', label: zh ? '可执行判据总数' : 'Executable criteria', note: zh ? `${c.files} 组 · 数自测试文件的 it(` : `${c.files} groups · counted from it( in test files` },
-    { icon: 'target', value: String(N.painPoints.answered), unit: zh ? '条痛点' : 'pain points', label: zh ? '各有答案' : 'Each with an answer', note: zh ? '不是"又一个 axios"——是治理层' : 'Not "another axios" — a governance layer' },
-    { icon: 'bolt', value: String(N.outcomes.states.length), unit: zh ? '态' : 'states', label: zh ? '结果三态' : 'Tri-state outcome', note: zh ? 'success / failed / unknown' : 'success / failed / unknown' },
-    { icon: 'layers', value: String(N.packages.kernel.files.length + N.packages.vueLayer.files.length), unit: zh ? '源文件' : 'source files', label: zh ? '内核 + 产品层' : 'Kernel + product layer', note: zh ? '内核零 vue 依赖 · 产品层 vue 为 peer' : 'kernel has zero Vue · layer has vue as peer' },
-    { icon: 'chart', value: N.channels.websocket ? '2' : '1', unit: zh ? '条通道' : 'channels', label: zh ? '共用同一套策略链' : 'Sharing one policy chain', note: zh ? 'HTTP + WebSocket' : 'HTTP + WebSocket' },
-    { icon: 'box', value: String(N.criteria.groups.find((g) => g.file.includes('vue-composables'))?.count ?? 0), unit: zh ? '条' : 'criteria', label: zh ? 'Vue 产品层判据' : 'Vue layer criteria', note: zh ? '含真 watchEffect 响应式验证' : 'incl. real watchEffect reactivity check' },
+    { value: String(c.total), unit: zh ? '判据' : 'criteria', note: zh ? `${c.files} 组 · 数自 it(` : `${c.files} groups · counted from it(` },
+    { value: String(N.painPoints.answered), unit: zh ? '痛点' : 'pain points', note: zh ? '各有答案' : 'each answered' },
+    { value: String(N.outcomes.states.length), unit: zh ? '结局' : 'outcomes', note: 'success / failed / unknown' },
+    { value: N.channels.websocket ? '2' : '1', unit: zh ? '通道' : 'channels', note: zh ? 'HTTP + WS · 同一链' : 'HTTP + WS · one chain' },
   ]
 })
 
 const groups = computed(() => N.criteria.groups)
-const boundaries = computed(() => D.boundaries)
-const layers = computed(() => D.layers)
 </script>
 
 <template>
   <p-page ref="rootEl" class="px">
-    <!-- 背景层：关卡闸门（横向栅线 + 一道竖向光缝）——区别于 Themis 的案卷横线纸 -->
-    <div class="px-bg" aria-hidden="true"><span class="px-gate" /><span class="px-slit" /></div>
+    <!-- 背景：关卡地面（整页铺底；纵向通路由管道自身承担） -->
+    <div class="px-floor" aria-hidden="true" />
 
-    <div class="px-wrap">
-      <!-- ═══ Hero（通栏：文案 + 三态闸门） ═══ -->
-      <p-grid :min-col-width="380" :gap="52" class="hero">
-        <div class="hero-copy">
-          <span class="chip"><FeatureIcon name="shield" />{{ isEn ? 'REQUEST GOVERNANCE LAYER' : '请求治理层' }} · {{ D.codename.toUpperCase() }}</span>
-          <h1 class="hero-h1">
-            <span class="h1-l1">{{ isEn ? 'Every request passes a checkpoint.' : '每个请求，都过一道哨卡。' }}</span>
-            <span class="h1-l2">{{ isEn ? 'Not every answer is success or failure.' : '不是每个答案，都只有成功和失败。' }}</span>
-          </h1>
-          <p class="hero-lead">
-            {{ isEn
-              ? 'Phylax is the governance layer for outbound requests: tri-state outcomes, idempotency, circuit breaking, offline queue, audit and multi-tenant isolation — enforced identically on HTTP and WebSocket. The kernel is platform-neutral; the Vue layer makes it reactive.'
-              : 'Phylax 是出网请求的治理层：三态结果、幂等、熔断、离线队列、审计、多业务隔离——HTTP 与 WebSocket 两条通道同一套策略链。内核平台中立，Vue 层负责让它变成响应式。' }}
-          </p>
-          <div class="hero-cta">
-            <a href="#gate" class="btn btn-primary">{{ isEn ? 'See the three lanes' : '看三态闸门' }}</a>
-            <router-link to="/docs/system/14-request-quickstart" class="btn btn-ghost">{{ isEn ? 'Cookbook · zero to first request' : '使用手册 · 从零到跑通' }}</router-link>
-            <router-link to="/docs/system/13-request-governance" class="btn btn-ghost">{{ isEn ? 'Design rationale' : '设计理由' }}</router-link>
-          </div>
-          <div class="hero-pills">
-            <span class="pill">{{ N.criteria.total }} {{ isEn ? 'criteria' : '条判据' }}</span>
-            <span class="pill">{{ isEn ? 'tri-state · unknown ≠ failure' : '三态 · unknown ≠ 失败' }}</span>
-            <span class="pill">{{ isEn ? 'HTTP + WS · one policy chain' : 'HTTP + WS · 同一策略链' }}</span>
-          </div>
+    <div class="px-doc">
+      <!-- ═══════════ 道口标题（通栏，不再双栏 hero） ═══════════ -->
+      <header class="px-head">
+        <span class="px-badge"><FeatureIcon name="shield" />{{ isEn ? 'REQUEST GOVERNANCE' : '请求治理层' }} · PHYLAX</span>
+        <h1 class="px-title">
+          {{ isEn ? 'One request. Five gates. Three fates.' : '一条请求，五道闸，三种命。' }}
+        </h1>
+        <p class="px-lede">
+          {{ isEn
+            ? 'Every outbound call — HTTP or WebSocket — walks the same corridor. Each gate can pass it, hold it, or reject it. What comes out the far end is not always success or failure: the third outcome is the whole point.'
+            : '每个出网请求——HTTP 或 WebSocket——都走同一条通道。每道闸可以放行、拦下或挂账。走到尽头拿到的，不只有成功和失败两种答案：第三种结局才是这层的全部意义。' }}
+        </p>
+        <div class="px-links">
+          <router-link to="/docs/system/14-request-quickstart" class="px-link">{{ isEn ? 'Cookbook' : '使用手册' }} →</router-link>
+          <router-link to="/docs/system/13-request-governance" class="px-link">{{ isEn ? 'Rationale' : '设计理由' }} →</router-link>
+        </div>
+      </header>
+
+      <!-- ═══════════ 管道：请求从这里进入，一直到出口 ═══════════ -->
+      <div class="pipe">
+        <!-- 入口：请求本体 -->
+        <div class="pipe-entry" data-reveal>
+          <span class="gate-axis" aria-hidden="true" />
+          <span class="entry-tag">{{ isEn ? 'REQUEST' : '请求' }}</span>
+          <code class="entry-code">POST /order · Authorization: Bearer tenant-a · Idempotency-Key: ord_7f3</code>
         </div>
 
-        <!-- 三态闸门 -->
-        <div id="gate" class="gate">
-          <div class="gate-head">
-            <span class="gh-title">{{ gate.reqLabel }}</span>
-            <span class="gh-seal">{{ D.codename.toUpperCase() }}</span>
-          </div>
-          <div class="gate-checks">
-            <span v-for="(c, i) in gate.checks" :key="i" class="gk"><span class="gk-dot" />{{ c }}</span>
-          </div>
-          <div class="gate-lanes">
-            <div v-for="l in gate.lanes" :key="l.tone" class="lane" :class="{ 'lane--ok': l.tone === 'ok', 'lane--bad': l.tone === 'bad', 'lane--warn': l.tone === 'warn' }">
-              <span class="lane-tag">{{ l.label }}</span>
-              <span class="lane-text">{{ l.text }}</span>
+        <!-- 闸门序列（有序 = 产品语义） -->
+        <div
+          v-for="(g, i) in gates"
+          :key="g.no"
+          class="gate"
+          data-reveal
+          :class="{ 'gate--bad': g.tone === 'bad', 'gate--warn': g.tone === 'warn', 'gate--ok': g.tone === 'ok' }"
+        >
+          <span class="gate-axis" aria-hidden="true"><span class="gate-knot" /></span>
+
+          <div class="gate-body">
+            <div class="gate-head">
+              <span class="gate-no">{{ g.no }}</span>
+              <h2 class="gate-name">{{ isEn ? g.en : g.zh }}</h2>
+            </div>
+            <p class="gate-check">{{ isEn ? g.enCheck : g.zhCheck }}</p>
+            <p class="gate-note">{{ isEn ? g.enNote : g.zhNote }}</p>
+            <p class="gate-onfail">
+              <span class="onfail-key">{{ isEn ? 'if it fails' : '不通过时' }}</span>
+              <span class="onfail-val">{{ isEn ? g.enOnFail : g.zhOnFail }}</span>
+            </p>
+
+            <!-- 仪表：贴在管道旁（第 1、3 道各挂一块，避免整页都是大数字） -->
+            <div v-if="i === 0 || i === 2" class="gauge-strip">
+              <div v-for="gg in (i === 0 ? gauges.slice(0, 2) : gauges.slice(2))" :key="gg.unit" class="gauge">
+                <span class="gauge-v">{{ gg.value }}</span>
+                <span class="gauge-u">{{ gg.unit }}</span>
+                <span class="gauge-n">{{ gg.note }}</span>
+              </div>
             </div>
           </div>
-          <p class="gate-note">{{ gate.note }}</p>
         </div>
-      </p-grid>
 
-      <!-- ═══ CP-01 三个不可让步的判断 ═══ -->
-      <section data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-01</span><h2 class="sec-title">{{ isEn ? 'Three non-negotiables' : '三个不可让步的判断' }}</h2><span class="sec-line" /></header>
-        <p-grid :min-col-width="280" :gap="16">
-          <div v-for="(c, i) in D.claims" :key="c.no" class="claim" :style="{ '--stagger-i': String(i) }" :class="{ 'claim--ok': i === 0, 'claim--bad': i === 1, 'claim--warn': i === 2 }">
-            <div class="claim-head"><span class="claim-no">{{ c.no }}</span><span class="card-ic"><FeatureIcon :name="i === 0 ? 'bolt' : i === 1 ? 'layers' : 'shield'" /></span></div>
-            <h3 class="claim-t">{{ isEn ? c.en : c.zh }}</h3>
-            <p class="claim-d">{{ isEn ? c.bodyEn : c.bodyZh }}</p>
-          </div>
-        </p-grid>
-      </section>
-
-      <!-- ═══ CP-02 三态 ═══ -->
-      <section data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-02</span><h2 class="sec-title">{{ isEn ? 'Three outcomes, not two' : '三态，而不是两态' }}</h2><span class="sec-line" /></header>
-        <p class="sec-note">
-          {{ isEn
-            ? 'Most request libraries give you success or error. For a payment, a timeout is neither: the request may have landed. Treating it as failure and retrying is how you charge twice. So the third state exists, and it is the design starting point of this whole layer.'
-            : '多数请求库只给你成功或失败。而对支付来说，超时两者都不是——请求可能已经落地了。把它当失败然后重试，就是重复扣款。所以第三个状态必须存在，而它正是整层的设计起点。' }}
-        </p>
-        <p-grid :min-col-width="250" :gap="14">
-          <div v-for="(o, i) in D.outcomes" :key="o.id" class="oc" :class="{ 'oc--ok': o.tone === 'ok', 'oc--bad': o.tone === 'bad', 'oc--warn': o.tone === 'warn' }" :style="{ '--stagger-i': String(i) }">
-            <span class="oc-id">{{ o.id }}</span>
-            <h3 class="oc-t">{{ isEn ? o.en : o.zh }}</h3>
-            <p class="oc-hint">{{ isEn ? o.enHint : o.zhHint }}</p>
-          </div>
-        </p-grid>
-      </section>
-
-      <!-- ═══ CP-03 两条通道 ═══ -->
-      <section data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-03</span><h2 class="sec-title">{{ isEn ? 'One policy chain, two channels' : '一套策略链，两条通道' }}</h2><span class="sec-line" /></header>
-        <p class="sec-note">
-          {{ isEn
-            ? 'Hardening only HTTP is the industry\'s most common vulnerability shape: the business switches one API call and bypasses everything. A WebSocket looks like "just a connection" in the audit log while being able to send and receive indefinitely.'
-            : '加固只做在 HTTP 上是行业里最常见的漏洞形态：业务换一个 API 就绕过了全部。而 WebSocket 在审计里看着"只是条连接"，却能无限期收发——最适合把数据悄悄外传。' }}
-        </p>
-        <div class="table">
-          <div class="tr th"><span>{{ isEn ? 'Policy' : '策略' }}</span><span>HTTP</span><span>WebSocket</span></div>
-          <div v-for="r in D.channelRows" :key="r.en" class="tr">
-            <span class="td-dim">{{ isEn ? r.en : r.zh }}</span>
-            <span class="td" :class="r.http ? 'td-yes' : 'td-no'">{{ r.http ? '✓' : '—' }}</span>
-            <span class="td" :class="r.ws ? 'td-yes' : 'td-no'">{{ r.ws ? '✓' : '—' }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- ═══ CP-04 三层结构 ═══ -->
-      <section data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-04</span><h2 class="sec-title">{{ isEn ? 'Three layers, split on purpose' : '三层，刻意分开' }}</h2><span class="sec-line" /></header>
-        <p class="sec-note">
-          {{ isEn
-            ? 'Why reactivity is a separate package: the kernel must run in Mini Program logic layers and Node, where there is no Vue. Embedding Vue would kill that. Template re-rendering is Vue-specific, so it lives one layer up.'
-            : '为什么响应式要单独成包：内核要能跑在小程序逻辑层和 Node——那里没有 Vue。把 Vue 塞进去就废了这个能力。而"模板自动重渲染"是 Vue 特有的，所以它在上层。' }}
-        </p>
-        <div class="layers">
-          <div v-for="(l, i) in layers" :key="l.en" class="layer" :style="{ '--stagger-i': String(i) }">
-            <div class="layer-head">
-              <code class="layer-name">{{ isEn ? l.en : l.zh }}</code>
-              <span class="layer-role">{{ isEn ? l.enRole : l.zhRole }}</span>
+        <!-- 出网：两条通道，同一套链 -->
+        <div class="egress" data-reveal>
+          <span class="gate-axis" aria-hidden="true"><span class="gate-knot gate-knot--wide" /></span>
+          <div class="egress-body">
+            <div class="egress-head">
+              <span class="gate-no">06</span>
+              <h2 class="gate-name">{{ isEn ? 'Egress' : '出网' }}</h2>
             </div>
-            <p class="layer-what">{{ isEn ? l.enWhat : l.zhWhat }}</p>
-            <span v-if="i < layers.length - 1" class="layer-arrow">▼</span>
+            <p class="egress-note">
+              {{ isEn
+                ? 'Past the gates, the request leaves through one of two wires — and both carry the same audit trail, the same tenant tag, the same redaction rules.'
+                : '过了闸，请求从两条线之一出去——两条线都带同样的审计、同样的租户标记、同样的脱敏规则。' }}
+            </p>
+            <div class="egress-wires">
+              <div class="wire">
+                <span class="wire-k">HTTP</span>
+                <span class="wire-v">OkHttp / URLSession / RCP</span>
+                <span class="wire-ok">{{ isEn ? 'audited · tagged · redacted' : '审计 · 标租户 · 脱敏' }}</span>
+              </div>
+              <div class="wire">
+                <span class="wire-k">WebSocket</span>
+                <span class="wire-v">wss:// · {{ isEn ? 'long-lived duplex' : '常驻双向' }}</span>
+                <span class="wire-ok">{{ isEn ? 'same chain · never logs payload' : '同一套链 · 绝不记载荷' }}</span>
+              </div>
+            </div>
           </div>
         </div>
-      </section>
 
-      <!-- ═══ CP-05 判据账本（数字全部来自 SSOT） ═══ -->
-      <section id="numbers" data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-05</span><h2 class="sec-title">{{ isEn ? 'The ledger · criteria' : '判据账本' }}</h2><span class="sec-line" /></header>
-        <p class="sec-note">
+        <!-- 分岔：一条管道裂成三条（三态的正确画法） -->
+        <div class="fork" aria-hidden="true">
+          <span class="fork-stem" />
+          <svg class="fork-svg" viewBox="0 0 1000 120" preserveAspectRatio="none">
+            <path d="M500 0 C500 62, 180 58, 180 120" class="fork-lane fork-lane--ok" />
+            <path d="M500 0 L500 120" class="fork-lane fork-lane--bad" />
+            <path d="M500 0 C500 62, 820 58, 820 120" class="fork-lane fork-lane--warn" />
+          </svg>
+        </div>
+
+        <!-- 三种结局 -->
+        <div class="lanes">
+          <div
+            v-for="l in lanes"
+            :key="l.id"
+            class="lane"
+            data-reveal
+            :class="{ 'lane--ok': l.tone === 'ok', 'lane--bad': l.tone === 'bad', 'lane--warn': l.tone === 'warn' }"
+          >
+            <span class="lane-id">{{ l.id }}</span>
+            <span class="lane-label">{{ l.label }}</span>
+            <h3 class="lane-title">{{ l.title }}</h3>
+            <p class="lane-desc">{{ l.desc }}</p>
+          </div>
+        </div>
+
+        <!-- 出口告示牌（边界不是列表节，是管道尽头的告示） -->
+        <footer class="sign" data-reveal>
+          <div class="sign-head">
+            <span class="sign-k">{{ isEn ? 'NOTICE BOARD' : '出口告示' }}</span>
+            <span class="sign-t">{{ isEn ? 'What this layer will not do' : '这层不做什么' }}</span>
+          </div>
+          <ul class="sign-list">
+            <li v-for="(b, i) in D.boundaries" :key="i">{{ isEn ? b.en : b.zh }}</li>
+          </ul>
+        </footer>
+      </div>
+
+      <!-- ═══════════ 副栏账本（附在管道一侧的记录，不是正节） ═══════════ -->
+      <section class="side-ledger" data-reveal>
+        <div class="sl-head">
+          <span class="sl-k">{{ isEn ? 'THE LEDGER' : '判据账本' }}</span>
+          <span class="sl-note">{{ isEn ? 'every figure is counted from repository artifacts' : '每个数字都从仓库产物重新数出' }}</span>
+        </div>
+        <div class="sl-rows">
+          <div v-for="g in groups" :key="g.file" class="sl-row">
+            <span class="sl-count">{{ g.count }}</span>
+            <span class="sl-name">{{ isEn ? g.en : g.zh }}</span>
+            <span class="sl-what">{{ isEn ? g.whatEn : g.what }}</span>
+          </div>
+        </div>
+        <p class="sl-foot">
           {{ isEn
-            ? 'Every figure below is read out of the repository on every check — no hand-written numbers. The criteria count is literally counted from it( in the test files. Source of truth: docs/generated/request-engine-numbers.json.'
-            : '下面的每个数字都在每次校验时从仓库重新读出——没有一个手写数字。「判据条数」是真的去数测试文件里的 it(。单一事实源：docs/generated/request-engine-numbers.json。' }}
-        </p>
-        <p-grid :min-col-width="250" :gap="14">
-          <div v-for="(m, i) in metrics" :key="m.label" class="metric" :style="{ '--stagger-i': String(i) }">
-            <span class="card-ic"><FeatureIcon :name="m.icon" /></span>
-            <div class="metric-value"><span class="mv-num">{{ m.value }}</span><span class="mv-unit">{{ m.unit }}</span></div>
-            <p class="metric-label">{{ m.label }}</p>
-            <p class="metric-note">{{ m.note }}</p>
-          </div>
-        </p-grid>
-
-        <!-- 分组明细：每组守什么 -->
-        <div class="table ledger">
-          <div class="tr th"><span>{{ isEn ? 'Group' : '分组' }}</span><span class="num-col">{{ isEn ? 'Criteria' : '判据' }}</span><span>{{ isEn ? 'What it guards' : '守什么' }}</span></div>
-          <div v-for="g in groups" :key="g.file" class="tr">
-            <span class="td-dim">{{ isEn ? g.en : g.zh }}</span>
-            <span class="td num-col">{{ g.count }}</span>
-            <span class="td td-what">{{ isEn ? g.whatEn : g.what }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- ═══ CP-06 代码：同一个请求，三种处置 ═══ -->
-      <section data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-06</span><h2 class="sec-title">{{ isEn ? 'The same request, three decisions' : '同一个请求，三种处置' }}</h2><span class="sec-line" /></header>
-        <div class="term">
-          <div class="term-bar"><span class="tdot td-r" /><span class="tdot td-y" /><span class="tdot td-g" /><span class="term-name">order.ts</span></div>
-          <pre class="term-pre"><code>const r = await client.post('/order', data)
-
-if (r.ok) return done()
-
-if (r.outcome === 'failed') {
-  // {{ isEn ? 'definitely not processed — retry is safe (with an idempotency key)' : '确定没被处理 —— 可以重试（带幂等键）' }}
-  return retryWithIdempotencyKey()
-}
-
-// {{ isEn ? 'unknown: it may have landed. Do NOT retry — reconcile.' : 'unknown：可能已经落地了。**不要重试** —— 去查单。' }}
-await refreshOrders()
-routeTo('/orders?pending=1')</code></pre>
-        </div>
-        <div class="term">
-          <div class="term-bar"><span class="tdot td-r" /><span class="tdot td-y" /><span class="tdot td-g" /><span class="term-name">TodoList.vue</span></div>
-          <pre class="term-pre"><code>{{ isEn ? '// Vue layer: reactive by construction — the template re-renders' : '// Vue 层：天然响应式 —— 模板会自己重渲染' }}
-const todos = useQuery&lt;Todo[]&gt;('/api/todos')
-
-const create = useMutation&lt;Todo, { title: string }&gt;('/api/todos', {
-  optimistic: (v) =&gt; ({ id: 'tmp', title: v.title, done: false }),
-  onError: (_e, outcome) =&gt; {
-    // {{ isEn ? 'unknown is kept, not rolled back: it may have been created' : 'unknown 不回滚：可能已经创建成功了' }}
-    if (outcome === 'unknown') toast('{{ isEn ? 'Result unknown — refresh to confirm' : '结果未知，请刷新确认' }}')
-  },
-})</code></pre>
-        </div>
-      </section>
-
-      <!-- ═══ CP-07 边界 ═══ -->
-      <section data-reveal class="sec">
-        <header class="sec-head"><span class="sec-k">CP-07</span><h2 class="sec-title">{{ isEn ? 'Boundaries · what it does not do' : '边界 · 它不做什么' }}</h2><span class="sec-line" /></header>
-        <div class="bounds">
-          <div v-for="(b, i) in boundaries" :key="i" class="bound" :style="{ '--stagger-i': String(i) }">
-            <span class="bound-mark">—</span>
-            <p class="bound-t">{{ isEn ? b.en : b.zh }}</p>
-          </div>
-        </div>
-        <p class="sec-note">
-          {{ isEn
-            ? 'The last one matters most: the tri-state model exists to make the need to reconcile visible, not to reconcile on the business\'s behalf. A business that treats unknown as failed will still double-charge with the best library underneath.'
-            : '最后一条最重要：三态模型的价值是让业务**看见**该去查单，不是替业务去查。把 unknown 当 failed 处理的业务，用再好的库也还是会重复下单。' }}
-        </p>
-      </section>
-
-      <!-- ═══ 出口 ═══ -->
-      <section data-reveal class="sec sec--end">
-        <header class="sec-head"><span class="sec-k">OUT</span><h2 class="sec-title">{{ isEn ? 'Go further' : '继续深入' }}</h2><span class="sec-line" /></header>
-        <div class="outs">
-          <router-link v-for="l in D.links" :key="l.to" :to="l.to" class="out">
-            <span class="out-t">{{ isEn ? l.en : l.zh }}</span>
-            <span class="out-arrow">→</span>
-          </router-link>
-        </div>
-        <p class="end-note">
-          {{ isEn ? D.codenameNote : D.codenameNote }}
+            ? 'Source of truth: docs/generated/request-engine-numbers.json — recounted on every check, so a deleted criterion cannot stay in the copy.'
+            : '单一事实源：docs/generated/request-engine-numbers.json —— 每次校验重算，删掉的判据不可能还留在文案里。' }}
         </p>
       </section>
     </div>
@@ -305,165 +241,174 @@ const create = useMutation&lt;Todo, { title: string }&gt;('/api/todos', {
 </template>
 
 <style scoped>
-/* ══════════════════ 背景：关卡闸门 ══════════════════ */
+/* ═══════ 整页：一块关卡地面，中央一条通路 ═══════ */
 .px { position: relative; }
-.px-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-/* 横向栅线（关卡地面） */
-.px-gate {
-  position: absolute; inset: 0;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0 39px,
-    rgba(255, 255, 255, 0.028) 39px 40px
-  );
-  mask-image: radial-gradient(ellipse 90% 70% at 50% 12%, #000 20%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 12%, #000 20%, transparent 78%);
+.px-floor {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 47px, rgba(255, 255, 255, 0.022) 47px 48px);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
 }
-/* 竖向光缝（闸口） */
-.px-slit {
-  position: absolute; left: 50%; top: 0; width: 1px; height: 62vh; transform: translateX(-50%);
-  background: linear-gradient(to bottom, transparent, var(--brand) 22%, rgba(124, 92, 255, 0.25) 62%, transparent);
-  opacity: 0.5;
+.px-doc {
+  position: relative;
+  display: flex; flex-direction: column;
+  padding: 76px 24px 140px; max-width: 900px; margin: 0 auto;
 }
-.px-wrap { position: relative; display: flex; flex-direction: column; gap: 92px; padding: 72px 24px 120px; max-width: 1180px; margin: 0 auto; }
 
-/* ══════════════════ Hero ══════════════════ */
-.hero { align-items: center; }
-.hero-copy { display: flex; flex-direction: column; gap: 18px; }
-.chip {
+/* ═══════ 标题：通栏（不再双栏 hero），左缘对齐管道 ═══════ */
+.px-head { display: flex; flex-direction: column; gap: 16px; padding-bottom: 44px; }
+.px-badge {
   display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
-  padding: 5px 11px; border-radius: 999px; font-size: 11px; letter-spacing: 0.08em;
-  color: var(--brand-ink); background: var(--brand-soft); border: 1px solid rgba(124, 92, 255, 0.28);
+  padding: 5px 11px; border-radius: 3px; font-size: 10.5px; letter-spacing: 0.16em;
+  color: var(--brand-ink); background: var(--brand-soft); border: 1px solid rgba(124, 92, 255, 0.26);
 }
-.hero-h1 { display: flex; flex-direction: column; gap: 8px; margin: 0; font-size: clamp(28px, 4vw, 46px); line-height: 1.18; letter-spacing: -0.02em; }
-.h1-l1 { color: var(--ink); }
-.h1-l2 { color: var(--brand-ink); }
-.hero-lead { margin: 0; color: rgba(244, 244, 247, 0.72); font-size: 15px; line-height: 1.75; max-width: 60ch; }
-.hero-cta { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
-.btn { display: inline-flex; align-items: center; padding: 9px 18px; border-radius: 10px; font-size: 13.5px; text-decoration: none; border: 1px solid transparent; transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease; }
-.btn-primary { background: var(--brand); color: #fff; }
-.btn-primary:hover { transform: translateY(-1px); background: #8b6dff; }
-.btn-ghost { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.32); background: rgba(124, 92, 255, 0.06); }
-.btn-ghost:hover { border-color: var(--brand); background: rgba(124, 92, 255, 0.13); }
-.hero-pills { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; }
-.pill { padding: 4px 10px; border-radius: 999px; font-size: 11.5px; color: rgba(244, 244, 247, 0.62); border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.025); }
-
-/* ── 三态闸门 ── */
-.gate {
-  display: flex; flex-direction: column; gap: 14px; padding: 20px 20px 18px;
-  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.09);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
-  box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.9);
+.px-title {
+  margin: 0; font-size: clamp(30px, 4.6vw, 52px); line-height: 1.1; letter-spacing: -0.025em;
+  color: var(--ink); font-weight: 650;
 }
-.gate-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
-.gh-title { font-size: 12px; letter-spacing: 0.06em; color: rgba(244, 244, 247, 0.56); }
-.gh-seal { font-size: 10.5px; letter-spacing: 0.22em; color: var(--brand-ink); opacity: 0.8; }
-.gate-checks { display: flex; flex-direction: column; gap: 7px; padding: 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.24); border: 1px solid rgba(255, 255, 255, 0.055); }
-.gk { display: flex; flex-direction: row; align-items: center; gap: 9px; font-size: 12.5px; color: rgba(244, 244, 247, 0.74); }
-.gk-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--brand); opacity: 0.8; flex: none; }
-.gate-lanes { display: flex; flex-direction: column; gap: 8px; }
-.lane { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 10px; border-left: 3px solid transparent; }
-.lane--ok { background: rgba(61, 220, 151, 0.085); border-left-color: var(--ok); }
-.lane--bad { background: rgba(255, 107, 107, 0.075); border-left-color: var(--rec); }
-.lane--warn { background: rgba(255, 180, 84, 0.095); border-left-color: var(--warn); }
-.lane-tag { font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; flex: none; }
-.lane--ok .lane-tag { color: var(--ok); }
-.lane--bad .lane-tag { color: var(--rec); }
-.lane--warn .lane-tag { color: var(--warn); }
-.lane-text { font-size: 12.5px; color: rgba(244, 244, 247, 0.78); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.gate-note { margin: 2px 0 0; font-size: 11.5px; line-height: 1.6; color: rgba(255, 180, 84, 0.82); }
+.px-lede { margin: 0; max-width: 68ch; color: rgba(244, 244, 247, 0.66); font-size: 15px; line-height: 1.8; }
+.px-links { display: flex; flex-direction: row; flex-wrap: wrap; gap: 18px; margin-top: 2px; }
+.px-link { font-size: 13px; color: var(--brand-ink); text-decoration: none; border-bottom: 1px solid rgba(124, 92, 255, 0.3); padding-bottom: 2px; }
+.px-link:hover { color: var(--ink); border-bottom-color: var(--brand); }
 
-/* ══════════════════ 分节 ══════════════════ */
-.sec { display: flex; flex-direction: column; gap: 20px; }
-.sec-head { display: flex; flex-direction: row; align-items: center; gap: 14px; }
-.sec-k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; letter-spacing: 0.16em; color: var(--brand-ink); opacity: 0.85; flex: none; }
-.sec-title { margin: 0; font-size: clamp(19px, 2.2vw, 25px); color: var(--ink); letter-spacing: -0.01em; }
-.sec-line { flex: 1; height: 1px; background: linear-gradient(to right, rgba(124, 92, 255, 0.28), transparent); }
-.sec-note { margin: 0; font-size: 14px; line-height: 1.8; color: rgba(244, 244, 247, 0.66); max-width: 82ch; }
+/* ═══════ 管道：左轴 + 右内容（整页唯一主轴） ═══════ */
+.pipe { display: flex; flex-direction: column; position: relative; padding-left: 22px; }
+/* ★整页唯一主轴：一条从入场到告示牌的实体竖线（不是每个节点各画一段 —— 那会断） */
+.pipe::before {
+  content: ""; position: absolute; left: 1px; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(to bottom, rgba(124, 92, 255, 0.55) 0%, rgba(124, 92, 255, 0.3) 62%, rgba(124, 92, 255, 0.1) 100%);
+}
+/* 竖线由每个节点的 .gate-axis 首尾相接 —— 删掉任一节点管道就断（结构即产品） */
+/* 节点：不再自己画线（线在 .pipe 上一次性画到底），只做 knot 的定位参照 */
+.gate-axis { position: absolute; left: -22px; top: 0; bottom: 0; width: 2px; }
+.gate-knot {
+  position: absolute; left: 0; top: 22px; width: 11px; height: 11px; margin-left: -5.5px;
+  border-radius: 50%; background: var(--bg); border: 2px solid var(--brand);
+  box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.08);
+}
+.gate-knot--wide { width: 13px; height: 13px; margin-left: -6.5px; top: 18px; }
 
-/* ── 判断卡 ── */
-.claim { display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.075); background: rgba(255, 255, 255, 0.022); border-left: 3px solid transparent; }
-.claim--ok { border-left-color: var(--ok); }
-.claim--bad { border-left-color: var(--rec); }
-.claim--warn { border-left-color: var(--warn); }
-.claim-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
-.claim-no { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: 0.16em; color: rgba(244, 244, 247, 0.42); }
-.card-ic { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 8px; background: var(--brand-soft); color: var(--brand-ink); font-size: 13px; }
-.claim-t { margin: 0; font-size: 16px; color: var(--ink); line-height: 1.45; }
-.claim-d { margin: 0; font-size: 13px; line-height: 1.75; color: rgba(244, 244, 247, 0.64); }
+/* 入口 */
+.pipe-entry { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 0 0 36px 0; }
+.entry-tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.2em; color: rgba(244, 244, 247, 0.4); }
+.entry-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.7;
+  color: var(--brand-ink); background: rgba(124, 92, 255, 0.07);
+  border: 1px solid rgba(124, 92, 255, 0.2); border-radius: 8px; padding: 11px 14px;
+  overflow-x: auto; white-space: nowrap;
+}
 
-/* ── 三态卡 ── */
-.oc { display: flex; flex-direction: column; gap: 7px; padding: 20px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.075); background: rgba(255, 255, 255, 0.022); border-top: 3px solid transparent; }
-.oc--ok { border-top-color: var(--ok); }
-.oc--bad { border-top-color: var(--rec); }
-.oc--warn { border-top-color: var(--warn); }
-.oc-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; letter-spacing: 0.08em; }
-.oc--ok .oc-id { color: var(--ok); }
-.oc--bad .oc-id { color: var(--rec); }
-.oc--warn .oc-id { color: var(--warn); }
-.oc-t { margin: 0; font-size: 15px; color: var(--ink); }
-.oc-hint { margin: 0; font-size: 12.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.6); }
+/* 闸门节点 */
+.gate { position: relative; display: flex; flex-direction: row; padding: 0 0 40px 0; }
+.gate-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.gate-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; }
+.gate-no {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  letter-spacing: 0.14em; color: rgba(244, 244, 247, 0.34); flex: none;
+}
+.gate-name { margin: 0; font-size: 19px; color: var(--ink); letter-spacing: -0.01em; }
+.gate--bad .gate-knot { border-color: var(--rec); box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.09); }
+.gate--warn .gate-knot { border-color: var(--warn); box-shadow: 0 0 0 4px rgba(255, 180, 84, 0.09); }
+.gate--ok .gate-knot { border-color: var(--ok); box-shadow: 0 0 0 4px rgba(61, 220, 151, 0.09); }
+.gate-check { margin: 0; font-size: 14px; line-height: 1.65; color: rgba(244, 244, 247, 0.8); }
+.gate-note { margin: 0; font-size: 12.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.48); }
+.gate-onfail {
+  display: flex; flex-direction: row; align-items: baseline; gap: 10px; margin: 2px 0 0;
+  padding: 7px 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.023);
+  border-left: 2px solid transparent;
+}
+.gate--bad .gate-onfail { border-left-color: var(--rec); }
+.gate--warn .gate-onfail { border-left-color: var(--warn); }
+.gate--ok .gate-onfail { border-left-color: var(--ok); }
+.onfail-key { font-size: 10.5px; letter-spacing: 0.12em; color: rgba(244, 244, 247, 0.36); flex: none; }
+.onfail-val { font-size: 12.5px; line-height: 1.6; color: rgba(244, 244, 247, 0.7); }
 
-/* ── 表格 ── */
-.table { display: flex; flex-direction: column; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.075); overflow: hidden; }
-.tr { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 12px; padding: 12px 16px; font-size: 13px; align-items: center; }
-.ledger .tr { grid-template-columns: 0.9fr 0.24fr 2.2fr; }
-.tr.th { background: rgba(255, 255, 255, 0.04); color: rgba(244, 244, 247, 0.55); font-size: 11.5px; letter-spacing: 0.06em; }
-.tr:not(.th) { border-top: 1px solid rgba(255, 255, 255, 0.05); color: rgba(244, 244, 247, 0.8); }
-.td-dim { color: rgba(244, 244, 247, 0.72); }
-.td { text-align: center; }
-.num-col { text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--brand-ink); }
-.td-what { text-align: left; font-size: 12.5px; line-height: 1.65; color: rgba(244, 244, 247, 0.6); }
-.td-yes { color: var(--ok); }
-.td-no { color: rgba(255, 107, 107, 0.72); }
+/* 贴在管道旁的仪表 */
+.gauge-strip { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.gauge {
+  display: flex; flex-direction: row; align-items: baseline; gap: 5px; flex-wrap: wrap;
+  padding: 8px 12px; border-radius: 7px; background: rgba(255, 255, 255, 0.022);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.gauge-v { font-size: 19px; font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; }
+.gauge-u { font-size: 11px; color: rgba(244, 244, 247, 0.45); }
+.gauge-n { font-size: 10.5px; color: rgba(244, 244, 247, 0.34); width: 100%; }
 
-/* ── 三层 ── */
-.layers { display: flex; flex-direction: column; gap: 0; }
-.layer { position: relative; display: flex; flex-direction: column; gap: 7px; padding: 16px 18px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.075); background: rgba(255, 255, 255, 0.022); margin-bottom: 26px; }
-.layer:last-child { margin-bottom: 0; }
-.layer-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.layer-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; color: var(--brand-ink); }
-.layer-role { font-size: 11.5px; color: rgba(244, 244, 247, 0.45); }
-.layer-what { margin: 0; font-size: 12.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.66); }
-.layer-arrow { position: absolute; left: 50%; bottom: -20px; transform: translateX(-50%); font-size: 11px; color: rgba(124, 92, 255, 0.42); }
+/* 出网 */
+.egress { position: relative; display: flex; flex-direction: row; padding: 0 0 34px 0; }
+.egress-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
+.egress-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; }
+.egress-note { margin: 0; font-size: 13px; line-height: 1.7; color: rgba(244, 244, 247, 0.55); }
+.egress-wires { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; }
+.wire {
+  display: flex; flex-direction: column; gap: 3px; flex: 1 1 240px;
+  padding: 11px 14px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022); border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.wire-k { font-size: 12.5px; color: var(--ink); font-weight: 600; }
+.wire-v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: rgba(244, 244, 247, 0.42); }
+.wire-ok { font-size: 11px; color: var(--ok); }
 
-/* ── 指标 ── */
-.metric { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.075); background: rgba(255, 255, 255, 0.022); }
-.metric-value { display: flex; flex-direction: row; align-items: baseline; gap: 6px; }
-.mv-num { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
-.mv-unit { font-size: 11.5px; color: rgba(244, 244, 247, 0.48); }
-.metric-label { margin: 0; font-size: 13px; color: rgba(244, 244, 247, 0.82); }
-.metric-note { margin: 0; font-size: 11.5px; line-height: 1.6; color: rgba(244, 244, 247, 0.46); }
+/* 分岔：SVG 三条支路 */
+.fork { position: relative; height: 120px; }
+.fork-stem { position: absolute; left: -21px; top: 0; width: 2px; height: 22px; background: rgba(124, 92, 255, 0.4); }
+.fork-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fork-lane { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fork-lane--ok { stroke: rgba(61, 220, 151, 0.55); }
+.fork-lane--bad { stroke: rgba(255, 107, 107, 0.5); }
+.fork-lane--warn { stroke: rgba(255, 180, 84, 0.5); }
 
-/* ── 终端 ── */
-.term { border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.085); background: rgba(0, 0, 0, 0.34); overflow: hidden; }
-.term-bar { display: flex; flex-direction: row; align-items: center; gap: 7px; padding: 9px 13px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.022); }
-.tdot { width: 9px; height: 9px; border-radius: 50%; }
-.td-r { background: #ff5f57; }
-.td-y { background: #febc2e; }
-.td-g { background: #28c840; }
-.term-name { margin-left: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: rgba(244, 244, 247, 0.42); }
-.term-pre { margin: 0; padding: 15px 16px; overflow-x: auto; }
-.term-pre code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.8; color: rgba(244, 244, 247, 0.78); white-space: pre; }
+/* 三态 */
+.lanes { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16px; padding-top: 4px; }
+.lane {
+  display: flex; flex-direction: column; gap: 6px; flex: 1 1 240px;
+  padding: 18px 18px 20px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.022); border: 1px solid rgba(255, 255, 255, 0.065);
+  border-top-width: 3px; border-top-style: solid;
+}
+.lane--ok { border-top-color: var(--ok); }
+.lane--bad { border-top-color: var(--rec); }
+.lane--warn { border-top-color: var(--warn); }
+.lane-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: 0.1em; }
+.lane--ok .lane-id { color: var(--ok); }
+.lane--bad .lane-id { color: var(--rec); }
+.lane--warn .lane-id { color: var(--warn); }
+.lane-label { font-size: 10.5px; letter-spacing: 0.2em; color: rgba(244, 244, 247, 0.34); }
+.lane-title { margin: 2px 0 0; font-size: 16px; color: var(--ink); }
+.lane-desc { margin: 0; font-size: 12.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.58); }
 
-/* ── 边界 ── */
-.bounds { display: flex; flex-direction: column; gap: 0; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.075); overflow: hidden; }
-.bound { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; padding: 13px 16px; }
-.bound + .bound { border-top: 1px solid rgba(255, 255, 255, 0.05); }
-.bound-mark { color: rgba(255, 107, 107, 0.6); flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.bound-t { margin: 0; font-size: 13px; line-height: 1.7; color: rgba(244, 244, 247, 0.68); }
+/* 出口告示牌 */
+.sign {
+  margin-top: 52px; padding: 20px 22px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.sign-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.sign-k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.2em; color: rgba(255, 107, 107, 0.7); }
+.sign-t { font-size: 14px; color: rgba(244, 244, 247, 0.72); }
+.sign-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0 0 0 16px; }
+.sign-list li { font-size: 12.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.55); }
 
-/* ── 出口 ── */
-.sec--end { padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
-.outs { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; }
-.out { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 11px; border: 1px solid rgba(124, 92, 255, 0.28); background: rgba(124, 92, 255, 0.07); text-decoration: none; transition: background 0.16s ease, border-color 0.16s ease; }
-.out:hover { background: rgba(124, 92, 255, 0.14); border-color: var(--brand); }
-.out-t { font-size: 13.5px; color: var(--brand-ink); }
-.out-arrow { color: rgba(171, 155, 255, 0.6); }
-.end-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.7; color: rgba(244, 244, 247, 0.42); }
+/* 副栏账本（附在管道一侧的记录，不是正节） */
+.side-ledger {
+  margin-top: 64px; padding: 20px 22px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(255, 255, 255, 0.016);
+}
+.sl-head { display: flex; flex-direction: row; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.sl-k { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; letter-spacing: 0.2em; color: var(--brand-ink); }
+.sl-note { font-size: 11px; color: rgba(244, 244, 247, 0.36); }
+.sl-rows { display: flex; flex-direction: column; }
+.sl-row {
+  display: grid; grid-template-columns: 42px 120px 1fr; gap: 12px; align-items: baseline;
+  padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+.sl-row:first-child { border-top: none; }
+.sl-count { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--brand-ink); text-align: right; }
+.sl-name { font-size: 12.5px; color: rgba(244, 244, 247, 0.78); }
+.sl-what { font-size: 11.5px; line-height: 1.65; color: rgba(244, 244, 247, 0.45); }
+.sl-foot { margin: 12px 0 0; font-size: 11px; line-height: 1.6; color: rgba(244, 244, 247, 0.34); }
 
-/* ── 滚动显现 ── */
-[data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity 0.5s ease, transform 0.5s ease; }
+/* 显现 */
+[data-reveal] { opacity: 0; transform: translateY(12px); transition: opacity 0.5s ease, transform 0.5s ease; }
 [data-reveal].revealed { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] { opacity: 1; transform: none; transition: none; }

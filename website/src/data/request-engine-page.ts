@@ -2,9 +2,6 @@
 // SSOT：docs/generated/request-engine-numbers.json
 // 重新生成：node website/scripts/gen-request-engine-data.mjs · 防漂移门禁：pnpm check:request-engine-data
 export const REQUEST_ENGINE_PAGE = {
-  "codename": "Phylax",
-  "codenameZh": "守卫",
-  "codenameNote": "Phylax（φύλαξ）= 古希腊的守卫/守备官。本层不是\"替你把请求发出去\"（那是传输层），而是\"守住边界、验明身份、留下记录\"——这正是它的职责范围。",
   "numbers": {
     "note": "Phylax（请求治理层）对外数字单一事实源 —— 由 scripts/gen-request-engine-numbers.mjs 从已入库产物读出；产品页与文档只读本件，不得手写数字。",
     "generatedFrom": {
@@ -154,111 +151,66 @@ export const REQUEST_ENGINE_PAGE = {
       }
     ]
   },
-  "claims": [
+  "gates": [
     {
       "no": "01",
-      "zh": "超时不是失败，是需要去查的状态。",
-      "en": "A timeout is not a failure. It is a state to reconcile.",
-      "bodyZh": "主流库把超时归入失败，业务于是重试——对支付来说这就是重复扣款。本层把结果分成三态：确定成功 / 确定失败 / **结果未知**。判不出来时保守归入 unknown，宁可让业务多查一次单。",
-      "bodyEn": "Mainstream libraries classify a timeout as failure, so the business retries — which for payments means charging twice. This layer splits results into three states: success, failed, and **unknown**. When we cannot tell, we err on unknown: better one extra reconciliation than one duplicate charge."
-    },
-    {
-      "no": "02",
-      "zh": "加固不能只做在一条通道上。",
-      "en": "Hardening one channel hardens nothing.",
-      "bodyZh": "平台给 HTTP 配了白名单、审计、配额，业务换个 API（useWebSocket）就全绕过。而 WS 在审计里看着\"只是条连接\"，却能无限期收发——最适合把数据悄悄外传。⇒ 本层的策略链对两条通道同时生效。",
-      "bodyEn": "The platform allowlists, audits and quotas HTTP. The business switches one API call to useWebSocket and bypasses all of it. And a WebSocket looks like \"just a connection\" in the audit log while being able to send and receive indefinitely — the ideal shape for quiet exfiltration. So the policy chain applies to both channels."
-    },
-    {
-      "no": "03",
-      "zh": "多租户下，\"相同请求\"是个危险的定义。",
-      "en": "Under multi-tenancy, \"identical request\" is a dangerous definition.",
-      "bodyZh": "去重键只含 method+url+body 时，A、B 两个业务请求同一接口、各带自己的 Authorization ⇒ 键相同 ⇒ 被合并 ⇒ A 拿到 B 的应答。反过来把全部 header 进键，追踪头又会让去重永不命中。⇒ 只收\"会改变应答内容\"的身份头，并且配了拦截器时干脆不去重。",
-      "bodyEn": "With a key of method+url+body only, tenants A and B calling the same endpoint with their own Authorization headers collide into one request — A receives B's response. Put every header in the key instead, and per-request tracing headers make deduplication never hit. So we include only identity headers that change the response, and skip deduplication entirely when interceptors are configured."
-    }
-  ],
-  "outcomes": [
-    {
-      "id": "success",
-      "zh": "确定成功",
-      "en": "Succeeded",
-      "zhHint": "正常走",
-      "enHint": "Proceed",
-      "tone": "ok"
-    },
-    {
-      "id": "failed",
-      "zh": "确定失败",
-      "en": "Failed",
-      "zhHint": "请求没被处理，可重试",
-      "enHint": "Never processed — retry is safe",
+      "zh": "域名白名单",
+      "en": "Domain allowlist",
+      "zhCheck": "目标 host 在平台配置的允许列表内？",
+      "enCheck": "Is the target host on the platform allowlist?",
+      "zhOnFail": "拦下 · request.forbidden / websocket.forbidden",
+      "enOnFail": "rejected · request.forbidden / websocket.forbidden",
+      "zhNote": "HTTP 与 WebSocket 共用同一份 isHostAllowed —— 业务换 API 也逃不掉",
+      "enNote": "HTTP and WebSocket share one isHostAllowed — switching APIs does not escape it",
       "tone": "bad"
     },
     {
-      "id": "unknown",
-      "zh": "结果未知",
-      "en": "Unknown",
-      "zhHint": "可能已生效，去查单，不要重试",
-      "enHint": "May have taken effect — reconcile, do not retry",
+      "no": "02",
+      "zh": "业务配额",
+      "en": "Business quota",
+      "zhCheck": "该 bizId 的并发/连接额度还有余量？",
+      "enCheck": "Does this bizId still have concurrency/connection budget?",
+      "zhOnFail": "拦下 · quotaExceeded（WS 是长连接，排队等待无意义）",
+      "enOnFail": "rejected · quotaExceeded (a long-lived WS cannot sensibly queue)",
+      "zhNote": "一业务打满不阻塞另一业务；WS 额度直到连接真正关闭才释放",
+      "enNote": "One tenant saturating never blocks another; WS quota is held until the socket actually closes",
+      "tone": "bad"
+    },
+    {
+      "no": "03",
+      "zh": "幂等键",
+      "en": "Idempotency key",
+      "zhCheck": "这个逻辑请求有稳定的幂等键吗？",
+      "enCheck": "Does this logical request carry a stable idempotency key?",
+      "zhOnFail": "降级 · 非幂等且无 key ⇒ 本次不重试（防重复提交）",
+      "enOnFail": "degraded · non-idempotent without a key ⇒ no retry (prevents duplicate writes)",
+      "zhNote": "键在同一逻辑请求的所有重试间复用；服务端按它去重",
+      "enNote": "The key is reused across every retry of one logical request; the server deduplicates on it",
       "tone": "warn"
-    }
-  ],
-  "channelRows": [
-    {
-      "zh": "域名白名单",
-      "en": "Domain allowlist",
-      "http": true,
-      "ws": true
     },
     {
-      "zh": "业务隔离（bizId）",
-      "en": "Business isolation (bizId)",
-      "http": true,
-      "ws": true
+      "no": "04",
+      "zh": "重试门禁",
+      "en": "Retry gate",
+      "zhCheck": "方法允许重试吗？（只有幂等方法可无条件重试）",
+      "enCheck": "Is the method retryable? (only idempotent methods retry unconditionally)",
+      "zhOnFail": "拒绝 · POST 无 key ⇒ retryRefused 如实写进 meta",
+      "enOnFail": "refused · POST without a key ⇒ retryRefused recorded in meta",
+      "zhNote": "被拒不是静默跳过 —— 业务必须能看出\"不是没重试，是不允许\"",
+      "enNote": "Refusal is never silent — the business must see \"not retried because disallowed\", not \"retry broke\"",
+      "tone": "warn"
     },
     {
-      "zh": "调用审计",
-      "en": "Call audit",
-      "http": true,
-      "ws": true
-    },
-    {
-      "zh": "并发/连接配额",
-      "en": "Concurrency / connection quota",
-      "http": true,
-      "ws": true
-    },
-    {
-      "zh": "载荷进日志",
-      "en": "Payload in logs",
-      "http": false,
-      "ws": false
-    }
-  ],
-  "layers": [
-    {
-      "zh": "@proteus-vue/request",
-      "en": "@proteus-vue/request",
-      "zhRole": "Vue 产品层 · vue 为 peerDependency",
-      "enRole": "Vue product layer · vue as peerDependency",
-      "zhWhat": "useQuery / useMutation / useRequest —— 只做响应式容器、竞态裁决、卸载取消",
-      "enWhat": "useQuery / useMutation / useRequest — reactive container, race adjudication, unmount cancel only"
-    },
-    {
-      "zh": "@proteus-vue/api/request",
-      "en": "@proteus-vue/api/request",
-      "zhRole": "策略内核 · 平台中立 · 零 vue 依赖",
-      "enRole": "Policy kernel · platform-neutral · zero Vue",
-      "zhWhat": "三态 · 幂等 · 断路器 · 离线队列 · 审计 · 脱敏 · 配额",
-      "enWhat": "tri-state · idempotency · breaker · offline queue · audit · redaction · quota"
-    },
-    {
-      "zh": "useFetch → bridge.request → 三端宿主",
-      "en": "useFetch → bridge.request → three hosts",
-      "zhRole": "传输层",
-      "enRole": "Transport",
-      "zhWhat": "OkHttp / URLSession / RCP —— 本层不重实现传输",
-      "enWhat": "OkHttp / URLSession / RCP — this layer does not reimplement transport"
+      "no": "05",
+      "zh": "去重身份",
+      "en": "Dedupe identity",
+      "zhCheck": "这个在飞请求与别的请求\"真的相同\"吗？",
+      "enCheck": "Is this in-flight request truly identical to another?",
+      "zhOnFail": "合并 · 键含身份/租户头；跨租户绝不合并",
+      "enOnFail": "merged · key includes identity/tenant headers; never merged across tenants",
+      "zhNote": "配了请求拦截器 ⇒ 干脆不去重（键代表不了最终身份），并在 meta 说明",
+      "enNote": "With request interceptors configured, dedupe is skipped entirely (the key cannot represent final identity) and said so in meta",
+      "tone": "ok"
     }
   ],
   "boundaries": [
@@ -281,23 +233,6 @@ export const REQUEST_ENGINE_PAGE = {
     {
       "zh": "unknown 之后能否正确处置是业务的责任——本层只保证状态诚实",
       "en": "Whether code handles unknown correctly is the business's responsibility — this layer only keeps the state honest"
-    }
-  ],
-  "links": [
-    {
-      "zh": "使用手册",
-      "en": "Cookbook",
-      "to": "/docs/system/14-request-quickstart"
-    },
-    {
-      "zh": "设计理由",
-      "en": "Design rationale",
-      "to": "/docs/system/13-request-governance"
-    },
-    {
-      "zh": "useFetch（单请求门面）",
-      "en": "useFetch (single-request facade)",
-      "to": "/docs/capability/fetch"
     }
   ]
 } as const
