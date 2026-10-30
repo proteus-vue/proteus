@@ -203,6 +203,14 @@ async fn select_device(serial: String) -> Result<capture_preset::CaptureInfo, St
     .map_err(|e| format!("切换线程失败：{e}"))?
 }
 
+/// ★**IDE 整体缩放**（决策 #1398）：Tauri v2 的 `Webview::set_zoom` 走系统级 pageZoom，
+/// 它会连**布局**一起缩放（`getBoundingClientRect` 也随之变化），所以画布矩形不会错位。
+/// 和"设备画面缩放"（`stageGeom.setZoom`）是两件事：那个只缩放屏幕内容，这个缩放整个界面。
+#[tauri::command]
+fn set_ui_zoom(webview: tauri::Webview, zoom: f64) -> Result<(), String> {
+    webview.set_zoom(zoom.clamp(0.6, 2.0)).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn set_canvas_rect(x: f64, y: f64, w: f64, h: f64) {
     // ★HTML → 原生 的接线证据：把收到的矩形打出来（截图被 TCC 拦时靠它证明"布局真的驱动了画布"）
@@ -609,6 +617,7 @@ fn main() {
         .on_menu_event(|app, ev| menu::dispatch(app, ev.id().0.as_str()))
         .invoke_handler(tauri::generate_handler![
             set_canvas_rect,
+            set_ui_zoom,
             stats,
             dump_frame,
             read_text,

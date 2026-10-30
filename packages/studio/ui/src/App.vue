@@ -9,6 +9,7 @@ import {
   sideHidden,
   sideW,
   startDrag,
+  uiZoom,
   toggleRail,
   toggleSide,
   toggleTree,
@@ -19,8 +20,9 @@ import {
   treeHidden,
   treeW,
   startDragTerm,
+  saveLayout,
 } from './layout'
-import { capturePreset, copyText, deviceSwipe, deviceTap, iosKey, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, type IosHint } from './bridge'
+import { capturePreset, copyText, deviceSwipe, deviceTap, iosKey, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, setUiZoom, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -78,6 +80,37 @@ const panLimit = stageGeom.panLimit
 const clampPan = stageGeom.clampPan
 const screenStyle = stageGeom.screenStyle
 const zoomLabel = stageGeom.zoomLabel
+
+/** IDE 整体缩放（决策 #1398）：界面（含布局）一起缩放；改完要重算画布矩形，否则原生视图错位。 */
+async function applyUiZoom(z: number) {
+  const next = Math.min(1.6, Math.max(0.7, Math.round(z * 10) / 10))
+  uiZoom.value = next
+  try {
+    await setUiZoom(next)
+  } catch {
+    /* 没有桥时（浏览器直开）静默：不影响其它判断 */
+  }
+  await nextTick()
+  void syncRect()
+  saveLayout()
+}
+
+/** ⌘= / ⌘- / ⌘0：终端内让终端自己处理（那调的是终端字号），其余位置缩放整个界面 */
+function onZoomKey(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return
+  const inTerm = (e.target as HTMLElement | null)?.closest?.('.termwrap')
+  if (inTerm) return
+  if (e.key === '=' || e.key === '+') {
+    e.preventDefault()
+    void applyUiZoom(uiZoom.value + 0.1)
+  } else if (e.key === '-') {
+    e.preventDefault()
+    void applyUiZoom(uiZoom.value - 0.1)
+  } else if (e.key === '0') {
+    e.preventDefault()
+    void applyUiZoom(1)
+  }
+}
 
 function setZoom(z: number) {
   stageGeom.setZoom(z, () => void syncRect())
@@ -568,6 +601,9 @@ const termLeft = computed(() => (view.value === 'code' && !treeHidden.value ? tr
 
 onMounted(async () => {
   loadLayout()
+  /* 应用上次的界面缩放（决策 #1398）：loadLayout 之后立刻设，避免先按 1.0 排一次版 */
+  window.addEventListener('keydown', onZoomKey, true)
+  void applyUiZoom(uiZoom.value)
   // ★先恢复上次的视图，再量画布：顺序反了会先按设备视图同步一次 rect，
   //   而恢复成 code 视图时那次同步是白做的（还会让原生画布闪一下）。
   await hydrateWorkspace()

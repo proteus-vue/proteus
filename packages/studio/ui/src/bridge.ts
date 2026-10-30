@@ -55,6 +55,10 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 
 export const getStats = (): Promise<Stats> => invoke<Stats>('stats')
 
+/* IDE 整体缩放（决策 #1398）：走 Rust 的 `Webview::set_zoom`，连布局一起缩放 */
+export const setUiZoom = (zoom: number): Promise<void> =>
+  invoke<void>('set_ui_zoom', { zoom })
+
 export const setCanvasRect = (r: { x: number; y: number; w: number; h: number }): Promise<void> =>
   invoke<void>('set_canvas_rect', r)
 

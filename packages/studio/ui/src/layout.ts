@@ -42,6 +42,9 @@ export const termFont = ref(12)
 export const treeW = ref(232) // 文件树宽度
 export const treeHidden = ref(false)
 
+/** IDE 整体缩放（决策 #1398）：0.8~1.5，步进 0.1。与"设备画面缩放"无关。 */
+export const uiZoom = ref(1)
+
 const LAYOUT_KEY = 'studio.layout.v1'
 const CODE_KEY = 'studio.code.v1'
 const TERM_KEY = 'studio.terminal.v1'
@@ -50,7 +53,8 @@ export function loadLayout() {
   try {
     const a = localStorage.getItem(LAYOUT_KEY)
     if (a) {
-      const s = JSON.parse(a) as Partial<{ railW: number; sideW: number; railHidden: boolean; sideHidden: boolean }>
+      const s = JSON.parse(a) as Partial<{ railW: number; sideW: number; railHidden: boolean; sideHidden: boolean; uiZoom: number }>
+      if (typeof s.uiZoom === 'number') uiZoom.value = clampNum(s.uiZoom, 0.7, 1.6)
       if (typeof s.railW === 'number') railW.value = clampNum(s.railW, 40, 96)
       if (typeof s.sideW === 'number') sideW.value = clampNum(s.sideW, 240, 640)
       railHidden.value = !!s.railHidden
@@ -83,6 +87,7 @@ export function saveLayout() {
         sideW: sideW.value,
         railHidden: railHidden.value,
         sideHidden: sideHidden.value,
+        uiZoom: uiZoom.value,
       }),
     )
   } catch {
