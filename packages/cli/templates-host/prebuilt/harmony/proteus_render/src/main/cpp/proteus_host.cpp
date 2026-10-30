@@ -14,6 +14,7 @@
 #include "transport_probe.h"   // ★★★#1156：鸿蒙传输层事实取证（多轮同 host:port ⇒ 服务端判复用）
 #include "vm_session_probe.h"   // ★★★#1342-A：#540 决策门 · #1344 B-1 会话式 VM 见 proteus_vm_session.h
 #include "proteus_vm_session.h"
+#include "proteus_vm_session_drive.h"   // ★#1344 B-4：会话内带泵 drive（真机崩点修复）
 #include <arkui/native_node_napi.h>
 #define PROTEUS_HOST_DOMAIN 0x0003
 #define PROTEUS_HOST_TAG "ProteusHostBridge"
@@ -1075,7 +1076,7 @@ static napi_value HostBridgeInit(napi_env env, napi_value exports) {
         {"hostAppAnimTick", nullptr, HostAppAnimTick, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"hostAppAnimStats", nullptr, HostAppAnimStats, nullptr, nullptr, nullptr, napi_default, nullptr},
         PROTEUS_PROBE_EXPORT(hostHttpProbe, HostHttpProbe), PROTEUS_PROBE_EXPORT(hostTransportProbe, HostTransportProbe), PROTEUS_PROBE_EXPORT(setHttpSandboxRoot, HostSetHttpSandboxRoot), PROTEUS_PROBE_EXPORT(hostVmSessionProbe, HostVmSessionProbe), PROTEUS_PROBE_EXPORT(hostVmSessionBundleProbe, HostVmSessionBundleProbe),  // ★#1342-A/B-0：后两项 = #540 决策门
-        PROTEUS_PROBE_EXPORT(hostVmSessionOpen, HostVmSessionOpen), PROTEUS_PROBE_EXPORT(hostVmSessionTick, HostVmSessionTick), PROTEUS_PROBE_EXPORT(hostVmSessionPushResolve, HostVmSessionPushResolve), PROTEUS_PROBE_EXPORT(hostVmSessionEval, HostVmSessionEval), PROTEUS_PROBE_EXPORT(hostVmSessionCancelStats, HostVmSessionCancelStats), PROTEUS_PROBE_EXPORT(hostVmSessionClose, HostVmSessionClose), PROTEUS_PROBE_EXPORT(hostVmSessionStats, HostVmSessionStats),  // ★#1344 B-1/B-2/B-2c 会话式 VM
+        PROTEUS_PROBE_EXPORT(hostVmSessionOpen, HostVmSessionOpen), PROTEUS_PROBE_EXPORT(hostVmSessionTick, HostVmSessionTick), PROTEUS_PROBE_EXPORT(hostVmSessionPushResolve, HostVmSessionPushResolve), PROTEUS_PROBE_EXPORT(hostVmSessionEval, HostVmSessionEval), PROTEUS_PROBE_EXPORT(hostVmSessionCancelStats, HostVmSessionCancelStats), PROTEUS_PROBE_EXPORT(hostVmSessionClose, HostVmSessionClose), PROTEUS_PROBE_EXPORT(hostVmSessionStats, HostVmSessionStats), PROTEUS_PROBE_EXPORT(hostVmSessionDrive, HostVmSessionDrive),  // ★#1344 B-1/B-2/B-2c 会话式 VM · ★B-4 会话内带泵 drive
         // ★★设备与系统域（决策 #1067）：ArkTS 注入设备快照 / 取走待执行动作
         {"setDeviceSnapshot", nullptr, SetDeviceSnapshot, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"drainDeviceActions", nullptr, DrainDeviceActions, nullptr, nullptr, nullptr, napi_default, nullptr},

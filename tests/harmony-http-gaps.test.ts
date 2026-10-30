@@ -535,14 +535,27 @@ describe('★★★#1344：鸿蒙生产路径渲染成本（会话化的决策�
       expect(Number(one.bundleKB), '★必须记 bundleKB（否则分不清耗时花在 VM 还是别处）')
         .toBeGreaterThan(0)
       /**
-       * ★★★#1344：会话式那一段**必须如实记失败**。
-       *   真机实测：会话 open 成功（STEP 全程 + screen.mount nodes=74，65ms），
-       *   但 open 返回后**进程立即死亡**（pidof 空，无 cppcrash 转储，无栈可查）
-       *   —— 与 #540 同形。⇒ 证据必须写明 status + 死点，不能只留一个"没做成"。
+       * ★★★#1344：会话式那一段**必须如实记结论**（成立与未成立都可以，但必须显式 + 自洽）。
+       *
+       * 【这条判据被改写过一次（重要）】原版断言是「session.status 必须写明**未成立**」——
+       *   它把 #1344 当时**失败**的结论固化成了判据。本轮（B-4）修好会话式渲染后，
+       *   这条断言反而判红。★与 `request-perf.test.ts` 的「必须给出拐点」是**同一种缺陷**：
+       *   断言锚在"上一轮的结论"上，而不是锚在"结论必须显式且自洽"上。
+       *   ⇒ 改成**双向一致**（见下），两种结论都能通过，但都不许含糊。
        */
       expect(ev.session, '★证据缺 session 段（会话式的真实结论）').toBeTruthy()
-      expect(String(ev.session.status ?? ''), '★session.status 必须写明未成立').toContain('未成立')
-      expect(String(ev.session.then ?? ''), '★必须记死点（否则下次又从零排查）').toContain('进程')
+      const st = String(ev.session.status ?? '')
+      expect(st, '★session.status 必须写明结论（成立 / 未成立）').not.toBe('')
+      if (st.includes('未成立')) {
+        // 失败形态：必须记死点（否则下次又从零排查——#1344 首轮就是"无栈可查"）
+        expect(String(ev.session.then ?? ''), '★未成立时必须记死点').not.toBe('')
+      } else {
+        /* 成立形态：不能只写"成立"——必须有**可复核的成功证据**。
+           ★这正是本仓"声称已验就必须有读数"的同一条纪律（#1404 的 M-P4 假绿）。 */
+        const evid = ev.session.evidence
+        expect(evid, '★★声称成立却没有任何证据（凭空声称）').toBeTruthy()
+        expect(String(evid.reportWritten ?? ''), '★必须记"报告真的落盘"').not.toBe('')
+      }
       expect(String(ev.decision?.switchDefault ?? ''), '★必须记默认值（防被误以为已启用）')
         .toContain('oneshot')
     }

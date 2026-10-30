@@ -5,24 +5,42 @@
   "oneshot": {
     "renderMsMin": 115,
     "renderMsMax": 135,
-    "samples": [117, 115, 135, 124, 123, 125, 125],
+    "samples": [
+      117,
+      115,
+      135,
+      124,
+      123,
+      125,
+      125
+    ],
     "bundleKB": 1542,
     "perRenderCost": "每次 render = CreateVM → eval 整包(1542KB) → boot → 实例化该屏 → DestroyVM",
     "verified": "默认路径（renderMode 缺省）；进程存活；每次点击/切屏都重付这份成本"
   },
   "session": {
-    "status": "未成立（进程崩）",
+    "status": "成立（真机渲染 + 报告落盘）",
     "openSucceeded": true,
-    "openEvidence": "SESSION_STEP 全程通过：vm-created → bundle-evaled(34ms) → post-boot-call；SESSION_INVOKE screen.mount nodes=74 contentNodes=73；open+boot 合计 65ms",
-    "then": "进程立即死亡（pidof 为空），无 cppcrash 转储（无 root 读不到 faultlog）",
-    "renderLogs": "SUPERAPP_BOOT / SUPERAPP_RENDER_MS 一条都没有 ⇒ 死在 openRenderSession 返回前后",
-    "failureShape": "与 #540 同形：会话存活期内的后续调用导致进程死，且拿不到栈",
-    "honestBoundary": "本次未定位根因。会话 open 本身是成功的（有完整 STEP 日志 + mount 节点数），死点在 open 返回之后。"
+    "openEvidence": "SESSION_STEP 全程通过：vm-created → bundle-evaled(34ms) → post-boot-call；SESSION_INVOKE screen.mount nodes=74 contentNodes=73",
+    "rootCause": "① `trySessionDrive` 用 `sessionEval`（只做一次 checkpoint）跑 `__proteusHostAppDrive` ——    而它是 `await app.booted` + 逐 tab `await navigate` 的异步链，navigate 还要等路由转场动画；    没有泵 ⇒ Promise 永不结算，一次 checkpoint 硬推整条链 ⇒ 微任务栈撑爆。 ② `trySessionRender` 把 **1,718,167 字节**的 argsJson（含 1.5MB bundle）拼进 JS 表达式跨 napi 传；    同一通道传 40 字节的 drive 参数正常 ⇒ 超大字符串是第二处崩因。    ★会话里 bundle 早已 eval 过 ⇒ `slim()` 剥掉 bundle/filesDir 即可。",
+    "locateMethod": "落盘诊断（`--ps diag 1`）+ 逐步检查点二分",
+    "locateWhyNotHilog": "hilog 被系统按进程/配额丢弃——实测两次在两条命令之间关键行就没了。日志是排查通道，不是证据通道。",
+    "evidence": {
+      "reportWritten": "superapp.json 775B · ok:true · current:index · tabs=index,messages,mine（session 模式）",
+      "diagChain": "0-enter → 2-before-open → 3-after-open(113B) → 4-after-parse(ok) → s1..s5 → s6-before-drive → d1-before-hostDrive → d2-after-hostDrive(788B) → s7 → s8 → r1 → r2 → r3(got=true)",
+      "mutatedBaseline": "oneshot 模式同样落报告（1545B），session=false ⇒ 两条路径都在跑"
+    },
+    "destructiveVerification": [
+      "M-H1：把 hostVmSessionDrive 换回 sessionEval ⇒ 无报告 + 进程死（精确复现）",
+      "M-H2：绕过 slim（传 1.7MB）⇒ 无报告 + 进程死（精确复现）",
+      "两条都必须修——缺任一条都崩；还原后两条都恢复"
+    ],
+    "honestBoundary": "成功读数（18:27/18:28）是**重构前**构建；之后为过 check:file-size 拆分（sessionDrive 独立头文件、driveApp 收敛），   拆分后编译通过，但复验时设备**开发者模式被关闭**（aa start 被拒）⇒ **拆分后的构建未再跑真机**。 ★这是本记录最该被质疑的一处：结构重构理论上不改变行为（纯搬移），但\"理论\"不是证据。 只验了 scene=superapp-screen-index 一条路径；pump/drive/switchTab 三条只做了静态接线（未逐条真机）。"
   },
   "decision": {
     "switchDefault": "oneshot（会话式需显式 --ps renderMode session）",
-    "why": "会话式在当前实现下会崩进程；默认关保证零回归，且失败不影响生产路径",
-    "nextStepIfPursued": "需要先解决『会话 open 返回后进程死亡』——建议按 #540 的方法（逐步 hilog 二分 + A/B 对照）定位，而不是盲试"
+    "why": "会话式已能跑通，但只有一条场景的真机证据；且默认关保证任何隐藏问题都不影响生产路径。翻默认值应等完整三端对齐后再做。",
+    "nextStepIfPursued": "① 设备恢复开发者模式后复跑（含 pump/drive/switchTab 三条路径）；② 若稳定再考虑翻默认值；③ 量会话式 vs 一次性 VM 的渲染耗时对比（会话式省掉整包 eval，预期大幅优于 115–135ms）"
   },
   "note": "本读数只覆盖 render 总耗时，未细分 VM 生命周期 vs 布局。"
 }

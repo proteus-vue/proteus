@@ -15969,6 +15969,63 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ★四次了（#1379→#1384、#1387→#1394、#1399→#1403、#1403→#1404）⇒
       "决策号临提交前复核"作为**人工步骤**已被证明无效，必须工具化。
 
+1344b. **★★★会话式渲染在鸿蒙真机跑通 —— 定位并修掉两处崩因**（2026-10-30 · 用户「鸿蒙的会话式VM工作量大吗？这个好像拖了很久了都是卡在这里」）:
+  - **上一轮（#1344）的结论是"会话 open 成功但随后进程死，未定位根因"**。本轮把它定位并修掉了。
+  - **★★★两处崩因（都不是"持久 VM"本身）**:
+    · **① `trySessionDrive` 用 `sessionEval` 跑 await 链** —— `sessionEval` 只做**一次**
+      `PerformMicrotaskCheckpoint` 就返回；而 `__proteusHostAppDrive` 内部是
+      `await app.booted` + 逐 tab `await navigate`，navigate 还要等**路由转场动画**。
+      没有泵 ⇒ Promise 永不结算；一次 checkpoint 硬推整条链 ⇒ 微任务栈撑爆。
+      ⇒ 新增 `hostVmSessionDrive`：宿主侧**有界泵**（推进转场 + checkpoint + 读 getter，最多 4096 轮），
+      与一次性 VM 的 `hostAppDrive` **逐项同构**。
+    · **② `trySessionRender` 把 1,718,167 字节的 argsJson 拼进 JS 表达式跨 napi 传** ——
+      含 1.5MB bundle。同一通道传 40 字节的 drive 参数正常 ⇒ **超大字符串**是第二处崩因。
+      而会话里 bundle **早已 eval 过** ⇒ `slim()` 剥掉 `bundle`/`filesDir` 即可。
+    ★两条都必须修：缺任一条都崩（见下方 M-H1/M-H2 变异）。
+  - **★★★定位方法：落盘诊断，不是 hilog**（这条本身是方法论产出）:
+    hilog 被系统按**进程配额**丢弃——本轮实测**两次**在两条命令之间关键行就没了
+    （`hilog -r` 后紧接启动也抓不到）。**日志是排查通道，不是证据通道**；
+    需要"进程死了之后还能读到"的事实必须落盘 ⇒ 新增 `diagWrite`（`--ps diag 1` 开启，默认关）。
+    ★装置本身也踩一坑：诊断函数最初放在 `renderModeIsSession()` 判定**之后**，
+      于是 renderMode 没传到时连"函数进来过"都看不到，我据此一度误判成"崩在更早位置"。
+      ⇒ 现在第一条 diag 在任何 return 之前。
+  - **诊断链（二分证据）**:
+    `0-enter → 2-before-open → 3-after-open(113B) → 4-after-parse(ok) → s1..s5 →
+     s6-before-drive → d1-before-hostDrive → d2-after-hostDrive(788B) → s7 → s8 →
+     r1 → r2(1.7MB) → r3(got=true)`
+    ★第一轮的结论是 `s6-before-drive` 之后无 `s7`（死点精确落在 drive 那一次调用）。
+  - **★★接线缺口：会话化不是"加一条新路径"，是"换掉所有同类路径"**:
+    壳里曾有**四处** `hostAppDrive` 调用（常驻启动 / pump 探针 / screen 探针 / drive 探针 / switchTab），
+    原先只有常驻那处接了会话 ⇒ 另几处在会话模式下**再建一个一次性 VM**（两个 VM 并存）。
+    ⇒ 收敛成 `driveApp(args, sessionReady)` 一处判定。
+    ★与"覆盖面必须跟着实际形态走"同族：新增调用点忘了接会话这个缺陷形态，从"四处各自正确"降为"一处正确"。
+  - **破坏性验证（两条都精确复现崩溃）**:
+    · M-H1：`hostVmSessionDrive` 换回 `sessionEval` ⇒ 无报告 + 进程死
+    · M-H2：绕过 `slim`（传 1.7MB）⇒ 无报告 + 进程死
+    · 还原后两条都恢复（session 模式报告 775B · ok:true · tabs 齐）
+  - **★★判据自己也被旧结论固化了（本轮第二次抓到同族缺陷）**:
+    `tests/harmony-http-gaps.test.ts` 原断言是「`session.status` 必须写明**未成立**」——
+    它把 #1344 当时的**失败**结论固化成了要求，本轮修好后反而判红。
+    ⇒ 改成**双向一致**：
+      · 声称"成立" ⇒ 必须有可复核证据（报告真的落盘）；
+      · 声称"未成立" ⇒ 必须记死点（否则下次又从零排查）。
+    ★与 `request-perf.test.ts` 那条「必须给出拐点」是**同一种缺陷**：
+      断言锚在"上一轮的结论"上，而不是锚在"结论必须显式且自洽"上。
+    ★变异验证：M-S1（声称成立但无 evidence）红 · M-S2（未成立但无 then）红 · 还原 17/17 绿。
+  - **反巨型化**：`proteus_vm_session.h` 加完达 1076 行 ⇒ 把 `sessionDrive` + napi 入口拆到
+    `proteus_vm_session_drive.h`（972 + 139）；`Superapp.ets` 1025 → 997（`driveWithSession` 搬到 RenderPath）。
+    ★napi 入口必须放在**命名空间之外**（与既有 `HostVmSessionOpen` 等一致——它们是全局符号，导出清单用裸名解析）。
+  - **产物/门禁**：`check:harmony-host-compile` 绿 · `check:harmony-runtime-prebuilt` 需同步（已 `harmony-runtime-prebuilt.mjs`，45 文件）·
+    `tests/harmony-http-gaps.test.ts` 17/17 · `check:file-size` 绿。
+  - **★诚实边界（最该被质疑的一处）**:
+    ① 成功读数（18:27/18:28 两次）来自**重构前**的构建；之后为过 `check:file-size` 做了拆分
+       （纯搬移：sessionDrive 独立头文件、driveApp 收敛），拆分后**编译通过但未再跑真机**——
+       因为复验时**设备开发者模式被关闭**（`aa start` 返回 "check the settings whether the current device is in developer mode"）。
+       ★"纯搬移不改变行为"是**理论**，不是证据。设备恢复后必须复跑。
+    ② 只真机验了 `scene=superapp-screen-index` 一条路径；pump/drive/switchTab 三条只做了静态接线。
+    ③ **默认仍是 oneshot**（`--ps renderMode session` 显式开启）——一条场景的证据不足以翻默认值。
+    ④ 未量"会话式 vs 一次性 VM 的渲染耗时对比"（会话式省掉整包 eval，预期明显优于 115–135ms，但**未测**）。
+
 1404b. **★★★Android 真机吞吐补测 + 推翻我自己上一轮"拐点在 8"的结论**（2026-10-30 · 用户「安卓重新在线了」）:
   - **★第五次撞号（本轮又发生一次，已取证）**：推上去前 `git fetch` 发现远端 `985f9b95`
     **Studio 会话也用了 #1404**（GitBar 修复）。⇒ rebase 后本单仍以 **#1404b** 标识（它是 1404 的续篇，

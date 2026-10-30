@@ -26,7 +26,7 @@ import { encodeInvoke, InvokeFrame } from '../runtime/InvokeWire';
 // ★★设备与系统域（决策 #1067）：渲染前注入设备快照、渲染后执行宿主动作队列
 import { refreshDeviceSnapshot, runDeviceActions } from '../runtime/DeviceSnapshot';
 import { runKeyboardProbe } from '../runtime/KeyboardProbe';
-import { trySessionRender, sessionRenderEnabled, openRenderSession, trySessionDrive } from '../runtime/RenderPath';
+import { trySessionRender, sessionRenderEnabled, openRenderSession, trySessionDrive, diagStep, driveApp } from '../runtime/RenderPath';
 import { tryRunProbeScene } from '../runtime/ProbeScenes';   // ★★★#1344 探针场景统一下发（本文件曾因此顶到 1004 行）
 import { runHttpProbe as runHttpProbeImpl } from '../runtime/HttpProbe';   // ★★★#1169 HTTP 探针（逻辑单列）
 // ★★★决策 #1082：元素查询探针读数（把回执里的探针字段转 JSON 文本——String(obj) 会变 [object Object]）
@@ -288,7 +288,7 @@ struct Superapp {
       //   `--pump=` 同判据（★看内核受理/宿主真写，不看截屏像素——#793 判据纪律）。
       if (this.scene.startsWith('superapp-pump-')) {
         const want: string = this.scene.slice('superapp-pump-'.length);
-        const out2: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
+        const out2: string = driveApp({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>, this.sessionReady);
         const o2 = JSON.parse(out2) as Record<string, Object>;
         const dr2 = o2['drive'] as Record<string, Object> | undefined;
         if (dr2) this.applyState(dr2['state'] as Object);
@@ -304,8 +304,8 @@ struct Superapp {
         }, holdMs);
       } else if (this.scene.startsWith('superapp-screen-')) {
         const want: string = this.scene.slice('superapp-screen-'.length);
-        const out2: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>));
-        hilog.info(DOMAIN, TAG, 'SUPERAPP_SCREEN_DRIVE %{public}s', out2.substring(0, 200));
+        const out2: string = driveApp({ 'bundle': bundle, 'filesDir': this.filesDir, 'tabs': [want] } as Record<string, Object>, this.sessionReady);
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_SCREEN_DRIVE session=%{public}s %{public}s', String(this.sessionReady), out2.substring(0, 200));
         const o2 = JSON.parse(out2) as Record<string, Object>;
         const dr2 = o2['drive'] as Record<string, Object> | undefined;
         if (dr2) this.applyState(dr2['state'] as Object);
@@ -330,8 +330,8 @@ struct Superapp {
       } else if (this.scene === 'superapp-drive') {
         // ★drive：**一次原生调用**完成 boot + 逐 tab 切页（one-kick + 宿主泵——鸿蒙 JSVM 专用形态）。
         //   跨原生调用反复启动新导航会与 V8 微任务排空重入 ⇒ 崩溃（本仓实测）；故合成单条 async 驱动。
-        const out: string = hostAppDrive(JSON.stringify({ 'bundle': bundle, 'filesDir': this.filesDir } as Record<string, Object>));
-        hilog.info(DOMAIN, TAG, 'SUPERAPP_DRIVE %{public}s', out.substring(0, 300));
+        const out: string = driveApp({ 'bundle': bundle, 'filesDir': this.filesDir } as Record<string, Object>, this.sessionReady);
+        hilog.info(DOMAIN, TAG, 'SUPERAPP_DRIVE session=%{public}s %{public}s', String(this.sessionReady), out.substring(0, 300));
         const o = JSON.parse(out) as Record<string, Object>;
         const dr = o['drive'] as Record<string, Object> | undefined;
         if (dr) {
@@ -877,9 +877,9 @@ struct Superapp {
    */
   private switchTab(name: string): void {
     try {
-      const out: string = hostAppDrive(JSON.stringify({
+      const out: string = driveApp({
         'bundle': this.bundle, 'filesDir': this.filesDir, 'tabs': [name],
-      } as Record<string, Object>));
+      } as Record<string, Object>, this.sessionReady);
       const o = JSON.parse(out) as Record<string, Object>;
       const dr = o['drive'] as Record<string, Object> | undefined;
       if (dr) this.applyState(dr['state'] as Object);

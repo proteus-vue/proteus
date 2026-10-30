@@ -101,6 +101,19 @@ export const hostVmSessionPushResolve: (frameHex: string) => string;
  */
 export const hostVmSessionEval: (js: string) => string;
 /**
+ * ★★★#1344 B-4：**会话内 app drive（带泵）** —— 与一次性 VM 的 `hostAppDrive` 同形回执。
+ *
+ * 【为什么必须单独一个入口】
+ *   `hostVmSessionEval` 只做**一次** checkpoint，而 `__proteusHostAppDrive` 内部是
+ *   `await app.booted` + 逐 tab `await navigate`（navigate 要等路由转场动画）。
+ *   没有泵 ⇒ Promise 永不结算；一次 checkpoint 硬推整条 await 链 ⇒ 微任务栈撑爆（真机崩）。
+ *   ⇒ 本入口在宿主侧跑**有界泵**（推进转场 + checkpoint + 读 getter，最多 4096 轮）。
+ *
+ * @param argsJson `{"tabs"?:["index",…]}`
+ * @returns 与 `hostAppDrive` 同形：`{"ok":true,"boot":…,"drive":…,"rounds":N}`
+ */
+export const hostVmSessionDrive: (argsJson: string) => string;
+/**
  * ★★★#1344 B-2c：**宿主侧取消记账**（`calls`/`hits`/`misses`）。
  *
  * 【为什么单独一个入口】在会话里用 `hostVmSessionEval("proteusHost.invoke('http.cancelStats')")`

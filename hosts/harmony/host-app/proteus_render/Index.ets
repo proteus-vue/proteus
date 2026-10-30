@@ -81,6 +81,9 @@ export {
   hostVmSessionCancelStats,
   hostVmSessionClose,
   hostVmSessionStats,
+  // ★★★#1344 B-4：会话内 app drive（**带泵**）—— 与一次性 VM 的 hostAppDrive 同形
+  //   ★不能省：sessionEval 只做一次 checkpoint，而 drive 是 await 链 + 转场动画 ⇒ 真机崩
+  hostVmSessionDrive,
 } from 'libproteus_host.so'
 
 // ★★★应用运行期驱动（v-pump 周期驱动 + 跳变驱动动画）——**runtime 归属的唯一实现**（决策 #796）：

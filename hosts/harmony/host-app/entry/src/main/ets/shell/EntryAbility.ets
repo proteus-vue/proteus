@@ -108,6 +108,17 @@ export default class EntryAbility extends UIAbility {
      *   必须先能对比、能回退，验证通过后再翻默认值。
      * ★与 `vmRounds`/`vmMode` 同族：`aa start --ps` 不会自动进 AppStorage，必须显式转。
      */
+    /**
+     * ★★★#1344：`--ps diag 1` ⇒ 开启**会话期崩溃的落盘诊断**
+     *   （`runtime/RenderPath.ets` 的 `diagWrite` 逐检查点写 filesDir）。
+     *   ★默认关：每检查点一次 open/write/close，对渲染路径是实打实的开销。
+     *   ★为什么保留这套装置：本轮定位"会话 open 成功后进程死"全靠它——hilog 会被
+     *     系统按进程/配额丢弃（实测两次把关键行冲掉），**日志不是证据通道**。
+     */
+    const diag = want?.parameters?.['diag'];
+    if (typeof diag === 'string' && diag.length > 0) {
+      AppStorage.setOrCreate('proteusDiag', diag);
+    }
     const renderMode = want?.parameters?.['renderMode'];
     if (typeof renderMode === 'string' && renderMode.length > 0) {
       AppStorage.setOrCreate('proteusRenderMode', renderMode);
