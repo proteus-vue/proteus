@@ -119,6 +119,11 @@ export const diagTsc = (): Promise<Diag[]> => invoke<Diag[]>('diag_tsc')
 export const diagEslint = (): Promise<Diag[]> => invoke<Diag[]>('diag_eslint')
 /** 启动**常驻**的 vue-tsc watch（幂等）。诊断通过 `diag:update` 事件全量推送。 */
 export const diagWatchStart = (): Promise<void> => invoke<void>('diag_watch_start')
+/** 启动内存语言服务（Volar，幂等）。诊断按文件通过 `diag:update-file` 推送。 */
+export const diagLspStart = (): Promise<void> => invoke<void>('diag_lsp_start')
+/** 把内存文本推给语言服务：kind = open | change | close */
+export const diagLspSync = (kind: 'open' | 'change' | 'close', path: string, text?: string): Promise<void> =>
+  invoke<void>('diag_lsp_sync', { kind, path, text })
 
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')

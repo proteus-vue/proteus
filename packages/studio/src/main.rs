@@ -621,6 +621,9 @@ fn main() {
             set_ui_zoom,
             diag::diag_tsc,
             diag::diag_eslint,
+            diag::diag_lsp_start,
+            diag::diag_lsp_sync,
+            diag::diag_lsp_stop,
             diag::diag_watch_start,
             diag::diag_watch_stop,
             stats,
@@ -840,6 +843,7 @@ fn main() {
                不 kill 会变成孤儿进程长期吃 CPU（每开一次 Studio 漏一个）。 */
             if matches!(event, tauri::RunEvent::Exit) {
                 diag::diag_watch_stop();
+                diag::diag_lsp_stop();
             }
         });
 }

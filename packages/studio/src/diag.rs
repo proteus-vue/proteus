@@ -334,3 +334,145 @@ pub fn diag_watch_stop() {
         }
     }
 }
+
+/* ── 内存语言服务（Volar）· 决策 #1419 ─────────────────────────────────────
+ * 与 watch 的分工：
+ *   · watch（磁盘）：**全仓**诊断，保存后 <1s —— 给「问题」面板全貌；
+ *   · LSP（内存）：**当前打开文件**，编辑即诊断（不保存）—— 给编辑器的波浪线。
+ * 两套结果在前端合并：同一个文件以 LSP 为准（更新更及时）。
+ *
+ * 边界：只起一个固定脚本 `packages/studio/diag-lsp.mjs`（参数只有仓库根），
+ *   脚本内部再起 volar 的 `vue-language-server --stdio`；不接受前端传命令。
+ */
+struct Lsp {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+}
+
+static LSP: OnceLock<Mutex<Option<Lsp>>> = OnceLock::new();
+
+/// 单文件诊断事件（只带这一个文件的完整列表 ⇒ 前端按 path 整体替换）
+#[derive(Serialize, Clone)]
+pub struct FileDiag {
+    pub path: String,
+    pub items: Vec<Diag>,
+}
+
+#[tauri::command]
+pub fn diag_lsp_start(app: tauri::AppHandle) -> Result<(), String> {
+    let cell = LSP.get_or_init(|| Mutex::new(None));
+    let mut guard = cell.lock().map_err(|e| format!("锁失败：{e}"))?;
+    if let Some(l) = guard.as_mut() {
+        match l.child.try_wait() {
+            Ok(None) => return Ok(()),
+            _ => {
+                *guard = None;
+            }
+        }
+    }
+
+    let root = crate::fs_guard::repo_root().map_err(|e| format!("找不到仓库根：{e}"))?;
+    let script = root.join("packages/studio/diag-lsp.mjs");
+    if !script.exists() {
+        return Err(format!("缺少语言服务脚本：{}", script.display()));
+    }
+    /* 用系统 node（脚本是 ESM），不走 npx：避免多一层进程与解析开销 */
+    let node = std::env::var("PROTEUS_NODE").unwrap_or_else(|_| "node".to_string());
+    let mut child = Command::new(node)
+        .arg(&script)
+        .arg(&root)
+        .current_dir(&root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("启动语言服务失败：{e}"))?;
+
+    if let Some(mut err) = child.stderr.take() {
+        std::thread::spawn(move || {
+            let mut s = String::new();
+            let _ = err.read_to_string(&mut s);
+        });
+    }
+    let stdin = child.stdin.take().ok_or("拿不到语言服务 stdin")?;
+    let out = child.stdout.take().ok_or("拿不到语言服务 stdout")?;
+    *guard = Some(Lsp { child, stdin });
+
+    std::thread::spawn(move || {
+        let reader = BufReader::new(out);
+        for line in reader.lines().map_while(Result::ok) {
+            let v: serde_json::Value = match serde_json::from_str(&line) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            match v.get("t").and_then(|x| x.as_str()) {
+                Some("diag") => {
+                    let path = v.get("path").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                    let mut items: Vec<Diag> = Vec::new();
+                    if let Some(arr) = v.get("items").and_then(|x| x.as_array()) {
+                        for it in arr {
+                            items.push(Diag {
+                                path: path.clone(),
+                                line: it.get("line").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                                col: it.get("col").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                                code: it.get("code").and_then(|x| x.as_str()).unwrap_or("vue").to_string(),
+                                message: it.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                                severity: it
+                                    .get("severity")
+                                    .and_then(|x| x.as_str())
+                                    .unwrap_or("error")
+                                    .to_string(),
+                                source: "volar".into(),
+                            });
+                        }
+                    }
+                    sort_dedup(&mut items);
+                    let _ = app.emit("diag:update-file", FileDiag { path, items });
+                }
+                Some("log") => {
+                    let msg = v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                    let _ = app.emit("diag:log", msg);
+                }
+                Some("ready") => {
+                    let _ = app.emit("diag:ready", ());
+                }
+                _ => {}
+            }
+        }
+    });
+    Ok(())
+}
+
+/// 把编辑器里的**内存文本**推给语言服务（kind = open | change | close）。
+#[tauri::command]
+pub fn diag_lsp_sync(kind: String, path: String, text: Option<String>) -> Result<(), String> {
+    let cell = LSP.get_or_init(|| Mutex::new(None));
+    let mut guard = cell.lock().map_err(|e| format!("锁失败：{e}"))?;
+    let lsp = guard.as_mut().ok_or("语言服务未启动")?;
+    let payload = serde_json::json!({
+        "t": kind,
+        "path": path,
+        "text": text.unwrap_or_default(),
+    });
+    let line = format!("{}\n", payload);
+    use std::io::Write;
+    lsp.stdin
+        .write_all(line.as_bytes())
+        .and_then(|_| lsp.stdin.flush())
+        .map_err(|e| format!("写入语言服务失败：{e}"))
+}
+
+#[tauri::command]
+pub fn diag_lsp_stop() {
+    if let Some(cell) = LSP.get() {
+        if let Ok(mut guard) = cell.lock() {
+            if let Some(mut l) = guard.take() {
+                use std::io::Write;
+                let _ = l.stdin.write_all(b"{\"t\":\"shutdown\"}\n");
+                let _ = l.stdin.flush();
+                let _ = l.child.kill();
+                let _ = l.child.wait();
+            }
+        }
+    }
+}

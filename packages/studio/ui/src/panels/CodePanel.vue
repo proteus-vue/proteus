@@ -40,7 +40,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab, redo, selectAll, 
 import { gotoLine, highlightSelectionMatches, search, searchKeymap, selectNextOccurrence } from '@codemirror/search'
 /* 类型诊断的**渲染层**（决策 #1413）：数据在 `diag.ts`，这里只负责"画波浪线 + 悬浮提示"。
    `linter` 会在文档变化/调用 `forceLinting` 时回调我们给的 source，从共享 store 现取现算。 */
-import { lintGutter, setDiagnostics } from '@codemirror/lint'
+import { lintGutter } from '@codemirror/lint'
 import {
   HighlightStyle,
   bracketMatching,
@@ -73,7 +73,8 @@ import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
 import { diagAt, diagStale, ensureWatch, markSaved, noteEdit, runEslint } from '../diag'
-import { lintOf } from '../diagLint'
+import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagSync'
+import { applyDiagnostics } from '../diagLint'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
@@ -313,6 +314,7 @@ function makeState(doc: string, path: string) {
         /* 记一次编辑：此时内存 ≠ 磁盘 ⇒ 诊断立即失效（不画旧波浪线）。
            不用再触发 tsc —— 常驻 watch 会在**保存**后 <1s 推送新结果（决策 #1418）。 */
         noteEdit()
+        scheduleSync(cur.value, u.state.doc.toString())
         syncLint()
         // ★每次改动都把 state 收进池子：切标签时才能连 undo 历史一起恢复
         states.set(cur.value, u.state)
@@ -424,6 +426,8 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     syncLint()
     /* 刚打开：内存 == 磁盘，诊断可信（解除 stale）；顺手补一次 eslint（有 10s 复用窗口） */
     markSaved()
+    /* 把这份文本交给语言服务（不保存也能实时诊断） */
+    if (view) syncOpen(path, view.state.doc.toString())
     void runEslint()
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
@@ -475,6 +479,8 @@ async function close(path: string) {
   const i = tabs.value.indexOf(path)
   if (i < 0) return
   if (isDirtyPath(path) && !(await confirmDiscard([path]))) return
+  /* ★确实要关了才通知语言服务：放在确认之后，否则"取消关闭"会让该文件失去实时诊断 */
+  syncClose(path)
   forget(path)
   if (cur.value !== path) return
   const next = tabs.value[Math.max(0, i - 1)] ?? ''
@@ -632,17 +638,9 @@ async function savePath(path: string): Promise<boolean> {
 /** 面包屑（决策 #1407）：把 `cur` 拆成目录段 + 文件名。
  *  ★**textContent 必须仍等于完整路径** —— 门禁把 `#codePath` 的文本当"当前文件"比对，
  *    所以分隔符用内联 `/` 文本、模板不换行，避免多余空白把路径弄脏。 */
-/**
- * ★**把诊断直接派发给编辑器**（决策 #1418）。
- * 不用 `linter(source)` + `forceLinting`：读库源码可知 `force()` 只在 `this.set` 为 true 时生效，
- * 而 `set` 在首次 lint 完成后被置 false，**只有 docChanged 才会复位** ——
- * 也就是说"外部数据更新"时 forceLinting 会**静默什么都不做**（实测：watch 推送后波浪线不刷新）。
- * 官方对"外部数据"的姿势就是 `setDiagnostics`，见 @codemirror/lint 文档。
- */
-function syncLint() {
-  if (!view) return
-  const list = diagStale.value ? [] : lintOf(view, cur.value)
-  view.dispatch(setDiagnostics(view.state, list))
+/* 派发逻辑在 `diagLint.applyDiagnostics`（含 stale 与"内存级结果优先"的判断） */
+const syncLint = () => {
+  if (view) applyDiagnostics(view, cur.value, diagStale.value)
 }
 
 const crumbs = computed(() => {
@@ -895,8 +893,10 @@ onMounted(boot)
 onMounted(() => window.addEventListener('keydown', onQuickKey, true))
 // 首帧后拉一次 git 状态（只读；非仓库会自己降级）
 /* 诊断数据一到就重画波浪线：`linter` 只在文档变化时回调，数据外部更新时要显式催一次（决策 #1413） */
-/* 诊断数据一到（watch 推送 / eslint 完成）⇒ 直接派发波浪线 */
+/* 诊断数据一到（watch 推送 / eslint 完成 / 内存语言服务）⇒ 直接派发波浪线 */
 watch(diagAt, () => syncLint())
+/* 内存级结果按文件到达：它不是走 diagAt，单独监听一次 */
+watch(liveDiag, () => syncLint())
 
 /* 用户切进代码视图时也刷新一次：CodePanel 用 v-show 常驻，挂载早于"进视图"，
    只靠挂载那一次会出现"进视图看到的是旧结果/空结果"（用户实测反馈）。 */
@@ -908,8 +908,10 @@ watch(
   },
 )
 
-/* 起常驻 watch（幂等）：之后每次保存，类型结果 <1s 自动推过来（决策 #1418） */
+/* 起常驻 watch（幂等）：保存后 <1s 推全仓类型结果（决策 #1418） */
 void ensureWatch()
+/* 起内存语言服务（幂等）：编辑即诊断，**不需要保存**（决策 #1419） */
+void ensureLsp()
 void runEslint()
 void refreshGit()
 onBeforeUnmount(() => {
@@ -947,7 +949,6 @@ onBeforeUnmount(() => {
       <!-- ★编辑器列让出终端面板高度（决策 #1348）：终端浮在它下方，
            不给 padding 的话最后几行代码会被盖住。文件树（.side）**不**让，所以它占满整列。 -->
       <div class="pane" :style="{ paddingBottom: termMode !== 'off' ? termH + 'px' : undefined }">
-
         <div class="bar">
           <!-- 面包屑（决策 #1407）：目录段可点（在树里定位），末段是文件名。★保持单行，textContent 才会正好等于完整路径（门禁按它比对当前文件）。 -->
           <span class="path" id="codePath" :title="cur"><template v-if="cur"><template v-for="(c, i) in crumbs" :key="c.name + i"><button class="crumb" :class="{ leaf: !c.dir }" @click.stop="c.dir && revealPath(c.dir, ws.codeCollapsed)">{{ c.name }}</button><span v-if="i < crumbs.length - 1" class="csep">/</span></template></template><template v-else>—</template></span>

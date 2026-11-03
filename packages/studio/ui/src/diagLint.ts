@@ -9,9 +9,10 @@
  *   · 行号要夹紧到 `1..doc.lines` —— 用户刚删了几行时，旧诊断会指到不存在的行；
  *   · 列号要夹紧到行尾 —— 否则偏移会跨行，波浪线画到下一行去。
  */
-import type { Diagnostic } from '@codemirror/lint'
+import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import type { EditorView } from '@codemirror/view'
 import { diagsOf } from './diag'
+import { liveOf } from './diagSync'
 
 /** 让波浪线覆盖到"一个词"的末尾，比单字符更容易用鼠标点中 */
 const WORD_STOP = /[\s,;()[\]{}.:'"`]/
@@ -29,11 +30,21 @@ export function lintOf(view: EditorView, path: string): Diagnostic[] {
     out.push({
       from,
       to: Math.max(to, Math.min(from + 1, line.to)),
-      /* eslint 的 warning 用橙色波浪线，别和类型错误混成一种颜色 */
+      /* 告警用橙色波浪线，与类型错误区分（颜色定义见 codepanel.css） */
       severity: d.severity === 'warning' ? 'warning' : 'error',
       source: d.source ?? 'tsc',
       message: `${d.code}: ${d.message}`,
     })
   }
   return out
+}
+
+/**
+ * 把诊断**派发**到编辑器（决策 #1418/#1419）。
+ * · `stale`（内存 ≠ 磁盘）时清空：磁盘诊断不能画在你改过的文本上；
+ * · 但若**内存语言服务**已给出该文件的结果（`liveOf` 非 null），它对应就是当前文本 ⇒ 正常画。
+ */
+export function applyDiagnostics(view: EditorView, path: string, stale: boolean): void {
+  const list = stale && !liveOf(path) ? [] : lintOf(view, path)
+  view.dispatch(setDiagnostics(view.state, list))
 }

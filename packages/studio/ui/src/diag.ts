@@ -16,6 +16,7 @@
  */
 import { computed, ref } from 'vue'
 import { diagEslint, diagWatchStart, hasBridge, type Diag } from './bridge'
+import { liveOf } from './diagSync'
 
 /** eslint 结果的复用窗口：进视图/切文件时若 10s 内跑过就不重复跑 */
 const LINT_STALE_MS = 10_000
@@ -124,10 +125,14 @@ export function runEslint(force = false): Promise<void> {
   return inflight
 }
 
-/** 某个文件的诊断（编辑器画波浪线用） */
+/** 某个文件的诊断（编辑器画波浪线用）。
+ *  ★优先返回**内存语言服务**的结果（对应你正在敲的文本，实时）；
+ *   没有（未打开/未就绪）才回退到磁盘 watch 的结果。 */
 const norm = (p: string) => p.replace(/^\.\//, '')
 export function diagsOf(path: string): Diag[] {
   if (!path) return []
+  const live = liveOf(path)
+  if (live) return live
   const want = norm(path)
   return diagList.value.filter((d) => norm(d.path) === want)
 }
