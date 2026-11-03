@@ -22,7 +22,7 @@ import PInput from '../ui/PInput.vue'
 import PSelect from '../ui/PSelect.vue'
 import TermPane from './TermPane.vue'
 import Icon from '../ui/Icon.vue'
-import { saveLayout, termFont, termShell, termSplit, termSplitW } from '../layout'
+import { saveLayout, termFont, termShell, termSplit } from '../layout'
 
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{ close: []; maximize: [] }>()

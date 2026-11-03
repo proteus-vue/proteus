@@ -17,7 +17,7 @@
  *   数据仍应在这里；等 @codemirror/lint 装上，只需 `linter(() => 从本模块取当前文件的诊断)`。
  */
 import { ref } from 'vue'
-import { diagTsc, hasBridge, type Diag } from './bridge'
+import { diagEslint, diagTsc, hasBridge, type Diag } from './bridge'
 
 /** 结果新鲜度：超过这个时间，进入代码视图时重跑一次 */
 /** 进入代码视图/打开文件时允许复用的最大年龄：太长会出现"看着是新的、其实是旧的"（用户实测反馈）。
@@ -52,9 +52,26 @@ export function runDiag(force = false): Promise<void> {
   const t0 = performance.now()
   inflight = (async () => {
     try {
-      /* ★后端在降级/旧版本里可能回 null：不校验会在模板里 `null.length` 崩掉整个面板 */
-      const r = await diagTsc()
-      diagList.value = Array.isArray(r) ? r : []
+      /* ★两个源**并行**跑：串行要 15+12s，并行约等于较慢那个（~max）。
+         任一个失败都不整体失败 —— 类型诊断挂了仍应看到 eslint 结果（反之同理），
+         所以用 allSettled 并把失败信息拼进 diagErr。 */
+      const [tsc, lint] = await Promise.allSettled([diagTsc(), diagEslint()])
+      const pick = (r: PromiseSettledResult<Diag[]>) =>
+        r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []
+      const merged = [...pick(tsc), ...pick(lint)]
+      /* 统一排序：文件 → 行 → 列；同位置 error 排 warning 前（先看严重的） */
+      merged.sort(
+        (a, b) =>
+          a.path.localeCompare(b.path) ||
+          a.line - b.line ||
+          a.col - b.col ||
+          (a.severity === 'error' ? 0 : 1) - (b.severity === 'error' ? 0 : 1),
+      )
+      diagList.value = merged
+      const fails = [tsc, lint]
+        .map((r, i) => (r.status === 'rejected' ? `${i === 0 ? '类型' : 'Lint'}：${String((r.reason as Error)?.message ?? r.reason).slice(0, 80)}` : ''))
+        .filter(Boolean)
+      if (fails.length) diagErr.value = fails.join('；')
       diagCost.value = Math.round(performance.now() - t0)
       diagAt.value = Date.now()
     } catch (e) {

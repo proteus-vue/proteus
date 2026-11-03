@@ -620,6 +620,7 @@ fn main() {
             set_canvas_rect,
             set_ui_zoom,
             diag::diag_tsc,
+            diag::diag_eslint,
             stats,
             dump_frame,
             read_text,

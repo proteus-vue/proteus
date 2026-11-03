@@ -24,7 +24,7 @@
 //   ★仍然不自己写分词器（G-56.1 红线：编辑器内核只用现成的）。
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { EditorState, type Extension } from '@codemirror/state'
+import { EditorState } from '@codemirror/state'
 import {
   EditorView,
   drawSelection,
@@ -43,7 +43,6 @@ import { gotoLine, highlightSelectionMatches, search, searchKeymap, selectNextOc
 import { forceLinting, lintGutter, linter, type Diagnostic } from '@codemirror/lint'
 import {
   HighlightStyle,
-  StreamLanguage,
   bracketMatching,
   forceParsing,
   indentOnInput,
@@ -66,18 +65,15 @@ import {
 } from '../bridge'
 import { useWorkspaceState, whenHydrated } from '../useWorkspaceState'
 import { onMenuAction } from '../menu'
-import StudioIcon from '../icons/StudioIcon.vue'
-import SearchBox from './SearchBox.vue'
-import FileTree from './FileTree.vue'
-import { startDrag, termH, termMode, treeHidden, treeW } from '../layout'
+import { termH, termMode } from '../layout'
 import TabBar from './TabBar.vue'
 import QuickOpen from './QuickOpen.vue'
 import { cmPhrases } from '../ui/i18n'
-import GitBar from './GitBar.vue'
 import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
-import { diagAt, diagsOf, ensureDiagFresh, refreshAfterSave, runDiag } from '../diag'
+import { diagAt, ensureDiagFresh, refreshAfterSave, runDiag } from '../diag'
+import { lintOf } from '../diagLint'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
@@ -291,7 +287,7 @@ function makeState(doc: string, path: string) {
       cmPhrases,
       search({ top: true }),
       lintGutter(),
-      linter((v) => buildDiags(v), { delay: 300 }),
+      linter((v) => lintOf(v, cur.value), { delay: 300 }),
       highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
@@ -634,34 +630,6 @@ async function savePath(path: string): Promise<boolean> {
 /** 面包屑（决策 #1407）：把 `cur` 拆成目录段 + 文件名。
  *  ★**textContent 必须仍等于完整路径** —— 门禁把 `#codePath` 的文本当"当前文件"比对，
  *    所以分隔符用内联 `/` 文本、模板不换行，避免多余空白把路径弄脏。 */
-/**
- * 把 `diag.ts` 里当前文件的诊断换算成 CodeMirror 的 Diagnostic。
- * ★行/列是 **1-based**（tsc 口径），CodeMirror 要**绝对偏移**；行号超界要夹紧
- *   （用户刚删了几行时，旧诊断会指到不存在的行，不夹紧会抛错）。
- */
-function buildDiags(v: EditorView): Diagnostic[] {
-  const path = cur.value
-  if (!path) return []
-  const doc = v.state.doc
-  const out: Diagnostic[] = []
-  for (const d of diagsOf(path)) {
-    const ln = Math.min(Math.max(1, d.line), doc.lines)
-    const line = doc.line(ln)
-    const from = Math.min(line.from + Math.max(0, d.col - 1), line.to)
-    /* 波浪线覆盖一个词（到空白/标点为止），比单字符好点中 */
-    let to = from
-    while (to < line.to && !/[\s,;()\[\]{}.:'"`]/.test(doc.sliceString(to, to + 1))) to++
-    out.push({
-      from,
-      to: Math.max(to, Math.min(from + 1, line.to)),
-      severity: 'error',
-      source: 'tsc',
-      message: `${d.code}: ${d.message}`,
-    })
-  }
-  return out
-}
-
 const crumbs = computed(() => {
   if (!cur.value) return []
   const parts = cur.value.split('/').filter(Boolean)

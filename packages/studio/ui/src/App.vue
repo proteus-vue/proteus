@@ -8,7 +8,6 @@ import {
   railW,
   sideHidden,
   sideW,
-  startDrag,
   uiZoom,
   toggleRail,
   toggleSide,

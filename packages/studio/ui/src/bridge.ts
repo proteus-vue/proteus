@@ -105,10 +105,18 @@ export interface Diag {
   path: string
   line: number
   col: number
+  /** tsc 用 TS 码（TS2339），eslint 用规则名 */
   code: string
   message: string
+  /** `error` | `warning`（老版本后端可能没有这个字段） */
+  severity?: 'error' | 'warning'
+  /** `tsc` | `eslint` */
+  source?: string
 }
+/** 类型诊断（vue-tsc）。命令与参数在后端写死，前端不能传。 */
 export const diagTsc = (): Promise<Diag[]> => invoke<Diag[]>('diag_tsc')
+/** Lint 诊断（eslint，只读、不自动修）。同上：参数写死。 */
+export const diagEslint = (): Promise<Diag[]> => invoke<Diag[]>('diag_eslint')
 
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
