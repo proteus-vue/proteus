@@ -72,7 +72,15 @@ import { cmPhrases } from '../ui/i18n'
 import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
-import { diagAt, ensureDiagFresh, refreshAfterSave, runDiag } from '../diag'
+import {
+  diagAt,
+  diagStale,
+  ensureDiagFresh,
+  noteEdit,
+  refreshAfterSave,
+  runDiag,
+  scheduleAfterEdit,
+} from '../diag'
 import { lintOf } from '../diagLint'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -287,7 +295,8 @@ function makeState(doc: string, path: string) {
       cmPhrases,
       search({ top: true }),
       lintGutter(),
-      linter((v) => lintOf(v, cur.value), { delay: 300 }),
+      /* ★结果比最后一次编辑还旧 ⇒ 一律不画（否则出现"改回正确代码反而爆红"，用户实测 #1417） */
+      linter((v) => (diagStale.value ? [] : lintOf(v, cur.value)), { delay: 300 }),
       highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
@@ -311,6 +320,9 @@ function makeState(doc: string, path: string) {
       ]),
       EditorView.updateListener.of((u) => {
         if (!u.docChanged || !cur.value) return
+        /* 记一次编辑：让过期诊断立即失效（不画旧波浪线），并安排防抖刷新 */
+        noteEdit()
+        scheduleAfterEdit()
         // ★每次改动都把 state 收进池子：切标签时才能连 undo 历史一起恢复
         states.set(cur.value, u.state)
         const now = u.state.doc.toString()

@@ -16,7 +16,7 @@
  * 【为什么不用 @codemirror/lint 存状态】lint 只是**渲染层**（波浪线/悬浮/侧栏），
  *   数据仍应在这里；等 @codemirror/lint 装上，只需 `linter(() => 从本模块取当前文件的诊断)`。
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { diagEslint, diagTsc, hasBridge, type Diag } from './bridge'
 
 /** 结果新鲜度：超过这个时间，进入代码视图时重跑一次 */
@@ -31,6 +31,33 @@ export const diagAt = ref(0)
 export const diagCost = ref(0)
 export const diagRunning = ref(false)
 export const diagErr = ref('')
+/** 编辑器里最近一次**文档变化**的时间（决策 #1417）。
+ *  ★为什么需要它：诊断是"起进程跑一遍 tsc"，结果回来时用户可能已经改了好几次文档。
+ *    把旧结果按**行号**画到新文档上，就是"改回正确代码反而红"的根源（用户实测）。
+ *    规则：`editedAt > diagAt` ⇒ 结果比最后一个编辑还旧 ⇒ **不画**（宁可不报，也不报错位置）。 */
+export const editedAt = ref(0)
+export const diagStale = computed(() => editedAt.value > diagAt.value)
+
+/** 编辑器 docChanged 时调用 */
+export function noteEdit() {
+  editedAt.value = Date.now()
+}
+
+/* 编辑后自动触发：防抖 700ms + 最小间隔 8s。
+   ★8s 的理由：一次 vue-tsc 要 3–12s、eslint 15s，逐字符触发会把 CPU 打满；
+     而"停手 0.7s 后跑一次"已经能满足"边写边看"的体感（真·实时要语言服务，见 #1417 说明）。 */
+let editTimer: number | undefined
+let lastAutoAt = 0
+export function scheduleAfterEdit(delay = 700, minGap = 8000): void {
+  if (editTimer) window.clearTimeout(editTimer)
+  editTimer = window.setTimeout(() => {
+    editTimer = undefined
+    if (diagRunning.value) return
+    if (Date.now() - lastAutoAt < minGap) return
+    lastAutoAt = Date.now()
+    void runDiag(true, { quick: true })
+  }, delay)
+}
 
 let inflight: Promise<void> | null = null
 
@@ -38,7 +65,7 @@ let inflight: Promise<void> | null = null
  * 跑一次诊断。
  * @param force true = 无论新鲜度都跑（点「检查类型」）
  */
-export function runDiag(force = false): Promise<void> {
+export function runDiag(force = false, opts: { quick?: boolean } = {}): Promise<void> {
   if (!hasBridge()) {
     diagErr.value = '需要在 Studio 里运行（浏览器直开没有后端）'
     return Promise.resolve()
@@ -55,7 +82,12 @@ export function runDiag(force = false): Promise<void> {
       /* ★两个源**并行**跑：串行要 15+12s，并行约等于较慢那个（~max）。
          任一个失败都不整体失败 —— 类型诊断挂了仍应看到 eslint 结果（反之同理），
          所以用 allSettled 并把失败信息拼进 diagErr。 */
-      const [tsc, lint] = await Promise.allSettled([diagTsc(), diagEslint()])
+      /* ★quick：编辑触发的检查只跑 tsc（3–12s），复用上一次的 eslint 结果。
+         eslint 要 15s，若每次停手都跑，打字体验会明显变卡（用户实测反馈 #1417）。 */
+      const prevLint = diagList.value.filter((d) => d.source === 'eslint')
+      const [tsc, lint] = opts.quick
+        ? [(await Promise.allSettled([diagTsc()]))[0], { status: 'fulfilled', value: prevLint } as PromiseSettledResult<Diag[]>]
+        : await Promise.allSettled([diagTsc(), diagEslint()])
       const pick = (r: PromiseSettledResult<Diag[]>) =>
         r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []
       const merged = [...pick(tsc), ...pick(lint)]
