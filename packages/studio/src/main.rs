@@ -621,6 +621,8 @@ fn main() {
             set_ui_zoom,
             diag::diag_tsc,
             diag::diag_eslint,
+            diag::diag_watch_start,
+            diag::diag_watch_stop,
             stats,
             dump_frame,
             read_text,
@@ -833,6 +835,11 @@ fn main() {
             #[cfg(target_os = "macos")]
             if matches!(event, tauri::RunEvent::Ready) {
                 unsafe { poc_use_bundle_icon() };
+            }
+            /* ★退出时收掉常驻诊断进程（决策 #1418）：vue-tsc --watch 是我们 spawn 的，
+               不 kill 会变成孤儿进程长期吃 CPU（每开一次 Studio 漏一个）。 */
+            if matches!(event, tauri::RunEvent::Exit) {
+                diag::diag_watch_stop();
             }
         });
 }

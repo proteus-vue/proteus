@@ -15,6 +15,14 @@
 // 【超时】`recv_timeout` 有界等待（不是盲轮询）：60s 没回就 kill 并如实报错，
 //   界面显示「诊断超时」而不是永远转圈。
 //
+// 【★★为什么类型诊断改成"常驻 watch"（决策 #1418）】
+//   每次 spawn 一个 vue-tsc 要 **3–12s**（冷启动 + 全量解析），这就是"改完很久不报错"的根源；
+//   而 `--watch` 模式下**增量重编译只要 <1s**（实测：文件写入 16:31:27 → 出结果 16:31:28）。
+//   所以：**进程起一次、常驻**，每次磁盘变化把整批诊断通过 `diag:update` 事件推给前端。
+//   · 代价：watch 看的是**磁盘文件**，所以"未保存的修改"不会报（保存即 <1s 出结果）；
+//     真·实时（含未保存）需要内存语言服务（tsserver 协议），属后续独立工程。
+//   · 生命周期：`diag_watch_start` 幂等；进程随 Studio 退出被系统回收（stdout 关闭 → 循环结束）。
+//
 // 【★退出码不能当失败判据】tsc 有类型错误时退出码非 0、eslint 有问题时退出码 1，
 //   但**输出本身就是结果**。所以这里只关心「能不能解析出内容」，不因非零退出而报错。
 use serde::Serialize;
@@ -212,4 +220,117 @@ pub async fn diag_eslint() -> Result<Vec<Diag>, String> {
     tauri::async_runtime::spawn_blocking(run_eslint)
         .await
         .map_err(|e| format!("lint 线程异常：{e}"))?
+}
+
+/* ── 常驻 watch（决策 #1418）─────────────────────────────────────────────── */
+
+use std::io::{BufRead, BufReader};
+use std::sync::{Mutex, OnceLock};
+use tauri::Emitter;
+
+static WATCH: OnceLock<Mutex<Option<std::process::Child>>> = OnceLock::new();
+
+/// 解析 watch 模式的一行诊断：`路径:行:列 - error TS2339: 消息`
+/// ★注意与一次性输出的格式**不同**（那次是 `路径(行,列): error TS...`），
+///   两者不能共用解析器 —— 混用会得到空列表（看起来"没错误"）。
+fn parse_watch_line(raw: &str) -> Option<Diag> {
+    let s = raw.trim();
+    let (loc, rest) = s.split_once(" - ")?;
+    let (sev_code, message) = rest.split_once(": ")?;
+    let (sev, code) = sev_code.split_once(' ')?;
+    if sev != "error" && sev != "warning" {
+        return None;
+    }
+    /* 从右往左拆 `路径:行:列`（路径里可能有 ':' 或 Windows 盘符） */
+    let mut it = loc.rsplitn(3, ':');
+    let col: u32 = it.next()?.trim().parse().ok()?;
+    let line: u32 = it.next()?.trim().parse().ok()?;
+    let path = it.next()?.to_string();
+    Some(Diag {
+        path,
+        line,
+        col,
+        code: code.to_string(),
+        message: message.trim().to_string(),
+        severity: if sev == "warning" { "warning".into() } else { "error".into() },
+        source: "tsc".into(),
+    })
+}
+
+/// 启动（或确认已启动）常驻 watch。幂等：已在跑直接返回。
+#[tauri::command]
+pub fn diag_watch_start(app: tauri::AppHandle) -> Result<(), String> {
+    let cell = WATCH.get_or_init(|| Mutex::new(None));
+    let mut guard = cell.lock().map_err(|e| format!("锁失败：{e}"))?;
+
+    if let Some(child) = guard.as_mut() {
+        match child.try_wait() {
+            Ok(None) => return Ok(()), // 还活着
+            _ => {
+                let _ = child.kill();
+                *guard = None;
+            }
+        }
+    }
+
+    let root = crate::fs_guard::repo_root().map_err(|e| format!("找不到仓库根：{e}"))?;
+    let bin = root.join(TSC_BIN);
+    if !bin.exists() {
+        return Err(format!("命令不存在：{TSC_BIN}（依赖没装？）"));
+    }
+    let mut child = Command::new(&bin)
+        .args(["-p", TSC_CONFIG, "--noEmit", "--watch", "--preserveWatchOutput"])
+        .current_dir(&root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("启动 watch 失败：{e}"))?;
+
+    /* stderr 也要读掉（不读会写满管道把子进程卡死），内容丢弃即可 */
+    if let Some(mut err) = child.stderr.take() {
+        std::thread::spawn(move || {
+            let mut sink = String::new();
+            let _ = err.read_to_string(&mut sink);
+        });
+    }
+    let out = child.stdout.take().ok_or("拿不到 watch stdout")?;
+    *guard = Some(child);
+
+    /* 解析线程：把每一批"编译结束"的诊断作为**全量**推给前端。
+       ★推送全量而不是增量：前端只保留 tsc 来源的部分替换，逻辑简单且不会漂移。 */
+    std::thread::spawn(move || {
+        let reader = BufReader::new(out);
+        let mut batch: Vec<Diag> = Vec::new();
+        for line in reader.lines().map_while(Result::ok) {
+            if line.contains("File change detected") || line.contains("Starting compilation") {
+                batch.clear();
+                continue;
+            }
+            if let Some(d) = parse_watch_line(&line) {
+                batch.push(d);
+                continue;
+            }
+            /* 一次编译的收尾行：`Found N error(s). Watching for file changes.` */
+            if line.trim_start().starts_with("Found ") && line.contains("Watching for file changes")
+            {
+                let mut list = batch.clone();
+                sort_dedup(&mut list);
+                let _ = app.emit("diag:update", &list);
+            }
+        }
+    });
+    Ok(())
+}
+
+/// 停掉 watch（窗口关闭 / 退出时调用；失败不致命）。
+#[tauri::command]
+pub fn diag_watch_stop() {
+    if let Some(cell) = WATCH.get() {
+        if let Ok(mut guard) = cell.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
 }

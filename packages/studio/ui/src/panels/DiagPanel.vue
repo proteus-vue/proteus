@@ -12,7 +12,7 @@
  *   按钮右侧显示上次时刻与耗时，避免"以为刚跑过"。
  */
 import { computed, ref } from 'vue'
-import { diagAt, diagCost, diagErr, diagList, diagRunning, runDiag } from '../diag'
+import { diagAt, diagCost, diagErr, diagList, diagRunning, runEslint } from '../diag'
 import PanelShell from './PanelShell.vue'
 import Icon from '../ui/Icon.vue'
 import { pushToast } from '../toast'
@@ -59,7 +59,7 @@ function toggle(p: string) {
 }
 
 async function run() {
-  await runDiag(true)
+  await runEslint(true)
   if (diagErr.value) pushToast(`诊断失败：${diagErr.value}`, 'err')
 }
 

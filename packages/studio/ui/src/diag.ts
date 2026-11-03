@@ -1,113 +1,121 @@
 /**
- * diag.ts —— 类型诊断的**唯一真源**（决策 #1412）
+ * diag.ts —— 诊断状态的**唯一真源**（决策 #1412 引入 · #1418 改常驻 watch）
  *
- * 【为什么要独立成模块】诊断结果有三个消费者：
- *   ① 右栏「问题」面板（聚合列表）；
- *   ② 编辑器里的波浪线（按当前文件过滤）；
- *   ③ 悬浮提示（同一份数据）。
- *   如果各自存一份，必然出现"面板说有 3 个、编辑器只画了 2 条"这类漂移 —— 与 `git.ts` 同一条经验。
+ * 【数据从哪来】
+ *   ① **类型错误（tsc）**：后端起一个**常驻的 `vue-tsc --watch`**，每次磁盘变化增量重编译
+ *      （实测 <1s），整批通过 `diag:update` 事件推过来 —— 这是"保存后立刻红"的关键；
+ *      之前每次 spawn 一个 vue-tsc 要 3–12s，所以用户感觉"输错很久都不报"。
+ *   ② **Lint（eslint）**：没有 watch 模式，仍是**按需一次**（15s）：进视图 / 保存 / 手动点检查。
  *
- * 【什么时候自动跑】
- *   · 首次进入代码视图（且结果超过 STALE_MS）；
- *   · 保存之后（`refreshAfterSave`）；
- *   手动「检查类型」= 强制跑（忽略 STALE）。
- *   ★不做"全局自动轮询"：一次 vue-tsc 12–17s，轮询会持续吃 CPU。
+ * 【为什么两个源节奏不同】tsc 有增量缓存，watch 重编译 <1s；eslint 每次全量 15s。
+ *   把 eslint 塞进每次保存路径会拖慢 ⌘S，所以只在"打开/保存/手动"时跑，其余时刻复用旧结果。
  *
- * 【为什么不用 @codemirror/lint 存状态】lint 只是**渲染层**（波浪线/悬浮/侧栏），
- *   数据仍应在这里；等 @codemirror/lint 装上，只需 `linter(() => 从本模块取当前文件的诊断)`。
+ * 【★版本对齐（#1417）】watch 读的是**磁盘**内容。编辑器里有未保存改动时，诊断对应旧内容，
+ *   按行号画上去就会"错位爆红"。所以 `diagStale = editedAt > savedAt`：
+ *   **有未保存改动 ⇒ 一律不画**（保存后 <1s 会自动回来）。
  */
 import { computed, ref } from 'vue'
-import { diagEslint, diagTsc, hasBridge, type Diag } from './bridge'
+import { diagEslint, diagWatchStart, hasBridge, type Diag } from './bridge'
 
-/** 结果新鲜度：超过这个时间，进入代码视图时重跑一次 */
-/** 进入代码视图/打开文件时允许复用的最大年龄：太长会出现"看着是新的、其实是旧的"（用户实测反馈）。
- *  增量诊断实测只要 3s 左右，所以这个值可以小。 */
-const STALE_MS = 10_000
+/** eslint 结果的复用窗口：进视图/切文件时若 10s 内跑过就不重复跑 */
+const LINT_STALE_MS = 10_000
 
 export const diagList = ref<Diag[]>([])
-/** 上次成功检查的时间戳（0 = 从未跑过） */
+/** 最近一次诊断刷新时间（tsc 事件或 eslint 完成都会更新） */
 export const diagAt = ref(0)
-/** 上次耗时（ms） */
+/** 最近一次 eslint 完成时间（控制复用窗口） */
+const lintAt = ref(0)
 export const diagCost = ref(0)
 export const diagRunning = ref(false)
 export const diagErr = ref('')
-/** 编辑器里最近一次**文档变化**的时间（决策 #1417）。
- *  ★为什么需要它：诊断是"起进程跑一遍 tsc"，结果回来时用户可能已经改了好几次文档。
- *    把旧结果按**行号**画到新文档上，就是"改回正确代码反而红"的根源（用户实测）。
- *    规则：`editedAt > diagAt` ⇒ 结果比最后一个编辑还旧 ⇒ **不画**（宁可不报，也不报错位置）。 */
-export const editedAt = ref(0)
-export const diagStale = computed(() => editedAt.value > diagAt.value)
 
-/** 编辑器 docChanged 时调用 */
+/** 编辑器最近一次文档变化（给 diagStale 用） */
+export const editedAt = ref(0)
+/** 最近一次"内存与磁盘一致"的时刻：打开文件 / 保存成功 */
+export const savedAt = ref(0)
+
+/** 磁盘内容与内存不一致 ⇒ 诊断不可信 ⇒ 不画 */
+export const diagStale = computed(() => editedAt.value > savedAt.value)
+
 export function noteEdit() {
   editedAt.value = Date.now()
 }
 
-/* 编辑后自动触发：防抖 700ms + 最小间隔 8s。
-   ★8s 的理由：一次 vue-tsc 要 3–12s、eslint 15s，逐字符触发会把 CPU 打满；
-     而"停手 0.7s 后跑一次"已经能满足"边写边看"的体感（真·实时要语言服务，见 #1417 说明）。 */
-let editTimer: number | undefined
-let lastAutoAt = 0
-export function scheduleAfterEdit(delay = 700, minGap = 8000): void {
-  if (editTimer) window.clearTimeout(editTimer)
-  editTimer = window.setTimeout(() => {
-    editTimer = undefined
-    if (diagRunning.value) return
-    if (Date.now() - lastAutoAt < minGap) return
-    lastAutoAt = Date.now()
-    void runDiag(true, { quick: true })
-  }, delay)
+/** 打开文件 / 保存成功后调用：此刻内存与磁盘一致 */
+export function markSaved() {
+  savedAt.value = Date.now()
 }
 
+/** 合并两个源并排序：文件 → 行 → 列；同位置 error 在 warning 前 */
+function mergeSort(tsc: Diag[], lint: Diag[]): Diag[] {
+  const all = [...tsc, ...lint]
+  all.sort(
+    (a, b) =>
+      a.path.localeCompare(b.path) ||
+      a.line - b.line ||
+      a.col - b.col ||
+      (a.severity === 'error' ? 0 : 1) - (b.severity === 'error' ? 0 : 1),
+  )
+  return all
+}
+
+const tscPart = () => diagList.value.filter((d) => d.source !== 'eslint')
+const lintPart = () => diagList.value.filter((d) => d.source === 'eslint')
+
+/* ── ① 常驻 watch：订阅 tsc 的全量推送 ──────────────────────────────────── */
+type ListenFn = (name: string, cb: (e: { payload: unknown }) => void) => Promise<() => void>
+let watchStarted = false
+
+export async function ensureWatch(): Promise<void> {
+  if (watchStarted || !hasBridge()) return
+  watchStarted = true
+  try {
+    await diagWatchStart()
+  } catch (e) {
+    watchStarted = false
+    diagErr.value = String((e as Error)?.message ?? e).slice(0, 200)
+    return
+  }
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (!ev?.listen) return
+  await ev.listen('diag:update', (e) => {
+    const raw = e.payload
+    const tsc = Array.isArray(raw) ? (raw as Diag[]) : []
+    /* 推送是全量：替换 tsc 部分，eslint 部分保留 */
+    diagList.value = mergeSort(tsc, lintPart())
+    diagAt.value = Date.now()
+    diagErr.value = ''
+  })
+}
+
+/* ── ② eslint：按需一次（15s）──────────────────────────────────────────── */
 let inflight: Promise<void> | null = null
 
 /**
- * 跑一次诊断。
- * @param force true = 无论新鲜度都跑（点「检查类型」）
+ * 跑一次 eslint（只读、不自动修）。
+ * @param force true = 忽略 10s 复用窗口（手动点「检查」）
  */
-export function runDiag(force = false, opts: { quick?: boolean } = {}): Promise<void> {
+export function runEslint(force = false): Promise<void> {
   if (!hasBridge()) {
     diagErr.value = '需要在 Studio 里运行（浏览器直开没有后端）'
     return Promise.resolve()
   }
-  /* 同一时刻只跑一份：并发点击/自动触发合并成一次，避免两个 vue-tsc 抢 CPU */
   if (inflight) return inflight
-  if (!force && Date.now() - diagAt.value < STALE_MS) return Promise.resolve()
+  if (!force && Date.now() - lintAt.value < LINT_STALE_MS) return Promise.resolve()
 
   diagRunning.value = true
   diagErr.value = ''
   const t0 = performance.now()
   inflight = (async () => {
     try {
-      /* ★两个源**并行**跑：串行要 15+12s，并行约等于较慢那个（~max）。
-         任一个失败都不整体失败 —— 类型诊断挂了仍应看到 eslint 结果（反之同理），
-         所以用 allSettled 并把失败信息拼进 diagErr。 */
-      /* ★quick：编辑触发的检查只跑 tsc（3–12s），复用上一次的 eslint 结果。
-         eslint 要 15s，若每次停手都跑，打字体验会明显变卡（用户实测反馈 #1417）。 */
-      const prevLint = diagList.value.filter((d) => d.source === 'eslint')
-      const [tsc, lint] = opts.quick
-        ? [(await Promise.allSettled([diagTsc()]))[0], { status: 'fulfilled', value: prevLint } as PromiseSettledResult<Diag[]>]
-        : await Promise.allSettled([diagTsc(), diagEslint()])
-      const pick = (r: PromiseSettledResult<Diag[]>) =>
-        r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []
-      const merged = [...pick(tsc), ...pick(lint)]
-      /* 统一排序：文件 → 行 → 列；同位置 error 排 warning 前（先看严重的） */
-      merged.sort(
-        (a, b) =>
-          a.path.localeCompare(b.path) ||
-          a.line - b.line ||
-          a.col - b.col ||
-          (a.severity === 'error' ? 0 : 1) - (b.severity === 'error' ? 0 : 1),
-      )
-      diagList.value = merged
-      const fails = [tsc, lint]
-        .map((r, i) => (r.status === 'rejected' ? `${i === 0 ? '类型' : 'Lint'}：${String((r.reason as Error)?.message ?? r.reason).slice(0, 80)}` : ''))
-        .filter(Boolean)
-      if (fails.length) diagErr.value = fails.join('；')
+      const r = await diagEslint()
+      const lint = Array.isArray(r) ? r : []
+      diagList.value = mergeSort(tscPart(), lint)
       diagCost.value = Math.round(performance.now() - t0)
+      lintAt.value = Date.now()
       diagAt.value = Date.now()
     } catch (e) {
-      diagErr.value = String((e as Error)?.message ?? e).slice(0, 200)
+      diagErr.value = `Lint：${String((e as Error)?.message ?? e).slice(0, 160)}`
     } finally {
       diagRunning.value = false
       inflight = null
@@ -116,23 +124,10 @@ export function runDiag(force = false, opts: { quick?: boolean } = {}): Promise<
   return inflight
 }
 
-/** 归一化路径：去掉前导 `./`，避免"看起来同一个文件、字符串却不相等"导致波浪线不画 */
-const norm = (p: string) => p.replace(/^\.\//, '')
-
 /** 某个文件的诊断（编辑器画波浪线用） */
+const norm = (p: string) => p.replace(/^\.\//, '')
 export function diagsOf(path: string): Diag[] {
   if (!path) return []
   const want = norm(path)
   return diagList.value.filter((d) => norm(d.path) === want)
-}
-
-/** 需要"现在就是新的"时用（切到代码视图 / 打开文件）：超过 maxAge 才真跑 */
-export function ensureDiagFresh(maxAgeMs = STALE_MS): void {
-  if (Date.now() - diagAt.value > maxAgeMs) void runDiag(true)
-}
-
-/** 保存之后调用：结果已过期，后台静默重跑（不阻塞保存反馈） */
-export function refreshAfterSave() {
-  diagAt.value = 0
-  void runDiag()
 }

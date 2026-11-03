@@ -40,7 +40,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab, redo, selectAll, 
 import { gotoLine, highlightSelectionMatches, search, searchKeymap, selectNextOccurrence } from '@codemirror/search'
 /* 类型诊断的**渲染层**（决策 #1413）：数据在 `diag.ts`，这里只负责"画波浪线 + 悬浮提示"。
    `linter` 会在文档变化/调用 `forceLinting` 时回调我们给的 source，从共享 store 现取现算。 */
-import { forceLinting, lintGutter, linter, type Diagnostic } from '@codemirror/lint'
+import { lintGutter, setDiagnostics } from '@codemirror/lint'
 import {
   HighlightStyle,
   bracketMatching,
@@ -72,15 +72,7 @@ import { cmPhrases } from '../ui/i18n'
 import CodeSidebar from './CodeSidebar.vue'
 import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
-import {
-  diagAt,
-  diagStale,
-  ensureDiagFresh,
-  noteEdit,
-  refreshAfterSave,
-  runDiag,
-  scheduleAfterEdit,
-} from '../diag'
+import { diagAt, diagStale, ensureWatch, markSaved, noteEdit, runEslint } from '../diag'
 import { lintOf } from '../diagLint'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -295,8 +287,6 @@ function makeState(doc: string, path: string) {
       cmPhrases,
       search({ top: true }),
       lintGutter(),
-      /* ★结果比最后一次编辑还旧 ⇒ 一律不画（否则出现"改回正确代码反而爆红"，用户实测 #1417） */
-      linter((v) => (diagStale.value ? [] : lintOf(v, cur.value)), { delay: 300 }),
       highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
@@ -320,9 +310,10 @@ function makeState(doc: string, path: string) {
       ]),
       EditorView.updateListener.of((u) => {
         if (!u.docChanged || !cur.value) return
-        /* 记一次编辑：让过期诊断立即失效（不画旧波浪线），并安排防抖刷新 */
+        /* 记一次编辑：此时内存 ≠ 磁盘 ⇒ 诊断立即失效（不画旧波浪线）。
+           不用再触发 tsc —— 常驻 watch 会在**保存**后 <1s 推送新结果（决策 #1418）。 */
         noteEdit()
-        scheduleAfterEdit()
+        syncLint()
         // ★每次改动都把 state 收进池子：切标签时才能连 undo 历史一起恢复
         states.set(cur.value, u.state)
         const now = u.state.doc.toString()
@@ -429,12 +420,11 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     states.set(path, st)
     await nextTick()
     view?.setState(st)
-    /* ★打开文件后主动催一次 lint：诊断通常**先于**打开文件就绪（进代码视图即自动跑），
-       而 `linter` 只在文档变化时回调 ⇒ 不催的话波浪线要等你敲一个字才出现（决策 #1413）。 */
-    if (view) forceLinting(view)
-    /* 打开文件时若"这个文件还没有诊断"且结果已过期 ⇒ 立刻重跑（用户反馈：不能只在保存后才检查）。
-       放在 forceLinting 之后：先按现有数据画一次（有就立刻显示），再决定要不要刷新数据。 */
-    ensureDiagFresh()
+    /* 打开文件立即按现有诊断画一次（切文件时 state 是新的，必须重新派发） */
+    syncLint()
+    /* 刚打开：内存 == 磁盘，诊断可信（解除 stale）；顺手补一次 eslint（有 10s 复用窗口） */
+    markSaved()
+    void runEslint()
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
     await syncDiffAfterOpen(opts.diff)
@@ -642,6 +632,19 @@ async function savePath(path: string): Promise<boolean> {
 /** 面包屑（决策 #1407）：把 `cur` 拆成目录段 + 文件名。
  *  ★**textContent 必须仍等于完整路径** —— 门禁把 `#codePath` 的文本当"当前文件"比对，
  *    所以分隔符用内联 `/` 文本、模板不换行，避免多余空白把路径弄脏。 */
+/**
+ * ★**把诊断直接派发给编辑器**（决策 #1418）。
+ * 不用 `linter(source)` + `forceLinting`：读库源码可知 `force()` 只在 `this.set` 为 true 时生效，
+ * 而 `set` 在首次 lint 完成后被置 false，**只有 docChanged 才会复位** ——
+ * 也就是说"外部数据更新"时 forceLinting 会**静默什么都不做**（实测：watch 推送后波浪线不刷新）。
+ * 官方对"外部数据"的姿势就是 `setDiagnostics`，见 @codemirror/lint 文档。
+ */
+function syncLint() {
+  if (!view) return
+  const list = diagStale.value ? [] : lintOf(view, cur.value)
+  view.dispatch(setDiagnostics(view.state, list))
+}
+
 const crumbs = computed(() => {
   if (!cur.value) return []
   const parts = cur.value.split('/').filter(Boolean)
@@ -677,8 +680,10 @@ async function save() {
   if (ok) {
     pushToast(`已保存 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
     void refreshGit()
-    /* 保存后类型结果已过期：后台静默重跑（决策 #1412） */
-    refreshAfterSave()
+    /* 保存完成：磁盘 == 内存 ⇒ 解除 stale（watch 会 <1s 推来新的类型结果）+ 刷新 eslint */
+    markSaved()
+    syncLint()
+    void runEslint(true)
   }
 }
 
@@ -890,21 +895,22 @@ onMounted(boot)
 onMounted(() => window.addEventListener('keydown', onQuickKey, true))
 // 首帧后拉一次 git 状态（只读；非仓库会自己降级）
 /* 诊断数据一到就重画波浪线：`linter` 只在文档变化时回调，数据外部更新时要显式催一次（决策 #1413） */
-watch(diagAt, () => {
-  if (view) forceLinting(view)
-})
+/* 诊断数据一到（watch 推送 / eslint 完成）⇒ 直接派发波浪线 */
+watch(diagAt, () => syncLint())
 
 /* 用户切进代码视图时也刷新一次：CodePanel 用 v-show 常驻，挂载早于"进视图"，
    只靠挂载那一次会出现"进视图看到的是旧结果/空结果"（用户实测反馈）。 */
 watch(
   () => ws.view,
   (v) => {
-    if (v === 'code') ensureDiagFresh()
+    /* 进代码视图补一次 eslint（tsc 由常驻 watch 自己保持最新） */
+    if (v === 'code') void runEslint()
   },
 )
 
-/* 首次挂载顺手跑一次类型诊断（非强制，60s 内复用结果）—— 用户不用再手动点（决策 #1412） */
-void runDiag()
+/* 起常驻 watch（幂等）：之后每次保存，类型结果 <1s 自动推过来（决策 #1418） */
+void ensureWatch()
+void runEslint()
 void refreshGit()
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onQuickKey, true)

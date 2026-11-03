@@ -117,6 +117,8 @@ export interface Diag {
 export const diagTsc = (): Promise<Diag[]> => invoke<Diag[]>('diag_tsc')
 /** Lint 诊断（eslint，只读、不自动修）。同上：参数写死。 */
 export const diagEslint = (): Promise<Diag[]> => invoke<Diag[]>('diag_eslint')
+/** 启动**常驻**的 vue-tsc watch（幂等）。诊断通过 `diag:update` 事件全量推送。 */
+export const diagWatchStart = (): Promise<void> => invoke<void>('diag_watch_start')
 
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
