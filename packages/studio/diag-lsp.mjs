@@ -16,8 +16,8 @@
  *   stdout → {"t":"diag","path":"a/b.ts","items":[{line,col,severity,code,message}]}
  *            {"t":"log","message":"..."}   {"t":"ready"}
  *
- * 【范围】只处理 Studio UI 下的 .ts/.tsx/.js；`.vue` 返回空并说明原因
- *   （覆盖 .vue 的 script 类型检查需装 `@vue/typescript-plugin` 并写进 tsconfig 的 plugins）。
+ * 【范围】Studio UI 下的 .ts/.tsx/.js；`.vue` 依赖 `@vue/typescript-plugin`（写进了
+ *   `packages/studio/ui/tsconfig.json` 的 `compilerOptions.plugins`）把 SFC 虚拟化成 TS 再诊断。
  *
  * 【为什么"关闭再打开"而不是 didChange】tsserver 的 `updateOpen.changedFiles` **只接受文件名**，
  *   不能带新内容；`change` 命令则需要精确行列增量。用 close+open 传 `fileContent` 最简单可靠，
@@ -36,7 +36,7 @@ if (!root) {
 const tsserver = path.join(root, 'node_modules/typescript/lib/tsserver.js')
 /* Studio UI 是唯一有 tsconfig.json 的目录（根 tsconfig 的 include 不含它，见 #1419） */
 const PROJECT = path.join(root, 'packages/studio/ui')
-const EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+const EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue']
 const REQ_TIMEOUT = 15000
 
 function out(o) {
@@ -131,6 +131,7 @@ async function diagnose(file, text) {
   })
   open.add(file)
 
+  /* `.vue` 交给 @vue/typescript-plugin 虚拟化；它的 syntactic 可能不实现 ⇒ 失败当空 */
   const [syn, sem] = await Promise.all([
     req('syntacticDiagnosticsSync', { file }).catch(() => []),
     req('semanticDiagnosticsSync', { file }).catch(() => []),
@@ -185,17 +186,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   const rel = m.path ?? ''
   if (m.t === 'open' || m.t === 'change') {
-    if (!isSupported(rel)) {
-      if (rel.endsWith('.vue')) {
-        /* tsserver 不认识 SFC；如实返回空并说明，交给保存后的磁盘 watch */
-        out({ t: 'diag', path: rel, items: [] })
-        out({
-          t: 'log',
-          message: '.vue 的实时类型检查需要 @vue/typescript-plugin（当前由保存后 <1s 的 watch 覆盖）',
-        })
-      }
-      return
-    }
+    if (!isSupported(rel)) return
     void run(abs(rel), rel, String(m.text ?? ''))
     return
   }

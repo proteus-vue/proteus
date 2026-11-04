@@ -287,6 +287,7 @@
     "@codemirror/view": "^6.43.15",
     "@lezer/highlight": "^1.2.5",
     "@vue/language-server": "2.2.12",
+    "@vue/typescript-plugin": "2.2.12",
     "pinia": "^4.0.3",
     "vue": "^3.4.0"
   },

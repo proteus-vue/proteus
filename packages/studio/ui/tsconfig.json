@@ -13,7 +13,10 @@
     "noEmit": true,
     "incremental": false,
     // ★`types` 里的相对路径相对**本文件目录**解析：继承来的 "./packages/..." 会指错，必须重写
-    "types": ["vite/client", "../../shared/src/shims/mp.d.ts"]
+    "types": ["vite/client", "../../shared/src/shims/mp.d.ts"],
+    // ★让 tsserver 加载 Vue 的 TS 插件（决策 #1421）：没有它，`.vue` 的 script 块对 tsserver 不可见
+    //   （它只认 .ts/.tsx）⇒ 实时诊断只剩模板/CSS 那点东西。装上后 .vue 也能"输入即报"。
+    "plugins": [{ "name": "@vue/typescript-plugin" }]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
 }
