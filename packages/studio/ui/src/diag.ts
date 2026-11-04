@@ -126,13 +126,20 @@ export function runEslint(force = false): Promise<void> {
 }
 
 /** 某个文件的诊断（编辑器画波浪线用）。
- *  ★优先返回**内存语言服务**的结果（对应你正在敲的文本，实时）；
- *   没有（未打开/未就绪）才回退到磁盘 watch 的结果。 */
+ *
+ *  ★**按来源合并，不是整体替换**（决策 #1422）：
+ *    · 类型诊断：优先**内存级**（tsserver，对应你正在敲的文本）；没有才用磁盘 watch 的；
+ *    · Lint 诊断（eslint）：始终取 `diagList` 里的 `source === 'eslint'` 条目。
+ *  之前写成"有内存结果就直接 return live"，把 eslint 告警**整个吞掉** ⇒
+ *  面板里一堆黄色警告、编辑器里一条都不画（用户实测反馈）。
+ */
 const norm = (p: string) => p.replace(/^\.\//, '')
 export function diagsOf(path: string): Diag[] {
   if (!path) return []
-  const live = liveOf(path)
-  if (live) return live
   const want = norm(path)
-  return diagList.value.filter((d) => norm(d.path) === want)
+  const lint = diagList.value.filter((d) => d.source === 'eslint' && norm(d.path) === want)
+  const live = liveOf(path)
+  if (live) return [...live, ...lint]
+  const tsc = diagList.value.filter((d) => d.source !== 'eslint' && norm(d.path) === want)
+  return [...tsc, ...lint]
 }
