@@ -10,6 +10,7 @@
  *   · 列号要夹紧到行尾 —— 否则偏移会跨行，波浪线画到下一行去。
  */
 import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
+import { hoverTooltip, type EditorView as View } from '@codemirror/view'
 import type { EditorView } from '@codemirror/view'
 import { diagsOf } from './diag'
 import { liveOf } from './diagSync'
@@ -72,4 +73,48 @@ export function applyDiagnostics(view: EditorView, path: string, stale: boolean)
 export function repaintDiag(view: EditorView, path: string, stale: boolean): void {
   resetDiagSig()
   applyDiagnostics(view, path, stale)
+}
+
+/**
+ * 悬停提示（决策 #1424）—— 自己实现，**不用** `@codemirror/lint` 自带的那个。
+ *
+ * 【为什么要自己写】
+ *   · 我们只用 `setDiagnostics` + `lintGutter`，**没有装 `linter()`** ⇒ 正文波浪线上
+ *     **根本没有 hover 提示**（实测 hover 返回 null）；只有行号标记的 tooltip；
+ *   · 行号标记的 tooltip 位置由"标记 + 鼠标"决定，鼠标在同一行横向移动时提示框会左右跳
+ *     （用户录屏反馈"闪跳一下"）。
+ *
+ * 【本实现的关键】`pos: 诊断的起点` —— tooltip 锚定在**诊断位置**，鼠标在这条诊断范围内
+ *   怎么移动都不会重新定位 ⇒ 不闪、不跳。
+ */
+export function diagHover(path: () => string) {
+  return hoverTooltip(
+    (view: View, pos: number) => {
+      const hit = lintOf(view, path()).filter((d) => pos >= d.from && pos <= d.to)
+      if (!hit.length) return null
+      return {
+        pos: hit[0].from,
+        /* 不强制 `above`：让 CodeMirror 按可用空间自动选上/下，第一行的提示不会压住标签栏 */
+        create() {
+          const dom = document.createElement('div')
+          dom.className = 'studio-diag-tip'
+          for (const d of hit) {
+            const row = document.createElement('div')
+            row.className = 'sd-row'
+            const head = document.createElement('div')
+            head.className = 'sd-head'
+            /* 只显示来源，不显示规则号 —— 规则号在面板里点开即可，提示里优先让人读消息 */
+            head.textContent = d.source ?? 'tsc'
+            const msg = document.createElement('div')
+            msg.className = 'sd-msg'
+            msg.textContent = d.message.replace(/^[^:]+:\s*/, '') // 去掉 "规则号: " 前缀
+            row.append(head, msg)
+            dom.append(row)
+          }
+          return { dom }
+        },
+      }
+    },
+    { hoverTime: 150 },
+  )
 }

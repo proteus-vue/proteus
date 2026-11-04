@@ -174,3 +174,66 @@
 .crumb.leaf:hover { color: var(--fg); text-decoration: none; }
 .csep { color: var(--fg-subtle); }
 
+
+/* ── 诊断提示框（决策 #1424）────────────────────────────────────────────
+   用户录屏反馈：鼠标停在标记上时提示框会"闪跳一下"。
+   成因之一是**宽度随可用空间变化**（靠右时被压窄 ⇒ 换行数变 ⇒ 高度变 ⇒ 看起来在跳）。
+   这里给它固定宽度区间与统一行高，出现位置变化时形状不再抖。 */
+:deep(.cm-tooltip.cm-tooltip-lint) {
+  min-width: 340px;
+  max-width: 460px;
+  white-space: normal;
+}
+:deep(.cm-tooltip.cm-tooltip-lint .cm-diagnostic) {
+  font-size: 11.5px;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+:deep(.cm-tooltip.cm-tooltip-lint ul) {
+  margin: 0;
+  padding: 0 2px;
+}
+
+/* 自定义诊断提示（决策 #1424）：锚定在诊断起点，鼠标横移不重新定位 */
+/* 容器交给我们的 section 画，避免"外框 + 内框"两层 */
+:deep(.cm-tooltip.cm-tooltip-hover) {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+:deep(.studio-diag-tip) {
+  max-width: 460px;
+  padding: 6px 8px;
+  /* ★用固定深色而不是主题变量：Studio 的 `--bg-overlay` 在这里落到了浅色，
+     结果深色编辑器里弹出一个浅色提示框（实测截图）。这里按编辑器底色定死。 */
+  /* ★`!important`：CodeMirror 的主题对 `.cm-tooltip-section` 有更高优先级的背景/文字色，
+     不加会被覆盖成浅底（实测：计算样式是深色、截图上却是浅色）。 */
+  background: #1f2228 !important;
+  color: #e6e9ef !important;
+  border: 1px solid #3a3f47;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+}
+:deep(.studio-diag-tip .sd-row + .sd-row) {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle, #2a2d33);
+}
+:deep(.studio-diag-tip .sd-head) {
+  font: 10px/1.4 -apple-system, 'PingFang SC', sans-serif;
+  color: #8b93a1 !important;
+  text-transform: lowercase;
+}
+:deep(.studio-diag-tip .sd-msg) {
+  font: 11.5px/1.5 -apple-system, 'PingFang SC', sans-serif;
+  color: #e6e9ef !important;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 只保留我们自己的提示（决策 #1424）：
+   `@codemirror/lint` 仍会把它的 `.cm-tooltip-lint` 段塞进同一个 tooltip 容器，
+   于是"一个框两层内容"（用户录屏里一上一下两段）。它的位置还跟鼠标走、会跳，直接隐掉。 */
+:deep(.cm-tooltip-section.cm-tooltip-lint) {
+  display: none;
+}

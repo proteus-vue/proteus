@@ -74,7 +74,7 @@ import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
 import { diagAt, diagStale, ensureWatch, markSaved, noteEdit, runEslint } from '../diag'
 import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagSync'
-import { applyDiagnostics, repaintDiag } from '../diagLint'
+import { applyDiagnostics, diagHover, repaintDiag } from '../diagLint'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -288,7 +288,12 @@ function makeState(doc: string, path: string) {
       langFor(path),
       cmPhrases,
       search({ top: true }),
-      lintGutter(),
+      /* ★行号标记保留，但**关掉它自带的 tooltip**（`tooltipFilter: () => []`）：
+         那个提示由"标记 + 鼠标位置"决定、同一行横移还会左右跳，且会和我们自己的提示叠成两层
+         （用户录屏里正是"两个框一上一下"）。提示统一交给下面的 `diagHover`。 */
+      lintGutter({ tooltipFilter: () => [] }),
+      /* 悬停提示：锚定诊断起点，鼠标横移不重新定位（决策 #1424） */
+      diagHover(() => cur.value),
       highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
