@@ -41,7 +41,6 @@ const ver = ref(0)
 const opened = ref(false)
 const exited = ref(false)
 
-const splitCount = computed(() => panes.value.length)
 const splitOn = computed(() => panes.value.length > 1)
 const sid = computed(() => panes.value[focusIdx.value] ?? panes.value[0] ?? 0)
 /** 每栏至少这么宽；不够宽就不再允许拆（否则挤成一条缝） */
@@ -348,7 +347,7 @@ function commitRename(id: number) {
 }
 
 /** 拖动会话列表的宽度（贴着 pane 区右边） */
-function startDragList(e: PointerEvent) {
+function startDragList(_e: PointerEvent) {
   const move = (ev: PointerEvent) => {
     const rect = (wrapEl.value as HTMLElement | undefined)?.getBoundingClientRect()
     if (!rect) return

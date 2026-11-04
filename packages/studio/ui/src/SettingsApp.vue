@@ -268,7 +268,6 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
               <input id="setPort" v-model.number="port" type="number" min="1024" max="65535" />
             </div>
           </div>
-
         </section>
 
         <!-- ── 设备（只读：切换只在主窗口做）──────────────────────────── -->

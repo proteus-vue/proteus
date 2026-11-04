@@ -21,7 +21,7 @@ import {
   startDragTerm,
   saveLayout,
 } from './layout'
-import { capturePreset, copyText, deviceSwipe, deviceTap, iosKey, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, setUiZoom, type IosHint } from './bridge'
+import { copyText, deviceSwipe, deviceTap, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, setUiZoom, type IosHint } from './bridge'
 import { pushToast } from './toast'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
@@ -42,7 +42,7 @@ import { LANGS, langLabel } from './langs'
 import { openMenu } from './contextmenu'
 import ToastStack from './ToastStack.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
-import { clampZoom, hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
+import { hydrateWorkspace, useWorkspaceState, type ViewName } from './useWorkspaceState'
 import { onMenuAction, wireMenu } from './menu'
 import { useStageGeometry } from './composables/useStageGeometry'
 import { useQuality } from './composables/useQuality'
@@ -77,8 +77,6 @@ const stageGeom = useStageGeometry(stats, wsZoom)
 const stageBox = stageGeom.stageBox
 const devAspect = stageGeom.devAspect
 const pan = stageGeom.pan
-const screenSize = stageGeom.screenSize
-const panLimit = stageGeom.panLimit
 const clampPan = stageGeom.clampPan
 const screenStyle = stageGeom.screenStyle
 const zoomLabel = stageGeom.zoomLabel
@@ -348,7 +346,7 @@ function onPointerDown(e: PointerEvent) {
     ly: e.clientY,
   }
   try {
-    e.currentTarget instanceof HTMLElement && e.currentTarget.setPointerCapture(e.pointerId)
+    if (e.currentTarget instanceof HTMLElement) e.currentTarget.setPointerCapture(e.pointerId)
   } catch {
     /* 合成事件（测试）没有真实 pointerId，捕获失败不影响逻辑 */
   }
@@ -371,7 +369,7 @@ function onPointerUp(e: PointerEvent) {
   const { moved, device, t0, x0, y0 } = drag
   drag = null
   try {
-    e.currentTarget instanceof HTMLElement && e.currentTarget.releasePointerCapture(e.pointerId)
+    if (e.currentTarget instanceof HTMLElement) e.currentTarget.releasePointerCapture(e.pointerId)
   } catch {
     /* 同上 */
   }
@@ -401,9 +399,7 @@ let touchBusy = false
    而不是"切分辨率"（两个轴不是一回事）；② 真机 USB 实测 4/8/13/20 Mbps 四档迟到帧恒为 0
    ⇒ 低码率在 USB 下换不到帧率，它换的是抗抖动与省带宽（Wi-Fi adb 才有意义）。 */
 const quality = useQuality()
-const qIndex = quality.qIndex
 const capBusy = quality.capBusy
-const qNow = quality.qNow
 const capLabel = quality.capLabel
 const capTitle = quality.capTitle
 const cycleQuality = quality.cycleQuality

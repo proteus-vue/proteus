@@ -39,7 +39,8 @@ const cur = computed(() => props.options.find((o) => o.value === props.modelValu
 const style = computed(() => (props.width ? { width: props.width + 'px' } : undefined))
 
 function toggle() {
-  open.value ? close() : show()
+  if (open.value) close()
+  else show()
 }
 
 function show() {
