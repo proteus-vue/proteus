@@ -74,7 +74,8 @@ import { revealPath } from '../fileTree'
 import { refreshGit } from '../git'
 import { diagAt, diagStale, ensureWatch, markSaved, noteEdit, runEslint } from '../diag'
 import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagSync'
-import { applyDiagnostics } from '../diagLint'
+import { applyDiagnostics, repaintDiag } from '../diagLint'
+import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
@@ -395,6 +396,10 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
   if (cached && rec0) {
     await nextTick()
     view?.setState(cached)
+    /* ★切回已打开的文件走这条分支（不读盘）：**必须重新派发诊断**，
+       否则 setState 换掉的 lint 状态不会恢复 ⇒ 波浪线消失（实测：a→b→a 后 a 干净了）。
+       同样先清签名，避免去重把这次派发当成"已经派过"。 */
+    view && repaintDiag(view, path, diagStale.value)
     // ★这条分支也必须登记：文件已在内存时走这里，漏了状态栏就会停在上一个文件的类型上（实测踩到）
     trackEditorFile(path)
     host.value?.setAttribute('data-lang', effectiveLangId(path))
@@ -422,8 +427,9 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     states.set(path, st)
     await nextTick()
     view?.setState(st)
-    /* 打开文件立即按现有诊断画一次（切文件时 state 是新的，必须重新派发） */
-    syncLint()
+    /* 打开文件立即按现有诊断画一次（切文件时 state 是新的，必须重新派发）。
+       ★先清签名：否则"切走再切回同一文件"会被去重误判成"已派发过" ⇒ 波浪线不出现。 */
+    view && repaintDiag(view, path, diagStale.value)
     /* 刚打开：内存 == 磁盘，诊断可信（解除 stale）；顺手补一次 eslint（有 10s 复用窗口） */
     markSaved()
     /* 把这份文本交给语言服务（不保存也能实时诊断） */
@@ -638,20 +644,10 @@ async function savePath(path: string): Promise<boolean> {
 /** 面包屑（决策 #1407）：把 `cur` 拆成目录段 + 文件名。
  *  ★**textContent 必须仍等于完整路径** —— 门禁把 `#codePath` 的文本当"当前文件"比对，
  *    所以分隔符用内联 `/` 文本、模板不换行，避免多余空白把路径弄脏。 */
-/* 派发逻辑在 `diagLint.applyDiagnostics`（含 stale 与"内存级结果优先"的判断） */
-const syncLint = () => {
-  if (view) applyDiagnostics(view, cur.value, diagStale.value)
-}
+/* 派发逻辑在 `diagLint`（含 stale 判定、"按来源合并"与派发去重） */
+const syncLint = () => view && applyDiagnostics(view, cur.value, diagStale.value)
 
-const crumbs = computed(() => {
-  if (!cur.value) return []
-  const parts = cur.value.split('/').filter(Boolean)
-  let acc = ''
-  return parts.map((name, i) => {
-    acc = acc ? `${acc}/${name}` : name
-    return { name, dir: i === parts.length - 1 ? '' : acc }
-  })
-})
+const crumbs = computed(() => crumbsOf(cur.value))
 
 /** 保存全部（⌥⌘S）：VS Code 的 ⌘K S 是和弦键，网页里用 ⌥⌘S 更直接 */
 async function saveAll() {

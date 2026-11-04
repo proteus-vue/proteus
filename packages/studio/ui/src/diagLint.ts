@@ -44,7 +44,32 @@ export function lintOf(view: EditorView, path: string): Diagnostic[] {
  * · `stale`（内存 ≠ 磁盘）时清空：磁盘诊断不能画在你改过的文本上；
  * · 但若**内存语言服务**已给出该文件的结果（`liveOf` 非 null），它对应就是当前文本 ⇒ 正常画。
  */
-export function applyDiagnostics(view: EditorView, path: string, stale: boolean): void {
+/** 上一次派发的签名：内容没变就**不要** dispatch（决策 #1423） */
+let lastSig = ''
+
+/** ★切换文件（`view.setState`）后必须调用：新 state 里没有任何 lint 状态，
+ *  而 `lastSig` 可能正好等于"上次给这个文件派发过的内容" ⇒ 去重会误判"不用派发" ⇒ 波浪线消失。 */
+export function resetDiagSig(): void {
+  lastSig = ''
+}
+
+export function applyDiagnostics(view: EditorView, path: string, stale: boolean): boolean {
   const list = stale && !liveOf(path) ? [] : lintOf(view, path)
+  /* ★为什么要签名去重（用户反馈：鼠标悬在波浪线上时提示框会"闪跳一下"）：
+     `setDiagnostics` 是一次真实事务，CodeMirror 会据此**重建** lint 状态与悬停提示；
+     而诊断数据经常"内容没变但对象换了"（每次 tsserver/eslint 推送都是新数组），
+     于是悬停期间被反复重画 ⇒ 提示框关掉重开 = 闪跳。
+     去重后：只有诊断**真的变了**才派发。 */
+  const sig =
+    path + '|' + list.map((d) => `${d.from}:${d.to}:${d.severity}:${d.source}:${d.message}`).join(';')
+  if (sig === lastSig) return false
+  lastSig = sig
   view.dispatch(setDiagnostics(view.state, list))
+  return true
+}
+
+/** 强制重画（含签名重置）：切文件/pub 后调用，避免去重把这次派发当成"已经派过" */
+export function repaintDiag(view: EditorView, path: string, stale: boolean): void {
+  resetDiagSig()
+  applyDiagnostics(view, path, stale)
 }
