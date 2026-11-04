@@ -1,0 +1,19 @@
+{
+  // packages/studio/ui/tsconfig.json —— 让**语言服务**把 Studio UI 识别成一个独立 TS 项目（决策 #1419）
+  //
+  // 【为什么必须叫 tsconfig.json】Volar（vue-language-server）按 LSP 的 workspace root 自动发现
+  //   `tsconfig.json`；而根 `tsconfig.json` 的 include 里**完全不含 packages/studio/ui**
+  //   ⇒ 之前即使语言服务起来了，诊断也永远是空数组（实测：publishDiagnostics 推 []）。
+  //
+  // 【与 tsconfig.diag.json 的关系】两者 include 相同，区别：
+  //   · 这份给**语言服务**用（长驻、自己管缓存，不开 incremental 以免和 tsc --watch 抢 buildinfo）；
+  //   · `tsconfig.diag.json` 给 `vue-tsc --watch` / 一次性检查用（开 incremental）。
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    // ★`types` 里的相对路径相对**本文件目录**解析：继承来的 "./packages/..." 会指错，必须重写
+    "types": ["vite/client", "../../shared/src/shims/mp.d.ts"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
+}

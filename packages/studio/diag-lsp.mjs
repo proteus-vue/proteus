@@ -1,30 +1,29 @@
 #!/usr/bin/env node
 /**
- * diag-lsp.mjs —— Studio 的**内存级语言服务桥**（决策 #1419）
+ * diag-lsp.mjs —— Studio 的**内存级诊断服务**（决策 #1419 起 · #1420 改为 tsserver 驱动）
  *
- * 【为什么要它】`vue-tsc --watch` 只能看**磁盘**，所以"敲错但没保存"永远不报 ——
- *   用户实测两次都不满意。主流 IDE（含 VS Code 的 Vue 支持）走的是 **Volar 语言服务**：
- *   编辑器把**内存里的文本**通过 `textDocument/didOpen|didChange` 推给服务端，
- *   服务端毫秒级回 `publishDiagnostics`，**不需要保存**。
+ * 【演进过程（避免以后再走弯路）】
+ *   1. `vue-tsc --watch`：只看磁盘 ⇒ 不保存不报（用户第一次不满）。
+ *   2. Volar（`vue-language-server --stdio`）：实测**对 .ts 恒返回空**、
+ *      对 .vue 只给模板/CSS 提示 —— 因为 **script 块与 .ts 的类型检查在 tsserver 侧**
+ *      （Volar 的 typescript 语言特性由 tsserver 插件提供，单独跑 server 拿不到）。
+ *   3. **tsserver（typescript 自带）**：`updateOpen` 支持 `fileContent`（内存文本，不落盘），
+ *      `syntacticDiagnosticsSync` + `semanticDiagnosticsSync` 直接拉取
+ *      ⇒ 实测**首次 ~3s（项目加载）、之后毫秒级**。不需要新依赖，且真正"输入即报"。
  *
- * 【本脚本职责】极简 LSP 客户端：
- *   · 起 `vue-language-server --stdio`（Volar），转发 initialize / didOpen / didChange / didClose；
- *   · 把服务端的诊断事件降级成**行 JSON** 打到 stdout 给 Rust；
- *   · 从 stdin 读 Rust 的指令（行 JSON）。
+ * 【协议（与 Rust 侧约定，未变）】
+ *   stdin  ← {"t":"open","path":"a/b.ts","text":"..."} / {"t":"change",...} / {"t":"close","path":...}
+ *   stdout → {"t":"diag","path":"a/b.ts","items":[{line,col,severity,code,message}]}
+ *            {"t":"log","message":"..."}   {"t":"ready"}
  *
- * 【协议（与 Rust 侧一致）】
- *   stdin  ← {"t":"open","path":"a/b.vue","text":"..."}
- *            {"t":"change","path":"a/b.vue","text":"..."}
- *            {"t":"close","path":"a/b.vue"}
- *            {"t":"shutdown"}
- *   stdout → {"t":"diag","path":"a/b.vue","items":[{line,col,endLine,endCol,severity,code,message}]}
- *            {"t":"log","message":"..."}      // 诊断自身故障时，让界面能说清原因
- *            {"t":"ready"}                    // initialize 完成
+ * 【范围】只处理 Studio UI 下的 .ts/.tsx/.js；`.vue` 返回空并说明原因
+ *   （覆盖 .vue 的 script 类型检查需装 `@vue/typescript-plugin` 并写进 tsconfig 的 plugins）。
  *
- * 【安全边界】参数全部来自 Rust（root 路径固定），不接受任意命令；只读文件 + 内存文本。
+ * 【为什么"关闭再打开"而不是 didChange】tsserver 的 `updateOpen.changedFiles` **只接受文件名**，
+ *   不能带新内容；`change` 命令则需要精确行列增量。用 close+open 传 `fileContent` 最简单可靠，
+ *   代价是一次 scriptInfo 重建（实测毫秒级）。
  */
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline'
 
@@ -34,177 +33,185 @@ if (!root) {
   process.exit(2)
 }
 
-const bin = path.join(root, 'node_modules/.bin/vue-language-server')
-if (!existsSync(bin)) {
-  out({ t: 'log', message: `缺少 vue-language-server（${bin}）—— 需要安装 @vue/language-server` })
-  process.exit(3)
-}
+const tsserver = path.join(root, 'node_modules/typescript/lib/tsserver.js')
+/* Studio UI 是唯一有 tsconfig.json 的目录（根 tsconfig 的 include 不含它，见 #1419） */
+const PROJECT = path.join(root, 'packages/studio/ui')
+const EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+const REQ_TIMEOUT = 15000
 
-const send = (o) => process.stdout.write(JSON.stringify(o) + '\n')
-/* 别名，避免和 LSP 的 jsonrpc `send` 混淆 */
 function out(o) {
-  send(o)
+  process.stdout.write(JSON.stringify(o) + '\n')
 }
 
-/* ── LSP 子进程 ──────────────────────────────────────────────────────────── */
-const server = spawn(bin, ['--stdio'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] })
-server.stderr.on('data', (b) => {
-  const s = String(b).trim()
-  /* 服务端的 stderr 多半是噪音；只在像错误时上报，避免刷屏 */
-  if (/error|exception|failed/i.test(s)) out({ t: 'log', message: s.slice(0, 300) })
-})
-server.on('exit', (code) => out({ t: 'log', message: `语言服务退出（code=${code}）` }))
+const isSupported = (p) => EXTS.some((e) => p.endsWith(e))
+const abs = (p) => path.join(root, p)
 
-/* JSON-RPC over stdio：Content-Length 分帧 */
+/* ── tsserver 进程 ──────────────────────────────────────────────────────── */
+const proc = spawn(process.execPath, [tsserver, '--disableAutomaticTypingAcquisition'], {
+  cwd: root,
+  stdio: ['pipe', 'pipe', 'pipe'],
+})
+proc.on('exit', (code) => out({ t: 'log', message: `tsserver 退出（code=${code}）` }))
+proc.stderr.on('data', (b) => {
+  const s = String(b).trim()
+  if (/error|exception/i.test(s)) out({ t: 'log', message: s.slice(0, 300) })
+})
+
+let seq = 0
+const pending = new Map() // seq → { resolve, reject, timer }
 let buf = Buffer.alloc(0)
-server.stdout.on('data', (chunk) => {
+
+proc.stdout.on('data', (chunk) => {
   buf = Buffer.concat([buf, chunk])
   for (;;) {
-    const headerEnd = buf.indexOf('\r\n\r\n')
-    if (headerEnd < 0) return
-    const header = buf.slice(0, headerEnd).toString('utf8')
-    const m = /Content-Length:\s*(\d+)/i.exec(header)
-    if (!m) {
-      buf = buf.slice(headerEnd + 4)
+    const i = buf.indexOf('\n')
+    if (i < 0) return
+    const line = buf.slice(0, i).toString('utf8')
+    buf = buf.slice(i + 1)
+    if (!line.trim()) continue
+    let msg
+    try {
+      msg = JSON.parse(line)
+    } catch {
       continue
     }
-    const len = Number(m[1])
-    const start = headerEnd + 4
-    if (buf.length < start + len) return
-    const body = buf.slice(start, start + len).toString('utf8')
-    buf = buf.slice(start + len)
-    try {
-      onMessage(JSON.parse(body))
-    } catch (e) {
-      out({ t: 'log', message: `解析 LSP 消息失败：${String(e).slice(0, 120)}` })
+    if (msg.type === 'response' && typeof msg.request_seq === 'number') {
+      const w = pending.get(msg.request_seq)
+      if (!w) continue
+      pending.delete(msg.request_seq)
+      clearTimeout(w.timer)
+      if (msg.success === false) w.reject(new Error(String(msg.message ?? 'tsserver 请求失败')))
+      else w.resolve(msg.body)
     }
   }
 })
 
-function write(msg) {
-  const body = JSON.stringify({ jsonrpc: '2.0', ...msg })
-  server.stdin.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`)
-}
-
-/* ── 文档与版本 ──────────────────────────────────────────────────────────── */
-const versions = new Map() // path -> version
-const known = new Set()
-
-const uriOf = (p) => 'file://' + encodeURI(path.join(root, p)).replace(/#/g, '%23')
-const pathOf = (uri) => decodeURI(uri.replace(/^file:\/\//, ''))
-
-function langId(p) {
-  if (p.endsWith('.vue')) return 'vue'
-  if (p.endsWith('.tsx')) return 'typescriptreact'
-  if (p.endsWith('.ts')) return 'typescript'
-  if (p.endsWith('.jsx')) return 'javascriptreact'
-  if (/\.(js|mjs|cjs)$/.test(p)) return 'javascript'
-  return 'plaintext'
-}
-
-function onMessage(msg) {
-  if (msg.method === 'textDocument/publishDiagnostics') {
-    const p = pathOf(msg.params.uri)
-    /* 只关心仓库内路径（Volar 也会推 node_modules 里文件） */
-    const rel = path.isAbsolute(p) ? path.relative(root, p).split(path.sep).join('/') : p
-    if (!rel || rel.startsWith('..')) return
-    const items = (msg.params.diagnostics || []).map((d) => ({
-      line: d.range.start.line + 1,
-      col: d.range.start.character + 1,
-      severity: d.severity === 2 ? 'warning' : 'error',
-      code: String(d.code ?? 'vue'),
-      message: String(d.message || '').split('\n')[0],
-    }))
-    out({ t: 'diag', path: rel, items })
-    return
-  }
-  /* 服务端发来的请求（如 window/workDoneProgress/create、client/registerCapability）要回空结果，
-     否则它会一直等，导致后续诊断不推 */
-  if (msg.id !== undefined && msg.method) {
-    write({ id: msg.id, result: null })
-    return
-  }
-  if (msg.id !== undefined && msg.method === undefined) {
-    /* initialize 的响应 */
-    if (msg.result?.capabilities) {
-      write({ method: 'initialized', params: {} })
-      out({ t: 'ready' })
-    }
-  }
-}
-
-/* ── 初始化 ─────────────────────────────────────────────────────────────── */
-write({
-  id: 1,
-  method: 'initialize',
-  params: {
-    processId: process.pid,
-    rootUri: uriOf(''),
-    workspaceFolders: [{ uri: uriOf(''), name: 'proteus' }],
-    capabilities: {
-      textDocument: {
-        publishDiagnostics: { relatedInformation: false },
-        synchronization: { didSave: false, dynamicRegistration: false },
-      },
-      workspace: { configuration: false, workspaceFolders: false },
-    },
-    initializationOptions: {
-      /* 明确 tsdk：否则服务端可能用内置的旧 TS，与仓库版本不一致会报一堆假错 */
-      typescript: { tsdk: path.join(root, 'node_modules/typescript/lib') },
-      vue: { hybridMode: false },
-    },
-  },
-})
-
-/* ── Rust → 本进程（行 JSON）─────────────────────────────────────────────── */
-readline
-  .createInterface({ input: process.stdin })
-  .on('line', (line) => {
-    let m
-    try {
-      m = JSON.parse(line)
-    } catch {
-      return
-    }
-    const p = m.path
-    if (m.t === 'open' || m.t === 'change') {
-      const v = (versions.get(p) ?? 0) + 1
-      versions.set(p, v)
-      if (m.t === 'open' && !known.has(p)) {
-        known.add(p)
-        write({
-          method: 'textDocument/didOpen',
-          params: { textDocument: { uri: uriOf(p), languageId: langId(p), version: v, text: m.text } },
-        })
-      } else {
-        /* 全量替换：简单可靠（增量 range 需要精确的 range 计算，收益不大） */
-        write({
-          method: 'textDocument/didChange',
-          params: { textDocument: { uri: uriOf(p), version: v }, contentChanges: [{ text: m.text }] },
-        })
-      }
-      return
-    }
-    if (m.t === 'close') {
-      if (known.delete(p)) {
-        write({ method: 'textDocument/didClose', params: { textDocument: { uri: uriOf(p) } } })
-      }
-      versions.delete(p)
-      return
-    }
-    if (m.t === 'shutdown') {
-      try {
-        write({ id: 999, method: 'shutdown', params: null })
-        write({ method: 'exit' })
-      } catch {
-        /* 忽略 */
-      }
-      server.kill()
-      process.exit(0)
-    }
+function req(command, args) {
+  const s = ++seq
+  proc.stdin.write(JSON.stringify({ seq: s, type: 'request', command, arguments: args }) + '\n')
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(s)
+      reject(new Error(`tsserver 超时：${command}`))
+    }, REQ_TIMEOUT)
+    pending.set(s, { resolve, reject, timer })
   })
+}
+
+/* ── 文档状态 ───────────────────────────────────────────────────────────── */
+const open = new Set()
+/** 诊断进行中又收到新文本 ⇒ 记下来，完成后用最新文本再跑一次 */
+const latest = new Map()
+const running = new Set()
+
+function toItems(diags) {
+  const list = []
+  for (const d of diags ?? []) {
+    list.push({
+      line: d.start?.line ?? 1,
+      col: (d.start?.offset ?? 0) + 1, // tsserver 的 offset 是 0-based
+      severity: d.category === 'warning' ? 'warning' : 'error',
+      code: String(d.code ?? 'ts'),
+      message: String(d.text ?? '').split('\n')[0],
+    })
+  }
+  return list
+}
+
+async function diagnose(file, text) {
+  /* close+open：把**内存文本**塞进 tsserver（`changedFiles` 不接受内容） */
+  if (open.has(file)) {
+    await req('close', { file }).catch(() => {})
+    open.delete(file)
+  }
+  await req('updateOpen', {
+    openFiles: [{ file, fileContent: text, projectRootPath: PROJECT }],
+    changedFiles: [],
+    closedFiles: [],
+  })
+  open.add(file)
+
+  const [syn, sem] = await Promise.all([
+    req('syntacticDiagnosticsSync', { file }).catch(() => []),
+    req('semanticDiagnosticsSync', { file }).catch(() => []),
+  ])
+  const items = [...toItems(syn), ...toItems(sem)]
+  /* 去重：同一位置同类消息可能语法/语义两边都给 */
+  const seen = new Set()
+  return items.filter((i) => {
+    const k = `${i.line}:${i.col}:${i.message}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+async function run(file, rel, text) {
+  if (running.has(file)) {
+    latest.set(file, { rel, text })
+    return
+  }
+  running.add(file)
+  try {
+    const items = await diagnose(file, text)
+    const nx = latest.get(file)
+    if (nx && nx.text !== text) {
+      /* 诊断期间文本又变了 ⇒ 丢弃这次结果（否则旧文本的错误会画在新内容上），用最新文本重跑 */
+      latest.delete(file)
+      running.delete(file)
+      return run(file, nx.rel, nx.text)
+    }
+    latest.delete(file)
+    out({ t: 'diag', path: rel, items })
+  } catch (e) {
+    out({ t: 'log', message: `诊断失败：${String(e?.message ?? e).slice(0, 160)}` })
+  } finally {
+    running.delete(file)
+  }
+}
+
+/* 就绪信号：tsserver 没有显式 ready，发一次 configure 确认管道通 */
+req('configure', { preferences: {} })
+  .catch(() => {})
+  .finally(() => out({ t: 'ready' }))
+
+/* ── Rust → 本进程 ──────────────────────────────────────────────────────── */
+readline.createInterface({ input: process.stdin }).on('line', (line) => {
+  let m
+  try {
+    m = JSON.parse(line)
+  } catch {
+    return
+  }
+  const rel = m.path ?? ''
+  if (m.t === 'open' || m.t === 'change') {
+    if (!isSupported(rel)) {
+      if (rel.endsWith('.vue')) {
+        /* tsserver 不认识 SFC；如实返回空并说明，交给保存后的磁盘 watch */
+        out({ t: 'diag', path: rel, items: [] })
+        out({
+          t: 'log',
+          message: '.vue 的实时类型检查需要 @vue/typescript-plugin（当前由保存后 <1s 的 watch 覆盖）',
+        })
+      }
+      return
+    }
+    void run(abs(rel), rel, String(m.text ?? ''))
+    return
+  }
+  if (m.t === 'close') {
+    const file = abs(rel)
+    latest.delete(file)
+    if (open.delete(file)) void req('close', { file }).catch(() => {})
+    return
+  }
+  if (m.t === 'shutdown') {
+    proc.kill()
+    process.exit(0)
+  }
+})
 
 process.on('SIGTERM', () => {
-  server.kill()
+  proc.kill()
   process.exit(0)
 })
