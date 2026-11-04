@@ -118,3 +118,13 @@ export function diagHover(path: () => string) {
     { hoverTime: 150 },
   )
 }
+
+/** 判空版：调用方（组件）常常只有 `EditorView | null`，把判空收在这里，避免调用点写成 `v && f(v)` */
+export function applyDiag(view: EditorView | null, path: string, stale: boolean): void {
+  if (view) applyDiagnostics(view, path, stale)
+}
+
+/** 判空 + 强制重画（换 state 后必须用这个） */
+export function forceDiag(view: EditorView | null, path: string, stale: boolean): void {
+  if (view) repaintDiag(view, path, stale)
+}

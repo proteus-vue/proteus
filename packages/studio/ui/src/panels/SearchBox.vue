@@ -43,9 +43,11 @@ async function run() {
   try {
     const r = await searchText(q)
     if (mine !== seq) return // 有更新的请求了：这次结果作废
-    hits.value = r.hits
-    engine.value = r.engine
-    truncated.value = r.truncated
+    /* ★`r` 可能是 null（后端降级 / 旧版本 / 桥不可用）：不判空会让整页白屏
+       （`hits` 变成 null 后，`for...of` 与 `list.length` 全部抛错） */
+    hits.value = Array.isArray(r?.hits) ? r.hits : []
+    engine.value = r?.engine ?? 'rg'
+    truncated.value = Boolean(r?.truncated)
     err.value = ''
   } catch (e) {
     if (mine !== seq) return
@@ -62,6 +64,41 @@ watch(query, () => {
   timer = setTimeout(() => void run(), 220)
 })
 watch(active, (on) => emit('active', on), { immediate: true })
+
+/* ── 按文件分组（决策 #1425）─────────────────────────────────────────────
+   平铺几百条命中时，同一文件的行挤在一起也看不出边界，左栏又窄（~260px）——
+   分组后能一眼看出"命中集中在哪几个文件"，也能把无关文件折掉。 */
+const groups = computed(() => {
+  const map = new Map<string, SearchHit[]>()
+  for (const h of hits.value ?? []) {
+    const arr = map.get(h.path)
+    if (arr) arr.push(h)
+    else map.set(h.path, [h])
+  }
+  return [...map.entries()].map(([path, items]) => ({ path, items }))
+})
+
+/** 结果很多时**默认全部折叠**：几千条 DOM 一次铺出来左栏会卡 */
+const MANY = 300
+const collapsed = ref<string[]>([])
+watch(hits, (list) => {
+  const arr = list ?? []
+  collapsed.value = arr.length > MANY ? [...new Set(arr.map((h) => h.path))] : []
+})
+const isOpen = (p: string) => !collapsed.value.includes(p)
+function toggle(p: string) {
+  const i = collapsed.value.indexOf(p)
+  if (i >= 0) collapsed.value.splice(i, 1)
+  else collapsed.value.push(p)
+}
+const baseOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
+/** 只显示**末尾两级目录**：左栏只有 ~260px，整条路径既放不下也没信息量（VS Code 同款取舍） */
+const dirOf = (p: string) => {
+  const parts = p.split('/')
+  parts.pop()
+  const tail = parts.slice(-2).join('/')
+  return tail ? `${tail}/` : ''
+}
 
 function clear() {
   query.value = ''
@@ -101,17 +138,27 @@ onBeforeUnmount(() => clearTimeout(timer))
       {{ busy ? '搜索中…' : `${hits.length}${truncated ? '+' : ''} 条命中 · ${engine === 'rg' ? 'rg' : '内置扫描（装 ripgrep 更快）'}` }}
     </div>
     <div v-if="active" class="hits" id="codeHits">
-      <button
-        v-for="(h, i) in hits"
-        :key="`${h.path}:${h.line}:${h.col}:${i}`"
-        class="hit"
-        :data-hit="`${h.path}:${h.line}:${h.col}`"
-        :title="`${h.path}:${h.line}:${h.col}`"
-        @click="emit('jump', h)"
-      >
-        <span class="hpath">{{ h.path }}<span class="hline">:{{ h.line }}</span></span>
-        <span class="htext">{{ h.text }}</span>
-      </button>
+      <div v-for="g in groups" :key="g.path" class="hgroup">
+        <button class="ghead" :title="g.path" @click="toggle(g.path)">
+          <span class="chev">{{ isOpen(g.path) ? '▾' : '▸' }}</span>
+          <span class="gname">{{ baseOf(g.path) }}</span>
+          <span class="gdir">{{ dirOf(g.path) }}</span>
+          <span class="gcount">{{ g.items.length }}</span>
+        </button>
+        <template v-if="isOpen(g.path)">
+          <button
+            v-for="(h, i) in g.items"
+            :key="`${h.path}:${h.line}:${h.col}:${i}`"
+            class="hit"
+            :data-hit="`${h.path}:${h.line}:${h.col}`"
+            :title="`${h.path}:${h.line}:${h.col}`"
+            @click="emit('jump', h)"
+          >
+            <span class="hln">L{{ h.line }}</span>
+            <span class="htext">{{ h.text }}</span>
+          </button>
+        </template>
+      </div>
       <div v-if="!hits.length && !busy" class="fnmeta">无命中</div>
     </div>
   </div>
@@ -191,15 +238,72 @@ onBeforeUnmount(() => clearTimeout(timer))
   overflow: auto;
   padding: var(--sp1) 0;
 }
-.hit {
-  display: block;
+/* 文件组：组头吸顶不明显但可点，条目缩进 */
+.hgroup {
+  margin-bottom: 2px;
+}
+.ghead {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   width: 100%;
-  padding: var(--sp1) var(--sp2);
+  padding: 3px var(--sp2);
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: var(--fs-xs) / 1.4 system-ui, -apple-system, 'PingFang SC', sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.ghead:hover {
+  background: var(--bg-overlay);
+  color: var(--fg);
+}
+.chev {
+  width: 8px;
+  flex: none;
+  color: var(--fg-subtle);
+}
+.gname {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gdir {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gcount {
+  flex: none;
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.hit {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  padding: 2px var(--sp2) 2px 20px;
   border: 0;
   background: transparent;
   text-align: left;
   cursor: pointer;
   transition: background var(--dur) var(--ease);
+}
+/* 行号列：定宽右对齐，扫读时不会左右跳 */
+.hln {
+  flex: none;
+  min-width: 30px;
+  color: var(--accent);
+  font: var(--fs-xs) / 16px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: right;
 }
 .hit:hover {
   background: var(--bg-overlay);
