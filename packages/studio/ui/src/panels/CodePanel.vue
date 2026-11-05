@@ -86,7 +86,7 @@ function onQuickPick(path: string) {
   void open(path)
 }
 
-/** 代码面板订阅的动作（决策 #1430）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
+/** 代码面板订阅的动作（决策 #1431）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
 const offActions = [
   onAction('file.closeTab', (e) => {
     /* 终端聚焦时 ⌘W 该关终端会话，不关标签：沿用原判据 */

@@ -570,7 +570,7 @@ const paneStyle = computed(() => {
 
 const termLeft = computed(() => (view.value === 'code' && !treeHidden.value ? treeW.value : 0))
 
-/* 应用级快捷键（决策 #1430）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
+/* 应用级快捷键（决策 #1431）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
 const offAppActions = [
   onAction('view.toggleTerminal', () => toggleTermPane()),
   onAction('view.toggleTerminalMax', () => toggleTermMax()),
