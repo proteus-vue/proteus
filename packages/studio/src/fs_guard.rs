@@ -216,3 +216,37 @@ mod tests {
         assert!(!within_root(root, "/etc/passwd"));
     }
 }
+
+/// 只读读取**仓库外**的文本文件（决策 #1435）。
+///
+/// 【为什么需要】跳转定义落在真的仓库外时（全局安装的包、`lib.dom.d.ts` 所在的 SDK 目录、
+///   pnpm store 之外的位置），主流 IDE 都是"打开即可看、但不许改"
+///   （JetBrains 的 External Libraries 直接就带锁）。
+///
+/// 【安全边界】三条，缺一不可：
+///   ① 必须**绝对路径**（相对路径一律走仓库内那套判定，避免两套语义混淆）；
+///   ② **扩展名白名单**（只认源码/类型/JSON —— 不让人借这个口子读 `/etc/shadow`）；
+///   ③ **大小上限 512KB**（与仓库内读取一致，防超大文件把 webview 卡死）。
+/// 全程只读：这个函数之外没有任何写路径经过它。
+pub fn read_text_external(path: String) -> Result<FileText, String> {
+    let raw = std::path::Path::new(&path);
+    if !raw.is_absolute() {
+        return Err(format!("需要绝对路径：{path}"));
+    }
+    let p = raw.canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    const OK_EXT: [&str; 10] = ["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "vue", "json"];
+    if !OK_EXT.contains(&ext.as_str()) {
+        return Err(format!("不支持的文件类型：.{ext}（只允许源码/类型/JSON）"));
+    }
+    let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+    if len > 512 * 1024 {
+        return Err(format!("文件过大：{len} 字节（上限 512KB）"));
+    }
+    let text = std::fs::read_to_string(&p).map_err(|e| format!("读失败 {path}：{e}"))?;
+    Ok(FileText { text, mtime_us: mtime_us(&p) })
+}

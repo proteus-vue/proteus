@@ -45,7 +45,7 @@ import {
   invoke,
   listFiles,
   onCloseBlocked,
-  readText,
+  readSource,
   writeText,
   type SearchHit,
 } from '../bridge'
@@ -63,7 +63,7 @@ import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagS
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
-import { goToDefinition, isDependencyPath, typeHover } from '../nav'
+import { goToDefinition, isReadonlyPath, typeHover } from '../nav'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -387,7 +387,7 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
   const cached = states.get(path)
   const rec0 = recs.get(path)
   if (cached && rec0) {
-    readonlyFile.value = isDependencyPath(path)
+    readonlyFile.value = isReadonlyPath(path)
     await nextTick()
     view?.setState(cached)
     /* ★切回已打开的文件走这条分支（不读盘）：**必须重新派发诊断**，
@@ -408,7 +408,7 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
 
   // ② 第一次打开：读盘，建 state + 基线
   try {
-    const f = await readText(path)
+    const f = await readSource(path)
     /* ★空返回要当成"读不到"处理（决策 #1404）：`read_text` 在某些降级路径（文件刚被删、
        桥不可用）会返回 null，直接取 `.text` 会抛 TypeError —— 用户看到的是
        "Cannot read properties of null"，比"读不到文件"难懂得多。 */
@@ -418,7 +418,7 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     }
     recs.set(path, { base: f.text, mtime: f.mtime_us })
     /* ★必须在 makeState 之前定好只读：state 里的 readOnly facet 是创建时定死的 */
-    readonlyFile.value = isDependencyPath(path)
+    readonlyFile.value = isReadonlyPath(path)
     const st = makeState(f.text, path)
     states.set(path, st)
     await nextTick()

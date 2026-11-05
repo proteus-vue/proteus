@@ -458,6 +458,12 @@ fn dump_frame(path: String) {
     `write_text` / `list_files`）。抽因：本文件曾 1103 行越过 1000 行硬上限；
    而这一组共享**同一条安全边界**（canonicalize + 前缀比对），写在一起边界才不会分叉。
    ★以下四个 command 只是把 Tauri 入口转发到该模块（命令名不变，前端零改动）。 */
+/// 只读读取仓库外文件（决策 #1435）：跳转定义落在依赖/SDK 上时用
+#[tauri::command]
+fn read_text_external(path: String) -> Result<fs_guard::FileText, String> {
+    fs_guard::read_text_external(path)
+}
+
 #[tauri::command]
 fn read_text(path: String) -> Result<fs_guard::FileText, String> {
     fs_guard::read_text(path)

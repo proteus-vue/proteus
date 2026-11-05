@@ -73,6 +73,14 @@ export interface FileText {
 /** 读仓库内一个文本文件。边界由 Rust 侧把关：仓库内 + ≤512KB。 */
 export const readText = (path: string): Promise<FileText> => invoke<FileText>('read_text', { path })
 
+/**
+ * 读文件内容（决策 #1435）：**绝对路径走只读外部通道**，其余走仓库内通道。
+ * 为什么合在一个函数里：调用方（打开文件）不该关心"这个路径属于哪套边界"，
+ * 否则每加一处读文件就要复制一次判断。
+ */
+export const readSource = (path: string): Promise<FileText> =>
+  path.startsWith('/') ? invoke<FileText>('read_text_external', { path }) : invoke<FileText>('read_text', { path })
+
 /** 写回。`expect` = 打开时读到的 mtime；返回新的 mtime。
  *  ★Rust 侧会比对 mtime：不一致就**拒绝覆盖**（本仓常驻多个 AI 会话同时改文件）。 */
 export const writeText = (path: string, text: string, expect: number): Promise<number> =>

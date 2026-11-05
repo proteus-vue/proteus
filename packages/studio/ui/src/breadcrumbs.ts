@@ -13,6 +13,18 @@ export interface Crumb {
 
 export function crumbsOf(path: string): Crumb[] {
   if (!path) return []
+  /* ★绝对路径（仓库外只读文件，决策 #1435）：只显示**末两段**并加 `…` 前缀。
+     原因：`split('/').filter(Boolean)` 会吃掉根斜杠，完整绝对路径又长到把面包屑撑爆；
+     而这类文件只需要"是哪一个文件"，不需要逐层导航。 */
+  if (path.startsWith('/')) {
+    const segs = path.split('/').filter(Boolean).slice(-2)
+    let acc = ''
+    const tail = segs.map((name, i) => {
+      acc = acc ? `${acc}/${name}` : name
+      return { name, dir: i === segs.length - 1 ? '' : '' }
+    })
+    return [{ name: '…', dir: '' }, ...tail]
+  }
   const parts = path.split('/').filter(Boolean)
   let acc = ''
   return parts.map((name, i) => {

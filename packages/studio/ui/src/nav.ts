@@ -59,7 +59,7 @@ export async function goToDefinition(
     return null
   }
   if (!isJumpable(t.path)) {
-    onInfo(`定义在仓库外：${t.path}`)
+    onInfo(`无法跳转（路径不可用）：${t.path}`)
     return null
   }
   return t
@@ -74,9 +74,17 @@ export function isDependencyPath(path: string): boolean {
   return !!path && !path.startsWith('/') && path.includes('node_modules/')
 }
 
-/** 能否跳过去：仓库内（含依赖）都行；仓库外（绝对路径 / `..`）不跳 */
+/**
+ * 是否只读打开：仓库内依赖（node_modules）+ **任何绝对路径**（仓库外的 SDK/全局包）。
+ * 主流 IDE 都这么做（JetBrains 的 External Libraries 直接带锁），我们跟这个语义。
+ */
+export function isReadonlyPath(path: string): boolean {
+  return path.startsWith('/') || isDependencyPath(path)
+}
+
+/** 能否跳过去：绝对路径也跳（只读打开）；只有 `..` 这类相对越界不跳 */
 export function isJumpable(path: string): boolean {
-  return !!path && !path.startsWith('/') && !path.startsWith('..')
+  return !!path && !path.startsWith('..')
 }
 
 const WORD = /[\w$]+/
