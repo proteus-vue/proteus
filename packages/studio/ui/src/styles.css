@@ -401,3 +401,20 @@ kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:
   transition: background .12s ease;
 }
 .tsplit:hover { background: var(--border-subtle); }
+
+/* ── 自定义快捷键表（决策 #1433，设置页「编辑器」分类）──────────────────── */
+.kblist{display:flex;flex-direction:column;gap:2px;margin:6px 0 10px}
+.kbgroup{margin:10px 0 2px;color:var(--fg-subtle);font-size:11px;letter-spacing:.04em}
+.kbrow{display:flex;align-items:center;gap:8px;padding:2px 0}
+.kblabel{flex:1;min-width:0;overflow:hidden;color:var(--fg);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+/* 键位按钮定宽 + 等宽字体：录制/切换时宽度不变，不会左右跳 */
+.kbkey{flex:none;min-width:132px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-2,#1f2228);color:var(--fg);font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;transition:border-color var(--dur) var(--ease)}
+.kbkey:hover{border-color:var(--accent)}
+.kbkey.custom{border-color:var(--accent);color:var(--accent)}
+.kbkey.rec{border-color:var(--accent);background:rgba(76,141,255,.16);color:var(--fg)}
+.kbreset{flex:none;padding:2px 6px;border:0;border-radius:3px;background:transparent;color:var(--fg-subtle);font-size:11px;cursor:pointer}
+.kbreset:hover{color:var(--fg);background:var(--bg-overlay)}
+.kbfoot{display:flex;align-items:center;gap:10px;margin-top:4px}
+.kball{padding:4px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--fg-muted);font-size:11px;cursor:pointer}
+.kball:hover{border-color:var(--accent);color:var(--fg)}
+.kbsaved{color:#6cc08b;font-size:11px}

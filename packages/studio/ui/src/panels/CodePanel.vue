@@ -141,9 +141,9 @@ const setTabDirty = (p: string, on: boolean) => {
 const searchActive = ref(false)
 const sidebar = ref<{ focusSearch: () => void } | null>(null)
 
-/** F12：跳到定义（决策 #1429）；失败原因由 `nav.goToDefinition` 给出 */
-async function jumpToDef() {
-  const t = await goToDefinition(view, cur.value, (m) => pushToast(m, 'info'))
+/** 跳到定义（决策 #1429 / #1433）：F12 用光标位置，⌘+单击用鼠标位置 */
+async function jumpToDef(pos?: number) {
+  const t = await goToDefinition(view, cur.value, (m) => pushToast(m, 'info'), pos)
   if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
 }
 
@@ -263,6 +263,18 @@ function makeState(doc: string, path: string) {
       tsAutocomplete(() => cur.value),
       /* 悬浮显示类型/文档（决策 #1429） */
       typeHover(() => cur.value),
+      /* ⌘/Ctrl + 单击 = 跳定义（决策 #1433）：VS Code 与 JetBrains 共同的肌肉记忆。
+         ★用 mousedown 而不是 click：先把位置算出来（posAtCoords），不依赖"默认把光标移过去"的时序。 */
+      EditorView.domEventHandlers({
+        mousedown: (e, v) => {
+          if (e.button !== 0 || !(e.metaKey || e.ctrlKey)) return false
+          const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+          if (pos == null) return false
+          e.preventDefault()
+          void jumpToDef(pos)
+          return true
+        },
+      }),
       history(),
       langFor(path),
       cmPhrases,

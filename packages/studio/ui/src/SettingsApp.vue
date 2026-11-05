@@ -8,8 +8,24 @@
 //    而不是把 7 个输入框平铺（上一版就是那样，用户说"太粗糙"）。
 // ③ **点两下就完成**：每组自动列出检测到的候选（带真实版本），点一下即选中；只有一个候选时自动填；
 //    找不到才让用户点「浏览…」（原生 NSOpenPanel）。
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { chordLabel, keymapSchemes, schemeState, setScheme, type KeymapScheme } from './keybindings'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  ACTIONS,
+  beginCapture,
+  chordFromEvent,
+  chordLabel,
+  conflictOf,
+  endCapture,
+  isCustomized,
+  keymapSchemes,
+  resetAllChords,
+  schemeState,
+  setChords,
+  setScheme,
+  type ActionId,
+  type ActionMeta,
+  type KeymapScheme,
+} from './keybindings'
 import PSelect from './ui/PSelect.vue'
 import {
   detectTools,
@@ -79,6 +95,66 @@ function pickScheme(v: string) {
 
 /** PSelect 要 `{value,label}`；`hint` 不填（键位随方案变，写死会骗人） */
 const keymapOptions = keymapSchemes.map((s) => ({ value: s.value, label: s.label }))
+
+/* ── 自定义快捷键（决策 #1433）────────────────────────────────────────── */
+const recording = ref<ActionId | null>(null)
+const kbNote = ref('')
+const actionGroups = computed(() => {
+  const g = new Map<string, ActionMeta[]>()
+  for (const a of ACTIONS) g.set(a.group, [...(g.get(a.group) ?? []), a])
+  return [...g.entries()].map(([name, items]) => ({ name, items }))
+})
+
+function stopRecord() {
+  recording.value = null
+  endCapture()
+  window.removeEventListener('keydown', onRecordKey, true)
+}
+
+function onRecordKey(e: KeyboardEvent) {
+  /* 录制期间吃掉所有按键：否则按 ⌘S 想绑键，文件先被保存了 */
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') return stopRecord()
+  const id = recording.value
+  if (!id) return
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    setChords(id, [])
+    kbNote.value = '已清除绑定'
+    return stopRecord()
+  }
+  const chord = chordFromEvent(e)
+  /* 只按修饰键：继续等真正的键 */
+  if (!chord) return
+  const dup = conflictOf(chord, id)
+  if (dup) {
+    kbNote.value = `该键已被「${dup}」占用`
+    return stopRecord()
+  }
+  setChords(id, [chord])
+  kbNote.value = '已保存'
+  stopRecord()
+}
+
+function startRecord(id: ActionId) {
+  stopRecord()
+  recording.value = id
+  kbNote.value = ''
+  beginCapture()
+  window.addEventListener('keydown', onRecordKey, true)
+}
+
+function resetOne(id: ActionId) {
+  setChords(id, null)
+  kbNote.value = '已恢复默认'
+}
+
+function resetAllKeymaps() {
+  resetAllChords()
+  kbNote.value = '全部恢复默认'
+}
+
+onBeforeUnmount(stopRecord)
 
 onMounted(async () => {
   if (!hasBridge()) return
@@ -247,6 +323,33 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
             侧栏 <b>{{ chordLabel('view.toggleSidebar') }}</b> ·
             终端 <b>{{ chordLabel('view.toggleTerminal') }}</b>
           </p>
+
+          <h2 class="sethead">自定义快捷键</h2>
+          <p class="setlead">
+            点右侧键位按钮后按下新的组合键即可。<b>Esc</b> 取消、<b>Backspace</b> 清除绑定。
+            被别的动作占用的键会被拒绝（不会静默覆盖）。改动立即生效，按方案走默认值。
+          </p>
+          <div class="kblist" id="setKeymapList">
+            <template v-for="g in actionGroups" :key="g.name">
+              <div class="kbgroup">{{ g.name }}</div>
+              <div v-for="a in g.items" :key="a.id" class="kbrow" :data-action="a.id">
+                <span class="kblabel">{{ a.label }}</span>
+                <button
+                  class="kbkey"
+                  :class="{ rec: recording === a.id, custom: isCustomized(a.id) }"
+                  :data-kb="a.id"
+                  @click="startRecord(a.id)"
+                >
+                  {{ recording === a.id ? '按下新键…' : chordLabel(a.id) || '未绑定' }}
+                </button>
+                <button v-if="isCustomized(a.id)" class="kbreset" @click="resetOne(a.id)">默认</button>
+              </div>
+            </template>
+          </div>
+          <div class="kbfoot">
+            <button class="kball" id="setKeymapResetAll" @click="resetAllKeymaps">全部恢复默认</button>
+            <span v-if="kbNote" class="kbsaved" id="setKeymapNote">{{ kbNote }}</span>
+          </div>
         </section>
 
         <!-- ── 开发环境：先选端，再看该端的工具 ────────────────────────── -->

@@ -114,6 +114,32 @@ function loadScheme(): KeymapScheme {
   }
 }
 
+/**
+ * 可自定义的动作清单（决策 #1433）—— **只列已经接线的**。
+ * 不列 `editor.findInFile` / `editor.gotoLine` / `editor.selectNext` / `term.*`：
+ * 它们目前由 CodeMirror 的 keymap 或终端面板内部固定绑定，改这里不会生效。
+ */
+export interface ActionMeta {
+  id: ActionId
+  label: string
+  group: '文件' | '编辑' | '视图'
+}
+export const ACTIONS: ActionMeta[] = [
+  { id: 'file.save', label: '保存', group: '文件' },
+  { id: 'file.saveAll', label: '保存全部', group: '文件' },
+  { id: 'file.closeTab', label: '关闭标签', group: '文件' },
+  { id: 'editor.searchRepo', label: '仓库搜索', group: '编辑' },
+  { id: 'editor.quickOpen', label: '快速打开文件', group: '编辑' },
+  { id: 'editor.gotoDefinition', label: '跳转定义', group: '编辑' },
+  { id: 'view.toggleSidebar', label: '切换主侧栏', group: '视图' },
+  { id: 'view.toggleRail', label: '切换左窄栏', group: '视图' },
+  { id: 'view.toggleTerminal', label: '切换终端', group: '视图' },
+  { id: 'view.toggleTerminalMax', label: '终端最大化', group: '视图' },
+  { id: 'view.zoomIn', label: '放大画布', group: '视图' },
+  { id: 'view.zoomOut', label: '缩小画布', group: '视图' },
+  { id: 'view.zoomReset', label: '画布复位', group: '视图' },
+]
+
 const scheme = ref<KeymapScheme>(loadScheme())
 /** 供设置面板直接读（`v-model` 用不了，因为它要同时写 localStorage，见 `setScheme`） */
 export const schemeState = scheme
@@ -142,9 +168,67 @@ export function setScheme(s: KeymapScheme): void {
   }
 }
 
-/** 某个动作在**当前方案**下的所有组合键（方案没写就回退 BASE） */
+/** 用户自定义覆盖：`null` = 没改过；空数组 = 用户清空了该动作的键 */
+const OVER_KEY = 'proteus.keymapOverrides'
+const overrides = ref<Partial<Record<ActionId, string[]>>>(loadOverrides())
+
+function loadOverrides(): Partial<Record<ActionId, string[]>> {
+  try {
+    const raw = localStorage.getItem(OVER_KEY)
+    const o = raw ? JSON.parse(raw) : null
+    return o && typeof o === 'object' ? (o as Partial<Record<ActionId, string[]>>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistOverrides() {
+  try {
+    localStorage.setItem(OVER_KEY, JSON.stringify(overrides.value))
+  } catch {
+    /* 写不了就只在内存生效 */
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === OVER_KEY) overrides.value = loadOverrides()
+  })
+}
+
+/** 某个动作在**当前方案**下的所有组合键：自定义 > 方案 > BASE */
 export function chordsOf(action: ActionId): string[] {
+  const ov = overrides.value[action]
+  if (ov) return ov.map(normalizeChord)
+  return (SCHEMES[scheme.value][action] ?? BASE[action] ?? []).map(normalizeChord)
+}
+
+/** 该动作的出厂键位（换方案后跟着变，用于"恢复默认"的对照） */
+export function defaultChordsOf(action: ActionId): string[] {
   return SCHEMES[scheme.value][action] ?? BASE[action] ?? []
+}
+
+export const isCustomized = (action: ActionId) => Array.isArray(overrides.value[action])
+
+/** 设置某动作的键位；传 `null` 恢复默认，传 `[]` 表示"禁用该动作" */
+export function setChords(action: ActionId, chords: string[] | null): void {
+  if (chords === null) delete overrides.value[action]
+  else overrides.value = { ...overrides.value, [action]: chords.map(normalizeChord) }
+  persistOverrides()
+}
+
+export function resetAllChords(): void {
+  overrides.value = {}
+  persistOverrides()
+}
+
+/** 该键是否已被**别的**动作占用（返回占用它的动作标签） */
+export function conflictOf(chord: string, except: ActionId): string | null {
+  for (const a of ACTIONS) {
+    if (a.id === except) continue
+    if (chordsOf(a.id).some((c) => normalizeChord(c) === normalizeChord(chord))) return a.label
+  }
+  return null
 }
 
 const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
@@ -154,6 +238,18 @@ interface Parsed {
   mod: boolean
   shift: boolean
   alt: boolean
+}
+
+/**
+ * 组合键归一化：修饰符保持原样，**单字符键统一小写**。
+ * ★为什么必须有这一步：预设里写的是 `Mod+Shift+F`，而录制出来的事件是 `Mod+Shift+f` ——
+ *   直接比字符串永远不相等 ⇒ 冲突检测形同虚设（实测：把 `⇧⌘F` 绑到"保存全部"没被拦住）。
+ */
+export function normalizeChord(chord: string): string {
+  return chord
+    .split('+')
+    .map((part) => (part.length === 1 ? part.toLowerCase() : part))
+    .join('+')
 }
 
 function parse(chord: string): Parsed {
@@ -173,6 +269,29 @@ function keyOf(e: KeyboardEvent): string {
   if (k === '+') return '='
   if (k === ' ') return 'space'
   return k.toLowerCase()
+}
+
+/**
+ * 录制态（决策 #1433）：设置面板录制新键时置位。
+ * ★必须让 `installKeymap` 让路 —— 否则用户按 `⌘S` 想绑键，文件先被保存了。
+ */
+let capturing = false
+export function beginCapture(): void {
+  capturing = true
+}
+export function endCapture(): void {
+  capturing = false
+}
+
+/** 从键盘事件生成 chord（`Mod+Shift+F`）；只按修饰键时返回 `null` */
+export function chordFromEvent(e: KeyboardEvent): string | null {
+  if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return null
+  const parts: string[] = []
+  if (isMac() ? e.metaKey : e.ctrlKey) parts.push('Mod')
+  if (e.altKey) parts.push('Alt')
+  if (e.shiftKey) parts.push('Shift')
+  parts.push(keyOf(e))
+  return parts.join('+')
 }
 
 export function matchChord(e: KeyboardEvent, chord: string): boolean {
@@ -221,7 +340,7 @@ export function onAction(id: ActionId, fn: Handler): () => void {
  */
 export function installKeymap(): () => void {
   const onKey = (e: KeyboardEvent) => {
-    if (e.isComposing) return
+    if (e.isComposing || capturing) return
     const action = actionOf(e)
     if (!action) return
     const set = handlers.get(action)

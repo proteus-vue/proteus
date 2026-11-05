@@ -27,6 +27,12 @@ export async function definitionAt(path: string, text: string, line: number, col
   return t ?? null
 }
 
+/** 指定文档偏移处的定义（⌘+单击用） */
+export async function definitionAtPos(view: EditorView, path: string, pos: number): Promise<DefTarget | null> {
+  const line = view.state.doc.lineAt(pos)
+  return definitionAt(path, view.state.doc.toString(), line.number, pos - line.from + 1)
+}
+
 /** F12：光标处的定义。`col` 用 UTF-16 偏移（tsserver 的口径就是 UTF-16 code unit） */
 export async function definitionAtCursor(view: EditorView, path: string): Promise<DefTarget | null> {
   const pos = view.state.selection.main.head
@@ -42,10 +48,12 @@ export async function goToDefinition(
   view: EditorView | null,
   path: string,
   onInfo: (msg: string) => void,
+  /** 指定位置（F12 用光标；⌘+单击传鼠标处的文档偏移） */
+  pos?: number,
 ): Promise<DefTarget | null> {
   /* 判空收在这里：调用方（组件）手里的 view 天然是 `EditorView | null` */
   if (!view || !path) return null
-  const t = await definitionAtCursor(view, path)
+  const t = pos === undefined ? await definitionAtCursor(view, path) : await definitionAtPos(view, path, pos)
   if (!t) {
     onInfo('这里没有可跳转的定义')
     return null
