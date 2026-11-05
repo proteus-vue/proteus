@@ -15,6 +15,8 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { peekState, setPeekPinned, type PeekData } from './modPeek'
 import { copyText } from './bridge'
+import { effectiveLangId } from './editorLang'
+import { highlightLines } from './syntaxTheme'
 import type { DefTarget } from './nav'
 
 const emit = defineEmits<{ (e: 'jump', t: DefTarget): void }>()
@@ -27,6 +29,17 @@ const shortPath = computed(() => {
   if (!p) return ''
   if (p.startsWith('/')) return `…/${p.split('/').filter(Boolean).slice(-2).join('/')}`
   return p.split('/').slice(-2).join('/')
+})
+
+/* ── 语法高亮（决策 #1441）───────────────────────────────────────────────
+   复用主编辑器的 `studioHighlight`（同一个实例 ⇒ 类名与 CSS 完全一致），
+   把整块代码交给 `highlightLines` 切成逐行 HTML。
+   ★必须传**整段连续代码**：跨行的块注释/模板字符串要靠上下文才能正确着色，
+     逐行独立解析会把它们当普通代码。 */
+const codeHtml = computed(() => {
+  const d = data.value
+  if (!d?.lines.length) return []
+  return highlightLines(d.lines.map((l) => l.text).join('\n'), effectiveLangId(d.target.path))
 })
 
 /* ── 复制 ─────────────────────────────────────────────────────────────── */
@@ -109,11 +122,11 @@ watch(
       <button class="dpbtn primary" title="跳到定义" @click="emit('jump', data.target)">跳转</button>
     </div>
     <pre v-if="data.lines.length" class="dpcode"><div
-        v-for="l in data.lines"
+        v-for="(l, i) in data.lines"
         :key="l.no"
         class="dprow"
         :class="{ hit: l.no === data.target.line }"
-      ><span class="dpno">{{ l.no }}</span><span class="dptext">{{ l.text }}</span></div></pre>
+      ><span class="dpno">{{ l.no }}</span><span class="dptext" v-html="codeHtml[i]" /></div></pre>
     <div v-else class="dpempty">读不到文件内容（可能过大或不可读）</div>
     <div v-if="data.truncated" class="dptrunc">已截断 · 共 {{ data.span }} 行，点「跳转」看全文</div>
   </div>

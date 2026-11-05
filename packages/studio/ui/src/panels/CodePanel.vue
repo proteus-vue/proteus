@@ -33,10 +33,10 @@ import { gotoLine, search, searchKeymap, selectNextOccurrence } from '@codemirro
 /* 类型诊断的**渲染层**（决策 #1413）：数据在 `diag.ts`，这里只负责"画波浪线 + 悬浮提示"。
    `linter` 会在文档变化/调用 `forceLinting` 时回调我们给的 source，从共享 store 现取现算。 */
 import { lintGutter } from '@codemirror/lint'
-import { HighlightStyle, forceParsing, syntaxHighlighting } from '@codemirror/language'
-import { tags } from '@lezer/highlight'
+import { forceParsing, syntaxHighlighting } from '@codemirror/language'
 import { Compartment } from '@codemirror/state'
 import { langExtension, langLabel } from '../langs'
+import { studioHighlight } from '../syntaxTheme'
 import { editorLang, effectiveLangId, langOverrides, trackEditorFile } from '../editorLang'
 import {
   copyText,
@@ -186,40 +186,6 @@ function langFor(path: string) {
   return langComp.of(langExtension(effectiveLangId(path)))
 }
 
-/** 语法着色：把 lezer 的 token 标签映射到 `--syn-*` 色板。
- *  ★只列"读代码时真的要区分"的类别；普通变量名**刻意不给颜色**——
- *    全都有颜色等于没颜色，变量继承正文色才能让关键字/字符串/类型凸显出来。
- *  ★注释用斜体：IDE 通用语汇，且不只靠颜色区分（色觉障碍下仍可分）。 */
-const studioHighlight = HighlightStyle.define([
-  {
-    tag: [
-      tags.keyword,
-      tags.controlKeyword,
-      tags.moduleKeyword,
-      tags.operatorKeyword,
-      tags.definitionKeyword,
-    ],
-    color: 'var(--syn-keyword)',
-  },
-  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.attributeValue], color: 'var(--syn-string)' },
-  { tag: [tags.number, tags.bool, tags.null], color: 'var(--syn-number)' },
-  {
-    tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment],
-    color: 'var(--syn-comment)',
-    fontStyle: 'italic',
-  },
-  {
-    tag: [tags.typeName, tags.className, tags.namespace, tags.tagName],
-    color: 'var(--syn-type)',
-  },
-  { tag: [tags.attributeName, tags.propertyName], color: 'var(--syn-attr)' },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--syn-fn)' },
-  {
-    tag: [tags.operator, tags.punctuation, tags.separator, tags.bracket, tags.angleBracket],
-    color: 'var(--syn-punct)',
-  },
-  { tag: tags.invalid, color: 'var(--syn-invalid)', textDecoration: 'underline wavy' },
-])
 
 /** 主题：全部用 Studio 的语义 token，不引 theme-one-dark（避免两套色板打架） */
 const theme = EditorView.theme(
