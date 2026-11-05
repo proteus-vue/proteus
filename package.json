@@ -274,6 +274,7 @@
     "check:request-perf": "node scripts/bench-request.mjs --check && node scripts/bench-request-load.mjs --check && node scripts/report-request-perf.mjs --check"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-javascript": "^6.2.5",

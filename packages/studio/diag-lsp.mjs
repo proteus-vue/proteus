@@ -100,6 +100,8 @@ function req(command, args) {
 
 /* ── 文档状态 ───────────────────────────────────────────────────────────── */
 const open = new Set()
+/** 已打开文件的当前内容：补全时内容没变就复用，不必 close+open（省一次 scriptInfo 重建） */
+const openText = new Map()
 /** 诊断进行中又收到新文本 ⇒ 记下来，完成后用最新文本再跑一次 */
 const latest = new Map()
 const running = new Set()
@@ -118,8 +120,9 @@ function toItems(diags) {
   return list
 }
 
-async function diagnose(file, text) {
-  /* close+open：把**内存文本**塞进 tsserver（`changedFiles` 不接受内容） */
+/** 把内存文本交给 tsserver（内容没变则跳过） */
+async function ensureDoc(file, text) {
+  if (open.has(file) && openText.get(file) === text) return
   if (open.has(file)) {
     await req('close', { file }).catch(() => {})
     open.delete(file)
@@ -130,6 +133,11 @@ async function diagnose(file, text) {
     closedFiles: [],
   })
   open.add(file)
+  openText.set(file, text)
+}
+
+async function diagnose(file, text) {
+  await ensureDoc(file, text)
 
   /* `.vue` 交给 @vue/typescript-plugin 虚拟化；它的 syntactic 可能不实现 ⇒ 失败当空 */
   const [syn, sem] = await Promise.all([
@@ -171,6 +179,39 @@ async function run(file, rel, text) {
   }
 }
 
+/**
+ * 补全（决策 #1428）：`completionInfo` 直接返回候选列表。
+ * `line` / `offset` 都是 **1-based**（tsserver 的约定），调用方不要做 0/1 转换。
+ * 任何失败都回空列表 —— 补全失败不该在编辑器里弹错误。
+ */
+async function complete(id, file, rel, text, line, col) {
+  try {
+    await ensureDoc(file, text)
+    /* ★自己取光标前的单词当 `prefix`：不传的话 tsserver 会把**全部**成员（实测 1084 条）
+       都吐回来，跨 IPC 传一遍纯属浪费；传了通常只剩几十条，且更相关。 */
+    const lineText = (text.split('\n')[line - 1] ?? '').slice(0, Math.max(0, col - 1))
+    const prefix = /[\w$]+$/.exec(lineText)?.[0] ?? ''
+    const info = await req('completionInfo', {
+      file,
+      line,
+      offset: col,
+      prefix,
+      includeExternalModuleExports: true,
+      includeInsertTextCompletions: true,
+    })
+    const items = (info?.entries ?? []).map((e) => ({
+      label: e.name,
+      /* tsserver 的 kind 是字符串：function / variable / property / keyword / interface… */
+      kind: String(e.kind ?? ''),
+      detail: String(e.kindModifiers ?? '').replace(/,/g, ' '),
+      insert: e.insertText ?? e.name,
+    }))
+    out({ t: 'completions', id, path: rel, items })
+  } catch (e) {
+    out({ t: 'completions', id, path: rel, items: [], error: String(e?.message ?? e).slice(0, 120) })
+  }
+}
+
 /* 就绪信号：tsserver 没有显式 ready，发一次 configure 确认管道通 */
 req('configure', { preferences: {} })
   .catch(() => {})
@@ -194,6 +235,14 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     const file = abs(rel)
     latest.delete(file)
     if (open.delete(file)) void req('close', { file }).catch(() => {})
+    return
+  }
+  if (m.t === 'complete') {
+    if (!isSupported(rel)) {
+      out({ t: 'completions', id: m.id, path: rel, items: [] })
+      return
+    }
+    void complete(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
     return
   }
   if (m.t === 'shutdown') {

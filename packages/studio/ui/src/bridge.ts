@@ -125,6 +125,18 @@ export const diagLspStart = (): Promise<void> => invoke<void>('diag_lsp_start')
 export const diagLspSync = (kind: 'open' | 'change' | 'close', path: string, text?: string): Promise<void> =>
   invoke<void>('diag_lsp_sync', { kind, path, text })
 
+/** 补全候选（tsserver `completionInfo`）。失败/超时返回空数组，调用方按"没有候选"处理。 */
+export interface CompletionItem {
+  label: string
+  /** tsserver 的 kind：function / variable / property / keyword… */
+  kind: string
+  detail: string
+  /** 实际插入文本（可能带参数占位） */
+  insert: string
+}
+export const diagComplete = (path: string, text: string, line: number, col: number): Promise<CompletionItem[]> =>
+  invoke<CompletionItem[]>('diag_complete', { path, text, line, col })
+
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
   return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }

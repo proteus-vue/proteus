@@ -436,6 +436,17 @@ pub fn diag_lsp_start(app: tauri::AppHandle) -> Result<(), String> {
                 Some("ready") => {
                     let _ = app.emit("diag:ready", ());
                 }
+                Some("completions") => {
+                    /* 拉式请求的回包：按 id 交给在等的那次调用 */
+                    if let Some(id) = v.get("id").and_then(|x| x.as_u64()) {
+                        if let Some(map) = PENDING.get() {
+                            let sender = map.lock().ok().and_then(|mut g| g.remove(&id));
+                            if let Some(tx) = sender {
+                                let _ = tx.send(v.clone());
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -473,6 +484,101 @@ pub fn diag_lsp_stop() {
                 let _ = l.child.kill();
                 let _ = l.child.wait();
             }
+        }
+    }
+}
+
+/* ── 自动补全（决策 #1428）────────────────────────────────────────────────
+ * 与诊断的区别：诊断是"推"（服务端主动发），补全是"拉"（要等这一次的结果）。
+ * 所以这里用 **id + 一次性 channel**：命令写 stdin 后 `recv_timeout` 等对应 id 的回包，
+ * 超时返回空列表（补全失败不该在编辑器里弹错误，静默降级为"没有候选"）。
+ */
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[derive(Serialize, Clone)]
+pub struct CompletionItem {
+    pub label: String,
+    /// tsserver 的 kind：function / variable / property / keyword / interface…
+    pub kind: String,
+    pub detail: String,
+    pub insert: String,
+}
+
+static PENDING: OnceLock<Mutex<HashMap<u64, std::sync::mpsc::Sender<serde_json::Value>>>> =
+    OnceLock::new();
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+#[tauri::command]
+pub fn diag_complete(
+    path: String,
+    text: String,
+    line: u32,
+    col: u32,
+) -> Result<Vec<CompletionItem>, String> {
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let (tx, rx) = std::sync::mpsc::channel();
+    {
+        let map = PENDING.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut guard = map.lock().map_err(|e| format!("锁失败：{e}"))?;
+        guard.insert(id, tx);
+    }
+
+    /* 写请求：与诊断共用同一个 stdin，靠 mutex 串行化（不会交错半行） */
+    let write_err = {
+        let cell = LSP.get_or_init(|| Mutex::new(None));
+        let mut guard = cell.lock().map_err(|e| format!("锁失败：{e}"))?;
+        match guard.as_mut() {
+            None => Some("语言服务未启动".to_string()),
+            Some(lsp) => {
+                let payload = serde_json::json!({
+                    "t": "complete", "id": id, "path": path, "text": text, "line": line, "col": col
+                });
+                use std::io::Write;
+                lsp.stdin
+                    .write_all(format!("{}\n", payload).as_bytes())
+                    .and_then(|_| lsp.stdin.flush())
+                    .err()
+                    .map(|e| format!("写入语言服务失败：{e}"))
+            }
+        }
+    };
+    if let Some(e) = write_err {
+        if let Some(map) = PENDING.get() {
+            if let Ok(mut g) = map.lock() {
+                g.remove(&id);
+            }
+        }
+        return Err(e);
+    }
+
+    /* 2.5s 足够（实测 tsserver 首次补全是毫秒级，冷启动时可能要等一次项目加载） */
+    match rx.recv_timeout(Duration::from_millis(2500)) {
+        Ok(v) => {
+            let mut out = Vec::new();
+            if let Some(arr) = v.get("items").and_then(|x| x.as_array()) {
+                for it in arr {
+                    out.push(CompletionItem {
+                        label: it.get("label").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                        kind: it.get("kind").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                        detail: it.get("detail").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                        insert: it
+                            .get("insert")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or_else(|| it.get("label").and_then(|x| x.as_str()).unwrap_or(""))
+                            .to_string(),
+                    });
+                }
+            }
+            Ok(out)
+        }
+        Err(_) => {
+            if let Some(map) = PENDING.get() {
+                if let Ok(mut g) = map.lock() {
+                    g.remove(&id);
+                }
+            }
+            Ok(Vec::new())
         }
     }
 }

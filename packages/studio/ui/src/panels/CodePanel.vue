@@ -33,7 +33,7 @@ import { gotoLine, search, searchKeymap, selectNextOccurrence } from '@codemirro
 /* 类型诊断的**渲染层**（决策 #1413）：数据在 `diag.ts`，这里只负责"画波浪线 + 悬浮提示"。
    `linter` 会在文档变化/调用 `forceLinting` 时回调我们给的 source，从共享 store 现取现算。 */
 import { lintGutter } from '@codemirror/lint'
-import { HighlightStyle, foldKeymap, forceParsing, syntaxHighlighting } from '@codemirror/language'
+import { HighlightStyle, forceParsing, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { Compartment } from '@codemirror/state'
 import { langExtension, langLabel } from '../langs'
@@ -61,7 +61,8 @@ import { refreshGit } from '../git'
 import { diagAt, diagStale, ensureWatch, markSaved, noteEdit, runEslint } from '../diag'
 import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagSync'
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
-import { editorExtras } from '../editorExtras'
+import { editorExtraKeys, editorExtras } from '../editorExtras'
+import { tsAutocomplete } from '../completion'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -269,6 +270,8 @@ function makeState(doc: string, path: string) {
       highlightActiveLine(),
       /* 折叠 / 闭括号 / 多光标等基础编辑能力（决策 #1427） */
       editorExtras(),
+      /* tsserver 补全（决策 #1428）：语法/语义候选，不是词法联想 */
+      tsAutocomplete(() => cur.value),
       history(),
       langFor(path),
       cmPhrases,
@@ -294,11 +297,12 @@ function makeState(doc: string, path: string) {
         /* ⌘D：选中下一个同样的词（多光标）；⌘F/⌘G 走官方面板（⌘G 是面板内的跳行，不弹 window.prompt） */
         { key: 'Mod-d', preventDefault: true, run: selectNextOccurrence },
         { key: 'Mod-g', preventDefault: true, run: gotoLine },
+        /* 闭括号（Backspace 删配对）+ 折叠键：**必须在 defaultKeymap 之前** */
+        ...editorExtraKeys,
         ...searchKeymap,
         ...defaultKeymap,
         ...historyKeymap,
         indentWithTab,
-        ...foldKeymap,
       ]),
       EditorView.updateListener.of((u) => {
         if (!u.docChanged || !cur.value) return

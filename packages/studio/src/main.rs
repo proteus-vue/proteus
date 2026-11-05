@@ -623,6 +623,7 @@ fn main() {
             diag::diag_eslint,
             diag::diag_lsp_start,
             diag::diag_lsp_sync,
+            diag::diag_complete,
             diag::diag_lsp_stop,
             diag::diag_watch_start,
             diag::diag_watch_stop,
