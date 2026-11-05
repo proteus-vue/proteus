@@ -237,3 +237,28 @@
 :deep(.cm-tooltip-section.cm-tooltip-lint) {
   display: none;
 }
+
+/* 类型/文档悬浮（决策 #1429）：与诊断提示同一套视觉，靠 `详情` 一行区分 */
+:deep(.studio-type-tip) {
+  max-width: 460px;
+  padding: 6px 8px;
+  background: #1f2228 !important;
+  color: #e6e9ef !important;
+  border: 1px solid #3a3f47;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+}
+:deep(.studio-type-tip .st-sig) {
+  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #e6e9ef;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+:deep(.studio-type-tip .st-doc) {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #2a2d33;
+  font: 11px/1.45 -apple-system, 'PingFang SC', sans-serif;
+  color: #8b93a1;
+  white-space: pre-wrap;
+}

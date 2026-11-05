@@ -137,6 +137,23 @@ export interface CompletionItem {
 export const diagComplete = (path: string, text: string, line: number, col: number): Promise<CompletionItem[]> =>
   invoke<CompletionItem[]>('diag_complete', { path, text, line, col })
 
+/** 跳转定义：光标处符号的定义位置（仓库相对路径）。没有定义返回 null。 */
+export interface DefTarget {
+  path: string
+  line: number
+  col: number
+}
+export const diagDefinition = (path: string, text: string, line: number, col: number): Promise<DefTarget | null> =>
+  invoke<DefTarget | null>('diag_definition', { path, text, line, col })
+
+/** 类型/文档（悬浮显示）：`text` 形如 `const FLUSH_MS: 30`。 */
+export interface QuickInfo {
+  text: string
+  doc: string
+}
+export const diagQuickinfo = (path: string, text: string, line: number, col: number): Promise<QuickInfo | null> =>
+  invoke<QuickInfo | null>('diag_quickinfo', { path, text, line, col })
+
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
   return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }

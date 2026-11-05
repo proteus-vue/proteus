@@ -63,6 +63,7 @@ import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagS
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
+import { goToDefinition, typeHover } from '../nav'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -157,6 +158,12 @@ const setTabDirty = (p: string, on: boolean) => {
  */
 const searchActive = ref(false)
 const sidebar = ref<{ focusSearch: () => void } | null>(null)
+
+/** F12：跳到定义（决策 #1429）；失败原因由 `nav.goToDefinition` 给出 */
+async function jumpToDef() {
+  const t = await goToDefinition(view, cur.value, (m) => pushToast(m, 'info'))
+  if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
+}
 
 /** 跳到某条命中：打开文件 → 把光标放到**行:列**（列是字符列，这里换成 UTF-16 偏移）。 */
 async function jumpTo(h: SearchHit) {
@@ -272,6 +279,8 @@ function makeState(doc: string, path: string) {
       editorExtras(),
       /* tsserver 补全（决策 #1428）：语法/语义候选，不是词法联想 */
       tsAutocomplete(() => cur.value),
+      /* 悬浮显示类型/文档（决策 #1429） */
+      typeHover(() => cur.value),
       history(),
       langFor(path),
       cmPhrases,
@@ -297,6 +306,7 @@ function makeState(doc: string, path: string) {
         /* ⌘D：选中下一个同样的词（多光标）；⌘F/⌘G 走官方面板（⌘G 是面板内的跳行，不弹 window.prompt） */
         { key: 'Mod-d', preventDefault: true, run: selectNextOccurrence },
         { key: 'Mod-g', preventDefault: true, run: gotoLine },
+        { key: 'F12', preventDefault: true, run: () => (void jumpToDef(), true) },
         /* 闭括号（Backspace 删配对）+ 折叠键：**必须在 defaultKeymap 之前** */
         ...editorExtraKeys,
         ...searchKeymap,

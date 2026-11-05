@@ -436,8 +436,8 @@ pub fn diag_lsp_start(app: tauri::AppHandle) -> Result<(), String> {
                 Some("ready") => {
                     let _ = app.emit("diag:ready", ());
                 }
-                Some("completions") => {
-                    /* 拉式请求的回包：按 id 交给在等的那次调用 */
+                Some("completions") | Some("definition") | Some("quickinfo") => {
+                    /* 拉式请求的回包（补全/定义/类型信息）：按 id 交给在等的那次调用 */
                     if let Some(id) = v.get("id").and_then(|x| x.as_u64()) {
                         if let Some(map) = PENDING.get() {
                             let sender = map.lock().ok().and_then(|mut g| g.remove(&id));
@@ -581,4 +581,116 @@ pub fn diag_complete(
             Ok(Vec::new())
         }
     }
+}
+
+/* ── 跳转定义 / 类型信息（决策 #1429）─────────────────────────────────────
+ * 与补全同属"拉式"：写请求 → 等对应 id 回包。抽一个 `lsp_call` 减少重复，
+ * 但**不改动**已经验证过的 `diag_complete`（补全路径稳定，重构收益不足以冒险）。
+ */
+fn lsp_call(mut payload: serde_json::Value, wait_ms: u64) -> Result<Option<serde_json::Value>, String> {
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    payload["id"] = serde_json::json!(id);
+    let (tx, rx) = std::sync::mpsc::channel();
+    {
+        let map = PENDING.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut guard = map.lock().map_err(|e| format!("锁失败：{e}"))?;
+        guard.insert(id, tx);
+    }
+    let write_err = {
+        let cell = LSP.get_or_init(|| Mutex::new(None));
+        let mut guard = cell.lock().map_err(|e| format!("锁失败：{e}"))?;
+        match guard.as_mut() {
+            None => Some("语言服务未启动".to_string()),
+            Some(lsp) => {
+                use std::io::Write;
+                lsp.stdin
+                    .write_all(format!("{}\n", payload).as_bytes())
+                    .and_then(|_| lsp.stdin.flush())
+                    .err()
+                    .map(|e| format!("写入语言服务失败：{e}"))
+            }
+        }
+    };
+    if let Some(e) = write_err {
+        if let Some(map) = PENDING.get() {
+            if let Ok(mut g) = map.lock() {
+                g.remove(&id);
+            }
+        }
+        return Err(e);
+    }
+    match rx.recv_timeout(Duration::from_millis(wait_ms)) {
+        Ok(v) => Ok(Some(v)),
+        Err(_) => {
+            if let Some(map) = PENDING.get() {
+                if let Ok(mut g) = map.lock() {
+                    g.remove(&id);
+                }
+            }
+            Ok(None)
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct DefTarget {
+    /// 仓库相对路径（仓库外的文件会是绝对路径，前端据此提示"不在仓库内"）
+    pub path: String,
+    pub line: u32,
+    pub col: u32,
+}
+
+/// 跳到光标处符号的定义。没有定义（内置/字面量）返回 `None`。
+#[tauri::command]
+pub fn diag_definition(
+    path: String,
+    text: String,
+    line: u32,
+    col: u32,
+) -> Result<Option<DefTarget>, String> {
+    /* 首次跳转可能要等项目加载，给 8s（诊断/补全都有更短的上限，这里放宽） */
+    let v = lsp_call(
+        serde_json::json!({ "t": "definition", "path": path, "text": text, "line": line, "col": col }),
+        8000,
+    )?;
+    let Some(v) = v else { return Ok(None) };
+    let Some(t) = v.get("target").filter(|t| !t.is_null()) else {
+        return Ok(None);
+    };
+    Ok(Some(DefTarget {
+        path: t.get("path").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        line: t.get("line").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+        col: t.get("col").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+    }))
+}
+
+#[derive(Serialize, Clone)]
+pub struct QuickInfo {
+    /// 类型签名（如 `const FLUSH_MS: 30`）
+    pub text: String,
+    /// 文档注释（可能为空）
+    pub doc: String,
+}
+
+/// 光标处符号的类型/文档（悬浮显示）。
+#[tauri::command]
+pub fn diag_quickinfo(
+    path: String,
+    text: String,
+    line: u32,
+    col: u32,
+) -> Result<Option<QuickInfo>, String> {
+    let v = lsp_call(
+        serde_json::json!({ "t": "quickinfo", "path": path, "text": text, "line": line, "col": col }),
+        4000,
+    )?;
+    let Some(v) = v else { return Ok(None) };
+    let text_ = v.get("text").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    if text_.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(QuickInfo {
+        text: text_,
+        doc: v.get("doc").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+    }))
 }

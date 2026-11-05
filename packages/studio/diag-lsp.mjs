@@ -212,6 +212,58 @@ async function complete(id, file, rel, text, line, col) {
   }
 }
 
+/**
+ * 跳转定义（决策 #1429）：`definition` 返回 `[{file, start:{line, offset}}]`。
+ * ★目标可能在别的文件（甚至 `node_modules` 里的 `.d.ts`），所以这里把绝对路径转成
+ *   **仓库相对路径**再回给前端；不在仓库内的（如 `lib.dom.d.ts`）也如实返回绝对路径，
+ *   由前端决定"跳过去还是提示一下"。
+ */
+async function definition(id, file, rel, text, line, col) {
+  try {
+    await ensureDoc(file, text)
+    const res = await req('definition', { file, line, offset: col })
+    const first = Array.isArray(res) ? res[0] : res
+    if (!first?.file) {
+      out({ t: 'definition', id, path: rel, target: null })
+      return
+    }
+    const absTarget = String(first.file)
+    const relTarget = path.isAbsolute(absTarget)
+      ? path.relative(root, absTarget).split(path.sep).join('/')
+      : absTarget
+    out({
+      t: 'definition',
+      id,
+      path: rel,
+      target: {
+        path: relTarget,
+        line: Number(first.start?.line ?? 1),
+        /* tsserver 的 FileSpan.offset 是 **1-based**（与 line 一致），不要再 +1 */
+        col: Number(first.start?.offset ?? 1),
+      },
+    })
+  } catch (e) {
+    out({ t: 'definition', id, path: rel, target: null, error: String(e?.message ?? e).slice(0, 120) })
+  }
+}
+
+/** 类型/符号信息（决策 #1429）：`quickinfo` 给 `displayString`（如 `(property) x: number`） */
+async function quickinfo(id, file, rel, text, line, col) {
+  try {
+    await ensureDoc(file, text)
+    const info = await req('quickinfo', { file, line, offset: col })
+    out({
+      t: 'quickinfo',
+      id,
+      path: rel,
+      text: String(info?.displayString ?? ''),
+      doc: String(info?.documentation ?? '').split('\n').slice(0, 2).join(' '),
+    })
+  } catch (e) {
+    out({ t: 'quickinfo', id, path: rel, text: '', doc: '', error: String(e?.message ?? e).slice(0, 120) })
+  }
+}
+
 /* 就绪信号：tsserver 没有显式 ready，发一次 configure 确认管道通 */
 req('configure', { preferences: {} })
   .catch(() => {})
@@ -243,6 +295,22 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       return
     }
     void complete(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
+    return
+  }
+  if (m.t === 'definition') {
+    if (!isSupported(rel)) {
+      out({ t: 'definition', id: m.id, path: rel, target: null })
+      return
+    }
+    void definition(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
+    return
+  }
+  if (m.t === 'quickinfo') {
+    if (!isSupported(rel)) {
+      out({ t: 'quickinfo', id: m.id, path: rel, text: '', doc: '' })
+      return
+    }
+    void quickinfo(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
     return
   }
   if (m.t === 'shutdown') {

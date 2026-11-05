@@ -624,6 +624,8 @@ fn main() {
             diag::diag_lsp_start,
             diag::diag_lsp_sync,
             diag::diag_complete,
+            diag::diag_definition,
+            diag::diag_quickinfo,
             diag::diag_lsp_stop,
             diag::diag_watch_start,
             diag::diag_watch_stop,
