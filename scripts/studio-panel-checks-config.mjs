@@ -56,8 +56,10 @@ export function checksConfig({ capability, set, dev, cap }) {
   [
     `㊶ 设置窗口：主窗口点设置 ⇒ open_settings×${set.openCalls} · 分类 ${set.nav0.map((n) => n.label).join('/')}（当前 ${set.nav0.find((n) => n.on)?.label ?? '—'}）· 设备只读 ${set.devRows} 行 · 关于含设置路径=${set.aboutText.includes('settings.json')} · 子页 JS 错误 ${set.winErrors}`,
     set.openCalls === 1 &&
-      set.nav0.length === 3 &&
-      set.nav0.map((n) => n.label).join('/') === '开发环境/设备/关于' &&
+      /* ★4 个分类：新增「编辑器」（快捷键等通用偏好不该混在"开发环境"里，决策 #1432）。
+         默认仍落在「开发环境」——那是设置窗口的主要用途。 */
+      set.nav0.length === 4 &&
+      set.nav0.map((n) => n.label).join('/') === '编辑器/开发环境/设备/关于' &&
       set.nav0.find((n) => n.on)?.id === 'env' &&
       set.devRows === 6 &&
       set.aboutText.includes('settings.json') &&

@@ -10,6 +10,7 @@
 //    找不到才让用户点「浏览…」（原生 NSOpenPanel）。
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { chordLabel, keymapSchemes, schemeState, setScheme, type KeymapScheme } from './keybindings'
+import PSelect from './ui/PSelect.vue'
 import {
   detectTools,
   getSettings,
@@ -24,7 +25,7 @@ import {
 } from './bridge'
 import { pushToast } from './toast'
 
-type Cat = 'env' | 'device' | 'about'
+type Cat = 'editor' | 'env' | 'device' | 'about'
 type Msg = { ok: boolean; text: string }
 
 /** 端 → 该端要的工具。key 与 Rust `settings::TOOLS` 一一对应（键名就是 `端.工具`）。 */
@@ -52,6 +53,8 @@ const TARGETS: { id: string; label: string; fields: { key: string; label: string
 
 const cat = ref<Cat>('env')
 const CATS: { id: Cat; label: string }[] = [
+  /* ★快捷键/编辑偏好属"通用偏好"，不是"开发环境"（用户指出：混在一起找不着） */
+  { id: 'editor', label: '编辑器' },
   { id: 'env', label: '开发环境' },
   { id: 'device', label: '设备' },
   { id: 'about', label: '关于' },
@@ -70,9 +73,12 @@ const devices = ref<DeviceInfo[]>([])
 const hydrated = ref(false)
 const savedNote = ref('')
 
-function pickScheme(e: Event) {
-  setScheme((e.target as HTMLSelectElement).value as KeymapScheme)
+function pickScheme(v: string) {
+  setScheme(v as KeymapScheme)
 }
+
+/** PSelect 要 `{value,label}`；`hint` 不填（键位随方案变，写死会骗人） */
+const keymapOptions = keymapSchemes.map((s) => ({ value: s.value, label: s.label }))
 
 onMounted(async () => {
   if (!hasBridge()) return
@@ -215,27 +221,36 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
       </aside>
 
       <main class="setbody">
-        <!-- ── 开发环境：先选端，再看该端的工具 ────────────────────────── -->
-        <section v-if="cat === 'env'">
-          <h2 class="sethead">编辑与快捷键</h2>
-          <p class="setlead">
-            选一套你熟悉的键位。<b>立即生效</b>（不用重启）：主窗口与设置窗口两个 webview 通过
-            <code>localStorage</code> 共享这个选择。
-          </p>
+        <!-- ── 编辑器：通用偏好（快捷键等）───────────────────────────── -->
+        <section v-if="cat === 'editor'">
+          <h2 class="sethead">编辑器</h2>
+          <p class="setlead">影响所有文件的通用偏好，与具体端/工具链无关。</p>
+
           <div class="setrow">
             <label for="setKeymap">快捷键方案</label>
-            <select id="setKeymap" :value="schemeState" @change="pickScheme">
-              <option v-for="s in keymapSchemes" :key="s.value" :value="s.value">{{ s.label }}</option>
-            </select>
+            <!-- ★用 Studio 自己的 PSelect（决策 #1350）：原生 select 在 macOS/Tauri 里由系统绘制，
+                 既跟深色主题对不上，弹层还会盖到原生画布之上 -->
+            <PSelect
+              id="setKeymap"
+              :model-value="schemeState"
+              :options="keymapOptions"
+              size="md"
+              :width="220"
+              @update:model-value="pickScheme"
+            />
           </div>
           <p class="setlead" id="setKeymapHint">
-            当前键位：跳转定义 <b>{{ chordLabel('editor.gotoDefinition') }}</b> ·
+            选一套你熟悉的键位，<b>立即生效</b>（不用重启，两个窗口经 <code>localStorage</code> 同步）。
+            当前：跳转定义 <b>{{ chordLabel('editor.gotoDefinition') }}</b> ·
             仓库搜索 <b>{{ chordLabel('editor.searchRepo') }}</b> ·
             快速打开 <b>{{ chordLabel('editor.quickOpen') }}</b> ·
             侧栏 <b>{{ chordLabel('view.toggleSidebar') }}</b> ·
             终端 <b>{{ chordLabel('view.toggleTerminal') }}</b>
           </p>
+        </section>
 
+        <!-- ── 开发环境：先选端，再看该端的工具 ────────────────────────── -->
+        <section v-else-if="cat === 'env'">
           <h2 class="sethead">开发环境</h2>
           <p class="setlead">
             每端要的工具不同，这里按端分开。一般<b>不用手输</b>：下面自动列出本机找到的，
