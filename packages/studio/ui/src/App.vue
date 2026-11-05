@@ -23,6 +23,7 @@ import {
 } from './layout'
 import { copyText, deviceSwipe, deviceTap, iosLongpress, iosScroll, iosStreamHint, iosSwipe, iosTap, openSettings, setCanvasRect, setUiZoom, type IosHint } from './bridge'
 import { pushToast } from './toast'
+import { installKeymap, onAction } from './keybindings'
 import { ms, num, pct, useStats } from './useStats'
 import DevicePanel from './panels/DevicePanel.vue'
 import DeviceSwitcher from './panels/DeviceSwitcher.vue'
@@ -204,34 +205,6 @@ function onKey(e: KeyboardEvent) {
      放在最前面且**先于**快捷键判断：否则 Cmd+C 之类会先被 IDE 吃掉。 */
   if (canvasEl.value && document.activeElement === canvasEl.value && touchOn.value) {
     if (!(e.metaKey || e.ctrlKey || e.altKey) && sendKeyToDevice(e)) return
-  }
-  /* ⌘J 终端面板 · ⌘⇧J 终端最大化（决策 #1346）：VS Code 手感 */
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
-    e.preventDefault()
-    if (e.shiftKey) toggleTermMax()
-    else toggleTermPane()
-    return
-  }
-  /* ⌘B 收起/展开右栏 · ⌘⇧B 收起/展开左栏（决策 #1343）：IDE 通用手感 */
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-    e.preventDefault()
-    /* ⌘B = 当前视图的"主侧栏"（VS Code 手感）：画布视图切右面板，代码视图切文件树 */
-    if (e.shiftKey) toggleRail()
-    else if (view.value === 'code') toggleTree()
-    else toggleSide()
-    return
-  }
-  if (nativeMenu) return
-  if (view.value !== 'device' || !(e.metaKey || e.ctrlKey)) return
-  if (e.key === '0') {
-    e.preventDefault()
-    setZoom(1)
-  } else if (e.key === '=' || e.key === '+') {
-    e.preventDefault()
-    setZoom(ws.zoom + 0.25)
-  } else if (e.key === '-') {
-    e.preventDefault()
-    setZoom(ws.zoom - 0.25)
   }
 }
 
@@ -596,6 +569,29 @@ const paneStyle = computed(() => {
 })
 
 const termLeft = computed(() => (view.value === 'code' && !treeHidden.value ? treeW.value : 0))
+
+/* 应用级快捷键（决策 #1430）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
+const offAppActions = [
+  onAction('view.toggleTerminal', () => toggleTermPane()),
+  onAction('view.toggleTerminalMax', () => toggleTermMax()),
+  onAction('view.toggleRail', () => toggleRail()),
+  /* 主侧栏：代码视图是文件树，画布视图是右面板（VS Code 的"当前视图主侧栏"手感） */
+  onAction('view.toggleSidebar', () => (view.value === 'code' ? toggleTree() : toggleSide())),
+  /* 缩放只对设备画布有意义；有原生菜单时由菜单接管（避免双触发） */
+  onAction('view.zoomIn', () => void (!nativeMenu && view.value === 'device' && setZoom(ws.zoom + 0.25))),
+  onAction('view.zoomOut', () => void (!nativeMenu && view.value === 'device' && setZoom(ws.zoom - 0.25))),
+  onAction('view.zoomReset', () => void (!nativeMenu && view.value === 'device' && setZoom(1))),
+]
+let offKeymap: () => void = () => {}
+
+/* 全局分发只在这里装一次：装两遍 = 每个动作执行两次（保存两次、关标签报错） */
+onMounted(() => {
+  offKeymap = installKeymap()
+})
+onBeforeUnmount(() => {
+  offKeymap()
+  for (const off of offAppActions) off()
+})
 
 onMounted(async () => {
   loadLayout()

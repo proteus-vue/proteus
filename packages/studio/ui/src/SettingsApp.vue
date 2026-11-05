@@ -9,6 +9,7 @@
 // ③ **点两下就完成**：每组自动列出检测到的候选（带真实版本），点一下即选中；只有一个候选时自动填；
 //    找不到才让用户点「浏览…」（原生 NSOpenPanel）。
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { chordLabel, keymapSchemes, schemeState, setScheme, type KeymapScheme } from './keybindings'
 import {
   detectTools,
   getSettings,
@@ -68,6 +69,10 @@ const devices = ref<DeviceInfo[]>([])
 /** 首次渲染完成前不落盘：否则"自动填入唯一候选"会被当成用户改动写进设置 */
 const hydrated = ref(false)
 const savedNote = ref('')
+
+function pickScheme(e: Event) {
+  setScheme((e.target as HTMLSelectElement).value as KeymapScheme)
+}
 
 onMounted(async () => {
   if (!hasBridge()) return
@@ -212,6 +217,25 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
       <main class="setbody">
         <!-- ── 开发环境：先选端，再看该端的工具 ────────────────────────── -->
         <section v-if="cat === 'env'">
+          <h2 class="sethead">编辑与快捷键</h2>
+          <p class="setlead">
+            选一套你熟悉的键位。<b>立即生效</b>（不用重启）：主窗口与设置窗口两个 webview 通过
+            <code>localStorage</code> 共享这个选择。
+          </p>
+          <div class="setrow">
+            <label for="setKeymap">快捷键方案</label>
+            <select id="setKeymap" :value="schemeState" @change="pickScheme">
+              <option v-for="s in keymapSchemes" :key="s.value" :value="s.value">{{ s.label }}</option>
+            </select>
+          </div>
+          <p class="setlead" id="setKeymapHint">
+            当前键位：跳转定义 <b>{{ chordLabel('editor.gotoDefinition') }}</b> ·
+            仓库搜索 <b>{{ chordLabel('editor.searchRepo') }}</b> ·
+            快速打开 <b>{{ chordLabel('editor.quickOpen') }}</b> ·
+            侧栏 <b>{{ chordLabel('view.toggleSidebar') }}</b> ·
+            终端 <b>{{ chordLabel('view.toggleTerminal') }}</b>
+          </p>
+
           <h2 class="sethead">开发环境</h2>
           <p class="setlead">
             每端要的工具不同，这里按端分开。一般<b>不用手输</b>：下面自动列出本机找到的，

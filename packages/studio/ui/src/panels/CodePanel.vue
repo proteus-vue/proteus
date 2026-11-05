@@ -64,6 +64,7 @@ import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
 import { goToDefinition, typeHover } from '../nav'
+import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -85,38 +86,19 @@ function onQuickPick(path: string) {
   void open(path)
 }
 
-/** ⌘P 打开快速面板；Esc 由面板自己处理。只在代码视图里监听（组件只在代码视图挂载）。 */
-function onQuickKey(e: KeyboardEvent) {
-  /* ⌘W：关闭**当前标签**（决策 #1406）。终端聚焦时它由终端自己处理（关那一栏的会话），
-     两者互不干扰：这里判 target 是否在 .termwrap 内。 */
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'w') {
+/** 代码面板订阅的动作（决策 #1430）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
+const offActions = [
+  onAction('file.closeTab', (e) => {
+    /* 终端聚焦时 ⌘W 该关终端会话，不关标签：沿用原判据 */
     if ((e.target as HTMLElement | null)?.closest?.('.termwrap')) return
-    if (!cur.value) return
-    e.preventDefault()
-    e.stopPropagation()
-    void close(cur.value)
-    return
-  }
-  /* ⇧⌘F：仓库搜索（VS Code 同键位）——把焦点送进左栏搜索框 */
-  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
-    e.preventDefault()
-    e.stopPropagation()
-    sidebar.value?.focusSearch()
-    return
-  }
-  /* ⌥⌘S：保存全部（决策 #1407） */
-  if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 's') {
-    e.preventDefault()
-    e.stopPropagation()
-    void saveAll()
-    return
-  }
-  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
-    e.preventDefault()
-    e.stopPropagation()
-    quickOpen.value = true
-  }
-}
+    if (cur.value) void close(cur.value)
+  }),
+  onAction('editor.searchRepo', () => sidebar.value?.focusSearch()),
+  onAction('file.saveAll', () => void saveAll()),
+  onAction('file.save', () => void save()),
+  onAction('editor.quickOpen', () => (quickOpen.value = true)),
+  onAction('editor.gotoDefinition', () => void jumpToDef()),
+]
 const err = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -295,18 +277,9 @@ function makeState(doc: string, path: string) {
       theme,
       // ⌘S 放最前：它能 preventDefault 掉浏览器/宿主的保存行为
       keymap.of([
-        {
-          key: 'Mod-s',
-          preventDefault: true,
-          run: () => {
-            void save()
-            return true
-          },
-        },
         /* ⌘D：选中下一个同样的词（多光标）；⌘F/⌘G 走官方面板（⌘G 是面板内的跳行，不弹 window.prompt） */
         { key: 'Mod-d', preventDefault: true, run: selectNextOccurrence },
         { key: 'Mod-g', preventDefault: true, run: gotoLine },
-        { key: 'F12', preventDefault: true, run: () => (void jumpToDef(), true) },
         /* 闭括号（Backspace 删配对）+ 折叠键：**必须在 defaultKeymap 之前** */
         ...editorExtraKeys,
         ...searchKeymap,
@@ -890,7 +863,10 @@ const offCloseBlocked = onCloseBlocked((n) => {
 
 onMounted(boot)
 /* ⌘P 监听（决策 #1396）：与 boot 分开挂，避免把启动流程改成 async 包装 */
-onMounted(() => window.addEventListener('keydown', onQuickKey, true))
+/* 全局分发由 App.vue 统一安装（只能装一次，否则每个动作会执行两遍）；这里只管退订 */
+onBeforeUnmount(() => {
+  for (const off of offActions) off()
+})
 // 首帧后拉一次 git 状态（只读；非仓库会自己降级）
 /* 诊断数据一到就重画波浪线：`linter` 只在文档变化时回调，数据外部更新时要显式催一次（决策 #1413） */
 /* 诊断数据一到（watch 推送 / eslint 完成 / 内存语言服务）⇒ 直接派发波浪线 */
@@ -915,8 +891,7 @@ void ensureLsp()
 void runEslint()
 void refreshGit()
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onQuickKey, true)
-  window.removeEventListener('keydown', onQuickKey, true)
+  /* 快捷键已交给 `keybindings` 的全局分发：这里不再摘 keydown 监听（原先还重复摘了两次） */
   offCloseBlocked()
   view?.destroy()
   view = null
