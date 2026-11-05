@@ -1,17 +1,24 @@
 /**
- * modPeek.ts —— 按住 ⌘/Ctrl 时的"跳转预览"（决策 #1436）
+ * modPeek.ts —— 按住 ⌘/Ctrl 时的"跳转预览"（决策 #1436 / 交互重做 #1438）
  *
- * 【对标行为】（VS Code / JetBrains 一致的肌肉记忆）
- *   按住 ⌘ ⇒ 光标下的符号**加下划线**、鼠标**变手型**、并自动弹出**定义预览**；
- *   此时单击 = 跳到定义；松开 ⌘ / 移开 ⇒ 全部复原。
+ * 【对标行为】
+ *   按住 ⌘ ⇒ 光标下的符号**加下划线**、鼠标**手型**、并弹出**定义预览卡**；
+ *   鼠标可以**移到卡片上**（卡片不消失）⇒ 选中代码、点「复制」、点「跳转」；
+ *   移出卡片且没按住 ⌘、或按 Esc、或在编辑器里点一下 ⇒ 收起。
  *
  * 【为什么自己做而不是用 hoverTooltip】
- *   `hoverTooltip` 的浮层**不可点击**（里面点不到东西），而预览卡需要"点一下就跳过去"；
- *   而且它按固定延迟弹，做不到"必须按住修饰键才出现"。
- *   ⇒ 下划线用 Decoration，预览卡用 Vue 组件（`DefPeek.vue`）按坐标绝对定位。
+ *   `hoverTooltip` 的浮层**不可点击/不可选中**，而预览卡要"选代码 + 复制 + 跳转"。
+ *   ⇒ 下划线用 Decoration，卡片用 Vue 组件（`DefPeek.vue`）按坐标 fixed 定位。
  *
- * 【状态放模块级 refs】预览卡是**单例**（同一时刻只有一张），放组件里反而要层层透传。
- * 【修饰键状态在 `modKey.ts`】`typeHover` / `diagHover` 也要读它（按住 ⌘ 时不许弹各自的提示），
+ * 【三个必须处理的"鼠标一进去就消失"】
+ *   1. 卡片 fixed 覆盖在编辑器上 ⇒ 鼠标进入卡片时编辑器先收到 **mouseleave**，
+ *      原来那里直接 `clear()` ⇒ 卡片瞬间消失。现改为**延迟关闭**（进入卡片会取消）。
+ *   2. 鼠标从符号移向卡片要跨过几像素空隙，途中编辑器会不断 mousemove 到别的词/空白，
+ *      原逻辑"没词就 clear" ⇒ 半路被杀。现改为：卡片已显示就**冻结内容**，不移除。
+ *   3. 松开 ⌘ 会 reset 掉一切。现在卡片被"钉住"（鼠标在卡片上）时**保留**。
+ *
+ * 【状态放模块级 refs】卡片是单例（同一时刻只有一张）。
+ * 【修饰键状态在 `modKey.ts`】`typeHover` / `diagHover` 也要读（按住 ⌘ 时不许弹），
  *   放这里会形成 `nav ↔ modPeek` 循环 import。
  */
 import { Decoration, EditorView, ViewPlugin, closeHoverTooltips, type DecorationSet } from '@codemirror/view'
@@ -20,15 +27,19 @@ import { readonly, ref } from 'vue'
 import { modHeldState, setModHeld } from './modKey'
 import { definitionAt, isReadonlyPath, type DefTarget } from './nav'
 import { readSource } from './bridge'
+import { sliceDefinition } from './peekRange'
 
-/* ── 修饰键状态 ─────────────────────────────────────────────────────────── */
 const hoverRange = ref<{ from: number; to: number } | null>(null)
 
 /** 预览卡内容（null = 不显示） */
 export interface PeekData {
   target: DefTarget
-  /** 目标文件里定义处附近的行（带行号） */
+  /** 定义块的完整行（带行号） */
   lines: { no: number; text: string }[]
+  /** 行数超过上限被截断 */
+  truncated: boolean
+  /** 定义块实际行数（截断时提示"共 N 行"） */
+  span: number
   /** 锚点：编辑器坐标系里的矩形（用它定位卡片） */
   anchor: { left: number; top: number; bottom: number }
   /** 是否只读打开（依赖/仓库外） */
@@ -36,6 +47,36 @@ export interface PeekData {
 }
 const peek = ref<PeekData | null>(null)
 export const peekState = readonly(peek)
+
+/** 鼠标是否停在卡片上（钉住）。钉住期间：不随鼠标移动换内容、不因松开 ⌘ 而关闭 */
+const pinned = ref(false)
+export const peekPinned = readonly(pinned)
+
+/** 卡片 DOM 的 mouseenter/mouseleave 调它 */
+export function setPeekPinned(v: boolean): void {
+  pinned.value = v
+  if (v) {
+    clearTimeout(closeTimer)
+    clearTimeout(replaceTimer)
+  } else {
+    /* 移出卡片：给"从卡片移回符号"留一点时间，避免边缘抖动 */
+    scheduleClose(260)
+  }
+}
+
+/** 关闭预览卡（Esc / 点击编辑器 / 滚出视野时调用） */
+export function closePeek(): void {
+  pinned.value = false
+  peek.value = null
+  hoverRange.value = null
+  clearTimeout(closeTimer)
+  clearTimeout(replaceTimer)
+  try {
+    liveView?.dispatch({ effects: setLink.of(null) })
+  } catch {
+    /* view 已销毁 */
+  }
+}
 
 /* ── 下划线装饰 ─────────────────────────────────────────────────────────── */
 const linkMark = Decoration.mark({ class: 'cm-def-link' })
@@ -54,6 +95,28 @@ const linkField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 })
 
+/* ── 闭包状态（每个编辑器实例一份；`liveView` 给 keydown 用） ─────────────── */
+let liveView: EditorView | null = null
+let closeTimer: ReturnType<typeof setTimeout> | undefined
+let replaceTimer: ReturnType<typeof setTimeout> | undefined
+/** 当前卡片对应的源词起点：用它判断"鼠标是不是换词了" */
+let peekSrcFrom = -1
+
+function scheduleClose(delay: number): void {
+  clearTimeout(closeTimer)
+  closeTimer = setTimeout(() => {
+    /* 钉住（鼠标在卡片上）⇒ 不关。这是"能复制代码"的前提 */
+    if (pinned.value) return
+    peek.value = null
+    hoverRange.value = null
+    try {
+      liveView?.dispatch({ effects: setLink.of(null) })
+    } catch {
+      /* view 已销毁 */
+    }
+  }, delay)
+}
+
 /* ── 主扩展 ─────────────────────────────────────────────────────────────── */
 export function modPeek(pathOf: () => string) {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -61,32 +124,24 @@ export function modPeek(pathOf: () => string) {
   /** 最后一次鼠标位置：★按住 ⌘ 时鼠标**已经停在符号上**就不会再有 mousemove，
       必须用它当场算一次，否则"先停住再按 ⌘"这个最常见的操作完全没反应。 */
   let lastXY: { x: number; y: number } | null = null
-  /** ★不能用 `this.view`：ViewPlugin 的 class field 初始化**早于** CM 赋值 `view`，
-      在 keydown 里读到的是 undefined（实测 `Cannot read properties of undefined (reading 'posAtCoords')`）。
-      改用闭包持有：构造器与 mousemove 都能拿到。 */
-  let liveView: EditorView | null = null
 
-  /** 清掉一切（松手、移开、切换文件都走这里） */
-  const clear = (view?: EditorView) => {
-    clearTimeout(timer)
+  const clearLink = (view?: EditorView) => {
     hoverRange.value = null
-    peek.value = null
     lastPos = -1
-    if (view && view.state.field(linkField, false)) {
-      view.dispatch({ effects: setLink.of(null) })
-    }
+    const v = view ?? liveView
+    if (v?.state.field(linkField, false)) v.dispatch({ effects: setLink.of(null) })
   }
 
   const schedule = (view: EditorView, pos: number) => {
-    if (!modHeldState.value) return
+    if (!modHeldState.value || pinned.value) return
     const path = pathOf()
     if (!path) return
     const word = view.state.wordAt(pos)
     if (!word) {
-      clear(view)
+      /* 没有词：已有卡片就冻住（鼠标可能正移向卡片），没有才清下划线 */
+      if (!peek.value) clearLink(view)
       return
     }
-    /* 同一个词内移动不重复请求；换了词才重排 */
     hoverRange.value = { from: word.from, to: word.to }
     if (lastPos === word.from) return
     lastPos = word.from
@@ -100,25 +155,26 @@ export function modPeek(pathOf: () => string) {
       const col = word.from - line.from + 1
       const t = await definitionAt(path, view.state.doc.toString(), line.number, col)
       if (!t || !modHeldState.value) return
-      /* 定义就在本文件同一处 ⇒ 没什么可预览的 */
+      /* 定义就在光标这一行 ⇒ 没什么可预览的 */
       const curLine = view.state.doc.lineAt(view.state.selection.main.head).number
       if (t.path === path && t.line === curLine) return
 
-      let lines: { no: number; text: string }[] = []
+      let slice = { lines: [] as { no: number; text: string }[], truncated: false, span: 0 }
       try {
         const f = await readSource(t.path)
-        const all = f.text.split('\n')
-        const start = Math.max(0, t.line - 3)
-        const end = Math.min(all.length, t.line + 2)
-        lines = all.slice(start, end).map((text, i) => ({ no: start + i + 1, text }))
+        /* ★整块截取（决策 #1438）：原来固定 ±5 行会把长接口/长函数拦腰截断 */
+        slice = sliceDefinition(f.text.split('\n'), t.line)
       } catch {
-        /* 读不到（二进制/过大/权限）⇒ 只显示位置，不显示代码 */
+        /* 读不到（二进制/过大/权限）⇒ 只显示位置 */
       }
       const coords = view.coordsAtPos(word.from)
       if (!coords) return
+      peekSrcFrom = word.from
       peek.value = {
         target: t,
-        lines,
+        lines: slice.lines,
+        truncated: slice.truncated,
+        span: slice.span,
         anchor: { left: coords.left, top: coords.top, bottom: coords.bottom },
         readonly: isReadonlyPath(t.path),
       }
@@ -127,29 +183,30 @@ export function modPeek(pathOf: () => string) {
 
   /* 修饰键：按下/松开/失焦。
      ★必须放在 ViewPlugin 里，不能把 `() => removeEventListener(...)` 直接塞进扩展数组 ——
-       **裸函数不是合法 `Extension`**，CodeMirror 会因此在建 state 时失败（实测：整个面板不渲染）。
-     ★用 `key` 判断而不是 keyCode；必须处理 blur ——在别的应用里松开 ⌘ 时 keyup 收不到，
-       会一直卡在"预览态"。 */
+       **裸函数不是合法 `Extension`**，CodeMirror 会因此在建 state 时失败（实测：整个面板不渲染）。 */
   const modKeyPlugin = ViewPlugin.fromClass(
     class {
       private readonly onKey = (e: KeyboardEvent) => {
+        /* Esc：关掉卡片（钉住时也能关，否则用户没法取消） */
+        if (e.key === 'Escape' && peek.value) {
+          e.preventDefault()
+          closePeek()
+          return
+        }
         if (e.key !== 'Meta' && e.key !== 'Control') return
         setModHeld(true)
-        /* 鼠标已经在某个符号上 ⇒ 不等 mousemove，立刻给反馈（下划线 + 预览） */
         const v = liveView
         if (!v) return
         /* ★已经弹出的 hover 提示（quickinfo / 诊断）**立刻收掉**：
-           它们的 source 只在"鼠标移动"或 hoverTime 到点时求值，按住 ⌘ 不会触发重算 ⇒
-           不主动关就会一直压在预览卡上面（用户截图里的"被顶替"）。 */
+           它们的 source 只在"鼠标移动"或 hoverTime 到点时求值，按住 ⌘ 不会触发重算。 */
         try {
           v.dispatch({ effects: closeHoverTooltips })
         } catch {
-          /* view 正在销毁 —— 忽略 */
+          /* view 正在销毁 */
         }
         const pos = lastXY ? v.posAtCoords(lastXY) : v.state.selection.main.head
         if (pos != null) schedule(v, pos)
       }
-      /** 松开修饰键：预览卡、下划线、悬停态**一起收**（只收卡片会留下孤立的下划线） */
       private readonly onKeyUp = (e: KeyboardEvent) => {
         if (e.key !== 'Meta' && e.key !== 'Control') return
         this.reset()
@@ -158,16 +215,11 @@ export function modPeek(pathOf: () => string) {
 
       private reset() {
         setModHeld(false)
-        peek.value = null
-        hoverRange.value = null
-        lastPos = -1
         clearTimeout(timer)
-        try {
-          /* 直接派发：不先判 field 是否存在 —— 判错的代价是"下划线留在那儿" */
-          liveView?.dispatch({ effects: setLink.of(null) })
-        } catch {
-          /* view 已销毁（切换文件时）—— 忽略 */
-        }
+        clearLink()
+        /* ★卡片被钉住（鼠标在卡片上/正在选代码）⇒ 不关，否则"按住 ⌘ → 移上去复制"永远做不到 */
+        if (pinned.value) return
+        peek.value = null
       }
       constructor(view: EditorView) {
         liveView = view
@@ -191,22 +243,46 @@ export function modPeek(pathOf: () => string) {
       mousemove: (e, view) => {
         lastXY = { x: e.clientX, y: e.clientY }
         liveView = view
+        /* 钉住（鼠标在卡片上）：编辑器里的任何移动都不影响卡片 */
+        if (pinned.value) return false
         if (!modHeldState.value) {
-          if (hoverRange.value) clear(view)
+          /* 没按 ⌘：有卡片就延迟收（可能正移向卡片），没有就只清下划线 */
+          if (peek.value) scheduleClose(200)
+          else if (hoverRange.value) clearLink(view)
           return false
         }
         const pos = view.posAtCoords({ x: e.clientX, y: e.clientY })
-        if (pos != null) schedule(view, pos)
+        if (pos == null) return false
+        /* 卡片已显示：**冻结内容**，但允许"停在新词 500ms"再换（松手/移入卡片都会取消）。
+           冻结是必需的：鼠标从符号移向卡片途中会不断经过别的词与空白，不冻结就会闪变/消失。 */
+        if (peek.value) {
+          const w = view.state.wordAt(pos)
+          if (w && w.from !== peekSrcFrom) {
+            clearTimeout(replaceTimer)
+            replaceTimer = setTimeout(() => {
+              if (!pinned.value) schedule(view, pos)
+            }, 500)
+          }
+          return false
+        }
+        schedule(view, pos)
         return false
       },
-      mouseleave: (_e, view) => {
-        clear(view)
+      /* ★不能在这里直接 clear：卡片 fixed 覆盖编辑器，鼠标进入卡片必然先触发 mouseleave */
+      mouseleave: () => {
+        if (peek.value) scheduleClose(280)
+        else clearLink()
+        return false
+      },
+      /* 在编辑器里按下鼠标：收起卡片（含钉住的），普通点击/⌘+单击跳转照常继续 */
+      mousedown: () => {
+        if (peek.value) closePeek()
         return false
       },
     }),
-    /* 松手时统一清（预览卡也要收），避免"松开还在" */
+    /* 兜底：没按住 ⌘ 且卡片没被钉住 ⇒ 收起（keyup 在别的窗口丢失时也不会残留） */
     EditorView.updateListener.of(() => {
-      if (!modHeldState.value && peek.value) peek.value = null
+      if (!modHeldState.value && peek.value && !pinned.value) scheduleClose(120)
     }),
     EditorView.theme({
       '.cm-def-link': {
@@ -217,9 +293,4 @@ export function modPeek(pathOf: () => string) {
       },
     }),
   ]
-}
-
-/** 关闭预览卡（用户点空白/滚动时调用） */
-export function closePeek(): void {
-  peek.value = null
 }
