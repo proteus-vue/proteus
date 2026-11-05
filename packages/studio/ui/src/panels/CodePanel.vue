@@ -64,6 +64,7 @@ import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
 import { goToDefinition, isReadonlyPath, typeHover } from '../nav'
+import { hintAt } from '../hint'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import { onAction } from '../keybindings'
@@ -147,7 +148,7 @@ const sidebar = ref<{ focusSearch: () => void } | null>(null)
 
 /** 跳到定义（决策 #1429 / #1433）：F12 用光标位置，⌘+单击用鼠标位置 */
 async function jumpToDef(pos?: number) {
-  const t = await goToDefinition(view, cur.value, (m) => pushToast(m, 'info'), pos)
+  const t = await goToDefinition(view, cur.value, (m) => hintAt(view, pos ?? view?.state.selection.main.head ?? 0, m), pos)
   if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
 }
 
@@ -170,7 +171,6 @@ async function jumpTo(h: SearchHit) {
   const carets = Array.from(hitLine.text.slice(0, pos - hitLine.from)).length + 1
   host.value?.setAttribute('data-caret', `${hitLine.number}:${carets}`)
 }
-
 
 /* ─── 目录树（决策 #1247 已拆到 `FileTree.vue` + `fileTree.ts`）─────────────────
  * 这里只剩一件与编辑器耦合的事：打开文件时把它的祖先目录展开（否则文件被折叠在看不见的地方）。
@@ -666,7 +666,7 @@ async function saveAll() {
 async function save() {
   if (!cur.value || saving.value) return
   if (readonlyFile.value) {
-    pushToast('依赖文件只读（node_modules 里的定义仅供参考）', 'info')
+    hintAt(view, view?.state.selection.main.head ?? 0, '依赖文件只读（node_modules 里的定义仅供参考）')
     return
   }
   saving.value = true

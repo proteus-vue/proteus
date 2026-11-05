@@ -418,3 +418,12 @@ kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:
 .kball{padding:4px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--fg-muted);font-size:11px;cursor:pointer}
 .kball:hover{border-color:var(--accent);color:var(--fg)}
 .kbsaved{color:#6cc08b;font-size:11px}
+
+
+/* 编辑器内就地提示（决策 #1440）：跳转失败/文件只读这类**动作反馈**显示在光标下方，
+   不再扔到右下角 toast —— 用户视线在代码上，右下角根本注意不到。
+   `pointer-events: none`：绝不能挡住正在敲的代码或 ⌘+单击。 */
+.studio-inline-hint{position:fixed;z-index:300;max-width:340px;padding:4px 9px;border:1px solid #3a3f47;border-radius:5px;background:#24272e;box-shadow:0 6px 18px rgba(0,0,0,.45);color:#d7dce4;font:11.5px/1.5 system-ui,-apple-system,'PingFang SC',sans-serif;pointer-events:none;opacity:0;transform:translateY(-2px);transition:opacity .12s ease,transform .12s ease}
+.studio-inline-hint.on{opacity:1;transform:none}
+/* 左侧蓝条用伪元素：代码里只 set textContent，不会把它冲掉 */
+.studio-inline-hint::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:2px;background:#4c8dff}
