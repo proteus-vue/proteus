@@ -22,23 +22,16 @@ export interface DefTarget {
  * 取光标/指定位置的定义。
  * @param col 1-based 字符列（与 tsserver 一致）
  */
+/** 全部定义位置（重载 / 合并声明 / 联合类型可能是多条） */
+export async function definitionsAt(path: string, text: string, line: number, col: number): Promise<DefTarget[]> {
+  if (!path) return []
+  const list = await diagDefinition(path, text, line, col).catch(() => [])
+  return Array.isArray(list) ? list : []
+}
+
+/** 第一个定义（预览卡只展示一处；要选的话走 `goToDefinition` 的 choose） */
 export async function definitionAt(path: string, text: string, line: number, col: number): Promise<DefTarget | null> {
-  if (!path) return null
-  const t = await diagDefinition(path, text, line, col).catch(() => null)
-  return t ?? null
-}
-
-/** 指定文档偏移处的定义（⌘+单击用） */
-export async function definitionAtPos(view: EditorView, path: string, pos: number): Promise<DefTarget | null> {
-  const line = view.state.doc.lineAt(pos)
-  return definitionAt(path, view.state.doc.toString(), line.number, pos - line.from + 1)
-}
-
-/** F12：光标处的定义。`col` 用 UTF-16 偏移（tsserver 的口径就是 UTF-16 code unit） */
-export async function definitionAtCursor(view: EditorView, path: string): Promise<DefTarget | null> {
-  const pos = view.state.selection.main.head
-  const line = view.state.doc.lineAt(pos)
-  return definitionAt(path, view.state.doc.toString(), line.number, pos - line.from + 1)
+  return (await definitionsAt(path, text, line, col))[0] ?? null
 }
 
 /**
@@ -51,19 +44,23 @@ export async function goToDefinition(
   onInfo: (msg: string) => void,
   /** 指定位置（F12 用光标；⌘+单击传鼠标处的文档偏移） */
   pos?: number,
+  /** 有**多个**定义时的选择器（由组件提供；不传就取第一个，保持旧行为） */
+  choose?: (list: DefTarget[]) => Promise<DefTarget | null>,
 ): Promise<DefTarget | null> {
   /* 判空收在这里：调用方（组件）手里的 view 天然是 `EditorView | null` */
   if (!view || !path) return null
-  const t = pos === undefined ? await definitionAtCursor(view, path) : await definitionAtPos(view, path, pos)
-  if (!t) {
-    onInfo('这里没有可跳转的定义')
+  const at = pos ?? view.state.selection.main.head
+  const line = view.state.doc.lineAt(at)
+  const all = await definitionsAt(path, view.state.doc.toString(), line.number, at - line.from + 1)
+  /* 仓库外 / `..` 这类不可用的位置先剔掉，别让用户选到一个点不动的 */
+  const usable = all.filter((t) => isJumpable(t.path))
+  if (!usable.length) {
+    onInfo(all.length ? `无法跳转（路径不可用）：${all[0].path}` : '这里没有可跳转的定义')
     return null
   }
-  if (!isJumpable(t.path)) {
-    onInfo(`无法跳转（路径不可用）：${t.path}`)
-    return null
-  }
-  return t
+  /* ★多个定义 ⇒ 交给选择器（决策 #1442）；只有一个就直接跳，不打扰 */
+  if (usable.length === 1) return usable[0]
+  return choose ? ((await choose(usable)) ?? null) : usable[0]
 }
 
 /**

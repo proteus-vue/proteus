@@ -65,8 +65,10 @@ import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
 import { goToDefinition, isReadonlyPath, typeHover } from '../nav'
 import { hintAt } from '../hint'
+import { chooseDefinitionAt } from '../chooser'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
+import DefChooser from '../DefChooser.vue'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -148,7 +150,9 @@ const sidebar = ref<{ focusSearch: () => void } | null>(null)
 
 /** 跳到定义（决策 #1429 / #1433）：F12 用光标位置，⌘+单击用鼠标位置 */
 async function jumpToDef(pos?: number) {
-  const t = await goToDefinition(view, cur.value, (m) => hintAt(view, pos ?? view?.state.selection.main.head ?? 0, m), pos)
+  const at = pos ?? view?.state.selection.main.head ?? 0
+  /* 第 5 个参数：多个定义时弹选择器（决策 #1442）；单条/零条时它不会被调用 */
+  const t = await goToDefinition(view, cur.value, (m) => hintAt(view, at, m), pos, (list) => chooseDefinitionAt(list, view, at))
   if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
 }
 
@@ -957,7 +961,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <!-- ⌘ 长按时的定义预览卡（决策 #1436）：fixed 定位，点一下即跳 -->
-    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" />
+    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser />
   </div>
 </template>
 

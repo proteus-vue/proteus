@@ -647,21 +647,32 @@ pub fn diag_definition(
     text: String,
     line: u32,
     col: u32,
-) -> Result<Option<DefTarget>, String> {
+) -> Result<Vec<DefTarget>, String> {
     /* 首次跳转可能要等项目加载，给 8s（诊断/补全都有更短的上限，这里放宽） */
     let v = lsp_call(
         serde_json::json!({ "t": "definition", "path": path, "text": text, "line": line, "col": col }),
         8000,
     )?;
-    let Some(v) = v else { return Ok(None) };
-    let Some(t) = v.get("target").filter(|t| !t.is_null()) else {
-        return Ok(None);
-    };
-    Ok(Some(DefTarget {
+    let Some(v) = v else { return Ok(Vec::new()) };
+
+    /* ★返回**全部**位置（决策 #1442）：重载 / interface 合并声明 / 联合类型会有多条，
+       原来只取第一条，用户没得选。前端在 >1 时弹选择器。 */
+    let mut out = Vec::new();
+    let read = |t: &serde_json::Value| DefTarget {
         path: t.get("path").and_then(|x| x.as_str()).unwrap_or("").to_string(),
         line: t.get("line").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
         col: t.get("col").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
-    }))
+    };
+    if let Some(arr) = v.get("targets").and_then(|x| x.as_array()) {
+        for t in arr {
+            out.push(read(t));
+        }
+    } else if let Some(t) = v.get("target").filter(|t| !t.is_null()) {
+        /* 兼容旧版脚本（只回单个 target） */
+        out.push(read(t));
+    }
+    out.retain(|t| !t.path.is_empty());
+    Ok(out)
 }
 
 #[derive(Serialize, Clone)]

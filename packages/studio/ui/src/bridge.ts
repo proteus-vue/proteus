@@ -151,8 +151,9 @@ export interface DefTarget {
   line: number
   col: number
 }
-export const diagDefinition = (path: string, text: string, line: number, col: number): Promise<DefTarget | null> =>
-  invoke<DefTarget | null>('diag_definition', { path, text, line, col })
+/** 全部定义位置（重载 / 合并声明 / 联合类型会有多条，决策 #1442） */
+export const diagDefinition = (path: string, text: string, line: number, col: number): Promise<DefTarget[]> =>
+  invoke<DefTarget[]>('diag_definition', { path, text, line, col })
 
 /** 类型/文档（悬浮显示）：`text` 形如 `const FLUSH_MS: 30`。 */
 export interface QuickInfo {

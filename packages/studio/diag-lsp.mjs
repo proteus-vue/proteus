@@ -222,34 +222,33 @@ async function definition(id, file, rel, text, line, col) {
   try {
     await ensureDoc(file, text)
     const res = await req('definition', { file, line, offset: col })
-    const first = Array.isArray(res) ? res[0] : res
-    if (!first?.file) {
-      out({ t: 'definition', id, path: rel, target: null })
-      return
+    /* ★tsserver 对**重载 / 合并声明 / 联合类型**会返回多个位置（决策 #1442）：
+       原来只取 `res[0]`，用户没法选，永远跳到第一个。这里全部带回，由前端弹选择器。 */
+    const arr = Array.isArray(res) ? res : res ? [res] : []
+    const targets = []
+    const seen = new Set()
+    for (const d of arr) {
+      if (!d?.file) continue
+      const absTarget = String(d.file)
+      /* ★不能无条件转相对路径：tsserver 返回的是**真实路径**，而本仓 worktree 的
+         `node_modules` 是软链到主仓库的 ⇒ `path.relative(root, 主仓库/node_modules/...)`
+         会算出 `../../../../../Volumes/...` 这种串（实测：跳依赖直接提示"路径不可用"）。
+         ⇒ 只有**确实在仓库内**才转相对；否则原样回绝对路径（前端走只读外部通道）。 */
+      let relTarget = absTarget
+      if (path.isAbsolute(absTarget)) {
+        const rel = path.relative(root, absTarget)
+        relTarget = rel.startsWith('..') ? absTarget : rel.split(path.sep).join('/')
+      }
+      /* tsserver 的 FileSpan.offset 是 **1-based**（与 line 一致），不要再 +1 */
+      const t = { path: relTarget, line: Number(d.start?.line ?? 1), col: Number(d.start?.offset ?? 1) }
+      const key = `${t.path}:${t.line}:${t.col}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      targets.push(t)
     }
-    const absTarget = String(first.file)
-    /* ★不能无条件转相对路径：tsserver 返回的是**真实路径**，而本仓 worktree 的
-       `node_modules` 是软链到主仓库的 ⇒ `path.relative(root, 主仓库/node_modules/...)`
-       会算出 `../../../../../Volumes/...` 这种串（实测：跳依赖直接提示"路径不可用"）。
-       ⇒ 只有**确实在仓库内**才转相对；否则原样回绝对路径（前端走只读外部通道）。 */
-    let relTarget = absTarget
-    if (path.isAbsolute(absTarget)) {
-      const rel = path.relative(root, absTarget)
-      relTarget = rel.startsWith('..') ? absTarget : rel.split(path.sep).join('/')
-    }
-    out({
-      t: 'definition',
-      id,
-      path: rel,
-      target: {
-        path: relTarget,
-        line: Number(first.start?.line ?? 1),
-        /* tsserver 的 FileSpan.offset 是 **1-based**（与 line 一致），不要再 +1 */
-        col: Number(first.start?.offset ?? 1),
-      },
-    })
+    out({ t: 'definition', id, path: rel, targets, target: targets[0] ?? null })
   } catch (e) {
-    out({ t: 'definition', id, path: rel, target: null, error: String(e?.message ?? e).slice(0, 120) })
+    out({ t: 'definition', id, path: rel, targets: [], target: null, error: String(e?.message ?? e).slice(0, 120) })
   }
 }
 
