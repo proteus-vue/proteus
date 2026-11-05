@@ -25,29 +25,15 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorState } from '@codemirror/state'
-import {
-  EditorView,
-  drawSelection,
-  highlightActiveLine,
-  highlightActiveLineGutter,
-  highlightSpecialChars,
-  keymap,
-  lineNumbers,
-} from '@codemirror/view'
+import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo, selectAll, undo } from '@codemirror/commands'
 /* 官方查找/替换（决策 #1401）：全量高亮、正则、替换、⌘D 选中同词都由它提供 ——
    之前自制的"选中即高亮"版只是临时方案，装好依赖就该换掉（少一套自己维护的状态机）。 */
-import { gotoLine, highlightSelectionMatches, search, searchKeymap, selectNextOccurrence } from '@codemirror/search'
+import { gotoLine, search, searchKeymap, selectNextOccurrence } from '@codemirror/search'
 /* 类型诊断的**渲染层**（决策 #1413）：数据在 `diag.ts`，这里只负责"画波浪线 + 悬浮提示"。
    `linter` 会在文档变化/调用 `forceLinting` 时回调我们给的 source，从共享 store 现取现算。 */
 import { lintGutter } from '@codemirror/lint'
-import {
-  HighlightStyle,
-  bracketMatching,
-  forceParsing,
-  indentOnInput,
-  syntaxHighlighting,
-} from '@codemirror/language'
+import { HighlightStyle, foldKeymap, forceParsing, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { Compartment } from '@codemirror/state'
 import { langExtension, langLabel } from '../langs'
@@ -75,6 +61,7 @@ import { refreshGit } from '../git'
 import { diagAt, diagStale, ensureWatch, markSaved, noteEdit, runEslint } from '../diag'
 import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagSync'
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
+import { editorExtras } from '../editorExtras'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
 import { pushToast } from '../toast'
@@ -280,11 +267,9 @@ function makeState(doc: string, path: string) {
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightActiveLine(),
-      drawSelection(),
-      highlightSpecialChars(),
+      /* 折叠 / 闭括号 / 多光标等基础编辑能力（决策 #1427） */
+      editorExtras(),
       history(),
-      bracketMatching(),
-      indentOnInput(),
       langFor(path),
       cmPhrases,
       search({ top: true }),
@@ -294,7 +279,6 @@ function makeState(doc: string, path: string) {
       lintGutter({ tooltipFilter: () => [] }),
       /* 悬停提示：锚定诊断起点，鼠标横移不重新定位（决策 #1424） */
       diagHover(() => cur.value),
-      highlightSelectionMatches(),
       syntaxHighlighting(studioHighlight),
       theme,
       // ⌘S 放最前：它能 preventDefault 掉浏览器/宿主的保存行为
@@ -314,6 +298,7 @@ function makeState(doc: string, path: string) {
         ...defaultKeymap,
         ...historyKeymap,
         indentWithTab,
+        ...foldKeymap,
       ]),
       EditorView.updateListener.of((u) => {
         if (!u.docChanged || !cur.value) return

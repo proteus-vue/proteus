@@ -124,7 +124,7 @@ onBeforeUnmount(() => clearTimeout(timer))
         id="codeSearch"
         ref="input"
         v-model="query"
-        placeholder="搜索仓库（⌘F）"
+        placeholder="搜索仓库（⇧⌘F）"
         spellcheck="false"
         autocomplete="off"
       />
