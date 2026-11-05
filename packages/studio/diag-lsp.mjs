@@ -228,9 +228,15 @@ async function definition(id, file, rel, text, line, col) {
       return
     }
     const absTarget = String(first.file)
-    const relTarget = path.isAbsolute(absTarget)
-      ? path.relative(root, absTarget).split(path.sep).join('/')
-      : absTarget
+    /* ★不能无条件转相对路径：tsserver 返回的是**真实路径**，而本仓 worktree 的
+       `node_modules` 是软链到主仓库的 ⇒ `path.relative(root, 主仓库/node_modules/...)`
+       会算出 `../../../../../Volumes/...` 这种串（实测：跳依赖直接提示"路径不可用"）。
+       ⇒ 只有**确实在仓库内**才转相对；否则原样回绝对路径（前端走只读外部通道）。 */
+    let relTarget = absTarget
+    if (path.isAbsolute(absTarget)) {
+      const rel = path.relative(root, absTarget)
+      relTarget = rel.startsWith('..') ? absTarget : rel.split(path.sep).join('/')
+    }
     out({
       t: 'definition',
       id,

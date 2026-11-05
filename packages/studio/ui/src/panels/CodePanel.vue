@@ -64,6 +64,8 @@ import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
 import { goToDefinition, isReadonlyPath, typeHover } from '../nav'
+import { modPeek } from '../modPeek'
+import DefPeek from '../DefPeek.vue'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -261,11 +263,10 @@ function makeState(doc: string, path: string) {
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightActiveLine(),
-      /* 折叠 / 闭括号 / 多光标等基础编辑能力（决策 #1427） */
       editorExtras(),
-      /* tsserver 补全（决策 #1428）：语法/语义候选，不是词法联想 */
       tsAutocomplete(() => cur.value),
-      /* 悬浮显示类型/文档（决策 #1429） */
+      /* ⌘ 按住：下划线 + 手型 + 定义预览（决策 #1436） */
+      modPeek(() => cur.value),
       typeHover(() => cur.value),
       /* ⌘/Ctrl + 单击 = 跳定义（决策 #1433）：VS Code 与 JetBrains 共同的肌肉记忆。
          ★用 mousedown 而不是 click：先把位置算出来（posAtCoords），不依赖"默认把光标移过去"的时序。 */
@@ -989,6 +990,8 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
+    <!-- ⌘ 长按时的定义预览卡（决策 #1436）：fixed 定位，点一下即跳 -->
+    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" />
   </div>
 </template>
 
