@@ -11,15 +11,17 @@
  *   ⇒ 下划线用 Decoration，预览卡用 Vue 组件（`DefPeek.vue`）按坐标绝对定位。
  *
  * 【状态放模块级 refs】预览卡是**单例**（同一时刻只有一张），放组件里反而要层层透传。
+ * 【修饰键状态在 `modKey.ts`】`typeHover` / `diagHover` 也要读它（按住 ⌘ 时不许弹各自的提示），
+ *   放这里会形成 `nav ↔ modPeek` 循环 import。
  */
-import { Decoration, EditorView, ViewPlugin, type DecorationSet } from '@codemirror/view'
+import { Decoration, EditorView, ViewPlugin, closeHoverTooltips, type DecorationSet } from '@codemirror/view'
 import { StateEffect, StateField } from '@codemirror/state'
 import { readonly, ref } from 'vue'
+import { modHeldState, setModHeld } from './modKey'
 import { definitionAt, isReadonlyPath, type DefTarget } from './nav'
 import { readSource } from './bridge'
 
 /* ── 修饰键状态 ─────────────────────────────────────────────────────────── */
-const modHeld = ref(false)
 const hoverRange = ref<{ from: number; to: number } | null>(null)
 
 /** 预览卡内容（null = 不显示） */
@@ -33,7 +35,6 @@ export interface PeekData {
   readonly: boolean
 }
 const peek = ref<PeekData | null>(null)
-export const modHeldState = readonly(modHeld)
 export const peekState = readonly(peek)
 
 /* ── 下划线装饰 ─────────────────────────────────────────────────────────── */
@@ -77,7 +78,7 @@ export function modPeek(pathOf: () => string) {
   }
 
   const schedule = (view: EditorView, pos: number) => {
-    if (!modHeld.value) return
+    if (!modHeldState.value) return
     const path = pathOf()
     if (!path) return
     const word = view.state.wordAt(pos)
@@ -94,11 +95,11 @@ export function modPeek(pathOf: () => string) {
     clearTimeout(timer)
     /* 250ms：与 VS Code 的"停住才预览"接近；移动中不请求，避免刷 IPC */
     timer = setTimeout(async () => {
-      if (!modHeld.value || lastPos !== word.from) return
+      if (!modHeldState.value || lastPos !== word.from) return
       const line = view.state.doc.lineAt(word.from)
       const col = word.from - line.from + 1
       const t = await definitionAt(path, view.state.doc.toString(), line.number, col)
-      if (!t || !modHeld.value) return
+      if (!t || !modHeldState.value) return
       /* 定义就在本文件同一处 ⇒ 没什么可预览的 */
       const curLine = view.state.doc.lineAt(view.state.selection.main.head).number
       if (t.path === path && t.line === curLine) return
@@ -133,10 +134,18 @@ export function modPeek(pathOf: () => string) {
     class {
       private readonly onKey = (e: KeyboardEvent) => {
         if (e.key !== 'Meta' && e.key !== 'Control') return
-        modHeld.value = true
+        setModHeld(true)
         /* 鼠标已经在某个符号上 ⇒ 不等 mousemove，立刻给反馈（下划线 + 预览） */
         const v = liveView
         if (!v) return
+        /* ★已经弹出的 hover 提示（quickinfo / 诊断）**立刻收掉**：
+           它们的 source 只在"鼠标移动"或 hoverTime 到点时求值，按住 ⌘ 不会触发重算 ⇒
+           不主动关就会一直压在预览卡上面（用户截图里的"被顶替"）。 */
+        try {
+          v.dispatch({ effects: closeHoverTooltips })
+        } catch {
+          /* view 正在销毁 —— 忽略 */
+        }
         const pos = lastXY ? v.posAtCoords(lastXY) : v.state.selection.main.head
         if (pos != null) schedule(v, pos)
       }
@@ -148,7 +157,7 @@ export function modPeek(pathOf: () => string) {
       private readonly onBlur = () => this.reset()
 
       private reset() {
-        modHeld.value = false
+        setModHeld(false)
         peek.value = null
         hoverRange.value = null
         lastPos = -1
@@ -182,7 +191,7 @@ export function modPeek(pathOf: () => string) {
       mousemove: (e, view) => {
         lastXY = { x: e.clientX, y: e.clientY }
         liveView = view
-        if (!modHeld.value) {
+        if (!modHeldState.value) {
           if (hoverRange.value) clear(view)
           return false
         }
@@ -197,7 +206,7 @@ export function modPeek(pathOf: () => string) {
     }),
     /* 松手时统一清（预览卡也要收），避免"松开还在" */
     EditorView.updateListener.of(() => {
-      if (!modHeld.value && peek.value) peek.value = null
+      if (!modHeldState.value && peek.value) peek.value = null
     }),
     EditorView.theme({
       '.cm-def-link': {

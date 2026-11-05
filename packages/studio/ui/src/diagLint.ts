@@ -11,6 +11,7 @@
  */
 import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { hoverTooltip, type EditorView as View } from '@codemirror/view'
+import { modHeldState } from './modKey'
 import type { EditorView } from '@codemirror/view'
 import { diagsOf } from './diag'
 import { liveOf } from './diagSync'
@@ -90,6 +91,8 @@ export function repaintDiag(view: EditorView, path: string, stale: boolean): voi
 export function diagHover(path: () => string) {
   return hoverTooltip(
     (view: View, pos: number) => {
+      /* 按住 ⌘/Ctrl 时让路给定义预览（决策 #1437）：同位置的两个提示会互相盖 */
+      if (modHeldState.value) return null
       const hit = lintOf(view, path()).filter((d) => pos >= d.from && pos <= d.to)
       if (!hit.length) return null
       return {

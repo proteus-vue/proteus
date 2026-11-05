@@ -60,7 +60,9 @@ const box = computed(() => {
 <style scoped>
 .defpeek {
   position: fixed;
-  z-index: 60;
+  /* ★必须高于 CodeMirror 的 tooltip（`.cm-tooltip` 是 z-index: 200，见 @codemirror/view baseTheme）：
+     原来是 60，只要有任何 hover 提示在场，预览卡就一定被压在下面（用户截图"被顶替"的视觉成因之一）。 */
+  z-index: 250;
   max-height: 190px;
   overflow: hidden;
   padding: 0;

@@ -9,6 +9,7 @@
  *   两者失败策略也不同：补全失败静默、导航失败要**告诉用户为什么没跳**。
  */
 import { hoverTooltip, type EditorView } from '@codemirror/view'
+import { modHeldState } from './modKey'
 import { diagDefinition, diagQuickinfo } from './bridge'
 
 export interface DefTarget {
@@ -96,6 +97,10 @@ const WORD = /[\w$]+/
 export function typeHover(pathOf: () => string) {
   return hoverTooltip(
     async (view, pos) => {
+      /* ★按住 ⌘/Ctrl 时**不许**弹类型提示（决策 #1437）：
+         该手势属于"定义预览"，`modPeek` 会弹可点击的定义卡；这两个提示锚在同一位置，
+         quickinfo 只要晚 300ms 冒出来就会把预览卡盖掉（用户截图反馈"预览总被顶替"）。 */
+      if (modHeldState.value) return null
       const path = pathOf()
       if (!path) return null
       const line = view.state.doc.lineAt(pos)
@@ -107,6 +112,9 @@ export function typeHover(pathOf: () => string) {
       const word = WORD.exec(text.slice(start))?.[0] ?? ''
       if (!word) return null
       const info = await diagQuickinfo(path, view.state.doc.toString(), line.number, start + 1).catch(() => null)
+      /* ★再判一次：请求是异步的，回来时用户可能**已经按下** ⌘（按下那一刻还看不到这次结果，
+         `closeHoverTooltips` 也关不掉它）⇒ 只能在落地前丢弃。 */
+      if (modHeldState.value) return null
       if (!info || !info.text) return null
       return {
         pos: line.from + start,
