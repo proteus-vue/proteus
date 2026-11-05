@@ -567,7 +567,7 @@
     "tableRows": 35,
     "headings": 10,
     "codeBlocks": 4,
-    "bodyLines": 15
+    "bodyLines": 19
   },
   "website/content/capabilities/notification.md": {
     "tableRows": 49,
@@ -1551,7 +1551,7 @@
     "tableRows": 34,
     "headings": 10,
     "codeBlocks": 4,
-    "bodyLines": 16
+    "bodyLines": 20
   },
   "website/en/capabilities/notification.md": {
     "tableRows": 48,

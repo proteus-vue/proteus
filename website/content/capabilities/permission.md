@@ -10,6 +10,14 @@ order: 5001
 
 **什么时候用**：首次使用前的授权引导。
 
+**端实现边界**：**App 三端只查不申请**。这是本能力最容易被误解的一点：`usePermission(name)` 读的是**当前授权状态**，**不会弹授权框**——真正的申请发生在业务实际使用该能力时（打开相机、请求定位），那时系统自己弹。擅自弹框会让"只想了解状态"的调用产生用户可见副作用。
+
+**App 端只有两态**（`granted` / `denied`），没有 Web 的 `prompt`：Android 要区分"从未询问"与"永久拒绝"需要 `getPermissionFlags()`（SystemApi，第三方应用调不到），鸿蒙 `checkAccessTokenSync` 也只给两态 ⇒ 未授予**一律如实报 `denied`**，不猜 `prompt`（猜了会让业务在"永久拒绝"时反复弹框，用户点过「不再询问」后什么都不会发生）。iOS 的 `notDetermined` 同样归入 `denied`——为三端一致，这是一处**刻意的信息损失**。
+
+**首批支持三项**：`camera` / `microphone` / `geolocation`（也接受小程序写法 `scope.camera` / `scope.record` / `scope.userLocation`）。**未知名字直接报错**，不返回 `denied`——把"框架不认识"伪装成"系统拒绝"会让业务永远查不出问题。通知权限暂不在首批：iOS 只有异步 API（`getNotificationSettings`），而宿主 invoke 契约是同步的。
+
+**配置前置（最容易踩的坑）**：Android 清单没声明该权限时 `checkSelfPermission` 同样回 DENIED；iOS 缺 `Info.plist` 的 `NSCameraUsageDescription` 等用途说明时，**真申请会让系统直接杀掉 App**（不是回 denied）。两者都把"没配置"伪装成"用户拒绝"⇒ 宿主回执带 `declared` 位，业务据此可分开这两种情形（`declared:false` 表示该补配置，不是引导用户去设置里找）。
+
 > 技术标识：能力原语 C16 · `capability.permission` · 返回 `Result<PermissionStatus>` · **Hook 已实现**（各端支持情况见下方兼容进度表）
 
 usePermission：权限状态（web Permissions API）
@@ -76,9 +84,9 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
 | 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.authorize |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
-| iOS 原生 | 🟡 | native-ios（UIKit + CoreAnimation） · 渲染核心已落地——能力桥未接线 |
-| Android 原生 | 🟡 | native-android（自绘 Canvas） · 渲染核心已落地——能力桥未接线 |
-| 鸿蒙 | 🟡 | native-harmony（ArkUI RenderNode） · 渲染核心已落地——能力桥未接线 |
+| iOS 原生 | ✅ | native-ios（UIKit + CoreAnimation） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| Android 原生 | ✅ | native-android（自绘 Canvas） · App 宿主桥（capability-app.ts）· 桥方法已接入 |
+| 鸿蒙 | ✅ | native-harmony（ArkUI RenderNode） · 鸿蒙宿主已接线（proteus_device.h） |
 | Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
 | 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
 

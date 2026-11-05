@@ -61,6 +61,9 @@ HOST_SRCS=(
   "$HERE/ProteusHost/runtime/share-capability.swift" \
   # ★★★#1384 C84 文档预览（QLPreviewController；本进程内预览，不经跨 App 授权面）
   "$HERE/ProteusHost/runtime/document-preview-capability.swift" \
+  # ★★★C16 权限状态查询（`permission.check`；逐框架查 AVFoundation / CoreLocation 授权状态）
+  #   ★新文件必须进清单——漏了就"静态绿、真机红"（G-39 教训：写死清单会让新文件悄悄不参与检查）
+  "$HERE/ProteusHost/runtime/permission-capability.swift" \
   "$HERE/ProteusHost/runtime/local-service-capability.swift" "$HERE/ProteusHost/runtime/js-task-sampler.swift"
   # ★★★#1100：树 diff / 全量请求 / JSON 序列化（从 selfdraw-scene.swift 拆出，文件大小棘轮）
   "$HERE/ProteusHost/runtime/host-tree-diff.swift"

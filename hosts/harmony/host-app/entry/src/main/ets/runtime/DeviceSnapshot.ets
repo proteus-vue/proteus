@@ -38,6 +38,8 @@ import { systemShare } from '@kit.ShareKit';
 //   `fileUri` 用来把沙箱绝对路径转成 `file://` URI（`PreviewInfo.uri` 要 URI 不是路径）。
 import { filePreview } from '@kit.PreviewKit';
 import { fileUri } from '@kit.CoreFileKit';
+// ★★★C16 权限状态：`abilityAccessCtrl`（同步查询）+ `bundleManager`（取本应用 accessTokenId）
+import { abilityAccessCtrl, bundleManager, Permissions } from '@kit.AbilityKit';
 import { setDeviceSnapshot, drainDeviceActions } from 'proteus_render';
 // ★★决策 #1083：录屏/画中画状态（C71）——快照随设备快照一起交给 C++
 import { readCaptureSnapshot, CaptureSnapshotData } from './CaptureSnapshot';
@@ -152,6 +154,15 @@ export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHe
       // ★#1083 录屏/画中画：`-1` = 本端查不了 ⇒ **不写该字段**（C++ 侧据此回 missing，不伪造 false；见下方条件赋值）
     };
     if (brightness >= 0) payload['brightness'] = brightness;
+    // ★★★C16 权限状态（`permission.check`）：**只采同步可查的三项**（与三端同一集）。
+    //   ★鸿蒙 `checkAccessTokenSync` 只给 granted/denied，分不出"未询问"与"永久拒绝"
+    //     ⇒ 未授予如实记 0（口径与 Android/iOS 一致，见 capability-app-permission.ts 头注释）。
+    //   ★采集失败 ⇒ **不写该字段**（C++ 侧据此如实回 missing，不伪造 denied——
+    //     "查不了"与"没授权"是两件事，混在一起业务会白引导用户去设置）。
+    const permSnapshot = collectPermissionSnapshot();
+    for (const k of Object.keys(permSnapshot)) {
+      payload[k] = permSnapshot[k];
+    }
     for (const k of Object.keys(sensorFields)) {
       const v = sensorFields[k];
       if (v !== null) payload[k] = v;
@@ -164,6 +175,43 @@ export function refreshDeviceSnapshot(win: window.Window | undefined, keyboardHe
     // 快照采集失败 ⇒ 不注入（JS 侧按 missing 如实 unsupported）；不阻断渲染
     console.error('PROTEUS_DEVICE_SNAPSHOT_FAIL ' + JSON.stringify(e));
   }
+}
+
+/**
+ * ★★★C16 权限状态采集（快照项）：`camera` / `microphone` / `geolocation` 三项。
+ *
+ * 【为什么走快照而不是直接调系统 API】与设备域同因：`permission.check` 在 `hostAppRender` 的
+ *   napi 调用内部**同步**执行，而 `abilityAccessCtrl` 的查询虽也有 Sync 版本，但需要
+ *   `context` / `accessTokenId`（ArkTS 侧对象，C++ 侧拿不到）⇒ 由本文件采集后交给快照。
+ *
+ * 【关键：查不到 ≠ 没授权】
+ *   任一项抛错（未 build 到该 API / tokenId 拿不到）⇒ **不写该字段**。
+ *   C++ 侧读不到字段就回 `missing` ⇒ JS 层报 `permission.unsupported`。
+ *   若这里"查不到就当 denied 写进去"，业务会去引导用户开权限，而真正的问题是"这端查不了"——
+ *   两者在 UI 上看起来一样，排查时却是完全不同的方向（本仓 #1103 同族陷阱）。
+ */
+function collectPermissionSnapshot(): Record<string, number> {
+  const out: Record<string, number> = {};
+  try {
+    const atManager = abilityAccessCtrl.createAtManager();
+    const info = bundleManager.getBundleInfoForSelfSync(
+      bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+    const tokenId: number = info.appInfo.accessTokenId;
+    // 1 = granted / 0 = denied（与 C++ 侧 `permissionStateOf()` 的读法约定）
+    const granted = (perm: Permissions): number =>
+      atManager.checkAccessTokenSync(tokenId, perm) === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED ? 1 : 0;
+    out['permission_camera'] = granted('ohos.permission.CAMERA');
+    out['permission_microphone'] = granted('ohos.permission.MICROPHONE');
+    // ★定位两项任一授予即 granted（鸿蒙把"大致位置"拆成独立权限，只查 LOCATION 会误报 denied）
+    const fine = granted('ohos.permission.LOCATION');
+    const coarse = granted('ohos.permission.APPROXIMATELY_LOCATION');
+    out['permission_geolocation'] = fine === 1 || coarse === 1 ? 1 : 0;
+  } catch (e) {
+    // ★整体失败 ⇒ 返回空表（一个字段都不写）⇒ C++ 回 missing，不伪造 denied
+    console.error('PROTEUS_PERMISSION_SNAPSHOT_FAIL ' + JSON.stringify(e));
+    return {};
+  }
+  return out;
 }
 
 /** 取走并执行待处理动作（渲染后调用；逐条异步执行，失败只记日志）。 */

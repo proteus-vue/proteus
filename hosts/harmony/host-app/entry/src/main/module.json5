@@ -13,6 +13,31 @@
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET"
+      },
+      // ★★★C16 权限状态查询（`permission.check`）：鸿蒙 `checkAccessTokenSync` 对**未声明**的权限
+      //   同样回 PERMISSION_DENIED ⇒ 不声明会让"清单没配"与"用户拒绝"看起来完全一样
+      //   （Android 侧用 `declared` 位区分，鸿蒙这边直接按"本宿主会用到"声明三项）。
+      //   ★user_grant 类权限：声明了只是"有资格申请"，**申请**仍要业务在真正使用时触发。
+      //   本能力只查询状态，不申请（见 proteus_device.h 的 permission.check 注释）。
+      {
+        "name": "ohos.permission.CAMERA",
+        "reason": "$string:permission_camera_reason",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
+      },
+      {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:permission_microphone_reason",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
+      },
+      {
+        "name": "ohos.permission.LOCATION",
+        "reason": "$string:permission_location_reason",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
+      },
+      {
+        "name": "ohos.permission.APPROXIMATELY_LOCATION",
+        "reason": "$string:permission_location_reason",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
       }
     ],
     "abilities": [

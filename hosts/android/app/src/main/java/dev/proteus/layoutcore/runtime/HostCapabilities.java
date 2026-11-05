@@ -224,6 +224,11 @@ public final class HostCapabilities {
             //     `FileTransferCapability.resolve()`（沙箱唯一实现）⇒ 声明在父包，见其文件头
             case "document.open":
                 return ok(dev.proteus.layoutcore.DocumentCapability.open(activity, args));
+            // ★★★C16 权限状态查询（`usePermission`）—— **只查不申请**（见 PermissionCapability 头注释）
+            //   ★回执带 `declared`：清单没声明该权限时 checkSelfPermission 同样回 DENIED，
+            //     不区分会让业务引导用户去系统设置里找一个月台不存在的开关（永远找不到）。
+            case "permission.check":
+                return ok(dev.proteus.layoutcore.runtime.PermissionCapability.check(activity, args));
             // ── #1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request ──
             case "http.cancel":
                 return ok(HttpCapability.cancel(args));

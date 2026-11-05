@@ -7,6 +7,16 @@
          （最小权限），代价是能力页只能标 ⚠️；现与「App 宿主承载超级应用」的目标对齐。
          ⇒ 门禁 check:host-variant-parity 判据③ 已同步反转（原「release 无 INTERNET」）。 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ★★★C16 权限状态查询（`permission.check`）：**查询不需要声明**，但"能不能查出一份
+         granted"必须先声明。★不声明也照样能查（`checkSelfPermission` 恒回 DENIED），
+         那会让业务把"清单没配"读成"用户拒绝了"——所以 `PermissionCapability` 额外回
+         `declared` 位让 JS 层能把这两种情形分开（见其文件头）。
+         ⇒ 本仓宿主按"真实使用这些能力"的基线声明三项：相机 / 录音 / 定位（大致+精确）。
+         ★这是**最小集**：没有对应的后台定位、没有存储、没有通知（那些能力尚未接入）。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="Proteus LayoutCore"
         android:debuggable="true"

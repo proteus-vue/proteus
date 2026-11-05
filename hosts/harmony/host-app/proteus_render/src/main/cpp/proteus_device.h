@@ -154,6 +154,39 @@ inline std::string dispatch(const std::string& method, const std::string& argsJs
     }
     return std::string("{\"ok\":true,\"data\":{\"supported\":") + (supported ? "true" : "false") + "}}";
   }
+  // ★★★C16 权限状态查询（`usePermission`）—— **只查不申请**，答案来自 ArkTS 渲染前采集的快照。
+  //   ★为什么是快照：`abilityAccessCtrl` 要 `context` / `accessTokenId`（ArkTS 对象），C++ 侧拿不到；
+  //     而本宿主的 `invokeBytes` 在同步 napi 内执行，也没法回调 ArkTS 去查
+  //     ⇒ 与设备域同款「渲染前快照」（见 DeviceSnapshot.ets 的 collectPermissionSnapshot）。
+  //   ★★★「查不了」≠「没授权」：快照缺字段 ⇒ 回 missing（JS 层报 permission.unsupported），
+  //     **绝不**伪造成 denied——那会让业务引导用户去开权限，而真问题是本端查不了。
+  if (method == "permission.check") {
+    // 可用性探测（`appPermissionAvailable()` 发 {probe:true}）：方法在就回 ok
+    if (argsJson.find("\"probe\"") != std::string::npos) {
+      return "{\"ok\":true,\"data\":{\"probe\":true,\"scopes\":[\"camera\",\"microphone\",\"geolocation\"]}}";
+    }
+    std::string scope;
+    jstr(argsJson.c_str(), argsJson.size(), "scope", &scope);
+    if (scope.empty()) {
+      return "{\"ok\":false,\"missing\":false,\"reason\":\"permission.check: 缺少 scope（支持 camera / microphone / geolocation）\"}";
+    }
+    // ★只接受三端同一集，其它 scope 直接报错（不猜、不回落 denied）
+    if (scope != "camera" && scope != "microphone" && scope != "geolocation") {
+      return std::string("{\"ok\":false,\"missing\":false,\"reason\":\"permission.check: 不认识的 scope「") +
+             jsonEscape(scope) + "」（支持 camera / microphone / geolocation）\"}";
+    }
+    std::string key = "permission_" + scope;
+    double v = -1;
+    if (!snapshotNum(key.c_str(), &v)) {
+      return std::string("{\"ok\":false,\"missing\":true,\"reason\":\"permission.check: 快照无 ") + key +
+             "（宿主未采集——**可能是本端查不了，不是没授权**）\"}";
+    }
+    // ★0/1 → denied/granted（口径：鸿蒙分不出"未询问"，未授予如实报 denied）
+    const char* state = (v > 0.5) ? "granted" : "denied";
+    return std::string("{\"ok\":true,\"data\":{\"scope\":\"") + jsonEscape(scope) +
+           "\",\"state\":\"" + state + "\",\"declared\":true,"
+           "\"framework\":\"abilityAccessCtrl.checkAccessTokenSync\"}}";
+  }
 
   // ── 动作类：入队（ArkTS 在渲染后 drain 执行）──
   if (method == "device.vibrate") {
@@ -339,7 +372,11 @@ inline bool isDeviceMethod(const std::string& method) {
          // ★★★#1384：`document.open` 同因（动作队列）。★这一行漏了会是什么样：
          //   实现全写了、编译也过，但运行时永远回落 `missing` ⇒ JS 侧读成 unsupported，
          //   而"本机不支持"看起来完全合理 ⇒ **最难发现的一类假绿**。
-         method == "document.open";
+         method == "document.open" ||
+         // ★★★C16：`permission.check` 同因——读的是本文件的快照。
+         //   漏这一行会怎样：实现全写了、编译也过，但运行时永远回落 `missing`
+         //   ⇒ JS 侧读成 unsupported，而"本端不支持权限查询"看起来完全合理 ⇒ 最难发现的假绿。
+         method == "permission.check";
 }
 
 }  // namespace device

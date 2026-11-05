@@ -46,6 +46,9 @@ export function appPerfProbe(base = '', concurrency = 8, total = 200): string {
     }
     const hooks = cap.createCapabilityHooks(cap.getSharedCapabilityBridge(), {})
 
+    /** 首个失败的归因（诊断用；不参与分位数） */
+    let firstError: { code: string; message: string; status: number | null } | null = null
+
     /** 固定 worker 池跑一批，返回每个请求的耗时（ms） */
     const runBatch = async (n: number, c: number): Promise<number[]> => {
       const lat: number[] = new Array(n)
@@ -60,6 +63,14 @@ export function appPerfProbe(base = '', concurrency = 8, total = 200): string {
           if (!r.ok) {
             // ★失败也要记账 —— 否则"快"可能是"全部失败得很快"
             lat[i] = -1
+            // ★★#1404：**必须留下失败原因**。首版只记 `failed=N`，真机首跑得到
+            //   "failed=8 · wallMs=8"（8 个 worker 各失败一次就退出）却**无任何错误码**，
+            //   无法区分"网络不通 / 明文被策略拦 / 参数错 / 服务端 5xx"——只能靠猜。
+            //   ⇒ 记首个失败的 code + message + status（只记一份，不污染分位数）。
+            if (!firstError) {
+              const e = (r as { error?: { code?: string; message?: string } }).error
+              firstError = { code: e?.code ?? 'unknown', message: String(e?.message ?? '').slice(0, 160), status: (r as { status?: number }).status ?? null }
+            }
             break
           }
         }
@@ -94,6 +105,8 @@ export function appPerfProbe(base = '', concurrency = 8, total = 200): string {
     out['maxMs'] = okLat.length ? +okLat[okLat.length - 1]!.toFixed(2) : 0
     // ★诚实：失败率必须随吞吐一起看
     out['failRatePct'] = +((failed / total) * 100).toFixed(1)
+    // ★失败归因（null = 无失败）：'失败得快'必须能解释为什么
+    out['firstError'] = firstError
     g['__proteusHostPerfProbeResult'] = JSON.stringify(out)
   }
 

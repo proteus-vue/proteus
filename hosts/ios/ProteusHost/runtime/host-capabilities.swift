@@ -120,6 +120,17 @@ final class HostCapabilities: NSObject {
                 }
             }
             catch { return fail("\(error)") }
+        // ★★★C16 权限状态查询（`usePermission`）—— **只查不申请**（见 permission-capability.swift 头注释）
+        //   ★回执带 `declared`：Info.plist 缺 UsageDescription 时，真申请会**杀进程**而不是回 denied。
+        case "permission.check":
+            do { return ok(try PermissionCapability.check(args)) }
+            catch let e as WsError {
+                switch e {
+                case .unsupported(let m): return miss(m)
+                case .invalid(let m): return fail(m)
+                }
+            }
+            catch { return fail("\(error)") }
         // ★#1121 取消通道（S3 回收维度）：按 reqId 中止在途 http.request
         case "http.cancel":
             return ok(HttpCapability.cancel(args))

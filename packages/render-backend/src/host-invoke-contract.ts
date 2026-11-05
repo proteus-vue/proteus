@@ -119,6 +119,18 @@ export const HOST_CAPABILITY_METHODS = [
   //   ★扩展名白名单（pdf/doc/docx/xls/xlsx/ppt/pptx/txt）⇒ 由扩展名推 MIME；不在白名单直接报错，
   //     **不猜、不降级成 octet-stream**（无接收方时表现为"点了没反应"，最难归因）。
   'document.open',
+  // ★★★C16 权限状态查询（`usePermission`）：**只查不申请**——读当前授权状态，不弹授权框。
+  //   ★真正的申请发生在业务实际使用该能力时（打开相机 / 请求定位），那时系统自己弹；
+  //     擅自弹框会让"只想了解状态"的调用产生用户可见副作用。
+  //   ★三端各自实现：Android `Context.checkSelfPermission` + `requestedPermissions`（判是否声明）/
+  //     iOS 逐框架 `AVCaptureDevice.authorizationStatus` · `CLLocationManager.authorizationStatus` /
+  //     鸿蒙 `abilityAccessCtrl.checkAccessTokenSync`（渲染前快照）。
+  //   ★★「未询问」分不出来：Android 需 `getPermissionFlags`（SystemApi）；鸿蒙 `checkAccessTokenSync`
+  //     只给 granted/denied ⇒ **未授予一律如实报 denied**，不猜 `prompt`
+  //     （猜了会让业务在"永久拒绝"时反复弹框，用户点了"不再询问"后什么都不会发生）。
+  //   ★★回执必须带 `declared`：Android 清单未声明 / iOS 缺 UsageDescription 时，真申请会
+  //     静默失败（iOS 上更是**直接杀进程**）⇒ 不区分会让"没配置"伪装成"用户拒绝"。
+  'permission.check',
   // ★★C78 局域网服务发现（#1097）：NsdManager / NWBrowser（事件经壳推 __proteusHostLocalService）
   'localService.start',
   'localService.stop',

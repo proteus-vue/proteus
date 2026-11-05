@@ -2,6 +2,9 @@
   "string": [
     { "name": "module_desc", "value": "Proteus HarmonyOS host (entry)" },
     { "name": "EntryAbility_desc", "value": "Proteus host entry ability" },
-    { "name": "EntryAbility_label", "value": "ProteusHost" }
+    { "name": "EntryAbility_label", "value": "ProteusHost" },
+    { "name": "permission_camera_reason", "value": "Used for camera features such as taking photos and scanning codes" },
+    { "name": "permission_microphone_reason", "value": "Used for microphone features such as recording and voice input" },
+    { "name": "permission_location_reason", "value": "Used to obtain location information while in use" }
   ]
 }

@@ -97,6 +97,12 @@ export const APP_BRIDGE_SOURCES = [
   //   ★这条**尤其**需要登记：C84 的 MP/Web 两腿在 NC1 就有了（`bridge-decls/open-document.ts`），
   //     页面长期显示 App 端 🟡；App 腿接上后若不登记，页面会继续谎报"未接线"。
   { file: 'packages/api/src/capability-app-document.ts', functions: ['createAppDocument'] },
+  // ★★★C16 权限状态查询（`getPermission`）在独立工厂
+  //   （`capability-app-permission.ts::createAppPermission`，装配层用条件 spread 引入）。
+  //   ★不登记就会被判「桥未接线」——与 #1207/#1225/#1226/#1285/#1336/#1384 同一形态。
+  //   ★登记的是**文件与工厂**：宿主缺 `permission.check` 时装配层**不提供**该方法
+  //     ⇒ 运行时如实 `permission.unsupported`（不掺假）。
+  { file: 'packages/api/src/capability-app-permission.ts', functions: ['createAppPermission'] },
 
 ]
 

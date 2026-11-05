@@ -16102,3 +16102,59 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ④ 跨端横比不成立（iOS WiFi / Android 回环），报告已逐端标注，但读者仍可能误引。
     ⑤ 单次真机数据里出现过 45.8% 的轮间差（Android 并发 16 的一轮）——已由中位吸收，
        但**说明设备状态（发热/后台）会影响读数**，这是真机测量的固有噪声。
+
+1430. **★★★App 能力 C16 `getPermission` 三端落地（只查不申请 + `declared` 位）· Android 真机 20/20（含授权翻转）**（2026-11-05 · 用户「IDE这个线不用管，兄弟会话在做，继续App能力主线」）:
+  - **★选型取证（为什么是它）**: `capability-app-gap` 报 App 桥 52 方法 / 可接线 44 / 真缺口 49；
+    `capability-app-feasibility` 报 **A 类 0 · B 类只剩 `getCookieJar`**（已 blocked 等设计拍板）·
+    其余 48 项全 C 类。而 `12-app-capability-batches.md` §2 的建议序里 `getPermission` 排第四，
+    理由不是"排到它了"，而是**它是很多 C 类的前置**（定位/相机/录音/通知都要先知道能不能用）。
+    ★三端都有**同步可查**的状态 API（已逐条核 SDK）: Android `Context.checkSelfPermission` ·
+    iOS `AVCaptureDevice.authorizationStatus` / `CLLocationManager.authorizationStatus` ·
+    鸿蒙 `abilityAccessCtrl.checkAccessTokenSync`（`@ohos.abilityAccessCtrl.d.ts:183` 实测存在）。
+  - **★★语义边界（写进代码/文档/探针，防被读成"会弹框"）**: 本能力**只查询当前授权状态，不申请**。
+    真正的申请发生在业务实际使用该能力时（打开相机/请求定位），那时系统自己弹。
+    ★擅自弹框会让"只想了解状态"的调用产生用户可见副作用——这是刻意的语义选择，不是漏做。
+  - **★★★两处"伪装"被消除（本轮最值钱的部分）**:
+    ① **"没配置"伪装成"用户拒绝"**: Android 清单未声明该权限时 `checkSelfPermission` 同样回 DENIED；
+       iOS 缺 `Info.plist` 的 `NSCameraUsageDescription` 时**真申请会让系统直接杀进程**（不是回 denied）。
+       ⇒ 宿主回执带 `declared` 位（Android 查 `requestedPermissions` / iOS 查 UsageDescription 非空），
+       业务可据此把"该补配置"与"该引导用户去设置"分开。
+    ② **"框架不认识"伪装成"系统拒绝"**: 未知 scope **直接报错**，不返回 `denied`
+       （静默回 denied 会让业务永远查不出问题）。
+  - **★口径（已定，不重新发明）**: App 端**只有两态** `granted`/`denied`，没有 Web 的 `prompt`——
+    Android 区分"从未询问"与"永久拒绝"需 `getPermissionFlags()`（**SystemApi**，第三方应用调不到），
+    鸿蒙 `checkAccessTokenSync` 只给两态 ⇒ 未授予一律如实报 `denied`；
+    为三端一致，iOS 的 `notDetermined` 也归 `denied`（**刻意的信息损失**，文档写明）。
+  - **★首批三项**: `camera` / `microphone` / `geolocation`（收小程序写法 `scope.camera`/`scope.record`/`scope.userLocation`）。
+    ★notifications 明确不进首批：iOS 只有**异步** `getNotificationSettings`，而宿主 invoke 契约是同步的。
+  - **四层落点（每层都真接）**: ① JS 桥 `capability-app-permission.ts`（归一 + 回执校验 + 回显原始名）;
+    ② 契约 `HOST_CAPABILITY_METHODS` 登记 `permission.check`; ③ 三端宿主
+    （Android `PermissionCapability` · iOS `PermissionCapability` · 鸿蒙 `proteus_device.h` 读 ArkTS 快照
+    `collectPermissionSnapshot`）; ④ 抽取器两份登记（`app-bridge-keys.mjs` + `harmony-host-keys.mjs`，
+    漏登记 ⇒ 页面永远 🟡 = 代码做了文档不认）。
+  - **判据**: 单测 `tests/capability-app-permission.test.ts` **8/8** · Android 真机
+    `hosts/android/run-permission-probe.sh` **20/20** · 关联回归
+    （phone 7 + document 11）共 **26/26** · 契约覆盖 android 61→**62** / ios 57→**58** / harmony 35→**36** ·
+    能力页 App 三列 🟡→✅（概览 iOS/Android 41→**42**、鸿蒙 21→**22**）· `gen-content --check` 绿。
+  - **★★破坏性验证 5 层（JS 3 + 宿主 2）**:
+    JS: M1 别名表兜底（未知名放行）⇒ 判据 ②⑥ 双红 · M2 去掉 state 白名单 ⇒ 判据 ⑤ 红 ·
+    M3 装配层无条件 spread（宿主缺方法也提供）⇒ 判据 ⑧ 红。
+    宿主（★真机，最重的一层）: M4 把 `checkSelfPermission` 短路成 false ⇒ 真机 **18/20**
+    （`grant 后变 granted` 与 `状态确实翻转` 两条精确红）——证明判据盯的是**系统真状态**，
+    而不是"宿主回执说成功"（只查一次的判据对"恒读缓存/恒回 DENIED"两种错法都全绿）。
+  - **★零设备编译全绿**: Android javac · iOS `swiftc -typecheck`（新 swift 文件已登记进
+    `check-selfdraw-compile.sh` 与 `run-selfdraw.sh` 两处清单——漏一处就"静态绿、真机红"）·
+    鸿蒙 `-fsyntax-only` + **HAP 真构建成功**（ArkTS 编译通过，含 `module.json5` 权限声明与中英字符串资源）。
+  - **诚实边界**:
+    ① **iOS 真机未跑**（描述文件失效 `本机没有 team XKH568R7A5 的有效描述文件`，设备 `unavailable`）
+    —— 探针脚本 `hosts/ios/run-permission-probe.sh` 已就绪，补签后可跑；
+    ② **鸿蒙真机未跑**（`hdc list targets` 为空）—— 探针 `hosts/harmony/run-permission-probe.sh` 已就绪；
+    ③ **授权态翻转只在 Android 验过**（`pm grant/revoke` 可控变量）——iOS/鸿蒙无等价命令，需人工改设置；
+    ④ 鸿蒙走**渲染前快照** ⇒ 本层证明"分派 + 读数映射"，不证明查询瞬间的实时性
+    （延迟上界 = 一次渲染间隔，与设备域其它快照项同一口径）；
+    ⑤ 只覆盖三个 scope；`notifications` 等需异步 API 的留在后续。
+  - **★顺带记两条纪律**: ① `run-selfdraw.sh` 加 4 行 plist 就破 1000 行上限 ⇒ 压回 **998**
+    （合并同族 key、不删注释）——存量棘轮"只减不增"对"我只是加了一点点"同样成立；
+    ② `check-file-size` 报的另 3 处（`MainActivity.java` / `proteus_host.cpp` ×2 / `studio/src/main.rs`）
+    经 `git show HEAD` 逐条对拍确认**全部是既存欠账**（本周 37 个提交带进来的），
+    不在本单 scope 内、不代为修改（AI 协作规范 §3.2：不替别的会话做决定）。

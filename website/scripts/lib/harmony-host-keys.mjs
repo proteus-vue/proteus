@@ -170,6 +170,15 @@ export const APP_SHARE_TO_HOST = { share: 'share' }
 export const APP_DOCUMENT_FACTORY = 'createAppDocument'
 export const APP_DOCUMENT_TO_HOST = { openDocument: 'document.open' }
 
+/** ★★C16：权限状态查询（`getPermission`）的桥成员 → 鸿蒙宿主方法
+ *  ★为什么**要登记**：本单把 C++ 分派（`proteus_device.h` 的 `permission.check`）+ ArkTS 快照采集
+ *    （`DeviceSnapshot.ets` 的 `collectPermissionSnapshot`，用 `abilityAccessCtrl.checkAccessTokenSync`）
+ *    都写了、HAP 也构建通过。
+ *  ★★登记口径（与其它条目一致）：只表示"**宿主源码里有该分派**"，不声称"真机验过"。
+ *  ★若不登记：页面会永远显示"鸿蒙宿主壳未接线"（代码做了、文档不认，与 #1285/#1336/#1384 同族）。 */
+export const APP_PERMISSION_FACTORY = 'createAppPermission'
+export const APP_PERMISSION_TO_HOST = { getPermission: 'permission.check' }
+
 export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-device.ts', factory: DEVICE_BRIDGE_FACTORY, map: BRIDGE_TO_HOST },
   { file: 'packages/api/src/capability-app-element.ts', factory: ELEMENT_BRIDGE_FACTORY, map: ELEMENT_BRIDGE_TO_HOST },
@@ -186,6 +195,8 @@ export const HARMONY_BRIDGE_SOURCES = [
   { file: 'packages/api/src/capability-app-share.ts', factory: APP_SHARE_FACTORY, map: APP_SHARE_TO_HOST },
   // ★#1384：文档预览域（openDocument → document.open）——不登记则永远 🟡
   { file: 'packages/api/src/capability-app-document.ts', factory: APP_DOCUMENT_FACTORY, map: APP_DOCUMENT_TO_HOST },
+  // ★C16：权限状态查询（getPermission → permission.check）——不登记则永远 🟡
+  { file: 'packages/api/src/capability-app-permission.ts', factory: APP_PERMISSION_FACTORY, map: APP_PERMISSION_TO_HOST },
 ]
 
 /** 鸿蒙宿主里承载能力分发的源码（新增承载文件必须登记——否则该能力在文档上永远 🟡）。 */

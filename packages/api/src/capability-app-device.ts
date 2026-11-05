@@ -32,6 +32,7 @@ import { appFileSystemAvailable, createAppFileSystem } from './capability-app-fi
 import { appPhoneCallAvailable, createAppPhone } from './capability-app-phone'   // ★#1285 C21 拨号盘
 import { appShareAvailable, createAppShare } from './capability-app-share'   // ★#1336 C22 系统分享面板
 import { appOpenDocumentAvailable, createAppDocument } from './capability-app-document'   // ★#1384 C84 文档预览
+import { appPermissionAvailable, createAppPermission } from './capability-app-permission'   // ★C16 权限状态查询
 // ★★★决策 #1081：App 端元素查询（`useElement` 选择器通路）——解析器由装配层注入
 import { createAppElementCapabilities } from './capability-app-element'
 // ★★★决策 #1083：录屏/截屏状态（C71）——三端能力面不同，逐方法诚实分档
@@ -291,6 +292,9 @@ export function createAppCapabilities<E extends Error = Error>(
     ...(appShareAvailable() ? createAppShare() : {}),
     // ★★★#1384 C84 文档预览（宿主缺 document.open 时**不提供** ⇒ useOpenDocument 如实 unsupported）
     ...(appOpenDocumentAvailable() ? createAppDocument() : {}),
+    // ★★★C16 权限状态查询（宿主缺 permission.check 时**不提供** ⇒ usePermission 如实 unsupported）
+    //   ★只查不申请（见 capability-app-permission.ts 头注释）——申请发生在业务真正使用该能力时。
+    ...(appPermissionAvailable() ? createAppPermission() : {}),
     connectWebSocket: appWs,   // ★#1093 App 端 WebSocket（ws.open/send/close + 壳推事件流）
     createSocketTask: createAppSocketTask(appWs, resOpts.resources ?? undefined, resOpts.owner),   // ★#1096 C28 低层句柄（复用同一 ws 腿）· ★#1245 透传账本
     ...createAppTransfer(resOpts),   // ★#1095 App 端 upload/download（复用 http.request 字节腿 + 宿主 fs）

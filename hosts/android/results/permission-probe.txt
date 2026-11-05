@@ -1,0 +1,16 @@
+11-05 10:23:55.903 22436 22436 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"probe":true} -> {"ok":true,"data":{"probe":true,"scopes":["camera","microphone","geolocation"]}}
+probe 回执：{"ok":true,"data":{"probe":true,"scopes":["camera","microphone","geolocation"]}}
+11-05 10:23:57.288 22558 22558 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"scope":"camera"} -> {"ok":true,"data":{"scope":"camera","state":"denied","declared":true,"manifestPermissions":["android.permission.CAMERA"]}}
+11-05 10:23:58.682 22657 22657 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"scope":"microphone"} -> {"ok":true,"data":{"scope":"microphone","state":"denied","declared":true,"manifestPermissions":["android.permission.RECORD_AUDIO"]}}
+11-05 10:24:00.067 22812 22812 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"scope":"geolocation"} -> {"ok":true,"data":{"scope":"geolocation","state":"denied","declared":true,"manifestPermissions":["android.permission.ACCESS_FINE_LOCATION","android.permission.ACCESS_COARSE_LOCATION"]}}
+camera：{"ok":true,"data":{"scope":"camera","state":"denied","declared":true,"manifestPermissions":["android.permission.CAMERA"]}}
+microphone：{"ok":true,"data":{"scope":"microphone","state":"denied","declared":true,"manifestPermissions":["android.permission.RECORD_AUDIO"]}}
+geolocation：{"ok":true,"data":{"scope":"geolocation","state":"denied","declared":true,"manifestPermissions":["android.permission.ACCESS_FINE_LOCATION","android.permission.ACCESS_COARSE_LOCATION"]}}
+11-05 10:24:01.473 22920 22920 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"scope":"camera"} -> {"ok":true,"data":{"scope":"camera","state":"granted","declared":true,"manifestPermissions":["android.permission.CAMERA"]}}
+camera（grant 后）：{"ok":true,"data":{"scope":"camera","state":"granted","declared":true,"manifestPermissions":["android.permission.CAMERA"]}}
+11-05 10:24:02.865 23038 23038 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"scope":"camera"} -> {"ok":true,"data":{"scope":"camera","state":"denied","declared":true,"manifestPermissions":["android.permission.CAMERA"]}}
+camera（revoke 后）：{"ok":true,"data":{"scope":"camera","state":"denied","declared":true,"manifestPermissions":["android.permission.CAMERA"]}}
+11-05 10:24:04.207 23140 23140 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={"scope":"notifications"} -> ERR:InternalError: host-invoke: permission.check: 不认识的 scope「notifications」（支持 camera / microphone / geolocation）
+未知 scope 回执：ERR:InternalError: host-invoke: permission.check: 不认识的 scope「notifications」（支持 camera / microphone / geolocation）
+11-05 10:24:05.573 23252 23252 I ProteusCapProbe: CAP_RECEIPT method=permission.check args={} -> ERR:InternalError: host-invoke: permission.check: 缺少 scope（支持 camera / microphone / geolocation）
+缺 scope 回执：ERR:InternalError: host-invoke: permission.check: 缺少 scope（支持 camera / microphone / geolocation）

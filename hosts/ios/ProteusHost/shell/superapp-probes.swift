@@ -117,6 +117,17 @@ enum SuperappProbes {
       deadlineSeconds: 90,
       extraReadings: { _ in [:] },
     ),
+    // ★★★C16 权限状态查询（`--permission-probe=1`）
+    //   ★deadline 给 60s：探针只有约 12 次调用（3 scope × Hook+宿主直调、别名、两条拒绝），
+    //     没有网络也没有夹具写入 ⇒ 比 share 还轻，给足余量但不长等。
+    ProbeConfig(
+      argPrefix: "--permission-probe=",
+      kickFormat: "__proteusHostAppPermissionProbe()",
+      resultKey: "__proteusHostPermissionProbeResult",
+      reportPrefix: "permission",
+      deadlineSeconds: 60,
+      extraReadings: { _ in [:] },
+    ),
     ProbeConfig(
       argPrefix: "--cancel-probe=",
       kickFormat: "__proteusHostAppCancelProbe(%@)",
