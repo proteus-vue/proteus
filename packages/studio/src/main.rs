@@ -638,6 +638,10 @@ fn main() {
             stats,
             dump_frame,
             read_text,
+            /* ★漏注册过一次（决策 #1439）：`#[tauri::command]` 只是标记，**必须**列进
+               `generate_handler!` 才能被前端调用；漏了会报 "Command xxx not found"，
+               而 `cargo build` 依然通过 —— 只有真机调用才暴露。 */
+            read_text_external,
             write_text,
             list_files,
             load_state,

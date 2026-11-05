@@ -94,6 +94,12 @@ if ! CARGO="$(pick_cargo)"; then
   echo "  装 rustup 工具链，或把 ~/.cargo/bin 放到 PATH 前面"
   exit 1
 fi
+# ★注册完整性（决策 #1439）：`#[tauri::command]` 漏进 `generate_handler!` 时 cargo 照样编过，
+#   只有真机调用才报 "Command xxx not found"（read_text_external 就这么漏过一次）⇒ 打包前拦。
+if ! node "$HERE/../../scripts/check-tauri-handlers.mjs"; then
+  echo "✗ tauri 命令注册不完整，中止打包"
+  exit 1
+fi
 echo "▸ cargo build --release（cargo $("$CARGO" --version | awk '{print $2}') · rustc $(rustc --version | awk '{print $2}')）"
 touch "$HERE/src/main.rs"
 "$CARGO" build --release --quiet
