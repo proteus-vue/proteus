@@ -58,16 +58,25 @@ export async function goToDefinition(
     onInfo('这里没有可跳转的定义')
     return null
   }
-  if (!isInRepo(t.path)) {
+  if (!isJumpable(t.path)) {
     onInfo(`定义在仓库外：${t.path}`)
     return null
   }
   return t
 }
 
-/** 目标是否在仓库内（`node_modules` / 绝对路径之外都算外） */
-export function isInRepo(path: string): boolean {
-  return !!path && !path.startsWith('/') && !path.startsWith('..') && !path.includes('node_modules/')
+/**
+ * 是否"仓库内的依赖文件"（`node_modules/`，含 pnpm 的 `.pnpm/`）。
+ * ★决策 #1434：这类文件**能读、能跳，但必须只读** —— 用户要看第三方类型定义，
+ *   却绝不能顺手改掉 `node_modules` 里的东西（下次 install 就没了，也污染依赖）。
+ */
+export function isDependencyPath(path: string): boolean {
+  return !!path && !path.startsWith('/') && path.includes('node_modules/')
+}
+
+/** 能否跳过去：仓库内（含依赖）都行；仓库外（绝对路径 / `..`）不跳 */
+export function isJumpable(path: string): boolean {
+  return !!path && !path.startsWith('/') && !path.startsWith('..')
 }
 
 const WORD = /[\w$]+/

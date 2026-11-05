@@ -63,7 +63,7 @@ import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagS
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
-import { goToDefinition, typeHover } from '../nav'
+import { goToDefinition, isDependencyPath, typeHover } from '../nav'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -103,6 +103,8 @@ const err = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const dirty = ref(false)
+/** 当前文件是否只读（决策 #1434：仓库内的依赖文件 node_modules/ 只读打开） */
+const readonlyFile = ref(false)
 const lineCount = ref(0)
 const host = ref<HTMLElement | null>(null)
 
@@ -254,6 +256,8 @@ function makeState(doc: string, path: string) {
   return EditorState.create({
     doc,
     extensions: [
+      /* 依赖文件（node_modules/）只读：能看类型定义，但不许改（决策 #1434） */
+      EditorState.readOnly.of(readonlyFile.value),
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightActiveLine(),
@@ -383,6 +387,7 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
   const cached = states.get(path)
   const rec0 = recs.get(path)
   if (cached && rec0) {
+    readonlyFile.value = isDependencyPath(path)
     await nextTick()
     view?.setState(cached)
     /* ★切回已打开的文件走这条分支（不读盘）：**必须重新派发诊断**，
@@ -412,6 +417,8 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
       return
     }
     recs.set(path, { base: f.text, mtime: f.mtime_us })
+    /* ★必须在 makeState 之前定好只读：state 里的 readOnly facet 是创建时定死的 */
+    readonlyFile.value = isDependencyPath(path)
     const st = makeState(f.text, path)
     states.set(path, st)
     await nextTick()
@@ -657,6 +664,10 @@ async function saveAll() {
 
 async function save() {
   if (!cur.value || saving.value) return
+  if (readonlyFile.value) {
+    pushToast('依赖文件只读（node_modules 里的定义仅供参考）', 'info')
+    return
+  }
   saving.value = true
   const ok = await savePath(cur.value)
   saving.value = false
@@ -938,7 +949,7 @@ onBeforeUnmount(() => {
       <div class="pane" :style="{ paddingBottom: termMode !== 'off' ? termH + 'px' : undefined }">
         <div class="bar">
           <!-- 面包屑（决策 #1407）：目录段可点（在树里定位），末段是文件名。★保持单行，textContent 才会正好等于完整路径（门禁按它比对当前文件）。 -->
-          <span class="path" id="codePath" :title="cur"><template v-if="cur"><template v-for="(c, i) in crumbs" :key="c.name + i"><button class="crumb" :class="{ leaf: !c.dir }" @click.stop="c.dir && revealPath(c.dir, ws.codeCollapsed)">{{ c.name }}</button><span v-if="i < crumbs.length - 1" class="csep">/</span></template></template><template v-else>—</template></span>
+          <span class="path" id="codePath" :title="cur"><template v-if="cur"><template v-for="(c, i) in crumbs" :key="c.name + i"><button class="crumb" :class="{ leaf: !c.dir }" @click.stop="c.dir && revealPath(c.dir, ws.codeCollapsed)">{{ c.name }}</button><span v-if="i < crumbs.length - 1" class="csep">/</span></template></template><template v-else>—</template></span><span v-if="readonlyFile" class="ro-badge" title="node_modules 里的依赖文件，仅供查看，不可编辑">只读</span>
           <span class="meta" id="codeMeta">{{ loading ? '读取中…' : `${lineCount} 行` }}</span>
           <!-- 未保存：可点的 chip（⌘S 之外的第二条路径） -->
           <button v-if="dirty" class="dirty" id="codeDirty" title="保存（⌘S）" @click="save">

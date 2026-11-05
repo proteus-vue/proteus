@@ -45,6 +45,46 @@ pub fn repo_root() -> Result<std::path::PathBuf, String> {
 }
 
 /// 解析"仓库内的一个路径"。★`canonicalize` 后再做前缀比对：只比字符串挡不住 `a/../../etc/passwd`。
+/// 消除 `.` / `..` 但**不解析软链**（`canonicalize` 会解析，见下）
+fn normalize(p: &std::path::Path) -> std::path::PathBuf {
+    use std::path::Component;
+    let mut out = std::path::PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// **只读**用的边界判定（决策 #1434）。
+///
+/// 【为什么不能直接用 `resolve_in_repo`】pnpm 的 `node_modules/<pkg>` 是**软链**到
+/// `.pnpm/...`（本仓还进一步链到主仓库）——`canonicalize` 之后落在仓库外，
+/// `starts_with(root)` 必然失败 ⇒ **依赖文件一个都读不了**（实测：跳转定义到 `.d.ts` 报"路径越界"）。
+///
+/// 【放宽的边界】先按**逻辑路径**判（`root.join(path)` 归一化后必须仍在仓库内，
+/// 绝对路径 / `..` 一律拒绝），再 canonicalize 用于真正读取。
+/// ⇒ 软链可以读，`../../etc/passwd` 仍被拒。**写**继续走严格的 `resolve_in_repo`（防软链穿越写）。
+pub fn resolve_in_repo_read(path: &str) -> Result<std::path::PathBuf, String> {
+    let root = repo_root()?;
+    if !within_root(&root, path) {
+        return Err(format!("路径越界：{path}"));
+    }
+    root.join(path)
+        .canonicalize()
+        .map_err(|e| format!("打不开 {path}：{e}"))
+}
+
+/// 逻辑路径是否落在仓库内（不解析软链）。抽成纯函数以便单测。
+fn within_root(root: &std::path::Path, path: &str) -> bool {
+    normalize(&root.join(path)).starts_with(root)
+}
+
 pub fn resolve_in_repo(path: &str) -> Result<std::path::PathBuf, String> {
     let root = repo_root()?;
     let p = root.join(path).canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
@@ -65,7 +105,7 @@ pub struct FileText {
 
 /// 读仓库内的文本文件（上限 512KB）。
 pub fn read_text(path: String) -> Result<FileText, String> {
-    let p = resolve_in_repo(&path)?;
+    let p = resolve_in_repo_read(&path)?;
     let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
     if len > 512 * 1024 {
         return Err(format!("文件过大：{len} 字节（上限 512KB）"));
@@ -156,4 +196,23 @@ pub fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
     }
     out.sort();
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 读边界（决策 #1434）：仓库内（含 node_modules 这类软链路径）放行，越界一律拒。
+    /// ★这是纯字符串层面的判定 —— 正因为**不解析软链**，pnpm 的 `node_modules/<pkg>`
+    ///   （软链到 `.pnpm/...` 甚至主仓库）才能被读；而 `../` 与绝对路径仍被挡住。
+    #[test]
+    fn read_boundary() {
+        let root = std::path::Path::new("/repo");
+        assert!(within_root(root, "node_modules/vue/dist/vue.d.ts"));
+        assert!(within_root(root, "packages/a/src/x.ts"));
+        assert!(within_root(root, "src/./a.ts"));
+        assert!(!within_root(root, "../etc/passwd"));
+        assert!(!within_root(root, "a/../../etc/passwd"));
+        assert!(!within_root(root, "/etc/passwd"));
+    }
 }
