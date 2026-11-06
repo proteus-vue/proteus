@@ -26,6 +26,7 @@ import {
   type ActionMeta,
   type KeymapScheme,
 } from './keybindings'
+import { AUTO_SAVE_OPTIONS, autoSaveMode, setAutoSave, type AutoSaveMode } from './autosave'
 import PSelect from './ui/PSelect.vue'
 import {
   detectTools,
@@ -91,6 +92,11 @@ const savedNote = ref('')
 
 function pickScheme(v: string) {
   setScheme(v as KeymapScheme)
+}
+
+const autoSaveOptions = AUTO_SAVE_OPTIONS
+function pickAutoSave(v: string) {
+  setAutoSave(v as AutoSaveMode)
 }
 
 /** PSelect 要 `{value,label}`；`hint` 不填（键位随方案变，写死会骗人） */
@@ -322,6 +328,22 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
             快速打开 <b>{{ chordLabel('editor.quickOpen') }}</b> ·
             侧栏 <b>{{ chordLabel('view.toggleSidebar') }}</b> ·
             终端 <b>{{ chordLabel('view.toggleTerminal') }}</b>
+          </p>
+
+          <div class="setrow">
+            <label for="setAutoSave">自动保存</label>
+            <PSelect
+              id="setAutoSave"
+              :model-value="autoSaveMode"
+              :options="autoSaveOptions"
+              size="md"
+              :width="220"
+              @update:model-value="pickAutoSave"
+            />
+          </div>
+          <p class="setlead">
+            <b>默认关闭</b>：Studio 直接改真实工作区文件，写盘是"有副作用"的动作。
+            开成「停止输入 1 秒后」最接近 VS Code 的 <code>files.autoSave: afterDelay</code>。
           </p>
 
           <h2 class="sethead">自定义快捷键</h2>

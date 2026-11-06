@@ -68,7 +68,7 @@ import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
 import { pickReferenceAt } from '../refs'
 import { runRename } from '../rename'
-import { gotoFileSymbol, openEditorMenu, registerEditorActions, setEditorMenuDeps } from '../editorMenu'
+import { gotoFileSymbol, installAutoSave, openEditorMenu, registerEditorActions, setEditorMenuDeps } from '../editorMenu'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import DefChooser from '../DefChooser.vue'
@@ -100,6 +100,7 @@ function onQuickPick(path: string) {
 /** 代码面板订阅的动作（决策 #1431）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
 const offActions = [
   ...registerEditorActions(() => view),
+  installAutoSave({ isDirty: () => dirty.value, save: () => void save() }),
   onAction('file.closeAll', () => void closeAll()),
   onAction('file.closeTab', (e) => {
     /* 终端聚焦时 ⌘W 该关终端会话，不关标签：沿用原判据 */
@@ -501,7 +502,6 @@ async function close(path: string) {
   host.value?.removeAttribute('data-parse')
 }
 
-/** 关掉全部标签（决策 #1450）：复用 `closeOthers('')`，未保存提示、语言服务解绑都同一套 */
 async function closeAll() {
   if (!(await closeOthers(''))) return
   cur.value = ''; dirty.value = false; lineCount.value = 0
