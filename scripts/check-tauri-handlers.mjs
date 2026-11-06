@@ -27,7 +27,11 @@ const rsFiles = readdirSync(srcDir).filter((f) => f.endsWith('.rs'))
 const mainCode = strip(readFileSync(join(srcDir, 'main.rs'), 'utf8'))
 const defined = rsFiles.flatMap((f) => {
   const code = f === 'main.rs' ? mainCode : strip(readFileSync(join(srcDir, f), 'utf8'))
-  return [...code.matchAll(/#\[tauri::command\]\s*\n\s*(?:pub\s+)?fn\s+(\w+)/g)].map((m) => m[1])
+  const direct = [...code.matchAll(/#\[tauri::command\]\s*\n\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/g)].map((m) => m[1])
+  /* ★宏生成的命令（`define_blocking_cmd!(diag_rename, …)`）：名字在宏调用里，
+     直接正则匹配不到 ⇒ 不认它就会漏掉这 5 个的注册校验。 */
+  const viaMacro = [...code.matchAll(/define_blocking_cmd!\(\s*(\w+)/g)].map((m) => m[1])
+  return [...direct, ...viaMacro]
 })
 
 const listMatch = /generate_handler!\s*\[([\s\S]*?)\]/.exec(mainCode)

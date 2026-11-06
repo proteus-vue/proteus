@@ -63,7 +63,7 @@ import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagS
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
-import { goToDefinition, isReadonlyPath, referencesAt, typeHover } from '../nav'
+import { definitionsAt, goToDefinition, isReadonlyPath, referencesAt, typeHover } from '../nav'
 import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
 import { pickReferenceAt } from '../refs'
@@ -438,6 +438,9 @@ async function open(path: string, opts: { diff?: 'disk' | 'head' } = {}) {
     dirty.value = false
   } finally {
     loading.value = false
+    /* ★后台预热（决策 #1446）：tsserver 的首次导航请求要加载整个项目（实测 4.7s）。
+       打开文件后静默跑一次，用户真正按 F12 / F2 时就是毫秒级。 */
+    setTimeout(() => { if (cur.value === path) void definitionsAt(path, view?.state.doc.toString() ?? '', 1, 1) }, 1200)
   }
 }
 

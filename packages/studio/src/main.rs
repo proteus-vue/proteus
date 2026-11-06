@@ -286,8 +286,13 @@ async fn search_text(query: String) -> Result<search::Outcome, String> {
    本文件曾 1103 行越过 1000 行硬上限；Git 只读与"窗口/画布/设备"职责无关，
    且它有一条独立安全边界（**只查询、不写**）——分开写更不容易在改窗口代码时被顺手放宽。 */
 #[tauri::command]
-fn git_status() -> git::GitStatus {
-    git::git_status()
+async fn git_status() -> git::GitStatus {
+    /* ★`git status` 是**外部进程**（几十~几百 ms）；同步 command 会把它跑到 UI 主线程上，
+       定时刷新时就会周期性卡一下。放后台线程（决策 #1446，与诊断命令同一类根因）。
+       线程 panic 才走兜底，正常路径不受影响。 */
+    tauri::async_runtime::spawn_blocking(git::git_status)
+        .await
+        .unwrap_or_else(|_| git::git_status())
 }
 
 /// 取某个文件在 HEAD 里的内容（用于"与 HEAD 比较"）；未跟踪/不存在 ⇒ None。

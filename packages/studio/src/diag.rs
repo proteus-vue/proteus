@@ -509,8 +509,33 @@ static PENDING: OnceLock<Mutex<HashMap<u64, std::sync::mpsc::Sender<serde_json::
     OnceLock::new();
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
-#[tauri::command]
-pub fn diag_complete(
+/// 把**阻塞式**语言服务调用挪到后台线程（决策 #1446）
+///
+/// 【为什么必须这样】
+///   Tauri 2 的**同步** command 在 **UI 主线程**执行；`lsp_call` 里的 `recv_timeout`
+///   一堵就是几秒（首次 rename 实测 4.7s）⇒ 整个窗口无响应、macOS 直接显示转圈。
+///   包一层 `spawn_blocking`：等待发生在后台线程，主线程继续渲染
+///   （所以"正在分析符号…"这类提示才真的能显示出来）。
+///
+/// 用法：把原实现改名成 `*_blocking`（去掉 `#[tauri::command]`），
+///   再用 `define_blocking_cmd!(对外名, 内部名, 返回类型, "日志标签")` 注册。
+macro_rules! define_blocking_cmd {
+    ($pub_name:ident, $inner:ident, $ret:ty, $label:literal) => {
+        #[tauri::command]
+        pub async fn $pub_name(
+            path: String,
+            text: String,
+            line: u32,
+            col: u32,
+        ) -> Result<$ret, String> {
+            tauri::async_runtime::spawn_blocking(move || $inner(path, text, line, col))
+                .await
+                .map_err(|e| format!("{}失败：{e}", $label))?
+        }
+    };
+}
+
+fn complete_blocking(
     path: String,
     text: String,
     line: u32,
@@ -641,8 +666,7 @@ pub struct DefTarget {
 }
 
 /// 跳到光标处符号的定义。没有定义（内置/字面量）返回 `None`。
-#[tauri::command]
-pub fn diag_definition(
+fn definition_blocking(
     path: String,
     text: String,
     line: u32,
@@ -684,8 +708,7 @@ pub struct QuickInfo {
 }
 
 /// 光标处符号的类型/文档（悬浮显示）。
-#[tauri::command]
-pub fn diag_quickinfo(
+fn quickinfo_blocking(
     path: String,
     text: String,
     line: u32,
@@ -728,8 +751,7 @@ pub struct RefItem {
     pub is_def: bool,
 }
 
-#[tauri::command]
-pub fn diag_references(
+fn references_blocking(
     path: String,
     text: String,
     line: u32,
@@ -789,8 +811,7 @@ pub struct RenameResult {
     pub files: Vec<RenameFile>,
 }
 
-#[tauri::command]
-pub fn diag_rename(
+fn rename_blocking(
     path: String,
     text: String,
     line: u32,
@@ -836,3 +857,13 @@ pub fn diag_rename(
         files,
     })
 }
+
+/* ── 阻塞命令的 async 包装（决策 #1446）──────────────────────────────────
+ * 名字与原来一致 ⇒ `main.rs` 的 `generate_handler!` 不用改。
+ * 每个都可能是秒级等待（首次要加载项目），所以**一律走后台线程**，
+ * 否则 UI 主线程被堵、整个窗口卡死。 */
+define_blocking_cmd!(diag_complete, complete_blocking, Vec<CompletionItem>, "补全");
+define_blocking_cmd!(diag_definition, definition_blocking, Vec<DefTarget>, "跳转定义");
+define_blocking_cmd!(diag_quickinfo, quickinfo_blocking, Option<QuickInfo>, "类型信息");
+define_blocking_cmd!(diag_references, references_blocking, Vec<RefItem>, "查找引用");
+define_blocking_cmd!(diag_rename, rename_blocking, RenameResult, "重命名");
