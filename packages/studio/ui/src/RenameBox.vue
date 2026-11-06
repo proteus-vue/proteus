@@ -10,6 +10,8 @@ import { renameAsk, settleRename } from './rename'
 
 const val = ref('')
 const input = ref<HTMLInputElement | null>(null)
+/** 二次确认态：有文件要被直接写盘时，第一次 Enter 只是"预告影响面" */
+const confirming = ref(false)
 
 const box = computed(() => {
   const d = renameAsk.value
@@ -24,6 +26,7 @@ const box = computed(() => {
 
 watch(renameAsk, async (d) => {
   if (!d) return
+  confirming.value = false
   val.value = d.initial
   await nextTick()
   input.value?.focus()
@@ -33,6 +36,11 @@ watch(renameAsk, async (d) => {
 function ok(): void {
   const v = val.value.trim()
   if (!v) return
+  /* ★需要写盘的文件 > 0 ⇒ 先亮出影响面，再按一次才真的执行（写盘不可撤销） */
+  if ((renameAsk.value?.affected ?? 0) > 0 && !confirming.value) {
+    confirming.value = true
+    return
+  }
   settleRename(v)
 }
 
@@ -62,14 +70,19 @@ onBeforeUnmount(() => window.removeEventListener('mousedown', onDown, true))
       autocomplete="off"
       @keydown.enter.prevent.stop="ok"
       @keydown.esc.prevent.stop="cancel"
+      @input="confirming = false"
     />
-    <span class="rbhint">Enter 确认 · Esc 取消</span>
+    <span class="rbhint">{{ confirming ? '再按 Enter 继续' : 'Enter 确认 · Esc 取消' }}</span>
+    <div v-if="confirming" class="rbwarn">
+      将直接写入 {{ renameAsk.affected }} 个文件（不可撤销）
+    </div>
   </div>
 </template>
 
 <style scoped>
 .renamebox {
   position: fixed;
+  flex-wrap: wrap;
   /* 高于引用面板(265)与就地提示(300)：这是正在输入的框，必须最上层 */
   z-index: 320;
   display: flex;
@@ -102,5 +115,14 @@ onBeforeUnmount(() => window.removeEventListener('mousedown', onDown, true))
   flex: none;
   color: #5d6673;
   font-size: 9.5px;
+}
+/* 二次确认的警示行：占满整行，明确"会写盘、不能撤销" */
+.rbwarn {
+  flex-basis: 100%;
+  margin-top: 2px;
+  padding-top: 3px;
+  border-top: 1px solid #3a3f47;
+  color: #e2b341;
+  font: 10px/1.5 system-ui, -apple-system, 'PingFang SC', sans-serif;
 }
 </style>

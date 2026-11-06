@@ -26,17 +26,25 @@ interface RenameAsk {
   initial: string
   x: number
   y: number
+  /** 会被**直接写盘**的文件数（0 = 只改当前文件，不需要二次确认） */
+  affected: number
 }
 const ask = ref<RenameAsk | null>(null)
 export const renameAsk = readonly(ask)
 
 let resolveFn: ((v: string | null) => void) | null = null
 
-export function askRenameName(initial: string, x: number, y: number): Promise<string | null> {
+export function askRenameName(
+  initial: string,
+  x: number,
+  y: number,
+  /** 有文件会被直接写盘时，输入框会要求**再按一次 Enter**（不可撤销，得让人知道） */
+  affected = 0,
+): Promise<string | null> {
   resolveFn?.(null)
   return new Promise((resolve) => {
     resolveFn = resolve
-    ask.value = { initial, x, y }
+    ask.value = { initial, x, y, affected }
   })
 }
 
@@ -152,7 +160,9 @@ export async function runRename(opts: {
   hideHint()
   const at = pos ?? view?.state.selection.main.head ?? 0
   const c = view?.coordsAtPos(at)
-  const name = await askRenameName(res.displayName, c?.left ?? 160, (c?.bottom ?? 160) + 8)
+  /* ★除当前文件外都会被**直接写盘**（不进 undo）⇒ 有外部文件时输入框要多确认一次 */
+  const affected = res.files.filter((f) => f.path !== path).length
+  const name = await askRenameName(res.displayName, c?.left ?? 160, (c?.bottom ?? 160) + 8, affected)
   if (!name || name === res.displayName) {
     hideHint()
     return
