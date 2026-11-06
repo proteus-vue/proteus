@@ -152,11 +152,15 @@ function startRecord(id: ActionId) {
 }
 
 function resetOne(id: ActionId) {
+  /* ★先退出录制态：正在录这一行时点「默认」，否则按钮会一直停在「按下新键…」 */
+  stopRecord()
   setChords(id, null)
   kbNote.value = '已恢复默认'
 }
 
 function resetAllKeymaps() {
+  /* ★同上：录制中直接点「全部恢复默认」，录制态必须一起清掉（用户实测截图） */
+  stopRecord()
   resetAllChords()
   kbNote.value = '全部恢复默认'
 }
@@ -363,8 +367,8 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
                   :data-kb="a.id"
                   @click="startRecord(a.id)"
                 >
-                  <template v-if="recording === a.id">按下新键…</template>
-                  <template v-else-if="!chordParts(a.id).length">未绑定</template>
+                  <template v-if="recording === a.id"><kbd class="ph">按下新键…</kbd></template>
+                  <template v-else-if="!chordParts(a.id).length"><kbd class="ph">未绑定</kbd></template>
                   <template v-else>
                     <kbd v-for="(k, i) in chordParts(a.id)" :key="i">{{ k }}</kbd>
                   </template>

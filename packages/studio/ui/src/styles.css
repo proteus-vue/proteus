@@ -410,10 +410,12 @@ kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;background:
 /* 键位按钮定宽 + 等宽字体：录制/切换时宽度不变，不会左右跳 */
 /* 键位显示（决策 #1458）：按钮是**容器**，里面每个键一个「键帽」——
    有底色/边框/底部加厚，一眼能看出"这是键盘上的一个键"，比一串 `⌥⇧↑` 直观。 */
-.kbkey{flex:none;min-width:132px;display:inline-flex;align-items:center;justify-content:flex-end;gap:3px;padding:2px 4px;border:0;border-radius:4px;background:transparent;color:var(--fg-subtle);font:11px/1.6 system-ui,-apple-system,'PingFang SC',sans-serif;cursor:pointer;transition:background var(--dur) var(--ease)}
+.kbkey{flex:none;min-width:132px;display:inline-flex;align-items:center;justify-content:flex-end;gap:3px;white-space:nowrap;padding:2px 8px 2px 4px;border:0;border-radius:4px;background:transparent;color:var(--fg-subtle);font:11px/1.6 system-ui,-apple-system,'PingFang SC',sans-serif;cursor:pointer;transition:background var(--dur) var(--ease)}
 .kbkey:hover{background:rgba(255,255,255,.05)}
 .kbkey kbd{min-width:20px;padding:1px 5px;border:1px solid #454c58;border-bottom:2px solid #20242a;border-radius:4px;background:#2b3038;color:#e6e9ef;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center}
 .kbkey.custom kbd{border-color:var(--accent);color:var(--accent)}
+/* 录制中 / 未绑定：虚线占位键帽 —— 用文本会跟键帽视觉割裂，而且宽度忽大忽小 */
+.kbkey kbd.ph{border-style:dashed;background:transparent;color:var(--fg-subtle);font-family:system-ui,-apple-system,'PingFang SC',sans-serif}
 .kbkey.rec{background:rgba(76,141,255,.16);color:var(--fg)}
 .kbreset{flex:none;padding:2px 6px;border:0;border-radius:3px;background:transparent;color:var(--fg-subtle);font-size:11px;cursor:pointer}
 .kbreset:hover{color:var(--fg);background:var(--bg-overlay)}
