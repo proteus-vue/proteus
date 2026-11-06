@@ -403,7 +403,8 @@ export function installKeymap(): () => void {
  * 键名 → 显示符号。★方向键/回车这类如果只 `toUpperCase()` 会显示成 `ARROWUP`（用户截图），
  * 主流 IDE 一律显示成 `↑` / `↩` 这种符号。
  */
-const KEY_LABEL: Record<string, string> = {
+/** mac：符号更紧凑（⌥⇧↑）；其它平台：文字（Alt+Shift+Down）—— 两边各自的习惯 */
+const KEY_LABEL_MAC: Record<string, string> = {
   arrowup: '↑',
   arrowdown: '↓',
   arrowleft: '←',
@@ -419,20 +420,59 @@ const KEY_LABEL: Record<string, string> = {
   home: 'Home',
   end: 'End',
 }
+const KEY_LABEL_OTHER: Record<string, string> = {
+  arrowup: 'Up',
+  arrowdown: 'Down',
+  arrowleft: 'Left',
+  arrowright: 'Right',
+  enter: 'Enter',
+  escape: 'Esc',
+  tab: 'Tab',
+  backspace: 'Backspace',
+  delete: 'Delete',
+  space: 'Space',
+  pageup: 'PageUp',
+  pagedown: 'PageDown',
+  home: 'Home',
+  end: 'End',
+}
 
 function keyLabel(k: string): string {
-  return KEY_LABEL[k.toLowerCase()] ?? k.toUpperCase()
+  const key = k.toLowerCase()
+  const map = isMac() ? KEY_LABEL_MAC : KEY_LABEL_OTHER
+  return map[key] ?? k.toUpperCase()
+}
+
+/**
+ * 按**当前平台**拼一个键位标签（菜单里的 `⌘S` / `Ctrl+S` 都走这里）。
+ *
+ * ★mac 的修饰键顺序是固定的 `⌃⌥⇧⌘`（Control 最外、Command 最内）——所以是
+ *   `⇧⌘O` 而不是 `⌘⇧O`；Windows/Linux 用 `Ctrl+Alt+Shift+键`。
+ * ★平台在**运行时**判断（`navigator.platform`），不是编译期写死。
+ */
+export function comboLabel(
+  key: string,
+  opts: { mod?: boolean; alt?: boolean; shift?: boolean } = {},
+): string {
+  const k = keyLabel(key)
+  if (!isMac()) {
+    const p: string[] = []
+    if (opts.mod) p.push('Ctrl')
+    if (opts.alt) p.push('Alt')
+    if (opts.shift) p.push('Shift')
+    p.push(k)
+    return p.join('+')
+  }
+  let out = ''
+  if (opts.alt) out += '⌥'
+  if (opts.shift) out += '⇧'
+  if (opts.mod) out += '⌘'
+  return out + k
 }
 
 export function chordLabel(action: ActionId): string {
   const chord = chordsOf(action)[0] ?? ''
   if (!chord) return ''
-  const mac = isMac()
   const parts = parse(chord)
-  const bits: string[] = []
-  if (parts.mod) bits.push(mac ? '⌘' : 'Ctrl')
-  if (parts.alt) bits.push(mac ? '⌥' : 'Alt')
-  if (parts.shift) bits.push(mac ? '⇧' : 'Shift')
-  bits.push(keyLabel(parts.key))
-  return mac ? bits.join('') : bits.join('+')
+  return comboLabel(parts.key, { mod: parts.mod, alt: parts.alt, shift: parts.shift })
 }
