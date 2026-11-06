@@ -202,6 +202,19 @@ export interface RenameResult {
 export const diagRename = (path: string, text: string, line: number, col: number): Promise<RenameResult> =>
   invoke<RenameResult>('diag_rename', { path, text, line, col })
 
+/** 文件内符号（⌘⇧O，决策 #1454） */
+export interface SymbolItem {
+  name: string
+  /** tsserver 的 kind：module / type / interface / function / const / property… */
+  kind: string
+  line: number
+  col: number
+  /** 0 = 顶层，1 = 成员 */
+  depth: number
+}
+export const diagSymbols = (path: string, text: string): Promise<SymbolItem[]> =>
+  invoke<SymbolItem[]>('diag_symbols', { path, text })
+
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
   return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }

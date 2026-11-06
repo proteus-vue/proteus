@@ -22,6 +22,7 @@ import { openMenu, type MenuItem } from './contextmenu'
 
 /* 行操作/注释/多选的动作注册（决策 #1452）从这里转出，`CodePanel` 少一行 import */
 export { registerEditorActions } from './editorActions'
+export { gotoFileSymbol } from './symbols'
 
 export interface EditorMenuDeps {
   getView: () => EditorView | null

@@ -321,6 +321,42 @@ async function rename(id, file, rel, text, line, col) {
   }
 }
 
+/**
+ * 文件内符号（决策 #1454，⌘⇧O 用）：tsserver `navtree` 返回整棵 NavigationTree。
+ * 只展开**两层**（顶层 + 类/接口的成员）——再深就是"看大纲"，不是"跳过去"；
+ * 每个节点取 `spans[0]`（同一符号可能有多个声明位置，跳第一个即可）。
+ */
+async function navtree(id, file, rel, text) {
+  try {
+    await ensureDoc(file, text)
+    const res = await req('navtree', { file })
+    /* ★body **直接就是** `NavigationTree`（`{ text, kind, spans, childItems }`）——
+       它不是 `{ text: 树 }` 那种包装；`res.text` 是该节点自己的名字（根节点通常是文件名）。 */
+    const root = res && typeof res === 'object' ? res : null
+    const items = []
+    const walk = (node, depth) => {
+      if (!node) return
+      const sp = node.spans?.[0]
+      if (sp) {
+        items.push({
+          name: String(node.text ?? '').trim(),
+          kind: String(node.kind ?? ''),
+          line: Number(sp.start?.line ?? 1),
+          col: Number(sp.start?.offset ?? 1),
+          depth,
+        })
+      }
+      if (depth < 1 && Array.isArray(node.childItems)) {
+        for (const c of node.childItems) walk(c, depth + 1)
+      }
+    }
+    walk(root, 0)
+    out({ t: 'symbols', id, path: rel, items: items.filter((x) => x.name).slice(0, 500) })
+  } catch (e) {
+    out({ t: 'symbols', id, path: rel, items: [], error: String(e?.message ?? e).slice(0, 120) })
+  }
+}
+
 /** 类型/符号信息（决策 #1429）：`quickinfo` 给 `displayString`（如 `(property) x: number`） */
 async function quickinfo(id, file, rel, text, line, col) {
   try {
@@ -377,6 +413,14 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       return
     }
     void definition(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
+    return
+  }
+  if (m.t === 'navtree') {
+    if (!isSupported(rel)) {
+      out({ t: 'symbols', id: m.id, path: rel, items: [] })
+      return
+    }
+    void navtree(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''))
     return
   }
   if (m.t === 'rename') {

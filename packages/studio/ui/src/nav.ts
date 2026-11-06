@@ -10,7 +10,7 @@
  */
 import { hoverTooltip, type EditorView } from '@codemirror/view'
 import { modHeldState } from './modKey'
-import { diagDefinition, diagQuickinfo, diagReferences, diagRename, type RefItem, type RenameResult } from './bridge'
+import { diagDefinition, diagQuickinfo, diagReferences, diagRename, diagSymbols, type RefItem, type RenameResult, type SymbolItem } from './bridge'
 
 export interface DefTarget {
   path: string
@@ -32,6 +32,12 @@ export async function definitionsAt(path: string, text: string, line: number, co
 /** 第一个定义（预览卡只展示一处；要选的话走 `goToDefinition` 的 choose） */
 export async function definitionAt(path: string, text: string, line: number, col: number): Promise<DefTarget | null> {
   return (await definitionsAt(path, text, line, col))[0] ?? null
+}
+
+/** 文件内符号（⌘⇧O）：交给 tsserver 的 `navtree`，只取两层 */
+export async function symbolsAt(view: EditorView | null, path: string): Promise<SymbolItem[]> {
+  if (!view || !path) return []
+  return diagSymbols(path, view.state.doc.toString()).catch(() => [])
 }
 
 /** 重命名（F2 用）：能否重命名 + 全部待改位置 */

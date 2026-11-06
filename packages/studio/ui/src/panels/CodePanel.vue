@@ -68,12 +68,13 @@ import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
 import { pickReferenceAt } from '../refs'
 import { runRename } from '../rename'
-import { openEditorMenu, registerEditorActions, setEditorMenuDeps } from '../editorMenu'
+import { gotoFileSymbol, openEditorMenu, registerEditorActions, setEditorMenuDeps } from '../editorMenu'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import DefChooser from '../DefChooser.vue'
 import RefPanel from '../RefPanel.vue'
 import RenameBox from '../RenameBox.vue'
+import SymbolPalette from '../SymbolPalette.vue'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -112,6 +113,7 @@ const offActions = [
   onAction('editor.gotoDefinition', () => void jumpToDef()),
   onAction('editor.findReferences', () => void findRefs()),
   onAction('editor.renameSymbol', () => void renameSymbol()),
+  onAction('editor.gotoSymbol', () => void gotoFileSymbol({ view, path: cur.value, hint: (m) => hintAt(view, view?.state.selection.main.head ?? 0, m), jump: (s) => void jumpTo({ path: cur.value, line: s.line, col: s.col, text: '' }) })),
 ]
 const err = ref('')
 const loading = ref(false)
@@ -165,7 +167,6 @@ async function jumpToDef(pos?: number) {
   if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
 }
 
-/** 某文件是否有未保存修改（重命名前的安全检查） */
 const isDirtyFile = (p: string) => { const st = states.get(p); const r = recs.get(p); return !!(st && r && st.doc.toString() !== r.base) }
 
 /** F2：重命名（决策 #1444）；跨文件写盘、"未保存拒绝"、报告都在 rename.ts */
@@ -834,7 +835,6 @@ watch(
   },
 )
 
-
 /* ─── 菜单动作（决策 #1221）：文件菜单属于编辑器，注册在这里 ──────────────────
  * ★⌘S / ⌘W 的**唯一**通路在真机上是菜单（accelerator 在 NSApplication 层被吃掉，
  *   CodeMirror 的 keymap 收不到）。所以这两个处理器不是"锦上添花"，
@@ -991,7 +991,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <!-- ⌘ 长按时的定义预览卡（决策 #1436）：fixed 定位，点一下即跳 -->
-    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel /><RenameBox />
+    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel /><RenameBox /><SymbolPalette />
   </div>
 </template>
 

@@ -32,6 +32,7 @@ export type ActionId =
   | 'editor.gotoDefinition'
   | 'editor.findReferences'
   | 'editor.renameSymbol'
+  | 'editor.gotoSymbol'
   | 'editor.moveLineUp'
   | 'editor.moveLineDown'
   | 'editor.copyLineUp'
@@ -73,6 +74,8 @@ const BASE: Chords = {
   'editor.gotoDefinition': ['F12'],
   'editor.findReferences': ['Shift+F12'],
   'editor.renameSymbol': ['F2'],
+  /* VS Code 的 "Go to Symbol in File" */
+  'editor.gotoSymbol': ['Mod+Shift+O'],
   'editor.moveLineUp': ['Alt+ArrowUp'],
   'editor.moveLineDown': ['Alt+ArrowDown'],
   'editor.copyLineUp': ['Shift+Alt+ArrowUp'],
@@ -103,6 +106,8 @@ export const SCHEMES: Record<KeymapScheme, Chords> = {
     'editor.gotoDefinition': ['Mod+B'],
     'editor.findReferences': ['Alt+F7'],
     'editor.renameSymbol': ['Shift+F6'],
+    /* JetBrains：Go to Symbol = ⌥⌘O（⇧⌘O 是 Go to File，已被 quickOpen 占） */
+    'editor.gotoSymbol': ['Mod+Alt+O'],
     'editor.moveLineUp': ['Shift+Alt+ArrowUp'],
     'editor.moveLineDown': ['Shift+Alt+ArrowDown'],
     'editor.quickOpen': ['Mod+Shift+O', 'Mod+Shift+N'],
@@ -160,6 +165,7 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'editor.gotoDefinition', label: '跳转定义', group: '编辑' },
   { id: 'editor.findReferences', label: '查找引用', group: '编辑' },
   { id: 'editor.renameSymbol', label: '重命名符号', group: '编辑' },
+  { id: 'editor.gotoSymbol', label: '跳到文件内符号', group: '编辑' },
   { id: 'editor.moveLineUp', label: '上移当前行', group: '编辑' },
   { id: 'editor.moveLineDown', label: '下移当前行', group: '编辑' },
   { id: 'editor.copyLineUp', label: '向上复制行', group: '编辑' },

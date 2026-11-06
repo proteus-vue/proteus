@@ -437,7 +437,7 @@ pub fn diag_lsp_start(app: tauri::AppHandle) -> Result<(), String> {
                     let _ = app.emit("diag:ready", ());
                 }
                 Some("completions") | Some("definition") | Some("quickinfo")
-                | Some("references") | Some("rename") => {
+                | Some("references") | Some("rename") | Some("symbols") => {
                     /* 拉式请求的回包：按 id 交给在等的那次调用。
                        ★★这里必须列**全部**回包类型：漏一个，那边 `recv_timeout` 就只能等满超时
                          （rename 漏掉时表现为「一直显示正在分析符号…」，30s 后才报超时）。
@@ -871,3 +871,46 @@ define_blocking_cmd!(diag_definition, definition_blocking, Vec<DefTarget>, "跳�
 define_blocking_cmd!(diag_quickinfo, quickinfo_blocking, Option<QuickInfo>, "类型信息");
 define_blocking_cmd!(diag_references, references_blocking, Vec<RefItem>, "查找引用");
 define_blocking_cmd!(diag_rename, rename_blocking, RenameResult, "重命名");
+
+/* ── 文件内符号（决策 #1454，⌘⇧O）─────────────────────────────────────────
+ * `navtree` 的 body **直接是** `NavigationTree`（不是 `{ text: 树 }` 包装）。
+ * 只展开两层（顶层 + 类/接口成员），每个符号取第一个 span。
+ */
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SymbolItem {
+    pub name: String,
+    /// tsserver 的 kind：module / type / interface / function / const / property…
+    pub kind: String,
+    pub line: u32,
+    pub col: u32,
+    /// 0 = 顶层，1 = 成员（前端按它缩进）
+    pub depth: u32,
+}
+
+#[tauri::command]
+pub async fn diag_symbols(path: String, text: String) -> Result<Vec<SymbolItem>, String> {
+    tauri::async_runtime::spawn_blocking(move || symbols_blocking(path, text))
+        .await
+        .map_err(|e| format!("符号任务失败：{e}"))?
+}
+
+fn symbols_blocking(path: String, text: String) -> Result<Vec<SymbolItem>, String> {
+    /* 首次 navtree 也要等项目加载（实测 4~5s），给 20s */
+    let v = lsp_call(serde_json::json!({ "t": "navtree", "path": path, "text": text }), 20000)?;
+    let Some(v) = v else { return Ok(Vec::new()) };
+    let mut out = Vec::new();
+    if let Some(arr) = v.get("items").and_then(|x| x.as_array()) {
+        for it in arr {
+            out.push(SymbolItem {
+                name: it.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                kind: it.get("kind").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                line: it.get("line").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                col: it.get("col").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                depth: it.get("depth").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
+            });
+        }
+    }
+    out.retain(|x| !x.name.is_empty());
+    Ok(out)
+}
