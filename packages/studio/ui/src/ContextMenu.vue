@@ -118,7 +118,10 @@ onBeforeUnmount(() => {
         @click="pickItem(it.id)"
       >
         <span class="label">{{ it.label }}</span>
-        <span v-if="it.accel" class="accel">{{ it.accel }}</span>
+        <span v-if="it.accelParts?.length" class="accel">
+          <kbd v-for="(k, j) in it.accelParts" :key="j">{{ k }}</kbd>
+        </span>
+        <span v-else-if="it.accel" class="accel">{{ it.accel }}</span>
       </button>
     </template>
   </div>
@@ -178,10 +181,26 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .accel {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: var(--fg-subtle);
   font-size: 11px;
   letter-spacing: 0.2px;
 }
+/* 键帽（决策 #1458）：菜单里的快捷键也做成一颗颗按键，与设置页同一套视觉 */
+.accel kbd {
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid #454c58;
+  border-bottom: 2px solid #20242a;
+  border-radius: 3px;
+  background: #2b3038;
+  color: #d7dce4;
+  font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+
 .item.active:not(:disabled) .accel {
   color: var(--fg-muted);
 }

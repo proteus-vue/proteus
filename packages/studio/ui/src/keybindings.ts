@@ -450,24 +450,44 @@ function keyLabel(k: string): string {
  *   `⇧⌘O` 而不是 `⌘⇧O`；Windows/Linux 用 `Ctrl+Alt+Shift+键`。
  * ★平台在**运行时**判断（`navigator.platform`），不是编译期写死。
  */
-export function comboLabel(
-  key: string,
-  opts: { mod?: boolean; alt?: boolean; shift?: boolean } = {},
-): string {
-  const k = keyLabel(key)
+/** 修饰键标签（顺序按平台：mac `⌃⌥⇧⌘` / 其它 `Ctrl Alt Shift`） */
+function modifierLabels(opts: { mod?: boolean; alt?: boolean; shift?: boolean }): string[] {
   if (!isMac()) {
     const p: string[] = []
     if (opts.mod) p.push('Ctrl')
     if (opts.alt) p.push('Alt')
     if (opts.shift) p.push('Shift')
-    p.push(k)
-    return p.join('+')
+    return p
   }
-  let out = ''
-  if (opts.alt) out += '⌥'
-  if (opts.shift) out += '⇧'
-  if (opts.mod) out += '⌘'
-  return out + k
+  const p: string[] = []
+  if (opts.alt) p.push('⌥')
+  if (opts.shift) p.push('⇧')
+  if (opts.mod) p.push('⌘')
+  return p
+}
+
+/** 拼成一整串（用于 `title` / 无法分键帽显示的地方） */
+export function comboLabel(
+  key: string,
+  opts: { mod?: boolean; alt?: boolean; shift?: boolean } = {},
+): string {
+  return comboParts(key, opts).join(isMac() ? '' : '+')
+}
+
+/** 拆成**按键数组**：界面上每个键一个"键帽"（决策 #1458） */
+export function comboParts(
+  key: string,
+  opts: { mod?: boolean; alt?: boolean; shift?: boolean } = {},
+): string[] {
+  return [...modifierLabels(opts), keyLabel(key)]
+}
+
+/** 某个动作当前键位的按键数组（按平台拆，`⌥⇧↑` → ['⌥','⇧','↑']） */
+export function chordParts(action: ActionId): string[] {
+  const chord = chordsOf(action)[0] ?? ''
+  if (!chord) return []
+  const p = parse(chord)
+  return comboParts(p.key, { mod: p.mod, alt: p.alt, shift: p.shift })
 }
 
 export function chordLabel(action: ActionId): string {

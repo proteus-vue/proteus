@@ -17,6 +17,8 @@ export interface MenuItem {
   label: string
   /** 右侧显示的快捷键提示（仅提示，真实快捷键由别处处理） */
   accel?: string
+  /** 按键数组：每个键渲染成一个「键帽」（优先级高于 `accel`，决策 #1458） */
+  accelParts?: string[]
   /** 危险动作（关闭类）用 --bad */
   danger?: boolean
   disabled?: boolean

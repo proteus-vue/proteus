@@ -14,6 +14,7 @@ import {
   beginCapture,
   chordFromEvent,
   chordLabel,
+  chordParts,
   conflictOf,
   endCapture,
   isCustomized,
@@ -362,7 +363,11 @@ const category = computed(() => CATS.find((c) => c.id === cat.value)?.label ?? '
                   :data-kb="a.id"
                   @click="startRecord(a.id)"
                 >
-                  {{ recording === a.id ? '按下新键…' : chordLabel(a.id) || '未绑定' }}
+                  <template v-if="recording === a.id">按下新键…</template>
+                  <template v-else-if="!chordParts(a.id).length">未绑定</template>
+                  <template v-else>
+                    <kbd v-for="(k, i) in chordParts(a.id)" :key="i">{{ k }}</kbd>
+                  </template>
                 </button>
                 <button v-if="isCustomized(a.id)" class="kbreset" @click="resetOne(a.id)">默认</button>
               </div>

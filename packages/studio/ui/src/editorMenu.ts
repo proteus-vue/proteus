@@ -18,7 +18,7 @@
 import { redo, redoDepth, toggleComment, undo, undoDepth } from '@codemirror/commands'
 import type { EditorView } from '@codemirror/view'
 import { copyText, readClipboard } from './bridge'
-import { chordLabel, comboLabel } from './keybindings'
+import { chordParts, comboParts } from './keybindings'
 import { openMenu, type MenuItem } from './contextmenu'
 
 /* 行操作/注释/多选的动作注册（决策 #1452）从这里转出，`CodePanel` 少一行 import */
@@ -53,21 +53,21 @@ function items(): MenuItem[] {
   const canUndo = !!v && undoDepth(v.state) > 0
   const canRedo = !!v && redoDepth(v.state) > 0
   return [
-    { id: 'save', label: '保存', accel: chordLabel('file.save'), disabled: !deps?.isDirty() },
+    { id: 'save', label: '保存', accelParts: chordParts('file.save'), disabled: !deps?.isDirty() },
     { id: 's1', label: '', sep: true },
-    { id: 'undo', label: '撤销', accel: comboLabel('z', { mod: true }), disabled: !canUndo },
-    { id: 'redo', label: '重做', accel: comboLabel('z', { mod: true, shift: true }), disabled: !canRedo },
+    { id: 'undo', label: '撤销', accelParts: comboParts('z', { mod: true }), disabled: !canUndo },
+    { id: 'redo', label: '重做', accelParts: comboParts('z', { mod: true, shift: true }), disabled: !canRedo },
     { id: 's2', label: '', sep: true },
-    { id: 'cut', label: '剪切', accel: comboLabel('x', { mod: true }), disabled: !hasSel },
-    { id: 'copy', label: '复制', accel: comboLabel('c', { mod: true }), disabled: !hasSel },
-    { id: 'paste', label: '粘贴', accel: comboLabel('v', { mod: true }) },
+    { id: 'cut', label: '剪切', accelParts: comboParts('x', { mod: true }), disabled: !hasSel },
+    { id: 'copy', label: '复制', accelParts: comboParts('c', { mod: true }), disabled: !hasSel },
+    { id: 'paste', label: '粘贴', accelParts: comboParts('v', { mod: true }) },
     { id: 's3', label: '', sep: true },
-    { id: 'def', label: '跳转定义', accel: chordLabel('editor.gotoDefinition') },
-    { id: 'refs', label: '查找引用', accel: chordLabel('editor.findReferences') },
-    { id: 'rename', label: '重命名符号', accel: chordLabel('editor.renameSymbol') },
+    { id: 'def', label: '跳转定义', accelParts: chordParts('editor.gotoDefinition') },
+    { id: 'refs', label: '查找引用', accelParts: chordParts('editor.findReferences') },
+    { id: 'rename', label: '重命名符号', accelParts: chordParts('editor.renameSymbol') },
     { id: 's4', label: '', sep: true },
-    { id: 'selectAll', label: '全选', accel: comboLabel('a', { mod: true }) },
-    { id: 'comment', label: '切换注释', accel: chordLabel('editor.toggleComment') },
+    { id: 'selectAll', label: '全选', accelParts: comboParts('a', { mod: true }) },
+    { id: 'comment', label: '切换注释', accelParts: chordParts('editor.toggleComment') },
     { id: 's5', label: '', sep: true },
     { id: 'copyPath', label: '复制相对路径' },
     { id: 'copyName', label: '复制文件名' },
