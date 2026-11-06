@@ -301,6 +301,31 @@ fn git_head(path: String) -> Option<String> {
     git::git_head(path)
 }
 
+/// 读剪贴板（右键菜单"粘贴"用）。
+/// 【为什么走 `pbpaste`】写用的是 ObjC 桥（`poc_copy_text`），但没做读；`pbpaste` 是系统自带、
+///   行为稳定、无需新增依赖。命令是 **async + spawn_blocking**（起进程几十 ms，不能堵 UI 主线程）。
+#[tauri::command]
+async fn read_clipboard() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        #[cfg(target_os = "macos")]
+        {
+            let out = std::process::Command::new("pbpaste")
+                .output()
+                .map_err(|e| format!("读取剪贴板失败：{e}"))?;
+            if !out.status.success() {
+                return Err("读取剪贴板失败（pbpaste 返回非 0）".to_string());
+            }
+            Ok(String::from_utf8_lossy(&out.stdout).to_string())
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Err("当前平台暂不支持读取剪贴板".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("剪贴板线程异常：{e}"))?
+}
+
 #[tauri::command]
 fn copy_text(text: String) {
     let c = CString::new(text).unwrap_or_default();
@@ -654,6 +679,7 @@ fn main() {
             load_state,
             save_state,
             copy_text,
+            read_clipboard,
             git_status,
             git_head,
             set_dirty_count,

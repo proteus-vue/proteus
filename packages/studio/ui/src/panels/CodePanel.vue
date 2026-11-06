@@ -68,6 +68,7 @@ import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
 import { pickReferenceAt } from '../refs'
 import { runRename } from '../rename'
+import { openEditorMenu, setEditorMenuDeps } from '../editorMenu'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import DefChooser from '../DefChooser.vue'
@@ -570,27 +571,17 @@ async function refreshFiles() {
   }
 }
 
+/* 编辑器右键菜单（决策 #1448）：菜单项与处理都在 `editorMenu.ts`，
+   这里只把"当前编辑器 + 已有动作"注入一次。 */
+setEditorMenuDeps({
+  getView: () => view, getPath: () => cur.value, isDirty: () => dirty.value,
+  save: () => void save(), copyPath: (p) => void copyPath(p),
+  hint: (m) => hintAt(view, view?.state.selection.main.head ?? 0, m),
+  gotoDefinition: () => void jumpToDef(), findReferences: () => void findRefs(), renameSymbol: () => void renameSymbol(),
+})
+
 function onEditorMenu(e: MouseEvent) {
-  if (!cur.value) return
-  openMenu(
-    e,
-    [
-      { id: 'save', label: '保存', accel: '⌘S', disabled: !dirty.value },
-      { id: 's1', label: '', sep: true },
-      { id: 'undo', label: '撤销', accel: '⌘Z' },
-      { id: 'redo', label: '重做', accel: '⇧⌘Z' },
-      { id: 'selectAll', label: '全选', accel: '⌘A' },
-      { id: 's2', label: '', sep: true },
-      { id: 'copyPath', label: '复制相对路径' },
-    ],
-    (id) => {
-      if (id === 'save') void save()
-      else if (id === 'undo' && view) undo(view)
-      else if (id === 'redo' && view) redo(view)
-      else if (id === 'selectAll' && view) selectAll(view)
-      else if (id === 'copyPath' && cur.value) void copyPath(cur.value)
-    },
-  )
+  openEditorMenu(e)
 }
 
 // 状态栏手选语言 → 就地重配（决策 #1241）。只在"当前打开的这个文件"上生效，

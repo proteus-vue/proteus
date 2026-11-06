@@ -213,6 +213,9 @@ export const gitHead = (path: string): Promise<string | null> => invoke<string |
 /** 把文本写进系统剪贴板（Rust 侧走 NSPasteboard）——右键菜单"复制相对路径"用。 */
 export const copyText = (text: string): Promise<void> => invoke<void>('copy_text', { text })
 
+/** 读剪贴板（右键菜单"粘贴"用）；平台不支持时 reject */
+export const readClipboard = (): Promise<string> => invoke<string>('read_clipboard')
+
 /** 开发环境设置（决策 #1270）：按**端**分组的工具路径，`目标.工具 → 路径` */
 export interface StudioSettings {
   paths: Record<string, string>

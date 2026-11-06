@@ -363,7 +363,9 @@ await page.mouse.click(anchorX, anchorY, { button: 'right' })
 await page.waitForTimeout(260)
 // 先用真实鼠标 hover 一个菜单项（让 Vue 的 active 状态真的更新），再读底色
 try {
-  await page.hover('#ctxMenu [data-menu-item="undo"]', { timeout: 1500 })
+  /* ★hover 一个**必然可点**的项：撤销/复制在"无历史/无选区"时是禁用的（决策 #1448），
+     禁用项本来就不该有 hover 底色 —— 拿它测"高亮是否中性灰"会误报。 */
+  await page.hover('#ctxMenu [data-menu-item="paste"]', { timeout: 1500 })
 } catch {
   /* 菜单没出来时留给断言报错 */
 }
@@ -371,7 +373,7 @@ const edgeMenu = await page.evaluate(() => {
   const el = document.getElementById('ctxMenu')
   if (!el) return null
   const r = el.getBoundingClientRect()
-  const item = document.querySelector('#ctxMenu [data-menu-item="undo"]')
+  const item = document.querySelector('#ctxMenu [data-menu-item="paste"]')
   const dis = el.querySelector('[data-menu-item][disabled]')
   return {
     left: r.left,
