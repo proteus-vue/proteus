@@ -19,6 +19,7 @@ import { readonly, ref } from 'vue'
 import type { EditorView } from '@codemirror/view'
 import { readSource, writeText, type RenameFile, type RenameSpan } from './bridge'
 import { renameTarget } from './nav'
+import { hideHint } from './hint'
 
 /* ── 输入框 ─────────────────────────────────────────────────────────────── */
 interface RenameAsk {
@@ -117,27 +118,45 @@ export async function applyRename(opts: {
   return { changed, failed, written }
 }
 
+/** tsserver 的原因文案是英文 ⇒ 常见几条翻成中文；没命中就原样显示（不丢信息） */
+function localizeRenameMsg(m: string): string {
+  const t = m.trim()
+  if (!t) return ''
+  if (t.includes("defined in a 'node_modules' folder")) return '不能重命名依赖（node_modules）里的符号'
+  if (t.includes('You cannot rename this element')) return '这个位置不能重命名'
+  return t
+}
+
 /** 完整流程：查询 → 校验 → 输入 → 应用 → 报告 */
 export async function runRename(opts: {
   view: EditorView | null
   path: string
   pos?: number
-  hint: (msg: string) => void
+  /** 第二参 `sticky`：常驻提示（等结果期间用） */
+  hint: (msg: string, sticky?: boolean) => void
   isDirty: (p: string) => boolean
   /** 外部文件写盘成功后的回调（调用方丢弃对应缓存 state） */
   onExternalWrite?: (p: string) => void
 }): Promise<void> {
   const { view, path, pos, hint } = opts
+  /* ★先给**常驻**反馈：首次 rename 会触发 tsserver 加载整个项目（实测 4.7s），
+     期间什么都不显示，用户只会看到鼠标转圈、以为卡死（实测反馈）。 */
+  hint('正在分析符号…', true)
   const res = await renameTarget(view, path, pos)
-  if (!res) return hint('重命名失败（语言服务无响应）')
-  /* tsserver 的本地化原因比自己编的准（"不能重命名全局变量"这类只有它知道） */
-  if (!res.canRename) return hint(res.message || '这个位置不能重命名')
+  if (!res) return hint('重命名超时：首次需要加载项目，请再按一次 F2')
+  /* tsserver 的原因最准（"不能重命名 node_modules 里的符号"这类只有它知道），翻成中文再显示 */
+  if (!res.canRename) return hint(localizeRenameMsg(res.message) || '这个位置不能重命名')
   if (!res.files.length) return hint('没有找到可重命名的地方')
 
+  /* 分析完成：收掉"正在分析…"，输入框自带操作提示 */
+  hideHint()
   const at = pos ?? view?.state.selection.main.head ?? 0
   const c = view?.coordsAtPos(at)
   const name = await askRenameName(res.displayName, c?.left ?? 160, (c?.bottom ?? 160) + 8)
-  if (!name || name === res.displayName) return
+  if (!name || name === res.displayName) {
+    hideHint()
+    return
+  }
   if (!/^[A-Za-z_$][\w$]*$/.test(name)) return hint('名字不合法：只允许字母/数字/_/$，且不能以数字开头')
 
   const { changed, failed, written } = await applyRename({

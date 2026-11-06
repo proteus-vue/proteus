@@ -30,8 +30,8 @@ function ensure(): HTMLDivElement {
   return el
 }
 
-/** 在指定视口坐标显示一条短提示（2.2s 自动淡出） */
-export function showHint(text: string, x: number, y: number): void {
+/** 在指定视口坐标显示一条短提示（`ms=0` 表示**不自动消失**，由下一次 showHint/hideHint 收掉） */
+export function showHint(text: string, x: number, y: number, ms = 2200): void {
   const d = ensure()
   d.textContent = text
   /* 视口收边：贴右/贴底时别被切掉（宽度按最长提示估 320） */
@@ -42,7 +42,9 @@ export function showHint(text: string, x: number, y: number): void {
   d.style.top = `${y + 34 > vh ? Math.max(8, y - 44) : y}px`
   d.classList.add('on')
   clearTimeout(timer)
-  timer = setTimeout(() => d.classList.remove('on'), 2200)
+  /* ★`ms=0`：常驻。用于"正在分析…"——请求可能要等项目加载（实测首次 4.7s），
+     2.2s 就消失会让用户以为没反应。 */
+  if (ms > 0) timer = setTimeout(() => d.classList.remove('on'), ms)
 }
 
 export function hideHint(): void {
@@ -56,7 +58,7 @@ export function hideHint(): void {
  *   我们的 mousedown 是 preventDefault 的，光标不会跟着移到点击处，
  *   若一律用光标，提示会飘到上一次光标所在的地方。
  */
-export function hintAt(view: EditorView | null, pos: number, text: string): void {
+export function hintAt(view: EditorView | null, pos: number, text: string, ms = 2200): void {
   if (!view) return
   const c = view.coordsAtPos(pos)
   if (!c) return
@@ -66,8 +68,8 @@ export function hintAt(view: EditorView | null, pos: number, text: string): void
   const end = view.coordsAtPos(view.state.doc.lineAt(pos).to)
   const need = 260
   if (end && end.right + 12 + need < window.innerWidth) {
-    showHint(text, end.right + 12, c.top - 3)
+    showHint(text, end.right + 12, c.top - 3, ms)
     return
   }
-  showHint(text, c.left, c.bottom + 8)
+  showHint(text, c.left, c.bottom + 8, ms)
 }

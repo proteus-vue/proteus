@@ -168,7 +168,7 @@ const isDirtyFile = (p: string) => { const st = states.get(p); const r = recs.ge
 /** F2：重命名（决策 #1444）；跨文件写盘、"未保存拒绝"、报告都在 rename.ts */
 async function renameSymbol() {
   const at = view?.state.selection.main.head ?? 0
-  await runRename({ view, path: cur.value, pos: at, hint: (m) => hintAt(view, at, m), isDirty: isDirtyFile, onExternalWrite: (p) => states.delete(p) })
+  await runRename({ view, path: cur.value, pos: at, hint: (m, sticky) => hintAt(view, at, m, sticky ? 0 : undefined), isDirty: isDirtyFile, onExternalWrite: (p) => states.delete(p) })
 }
 
 /** ⇧F12：列出符号在整个项目里的引用（决策 #1443） */

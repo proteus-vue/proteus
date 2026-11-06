@@ -798,11 +798,13 @@ pub fn diag_rename(
 ) -> Result<RenameResult, String> {
     let v = lsp_call(
         serde_json::json!({ "t": "rename", "path": path, "text": text, "line": line, "col": col }),
-        15000,
+        /* ★30s：首次 rename 会触发 tsserver 加载整个项目（实测 4.7s，真机可能更久），
+           15s 会把"正常但慢"误报成"语言服务未返回结果"（用户实测踩到）。 */
+        30000,
     )?;
     let empty = || RenameResult {
         can_rename: false,
-        message: "语言服务未返回结果".to_string(),
+        message: "语言服务超时：首次使用需要加载项目，请再按一次".to_string(),
         display_name: String::new(),
         files: Vec::new(),
     };
