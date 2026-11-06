@@ -399,6 +399,31 @@ export function installKeymap(): () => void {
 }
 
 /** 显示用标签：`Mod+Shift+F` → `⇧⌘F`（mac）/ `Ctrl+Shift+F` */
+/**
+ * 键名 → 显示符号。★方向键/回车这类如果只 `toUpperCase()` 会显示成 `ARROWUP`（用户截图），
+ * 主流 IDE 一律显示成 `↑` / `↩` 这种符号。
+ */
+const KEY_LABEL: Record<string, string> = {
+  arrowup: '↑',
+  arrowdown: '↓',
+  arrowleft: '←',
+  arrowright: '→',
+  enter: '↩',
+  escape: 'Esc',
+  tab: '⇥',
+  backspace: '⌫',
+  delete: '⌦',
+  space: '␣',
+  pageup: 'PgUp',
+  pagedown: 'PgDn',
+  home: 'Home',
+  end: 'End',
+}
+
+function keyLabel(k: string): string {
+  return KEY_LABEL[k.toLowerCase()] ?? k.toUpperCase()
+}
+
 export function chordLabel(action: ActionId): string {
   const chord = chordsOf(action)[0] ?? ''
   if (!chord) return ''
@@ -408,6 +433,6 @@ export function chordLabel(action: ActionId): string {
   if (parts.mod) bits.push(mac ? '⌘' : 'Ctrl')
   if (parts.alt) bits.push(mac ? '⌥' : 'Alt')
   if (parts.shift) bits.push(mac ? '⇧' : 'Shift')
-  bits.push(parts.key.toUpperCase())
+  bits.push(keyLabel(parts.key))
   return mac ? bits.join('') : bits.join('+')
 }
