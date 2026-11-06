@@ -68,7 +68,7 @@ import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
 import { pickReferenceAt } from '../refs'
 import { runRename } from '../rename'
-import { openEditorMenu, setEditorMenuDeps } from '../editorMenu'
+import { openEditorMenu, registerEditorActions, setEditorMenuDeps } from '../editorMenu'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import DefChooser from '../DefChooser.vue'
@@ -98,6 +98,7 @@ function onQuickPick(path: string) {
 
 /** 代码面板订阅的动作（决策 #1431）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
 const offActions = [
+  ...registerEditorActions(() => view),
   onAction('file.closeAll', () => void closeAll()),
   onAction('file.closeTab', (e) => {
     /* 终端聚焦时 ⌘W 该关终端会话，不关标签：沿用原判据 */
@@ -215,7 +216,6 @@ const langComp = new Compartment()
 function langFor(path: string) {
   return langComp.of(langExtension(effectiveLangId(path)))
 }
-
 
 /** 主题：全部用 Studio 的语义 token，不引 theme-one-dark（避免两套色板打架） */
 const theme = EditorView.theme(

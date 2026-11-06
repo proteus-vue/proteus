@@ -20,6 +20,9 @@ import type { EditorView } from '@codemirror/view'
 import { copyText, readClipboard } from './bridge'
 import { openMenu, type MenuItem } from './contextmenu'
 
+/* 行操作/注释/多选的动作注册（决策 #1452）从这里转出，`CodePanel` 少一行 import */
+export { registerEditorActions } from './editorActions'
+
 export interface EditorMenuDeps {
   getView: () => EditorView | null
   getPath: () => string
@@ -131,7 +134,8 @@ export function openEditorMenu(e: MouseEvent): void {
         if (v) v.dispatch({ selection: { anchor: 0, head: v.state.doc.length } })
         break
       case 'comment':
-        if (v) toggleComment(v)
+        /* `toggleComment` 是 StateCommand（解构 `{state, dispatch}`），不能直接传 EditorView */
+        if (v) toggleComment({ state: v.state, dispatch: (tr) => v.dispatch(tr) })
         break
       case 'copyPath':
         if (deps?.getPath()) deps.copyPath(deps.getPath())

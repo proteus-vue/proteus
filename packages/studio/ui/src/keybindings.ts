@@ -32,6 +32,14 @@ export type ActionId =
   | 'editor.gotoDefinition'
   | 'editor.findReferences'
   | 'editor.renameSymbol'
+  | 'editor.moveLineUp'
+  | 'editor.moveLineDown'
+  | 'editor.copyLineUp'
+  | 'editor.copyLineDown'
+  | 'editor.deleteLine'
+  | 'editor.toggleComment'
+  | 'editor.selectAllMatches'
+  | 'editor.jumpBracket'
   | 'editor.quickOpen'
   | 'editor.gotoLine'
   | 'editor.selectNext'
@@ -65,6 +73,14 @@ const BASE: Chords = {
   'editor.gotoDefinition': ['F12'],
   'editor.findReferences': ['Shift+F12'],
   'editor.renameSymbol': ['F2'],
+  'editor.moveLineUp': ['Alt+ArrowUp'],
+  'editor.moveLineDown': ['Alt+ArrowDown'],
+  'editor.copyLineUp': ['Shift+Alt+ArrowUp'],
+  'editor.copyLineDown': ['Shift+Alt+ArrowDown'],
+  'editor.deleteLine': ['Mod+Shift+K'],
+  'editor.toggleComment': ['Mod+/'],
+  'editor.selectAllMatches': ['Mod+Shift+L'],
+  'editor.jumpBracket': ['Mod+Shift+\\'],
   'editor.quickOpen': ['Mod+P'],
   'editor.gotoLine': ['Mod+G'],
   'editor.selectNext': ['Mod+D'],
@@ -87,6 +103,8 @@ export const SCHEMES: Record<KeymapScheme, Chords> = {
     'editor.gotoDefinition': ['Mod+B'],
     'editor.findReferences': ['Alt+F7'],
     'editor.renameSymbol': ['Shift+F6'],
+    'editor.moveLineUp': ['Shift+Alt+ArrowUp'],
+    'editor.moveLineDown': ['Shift+Alt+ArrowDown'],
     'editor.quickOpen': ['Mod+Shift+O', 'Mod+Shift+N'],
     'editor.gotoLine': ['Mod+L'],
     'editor.selectNext': ['Mod+Shift+D'], // IDEA 没有同款；避开 ⌘D（=Duplicate Line）
@@ -142,6 +160,14 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'editor.gotoDefinition', label: '跳转定义', group: '编辑' },
   { id: 'editor.findReferences', label: '查找引用', group: '编辑' },
   { id: 'editor.renameSymbol', label: '重命名符号', group: '编辑' },
+  { id: 'editor.moveLineUp', label: '上移当前行', group: '编辑' },
+  { id: 'editor.moveLineDown', label: '下移当前行', group: '编辑' },
+  { id: 'editor.copyLineUp', label: '向上复制行', group: '编辑' },
+  { id: 'editor.copyLineDown', label: '向下复制行', group: '编辑' },
+  { id: 'editor.deleteLine', label: '删除当前行', group: '编辑' },
+  { id: 'editor.toggleComment', label: '切换注释', group: '编辑' },
+  { id: 'editor.selectAllMatches', label: '选中所有匹配', group: '编辑' },
+  { id: 'editor.jumpBracket', label: '跳到匹配括号', group: '编辑' },
   { id: 'view.toggleSidebar', label: '切换主侧栏', group: '视图' },
   { id: 'view.toggleRail', label: '切换左窄栏', group: '视图' },
   { id: 'view.toggleTerminal', label: '切换终端', group: '视图' },
@@ -279,6 +305,8 @@ function keyOf(e: KeyboardEvent): string {
   const k = e.key
   if (k === '+') return '='
   if (k === ' ') return 'space'
+  /* `Mod+Shift+\` 实际按下去 `e.key` 是 `|`（US 布局）⇒ 归一化成 `\` 才能匹配 */
+  if (k === '|') return '\\'
   return k.toLowerCase()
 }
 
