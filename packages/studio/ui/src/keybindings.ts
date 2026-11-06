@@ -26,6 +26,7 @@ export type ActionId =
   | 'file.save'
   | 'file.saveAll'
   | 'file.closeTab'
+  | 'file.closeAll'
   | 'editor.findInFile'
   | 'editor.searchRepo'
   | 'editor.gotoDefinition'
@@ -58,6 +59,7 @@ const BASE: Chords = {
   'file.save': ['Mod+S'],
   'file.saveAll': ['Mod+Alt+S'],
   'file.closeTab': ['Mod+W'],
+  'file.closeAll': ['Alt+Mod+W'],
   'editor.findInFile': ['Mod+F'],
   'editor.searchRepo': ['Mod+Shift+F'],
   'editor.gotoDefinition': ['F12'],
@@ -134,6 +136,7 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'file.save', label: '保存', group: '文件' },
   { id: 'file.saveAll', label: '保存全部', group: '文件' },
   { id: 'file.closeTab', label: '关闭标签', group: '文件' },
+  { id: 'file.closeAll', label: '关闭全部标签', group: '文件' },
   { id: 'editor.searchRepo', label: '仓库搜索', group: '编辑' },
   { id: 'editor.quickOpen', label: '快速打开文件', group: '编辑' },
   { id: 'editor.gotoDefinition', label: '跳转定义', group: '编辑' },
