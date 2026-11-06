@@ -436,8 +436,12 @@ pub fn diag_lsp_start(app: tauri::AppHandle) -> Result<(), String> {
                 Some("ready") => {
                     let _ = app.emit("diag:ready", ());
                 }
-                Some("completions") | Some("definition") | Some("quickinfo") => {
-                    /* 拉式请求的回包（补全/定义/类型信息）：按 id 交给在等的那次调用 */
+                Some("completions") | Some("definition") | Some("quickinfo")
+                | Some("references") | Some("rename") => {
+                    /* 拉式请求的回包：按 id 交给在等的那次调用。
+                       ★★这里必须列**全部**回包类型：漏一个，那边 `recv_timeout` 就只能等满超时
+                         （rename 漏掉时表现为「一直显示正在分析符号…」，30s 后才报超时）。
+                         新增回包类型时，记得同时改这里 —— 有 `check:lsp-branches` 门禁兜底。 */
                     if let Some(id) = v.get("id").and_then(|x| x.as_u64()) {
                         if let Some(map) = PENDING.get() {
                             let sender = map.lock().ok().and_then(|mut g| g.remove(&id));

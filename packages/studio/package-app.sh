@@ -100,6 +100,12 @@ if ! node "$HERE/../../scripts/check-tauri-handlers.mjs"; then
   echo "✗ tauri 命令注册不完整，中止打包"
   exit 1
 fi
+# ★回包类型对齐（决策 #1447）：脚本 `out({t:'x'})` 与 Rust `Some("x")` 靠字符串配对，
+#   漏一个就表现为"命令一直等到超时"（rename 漏过一次）。
+if ! node "$HERE/../../scripts/check-lsp-branches.mjs"; then
+  echo "✗ 语言服务回包类型未对齐，中止打包"
+  exit 1
+fi
 echo "▸ cargo build --release（cargo $("$CARGO" --version | awk '{print $2}') · rustc $(rustc --version | awk '{print $2}')）"
 touch "$HERE/src/main.rs"
 "$CARGO" build --release --quiet
