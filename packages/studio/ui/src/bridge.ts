@@ -163,6 +163,23 @@ export interface QuickInfo {
 export const diagQuickinfo = (path: string, text: string, line: number, col: number): Promise<QuickInfo | null> =>
   invoke<QuickInfo | null>('diag_quickinfo', { path, text, line, col })
 
+/** 引用项（查找引用，决策 #1443） */
+export interface RefItem {
+  path: string
+  line: number
+  col: number
+  endCol: number
+  /** tsserver 给的行文本（已截断到 200 字符） */
+  text: string
+  /** 是否是**写入**点（赋值/定义） */
+  writeAccess: boolean
+  /** 是否是声明处 */
+  isDef: boolean
+}
+/** 查找引用：返回跨文件的全部引用位置 */
+export const diagReferences = (path: string, text: string, line: number, col: number): Promise<RefItem[]> =>
+  invoke<RefItem[]>('diag_references', { path, text, line, col })
+
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
   return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }

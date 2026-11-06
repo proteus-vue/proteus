@@ -63,12 +63,14 @@ import { ensureLsp, liveDiag, scheduleSync, syncClose, syncOpen } from '../diagS
 import { applyDiag, diagHover, forceDiag } from '../diagLint'
 import { editorExtraKeys, editorExtras } from '../editorExtras'
 import { tsAutocomplete } from '../completion'
-import { goToDefinition, isReadonlyPath, typeHover } from '../nav'
+import { goToDefinition, isReadonlyPath, referencesAt, typeHover } from '../nav'
 import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
+import { pickReferenceAt } from '../refs'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import DefChooser from '../DefChooser.vue'
+import RefPanel from '../RefPanel.vue'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -103,6 +105,7 @@ const offActions = [
   onAction('file.save', () => void save()),
   onAction('editor.quickOpen', () => (quickOpen.value = true)),
   onAction('editor.gotoDefinition', () => void jumpToDef()),
+  onAction('editor.findReferences', () => void findRefs()),
 ]
 const err = ref('')
 const loading = ref(false)
@@ -154,6 +157,15 @@ async function jumpToDef(pos?: number) {
   /* 第 5 个参数：多个定义时弹选择器（决策 #1442）；单条/零条时它不会被调用 */
   const t = await goToDefinition(view, cur.value, (m) => hintAt(view, at, m), pos, (list) => chooseDefinitionAt(list, view, at))
   if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
+}
+
+/** ⇧F12：列出符号在整个项目里的引用（决策 #1443） */
+async function findRefs() {
+  const at = view?.state.selection.main.head ?? 0
+  const list = await referencesAt(view, cur.value)
+  if (!list.length) return hintAt(view, at, '没有找到引用')
+  const pick = await pickReferenceAt(list, view, at)
+  if (pick) await jumpTo({ path: pick.path, line: pick.line, col: pick.col, text: '' })
 }
 
 /** 跳到某条命中：打开文件 → 把光标放到**行:列**（列是字符列，这里换成 UTF-16 偏移）。 */
@@ -961,7 +973,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <!-- ⌘ 长按时的定义预览卡（决策 #1436）：fixed 定位，点一下即跳 -->
-    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser />
+    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel />
   </div>
 </template>
 

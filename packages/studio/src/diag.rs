@@ -705,3 +705,55 @@ pub fn diag_quickinfo(
         doc: v.get("doc").and_then(|x| x.as_str()).unwrap_or("").to_string(),
     }))
 }
+
+/* ── 查找引用（决策 #1443）───────────────────────────────────────────────
+ * `references` 的 body 是 `{ refs, symbolName }`（**不是数组**，`definition` 才是数组）。
+ * 全局搜索可能触发项目加载 ⇒ 超时给 15s（比定义/补全更宽）。
+ */
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RefItem {
+    /// 仓库相对路径（仓库外为绝对路径）
+    pub path: String,
+    pub line: u32,
+    pub col: u32,
+    /// 结束列（1-based，用于未来做高亮/替换）
+    pub end_col: u32,
+    /// tsserver 已经读过的行文本（省一次读盘）
+    pub text: String,
+    #[serde(rename = "writeAccess")]
+    pub write_access: bool,
+    /// 是否是声明处
+    #[serde(rename = "isDef")]
+    pub is_def: bool,
+}
+
+#[tauri::command]
+pub fn diag_references(
+    path: String,
+    text: String,
+    line: u32,
+    col: u32,
+) -> Result<Vec<RefItem>, String> {
+    let v = lsp_call(
+        serde_json::json!({ "t": "references", "path": path, "text": text, "line": line, "col": col }),
+        15000,
+    )?;
+    let Some(v) = v else { return Ok(Vec::new()) };
+    let mut out = Vec::new();
+    if let Some(arr) = v.get("items").and_then(|x| x.as_array()) {
+        for it in arr {
+            out.push(RefItem {
+                path: it.get("path").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                line: it.get("line").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                col: it.get("col").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                end_col: it.get("endCol").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                text: it.get("text").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                write_access: it.get("write").and_then(|x| x.as_bool()).unwrap_or(false),
+                is_def: it.get("def").and_then(|x| x.as_bool()).unwrap_or(false),
+            });
+        }
+    }
+    out.retain(|x| !x.path.is_empty());
+    Ok(out)
+}

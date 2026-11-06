@@ -218,6 +218,17 @@ async function complete(id, file, rel, text, line, col) {
  *   **仓库相对路径**再回给前端；不在仓库内的（如 `lib.dom.d.ts`）也如实返回绝对路径，
  *   由前端决定"跳过去还是提示一下"。
  */
+/**
+ * tsserver 给的是**真实路径**；本仓 worktree 的 `node_modules` 是软链到主仓库的，
+ * 所以 `path.relative(root, 主仓库/...)` 会算出 `../../../../../Volumes/...`
+ * ⇒ 只有**确实在仓库内**才转相对；否则原样回绝对路径（前端走只读外部通道）。
+ */
+function toRelPath(absTarget) {
+  if (!path.isAbsolute(absTarget)) return absTarget
+  const rel = path.relative(root, absTarget)
+  return rel.startsWith('..') ? absTarget : rel.split(path.sep).join('/')
+}
+
 async function definition(id, file, rel, text, line, col) {
   try {
     await ensureDoc(file, text)
@@ -229,16 +240,7 @@ async function definition(id, file, rel, text, line, col) {
     const seen = new Set()
     for (const d of arr) {
       if (!d?.file) continue
-      const absTarget = String(d.file)
-      /* ★不能无条件转相对路径：tsserver 返回的是**真实路径**，而本仓 worktree 的
-         `node_modules` 是软链到主仓库的 ⇒ `path.relative(root, 主仓库/node_modules/...)`
-         会算出 `../../../../../Volumes/...` 这种串（实测：跳依赖直接提示"路径不可用"）。
-         ⇒ 只有**确实在仓库内**才转相对；否则原样回绝对路径（前端走只读外部通道）。 */
-      let relTarget = absTarget
-      if (path.isAbsolute(absTarget)) {
-        const rel = path.relative(root, absTarget)
-        relTarget = rel.startsWith('..') ? absTarget : rel.split(path.sep).join('/')
-      }
+      const relTarget = toRelPath(String(d.file))
       /* tsserver 的 FileSpan.offset 是 **1-based**（与 line 一致），不要再 +1 */
       const t = { path: relTarget, line: Number(d.start?.line ?? 1), col: Number(d.start?.offset ?? 1) }
       const key = `${t.path}:${t.line}:${t.col}`
@@ -249,6 +251,36 @@ async function definition(id, file, rel, text, line, col) {
     out({ t: 'definition', id, path: rel, targets, target: targets[0] ?? null })
   } catch (e) {
     out({ t: 'definition', id, path: rel, targets: [], target: null, error: String(e?.message ?? e).slice(0, 120) })
+  }
+}
+
+/**
+ * 查找引用（决策 #1443）：`references` 回 `FileSpanWithContext[]`，
+ * 每项带 `lineText`（tsserver 已经读过那个文件，直接用它省一次读盘）、
+ * `isWriteAccess`（写入点）与 `isDefinition`（声明处）。
+ */
+async function references(id, file, rel, text, line, col) {
+  try {
+    await ensureDoc(file, text)
+    const res = await req('references', { file, line, offset: col })
+    /* ★`references` 的 body 是 `{ refs, symbolName }`，**不是数组**（`definition` 才是数组）——
+       按数组判断会永远拿到空列表（实测踩过）。 */
+    const arr = Array.isArray(res) ? res : Array.isArray(res?.refs) ? res.refs : []
+    const items = arr
+      .map((r) => ({
+        path: toRelPath(String(r.file ?? '')),
+        line: Number(r.start?.line ?? 1),
+        col: Number(r.start?.offset ?? 1),
+        endCol: Number(r.end?.offset ?? r.start?.offset ?? 1),
+        /* 行文本可能很长（压缩后的 .d.ts），截断避免跨 IPC 传大段 */
+        text: String(r.lineText ?? '').trim().slice(0, 200),
+        write: Boolean(r.isWriteAccess),
+        def: Boolean(r.isDefinition),
+      }))
+      .filter((x) => x.path)
+    out({ t: 'references', id, path: rel, symbol: String(res?.symbolName ?? ''), items })
+  } catch (e) {
+    out({ t: 'references', id, path: rel, items: [], error: String(e?.message ?? e).slice(0, 120) })
   }
 }
 
@@ -308,6 +340,14 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       return
     }
     void definition(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
+    return
+  }
+  if (m.t === 'references') {
+    if (!isSupported(rel)) {
+      out({ t: 'references', id: m.id, path: rel, items: [] })
+      return
+    }
+    void references(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
     return
   }
   if (m.t === 'quickinfo') {
