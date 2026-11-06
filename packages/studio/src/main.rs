@@ -632,6 +632,7 @@ fn main() {
             diag::diag_complete,
             diag::diag_definition,
             diag::diag_references,
+            diag::diag_rename,
             diag::diag_quickinfo,
             diag::diag_lsp_stop,
             diag::diag_watch_start,

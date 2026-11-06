@@ -757,3 +757,80 @@ pub fn diag_references(
     out.retain(|x| !x.path.is_empty());
     Ok(out)
 }
+
+/* ── 重命名（决策 #1444）─────────────────────────────────────────────────
+ * `rename` 的 body 是 `{ info, locs }`；`locs` 是**按文件分组**的区间组。
+ * ★`locs` 里的 span **不保证按位置升序**（实测同一文件先给使用处、再给定义处），
+ *   应用时必须自己排序后倒序替换，否则前面的改动会把后面的偏移顶走。
+ */
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameSpan {
+    pub start_line: u32,
+    pub start_col: u32,
+    pub end_line: u32,
+    pub end_col: u32,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFile {
+    pub path: String,
+    pub spans: Vec<RenameSpan>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameResult {
+    pub can_rename: bool,
+    /// tsserver 给的**本地化**原因（不能重命名时原样展示给用户）
+    pub message: String,
+    pub display_name: String,
+    pub files: Vec<RenameFile>,
+}
+
+#[tauri::command]
+pub fn diag_rename(
+    path: String,
+    text: String,
+    line: u32,
+    col: u32,
+) -> Result<RenameResult, String> {
+    let v = lsp_call(
+        serde_json::json!({ "t": "rename", "path": path, "text": text, "line": line, "col": col }),
+        15000,
+    )?;
+    let empty = || RenameResult {
+        can_rename: false,
+        message: "语言服务未返回结果".to_string(),
+        display_name: String::new(),
+        files: Vec::new(),
+    };
+    let Some(v) = v else { return Ok(empty()) };
+    let mut files = Vec::new();
+    if let Some(arr) = v.get("files").and_then(|x| x.as_array()) {
+        for f in arr {
+            let mut spans = Vec::new();
+            if let Some(ss) = f.get("spans").and_then(|x| x.as_array()) {
+                for s in ss {
+                    spans.push(RenameSpan {
+                        start_line: s.get("startLine").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                        start_col: s.get("startCol").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                        end_line: s.get("endLine").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                        end_col: s.get("endCol").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
+                    });
+                }
+            }
+            let p = f.get("path").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            if !p.is_empty() && !spans.is_empty() {
+                files.push(RenameFile { path: p, spans });
+            }
+        }
+    }
+    Ok(RenameResult {
+        can_rename: v.get("canRename").and_then(|x| x.as_bool()).unwrap_or(false),
+        message: v.get("message").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        display_name: v.get("displayName").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        files,
+    })
+}

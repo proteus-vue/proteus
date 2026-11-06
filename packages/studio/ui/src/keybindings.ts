@@ -30,6 +30,7 @@ export type ActionId =
   | 'editor.searchRepo'
   | 'editor.gotoDefinition'
   | 'editor.findReferences'
+  | 'editor.renameSymbol'
   | 'editor.quickOpen'
   | 'editor.gotoLine'
   | 'editor.selectNext'
@@ -61,6 +62,7 @@ const BASE: Chords = {
   'editor.searchRepo': ['Mod+Shift+F'],
   'editor.gotoDefinition': ['F12'],
   'editor.findReferences': ['Shift+F12'],
+  'editor.renameSymbol': ['F2'],
   'editor.quickOpen': ['Mod+P'],
   'editor.gotoLine': ['Mod+G'],
   'editor.selectNext': ['Mod+D'],
@@ -82,6 +84,7 @@ export const SCHEMES: Record<KeymapScheme, Chords> = {
     /* JetBrains：跳声明是 ⌘B；文件=⇧⌘O、符号=⇧⌘N（这里都映射到"快速打开"）；行=⌘L */
     'editor.gotoDefinition': ['Mod+B'],
     'editor.findReferences': ['Alt+F7'],
+    'editor.renameSymbol': ['Shift+F6'],
     'editor.quickOpen': ['Mod+Shift+O', 'Mod+Shift+N'],
     'editor.gotoLine': ['Mod+L'],
     'editor.selectNext': ['Mod+Shift+D'], // IDEA 没有同款；避开 ⌘D（=Duplicate Line）
@@ -135,6 +138,7 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'editor.quickOpen', label: '快速打开文件', group: '编辑' },
   { id: 'editor.gotoDefinition', label: '跳转定义', group: '编辑' },
   { id: 'editor.findReferences', label: '查找引用', group: '编辑' },
+  { id: 'editor.renameSymbol', label: '重命名符号', group: '编辑' },
   { id: 'view.toggleSidebar', label: '切换主侧栏', group: '视图' },
   { id: 'view.toggleRail', label: '切换左窄栏', group: '视图' },
   { id: 'view.toggleTerminal', label: '切换终端', group: '视图' },

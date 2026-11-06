@@ -180,6 +180,28 @@ export interface RefItem {
 export const diagReferences = (path: string, text: string, line: number, col: number): Promise<RefItem[]> =>
   invoke<RefItem[]>('diag_references', { path, text, line, col })
 
+/** 重命名的单个位置（1-based 行列，`end` 为字符区间右端） */
+export interface RenameSpan {
+  startLine: number
+  startCol: number
+  endLine: number
+  endCol: number
+}
+export interface RenameFile {
+  path: string
+  spans: RenameSpan[]
+}
+export interface RenameResult {
+  canRename: boolean
+  /** 不能重命名时 tsserver 给的本地化原因 */
+  message: string
+  displayName: string
+  files: RenameFile[]
+}
+/** 重命名：返回能否重命名 + 全部待改位置（按文件分组） */
+export const diagRename = (path: string, text: string, line: number, col: number): Promise<RenameResult> =>
+  invoke<RenameResult>('diag_rename', { path, text, line, col })
+
 export const gitStatus = async (): Promise<GitStatusInfo> => {
   const raw = await invoke<GitStatusInfo & { is_repo?: boolean }>('git_status')
   return { ...raw, isRepo: raw.isRepo ?? raw.is_repo ?? false }

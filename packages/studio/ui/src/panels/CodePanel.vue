@@ -67,10 +67,12 @@ import { goToDefinition, isReadonlyPath, referencesAt, typeHover } from '../nav'
 import { hintAt } from '../hint'
 import { chooseDefinitionAt } from '../chooser'
 import { pickReferenceAt } from '../refs'
+import { runRename } from '../rename'
 import { modPeek } from '../modPeek'
 import DefPeek from '../DefPeek.vue'
 import DefChooser from '../DefChooser.vue'
 import RefPanel from '../RefPanel.vue'
+import RenameBox from '../RenameBox.vue'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
@@ -106,6 +108,7 @@ const offActions = [
   onAction('editor.quickOpen', () => (quickOpen.value = true)),
   onAction('editor.gotoDefinition', () => void jumpToDef()),
   onAction('editor.findReferences', () => void findRefs()),
+  onAction('editor.renameSymbol', () => void renameSymbol()),
 ]
 const err = ref('')
 const loading = ref(false)
@@ -157,6 +160,15 @@ async function jumpToDef(pos?: number) {
   /* 第 5 个参数：多个定义时弹选择器（决策 #1442）；单条/零条时它不会被调用 */
   const t = await goToDefinition(view, cur.value, (m) => hintAt(view, at, m), pos, (list) => chooseDefinitionAt(list, view, at))
   if (t) await jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })
+}
+
+/** 某文件是否有未保存修改（重命名前的安全检查） */
+const isDirtyFile = (p: string) => { const st = states.get(p); const r = recs.get(p); return !!(st && r && st.doc.toString() !== r.base) }
+
+/** F2：重命名（决策 #1444）；跨文件写盘、"未保存拒绝"、报告都在 rename.ts */
+async function renameSymbol() {
+  const at = view?.state.selection.main.head ?? 0
+  await runRename({ view, path: cur.value, pos: at, hint: (m) => hintAt(view, at, m), isDirty: isDirtyFile, onExternalWrite: (p) => states.delete(p) })
 }
 
 /** ⇧F12：列出符号在整个项目里的引用（决策 #1443） */
@@ -973,7 +985,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <!-- ⌘ 长按时的定义预览卡（决策 #1436）：fixed 定位，点一下即跳 -->
-    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel />
+    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel /><RenameBox />
   </div>
 </template>
 

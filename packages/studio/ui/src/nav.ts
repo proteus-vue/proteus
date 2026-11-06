@@ -10,7 +10,7 @@
  */
 import { hoverTooltip, type EditorView } from '@codemirror/view'
 import { modHeldState } from './modKey'
-import { diagDefinition, diagQuickinfo, diagReferences, type RefItem } from './bridge'
+import { diagDefinition, diagQuickinfo, diagReferences, diagRename, type RefItem, type RenameResult } from './bridge'
 
 export interface DefTarget {
   path: string
@@ -32,6 +32,18 @@ export async function definitionsAt(path: string, text: string, line: number, co
 /** 第一个定义（预览卡只展示一处；要选的话走 `goToDefinition` 的 choose） */
 export async function definitionAt(path: string, text: string, line: number, col: number): Promise<DefTarget | null> {
   return (await definitionsAt(path, text, line, col))[0] ?? null
+}
+
+/** 重命名（F2 用）：能否重命名 + 全部待改位置 */
+export async function renameTarget(
+  view: EditorView | null,
+  path: string,
+  pos?: number,
+): Promise<RenameResult | null> {
+  if (!view || !path) return null
+  const at = pos ?? view.state.selection.main.head
+  const line = view.state.doc.lineAt(at)
+  return diagRename(path, view.state.doc.toString(), line.number, at - line.from + 1).catch(() => null)
 }
 
 /** 查找引用（⇧F12 用）：光标/指定位置的符号在**整个项目**里的全部引用 */

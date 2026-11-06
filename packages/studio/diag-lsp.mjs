@@ -284,6 +284,43 @@ async function references(id, file, rel, text, line, col) {
   }
 }
 
+/**
+ * 重命名（决策 #1444）：`rename` 的 body 是 `{ info, locs }` ——
+ * `info.canRename=false` 时要把它自己的 `localizedErrorMessage` 原样回给用户
+ * （"不能重命名全局变量/关键字"这类原因只有 tsserver 说得清）。
+ * `locs` 是**按文件分组**的 `SpanGroup[]`，每组的 `locs` 是该文件里的字符区间。
+ */
+async function rename(id, file, rel, text, line, col) {
+  try {
+    await ensureDoc(file, text)
+    const res = await req('rename', { file, line, offset: col })
+    const info = res?.info ?? {}
+    const groups = Array.isArray(res?.locs) ? res.locs : []
+    const files = groups
+      .map((g) => ({
+        path: toRelPath(String(g.file ?? '')),
+        spans: (g.locs ?? []).map((sp) => ({
+          startLine: Number(sp.start?.line ?? 1),
+          startCol: Number(sp.start?.offset ?? 1),
+          endLine: Number(sp.end?.line ?? 1),
+          endCol: Number(sp.end?.offset ?? 1),
+        })),
+      }))
+      .filter((g) => g.path && g.spans.length)
+    out({
+      t: 'rename',
+      id,
+      path: rel,
+      canRename: Boolean(info.canRename),
+      message: String(info.localizedErrorMessage ?? ''),
+      displayName: String(info.displayName ?? ''),
+      files,
+    })
+  } catch (e) {
+    out({ t: 'rename', id, path: rel, canRename: false, message: String(e?.message ?? e).slice(0, 160), displayName: '', files: [] })
+  }
+}
+
 /** 类型/符号信息（决策 #1429）：`quickinfo` 给 `displayString`（如 `(property) x: number`） */
 async function quickinfo(id, file, rel, text, line, col) {
   try {
@@ -340,6 +377,14 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       return
     }
     void definition(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
+    return
+  }
+  if (m.t === 'rename') {
+    if (!isSupported(rel)) {
+      out({ t: 'rename', id: m.id, path: rel, canRename: false, message: '该文件类型不支持重命名', displayName: '', files: [] })
+      return
+    }
+    void rename(Number(m.id) || 0, abs(rel), rel, String(m.text ?? ''), Number(m.line) || 1, Number(m.col) || 1)
     return
   }
   if (m.t === 'references') {
