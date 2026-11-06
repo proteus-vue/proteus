@@ -461,9 +461,11 @@ function forget(path: string) {
 async function closeOthers(keep: string) {
   const victims = tabs.value.filter((p) => p !== keep)
   const dirty = victims.filter(isDirtyPath)
-  if (dirty.length && !(await confirmDiscard(dirty))) return
-  for (const p of victims) forget(p)
+  if (dirty.length && !(await confirmDiscard(dirty))) return false
+  /* ★与 `close()` 一致：真关了才通知语言服务（原来这里漏了，tsserver 会留着已关闭的文档） */
+  for (const p of victims) { syncClose(p); forget(p) }
   if (cur.value !== keep) void open(keep)
+  return true
 }
 
 /** 关掉 `path` 右侧的所有标签 */
@@ -473,7 +475,7 @@ async function closeRight(path: string) {
   const victims = tabs.value.slice(i + 1)
   const dirty = victims.filter(isDirtyPath)
   if (dirty.length && !(await confirmDiscard(dirty))) return
-  for (const p of victims) forget(p)
+  for (const p of victims) { syncClose(p); forget(p) }
 }
 
 async function close(path: string) {
@@ -495,6 +497,13 @@ async function close(path: string) {
   lineCount.value = 0
   view?.setState(makeState('', ''))
   host.value?.removeAttribute('data-parse')
+}
+
+/** 关掉全部标签（决策 #1450）：复用 `closeOthers('')`，未保存提示、语言服务解绑都同一套 */
+async function closeAll() {
+  if (!(await closeOthers(''))) return
+  cur.value = ''; dirty.value = false; lineCount.value = 0
+  view?.setState(makeState('', '')); host.value?.removeAttribute('data-parse')
 }
 
 /* ─── 右键菜单（决策 #1234）：三处上下文，一套开关/定位 ──────────────────────
@@ -550,6 +559,7 @@ function onTabMenu(e: MouseEvent, p: string) {
       { id: 'close', label: '关闭', accel: '⌘W', danger: true },
       { id: 'closeOthers', label: '关闭其他', disabled: tabs.value.length < 2 },
       { id: 'closeRight', label: '关闭右侧', disabled: i >= tabs.value.length - 1 },
+      { id: 'closeAll', label: '关闭全部', disabled: tabs.value.length === 0 },
       { id: 's1', label: '', sep: true },
       { id: 'copyPath', label: '复制相对路径' },
     ],
@@ -557,6 +567,7 @@ function onTabMenu(e: MouseEvent, p: string) {
       if (id === 'close') close(p)
       else if (id === 'closeOthers') closeOthers(p)
       else if (id === 'closeRight') closeRight(p)
+      else if (id === 'closeAll') void closeAll()
       else if (id === 'copyPath') void copyPath(p)
     },
   )
