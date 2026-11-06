@@ -17,6 +17,8 @@ use tauri::Manager;
 
 /// 抓屏参数的计算（纯函数 + 单测；与 Tauri/窗口无关）
 mod capture;
+/// 本地文件 / 剪贴板命令（决策 #1453，从本文件拆出）
+mod ipc_fs;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
@@ -39,7 +41,8 @@ mod diag;
 mod git;
 /// ★#1344：仓库内文件读写 + 路径沙箱（同一组抽出；共享**同一条**安全边界）。
 ///   ★新增任何文件系统能力必须复用 `resolve_in_repo`，不要自己拼路径。
-mod fs_guard;
+/// 仓库内读写与路径沙箱（#1344 拆出）；`ipc_fs` 也要用，故 `pub(crate)`
+pub(crate) mod fs_guard;
 
 extern "C" {
     fn poc_attach(parent: *mut c_void) -> c_int;
@@ -301,40 +304,6 @@ fn git_head(path: String) -> Option<String> {
     git::git_head(path)
 }
 
-/// 读剪贴板（右键菜单"粘贴"用）。
-/// 【为什么走 `pbpaste`】写用的是 ObjC 桥（`poc_copy_text`），但没做读；`pbpaste` 是系统自带、
-///   行为稳定、无需新增依赖。命令是 **async + spawn_blocking**（起进程几十 ms，不能堵 UI 主线程）。
-#[tauri::command]
-async fn read_clipboard() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        #[cfg(target_os = "macos")]
-        {
-            let out = std::process::Command::new("pbpaste")
-                .output()
-                .map_err(|e| format!("读取剪贴板失败：{e}"))?;
-            if !out.status.success() {
-                return Err("读取剪贴板失败（pbpaste 返回非 0）".to_string());
-            }
-            Ok(String::from_utf8_lossy(&out.stdout).to_string())
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            Err("当前平台暂不支持读取剪贴板".to_string())
-        }
-    })
-    .await
-    .map_err(|e| format!("剪贴板线程异常：{e}"))?
-}
-
-#[tauri::command]
-fn copy_text(text: String) {
-    let c = CString::new(text).unwrap_or_default();
-    #[cfg(target_os = "macos")]
-    unsafe {
-        poc_copy_text(c.as_ptr())
-    };
-}
-
 /* ── 关窗口/退出前的拦截（决策 #1244）─────────────────────────────────────
  * 前端把"脏缓冲数量"同步过来；窗口收到关闭请求时，只要还有脏的就**拦下来**并通知前端弹确认框。
  * 前端选完（保存并关闭 / 不保存）再调 `close_now()` 放行。
@@ -467,46 +436,6 @@ fn dump_frame(path: String) {
     let c = CString::new(path).unwrap();
     let rc = unsafe { poc_dump(c.as_ptr()) };
     eprintln!("[studio] dump rc={rc}");
-}
-
-/// 读仓库内一个文本文件（G4 第一块砖：代码视图的**文件通路**）。
-///
-/// 【为什么不用 Tauri 的 fs 插件】本目录刻意没有 `package.json`（决策 #1187），
-///   引 `@tauri-apps/plugin-fs` 会连带把前端依赖树和 capabilities 配置一起拉进来；
-///   而"只读仓库里的文本"这一件事，Rust 侧 20 行就够，且能**自己把关边界**。
-///
-/// 【边界（都是硬约束，不是建议）】
-///   · **必须在仓库根之下**：`canonicalize` 后前缀比对，`../` 穿越一律拒绝；
-///   · **≤512KB**：再大就不是"看一段代码"，该走别的方式；
-///   · **写回走 `write_text`**：带 mtime 冲突检测 + 原子替换（见该函数的注释）。
-///
-/// 【★诚实边界】仓库根取自编译期 `CARGO_MANIFEST_DIR`：
-///   开发机直接跑二进制 ⇒ 有效；**打包成 .app 后该路径不存在** ⇒ 明确报错（不静默返回空串）。
-///   打包形态要读源码是另一个问题（应读设备侧或让用户选工程目录），不在这一版。
-/* ★★★#1344：**仓库内文件读写 + 路径沙箱**已抽到 `fs_guard.rs`
-   （`repo_root` / `resolve_in_repo` / `mtime_us` / `FileText` / `read_text` /
-    `write_text` / `list_files`）。抽因：本文件曾 1103 行越过 1000 行硬上限；
-   而这一组共享**同一条安全边界**（canonicalize + 前缀比对），写在一起边界才不会分叉。
-   ★以下四个 command 只是把 Tauri 入口转发到该模块（命令名不变，前端零改动）。 */
-/// 只读读取仓库外文件（决策 #1435）：跳转定义落在依赖/SDK 上时用
-#[tauri::command]
-fn read_text_external(path: String) -> Result<fs_guard::FileText, String> {
-    fs_guard::read_text_external(path)
-}
-
-#[tauri::command]
-fn read_text(path: String) -> Result<fs_guard::FileText, String> {
-    fs_guard::read_text(path)
-}
-
-#[tauri::command]
-fn write_text(path: String, text: String, expect: u64) -> Result<u64, String> {
-    fs_guard::write_text(path, text, expect)
-}
-
-#[tauri::command]
-fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
-    fs_guard::list_files(roots)
 }
 
 /// 工作区状态的落盘位置（G5）：`~/Library/Application Support/dev.proteus.studio/state.json`。
@@ -669,17 +598,17 @@ fn main() {
             diag::diag_watch_stop,
             stats,
             dump_frame,
-            read_text,
+            ipc_fs::read_text,
             /* ★漏注册过一次（决策 #1439）：`#[tauri::command]` 只是标记，**必须**列进
                `generate_handler!` 才能被前端调用；漏了会报 "Command xxx not found"，
                而 `cargo build` 依然通过 —— 只有真机调用才暴露。 */
-            read_text_external,
-            write_text,
-            list_files,
+            ipc_fs::read_text_external,
+            ipc_fs::write_text,
+            ipc_fs::list_files,
             load_state,
             save_state,
-            copy_text,
-            read_clipboard,
+            ipc_fs::copy_text,
+            ipc_fs::read_clipboard,
             git_status,
             git_head,
             set_dirty_count,
