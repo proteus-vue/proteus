@@ -240,16 +240,29 @@ export function stubTauri(payload) {
             listening: window.localStorage.getItem('__IOS_LISTEN__') !== '0',
             active: window.localStorage.getItem('__IOS_ACTIVE__') === '1',
           }
-        if (cmd === 'list_files')
-          return window.localStorage.getItem('__BIG__') === '1'
-            ? ['packages/studio/big.ts']
-            : [
-                'packages/studio/ui/src/App.vue',
-                'packages/studio/ui/src/bridge.ts',
-                'packages/studio/ui/src/styles.css',
-                'packages/studio/src/main.rs',
-                'packages/studio/native/embed_view.m',
-              ]
+        if (cmd === 'list_files') {
+          if (window.localStorage.getItem('__BIG__') === '1') return ['packages/studio/big.ts']
+          /* 决策 #1460：新建成功后文件树要**真的出现**新文件（刷树也是判据的一部分）。
+             桩把 create_file/create_dir 收到的路径记下来，下一次 list_files 一并返回。 */
+          const made = JSON.parse(window.localStorage.getItem('__STUB_MADE__') || '[]')
+          return [
+            'packages/studio/ui/src/App.vue',
+            'packages/studio/ui/src/bridge.ts',
+            'packages/studio/ui/src/styles.css',
+            'packages/studio/src/main.rs',
+            'packages/studio/native/embed_view.m',
+            ...made,
+          ].sort()
+        }
+        /* 文件树写操作（决策 #1460）：桩只记录 + 回成功，不碰真实磁盘。
+           ★调用记录由 `calls.push` 统一完成 ⇒ 判据能核对命令名与 args.path。 */
+        if (cmd === 'create_file' || cmd === 'create_dir') {
+          const made = JSON.parse(window.localStorage.getItem('__STUB_MADE__') || '[]')
+          made.push(String(args?.path ?? ''))
+          window.localStorage.setItem('__STUB_MADE__', JSON.stringify(made))
+          return null
+        }
+        if (cmd === 'rename_path' || cmd === 'delete_path') return null
         // ★G5 会话状态：用 localStorage 模拟磁盘——这样 reload 后还能验「恢复上次视图」
         if (cmd === 'load_state') return localStorage.getItem('__stub_state__') ?? '{}'
         if (cmd === 'save_state') {

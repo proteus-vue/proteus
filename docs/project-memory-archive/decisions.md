@@ -16158,3 +16158,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ② `check-file-size` 报的另 3 处（`MainActivity.java` / `proteus_host.cpp` ×2 / `studio/src/main.rs`）
     经 `git show HEAD` 逐条对拍确认**全部是既存欠账**（本周 37 个提交带进来的），
     不在本单 scope 内、不代为修改（AI 协作规范 §3.2：不替别的会话做决定）。
+
+1460. **★★Studio 文件树写操作：新建文件/文件夹 · 同级重命名 · 删除（空目录）**（2026-11-08 · 用户「继续Studio线」）:
+    承接 11-06 日志连列两次的「文件树新建·重命名·删除」。**分层**：Rust 只管磁盘与路径沙箱
+    （新 `src/fs_ops.rs` 四个命令），前端 `ui/src/fileOps.ts` 管用户意图（输入框 / 二次确认 /
+    已打开标签保护 / 刷树 / 回执），`FileTree.vue` 只发 `{kind,path,dir,x,y}`。
+    ★**新写边界 `fs_guard::resolve_in_repo_new`**：`resolve_in_repo` 对目标本身 `canonicalize`
+    ⇒ 目标不存在即失败，而新建/改名的 `to` 恰恰不存在。改为「① 逻辑归一化仍在仓库内（复用
+    `within_root` 挡 `..`/绝对路径）② **父目录** canonicalize + 前缀比对（挡软链穿越写）
+    ③ 文件名不含分隔符/`.`/`..`」。与既有读/写边界写在同一文件，边界只有一份。
+    ★**三条硬边界**：① 新建用 `OpenOptions::create_new(true)` 原子创建，绝不覆盖已有文件；
+    ② **绝不递归删除**——目录只走 `remove_dir`（天然要求为空），非空直接报错（本仓多 AI 会话，
+    递归删一次就是不可逆事故）；③ 新建/改扩展名只认 `LIST_EXT`（提到 `fs_guard` 模块级，
+    `list_files` 与 `fs_ops` 共用一条白名单）——否则「写盘成功但文件树看不见」，比报错更难排查。
+    ★**为什么「已打开标签一律拒绝」而不是自动改路径**：重命名/删除后编辑器还挂着旧路径的
+    EditorState / undo 历史 / tsserver 文档 / 诊断缓存，自动改路径要同步四处，漏一处就是
+    「显示 A、保存写到 B」⇒ 沿用 #1444 的整体拒绝 + 明确提示，不做半套。
+    ★**二次确认**：重命名与删除走全局 `ask()`，文案写明源/目标路径与「不可撤销」；新建不弹
+    （不破坏已有文件）。输入框是新 `FileOpsBox.vue`，**刻意不复用 `RenameBox.vue`** —— 后者带
+    「影响 N 个文件」的符号重命名二次确认态，语义不同。
+    ★**async + spawn_blocking**（#1446 教训）：同步 `#[tauri::command]` 跑 UI 主线程，磁盘抖动
+    会卡整块窗口；四个命令一律丢 blocking 线程池。
+    ★**反巨型化**：`CodePanel.vue` 998 行、`App.vue` 985、`main.rs` 976 全贴 1000 硬上限
+    ⇒ 新逻辑一律进新文件；`CodePanel` 只留 import + 一句 `installFileOps` + 一句 `@ops`，
+    并把原 6 行 `setEditorMenuDeps({...})` 压成 1 行（纯排版，行数净减）。
+    ★**ROOTS 单一真源**：原常量长在 `CodePanel.vue` 里，抽到 `fileOps.ts` 供组件反向 import，
+    避免「新建落在扫描根外 ⇒ 树上看不见」的两份常量漂移。
+    ★**诚实边界**：只支持**同级重命名**（跨目录移动会让标签/语言服务缓存失效，第一版不碰）；
+    删目录只删空目录；重命名/删除前若目标目录子树里有已打开标签则整体拒绝；
+    未做「关标签后自动改路径」与「回收站式撤销」。判据覆盖见 `check:studio-panel` 与
+    `check:tauri-handlers`（四个新命令必须进 `generate_handler!`）。
+

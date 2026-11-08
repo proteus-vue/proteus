@@ -89,6 +89,12 @@ export const writeText = (path: string, text: string, expect: number): Promise<n
 /** 列仓库内若干子树下的源码文件（G4 文件列表）。边界同上，另有扩展名白名单与 300 条上限。 */
 export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]>('list_files', { roots })
 
+/** 文件树写操作（决策 #1460）：路径沙箱 / 空目录限制 / 扩展名白名单全在 Rust 侧，前端只传相对路径。 */
+export const createFile = (path: string): Promise<void> => invoke<void>('create_file', { path })
+export const createDir = (path: string): Promise<void> => invoke<void>('create_dir', { path })
+export const renamePath = (from: string, to: string): Promise<void> => invoke<void>('rename_path', { from, to })
+export const deletePath = (path: string): Promise<void> => invoke<void>('delete_path', { path })
+
 /** Git **只读**（决策 #1246）：分支 / 领先落后 / 改动文件。非仓库时 `isRepo=false`，不抛错。 */
 export interface GitFileStatus {
   path: string

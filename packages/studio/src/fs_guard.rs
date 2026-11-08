@@ -11,7 +11,8 @@
 //   · 仓库根取自编译期 `CARGO_MANIFEST_DIR`；打包成 .app 后该路径不存在 ⇒ **明确报错**
 //     （不静默返回空串）。
 //   · 读写上限 512KB；`list_files` 只读、只认白名单扩展名、跳过构建目录、上限 300 条。
-//   ★新增任何文件系统能力时，**必须**复用 `resolve_in_repo`；不要自己拼路径。
+//   ★新增任何文件系统能力时，**必须**复用 `resolve_in_repo` / `resolve_in_repo_new`；
+//     不要自己拼路径（决策 #1460 的 `fs_ops.rs` 也走这里）。
 //
 // 【★`write_text` 为什么不是简单的 fs::write（三条，都是真事故的形状）】
 //   1. **冲突检测**：`expect` 是打开时读到的 mtime。磁盘 mtime 变了 ⇒ 说明这段文本在打开之后
@@ -22,6 +23,11 @@
 //      半个文件——而这是个**源码**仓库，半个文件比没写更糟。
 //   3. **保留权限位**：`rename` 会换成新文件的 mode（默认 0644），可执行脚本会因此丢 `+x`。
 use serde::Serialize;
+
+/// 文件树只列这些扩展名（`list_files` 与「新建文件 / 改扩展名」共用一条白名单）。
+/// ★放在模块级而不是函数内（决策 #1460）：`fs_ops::create_file` 必须复用它——
+///   新建出白名单外的文件会「写盘成功但文件树看不见」，那是最难排查的假失败。
+pub const LIST_EXT: [&str; 10] = ["ts", "tsx", "vue", "rs", "m", "h", "py", "md", "json", "css"];
 
 /// 文件 mtime 用**微秒**（Unix epoch）；取不到就 0（上层据此判断"无法做冲突检测"）。
 /// ★用微秒而不是毫秒：两次保存可能落在同一毫秒里，那时冲突检测会漏判。
@@ -94,6 +100,39 @@ pub fn resolve_in_repo(path: &str) -> Result<std::path::PathBuf, String> {
     Ok(p)
 }
 
+/// **目标尚不存在**时的写边界（决策 #1460：新建 / 重命名的 `to`）。
+///
+/// 【为什么不能复用 `resolve_in_repo`】它对**目标本身** `canonicalize` ⇒ 目标不存在就直接失败，
+///   而新建/改名要的恰恰是"目标不存在"。
+///
+/// 【三层校验，缺一不可】
+///   ① 逻辑归一化后仍在仓库内（复用 `within_root` ⇒ 挡 `..` 与绝对路径）；
+///   ② **父目录** `canonicalize` 并做前缀比对（挡「父目录是软链、指向仓库外」的穿越写）；
+///   ③ 文件名不含路径分隔符 / `.` / `..`（`file_name()` 只取最后一段，中间段已被 ① 挡住）。
+pub fn resolve_in_repo_new(path: &str) -> Result<std::path::PathBuf, String> {
+    let root = repo_root()?;
+    if path.is_empty() || !within_root(&root, path) {
+        return Err(format!("路径越界：{path}"));
+    }
+    let rel = std::path::Path::new(path);
+    let name = rel
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("非法文件名：{path}"))?;
+    if name.is_empty() || name == "." || name == ".." || name.contains('\\') {
+        return Err(format!("非法文件名：{name}"));
+    }
+    let parent_rel = rel.parent().unwrap_or(std::path::Path::new(""));
+    let parent = root
+        .join(parent_rel)
+        .canonicalize()
+        .map_err(|e| format!("父目录不存在或不可达：{}（{e}）", parent_rel.display()))?;
+    if !parent.starts_with(&root) {
+        return Err(format!("路径越界（父目录在仓库外）：{path}"));
+    }
+    Ok(parent.join(name))
+}
+
 /// 读到的一段文本 + 它的 mtime。
 /// ★为什么要带 mtime：保存时回传，用来判断"打开之后文件有没有被别人改过"。
 #[derive(Serialize)]
@@ -155,7 +194,6 @@ pub fn write_text(path: String, text: String, expect: u64) -> Result<u64, String
 /// 【边界（硬约束）】只在仓库根之下 · 只认白名单扩展名 · 跳过 node_modules/target/构建产物
 ///   （否则一次几千条）· 上限 **300** 条（到上限就返回，如实截断而非静默少给）。
 pub fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
-    const EXT: [&str; 10] = ["ts", "tsx", "vue", "rs", "m", "h", "py", "md", "json", "css"];
     const SKIP: [&str; 8] = ["node_modules", "target", "dist", "build-app", "web-dist", "gen", ".git", ".vite"];
     const MAX: usize = 300;
 
@@ -180,7 +218,7 @@ pub fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
             }
             let ok = p
                 .extension()
-                .map(|x| EXT.contains(&x.to_string_lossy().as_ref()))
+                .map(|x| LIST_EXT.contains(&x.to_string_lossy().to_ascii_lowercase().as_str()))
                 .unwrap_or(false);
             if !ok {
                 continue;
@@ -214,6 +252,16 @@ mod tests {
         assert!(!within_root(root, "../etc/passwd"));
         assert!(!within_root(root, "a/../../etc/passwd"));
         assert!(!within_root(root, "/etc/passwd"));
+    }
+
+    /// 新建/改名目标的逻辑边界（决策 #1460）：与读共用 `within_root`，越界同样要挡。
+    #[test]
+    fn new_path_boundary() {
+        let root = std::path::Path::new("/repo");
+        assert!(within_root(root, "packages/studio/ui/src/new.vue"));
+        assert!(!within_root(root, "packages/../../etc/passwd"));
+        assert!(!within_root(root, "/tmp/evil.rs"));
+        assert!(!within_root(root, ""));
     }
 }
 

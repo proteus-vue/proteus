@@ -15,6 +15,7 @@ import GitBar from './GitBar.vue'
 import FileTree from './FileTree.vue'
 import { startDrag, treeHidden, treeW } from '../layout'
 import type { SearchHit } from '../bridge'
+import type { FileOp } from '../fileOps'
 
 const props = defineProps<{
   files: string[]
@@ -29,6 +30,8 @@ const emit = defineEmits<{
   refresh: []
   copy: [path: string]
   active: [v: boolean]
+  /** 文件树写操作，原样上抛给 CodePanel（`fileOps.ts` 编排） */
+  ops: [op: FileOp]
 }>()
 
 const searchBox = ref<{ focus: () => void } | null>(null)
@@ -61,6 +64,7 @@ defineExpose({ focusSearch })
         @open="(p) => emit('open', p)"
         @copy="(p) => emit('copy', p)"
         @refresh="emit('refresh')"
+        @ops="(o) => emit('ops', o)"
       />
     </div>
 </template>

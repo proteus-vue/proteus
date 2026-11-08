@@ -78,14 +78,16 @@ import SymbolPalette from '../SymbolPalette.vue'
 import { onAction } from '../keybindings'
 import { crumbsOf } from '../breadcrumbs'
 import { openMenu } from '../contextmenu'
+import { ROOTS, installFileOps, runFileOp } from '../fileOps'
+import FileOpsBox from '../FileOpsBox.vue'
 import { pushToast } from '../toast'
 import { ask } from '../confirm'
 import DiffView from '../DiffView.vue'
 
 /** ★G5：上次打开的文件 / 折叠的目录都存在工作区会话里（重启恢复）。 */
 const ws = useWorkspaceState()
-/** 列哪些子树（都是 Studio 自己的源码——显示它自己，一眼能核对"屏幕这段 == 仓库那段"） */
-const ROOTS = ['packages/studio/ui/src', 'packages/studio/src', 'packages/studio/native'] as const
+/* 列哪些子树（ROOTS）已抽到 `fileOps.ts` 作单一真源（决策 #1460）：新建文件必须落在这些根内，
+   否则刚建的文件不会出现在树里。 */
 
 const files = ref<string[]>([])
 const cur = ref('')
@@ -584,14 +586,11 @@ async function refreshFiles() {
   }
 }
 
-/* 编辑器右键菜单（决策 #1448）：菜单项与处理都在 `editorMenu.ts`，
-   这里只把"当前编辑器 + 已有动作"注入一次。 */
-setEditorMenuDeps({
-  getView: () => view, getPath: () => cur.value, isDirty: () => dirty.value,
-  save: () => void save(), copyPath: (p) => void copyPath(p),
-  hint: (m) => hintAt(view, view?.state.selection.main.head ?? 0, m),
-  gotoDefinition: () => void jumpToDef(), findReferences: () => void findRefs(), renameSymbol: () => void renameSymbol(),
-})
+/* 编辑器右键菜单（决策 #1448）：菜单项与处理都在 `editorMenu.ts`，这里只注入一次。
+   ★压成一行是给 1000 行硬上限留余量（决策 #1460），行为不变。 */
+setEditorMenuDeps({ getView: () => view, getPath: () => cur.value, isDirty: () => dirty.value, save: () => void save(), copyPath: (p) => void copyPath(p), hint: (m) => hintAt(view, view?.state.selection.main.head ?? 0, m), gotoDefinition: () => void jumpToDef(), findReferences: () => void findRefs(), renameSymbol: () => void renameSymbol() })
+/* 文件树写操作（决策 #1460）：只注入「打开的标签 + 刷树」，其余编排在 fileOps.ts。 */
+installFileOps({ openPaths: () => tabs.value, refresh: () => void refreshFiles() })
 
 function onEditorMenu(e: MouseEvent) {
   openEditorMenu(e)
@@ -938,7 +937,7 @@ onBeforeUnmount(() => {
         @open="open"
         @changed="openChanged"
         @jump="jumpTo"
-        @refresh="refreshFiles"
+        @refresh="refreshFiles" @ops="runFileOp"
         @copy="copyPath"
         @active="searchActive = $event"
       />
@@ -991,7 +990,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <!-- ⌘ 长按时的定义预览卡（决策 #1436）：fixed 定位，点一下即跳 -->
-    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel /><RenameBox /><SymbolPalette />
+    <DefPeek @jump="(t) => jumpTo({ path: t.path, line: t.line, col: t.col, text: '' })" /><DefChooser /><RefPanel /><RenameBox /><SymbolPalette /><FileOpsBox />
   </div>
 </template>
 

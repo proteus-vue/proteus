@@ -19,6 +19,8 @@ use tauri::Manager;
 mod capture;
 /// 本地文件 / 剪贴板命令（决策 #1453，从本文件拆出）
 mod ipc_fs;
+/// 文件树写操作：新建 / 重命名 / 删除（决策 #1460，路径边界复用 `fs_guard`）
+mod fs_ops;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
@@ -606,6 +608,13 @@ fn main() {
             ipc_fs::read_text_external,
             ipc_fs::write_text,
             ipc_fs::list_files,
+            /* ★决策 #1460：四个命令同样必须列进 generate_handler! —— `#[tauri::command]`
+               只是生成 wrapper，漏注册时 cargo build 仍通过、只有真机调用才报
+               "Command xxx not found"（check-tauri-handlers 静态兜底）。 */
+            fs_ops::create_file,
+            fs_ops::create_dir,
+            fs_ops::rename_path,
+            fs_ops::delete_path,
             load_state,
             save_state,
             ipc_fs::copy_text,

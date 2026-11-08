@@ -26,6 +26,17 @@
   },
   "tasks": [
     {
+      "id": "T-studio-file-ops",
+      "title": "Studio 文件树：新建文件/文件夹 · 重命名 · 删除（路径沙箱 + 写盘二次确认 + 已打开标签保护）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:wb-20261108",
+      "scope": ["packages/studio/**"],
+      "decision": 1460,
+      "verification": "node scripts/check-tauri-handlers.mjs（48/48 注册）· PATH=\"$HOME/.cargo/bin:$PATH\" cargo check --manifest-path packages/studio/Cargo.toml（Finished dev）· pnpm build:studio-ui · npx eslint <6 个改动文件>（0）· npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx vitest run tests/studio-file-ops.test.ts（8/8）· pnpm check:studio-panel（69/69，含新增 ㊾：真实右键→新建→create_file 参数→刷树出现→删除取消无 IPC→已打开标签保护）",
+      "note": "【done · 决策 #1460（2026-11-08）】Rust `fs_ops.rs` 四命令 + `fs_guard::resolve_in_repo_new` 新写边界 + 前端 `fileOps.ts` / `FileOpsBox.vue` 编排 + 判据 ㊾。★三条硬边界：create_new 原子创建不覆盖 / 只删空目录绝不递归 / 扩展名白名单与 list_files 同源。★已打开标签一律整体拒绝（不自动改路径）。★诚实边界：只同级重命名、删目录只删空、未做回收站式撤销；UI 判据用 invoke 桩，不碰真实磁盘（Rust 侧沙箱由 cargo check + 路径纯函数单测覆盖，未做真机删文件破坏性验证）。★既存欠账未动：check:file-size 的 Android/Harmony 3 处增长、check-decision-numbers 的 #1242 重号（git show HEAD 确认均为本单之前）。"
+    },
+    {
       "id": "T-glass-end2end",
       "title": "端到端样例：真 .vue 用 <pg-glass> → 三端渲染玻璃（含 glass.radius 单位校验）",
       "type": "end-alignment",

@@ -18,6 +18,7 @@ import { openMenu } from '../contextmenu'
 import FileIcon from '../icons/FileIcon.vue'
 import FolderIcon from '../icons/FolderIcon.vue'
 import { fileTypeIcon } from '../fileIcons'
+import type { FileOp, FileOpKind } from '../fileOps'
 
 const props = defineProps<{
   files: string[]
@@ -27,6 +28,8 @@ const emit = defineEmits<{
   open: [path: string]
   copy: [path: string]
   refresh: []
+  /** 新建/重命名/删除：这里只发意图，写盘与二次确认在 `fileOps.ts` */
+  ops: [op: FileOp]
 }>()
 
 const ws = useWorkspaceState()
@@ -75,7 +78,14 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       node.dir
         ? { id: 'toggle', label: collapsed ? '展开目录' : '折叠目录' }
         : { id: 'open', label: '打开' },
+      { id: 's0', label: '', sep: true },
+      /* 决策 #1460：写操作不在这里做，只把「命中节点 + 鼠标锚点」上抛 */
+      { id: 'createFile', label: '新建文件…' },
+      { id: 'createDir', label: '新建文件夹…' },
       { id: 's1', label: '', sep: true },
+      { id: 'rename', label: '重命名…' },
+      { id: 'delete', label: '删除…', danger: true },
+      { id: 's2', label: '', sep: true },
       { id: 'copyPath', label: '复制相对路径' },
       { id: 'refresh', label: '刷新文件树' },
     ],
@@ -84,6 +94,9 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       else if (id === 'open') emit('open', node.path)
       else if (id === 'copyPath') emit('copy', node.path)
       else if (id === 'refresh') emit('refresh')
+      else if (id === 'createFile' || id === 'createDir' || id === 'rename' || id === 'delete') {
+        emit('ops', { kind: id as FileOpKind, path: node.path, dir: node.dir, x: e.clientX, y: e.clientY })
+      }
     },
   )
 }
