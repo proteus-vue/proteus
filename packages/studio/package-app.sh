@@ -184,7 +184,12 @@ python3 "$HERE/bundle-dylibs.py" "$APP"
   # ★**工作区是否干净**（决策 #1352）：HEAD 只说明"基于哪个提交"，说明不了"有没有未提交改动"。
   #   今天踩到：13:39 打的包里 HEAD 还是 3b8b959c（修复提交在 2 分钟后），
   #   光看身份证根本分不清"包里有没有那个修复"。
-  if [ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null | head -1)" ]; then
+  #   ★排除 `.workbuddy/memory|logs`（2026-11-08，决策 #1464 期间实测）：工作日志几乎总是
+  #     "打包之后才追加"，若不排除，**每次**打包都会判成"含未提交改动" ⇒ 这一行失去分辨力
+  #     （实测：源文件已提交、只有日志未提交，身份证仍说 dirty）。日志不进二进制，不该算。
+  #   ★`grep -v` 全过滤掉时返回 1，`set -o pipefail` 下会打断脚本 ⇒ 必须 `|| true`。
+  DIRTY="$(git -C "$ROOT" status --porcelain 2>/dev/null | grep -vE '^.. \.workbuddy/(memory|logs)/' | head -1 || true)"
+  if [ -n "$DIRTY" ]; then
     printf '工作区：**含未提交改动**（HEAD 不完整代表包内容）\n'
   else
     printf '工作区：干净（包内容 = 该提交）\n'
