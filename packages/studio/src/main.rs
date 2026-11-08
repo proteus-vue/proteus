@@ -21,6 +21,8 @@ mod capture;
 mod ipc_fs;
 /// 文件树写操作：新建 / 重命名 / 删除（决策 #1460，路径边界复用 `fs_guard`）
 mod fs_ops;
+/// 编辑器格式化：固定 prettier CLI，stdin 进 / stdout 出、**不写盘**（决策 #1462）
+mod format;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
@@ -615,6 +617,8 @@ fn main() {
             fs_ops::create_dir,
             fs_ops::rename_path,
             fs_ops::delete_path,
+            /* 决策 #1462：同样必须列进 generate_handler!（check-tauri-handlers 静态兜底） */
+            format::format_text,
             load_state,
             save_state,
             ipc_fs::copy_text,
@@ -935,6 +939,10 @@ fn start_ticks(handle: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /* ★决策 #1462：#1344 把 read_text/write_text 抽到 fs_guard 后，这里仍用裸名字 ⇒
+       `cargo test` 一直编译不过（6 个 E0425），导致 Rust 侧单测形同不存在。补这一行
+       只为让测试 harness 能编译（不改任何运行时代码），并解锁本单的真跑 CLI 单测。 */
+    use crate::fs_guard::{read_text, write_text};
 
     /// 写回通路的三条硬约束：冲突检测 / 被拒不落盘 / 原子替换不留残留。
     /// ★放 `packages/studio/target/`（gitignore）下写临时文件，测完删掉——不给仓库留垃圾。

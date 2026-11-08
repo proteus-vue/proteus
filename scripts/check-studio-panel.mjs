@@ -461,7 +461,7 @@ const iosStream = await probeIosStream(page)
 
 /* ── ㊼ 内置终端（采集段在 studio-panel-probes-term.mjs，决策 #1279）──
    ★放这里：它会点 rail 切到终端视图（之后 perf 段自己 reload 回 code 视图，互不影响）。 */
-const termProbe = await probeTerminal(page, STUDIO); const termKeysChecks = await (await import('./studio-panel-checks-termkeys.mjs')).checksTermKeys(page, STUDIO)
+const termProbe = await probeTerminal(page, STUDIO); const termKeysChecks = await (await import('./studio-panel-checks-termkeys.mjs')).checksTermKeys(page, STUDIO); const formatChecks = await (await import('./studio-panel-checks-format.mjs')).checksFormat(page, STUDIO)
 
 // ── ㉑ 大文件着色性能（决策 #1216）────────────────────────────────────────────
 // 【为什么要有这条】用户实测："两百多行的文件，滚动到哪才开始着色"。
@@ -519,7 +519,7 @@ const objcColors = [objcKw, objcNum, objcComment]
 const { missing: missingExt, seen: seenExtCount } = langExtCoverage(STUDIO)
 
 const capability = checkCapability(STUDIO)
-const checks = [...fileOpsChecks, ...termKeysChecks,
+const checks = [...fileOpsChecks, ...termKeysChecks, ...formatChecks,
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
   ['② 画布矩形也被同步（HTML 驱动原生）', seen.calls.some((c) => c === 'set_canvas_rect')],
   ['③ 机型/画面/解码三行都有值（不是 "—"）', seen.dev !== '—' && seen.stream !== '—' && seen.dec !== '—'],

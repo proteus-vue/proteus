@@ -26,6 +26,17 @@
   },
   "tasks": [
     {
+      "id": "T-studio-format",
+      "title": "Studio 编辑器格式化文档（prettier 固定命令 · 只改 buffer · 快捷键 + 右键菜单）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:wb-20261108",
+      "scope": ["packages/studio/**", "scripts/studio-panel-checks-format.mjs", "scripts/studio-panel-stub.mjs", "scripts/check-studio-panel.mjs", "tests/studio-format.test.ts"],
+      "decision": 1462,
+      "verification": "pnpm check:studio-panel（73/73，含新增 ㊿c/㊿d：真实键盘 ⇧⌥F → Node 侧真跑 prettier 回包 → buffer → ⌘Z 回退 → 右键菜单 → .rs 拒绝）· npx vitest run tests/studio-format.test.ts（5/5）· PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path packages/studio/Cargo.toml 'format::'（2/2，含真跑 CLI）· cargo check · pnpm build:studio-ui · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint <改动文件>（0 error）· node scripts/check-tauri-handlers.mjs（49/49）· pnpm check:ai-tasks ✅ · node scripts/check-file-size.mjs（主门禁 998 行、CodePanel 997 行不增）",
+      "note": "【done · 决策 #1462（2026-11-08）】Rust src/format.rs 固定 prettier CLI（参数写死在 FORMAT_ARGS，前端只传 path/text），stdin 进 stdout 出、三条流各起线程防管道死锁、15s 超时、512KB 上限、路径校验、NO_PARSER_EXT 提前拒绝、全程不写盘；main.rs 注册后 49 命令。前端 editorFormat.ts 单一 formatDocument() 供 onAction（⇧⌥F / JetBrains ⌥⌘L）与右键菜单共用，dispatch 整篇替换保留 undo + mapPos 保留选区，只读文件拒绝、busy 防重入；CodePanel.vue 零增行。★修掉真实缺陷：keyOf 只比 e.key，macOS Option 把 ⌥F 改成 ƒ ⇒ 真机 ⇧⌥F 永不命中而 CDP 按键会假绿，改为 Alt+字母回落到 e.code。★顺手补 main.rs tests 一行 use 解锁 cargo test（#1344 抽出 fs_guard 后遗留 6 个 E0425）。★判据回包不是手写 fixture：page.exposeFunction 在 Node 侧真跑同一 CLI，参数从 Rust 常量静态读出。★诚实边界：prettier 是 @changesets 传递依赖未显式声明（缺失时明确报错，根治需用户终端装包）；rs/m/h/py 无 parser 明确拒绝；只改 buffer 不自动保存；UI 判据的 .rs 错误不是 Rust 进程本身，Rust 真跑由 cargo test 覆盖。"
+    },
+    {
       "id": "T-studio-term-keys",
       "title": "Studio 终端快捷键纳入统一注册表（面板作用域 + 可自定义 + 三套预设）",
       "type": "framework-feature",

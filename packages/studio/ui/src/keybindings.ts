@@ -50,6 +50,7 @@ export type ActionId =
   | 'editor.quickOpen'
   | 'editor.gotoLine'
   | 'editor.selectNext'
+  | 'editor.formatDocument'
   | 'view.toggleSidebar'
   | 'view.toggleTerminal'
   | 'view.toggleTerminalMax'
@@ -118,6 +119,8 @@ const BASE: Chords = {
   'editor.quickOpen': ['Mod+P'],
   'editor.gotoLine': ['Mod+G'],
   'editor.selectNext': ['Mod+D'],
+  /* 决策 #1462：VS Code 的 Format Document = ⇧⌥F；JetBrains 在下面覆盖成 ⌥⌘L */
+  'editor.formatDocument': ['Shift+Alt+F'],
   'view.toggleSidebar': ['Mod+B'],
   'view.toggleTerminal': ['Mod+J'],
   'view.toggleTerminalMax': ['Mod+Shift+J'],
@@ -154,6 +157,8 @@ export const SCHEMES: Record<KeymapScheme, Chords> = {
     'editor.quickOpen': ['Mod+Shift+O', 'Mod+Shift+N'],
     'editor.gotoLine': ['Mod+L'],
     'editor.selectNext': ['Mod+Shift+D'], // IDEA 没有同款；避开 ⌘D（=Duplicate Line）
+    /* 决策 #1462：Reformat Code = ⌥⌘L（与 VS Code 的 ⇧⌥F 不同习惯） */
+    'editor.formatDocument': ['Mod+Alt+L'],
     'view.toggleSidebar': ['Mod+1'], // Project 视图
     'view.toggleTerminal': ['Alt+F12'], // Terminal
     /* ★不要把 `term.new` 也映射成 ⌥F12（决策 #1461）：终端内该键属于 `terminal` 作用域，
@@ -217,6 +222,7 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'editor.toggleComment', label: '切换注释', group: '编辑' },
   { id: 'editor.selectAllMatches', label: '选中所有匹配', group: '编辑' },
   { id: 'editor.jumpBracket', label: '跳到匹配括号', group: '编辑' },
+  { id: 'editor.formatDocument', label: '格式化文档', group: '编辑' },
   { id: 'view.toggleSidebar', label: '切换主侧栏', group: '视图' },
   { id: 'view.toggleRail', label: '切换左窄栏', group: '视图' },
   { id: 'view.toggleTerminal', label: '切换终端', group: '视图' },
@@ -365,6 +371,11 @@ function parse(chord: string): Parsed {
 /** 事件里的键名归一化：字母小写；`Shift+=` 产出 `+`，按 `=` 处理 */
 function keyOf(e: KeyboardEvent): string {
   const k = e.key
+  /* ★决策 #1462：macOS 上 Option 会把**字母**改写成特殊字符（⌥F → `ƒ`、⌥L → `¬`），
+     但物理键码仍是 `KeyF` / `KeyL`。若只按 `e.key` 匹配，真机按 ⇧⌥F（格式化文档）
+     或 ⌥⌘L 永远命中不了；而 Playwright 的 CDP 按键会给出干净的 `'F'` ⇒ 判据假绿。
+     ⇒ 带 Alt 的字母组合统一回落到 `e.code`；F12 / F7 / 方向键等非字母不受影响。 */
+  if (e.altKey && /^Key[A-Z]$/.test(e.code ?? '')) return e.code.slice(3).toLowerCase()
   if (k === '+') return '='
   if (k === ' ') return 'space'
   /* `Mod+Shift+\` 实际按下去 `e.key` 是 `|`（US 布局）⇒ 归一化成 `\` 才能匹配；

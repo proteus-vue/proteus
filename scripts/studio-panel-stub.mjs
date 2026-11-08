@@ -151,6 +151,11 @@ export function stubTauri(payload) {
           window.__LAST_WRITE__ = args
           return 1700000000000001
         }
+        /* 决策 #1462：格式化回包**不是手写 fixture** —— `checksFormat` 用
+           `page.exposeFunction` 在 Node 侧真跑同一个 prettier CLI（参数从 Rust 的
+           FORMAT_ARGS 常量读取），桩只做转发。真 CLI 报错也原样 reject 给前端。 */
+        if (cmd === 'format_text')
+          return await window.__formatWithPrettier(String(args?.path ?? ''), String(args?.text ?? ''))
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
         // 搜索（决策 #1222）：只给两条固定命中。★行/列要能在 RUST 桩里对上号：
         //   RUST 桩第 4 行是 `    let stubLine = 1;`，`stubLine` 从第 9 个字符开始。

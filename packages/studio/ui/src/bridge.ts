@@ -95,6 +95,9 @@ export const createDir = (path: string): Promise<void> => invoke<void>('create_d
 export const renamePath = (from: string, to: string): Promise<void> => invoke<void>('rename_path', { from, to })
 export const deletePath = (path: string): Promise<void> => invoke<void>('delete_path', { path })
 
+/** 格式化文档（决策 #1462）：只回格式化后的**文本**，不写盘；Rust 侧固定 prettier 命令与参数。 */
+export const formatText = (path: string, text: string): Promise<string> => invoke<string>('format_text', { path, text })
+
 /** Git **只读**（决策 #1246）：分支 / 领先落后 / 改动文件。非仓库时 `isRepo=false`，不抛错。 */
 export interface GitFileStatus {
   path: string

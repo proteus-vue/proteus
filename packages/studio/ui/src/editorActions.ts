@@ -22,6 +22,7 @@ import { selectSelectionMatches } from '@codemirror/search'
 import type { Transaction } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { onAction } from './keybindings'
+import { registerFormatAction } from './editorFormat'
 
 /**
  * ★**StateCommand → Command 适配**：`selectSelectionMatches()` 返回的命令解构
@@ -34,7 +35,10 @@ type Cmd = (v: EditorView) => boolean
 const asCommand = (sc: (t: { state: EditorView['state']; dispatch: (tr: Transaction) => void }) => boolean): Cmd =>
   (v) => sc({ state: v.state, dispatch: (tr) => v.dispatch(tr) })
 
-export function registerEditorActions(getView: () => EditorView | null): Array<() => void> {
+export function registerEditorActions(
+  getView: () => EditorView | null,
+  getPath: () => string,
+): Array<() => void> {
   /** 只在编辑器真的聚焦时执行（见文件头"焦点保护"） */
   const run = (cmd: Cmd) => () => {
     const v = getView()
@@ -52,5 +56,8 @@ export function registerEditorActions(getView: () => EditorView | null): Array<(
     onAction('editor.toggleComment', run(asCommand(toggleComment))),
     onAction('editor.selectAllMatches', run(asCommand(selectSelectionMatches))),
     onAction('editor.jumpBracket', run(asCommand(cursorMatchingBracket))),
+    /* 决策 #1462：格式化不是行级动作，但需要同一个 view/path ⇒ 从这里统一注册，
+       `CodePanel.vue` 的 offActions 一行都不用加（它已贴 1000 行上限）。 */
+    ...registerFormatAction(getView, getPath),
   ]
 }

@@ -16223,3 +16223,43 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ★**诚实边界**：自定义那段不是从设置 UI 点进去，而是模拟另一个窗口写 localStorage；
       真 pty 由 Rust 单测覆盖，UI 判据只验界面→IPC→DOM，不验终端里真的跑起 shell。
 
+1462. **★★Studio 编辑器「格式化文档」：prettier 固定命令 + 只改 buffer**（2026-11-08 · 用户「继续」）:
+    承接 11-06 日志的候选，并兑现 `editorMenu.ts` 从 #1448 起就写着的诚实边界——
+    「格式化暂不提供（没有格式化器，放个假菜单项比没有更糟）」。
+    ★**先取证再动手**：`node_modules/.bin/prettier` 是 2.8.8（来自 `@changesets` 的**传递依赖**）；
+    真跑 stdin 模式发现默认配置会输出「双引号 + 分号 + 80 列」，与本仓「单引号 / 无分号 /
+    100 列 / 尾逗号」正好相反 ⇒ 直接接默认配置等于一键把全文件改成另一种风格；
+    `.rs` 真跑报 `No parser could be inferred`。
+    ★**分层**：Rust 新 `src/format.rs` 固定 `node_modules/.bin/prettier` + `FORMAT_ARGS`
+    （参数写死，前端只传 `path`/`text`，`--stdin-filepath` 只用于推断 parser、不读该文件）；
+    三条流各起线程（512KB 文本若主线程先写 stdin 再读 stdout，prettier 等 EOF、我们等退出
+    ⇒ 管道缓冲死锁），15s 超时、512KB 上限、路径校验、`NO_PARSER_EXT` 提前拒绝、
+    **全程不写盘**。`main.rs` 注册后 49 个命令。
+    前端 `ui/src/editorFormat.ts` 只有一个 `formatDocument()`：`registerFormatAction` 走
+    `onAction`（⇧⌥F / JetBrains ⌥⌘L，进 ACTIONS 可自定义），编辑器右键菜单直接调它；
+    一次 `dispatch` 整篇替换 ⇒ 保留 undo 历史（⌘Z 一步回退）、`ChangeSet.mapPos` 保留选区、
+    dirty 判定不变，保存仍走 `write_text` 的 mtime 冲突检测。只读文件拒绝、`busy` 防重入。
+    `CodePanel.vue` **零增行**（`registerEditorActions` 多接一个 `getPath`）。
+    ★★**修掉的真实缺陷（判据假绿）**：`keybindings.ts::keyOf` 只比 `e.key`，而 macOS 的
+    Option 会把字母改写成特殊字符（⌥F → `ƒ`、⌥L → `¬`）⇒ 真机按 ⇧⌥F **永远命中不了**
+    格式化，但 Playwright 的 CDP 按键给的是干净的 `'F'` ⇒ UI 判据会绿、真机不可用。
+    改为带 Alt 的字母组合统一回落到物理键码 `e.code`（F12/F7/方向键不受影响）；
+    单测直接构造 `e.key='ƒ', code='KeyF'` 钉住这条。
+    ★**顺手解锁既存欠账**：#1344 把 `read_text/write_text` 抽到 `fs_guard.rs` 后，
+    `main.rs` 的 `#[cfg(test)]` 仍用裸名字 ⇒ `cargo test` 一直编译不过（6 个 E0425），
+    Rust 侧单测形同不存在。补一行 `use crate::fs_guard::{read_text, write_text};`
+    （不改任何运行时代码）才跑得起本单的真跑 CLI 单测。
+    ★**判据**：`check:studio-panel` 新增 ㊿c / ㊿d（独立模块 `studio-panel-checks-format.mjs`，
+    主脚本保持 998 行不增行）。**回包不是手写 fixture**：`page.exposeFunction` 在 Node 侧真跑
+    `prettier`，参数从 Rust 的 `FORMAT_ARGS`/`NO_PARSER_EXT` 常量静态读出（单一真源），
+    桩只转发。真实键盘 ⇧⌥F → IPC → 规范文本进 buffer → ⌘Z 回退 → 右键菜单同结果 →
+    `.rs` 拒绝且 buffer 一字不变。`tests/studio-format.test.ts` 5/5、
+    `cargo test format::` 2/2（其中一条真跑 CLI 断言产物是本仓风格）。
+    ★**诚实边界**：① prettier 仍是传递依赖、**未显式声明**；将来 pnpm 不再 hoist 时
+      Rust 会明确报「格式化器不存在：node_modules/.bin/prettier」而不是静默失败，
+      但要根治需显式声明（装包须用户自己终端跑，AI 沙箱被拦）；
+      ② 只支持 prettier 自带 parser 的语言，`rs/m/h/py` 明确拒绝；
+      ③ 格式化只改内存 buffer，**不自动保存**；
+      ④ UI 判据的 `.rs` 错误由 Node 侧按同一常量抛出、文案与 Rust 提前拒绝一致，
+      但不是 Rust 进程本身；Rust 真跑由 `cargo test` 覆盖。
+

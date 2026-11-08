@@ -13,13 +13,16 @@
  *   · 剪切/复制走 Rust `copy_text`（ObjC 桥），粘贴走 `pbpaste` —— webview 的
  *     `navigator.clipboard` 在 Tauri 里不一定可用，不能靠它；
  *   · 撤销/重做用 `undoDepth/redoDepth` **禁用**而不是静默失败（菜单项灰掉才算说清楚）；
- *   · 格式化暂不提供（没有格式化器，放个假菜单项比没有更糟）。
+ *   · 格式化（决策 #1462）调 `editorFormat.ts::formatDocument`，与快捷键**同一个执行函数**：
+ *     只改 buffer、保留 undo；格式化器/风格参数全在 Rust 侧 `format.rs` 固定。
+ *     （#1448 时这里写着「格式化暂不提供，放个假菜单项比没有更糟」——现在才真正具备条件。）
  */
 import { redo, redoDepth, toggleComment, undo, undoDepth } from '@codemirror/commands'
 import type { EditorView } from '@codemirror/view'
 import { copyText, readClipboard } from './bridge'
 import { chordParts, comboParts } from './keybindings'
 import { openMenu, type MenuItem } from './contextmenu'
+import { formatDocument } from './editorFormat'
 
 /* 行操作/注释/多选的动作注册（决策 #1452）从这里转出，`CodePanel` 少一行 import */
 export { registerEditorActions } from './editorActions'
@@ -68,6 +71,7 @@ function items(): MenuItem[] {
     { id: 's4', label: '', sep: true },
     { id: 'selectAll', label: '全选', accelParts: comboParts('a', { mod: true }) },
     { id: 'comment', label: '切换注释', accelParts: chordParts('editor.toggleComment') },
+    { id: 'format', label: '格式化文档', accelParts: chordParts('editor.formatDocument') },
     { id: 's5', label: '', sep: true },
     { id: 'copyPath', label: '复制相对路径' },
     { id: 'copyName', label: '复制文件名' },
@@ -139,6 +143,9 @@ export function openEditorMenu(e: MouseEvent): void {
       case 'comment':
         /* `toggleComment` 是 StateCommand（解构 `{state, dispatch}`），不能直接传 EditorView */
         if (v) toggleComment({ state: v.state, dispatch: (tr) => v.dispatch(tr) })
+        break
+      case 'format':
+        void formatDocument(v, deps?.getPath() ?? '')
         break
       case 'copyPath':
         if (deps?.getPath()) deps.copyPath(deps.getPath())

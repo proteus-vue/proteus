@@ -101,7 +101,7 @@ function onQuickPick(path: string) {
 
 /** 代码面板订阅的动作（决策 #1431）：键位由 `keybindings.ts` 的当前方案决定，这里只写"做什么" */
 const offActions = [
-  ...registerEditorActions(() => view),
+  ...registerEditorActions(() => view, () => cur.value),
   installAutoSave({ isDirty: () => dirty.value, save: () => void save() }),
   onAction('file.closeAll', () => void closeAll()),
   onAction('file.closeTab', (e) => {
