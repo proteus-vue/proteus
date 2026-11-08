@@ -68,6 +68,18 @@ function staticParity(studioDir, cfg) {
       rs.includes('Command::new(node)') &&
       rs.includes('env_clear()'),
     sharedPath: ios.includes('pub(crate) fn child_path') && ios.includes('pub(crate) fn which'),
+    /* ★决策 #1464：#1463 真机仍失败 —— 登录 shell PATH 与 12 个硬编码目录里都没有
+       本机唯一的 node（~/.workbuddy/binaries/node/versions/<ver>/bin/node）。
+       静态只证明「三层解析都在」，真跑由 Rust 单测 gui_minimal_env_end_to_end
+       在 env_clear() 的整个进程里覆盖（那条才是不能被绕过的判据）。 */
+    nodeScan:
+      ios.includes('fn versioned_node_bin_dirs') &&
+      ios.includes('fn child_path_from') &&
+      ios.includes('.workbuddy/binaries/node/versions') &&
+      rs.includes('fn packaged_node_path') &&
+      rs.includes('PROTEUS_NODE') &&
+      rs.includes('fn gui_minimal_env_end_to_end') &&
+      fs.readFileSync(path.join(studioDir, 'package-app.sh'), 'utf8').includes('node-path.txt'),
   }
 }
 
@@ -255,8 +267,8 @@ export async function checksFormat(page, studioDir) {
       kb.row && kb.label === '格式化文档' && kb.bound,
     ],
     [
-      `㊿f GUI 无 PATH 可用（决策 #1463 · 模拟 launchd）：PATH=/usr/bin:/bin 下产出=${guiOut.trim() || '(失败)'} · 绝对路径 node+JS 入口=${s.guiNode && s.sharedPath}`,
-      guiOut.includes('const a = { x: 1, y: 2 }') && s.guiNode && s.sharedPath,
+      `㊿f GUI 无 PATH 可用（决策 #1463/#1464 · 模拟 launchd）：PATH=/usr/bin:/bin 下产出=${guiOut.trim() || '(失败)'} · 绝对路径 node+JS 入口=${s.guiNode && s.sharedPath} · 版本管理器扫描/包内 node-path/PROTEUS_NODE 三层=${s.nodeScan}（真跑判据：cargo test format::tests::gui_minimal_env_end_to_end）`,
+      guiOut.includes('const a = { x: 1, y: 2 }') && s.guiNode && s.sharedPath && s.nodeScan,
     ],
   ]
 }

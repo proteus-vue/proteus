@@ -16297,3 +16297,51 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
       `child_path()` 起一次 `/bin/zsh -lc`（成功结果已缓存）；Windows/Linux 的
       node 解析未专门验证（Studio 当前为 macOS Tauri）。
 
+1464. **★★Studio 格式化器第二次真机失败：GUI 里根本没有可解析的 node（版本管理器扫描 + 包内记录路径）**（2026-11-08 · 用户第二次截图）:
+    用户截图：`格式化失败：找不到 node（GUI 启动未继承终端 PATH）…`。
+    错误从英文 `exec: node: not found` 变成中文 ⇒ **绕开 `.bin/prettier` wrapper 已生效**，
+    但 `which("node", child_path())` 本身返回 None。
+    ★**同源取证（先钉环境，不猜）**：
+      ① `env -i HOME=… PATH=/usr/bin:/bin /bin/zsh -lc 'printf %s "$PATH"'`
+         ⇒ `/opt/homebrew/bin:/usr/local/bin:…:/usr/bin:/bin`，**逐目录检查无 node**；
+      ② `child_path()` 里那 12 个硬编码「常见安装位」同样**没有一个含 node**；
+      ③ 本机唯一的 node 在 `~/.workbuddy/binaries/node/versions/22.22.2-6/bin/node`
+         —— 目录名带版本号，登录 shell 只 source `.zprofile`（nvm 之类通常挂在 `.zshrc`）
+         也扫不到。同路径 `env -i` 下 `node -v` 正常、跑 prettier JS 入口正常产出本仓风格。
+    ★**为什么 #1463 的判据仍然绿（同一个坑的第二次）**：`formats_under_gui_minimal_path`
+      是**先在测试进程（终端富 PATH）里解析出 node**，再给子进程 `env_clear()`；
+      真机失败的是「解析」这一步，判据只证明了「执行」不依赖 PATH。
+      ⇒ 与本仓 #1460 / #1463 同族：**判据执行的东西，在真实运行时由谁产生？** 答不上来即假绿。
+    ★**修法（三层，谁先命中用谁）**：
+      ① `ios_stream::child_path()` 增补 `versioned_node_bin_dirs()` —— 扫
+         nvm / fnm / mise / asdf / volta / WorkBuddy 托管 node 以及 Homebrew keg-only
+         `opt/node@*`；目录名带版本号只能按一层通配，纯函数只吃 `home`；
+         同时把 PATH 拼装抽成 `child_path_from(login_path, home)`，判据能在
+         **最小 PATH** 下直接调同一段代码（`/bin/zsh -lc` 失败也不影响）；
+      ② `package-app.sh` 在**签名前**把 `command -v node` 的 `realpath` 写进
+         `Contents/Resources/node-path.txt`（脚本本身就在用 node ⇒ 记录的是真实运行时
+         会用的那一个，不手写猜路径）；`format.rs::packaged_node_path()` 读它并校验
+         `is_file()`，换机 / 卸载自动回落扫描，不拿死路径硬跑；
+      ③ `PROTEUS_NODE=/绝对路径/node` 显式兜底。
+      另：`format.rs::node_for_prettier()` 的失败文案改成上面两条可操作提示。
+    ★**顺手修掉打包脚本「无证书必断」**：`SIGN_ID="$(security … | grep -m1 … | awk …)"`
+      在本机 `0 valid identities found` 时 `grep` rc=1，`set -euo pipefail` 在**赋值语句**
+      上直接退出，作者写好的「无证书 ⇒ 回落 ad-hoc」分支永远进不去（11:04 已记录、当时未改）。
+      加 `|| true` 把「查不到」当空值。
+    ★**判据**：`cargo test format::` **4/4** —— 新增 `gui_minimal_env_end_to_end`：
+      用 `env_clear()` **重开整个测试二进制**（PATH=/usr/bin:/bin + HOME），副本里走完整
+      `format_via_cli` ⇒ 解析 + 执行都在 GUI 环境；且断言输出含 `1 passed`，
+      防 `--exact` 失配导致「0 tests 也绿」。`cargo test ios_stream::` **8/8**（新增
+      `最小PATH下仍能解析版本管理器node`，登录 shell PATH 显式换成最小集）。
+      `check:studio-panel` 全绿（㊿f 增静态 `nodeScan`：三层解析 + package-app 写
+      `node-path.txt` 缺一即红）· `cargo check` · `vue-tsc` 0 · `eslint` 0 ·
+      `check-tauri-handlers` 49/49。
+    ★**新发现的既存欠账（本单未修，仅记录）**：`cargo test` **全量 31/32**，
+      `fs_guard::tests::new_path_boundary` 红 —— `within_root(root, "")` 返回 true
+      （`root.join("")` 归一化后等于 root）。生产路径 `resolve_in_repo_new` 已先判
+      `path.is_empty()`，无实际越界；`fs_guard.rs` 与 HEAD 逐字节一致 ⇒ 是 #1460 遗留，
+      以前只跑 `cargo test format::` 过滤所以没暴露。修它会改到路径沙箱语义，留待单独立单。
+    ★**诚实边界**：仍依赖仓库内 `node_modules/prettier`（传递依赖，未显式声明）；
+      `node-path.txt` 记录的是**打包这台机器**的路径，换机靠扫描/`PROTEUS_NODE` 回落；
+      Windows/Linux 未验证；格式化只改内存 buffer，不自动保存。
+

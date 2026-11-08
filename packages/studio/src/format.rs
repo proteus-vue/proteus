@@ -11,6 +11,21 @@
 //   `pnpm: command not found`）解析出 **node 绝对路径**，直接执行 prettier 的
 //   JS 入口 `node_modules/prettier/bin-prettier.js`，绕开 sh wrapper。
 //
+// 【★★决策 #1464：#1463 仍然真机失败（用户第二次截图）】
+//   错误从英文 `exec: node: not found` 变成中文「找不到 node」⇒ 说明**绕开 wrapper 成功**，
+//   但 `which("node", child_path())` 本身返回 None。取证：GUI 最小环境下
+//   `/bin/zsh -lc` 给的 PATH 里没有 node，12 个硬编码常见安装位里也没有；
+//   本机唯一的 node 在 `~/.workbuddy/binaries/node/versions/22.22.2-6/bin/node`
+//   （目录名带版本号，且登录 shell 只 source .zprofile、nvm 之类通常挂在 .zshrc）。
+//   ⇒ ① `child_path()` 增补「版本管理器 node 目录」扫描；
+//      ② `package-app.sh` 把打包时确实用到的 node 绝对路径写进包内，运行时优先复用；
+//      ③ 留 `PROTEUS_NODE` 显式兜底。
+//   ★判据为什么当时还是绿的：`formats_under_gui_minimal_path` 是**先在终端的富 PATH
+//   里解析出 node**，再给子进程 `env_clear()`。真机 GUI 里失败的是「解析」这一步，
+//   判据却只证明了「执行」不需要 PATH —— 又一次「判据通过 ≠ 功能可用」。
+//   本单新增 `gui_minimal_env_end_to_end`：整个测试二进制重开在 `env_clear()` 的
+//   最小环境里，让解析 + 执行**都**发生在 GUI 环境下。
+//
 // 【为什么是 Rust 侧固定命令、而不是前端 import prettier】
 //   ① studio/ui 刻意不是 npm 包（决策 #1187），前端 import 一个只能靠 pnpm hoist 才存在的
 //      **传递依赖**（prettier 2.8.8 来自 @changesets）非常脆弱；Rust 侧固定路径调用，
@@ -82,24 +97,41 @@ fn first_line(s: &str) -> String {
     out
 }
 
-/// 解析 **node 绝对路径**，不受当前进程 PATH 影响（决策 #1463）。
-/// `child_path()` 先问登录 shell、再补常见安装位（决策 #1277 同源）；成功才缓存，
-/// 失败不缓存 —— 用户后来把 node 配进 PATH 时不必重启 Studio。
+/// 打包时记下的 node 绝对路径（决策 #1464）。
+/// `package-app.sh` 本身就在用 node ⇒ 写进 `Contents/Resources/node-path.txt`。
+/// 运行时先校验 `is_file()`：换机 / node 被卸载就自动回落到扫描，不会拿着死路径硬跑。
+fn packaged_node_path() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let contents = exe.parent()?.parent()?; // <APP>/Contents/MacOS/<exe> → <APP>/Contents
+    let text = std::fs::read_to_string(contents.join("Resources/node-path.txt")).ok()?;
+    let p = PathBuf::from(text.trim());
+    p.is_file().then_some(p)
+}
+
+/// 解析 **node 绝对路径**，不受当前进程 PATH 影响（决策 #1463 / #1464）。
+/// 优先级：`PROTEUS_NODE` 显式指定 → 打包时记录的路径 → `child_path()` 扫描结果。
+/// 成功才缓存，失败不缓存 —— 用户后来把 node 配好时不必重启 Studio。
 fn node_for_prettier() -> Result<PathBuf, String> {
     static CACHED: OnceLock<PathBuf> = OnceLock::new();
     if let Some(p) = CACHED.get() {
         return Ok(p.clone());
     }
-    let found = crate::ios_stream::which("node", &crate::ios_stream::child_path())
+    let found = std::env::var_os("PROTEUS_NODE")
         .map(PathBuf::from)
-        .filter(|p| p.is_file());
+        .filter(|p| p.is_file())
+        .or_else(packaged_node_path)
+        .or_else(|| {
+            crate::ios_stream::which("node", &crate::ios_stream::child_path())
+                .map(PathBuf::from)
+                .filter(|p| p.is_file())
+        });
     match found {
         Some(p) => {
             let _ = CACHED.set(p.clone());
             Ok(p)
         }
         None => Err(
-            "找不到 node（GUI 启动未继承终端 PATH）。请把 node 目录写进 ~/.zprofile 的 PATH，或从终端启动 Studio"
+            "找不到 node（GUI 启动未继承终端 PATH）。可从终端用 PROTEUS_NODE=/绝对路径/node 启动 Studio，或把 node 装到 /usr/local/bin、/opt/homebrew/bin 等标准位置"
                 .to_string(),
         ),
     }
@@ -234,9 +266,10 @@ mod tests {
         assert!(format_via_cli("packages/studio/src/main.rs", "fn main(){}").is_err());
     }
 
-    /// ★决策 #1463：**复现用户报错的环境**（GUI 的 PATH 里没有 node），用同一条
-    /// `format_command` 真跑一次。首版在这条测试下必红 —— `.bin/prettier` 是 sh
-    /// wrapper，第 16 行 `exec node` 会报 `node: not found`。
+    /// ★决策 #1463：**证明执行阶段不依赖 PATH**。
+    /// ⚠ 它**不能**证明「node 解析」在 GUI 下可行 —— `format_command()` 是在本测试进程
+    /// （终端的富 PATH）里先解析好 node，之后才给子进程 `env_clear()`。
+    /// #1463 真机仍失败就栽在这条缝里；解析那一半见下一条 `gui_minimal_env_end_to_end`。
     #[test]
     fn formats_under_gui_minimal_path() {
         let root = match crate::fs_guard::repo_root() {
@@ -266,5 +299,50 @@ mod tests {
         child.stderr.take().expect("stderr").read_to_string(&mut err).expect("read");
         assert!(child.wait().expect("wait").success(), "最小 PATH 下格式化失败：{}", first_line(&err));
         assert!(out.contains("const a = { x: 1, y: 2 }"), "{out}");
+    }
+
+    /// ★★决策 #1464：**真·GUI 环境**端到端判据，覆盖「解析 node」这一步。
+    /// 用 `env_clear()` 重开本测试二进制，只给 launchd 会给的 PATH 与 HOME；
+    /// 副本里走完整的 `format_via_cli` ⇒ node 解析 + 真跑 prettier **都**发生在最小环境。
+    /// 上一条判据是「先解析、后 env_clear」，所以 #1463 真机失败它仍然绿。
+    #[test]
+    fn gui_minimal_env_end_to_end() {
+        const FLAG: &str = "PROTEUS_FMT_GUI_CHILD";
+        const NAME: &str = "format::tests::gui_minimal_env_end_to_end";
+        if std::env::var_os(FLAG).is_some() {
+            let out = format_via_cli("packages/studio/ui/src/__fmt_probe.ts", "const a = {x:1,y:2};\n")
+                .unwrap_or_else(|e| panic!("GUI 最小环境下格式化失败：{e}"));
+            assert!(out.contains("const a = { x: 1, y: 2 }"), "{out}");
+            assert!(!out.contains(';'), "{out}");
+            return;
+        }
+        let Some(home) = std::env::var_os("HOME") else {
+            eprintln!("skip: 无 HOME");
+            return;
+        };
+        let root = match crate::fs_guard::repo_root() {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        if !root.join(PRETTIER_JS).exists() {
+            eprintln!("skip: {PRETTIER_JS} 不存在");
+            return;
+        }
+        let out = std::process::Command::new(std::env::current_exe().expect("测试二进制"))
+            .args(["--exact", NAME, "--nocapture"])
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("HOME", home)
+            .env(FLAG, "1")
+            .output()
+            .expect("起最小环境子进程");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.status.success(), "GUI 最小环境判据失败：\n{text}");
+        // 光 exit 0 不够：filter 写错会「0 tests」也绿 ⇒ 必须确认真的跑了 1 条
+        assert!(text.contains("1 passed"), "判据没真正跑到（test filter 失配？）：\n{text}");
     }
 }

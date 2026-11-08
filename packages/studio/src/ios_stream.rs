@@ -24,7 +24,7 @@
 //   （点一次"始终允许"之后不再问）。这几步 Apple 不允许自动化，本模块只能把它们
 //   **暴露成明确的下一步**，而不是假装不需要。
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -83,38 +83,82 @@ pub(crate) fn find_root() -> Option<PathBuf> {
 
 /// 把 `~` 换成 HOME（GUI 里没有 shell 帮忙展开）
 fn expand(p: &str) -> String {
+    expand_with(p, None)
+}
+
+/// `expand` 的纯函数形态：`home` 由调用方给，不隐式读环境。
+fn expand_with(p: &str, home: Option<&Path>) -> String {
     if let Some(rest) = p.strip_prefix("~/") {
-        if let Ok(h) = std::env::var("HOME") {
-            return format!("{h}/{rest}");
+        let h = home
+            .map(Path::to_path_buf)
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from));
+        if let Some(h) = h {
+            return h.join(rest).display().to_string();
         }
     }
     p.to_string()
 }
 
-/// 子进程要用的 PATH。
-///
-/// 【为什么必须有这个】macOS 的 **GUI 应用不继承终端的 PATH**（launchd 给的只有
-/// `/usr/bin:/bin:/usr/sbin:/sbin`）。实测：点"投屏"后脚本在第 159 行炸
-/// `pnpm: command not found` —— 而 `pnpm` 就在 `~/Library/pnpm/bin`（pnpm 默认 PNPM_HOME）。
-/// 同类工具还有 `cargo`（~/.cargo/bin）、`node`（nvm/volta/bun 各有一套）。
-///
-/// 做法：**先问登录 shell**（最忠实，用户装哪都认）→ 再补常见目录（幂等去重）。
-/// 只补那些真实存在的目录，不往 PATH 里塞不存在的东西。
-/// ★`pub(crate)`：决策 #1463 后 `format.rs` 复用同一份 PATH 补齐逻辑 ——
-///   GUI 找不到 `node` 和当年找不到 `pnpm` 是**同一个根因**，不要再抄一份。
-pub(crate) fn child_path() -> String {
-    let mut parts: Vec<String> = Vec::new();
+/// 在「版本目录」里找可执行文件所在的 bin 目录。
+/// ★目录名带版本号（nvm / fnm / mise / volta / asdf / WorkBuddy 托管 node），
+///   写死路径覆盖不到 ⇒ 只能扫一层；版本号倒序 ⇒ 优先用最高版本。
+fn scan_bin_dirs(root: &Path, prefix: Option<&str>, leaf: &str) -> Vec<PathBuf> {
+    let Ok(rd) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut versions: Vec<PathBuf> = rd
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .filter(|p| {
+            prefix.map_or(true, |q| {
+                p.file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|s| s.starts_with(q))
+            })
+        })
+        .collect();
+    versions.sort_by(|a, b| b.cmp(a));
+    versions
+        .into_iter()
+        .map(|v| v.join(leaf))
+        .filter(|p| p.is_file())
+        .filter_map(|p| p.parent().map(Path::to_path_buf))
+        .collect()
+}
 
-    // ① 登录 shell 的 PATH：取**含 ':' 且以 '/' 开头**的最后一行（防止 .zprofile 有打印噪声）
-    if let Ok(out) = Command::new("/bin/zsh").args(["-lc", "printf %s \"$PATH\""]).output() {
-        let text = String::from_utf8_lossy(&out.stdout).to_string();
-        if let Some(line) = text
-            .lines()
-            .rev()
-            .find(|l| l.contains(':') && l.trim_start().starts_with('/'))
-        {
-            parts.extend(line.trim().split(':').map(|s| s.to_string()));
-        }
+/// ★决策 #1464：版本管理器 / 托管运行时里的 node bin 目录。
+/// GUI 的登录 shell 未必 source `.zshrc`（nvm 通常挂在那里），本机实测唯一的 node 在
+/// `~/.workbuddy/binaries/node/versions/22.22.2-6/bin/node` —— 既不在登录 shell PATH，
+/// 也不在下方那 12 个「常见安装位」里 ⇒ 旧 `which("node")` 必然返回 None。
+/// 纯函数（只吃 home）是刻意留的：判据要在**最小 PATH** 下直接调它，不能靠当前进程环境。
+pub(crate) fn versioned_node_bin_dirs(home: &Path) -> Vec<PathBuf> {
+    // (相对 home 的版本目录父级, node 相对某个版本目录的路径)
+    const ROOTS: [(&str, &str); 6] = [
+        (".workbuddy/binaries/node/versions", "bin/node"),
+        (".nvm/versions/node", "bin/node"),
+        (".local/share/fnm/node-versions", "installation/bin/node"),
+        (".local/share/mise/installs/node", "bin/node"),
+        (".asdf/installs/nodejs", "bin/node"),
+        (".volta/tools/image/node", "bin/node"),
+    ];
+    let mut out = Vec::new();
+    for (root, leaf) in ROOTS {
+        out.extend(scan_bin_dirs(&home.join(root), None, leaf));
+    }
+    // Homebrew 的 node 是 keg-only，默认不会 link 进 /opt/homebrew/bin
+    out.extend(scan_bin_dirs(Path::new("/opt/homebrew/opt"), Some("node"), "bin/node"));
+    out.extend(scan_bin_dirs(Path::new("/usr/local/opt"), Some("node"), "bin/node"));
+    out
+}
+
+/// 子进程 PATH 的**纯拼装**：`child_path()` 与判据共用同一段代码。
+/// ★`login_path` 给最小 PATH 正是 GUI launchd 的环境；判据必须能在这条路径下也解析出
+///   node，否则又是「终端里绿、真机红」的假绿（决策 #1464）。
+pub(crate) fn child_path_from(login_path: Option<&str>, home: Option<&Path>) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(line) = login_path {
+        parts.extend(line.split(':').map(|s| s.to_string()));
     }
 
     // ② 常见安装位（家目录在 GUI 里一定可展开）
@@ -122,7 +166,7 @@ pub(crate) fn child_path() -> String {
         "/opt/homebrew/bin",
         "/opt/homebrew/sbin",
         "/usr/local/bin",
-        "~/Library/pnpm/bin", // ★pnpm 的默认 PNPM_HOME · 本次事故的直接原因
+        "~/Library/pnpm/bin", // ★pnpm 的默认 PNPM_HOME · 决策 #1277 的直接原因
         "~/Library/pnpm",
         "~/.local/share/pnpm",
         "~/.cargo/bin",
@@ -133,10 +177,15 @@ pub(crate) fn child_path() -> String {
         "/usr/sbin",
         "/sbin",
     ] {
-        let e = expand(p);
-        if std::path::Path::new(&e).exists() {
+        let e = expand_with(p, home);
+        if Path::new(&e).exists() {
             parts.push(e);
         }
+    }
+
+    // ③ ★决策 #1464：版本管理器里的 node（目录名带版本号，②覆盖不到）
+    if let Some(h) = home {
+        parts.extend(versioned_node_bin_dirs(h).into_iter().map(|d| d.display().to_string()));
     }
 
     // 去重但保序（登录 shell 的顺序优先）
@@ -148,6 +197,35 @@ pub(crate) fn child_path() -> String {
         }
     }
     out.join(":")
+}
+
+/// 子进程要用的 PATH。
+///
+/// 【为什么必须有这个】macOS 的 **GUI 应用不继承终端的 PATH**（launchd 给的只有
+/// `/usr/bin:/bin:/usr/sbin:/sbin`）。实测：点"投屏"后脚本在第 159 行炸
+/// `pnpm: command not found` —— 而 `pnpm` 就在 `~/Library/pnpm/bin`（pnpm 默认 PNPM_HOME）。
+/// 同类工具还有 `cargo`（~/.cargo/bin）、`node`（nvm/volta/bun 各有一套）。
+///
+/// 做法：**先问登录 shell**（最忠实，用户装哪都认）→ 再补常见目录 → 再扫版本管理器
+/// （决策 #1464：登录 shell 只 source `.zprofile`，nvm 之类常挂在 `.zshrc`）。
+/// 只补那些真实存在的目录，不往 PATH 里塞不存在的东西。
+/// ★`pub(crate)`：决策 #1463 后 `format.rs` 复用同一份 PATH 补齐逻辑 ——
+///   GUI 找不到 `node` 和当年找不到 `pnpm` 是**同一个根因**，不要再抄一份。
+pub(crate) fn child_path() -> String {
+    // ① 登录 shell 的 PATH：取**含 ':' 且以 '/' 开头**的最后一行（防止 .zprofile 有打印噪声）
+    let login = Command::new("/bin/zsh")
+        .args(["-lc", "printf %s \"$PATH\""])
+        .output()
+        .ok()
+        .and_then(|out| {
+            let text = String::from_utf8_lossy(&out.stdout).to_string();
+            text.lines()
+                .rev()
+                .find(|l| l.contains(':') && l.trim_start().starts_with('/'))
+                .map(|l| l.trim().to_string())
+        });
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    child_path_from(login.as_deref(), home.as_deref())
 }
 
 /// 在 PATH 里找可执行文件（不依赖外部 `which`）
@@ -520,6 +598,23 @@ mod tests {
         dirs.sort_unstable();
         dirs.dedup();
         assert_eq!(dirs.len(), n, "PATH 有重复项：{p}");
+    }
+
+    #[test]
+    fn 最小PATH下仍能解析版本管理器node() {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            eprintln!("skip: 无 HOME");
+            return;
+        };
+        if versioned_node_bin_dirs(&home).is_empty() {
+            eprintln!("skip: 本机没有版本管理器/托管目录里的 node（可能直接装在标准目录）");
+            return;
+        }
+        // ★显式把「登录 shell PATH」换成 launchd 给 GUI 的最小集 —— 终端里的富 PATH 不算数
+        let p = child_path_from(Some("/usr/bin:/bin"), Some(&home));
+        let node = which("node", &p).expect("最小 PATH 下应能解析出 node");
+        assert!(Path::new(&node).is_absolute(), "node 必须是绝对路径：{node}");
+        assert!(!p.contains("~/"), "PATH 里不该残留 ~：{p}");
     }
 
     #[test]

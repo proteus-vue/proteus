@@ -26,6 +26,17 @@
   },
   "tasks": [
     {
+      "id": "T-studio-format-gui-node-2",
+      "title": "Studio 格式化器第二次真机失败：GUI 里没有可解析的 node（版本管理器扫描 + 包内记录路径）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:wb-20261108",
+      "scope": ["packages/studio/src/format.rs", "packages/studio/src/ios_stream.rs", "packages/studio/package-app.sh", "scripts/studio-panel-checks-format.mjs"],
+      "decision": 1464,
+      "verification": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path packages/studio/Cargo.toml 'format::'（4/4，新增 gui_minimal_env_end_to_end：env_clear() 重开整个测试二进制走完整 format_via_cli，并断言 1 passed 防 filter 失配）· 同 cargo test 'ios_stream::'（8/8，新增 最小PATH下仍能解析版本管理器node）· node scripts/check-studio-panel.mjs --no-build（全绿，㊿f 增 nodeScan）· cargo check · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint scripts/studio-panel-checks-format.mjs（0）· node scripts/check-tauri-handlers.mjs（49/49）",
+      "note": "【done · 决策 #1464（2026-11-08）】用户第二次截图「找不到 node（GUI 启动未继承终端 PATH）」⇒ wrapper 已绕开，失败在解析。★取证：GUI 最小 env 下 /bin/zsh -lc 的 PATH 无 node、12 个硬编码安装位无 node；本机唯一 node 在 ~/.workbuddy/binaries/node/versions/22.22.2-6/bin/node（版本目录 + 登录 shell 只 source .zprofile）。★修法：child_path 增补 versioned_node_bin_dirs（nvm/fnm/mise/asdf/volta/WorkBuddy/brew keg-only）+ 抽出纯函数 child_path_from 供最小 PATH 判据复用；package-app.sh 签名前写 Contents/Resources/node-path.txt（realpath，运行时会用的那个），format.rs packaged_node_path() 校验 is_file 后优先用、换机回落；PROTEUS_NODE 兜底。★顺手修 package-app.sh 无证书时 grep rc=1 被 set -euo pipefail 打断、ad-hoc 回落分支进不去（加 || true）。★判据教训：formats_under_gui_minimal_path 是「先解析后 env_clear」⇒ 真机解析失败它仍绿；新判据把整个测试进程放进最小环境，并断言 1 passed。★新发现既存红（未修）：cargo test 全量 31/32，fs_guard::tests::new_path_boundary 的 within_root(root,\"\")=true；fs_guard.rs 与 HEAD 一致 ⇒ #1460 遗留，以前只跑 format:: 过滤没暴露。★诚实边界：prettier 仍是传递依赖；node-path.txt 是打包机路径；Windows/Linux 未验证；只改 buffer 不保存。"
+    },
+    {
       "id": "T-studio-format-gui-node",
       "title": "Studio 格式化器在 GUI 下找不到 node（绝对路径 node + prettier JS 入口）",
       "type": "bugfix",

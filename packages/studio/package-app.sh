@@ -197,6 +197,23 @@ python3 "$HERE/bundle-dylibs.py" "$APP"
   printf '二进制 sha256（签名前）：%s\n' "$(shasum -a 256 "$APP/Contents/MacOS/$EXE_NAME" 2>/dev/null | cut -c1-16)"
 } > "$APP/Contents/Resources/BUILD_INFO.txt" 2>/dev/null || true
 
+# ④d ★决策 #1464：把**打包时确实用到的 node 绝对路径**写进包内。
+#   为什么：GUI 从 Dock/Finder 启动时 launchd 不给 node；版本管理器（nvm / fnm / volta /
+#   WorkBuddy 托管 node）的目录名带版本号，登录 shell 又只 source .zprofile ⇒ 运行时扫描
+#   仍可能漏。本脚本前面刚用 node 真跑过两个门禁，所以此刻 `command -v node` 就是**真实
+#   可用的那个**（判据纪律：记录的东西必须由真实运行时产生，不能手写猜测路径）。
+#   Rust 侧 `format.rs::packaged_node_path()` 优先读它并校验存在性，换机 / 卸载自动
+#   回落到扫描，不会拿着死路径硬跑。
+#   ★必须在签名前写：签名后再往包里加文件会破坏 ad-hoc 封印（同 BUILD_INFO）。
+NODE_BIN="$(command -v node 2>/dev/null || true)"
+if [ -n "$NODE_BIN" ]; then
+  NODE_ABS="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$NODE_BIN")"
+  if [ -f "$NODE_ABS" ]; then
+    printf '%s\n' "$NODE_ABS" > "$APP/Contents/Resources/node-path.txt"
+    echo "  ✓ 记录打包时 node：$NODE_ABS"
+  fi
+fi
+
 # ⑤ 签名：ad-hoc（`-`）。★这只是让本机能跑，**不能**消除 Gatekeeper 在别人机器上的拦截
 #    ★BUILD_INFO.txt 必须在**签名之前**写：签名后再往包里加文件会破坏 ad-hoc 封印。
 # ★签名身份必须**固定**（决策 #1309）：ad-hoc（`-s -`）签名的 cdhash 每次重新编译都变，
@@ -205,7 +222,11 @@ python3 "$HERE/bundle-dylibs.py" "$APP"
 # ★按**哈希**签，不能按名字（决策 #1309 的第二坑）：本机有两个**同名**的
 #   "Apple Development: lyl@shxuxi.cn"，按名字 `codesign` 会报 ambiguous 并**静默回落 ad-hoc**
 #   （错误打在 stdout、退出码仍是 0，脚本的 `||` 根本兜不住）。
-SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 'Apple Development' | awk '{print $2}')"
+# ★`|| true` 不能省（2026-11-08 修，决策 #1464）：本机钥匙串 0 张有效证书时
+#   `grep -m1` 返回 1，`set -euo pipefail` 会在这条**赋值语句**上直接退出，
+#   作者写好的「无证书 ⇒ else 回落 ad-hoc」分支永远进不去（脚本静默 exit 1）。
+#   ⇒ 把「查不到」当成空值，而不是致命错误。
+SIGN_ID="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 'Apple Development' | awk '{print $2}' || true)"
 if [ -n "$SIGN_ID" ]; then
   echo "  签名身份：$SIGN_ID"
   codesign --force --sign "$SIGN_ID" --timestamp=none "$APP" >/dev/null 2>&1
