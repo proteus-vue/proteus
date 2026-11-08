@@ -16263,3 +16263,37 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
       ④ UI 判据的 `.rs` 错误由 Node 侧按同一常量抛出、文案与 Rust 提前拒绝一致，
       但不是 Rust 进程本身；Rust 真跑由 `cargo test` 覆盖。
 
+1463. **★★Studio 格式化器在 GUI 下 `node: not found`：绝对路径 node + prettier JS 入口**（2026-11-08 · 用户截图反馈）:
+    用户截图：`格式化失败：/Users/.../node_modules/.bin/prettier: line 16: exec: node: not found`；
+    同轮还反馈「快捷键和编辑器右键里都没有定义」。取证后是**两个独立问题**：
+    ① **可见性**：屏幕上跑的仍是 11:55 启动的 PID 51645（#1461 版），12:20 重打包未重启。
+      源码、12:20 产物、设置窗口 DOM 里都有 `editor.formatDocument`；设置页是独立窗口
+      （`?view=settings`）且默认停在「开发环境」分类，快捷键列表藏在「编辑器」分类下。
+      ⇒ `open -n` 起新实例 77955，旧窗口保留不杀（可能有在跑的终端会话），
+      并补 ㊿e 判据：真开第二个页面、真点分类、真读 DOM 与键帽（「格式化文档 / ⌥ ⇧ F」）。
+    ② **真机执行失败（本决策）**：`node_modules/.bin/prettier` 是 sh wrapper，第 16 行
+      `exec node ...`；macOS 从 Dock/Finder 启动时 launchd 只给
+      `/usr/bin:/bin:/usr/sbin:/sbin`，里面没有 node。
+    ★**为什么 #1462 的判据当时全绿**：UI 判据在 Node 侧跑、`cargo test` 在终端跑，
+      两边都有 node —— 又一次「判据通过 ≠ 功能可用」：判据执行的东西在真实运行时
+      （GUI 进程）根本不存在，与 #1460 的「假绿」同类、比它更隐蔽。
+      同源取证：`env -i PATH=/usr/bin:/bin node_modules/.bin/prettier ...` 精确复现
+      `line 16: exec: node: not found`（rc=127）；同环境下
+      `<绝对路径 node> node_modules/prettier/bin-prettier.js ...` 正常产出本仓风格。
+    ★**修法（复用既有解法，不另造轮子）**：`ios_stream::child_path()` / `which()`
+      （决策 #1277 已解决过 GUI 找不到 `pnpm`）提升为 `pub(crate)`；
+      `format.rs` 新增 `node_for_prettier()`（登录 shell PATH + 常见安装位解析出
+      **绝对路径**、OnceLock 只缓存成功）、`format_command()`；
+      `PRETTIER_BIN` → `PRETTIER_JS`，命令固定为
+      `node(绝对路径) + bin-prettier.js + FORMAT_ARGS`，绕开 sh wrapper。
+      解析失败给中文提示「把 node 目录写进 ~/.zprofile 的 PATH，或从终端启动 Studio」。
+    ★**判据**：`cargo test format::` 3/3，新增 `formats_under_gui_minimal_path`
+      在 `env_clear() + PATH=/usr/bin:/bin` 子进程里真跑同一条 `format_command`、
+      并断言 program 是绝对路径（首版在这条下必红）；`check:studio-panel` **75/75**，
+      新增 ㊿e（设置窗口真实可见）+ ㊿f（Node 侧模拟 GUI 最小 PATH 真跑 +
+      静态断言不许退回 `PRETTIER_BIN`）。判据 `rustConfig` 改从 `PRETTIER_JS`
+      读入口、用 `process.execPath` 真跑，与 Rust 保持同一入口/同一套参数。
+    ★**诚实边界**：仍依赖仓库内存在 `node_modules/prettier`（传递依赖，未显式声明）；
+      `child_path()` 起一次 `/bin/zsh -lc`（成功结果已缓存）；Windows/Linux 的
+      node 解析未专门验证（Studio 当前为 macOS Tauri）。
+

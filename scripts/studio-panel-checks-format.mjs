@@ -28,11 +28,11 @@ function rustConfig(studioDir) {
     const m = src.match(new RegExp(`${decl}[^=]*=\\s*\\[([\\s\\S]*?)\\]`))
     return [...(m?.[1] ?? '').matchAll(/"([^"]+)"/g)].map((x) => x[1])
   }
-  const binRel = src.match(/pub const PRETTIER_BIN:\s*&str\s*=\s*"([^"]+)"/)?.[1] ?? ''
+  const jsRel = src.match(/pub const PRETTIER_JS:\s*&str\s*=\s*"([^"]+)"/)?.[1] ?? ''
   return {
     args: arrayOf('pub const FORMAT_ARGS'),
     noParser: arrayOf('const NO_PARSER_EXT'),
-    bin: path.join(studioDir, '..', '..', binRel),
+    js: path.join(studioDir, '..', '..', jsRel),
     root: path.join(studioDir, '..', '..'),
   }
 }
@@ -45,6 +45,7 @@ function staticParity(studioDir, cfg) {
   const fmt = read('ui/src/editorFormat.ts')
   const main = read('src/main.rs')
   const rs = read('src/format.rs')
+  const ios = read('src/ios_stream.rs')
   return {
     action: kb.includes("| 'editor.formatDocument'") && kb.includes(`{ id: 'editor.formatDocument',`),
     chords: kb.includes("'editor.formatDocument': ['Shift+Alt+F']") && kb.includes("'editor.formatDocument': ['Mod+Alt+L']"),
@@ -57,6 +58,16 @@ function staticParity(studioDir, cfg) {
     /* ★Option 改写字母时按物理键码回落（真机 ⇧⌥F 能命中，而 CDP 按键本来就会假绿） */
     altSafe: kb.includes("e.altKey && /^Key[A-Z]$/.test(e.code"),
     sharedArgs: cfg.args.includes('--single-quote') && cfg.args.includes('--no-semi') && cfg.args.includes('100') && cfg.noParser.includes('rs'),
+    /* ★决策 #1463：GUI 不继承终端 PATH ⇒ 不许再执行 `.bin/prettier` 那个 sh wrapper。
+       静态只证明「代码形态」，真跑证明见 ㊿f 与本模块 Rust 单测，两者缺一都会假绿。 */
+    guiNode:
+      rs.includes('pub const PRETTIER_JS') &&
+      !rs.includes('pub const PRETTIER_BIN') &&
+      rs.includes('ios_stream::child_path()') &&
+      rs.includes('ios_stream::which(') &&
+      rs.includes('Command::new(node)') &&
+      rs.includes('env_clear()'),
+    sharedPath: ios.includes('pub(crate) fn child_path') && ios.includes('pub(crate) fn which'),
   }
 }
 
@@ -65,12 +76,30 @@ export async function checksFormat(page, studioDir) {
   const cfg = rustConfig(studioDir)
   const s = staticParity(studioDir, cfg)
 
+  /* ★决策 #1463：模拟 GUI 的 launchd 环境（PATH 里没有 node）真跑同一条命令。
+     用户截图是 `.bin/prettier: line 16: exec: node: not found`；这里用
+     **绝对路径 node + 同一个 JS 入口**，正是 Rust 侧修复后的形态。
+     （Node 侧本来就有 node，所以光看这条会假绿 ⇒ 必须叠加 s.guiNode 静态断言。） */
+  const guiOut = (() => {
+    try {
+      return execFileSync(process.execPath, [cfg.js, ...cfg.args, '--stdin-filepath', TS_FILE], {
+        input: 'const a = {x:1,y:2};\n',
+        cwd: cfg.root,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: '/usr/bin:/bin' },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+    } catch {
+      return ''
+    }
+  })()
+
   /** 真跑 CLI：前端 IPC 的回包与 expected 都出自这一个函数，不手写格式化结果。 */
   const runPrettier = (p, text) => {
     const ext = String(p).split('.').pop().toLowerCase()
     if (cfg.noParser.includes(ext)) throw new Error(`暂不支持 .${ext} 格式化（prettier 没有对应 parser）`)
     if (!p || p.startsWith('/') || p.includes('..')) throw new Error(`非法路径：${p}`)
-    return execFileSync(cfg.bin, [...cfg.args, '--stdin-filepath', p], {
+    return execFileSync(process.execPath, [cfg.js, ...cfg.args, '--stdin-filepath', p], {
       input: text,
       cwd: cfg.root,
       encoding: 'utf8',
@@ -169,6 +198,37 @@ export async function checksFormat(page, studioDir) {
     window.dispatchEvent(new StorageEvent('storage', { key: 'proteus.keymapOverrides', newValue: null }))
   })
 
+  /* ★⑥ 真实设置窗口（决策 #1462 补判据）：用户反馈「快捷键里没定义、右键里也没有」。
+     静态检查 ACTIONS 常量会「绿但不可用」——设置页是**独立窗口**（`?view=settings`），
+     且默认停在「开发环境」分类，自定义快捷键列表在「编辑器」分类下（`v-if`）。
+     所以这里在同一 context 里真开第二个页面、真点分类、真读 DOM 与键帽，
+     证明用户走真实入口时**看得到**这一行，而不是只证明源码里有字符串。 */
+  const settingsUrl = new URL(page.url())
+  settingsUrl.searchParams.set('view', 'settings')
+  const settingsPage = await page.context().newPage()
+  const noRow = { row: false, label: '', keys: '', bound: false }
+  const kb = await (async () => {
+    try {
+      await settingsPage.goto(settingsUrl.toString())
+      await settingsPage.waitForTimeout(500)
+      await settingsPage.click('[data-cat="editor"]')
+      return await settingsPage.evaluate(() => {
+        const row = document.querySelector('#setKeymapList [data-action="editor.formatDocument"]')
+        const keys = [...(row?.querySelectorAll('.kbkey kbd') ?? [])].map((k) => k.textContent?.trim() ?? '')
+        return {
+          row: !!row,
+          label: row?.querySelector('.kblabel')?.textContent?.trim() ?? '',
+          keys: keys.join(' '),
+          bound: keys.length > 0 && !keys.some((k) => k.includes('未绑定')),
+        }
+      })
+    } catch {
+      return noRow
+    } finally {
+      await settingsPage.close()
+    }
+  })()
+
   const keyOk =
     focusInEditor &&
     doc0.length > 0 &&
@@ -189,6 +249,14 @@ export async function checksFormat(page, studioDir) {
     [
       `㊿d 格式化全链静态接线（决策 #1462）：ActionId/键位=${s.action && s.chords} · 菜单=${s.menu} · 单一执行函数=${s.oneImpl} · dispatch+mapPos=${s.dispatch} · 命令注册=${s.handler} · 只改buffer不写盘=${s.noDiskWrite} · Alt物理键兜底=${s.altSafe} · Rust参数同源=${s.sharedArgs}`,
       Object.values(s).every(Boolean),
+    ],
+    [
+      `㊿e 设置窗口可见性（决策 #1462 · 真实第二个页面）：编辑器分类下「格式化文档」=${kb.row}/${kb.label} · 键帽=${kb.keys || '(无)'} · 已绑定=${kb.bound}`,
+      kb.row && kb.label === '格式化文档' && kb.bound,
+    ],
+    [
+      `㊿f GUI 无 PATH 可用（决策 #1463 · 模拟 launchd）：PATH=/usr/bin:/bin 下产出=${guiOut.trim() || '(失败)'} · 绝对路径 node+JS 入口=${s.guiNode && s.sharedPath}`,
+      guiOut.includes('const a = { x: 1, y: 2 }') && s.guiNode && s.sharedPath,
     ],
   ]
 }

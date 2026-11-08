@@ -100,7 +100,9 @@ fn expand(p: &str) -> String {
 ///
 /// 做法：**先问登录 shell**（最忠实，用户装哪都认）→ 再补常见目录（幂等去重）。
 /// 只补那些真实存在的目录，不往 PATH 里塞不存在的东西。
-fn child_path() -> String {
+/// ★`pub(crate)`：决策 #1463 后 `format.rs` 复用同一份 PATH 补齐逻辑 ——
+///   GUI 找不到 `node` 和当年找不到 `pnpm` 是**同一个根因**，不要再抄一份。
+pub(crate) fn child_path() -> String {
     let mut parts: Vec<String> = Vec::new();
 
     // ① 登录 shell 的 PATH：取**含 ':' 且以 '/' 开头**的最后一行（防止 .zprofile 有打印噪声）
@@ -149,7 +151,7 @@ fn child_path() -> String {
 }
 
 /// 在 PATH 里找可执行文件（不依赖外部 `which`）
-fn which(tool: &str, path: &str) -> Option<String> {
+pub(crate) fn which(tool: &str, path: &str) -> Option<String> {
     for dir in path.split(':') {
         if dir.is_empty() {
             continue;

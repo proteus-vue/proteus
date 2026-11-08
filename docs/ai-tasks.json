@@ -26,6 +26,17 @@
   },
   "tasks": [
     {
+      "id": "T-studio-format-gui-node",
+      "title": "Studio 格式化器在 GUI 下找不到 node（绝对路径 node + prettier JS 入口）",
+      "type": "bugfix",
+      "status": "done",
+      "owner": "session:wb-20261108",
+      "scope": ["packages/studio/src/format.rs", "packages/studio/src/ios_stream.rs", "scripts/studio-panel-checks-format.mjs"],
+      "decision": 1463,
+      "verification": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path packages/studio/Cargo.toml 'format::'（3/3，新增 formats_under_gui_minimal_path 在 env_clear()+PATH=/usr/bin:/bin 子进程真跑）· pnpm check:studio-panel（75/75，新增 ㊿e 设置窗口真实可见 + ㊿f GUI 最小 PATH 真跑）· cargo check · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint scripts/studio-panel-checks-format.mjs（0 error）· node scripts/check-file-size.mjs（主门禁 998 行）· pnpm check:ai-tasks ✅",
+      "note": "【done · 决策 #1463（2026-11-08）】用户截图 `prettier: line 16: exec: node: not found`。★根因：`.bin/prettier` 是 sh wrapper，GUI 从 Dock 启动只继承 launchd 的 /usr/bin:/bin，没有 node；#1462 判据在 Node 侧/终端跑都有 node ⇒ 全绿但真机不可用。★修复：`ios_stream::child_path()`/`which()`（#1277 同源解法）提升 pub(crate) 复用；format.rs 新增 node_for_prettier()（解析绝对路径 + OnceLock 只缓存成功）与 format_command()，PRETTIER_BIN→PRETTIER_JS，固定 `node(绝对路径) + bin-prettier.js + FORMAT_ARGS`。★同轮另一起问题：用户屏幕上仍是 11:55 的 PID 51645（#1461 版），12:20 重打包未重启 ⇒ open -n 起新实例 77955，旧窗口保留不杀；设置页是独立窗口且默认在「开发环境」分类，快捷键列表藏在「编辑器」分类。★诚实边界：仍依赖 node_modules/prettier 传递依赖；child_path 起一次 /bin/zsh -lc；Windows/Linux 未专门验证。"
+    },
+    {
       "id": "T-studio-format",
       "title": "Studio 编辑器格式化文档（prettier 固定命令 · 只改 buffer · 快捷键 + 右键菜单）",
       "type": "framework-feature",
