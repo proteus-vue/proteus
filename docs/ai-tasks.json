@@ -26,6 +26,17 @@
   },
   "tasks": [
     {
+      "id": "T-studio-term-keys",
+      "title": "Studio 终端快捷键纳入统一注册表（面板作用域 + 可自定义 + 三套预设）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:wb-20261108",
+      "scope": ["packages/studio/**"],
+      "decision": 1461,
+      "verification": "pnpm check:studio-panel（71/71，含新增 ㊿/㊿b：真实键盘 11 组键 + 焦点内/外 + ⌘W 必须触发 term_close + 自定义键走 storage 通道）· npx vitest run tests/studio-term-keys.test.ts（8/8）· pnpm build:studio-ui · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint <5 个改动文件>（0 error）· node scripts/check-file-size.mjs（主门禁保持 998 行；3 条既存红未动）· pnpm check:ai-tasks ✅",
+      "note": "【done · 决策 #1461（2026-11-08）】11 个 term.* 收进 keybindings.ts（BASE / ACTIONS / onAction 三方齐），新增 ActionScope=global|terminal：installKeymap 按 e.target.closest('.termwrap') 算 scope，终端内 terminal 动作优先于全局，终端外完全不参与；conflictOf 改同 scope 才冲突；keyOf 补 {→[ / }→]；删 JetBrains 把 term.new 也映射 ⌥F12 的错配。TerminalPanel.vue 删 onPanelKey 手写 11 分支与 @keydown.capture，改 11 条 onAction（953→905 行）。★修掉的真实缺陷：window 捕获阶段的全局分发抢走终端内 ⌘W/⌘=/⌘-/⌘0/⌘1 并 stopPropagation，App.vue 的 onZoomKey 让路代码根本没机会执行。★判据独立模块 studio-panel-checks-termkeys.mjs（主脚本不增行），单测覆盖分发纯函数。★诚实边界：自定义键段模拟设置窗口写 localStorage + storage 事件，不是从设置 UI 点入；真 pty 由 Rust 单测覆盖，UI 判据只验界面→IPC→DOM。★既存欠账未动：check:file-size 3 红、check-decision-numbers #1242 重号。"
+    },
+    {
       "id": "T-studio-file-ops",
       "title": "Studio 文件树：新建文件/文件夹 · 重命名 · 删除（路径沙箱 + 写盘二次确认 + 已打开标签保护）",
       "type": "framework-feature",

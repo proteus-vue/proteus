@@ -3,14 +3,20 @@
  *
  * 【为什么要有这一层】之前快捷键散落在 4 个文件里手写：
  *   `App.vue`（缩放 / ⌘B / ⌘J）、`CodePanel.vue`（⌘W / ⇧⌘F / ⌘P / ⌘⌥S）、
- *   `TerminalPanel.vue`（8 条）、以及 CodeMirror 的 `keymap.of([...])`。
+ *   `TerminalPanel.vue`（11 个键）、以及 CodeMirror 的 `keymap.of([...])`。
  *   后果有两个：① 想改一个键要满仓 grep；② **没法按 IDE 习惯切换**（用户明确提出的需求）。
+ *   ★决策 #1461：终端那 11 个键已收编，并引入 `ActionScope` —— 见下方「面板作用域」。
  *
  * 【设计】
  *   · `ActionId` 是"语义动作"（`editor.gotoDefinition`），**不是**"按键"；
  *   · `SCHEMES` 给出三套预设（VS Code / JetBrains / Sublime）的映射；
  *   · 面板通过 `onAction(id, fn)` 注册处理函数，**不关心键是什么**；
  *   · 用户选方案后写进 workspace state，重启保持。
+ *
+ * 【★面板作用域（决策 #1461）】同一个键在终端内与在编辑器里是**两个动作**（⌘W = 关标签 / 关终端会话，
+ *   ⌘= = 缩放画布 / 放大终端字号），不能只靠"谁先注册"决定。注册表的捕获阶段**先于**面板：
+ *   `installKeymap` 会按事件目标是否落在 `.termwrap` 内算出 `scope`，终端内先看 `terminal` 动作、
+ *   没命中再看全局；终端外则完全不看 `terminal` 动作（在编辑器里按 ⌘⇧T 不会偷开一个终端会话）。
  *
  * 【组合键写法】`Mod` = macOS `⌘` / 其它平台 `Ctrl`；`Shift` / `Alt` 照旧；
  *   例：`Mod+Shift+F`、`Mod+Alt+S`、`F12`、`Mod+\\`、`Mod+=`。
@@ -54,6 +60,31 @@ export type ActionId =
   | 'term.new'
   | 'term.split'
   | 'term.find'
+  | 'term.zoomIn'
+  | 'term.zoomOut'
+  | 'term.zoomReset'
+  | 'term.clear'
+  | 'term.close'
+  | 'term.switchTo'
+  | 'term.prevSession'
+  | 'term.nextSession'
+
+/** ★面板作用域（决策 #1461）：只有 `terminal` 动作在终端面板内优先；其余一律 `global`。 */
+export type ActionScope = 'global' | 'terminal'
+const TERMINAL_ACTIONS = new Set<ActionId>([
+  'term.new',
+  'term.split',
+  'term.find',
+  'term.zoomIn',
+  'term.zoomOut',
+  'term.zoomReset',
+  'term.clear',
+  'term.close',
+  'term.switchTo',
+  'term.prevSession',
+  'term.nextSession',
+])
+export const scopeOf = (id: ActionId): ActionScope => (TERMINAL_ACTIONS.has(id) ? 'terminal' : 'global')
 
 type Chords = Partial<Record<ActionId, string[]>>
 
@@ -97,6 +128,16 @@ const BASE: Chords = {
   'term.new': ['Mod+Shift+T'],
   'term.split': ['Mod+\\'],
   'term.find': ['Mod+F'],
+  /* 下面 8 项原是 TerminalPanel.vue 里 `onPanelKey` 手写的分支（决策 #1394/#1397/#1405）。
+     ★`Mod+W` / `Mod+=` / `Mod+0` / `Mod+1` 与全局动作**同键**：靠 scope 区分，不靠改键位躲。 */
+  'term.zoomIn': ['Mod+='],
+  'term.zoomOut': ['Mod+-'],
+  'term.zoomReset': ['Mod+0'],
+  'term.clear': ['Mod+K'],
+  'term.close': ['Mod+W'],
+  'term.switchTo': ['Mod+1', 'Mod+2', 'Mod+3', 'Mod+4', 'Mod+5', 'Mod+6', 'Mod+7', 'Mod+8', 'Mod+9'],
+  'term.prevSession': ['Mod+Shift+['],
+  'term.nextSession': ['Mod+Shift+]'],
 }
 
 export const SCHEMES: Record<KeymapScheme, Chords> = {
@@ -115,7 +156,8 @@ export const SCHEMES: Record<KeymapScheme, Chords> = {
     'editor.selectNext': ['Mod+Shift+D'], // IDEA 没有同款；避开 ⌘D（=Duplicate Line）
     'view.toggleSidebar': ['Mod+1'], // Project 视图
     'view.toggleTerminal': ['Alt+F12'], // Terminal
-    'term.new': ['Alt+F12'], // IDEA 里 ⌥F12 就是开终端
+    /* ★不要把 `term.new` 也映射成 ⌥F12（决策 #1461）：终端内该键属于 `terminal` 作用域，
+       会盖掉全局的 `view.toggleTerminal` ⇒ 用户再也关不掉终端。沿用 BASE 的 ⇧⌘T。 */
     'term.split': ['Mod+Shift+\\'],
     'file.saveAll': ['Mod+S'], // IDEA 的 ⌘S 就是全部保存
     'file.save': ['Mod+S'],
@@ -147,13 +189,14 @@ function loadScheme(): KeymapScheme {
 
 /**
  * 可自定义的动作清单（决策 #1433）—— **只列已经接线的**。
- * 不列 `editor.findInFile` / `editor.gotoLine` / `editor.selectNext` / `term.*`：
- * 它们目前由 CodeMirror 的 keymap 或终端面板内部固定绑定，改这里不会生效。
+ * 不列 `editor.findInFile` / `editor.gotoLine` / `editor.selectNext`：
+ * 它们仍由 CodeMirror 的 keymap 固定绑定，改这里不会生效。
+ * ★决策 #1461：`term.*` 现已全部经 `onAction` 分发 ⇒ 进清单，在设置面板的「终端」分组可改。
  */
 export interface ActionMeta {
   id: ActionId
   label: string
-  group: '文件' | '编辑' | '视图'
+  group: '文件' | '编辑' | '视图' | '终端'
 }
 export const ACTIONS: ActionMeta[] = [
   { id: 'file.save', label: '保存', group: '文件' },
@@ -181,6 +224,17 @@ export const ACTIONS: ActionMeta[] = [
   { id: 'view.zoomIn', label: '放大画布', group: '视图' },
   { id: 'view.zoomOut', label: '缩小画布', group: '视图' },
   { id: 'view.zoomReset', label: '画布复位', group: '视图' },
+  { id: 'term.new', label: '新建终端会话', group: '终端' },
+  { id: 'term.split', label: '拆分终端栏', group: '终端' },
+  { id: 'term.find', label: '在终端中查找', group: '终端' },
+  { id: 'term.zoomIn', label: '放大终端字号', group: '终端' },
+  { id: 'term.zoomOut', label: '缩小终端字号', group: '终端' },
+  { id: 'term.zoomReset', label: '终端字号复位', group: '终端' },
+  { id: 'term.clear', label: '清屏（保留回滚）', group: '终端' },
+  { id: 'term.close', label: '关闭当前终端会话', group: '终端' },
+  { id: 'term.switchTo', label: '切到第 N 个会话（⌘1…⌘9）', group: '终端' },
+  { id: 'term.prevSession', label: '上一个终端会话', group: '终端' },
+  { id: 'term.nextSession', label: '下一个终端会话', group: '终端' },
 ]
 
 const scheme = ref<KeymapScheme>(loadScheme())
@@ -265,10 +319,12 @@ export function resetAllChords(): void {
   persistOverrides()
 }
 
-/** 该键是否已被**别的**动作占用（返回占用它的动作标签） */
+/** 该键是否已被**同一作用域内别的**动作占用（返回占用它的动作标签）。
+ *  ★决策 #1461：跨作用域同键是**设计**，不是冲突（⌘W 在编辑器里关标签、在终端里关会话）。 */
 export function conflictOf(chord: string, except: ActionId): string | null {
+  const scope = scopeOf(except)
   for (const a of ACTIONS) {
-    if (a.id === except) continue
+    if (a.id === except || scopeOf(a.id) !== scope) continue
     if (chordsOf(a.id).some((c) => normalizeChord(c) === normalizeChord(chord))) return a.label
   }
   return null
@@ -311,8 +367,11 @@ function keyOf(e: KeyboardEvent): string {
   const k = e.key
   if (k === '+') return '='
   if (k === ' ') return 'space'
-  /* `Mod+Shift+\` 实际按下去 `e.key` 是 `|`（US 布局）⇒ 归一化成 `\` 才能匹配 */
+  /* `Mod+Shift+\` 实际按下去 `e.key` 是 `|`（US 布局）⇒ 归一化成 `\` 才能匹配；
+     同理 `Mod+Shift+[` 按下去是 `{`（决策 #1461：切上一个终端会话） */
   if (k === '|') return '\\'
+  if (k === '{') return '['
+  if (k === '}') return ']'
   return k.toLowerCase()
 }
 
@@ -355,11 +414,16 @@ export function matchChord(e: KeyboardEvent, chord: string): boolean {
   return true
 }
 
-/** 事件命中的动作（按当前方案顺序匹配，先到先得） */
-export function actionOf(e: KeyboardEvent): ActionId | null {
+/** 事件命中的动作（按当前方案顺序匹配，先到先得）。
+ *  ★`scope` 由调用方按事件目标算（决策 #1461）：终端内 `terminal` 动作**优先于**全局，
+ *    没命中再退回全局；终端外 `terminal` 动作完全不参与。 */
+export function actionOf(e: KeyboardEvent, scope: ActionScope = 'global'): ActionId | null {
   /* 合并 BASE 与当前方案：方案里没覆盖的动作仍按 VS Code 习惯工作 */
   const merged: Chords = { ...BASE, ...SCHEMES[scheme.value] }
-  for (const a of Object.keys(merged) as ActionId[]) {
+  const ids = Object.keys(merged) as ActionId[]
+  const global = ids.filter((id) => scopeOf(id) === 'global')
+  const ordered = scope === 'terminal' ? [...ids.filter((id) => scopeOf(id) === 'terminal'), ...global] : global
+  for (const a of ordered) {
     for (const chord of chordsOf(a)) {
       if (matchChord(e, chord)) return a
     }
@@ -382,11 +446,14 @@ export function onAction(id: ActionId, fn: Handler): () => void {
 /**
  * 安装全局分发（捕获阶段）。
  * ★用捕获而不是冒泡：编辑器/终端会把 keydown 消化掉，冒泡到 window 时可能已被 preventDefault。
+ * ★作用域按**事件目标**算（决策 #1461），不按"哪个面板注册了 handler"：`.termwrap` 内的
+ *   输入框/查找框/会话标签都算终端内；切回代码视图后按键自然回到全局语义。
  */
 export function installKeymap(): () => void {
   const onKey = (e: KeyboardEvent) => {
     if (e.isComposing || capturing) return
-    const action = actionOf(e)
+    const inTerm = !!(e.target as Element | null)?.closest?.('.termwrap')
+    const action = actionOf(e, inTerm ? 'terminal' : 'global')
     if (!action) return
     const set = handlers.get(action)
     if (!set || !set.size) return

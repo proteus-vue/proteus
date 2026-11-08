@@ -23,6 +23,7 @@ import PSelect from '../ui/PSelect.vue'
 import TermPane from './TermPane.vue'
 import Icon from '../ui/Icon.vue'
 import { saveLayout, termFont, termShell, termSplit } from '../layout'
+import { onAction } from '../keybindings'
 
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{ close: []; maximize: [] }>()
@@ -469,88 +470,40 @@ const statText = computed(() => {
   return `${c}×${r} · ${exited.value ? '已退出' : '运行中'}`
 })
 
-/** 终端面板内的快捷键（决策 #1394）：
- *  · ⌘⇧T 新建会话 · ⌘F 查找（原有）
- *  · ⌘\ 拆分（在右侧新开一栏，VS Code 的 split 键位）
- *  · ⌘W 关闭**当前栏**的会话（面板里按才生效，不会误关窗口）
- *  · ⌘1…⌘9 切到第 N 个会话 · ⌘⇧[ / ⌘⇧] 上一个/下一个会话
- */
-function onPanelKey(e: KeyboardEvent) {
-  const mod = e.metaKey || e.ctrlKey
-  if (mod && e.shiftKey && e.key.toLowerCase() === 't') {
-    e.preventDefault()
-    e.stopPropagation()
-    newSession()
-    return
-  }
-  if (mod && e.key.toLowerCase() === 'f') {
-    e.preventDefault()
-    e.stopPropagation()
-    void openFind()
-    return
-  }
-  if (mod && (e.key === '\\' || e.key === '|')) {
-    e.preventDefault()
-    e.stopPropagation()
-    toggleSplit()
-    return
-  }
-  /* 字号缩放（决策 #1397）：⌘= 放大 / ⌘- 缩小 / ⌘0 复位。与浏览器缩放无关，只影响终端网格 */
-  if (mod && (e.key === '=' || e.key === '+')) {
-    e.preventDefault()
-    e.stopPropagation()
-    termFont.value = Math.min(22, termFont.value + 1)
-    return
-  }
-  if (mod && e.key === '-') {
-    e.preventDefault()
-    e.stopPropagation()
-    termFont.value = Math.max(9, termFont.value - 1)
-    return
-  }
-  if (mod && e.key === '0') {
-    e.preventDefault()
-    e.stopPropagation()
-    termFont.value = 12
-    return
-  }
-  /* ⌘K 清屏（决策 #1405）：与 VS Code 一致发 Ctrl-L，**保留回滚缓冲**（还能往上翻翻旧输出） */
-  if (mod && !e.shiftKey && e.key.toLowerCase() === 'k') {
-    e.preventDefault()
-    e.stopPropagation()
-    void sendCtrl('\x0c')
-    return
-  }
-  if (mod && e.key.toLowerCase() === 'w') {
-    e.preventDefault()
-    e.stopPropagation()
+/* ── 快捷键：统一走 `keybindings` 注册表（决策 #1461）──────────────────────
+ * ★原先这里是 11 个手写分支的 `onPanelKey`，挂在 `.termwrap` 的捕获阶段。
+ *   但 `installKeymap` 装在 **window** 捕获阶段、比面板更早：⌘W / ⌘= / ⌘- / ⌘0 / ⌘1
+ *   会先被全局动作（file.closeTab / view.zoomIn / view.toggleSidebar）吃掉并
+ *   `stopPropagation` ⇒ 面板一次都收不到。现在注册表按 `scope` 判优先级后统一分发，
+ *   handler 只做动作，`preventDefault` / `stopPropagation` 由 installKeymap 统一负责。
+ * ★`term.switchTo` 的 9 个键共用一条 handler，从事件里读数字，避免 9 个 ActionId。 */
+function stepSession(delta: number) {
+  const i = sessions.value.findIndex((x) => x.id === sid.value)
+  const n = sessions.value.length
+  if (i < 0 || !n) return
+  switchTo(sessions.value[(i + delta + n) % n].id)
+}
+
+const offTermActions = [
+  onAction('term.new', () => newSession()),
+  onAction('term.find', () => void openFind()),
+  onAction('term.split', () => toggleSplit()),
+  onAction('term.zoomIn', () => (termFont.value = Math.min(22, termFont.value + 1))),
+  onAction('term.zoomOut', () => (termFont.value = Math.max(9, termFont.value - 1))),
+  onAction('term.zoomReset', () => (termFont.value = 12)),
+  onAction('term.clear', () => void sendCtrl('\x0c')),
+  onAction('term.close', () => {
     const cur = sid.value
     if (cur) void closeSession(cur)
-    return
-  }
-  if (mod && !e.shiftKey && /^[1-9]$/.test(e.key)) {
-    const idx = Number(e.key) - 1
-    const target = sessions.value[idx]
-    if (target) {
-      e.preventDefault()
-      e.stopPropagation()
-      switchTo(target.id)
-    }
-    return
-  }
-  /* ★按下 Shift 时 `e.key` 是 `{` / `}`（US 布局），不是 `[` / `]` —— 两种都要认（踩过一次） */
-  if (mod && e.shiftKey && ['[', ']', '{', '}'].includes(e.key)) {
-    const i = sessions.value.findIndex((x) => x.id === sid.value)
-    if (i >= 0) {
-      const n = sessions.value.length
-      const fwd = e.key === ']' || e.key === '}'
-      const next = (i + (fwd ? 1 : -1) + n) % n
-      e.preventDefault()
-      e.stopPropagation()
-      switchTo(sessions.value[next].id)
-    }
-  }
-}
+  }),
+  onAction('term.switchTo', (e) => {
+    const target = sessions.value[Number(e.key) - 1]
+    if (target) switchTo(target.id)
+  }),
+  onAction('term.prevSession', () => stepSession(-1)),
+  onAction('term.nextSession', () => stepSession(1)),
+]
+onBeforeUnmount(() => offTermActions.forEach((off) => off()))
 
 defineExpose({ focus: focusCurrent })
 </script>
@@ -559,7 +512,6 @@ defineExpose({ focus: focusCurrent })
   <div
     class="termwrap"
     id="termWrap"
-    @keydown.capture="onPanelKey"
     :style="{ '--fs-term': termFont + 'px' }"
   >
     <!-- ★面板级工具栏：一条，横跨左右两栏（VS Code 同款布局） -->

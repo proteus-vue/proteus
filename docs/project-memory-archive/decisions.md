@@ -16189,3 +16189,37 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     未做「关标签后自动改路径」与「回收站式撤销」。判据覆盖见 `check:studio-panel` 与
     `check:tauri-handlers`（四个新命令必须进 `generate_handler!`）。
 
+1461. **★★Studio 终端快捷键收编注册表 + 面板作用域 `ActionScope`**（2026-11-08 · 用户「继续IDE体验主线」）:
+    承接 11-06 日志「下一步候选：TerminalPanel 快捷键纳入注册表」。
+    ★**取证先于结论**：`keybindings.ts` 里 `term.new/term.split/term.find` 三个 ActionId 有键位，
+      ACTIONS 注释还写着「由终端面板内部固定绑定」，但**全仓 grep 无任何 `onAction('term.*')`**
+      ⇒ 三个 id 是「没人调用的真源码」（判据纪律：这个东西在真实运行时由谁产生？答不上来就是假绿）。
+      真正生效的 11 个键仍是 `TerminalPanel.vue` 里 `onPanelKey` 的手写分支。
+    ★**根因不是"没接线"，是"抢键"**：`installKeymap` 装在 **window 捕获阶段**，比 `.termwrap`
+      的 `@keydown.capture` 更早；命中全局动作就 `preventDefault + stopPropagation` ⇒ 终端内
+      ⌘W（`file.closeTab`）、⌘= / ⌘- / ⌘0（`view.zoomIn/Out/Reset`）、JetBrains 下 ⌘1
+      （`view.toggleSidebar`）**永远到不了面板**。App.vue 的 `onZoomKey` 虽已对 `.termwrap`
+      让路，但 `installKeymap` 先注册先执行，让路代码根本没机会跑。
+    ★**解法：作用域优先，不改键位躲冲突**。`ActionScope = 'global' | 'terminal'`，
+      `TERMINAL_ACTIONS` 收 11 个 `term.*`；`installKeymap` 按 `(e.target).closest('.termwrap')`
+      算 scope；`actionOf(e, scope)` 在终端内先遍历 terminal 动作、没命中再退回全局，终端外
+      完全不看 terminal。`conflictOf` 改成**同作用域才冲突**（跨 scope 同键是设计，不是冲突）。
+      `keyOf` 补 `{`→`[` / `}`→`]`（US 布局 Shift+[ 的 `e.key` 是 `{`）。
+    ★**11 个动作**：new / find / split / zoomIn / zoomOut / zoomReset / clear / close /
+      switchTo（9 个键共享一条 handler，从 `e.key` 读数字）/ prevSession / nextSession。
+      全部进 `ACTIONS` ⇒ 设置面板新增「终端」分组，可自定义、随三套预设切换。
+    ★**顺手修一处预设错配**：JetBrains 原把 `term.new` 也映射成 ⌥F12，与全局
+      `view.toggleTerminal` 同键；按新作用域规则，终端内按 ⌥F12 会新建会话而不是关终端
+      ⇒ 删掉该覆盖，沿用 BASE 的 ⇧⌘T。
+    ★**判据**：`check:studio-panel` 新增 ㊿ / ㊿b（独立模块 `studio-panel-checks-termkeys.mjs`，
+      主脚本保持 998 行不增行）：钉死焦点 → `page.keyboard` 真实按 11 组键 → IPC 桩计数 + DOM
+      读数断言；核心是「⌘W 触发 `term_close`」（旧版被全局关标签抢走 ⇒ 0）与「焦点移出
+      `.termwrap` 后 ⌘⇧T 不偷开会话」。自定义键走 `storage` 事件（设置窗口的真实通道）。
+      `tests/studio-term-keys.test.ts` 补分发纯函数（同键两 scope / 跨 scope 不冲突 /
+      自定义覆盖 / 预设切换）。
+    ★**探针自身的坑**：`page.click('#termInput')` 被绝对定位的 `.grip-rail` 分隔条拦截
+      （30s 超时）⇒ 与 ㊼ 探针一致改用浏览器原生 `focus()`，并把「焦点确实在 `.termwrap`
+      内 / 外」写成显式断言，避免判据自己把焦点状态当理所当然。
+    ★**诚实边界**：自定义那段不是从设置 UI 点进去，而是模拟另一个窗口写 localStorage；
+      真 pty 由 Rust 单测覆盖，UI 判据只验界面→IPC→DOM，不验终端里真的跑起 shell。
+
