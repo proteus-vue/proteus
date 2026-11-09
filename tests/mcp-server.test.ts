@@ -73,13 +73,30 @@ describe('G-36 B1 MCP Server 协议面', () => {
     expect(s.readResource('proteus://nope').ok).toBe(false)
   })
 
-  it('prompts/list+get：3 模板（flex-layout/migrate-wx/token-only）', () => {
+  it('prompts/list+get：4 模板（flex-layout/migrate-wx/token-only + #1473 plugin-author）', () => {
     const s = makeServer()
-    expect(s.listPrompts().map((p) => p.name)).toEqual(['proteus-flex-layout', 'proteus-migrate-wx', 'proteus-token-only'])
+    expect(s.listPrompts().map((p) => p.name)).toEqual([
+      'proteus-flex-layout',
+      'proteus-migrate-wx',
+      'proteus-token-only',
+      'proteus-plugin-author',
+    ])
     const p = s.getPrompt('proteus-migrate-wx')
     expect(p.ok).toBe(true)
     expect(p.messages?.[0].content).toContain('lookup_miniprogram')
     expect(s.getPrompt('nope').ok).toBe(false)
+  })
+
+  /* ★决策 #1473：插件作者 SOP 必须把三件"工具拦不住的事"写死在提示里——
+     编能力名 / 多申请权限 / 以为能自己安装。判据只看关键字，防的是"模板被删成一句话"。 */
+  it('★plugin-author 提示词包含三条硬约束', () => {
+    const s = makeServer()
+    const p = s.getPrompt('proteus-plugin-author')
+    expect(p.ok).toBe(true)
+    const text = p.messages?.[0].content ?? ''
+    expect(text).toContain('plugin_list_capabilities')
+    expect(text).toContain('E_NOT_IMPLEMENTED')
+    expect(text).toContain('没有 install')
   })
 })
 

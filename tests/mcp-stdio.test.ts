@@ -140,11 +140,11 @@ describe('★#681 MCP stdio 适配器 · 协议往返（in-memory）', () => {
     }
   })
 
-  it('prompts/list + get：3 模板，get 返回 text content', async () => {
+  it('prompts/list + get：4 模板，get 返回 text content', async () => {
     const { client, close } = await connectedPair()
     try {
       const { prompts } = await client.listPrompts()
-      expect(prompts).toHaveLength(3)
+      expect(prompts).toHaveLength(4)
       const got = await client.getPrompt({ name: 'proteus-token-only' })
       expect(got.messages).toHaveLength(1)
       expect(got.messages[0].content.type).toBe('text')

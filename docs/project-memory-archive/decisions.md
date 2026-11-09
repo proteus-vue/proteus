@@ -16615,4 +16615,25 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ② 真机级判据依赖 `dist` 已构建（旧 dist 会以 `unknown_tool` 失败，属正确提示而非误报）；
     ③ 探针脚本本身是一次性的，未固化进仓库（结论已固化为上面两条测试）。
 
+1473. **★MCP 加「写插件 SOP」提示词模板（第 4 个 prompt）· 补上工具拦不住的那三类错**（2026-11-09 · 用户「好的继续」）:
+  - **为什么光有工具不够**：4 个插件工具**只会在做错之后回 error**，而 AI 拿到 error 常常换个姿势继续蒙。
+    有三类错是工具拦不住的：
+    ① **编能力名**（凭印象写 `readFile` / `fs.read`，装的时候才炸）；
+    ② **要得太多**（"以后可能用到"，于是把写权限、终端全申请上）；
+    ③ **以为能自己装**（MCP 里没有 `install`，它会开始编别的路子）。
+  - **加 `proteus-plugin-author`（第 4 个 prompt，3 → 4）**，把**顺序**写死：
+    先 `plugin_list_capabilities` 拿真实 id → 选最小集 → 写 manifest（`grant=user` 必写人话 reason）→
+    `plugin_validate_manifest` 自检到零 error → `plugin_scaffold` 出骨架。并把三条硬规则前置：
+    `implemented=false` 不要用 · 第三方拿不到 trusted/builtin 档 · **没有 install/enable，
+    安装与授权必须由人完成**。
+  - **一句写进模板的话**：「权限模型的价值全靠『申请得少』，申请得多等于没有。」
+    ——这条比任何技术约束都更能影响 AI 的行为，因为它是**理由**而不是规则。
+  - **判据**：`mcp-server.test.ts` 新增一条只查关键字的判据（含 `plugin_list_capabilities` /
+    `E_NOT_IMPLEMENTED` / `没有 install`）——防的是"模板被后来人删成一句话"。
+    prompts 数 3 → 4，`mcp-server` / `mcp-stdio` / `mcp-http` **三处**断言同步。
+  - 判据：四文件 **61 条**全绿 · `packages/mcp` dist 已重建。
+  - **★诚实边界（必须写在前面）**：prompt 只是**建议**，不是强制——AI 仍可能不遵守，
+    上下文一长尤其如此。真正兜底的是**校验器与安装闸**，不是提示词。
+    把"写了 prompt"误当成"AI 不会犯错了"，就是又一次把提示当判据。
+
 

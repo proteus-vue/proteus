@@ -96,7 +96,7 @@ describe.skipIf(!HAS_WEB_CRYPTO)('★#682 Streamable HTTP 传输（需 Node ≥2
     const { resources } = await client.listResources()
     expect(resources).toHaveLength(5)
     const { prompts } = await client.listPrompts()
-    expect(prompts).toHaveLength(3)
+    expect(prompts).toHaveLength(4)
   }, 30000)
 
   it('并发两客户端（stateless per-request 各自独立）', async () => {
