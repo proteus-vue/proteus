@@ -9,12 +9,13 @@
 //   ② 卡片内容跟着**被悬停的那一项**变 —— 桩里 App.vue=371 行、main.rs=997 行。
 //      若桩对所有文件都返回同一个数，"卡片沿用了上一项数据"这类串数据缺陷根本抓不到；
 //   ③ 移开即消失 —— 残留卡片会挡住下一行的点击，是可感知的缺陷。
-import { probeFileHover, probeSymbolPanel } from './studio-panel-probes.mjs'
+import { probeFileHover, probePopoverChain, probeSymbolPanel } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
   const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone } =
     await probeFileHover(page)
   const sym = await probeSymbolPanel(page)
+  const chain = await probePopoverChain(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -115,5 +116,31 @@ export async function checksHover(page) {
         sym.info.dim === 2 &&
         sym.gone === true,
     ],
+    /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
+       "只能点箭头太固化" ⇒ 整行可点；
+       "前面的面板不需要自动关闭" ⇒ 指针进子面板 700ms 后父面板仍在；
+       "面板要紧挨触发入口" ⇒ 与父面板边缘的间距恒为 8px（误差 ≤1，浮点取整）。 */
+    (() => {
+      const gap =
+        chain.panel && chain.card1
+          ? chain.panel.side === 'left'
+            ? chain.card1.left - chain.panel.right
+            : chain.panel.left - chain.card1.right
+          : NaN
+      const gapOk = Number.isFinite(gap) && Math.abs(gap - 8) <= 1
+      return [
+        `㊿o 面板级联（决策 #1482）：整行可点=${chain.panel !== null && chain.panel !== undefined} · 父面板不关=${
+          chain.cardKept
+        } · 间距=${Number.isFinite(gap) ? Math.round(gap) : '?'}px · 关子后父仍在=${
+          chain.cardAfterClose
+        } · 移开双收=${chain.goneBoth}`,
+        chain.panel != null &&
+          chain.cardKept === true &&
+          chain.panelKept === true &&
+          gapOk &&
+          chain.cardAfterClose === true &&
+          chain.goneBoth === true,
+      ]
+    })(),
   ]
 }

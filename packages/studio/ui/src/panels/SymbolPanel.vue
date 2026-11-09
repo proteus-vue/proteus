@@ -17,12 +17,28 @@
 //   摘要与清单是两条命令：悬停是热路径，不为"可能不会点开的面板"付钱。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { fileSymbols, type SymbolRow } from '../bridge'
+import { placeBeside, type AnchorRect } from '../popover'
 import { useWorkspaceState } from '../useWorkspaceState'
 import StudioIcon from '../icons/StudioIcon.vue'
 
-const props = defineProps<{ path: string }>()
+const props = defineProps<{
+  path: string
+  /** 父面板（悬停卡）的矩形 —— 决策 #1482：子面板锚定**父面板**，不是锚定某一行 */
+  anchor: AnchorRect | null
+}>()
 const emit = defineEmits<{ close: [] }>()
 const ws = useWorkspaceState()
+
+/* 面板尺寸：宽度固定（清单是等宽名字 + 行号，窄了会截断），高度用于垂直夹取 */
+const W = 340
+const EST_H = 420
+const LEAVE_GRACE = 300
+
+const pos = computed(() => {
+  const a = props.anchor
+  if (!a) return { left: 24, top: 88, side: 'right' as const }
+  return placeBeside(a, { w: W, h: EST_H })
+})
 
 const rows = ref<SymbolRow[]>([])
 const err = ref('')
@@ -67,6 +83,23 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
 }
 
+/* 悬停自动关闭（决策 #1482）：面板是"链路的第二级"，
+   指针离开 300ms 就收起；父面板（卡片）由 FileTree 决定去留，这里不越权。 */
+let leaveTimer: ReturnType<typeof setTimeout> | null = null
+function onEnter() {
+  if (leaveTimer) {
+    clearTimeout(leaveTimer)
+    leaveTimer = null
+  }
+}
+function onLeave() {
+  onEnter()
+  leaveTimer = setTimeout(() => emit('close'), LEAVE_GRACE)
+}
+onBeforeUnmount(() => {
+  if (leaveTimer) clearTimeout(leaveTimer)
+})
+
 /** 点一条 → 交给 `ws.jump`（CodePanel 监听它并负责打开文件 + 定位），然后收起面板。
  *  ★这里不自己调编辑器：`EditorView` 只在 CodePanel 里，跨组件拿是错的（#1409 的既有约定）。 */
 function go(r: SymbolRow) {
@@ -77,7 +110,16 @@ function go(r: SymbolRow) {
 
 <template>
   <Teleport to="body">
-    <div class="sym" id="symbolPanel" role="dialog" aria-label="结构大纲">
+    <div
+      class="sym"
+      id="symbolPanel"
+      role="dialog"
+      aria-label="结构大纲"
+      :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: `${W}px` }"
+      :data-side="pos.side"
+      @mouseenter="onEnter"
+      @mouseleave="onLeave"
+    >
       <header class="sym-h">
         <div class="sym-t">
           <StudioIcon name="rows" :size="13" />
@@ -117,14 +159,13 @@ function go(r: SymbolRow) {
 </template>
 
 <style scoped>
+/* ★位置由 `placeBeside` 算（决策 #1482），这里**不写 top/right** ——
+   上一版固定 `top:88px; right:24px`，于是面板飞到窗口角落、与触发入口毫无关系。 */
 .sym {
   position: fixed;
-  top: 88px;
-  right: 24px;
   z-index: 70;
   display: flex;
   flex-direction: column;
-  width: 340px;
   max-height: 70vh;
   border: 1px solid var(--border-strong);
   border-radius: 10px;

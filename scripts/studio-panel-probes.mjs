@@ -851,3 +851,46 @@ export async function probeSymbolPanel(page) {
   const gone = await page.evaluate(() => !document.getElementById('symbolPanel'))
   return { info, gone }
 }
+
+/**
+ * 面板级联模型（决策 #1482）：点符号行 → 子面板紧贴父面板右侧，且**父面板不消失**。
+ * ★这条判据守的是用户原话："前面的面板不需要自动关闭""面板是紧挨着触发入口弹出才对"。
+ */
+export async function probePopoverChain(page) {
+  const rect = (id) =>
+    page.evaluate((i) => {
+      const el = document.getElementById(i)
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, side: el.dataset.side ?? '' }
+    }, id)
+
+  await page.hover('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]')
+  await page.waitForTimeout(520)
+  const card0 = await rect('fileHoverCard')
+  if (!card0) return { card0: null }
+
+  /* ① 点**整行**（不是 16px 箭头）：命中面积够大才算"不固化" */
+  await page.click('#fileHoverCard .fv-row.more')
+  await page.waitForTimeout(420)
+  const card1 = await rect('fileHoverCard')
+  const panel = await rect('symbolPanel')
+
+  /* ② 指针移到子面板上，等超过父面板的 220ms 宽限：父面板必须**还在** */
+  await page.hover('#symbolPanel').catch(() => {})
+  await page.waitForTimeout(700)
+  const cardKept = (await rect('fileHoverCard')) !== null
+  const panelKept = (await rect('symbolPanel')) !== null
+
+  /* ③ 关子面板：不能被"同步连带"关掉父面板 */
+  await page.click('#symbolPanel .sym-x').catch(() => {})
+  await page.waitForTimeout(120)
+  const cardAfterClose = (await rect('fileHoverCard')) !== null
+
+  /* ④ 移开指针：两级都收 */
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(760)
+  const goneBoth = (await rect('fileHoverCard')) === null && (await rect('symbolPanel')) === null
+
+  return { card0, card1, panel, cardKept, panelKept, cardAfterClose, goneBoth }
+}

@@ -128,23 +128,46 @@ function clearHover() {
   hoverStat.value = null
 }
 
-/** 延迟收起（决策 #1478）：离开行或离开卡片后给 220ms 宽限，好让指针走进卡片 */
+/** 延迟收起（决策 #1478）：离开行或离开卡片后给 220ms 宽限，好让指针走进卡片。
+ *  ★决策 #1482：**子面板开着时父面板不自动关**——它是子面板的锚点，
+ *    收掉父面板会让第二级浮层变成"凭空出现"，正是用户说的"整套逻辑是分离的"。 */
 function scheduleHide() {
   cancelHide()
-  hideTimer = setTimeout(clearHover, HIDE_GRACE)
+  hideTimer = setTimeout(() => {
+    if (symbolPath.value) return
+    clearHover()
+  }, HIDE_GRACE)
 }
 
-/** 结构面板（决策 #1481）：卡片上的箭头点开后，清单在独立面板里列。
- *  ★打开时顺手收起卡片：接下来视线和指针都在面板上，留着卡片只会互相压。 */
+/** 结构面板（决策 #1481 / 级联规则 #1482）
+ *  ★锚点取**卡片自己的矩形**：子面板贴着父面板的右边缘展开，两级像台阶一样向右延伸。
+ *  ★不再 `clearHover()`：父面板必须留着（上一版把它关掉了，用户当场指出这是分离感）。 */
 const symbolPath = ref('')
+const symbolAnchor = ref<{ top: number; left: number; right: number } | null>(null)
+
 function openSymbols(p: string) {
-  clearHover()
+  if (symbolPath.value === p) return // 悬停自动触发会重复调用，幂等
+  const el = document.getElementById('fileHoverCard')
+  const r = el?.getBoundingClientRect()
+  symbolAnchor.value = r ? { top: r.top, left: r.left, right: r.right } : hoverAnchor.value
   symbolPath.value = p
+}
+
+/** 关子面板：父面板按正常宽限走（指针若还在卡片上，卡片不会消失） */
+function closeSymbols() {
+  symbolPath.value = ''
+  symbolAnchor.value = null
+  scheduleHide()
 }
 
 function onHover(e: Event, node: TreeNode) {
   cancelHide()
   if (hoverTimer) clearTimeout(hoverTimer)
+  /* 换一行 = 换一个文件，旧的子面板必须跟着收掉（它属于上一个文件） */
+  if (symbolPath.value && symbolPath.value !== node.path) {
+    symbolPath.value = ''
+    symbolAnchor.value = null
+  }
   const el = e.currentTarget as HTMLElement | null
   if (!el) return
   const r = el.getBoundingClientRect()
@@ -176,8 +199,9 @@ function onKeydown(e: KeyboardEvent) {
 function onDocPointerDown(e: Event) {
   if (!hoverPath.value) return
   const t = e.target as Element | null
-  /* 卡片内的点击（将来的复制/展开按钮）不算"点别处" */
-  if (t?.closest?.('#fileHoverCard')) return
+  /* ★决策 #1482：**整条链路**内的点击都不算"点别处"——卡片和子面板都要排除。
+     只排除卡片的话，点结构面板里的 ✕ / 符号条目会先把卡片干掉（门禁 ㊿o 抓到的真缺陷）。 */
+  if (t?.closest?.('#fileHoverCard, #symbolPanel')) return
   clearHover()
 }
 
@@ -280,8 +304,13 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     />
   </Teleport>
 
-  <!-- 结构大纲面板（决策 #1481）：自己 Teleport 到 body，可滚、可 Esc 关闭 -->
-  <SymbolPanel v-if="symbolPath" :path="symbolPath" @close="symbolPath = ''" />
+  <!-- 结构大纲面板（决策 #1481 · 级联定位 #1482）：锚点是卡片自身的矩形 -->
+  <SymbolPanel
+    v-if="symbolPath"
+    :path="symbolPath"
+    :anchor="symbolAnchor"
+    @close="closeSymbols"
+  />
 </template>
 
 <style scoped>

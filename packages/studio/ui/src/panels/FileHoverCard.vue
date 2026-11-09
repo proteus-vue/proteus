@@ -14,8 +14,9 @@
 //
 // 【数据是异步的】`file_stat` 是一次 IPC。为了不"先空后跳"，卡片**立刻**用已知信息
 //   （文件名/路径）渲染骨架，stat 回来后再填数字——宁可短暂显示"—"，也不让卡片高度抖动。
-import { computed } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import type { FileStat } from '../bridge'
+import { placeBeside } from '../popover'
 import StudioIcon from '../icons/StudioIcon.vue'
 
 const props = defineProps<{
@@ -34,6 +35,23 @@ const props = defineProps<{
 /** 决策 #1481：`more` = 点箭头要看**完整结构清单**（卡片只给总览，清单交给面板） */
 const emit = defineEmits<{ more: [path: string] }>()
 
+/** 决策 #1482：整行触发，不必瞄准 16px 按钮。
+ *  悬停停留时长刻意比卡片出现的 250ms 更长（380ms）——否则鼠标扫过这一行
+ *  就会误弹出下一个面板，那是噪音。 */
+const MORE_DWELL = 380
+let moreTimer: ReturnType<typeof setTimeout> | null = null
+function armMore() {
+  disarmMore()
+  moreTimer = setTimeout(() => emit('more', props.path), MORE_DWELL)
+}
+function disarmMore() {
+  if (moreTimer) {
+    clearTimeout(moreTimer)
+    moreTimer = null
+  }
+}
+onBeforeUnmount(disarmMore)
+
 /** 卡片宽度：与文件树 240px 量级匹配，但不跟着树宽变（避免窄树里折行） */
 const W = 272
 /** 高度估算值：只用于"底部放不下就上移"，误差靠 max-height + 滚动兜底 */
@@ -42,13 +60,9 @@ const EST_H = 140
 const pos = computed(() => {
   const a = props.anchor
   if (!a) return { left: -9999, top: -9999 }
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  // 优先贴行右侧；右侧不够就翻到左侧（树通常靠左，翻边是常态而非例外）
-  let left = a.right + 8
-  if (left + W > vw - 8) left = Math.max(8, a.left - 8 - W)
-  const top = Math.max(8, Math.min(a.top, vh - EST_H - 8))
-  return { left, top }
+  /* ★位置规则统一走 `placeBeside`（决策 #1482）：卡片与结构面板共用同一套"紧挨触发入口"
+     的模型。以前这里是手写的一份，结构面板又固定在右上角——两份规则必然分离。 */
+  return placeBeside(a, { w: W, h: EST_H })
 })
 
 const name = computed(() => props.path.slice(props.path.lastIndexOf('/') + 1))
@@ -245,7 +259,17 @@ const markLabel = computed(() => {
           </span>
         </div>
         <!-- 符号名单独一行、**允许换行**（monospace 淡色），不再被 ellipsis 吃掉 -->
-        <div v-if="brief?.names?.length" class="fv-row">
+        <div
+          v-if="brief?.names?.length"
+          class="fv-row more"
+          role="button"
+          tabindex="0"
+          :title="`点击或悬停 ${MORE_DWELL}ms 打开结构面板`"
+          @click="emit('more', path)"
+          @keydown.enter.prevent="emit('more', path)"
+          @mouseenter="armMore"
+          @mouseleave="disarmMore"
+        >
           <span class="fv-k" />
           <span class="fv-v names">
             {{ brief.names.join(' · ') }}
@@ -253,7 +277,8 @@ const markLabel = computed(() => {
               >+{{ brief.names_total - brief.names.length }}</span
             >
           </span>
-          <!-- ★决策 #1481：箭头 → 单开结构面板（卡片只做总览，清单交给面板） -->
+          <!-- ★决策 #1482：箭头只是"这里还有下一级"的视觉提示，整行都能点/能悬停，
+               不再强迫用户去瞄准一个 16px 的按钮。 -->
           <button
             class="fv-more"
             title="打开结构面板（完整清单）"
@@ -447,6 +472,17 @@ const markLabel = computed(() => {
   border-color: var(--accent);
   background: var(--bg-overlay);
   color: var(--fg);
+}
+/* ★决策 #1482：符号行**整行都是触发区**（把手/箭头只是提示）。
+   之前只有 16px 的按钮能点，用户说"太固化"——命中面积太小本身就是缺陷。 */
+.fv-row.more {
+  margin: 0 calc(-1 * var(--sp3));
+  padding: 0 var(--sp3);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.fv-row.more:hover {
+  background: var(--bg-overlay);
 }
 .fv-sub {
   margin-left: 5px;
