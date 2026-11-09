@@ -16585,4 +16585,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     manifest + README，**没有 Provider 实现桩**（Provider 入出参尚未冻结，见 G-58 §3.5 的提案约束）；
     ③ **未做端到端**：没在真实 MCP 客户端（Claude Desktop / Cursor）里跑过一次"AI 写插件"的完整闭环。
 
+1472. **★★端到端抓到并修掉一个契约缺陷：`ok` 字段在「工具执行成功」与「业务校验结论」两层撞名（`errors` 被整条吞掉）**（2026-11-09 · 用户「好的继续」→ 跑真实 MCP 闭环）:
+  - **怎么发现的**：16 条单测全绿之后，用 **SDK Client + 真实 stdio 子进程**（`proteus mcp serve`）
+    跑了一遍四个工具——合法 manifest 通过，**非法 manifest 却只回来一句 `error: 操作失败`**，
+    `errors` 详情全丢。★这就是「单测绿 ≠ 端到端可用」的又一实例：单测直接调 `run()`
+    拿得到完整对象，**永远走不到协议转换那一层**。
+  - **根因**：`stdio.ts::toProtocolCallResult` 有一条明确契约——`payload.ok === false`
+    ⇒ 判为**工具执行失败**（`isError: true`）。那是给 `write_file` 那类"操作没做成"
+    （`write_disabled`）设计的。而 `plugin_validate_manifest` 用 `ok: false` 表达
+    "**校验不通过**"——两层语义撞名，整个 payload 被压成一行错误文本。
+  - **修法（改契约用法，不动协议层）**：插件工具的业务结论一律改用非 `ok` 字段——
+    `{ valid, errors, warnings }`；scaffold 改 `{ scaffolded, selfCheck: { valid, … } }`；
+    describe_provider 改 `{ found }`。**`ok` 从此只表示"工具跑没跑起来"**，这条写进
+    `validateManifest` 头注释，将来加工具的人第一眼就能看到。
+  - **★第二层发现：单测走 src、CLI 走 dist**。vitest alias 指向 `packages/mcp/src/index.ts`，
+    而 `proteus mcp serve` 通过包入口加载 `dist/index.js` —— 实测 **dist 是 10 天前（10-29）的**，
+    里面根本没有 `plugin_*` 工具。⇒ 改完 `packages/mcp` 必须 `npm run build`，
+    否则"单测全绿、CLI 里工具不存在"。这是端到端要抓的第二类断层。
+  - **判据**：① `mcp-plugin-tools.test.ts` **17 条**（新增"校验不通过不能被协议层当工具失败"，
+    显式走 `toProtocolCallResult`）；② `mcp-stdio.test.ts` 新增**真机级**用例——真实子进程调
+    `plugin_validate_manifest` 传非法 manifest，断言 `isError` 为空且能解析出 `E_SYSTEM_SCOPE`；
+    ③ 工具数断言从 4 处补到 **6 处**（又发现 `mcp-stdio.test.ts:207` 的 `toBe(11)`）——
+    "改判据要扫全"第三次生效。
+  - **破坏性验证**：把返回改回 `{ ok: r.valid }` ⇒ **只有那一条判据红，其余 16 条绿**（精确）。
+  - **判据结果**：`mcp-plugin-tools` + `mcp-server` + `mcp-http` **45 条**绿 · `mcp-stdio` **15 条**绿 ·
+    端到端探针输出 `[4] 非法 manifest ok=false codes=E_TIER_TOO_LOW,E_SYSTEM_SCOPE`。
+  - **诚实边界**：① 端到端用的是 **SDK Client 脚本**，不是真实 LLM 客户端——它证明协议链路与
+    工具契约，**不证明"AI 会按正确顺序用它们"**（那要靠 prompt 引导，本单没做）；
+    ② 真机级判据依赖 `dist` 已构建（旧 dist 会以 `unknown_tool` 失败，属正确提示而非误报）；
+    ③ 探针脚本本身是一次性的，未固化进仓库（结论已固化为上面两条测试）。
+
 

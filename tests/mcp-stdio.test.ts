@@ -202,9 +202,50 @@ describe('★#681 端到端 stdio（真实子进程 `proteus mcp serve`）', () 
     if (!existsSync(MCP_DIST)) throw new Error(`MCP dist 不存在：${MCP_DIST}（测试前需 build-packages）`)
   })
 
-  it('spawn 真实 CLI → initialize/listTools(11)/callTool 全通', async () => {
+  it('spawn 真实 CLI → initialize/listTools(15)/callTool 全通', async () => {
     const { tools } = await stdioRoundtrip(process.execPath, [CLI_DIST, 'mcp', 'serve'])
-    expect(tools).toBe(11)
+    expect(tools).toBe(15)
+  }, 30000)
+
+  /* ★★决策 #1471：插件工具的**真机级**判据——走真实 stdio 子进程。
+     为什么必须放在这里：`toProtocolCallResult` 会把 `payload.ok === false` 判成
+     "**工具执行失败**"，于是"校验不通过"这个业务结论被压成一行 `error: 操作失败`、errors 全丢。
+     单元测试直接调 `run()` 拿得到完整对象，**永远测不出这一段**（本单实测踩到，不是假想）。
+     ★前提：dist 必须是新构建的（`build-packages`）——旧 dist 里没有 plugin_* 工具，
+       会以 `unknown_tool` 失败，那是"该 build 了"的正确提示，不是误报。 */
+  it('★plugin_validate_manifest 经真实 stdio：校验不通过仍拿到结构化 errors', async () => {
+    const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [CLI_DIST, 'mcp', 'serve'],
+      env: sanitizedEnv(),
+      stderr: 'pipe',
+    })
+    const client = new Client({ name: 'vitest-plugin-e2e', version: '0.0.0' })
+    try {
+      await client.connect(transport)
+      const res = await client.callTool({
+        name: 'plugin_validate_manifest',
+        arguments: {
+          manifest: {
+            name: '@proteus-studio/plugin-e2e',
+            version: '0.1.0',
+            tier: 'third-party',
+            engines: { studio: '>=0.4.0 <0.6.0' },
+            permissions: [{ id: 'system.internal' }],
+          },
+        },
+      })
+      expect(res.isError, '校验不通过不是工具故障，不该标 isError').toBeFalsy()
+      const payload = JSON.parse((res.content as { text: string }[])[0].text) as {
+        valid: boolean
+        errors: { code: string }[]
+      }
+      expect(payload.valid).toBe(false)
+      expect(payload.errors.map((e) => e.code)).toContain('E_SYSTEM_SCOPE')
+    } finally {
+      await client.close().catch(() => {})
+    }
   }, 30000)
 })
 

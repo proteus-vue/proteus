@@ -9,7 +9,7 @@
 //      `status: proposed` 是 **warning**（方向对但未收编）。
 //   ③ scaffold 生成的东西必须**自己能过自己的校验**，否则模板会批量生产非法插件。
 import { describe, it, expect } from 'vitest'
-import { MCP_TOOLS, validateManifest } from '@proteus-vue/mcp'
+import { MCP_TOOLS, validateManifest, toProtocolCallResult } from '@proteus-vue/mcp'
 
 const legal = {
   name: '@proteus-studio/plugin-demo',
@@ -47,7 +47,7 @@ describe('#1471 插件开发工具：硬边界', () => {
 describe('#1471 manifest 校验（安装闸规格）', () => {
   it('合法 manifest 通过', () => {
     const r = validateManifest(legal)
-    expect(r.ok).toBe(true)
+    expect(r.valid).toBe(true)
     expect(r.errors).toEqual([])
   })
 
@@ -100,7 +100,7 @@ describe('#1471 manifest 校验（安装闸规格）', () => {
       tier: 'trusted',
       permissions: [{ id: 'terminal', reason: '需要跑用户命令来构建项目' }],
     })
-    expect(r.ok, `terminal 是 proposed 而非 error：${JSON.stringify(r.errors)}`).toBe(true)
+    expect(r.valid, `terminal 是 proposed 而非 error：${JSON.stringify(r.errors)}`).toBe(true)
     expect(warnCodes(r)).toContain('W_PROPOSED')
   })
 
@@ -145,14 +145,19 @@ describe('#1471 工具行为（直接调 run，走与 server 相同的入参）'
     const out = byName('plugin_scaffold').run(
       { name: '@proteus-studio/plugin-demo', capabilities: ['readWorkspace'] },
       { writeEnabled: false },
-    ) as { ok: boolean; files: { path: string; content: string }[]; wroteToDisk: boolean }
+    ) as {
+      scaffolded: boolean
+      selfCheck: { valid: boolean }
+      files: { path: string; content: string }[]
+      wroteToDisk: boolean
+    }
 
     expect(out.wroteToDisk).toBe(false)
     const manifestFile = out.files.find((f) => f.path === 'proteus.plugin.json')
     expect(manifestFile).toBeTruthy()
     const parsed = JSON.parse(manifestFile!.content)
-    expect(validateManifest(parsed).ok).toBe(true)
-    expect(out.ok).toBe(true)
+    expect(validateManifest(parsed).valid).toBe(true)
+    expect(out.selfCheck.valid).toBe(true)
   })
 
   it('describe_provider：10 个插槽，foldingRange/codeAction 尚无通道', () => {
@@ -163,5 +168,25 @@ describe('#1471 工具行为（直接调 run，走与 server 相同的入参）'
     expect(all.total).toBe(10)
     expect(all.kinds.find((k) => k.kind === 'foldingRange')?.status).toBe('no-channel')
     expect(all.kinds.find((k) => k.kind === 'documentFormatting')?.status).toBe('has-channel')
+  })
+
+  /* ★★这条判据守的是一个只在真实协议链路上才暴露的陷阱（决策 #1471 端到端实测）：
+     `toProtocolCallResult` 会把 `payload.ok === false` 判成"**工具执行失败**"，
+     于是"校验不通过"这个**业务结论**会被压成一行 `error: 操作失败`，errors 全丢。
+     单测直接调 `run()` 拿得到完整对象，所以永远测不出这段——必须显式走协议转换。 */
+  it('★校验不通过是正常结果，不能被协议层当成工具失败', () => {
+    const core = byName('plugin_validate_manifest').run(
+      { manifest: { ...legal, permissions: [{ id: 'not-a-real-cap' }] } },
+      { writeEnabled: false },
+    )
+    const protocol = toProtocolCallResult({
+      ok: true,
+      tool: 'plugin_validate_manifest',
+      result: core,
+    })
+    expect(protocol.isError, '校验不通过不是工具故障，不该标 isError').toBeFalsy()
+    const payload = JSON.parse(protocol.content[0].text) as { valid: boolean; errors: { code: string }[] }
+    expect(payload.valid).toBe(false)
+    expect(payload.errors.map((e) => e.code)).toContain('E_UNKNOWN_CAP')
   })
 })

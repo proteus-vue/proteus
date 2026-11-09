@@ -68,13 +68,19 @@ const capById = (id: string): CapabilityRow | undefined => TABLE.capabilities.fi
  * 返回 errors（装不上）与 warnings（能装但要注意），严重度必须分开：
  *   · `implemented: false` 是 **error**（宿主没有对应实现，装上也是"点了没反应"）
  *   · `status: proposed` 是 **warning**（方向对，但还没收编，将来可能变）
+ *
+ * ★★字段名**不能叫 `ok`**（决策 #1471 端到端实测踩到）：协议层 `toProtocolCallResult`
+ *   会把 `payload.ok === false` 判成"**工具执行失败**"，于是"校验不通过"这个**业务结论**
+ *   会被压成一行 `error: 操作失败`，`errors` 详情全部丢失。
+ *   ⇒ 契约是：**`ok` 只表示"工具跑没跑起来"，业务结论一律用别的字段**（这里用 `valid`）。
+ *   单测直接调 `run()` 拿得到完整对象，所以这个坑**只有走真实 stdio 协议才暴露**。
  */
-export function validateManifest(raw: unknown): { ok: boolean; errors: Issue[]; warnings: Issue[] } {
+export function validateManifest(raw: unknown): { valid: boolean; errors: Issue[]; warnings: Issue[] } {
   const errors: Issue[] = []
   const warnings: Issue[] = []
 
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ok: false, errors: [{ code: 'E_MANIFEST', message: 'manifest 必须是对象' }], warnings }
+    return { valid: false, errors: [{ code: 'E_MANIFEST', message: 'manifest 必须是对象' }], warnings }
   }
   const m = raw as Record<string, unknown>
 
@@ -105,7 +111,7 @@ export function validateManifest(raw: unknown): { ok: boolean; errors: Issue[]; 
   const perms = m.permissions
   if (!Array.isArray(perms)) {
     errors.push({ code: 'E_PERMISSIONS', message: 'permissions 必须是数组（可以为空数组）' })
-    return { ok: errors.length === 0, errors, warnings }
+    return { valid: errors.length === 0, errors, warnings }
   }
 
   const seen = new Set<string>()
@@ -179,7 +185,7 @@ export function validateManifest(raw: unknown): { ok: boolean; errors: Issue[]; 
     errors.push({ code: 'E_SYSTEM_SCOPE', message: 'system.* 仅内置插件可用（第三方声明即拒装）' })
   }
 
-  return { ok: errors.length === 0, errors, warnings }
+  return { valid: errors.length === 0, errors, warnings }
 }
 
 export const PLUGIN_TOOLS: readonly McpToolDefWithHandler[] = [
@@ -228,7 +234,9 @@ export const PLUGIN_TOOLS: readonly McpToolDefWithHandler[] = [
     },
     run(args) {
       const r = validateManifest(args.manifest)
-      return { ok: r.ok, errors: r.errors, warnings: r.warnings }
+      /* ★不要返回 `ok`（见 validateManifest 的注释）：协议层会把 `ok:false` 当成
+         "工具执行失败"，把校验详情压成一行错误文本。业务结论一律用 `valid`。 */
+      return { valid: r.valid, errors: r.errors, warnings: r.warnings }
     },
   },
   {
@@ -269,8 +277,9 @@ export const PLUGIN_TOOLS: readonly McpToolDefWithHandler[] = [
       const check = validateManifest(manifest)
 
       return {
-        ok: check.ok,
-        selfCheck: { errors: check.errors, warnings: check.warnings },
+        /** ★同上：不用 `ok`，否则自检失败会被协议层当"工具挂了" */
+        scaffolded: true,
+        selfCheck: { valid: check.valid, errors: check.errors, warnings: check.warnings },
         summary,
         files: [
           { path: 'proteus.plugin.json', content: `${JSON.stringify(manifest, null, 2)}\n` },
@@ -300,9 +309,10 @@ export const PLUGIN_TOOLS: readonly McpToolDefWithHandler[] = [
       }
       const p = TABLE.providerKinds.find((x) => x.kind === kind)
       if (!p) {
-        return { ok: false, error: `未知 ProviderKind：${kind}` }
+        /* 同样不用 `ok:false`——否则协议层会把它压成一行 `error: 操作失败`，`error` 原文反而丢失 */
+        return { found: false, error: `未知 ProviderKind：${kind}` }
       }
-      return { ok: true, ...p }
+      return { found: true, ...p }
     },
   },
 ]
