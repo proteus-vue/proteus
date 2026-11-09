@@ -186,3 +186,88 @@ LSP/DAP 服务器是**原生进程，不在 WASM 沙箱内**。
 | **插件间权限传递** | 阶段 1 禁止插件互调，规避该问题 |
 | **Tier 2 进程的逃逸风险** | 等同运行外部程序，无沙箱，仅靠用户授权 |
 | **权限变更的增量提示** | 更新时新增权限如何提示，未定 |
+
+---
+
+## 9. Studio 现有 IPC → capability 映射（决策 #1470）
+
+> 本节回答一个此前只有抽象答案的问题：**G-58 的 capability 落到 Studio 是哪几条命令？**
+> 取证来源：`main.rs::generate_handler!` 全量 **62 条**（2026-11-09 实测）。
+
+### 9.1 为什么必须做这张表
+
+抽象 capability（`readWorkspace` / `spawnProcess`）本身不能施工。没有映射表会有两个后果：
+
+- **插件申请粒度失控**：`diag_*` 有 13 条命令，若按命令授权，插件得申请 13 次
+- **危险能力被漏掉**：`term_*`（pty + execve）在现有 capability 里**没有对应项**，
+  照抽象清单实现会直接漏掉 Studio 最危险的一条通道
+
+### 9.2 映射表
+
+| 分组 | Studio 命令 | capability | 备注 |
+|---|---|---|---|
+| **宿主壳自身**（14） | `set_canvas_rect` `set_ui_zoom` `dump_frame` `stats` `set_dirty_count` `close_now` `open_settings` `settings::×5` `load_state` `save_state` | **不对插件开放** | 这是"壳怎么画自己"，不是能力 |
+| **工作区只读**（4） | `read_text` `read_text_external` `list_files` `search_text` | `readWorkspace` | ★`read_text_external` 另有数据敏感度判定（Studio 侧已实现） |
+| **工作区写**（5） | `write_text` | `writeWorkspace` | 带 mtime 冲突检测 |
+| | `create_file` `create_dir` `rename_path` `delete_path` | `writeWorkspace.structure` | ★**建议细分**：改目录结构比改文件内容危险得多（误删/误改名） |
+| **外部进程**（16） | `format_text` | `spawnProcess{commands:["prettier","rustfmt"]}` | 命令模板由宿主持有（Studio 已实现 `proc_template`） |
+| | `diag::×13` | `spawnProcess{commands:["tsserver","eslint"]}` | ★13 条命令 = **1 个** capability |
+| | `git_status` `git_head` | `spawnProcess{commands:["git"]}` | 实测是 `Command::new("git")`，不是读 `.git/` |
+| **终端**（5） | `term_open` `term_write` `term_resize` `term_close` `term_info` | **`terminal`（新增）** | ★★见 9.3，这是模型漏洞 |
+| **设备·连接**（8） | `list_devices` `select_device` `capture_preset` `ios_stream_start` `ios_start_host` `ios_uninstall` `ios_run_state` `ios_stream_hint` | `device.attach{runtimes}` | |
+| **设备·输入**（8） | `device_tap` `device_swipe` `ios_tap` `ios_scroll` `ios_key` `ios_longpress` `ios_swipe` `ios_touch_state` | `device.input` | 8 条命令 = 1 个 capability |
+| **剪贴板**（2） | `read_clipboard` `copy_text` | **`clipboard.read` / `clipboard.write`（新增）** | ★★见 9.4 |
+| **框架内核查询**（0） | — | `kernel.spiTopology` 等 4 项 | ★Studio **尚未实现**任何一条（见 9.5） |
+
+合计：14 + 4 + 5 + 16 + 5 + 8 + 8 + 2 = **62** ✓
+
+### 9.3 ★★`term_*` 是现有能力模型的漏洞
+
+`spawnProcess` 的约束方式是**命令白名单**（`commands: ["prettier"]`）。而终端是：
+
+```
+openpty + fork + execve  ⇒ 用户在里面敲什么就执行什么
+```
+
+⇒ **一旦把终端开放给插件，`spawnProcess` 的白名单就形同虚设**（插件通过终端跑任意命令）。
+
+处置建议（三选一，倾向第三个）：
+
+| 方案 | 说明 |
+|---|---|
+| 复用 `spawnProcess` | ❌ 自欺——白名单挡不住 pty |
+| 新增 `terminal` capability 且允许 third-party 申请 | ⚠ 用户点了"允许"就等于交出整台机器 |
+| **新增 `terminal` 且 `minTier: trusted`，third-party 一律拒装** | ✅ 与 `system.internal` 同档 |
+
+### 9.4 ★★`clipboard` 是 G-59 那条原则的实证
+
+G-59 说"权限建在**数据敏感度**上，不建在 API 危险度上"，原话举的例子就是 `clipboard.writeText`。
+Studio 侧对应的是 `read_clipboard`：
+
+- 它看起来是"第一方无害功能"（右键菜单粘贴用）
+- 但用户剪贴板里可能是**密码管理器导出的密码、助记词、验证码**
+- ⇒ 数据敏感度 = `secret`，**不该因为它"只是个粘贴"就归到低危**
+
+故 `clipboard.read` 至少 `user_grant`，且在授权文案里必须写明读的是"系统剪贴板内容"。
+
+### 9.5 两条由此暴露的欠账
+
+| 欠账 | 说明 |
+|---|---|
+| **`kernel.*` 一条都没实现** | G-58 设计了 `spiTopology`/`layerRules`/`conformance`/`deviceImpact` 四项，Studio 侧**没有对应 IPC 命令** ⇒ 这四项现在只能写在文档里 |
+| **`search_text` 的能力需求随环境变化** | 有 `rg` 时 spawn，无 `rg` 时走内置扫描（不 spawn）。★授权口径应取**最宽那条**（按 rg 路径算 `spawnProcess`），不能"没装 rg 就自动降权"——那会让授权结果随机器不同而不同 |
+
+### 9.6 一个可复用的判断规则
+
+从这 62 条里能提炼出一条**分组规则**，用于将来新增命令时快速定位：
+
+```
+这个命令会不会让插件"替用户做决定"？
+├─ 只读数据 ─────────────→ readWorkspace（+ 数据敏感度分级）
+├─ 改数据 ───────────────→ writeWorkspace（结构变更再细分）
+├─ 起进程 ───────────────→ spawnProcess（命令白名单 + 模板）
+├─ 执行任意命令 ─────────→ terminal（trusted 起）
+├─ 碰设备 ───────────────→ device.attach / device.input
+└─ 只影响壳自己 ─────────→ 不对插件开放
+```
+

@@ -4214,7 +4214,24 @@
       "related": [
         "T-studio-proc-template"
       ],
-      "note": "【done · 决策 #1469（2026-11-09）】Studio 后端自己就有 18 个 .rs，却不能格式化——接 rustfmt。★改法：`Formatter{Prettier,Rustfmt}` + `formatter_for()` 唯一判定入口；`rustfmt_command()` 用第二条模板（`--emit stdout --edition 2021`）；`rustfmt_exe()` 与 node 同款三层解析（`~/.cargo/bin` 早在 `child_path_from` 硬编码表里，#1464 顺带覆盖）；`NO_PARSER_EXT` 28→27（rs 移出，语义改为「Studio 没有任何格式化器能处理」）。★★安全前提单独验证：实测 rustfmt 语法错误 `rc=1` + stdout 0 字节 + stderr 有 error——若返回 0 则会把空内容 dispatch 回编辑器（=清空用户文件）；判据 `rustfmt_syntax_error_is_rejected_not_silently_empty` 专守。★`--emit stdout` 是必须的（不带它会改写源文件）。★三张表不变量 `formatter_tables_are_consistent`：LIST_EXT 每项要么有格式化器要么在拒绝表；拒绝表每项不得被判给格式化器；判给 Rustfmt 的只能是 rs。★判据：真跑 rustfmt 单测绿 · `cargo test` 41 通过/1 失败（唯一红为 #1460 既存）· `check:studio-panel` **75 绿 0 红**。★门禁同步（判据跟着代码搬家）：拒绝用例 .rs→.m；`noDiskWrite`/`guiNode` 的证明位置扩到 proc_template 并改查证据链（`let node = node_for_prettier()?` + `assemble(&node,`）。★诚实边界：**GUI 真机未验**（没在 Dock 启动的 Studio 里真点 ⇧⌥F 格式化 .rs——#1463/#1464 栽过同类坑，必须补跑）；只支持 .rs（.m/.h 仍无格式化器）；`.rustfmt.toml` 未接，风格随用户 rustup 版本。【Handoff】- 做到哪：路由 + 第二条模板 + 真跑判据 + 门禁同步。- 未做：GUI 真机复验；.rustfmt.toml 读取。- 下一步：真机点一次 ⇧⌥F（.rs）；再谈 G-58 B1 映射表。"
+      "note": "【done · 决策 #1469（2026-11-09）】Studio 后端自己就有 18 个 .rs，却不能格式化——接 rustfmt。★★**真机已验证（2026-11-09 11:56 · 用户「格式化验证没问题」）**：`package-app.sh` 重打包（53s · 来源 main@98f60e4f · 内嵌前端自证）后在 app 里点 ⇧⌥F 格式化 .rs **通过**——#1463/#1464 那条「判据绿但真机挂」的缝未重现（`~/.cargo/bin` 本就在 `child_path_from` 硬编码位）。★改法：`Formatter{Prettier,Rustfmt}` + `formatter_for()` 唯一判定入口；`rustfmt_command()` 用第二条模板（`--emit stdout --edition 2021`）；`rustfmt_exe()` 与 node 同款三层解析；`NO_PARSER_EXT` 28→27（rs 移出，语义改为「Studio 没有任何格式化器能处理」）。★★安全前提单独验证：实测 rustfmt 语法错误 `rc=1` + stdout 0 字节 + stderr 有 error——若返回 0 则会把空内容 dispatch 回编辑器（=清空用户文件）；判据 `rustfmt_syntax_error_is_rejected_not_silently_empty` 专守。★`--emit stdout` 是必须的（不带它会改写源文件）。★三张表不变量 `formatter_tables_are_consistent`。★判据：真跑 rustfmt 单测绿 · `cargo test` 44 通过/1 失败（唯一红为 #1460 既存）· `check:studio-panel` **75 绿 0 红**。★门禁同步（判据跟着代码搬家）：拒绝用例 .rs→.m；`noDiskWrite`/`guiNode` 的证明位置扩到 proc_template 并改查证据链。★诚实边界：真机只验了 .rs 成功一条（.m 拒绝与 .ts 走 prettier 未逐项真机点验）；只支持 .rs（.m/.h 仍无格式化器）；`.rustfmt.toml` 未接。【Handoff】- 做到哪：路由 + 第二条模板 + 真跑判据 + 门禁同步 + 真机验证。- 未做：.m/.h 格式化器；.rustfmt.toml 读取。- 下一步：G-58 B1 映射表（已完成，见 T-plugin-ipc-capability-map）。"
+    },
+    {
+      "id": "T-plugin-ipc-capability-map",
+      "title": "Studio IPC → capability 映射表（62 条命令逐条落位）· 暴露 terminal/clipboard 两个模型漏洞",
+      "type": "docs",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "docs/proteus-plugin-api-plan/04-capability-model.md"
+      ],
+      "decision": 1470,
+      "verification": "cd docs/proteus-plugin-api-plan && bash verify.sh",
+      "branch": null,
+      "related": [
+        "T-studio-rustfmt"
+      ],
+      "note": "【done · 决策 #1470（2026-11-09）】把 G-58 的抽象 capability 落到 Studio 的 62 条 IPC 命令上（`main.rs::generate_handler!` 逐条数，按实现方式核实归属：git 是 Command::new(\"git\")、search 双路径、term 是 openpty+fork+execve）。★分布：宿主壳 14（不开放）· 只读 4 · 写 5 · 外部进程 16 · 终端 5 · 设备连接 8 · 设备输入 8 · 剪贴板 2 · 内核查询 0。★★两个漏洞：① `term_*` —— spawnProcess 靠命令白名单，而终端是任意命令，**一旦开放白名单形同虚设** ⇒ 新增 `terminal` capability 且 minTier=trusted；② `clipboard` —— 正是 G-59 的原例，read_clipboard 看似无害但剪贴板可能是密码/助记词 ⇒ 数据敏感度 secret。★欠账：G-58 的 `kernel.*` 四项在 Studio **一条命令都没有**。★口径：search_text 能力随环境变化（rg/内置），授权取最宽那条，否则授权结果随机器不同。★落点：04-capability-model.md 新增 §9（188→316 行），verify.sh PASS=40 FAIL=0。★诚实边界：静态映射未改代码；`writeWorkspace.structure`/`terminal`/`clipboard.*` 三个 capability 是**我建议新增的**、G-58 原文没有，须走 05 的版本流程正式收编；归属按当前实现判定，实现变了要重核。【Handoff】- 做到哪：映射表 + 两个漏洞定级建议 + 分组规则。- 未做：没改任何代码；三个新 capability 未进 API 版本定义。- 下一步：kernel.* 四项要么实现要么在文档里标「未实现」（当前是空白）。"
     }
   ]
 }

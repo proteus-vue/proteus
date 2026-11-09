@@ -16497,11 +16497,54 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **判据**：`cargo test` **44 通过 / 1 失败**（唯一红 `new_path_boundary` 是 #1460 既存）·
     `check:studio-panel` **75 绿 0 红**（含 ㊿c 的 `.m 拒绝=true/buffer不变=true`）·
     `check:file-size` 3 处既存红未变（`format.rs` 409 → 619 行）。
-  - **诚实边界**：① **真机 GUI 未验**——最小环境判据（`env_clear` + 只给 launchd PATH）
-    已覆盖"解析"这一步，但它与**真正从 Dock 启动的 Studio** 仍有差异（#1464 的教训），
-    所以"用户在 app 里点 ⇧⌥F 格式化 `.rs`"这一条**仍缺真机证据**，设备就绪后补跑；
+  - **✅ 真机已验证（2026-11-09 11:56 · 用户「格式化验证没问题」）**：先用 `package-app.sh` 重新打包
+    （53s · `BUILD_INFO` 显示来源 `/Volumes/data1/work/office/debug/proteus · main@98f60e4f`、
+    内嵌前端自证 `index-B8rom96i.js` 与 `web-dist/index.html` 一致、已用开发者证书签名），
+    再在 app 里点 ⇧⌥F 格式化 `.rs` —— **通过**。
+    ★这次没重现 #1463/#1464 那条"判据绿但真机挂"的缝，关键原因是 `~/.cargo/bin` **本来就在**
+    `child_path_from` 的硬编码位里（#1464 修 node 时顺带覆盖），不是运气。
+  - **诚实边界**：① 真机**只验了 `.rs` 成功**这一条；`.m` 拒绝与 `.ts` 走 prettier 两条**未逐项点验**
+    （前者由 `check:studio-panel` ㊿c 覆盖、后者由 `formats_with_real_cli` 覆盖，但都不是真机）；
     ② 只支持 `.rs`，`.m/.h`（ObjC）仍无格式化器；③ rustfmt 版本由用户的 rustup 决定
     ⇒ 不同机器格式化风格可能不同（`.rustfmt.toml` 未接）。
   - ★**本单同时兑现了 #1468 的欠账**：`proc_template` 从"单模板"变成"双模板"
     （prettier + rustfmt），这才够格谈"机制"，但仍不等于完整插件 SPI（插件还不能注册模板）。
+
+1470. **★★Studio IPC → capability 映射表（62 条命令逐条落位）· 暴露两个模型漏洞（`terminal` / `clipboard`）与一条欠账（`kernel.*` 全未实现）**（2026-11-09 · 用户「格式化验证没问题，继续往下做」）:
+  - **为什么必须做**：G-58 的 capability 是**抽象**的（`readWorkspace` / `spawnProcess`），不能直接施工。
+    没有映射表会有两个后果：① **申请粒度失控**——`diag_*` 有 13 条命令，按命令授权要申请 13 次；
+    ② **危险能力被漏掉**——`term_*` 在现有 capability 里**根本没有对应项**，照抽象清单实现会直接漏掉
+    Studio 最危险的一条通道。
+  - **取证**：`main.rs::generate_handler!` 全量 **62 条**（逐条数，非估算），并按**实现方式**核实归属：
+    `git_status/git_head` 实测是 `Command::new("git")` ⇒ spawnProcess（不是读 `.git/`）；
+    `search_text` 双路径（有 rg 则 spawn、无 rg 走内置扫描）；`term_*` 是 **openpty + fork + execve**；
+    `capture_preset`/`ios_*` 走设备通道。
+  - **映射结果**：宿主壳自身 **14**（不对插件开放）· 工作区只读 **4** · 写 **5**
+    （`create/dir/rename/delete` 建议单列 `writeWorkspace.structure`）· 外部进程 **16**
+    （format 1 + diag 13 + git 2）· 终端 **5** · 设备连接 **8** · 设备输入 **8** ·
+    剪贴板 **2** · 内核查询 **0**。合计 62 ✓
+  - **★★漏洞一：`term_*` 是现有能力模型的缺口** —— `spawnProcess` 的约束方式是**命令白名单**，
+    而终端是"用户敲什么就执行什么" ⇒ **一旦终端对插件开放，`spawnProcess` 白名单形同虚设**。
+    处置：新增 `terminal` capability 且 `minTier: trusted`（与 `system.internal` 同档），
+    third-party 一律拒装。★"复用 spawnProcess"是**自欺**，白名单挡不住 pty。
+  - **★★漏洞二：`clipboard` 是 G-59 原则的现成实证** —— G-59 原话举的例子就是 `clipboard.writeText`。
+    Studio 的 `read_clipboard` 看起来是"第一方无害功能"（右键粘贴用），但用户剪贴板里可能是
+    **密码管理器导出的密码 / 助记词 / 验证码** ⇒ **数据敏感度 = secret**，至少 `user_grant`，
+    且授权文案必须写明"读的是**系统剪贴板内容**"。
+  - **★欠账：`kernel.*` 一条都没实现** —— G-58 设计了 `spiTopology` / `layerRules` / `conformance` /
+    `deviceImpact` 四项，Studio 侧 62 条命令里**没有任何一条**对应。这四项目前只存在于文档。
+  - **★一条必须定死的口径**：`search_text` 的能力需求随**环境**变化（有 rg 则 spawn、无 rg 不 spawn）。
+    授权应取**最宽那条**（按 rg 路径算 `spawnProcess`）——否则同一份 manifest 在不同机器上
+    得到不同授权结果，那种"环境相关的权限"没法解释也没法审计。
+  - **★可复用的分组规则**（新增命令时快速定位）：
+    只读 → `readWorkspace` · 改数据 → `writeWorkspace` · 起进程 → `spawnProcess` ·
+    执行任意命令 → `terminal`(trusted) · 碰设备 → `device.attach`/`device.input` · 只影响壳 → 不开放。
+  - **落点**：`docs/proteus-plugin-api-plan/04-capability-model.md` 新增 §9（188 → 316 行）。
+  - **自检**：`verify.sh` **PASS=40 FAIL=0**（CHECKSUM 重算 12/12 匹配）。
+  - **诚实边界**：① 本表是**静态映射**，未改任何代码（Studio 现在没有插件运行时，映射表是设计输入）；
+    ② `writeWorkspace.structure` / `terminal` / `clipboard.read|write` 三个 capability
+    **是我建议新增的**、G-58 原文没有——须在下一次 API 版本定义时正式收编（走 05 的版本流程），
+    不能直接当成既有 API 用；③ 62 条命令的归属按**当前实现**判定，将来若 `git_status` 改成读
+    `.git/` 就该降为 `readWorkspace`——映射表有保质期，实现变了要重核。
+
 
