@@ -876,6 +876,25 @@ export async function probePopoverChain(page) {
   const card1 = await rect('fileHoverCard')
   const panel = await rect('symbolPanel')
 
+  /* ★决策 #1485：行高与箭头位置的几何量测。
+     ① 卡片内所有 `.fv-row` 必须等高（20px 档）；
+     ② chevron 必须贴右边缘（否则短名字时它挤在字后面，用户说"看着别扭"）；
+     ③ 面板内所有 `.sym-i` 必须等于标准档 24px。 */
+  const geo = await page.evaluate(() => {
+    const c = document.getElementById('fileHoverCard')
+    const p = document.getElementById('symbolPanel')
+    if (!c || !p) return null
+    const cr = c.getBoundingClientRect()
+    const chev = c.querySelector('.fv-chev')
+    const chr = chev ? chev.getBoundingClientRect() : null
+    return {
+      cardRight: Math.round(cr.right),
+      chevRight: chr ? Math.round(chr.right) : -1,
+      rows: [...c.querySelectorAll('.fv-row')].map((e) => Math.round(e.getBoundingClientRect().height)),
+      sym: [...p.querySelectorAll('.sym-i')].map((e) => Math.round(e.getBoundingClientRect().height)),
+    }
+  })
+
   /* ② 指针移到子面板上，等超过父面板的 220ms 宽限：父面板必须**还在** */
   await page.hover('#symbolPanel').catch(() => {})
   await page.waitForTimeout(700)
@@ -897,7 +916,7 @@ export async function probePopoverChain(page) {
   await page.waitForTimeout(760)
   const goneBoth = (await rect('fileHoverCard')) === null && (await rect('symbolPanel')) === null
 
-  return { card0, card1, panel, cardKept, panelKept, rowActive, cardAfterClose, goneBoth }
+  return { card0, card1, panel, geo, cardKept, panelKept, rowActive, cardAfterClose, goneBoth }
 }
 
 /**

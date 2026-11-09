@@ -262,7 +262,7 @@ const markLabel = computed(() => {
           <StudioIcon name="rows" :size="13" />
           <span class="fv-k">结构</span>
           <span class="fv-v chips">
-            <span v-for="c in brief.chips" :key="c" class="chip">{{ c }}</span>
+            <span v-for="c in brief.chips" :key="c" class="fv-chip">{{ c }}</span>
           </span>
         </div>
         <!-- 符号名：整行是下一级的触发区。排版按"极简"重做（决策 #1484）：
@@ -276,7 +276,7 @@ const markLabel = computed(() => {
           :class="{ active }"
           role="button"
           tabindex="0"
-          :title="`点击或悬停 ${MORE_DWELL}ms 打开结构面板`"
+          :aria-label="`展开 ${path} 的结构清单`"
           @click="emit('more', path)"
           @keydown.enter.prevent="emit('more', path)"
           @mouseenter="armMore"
@@ -414,9 +414,17 @@ const markLabel = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* ★决策 #1485：行高走统一档位（tight 20px），不再靠 `line-height` 自适应——
+     否则内容高低不同时，hover 背景块会忽高忽低。名字换行时这一行自然变高（可接受）。 */
+  min-height: var(--row-h-tight, 20px);
   color: var(--fg-muted);
   font-size: 11px;
   line-height: 1.5;
+}
+/* 符号名占满剩余空间，把 chevron 顶到右边缘（决策 #1485）——
+   之前箭头紧跟内容，短名字时挤在字后面，看着别扭。 */
+.fv-row.more .fv-v.names {
+  flex: 1;
 }
 .fv-row svg {
   flex: none;
@@ -446,7 +454,9 @@ const markLabel = computed(() => {
   overflow: visible;
   white-space: normal;
 }
-.chip {
+/* ★决策 #1485：类名叫 `fv-chip` 不叫 `chip` —— 全局 `.chip`（标题栏那个）有 height:22px，
+   同名会把这一行撑到 24px，与其它 20px 的行不齐（门禁 ㊿r 当场抓到）。 */
+.fv-chip {
   padding: 0 5px;
   border-radius: 4px;
   background: var(--bg-overlay);

@@ -4537,6 +4537,29 @@
         "T-studio-brief-layout"
       ],
       "note": "【done · 决策 #1484（2026-11-09）】用户两条：①「这块排版太难看，箭头去掉按钮边框，整体走极简但不低档」②「鼠标放到新面板上，上一个面板的悬停高亮又消失了」。\n★① 箭头从\"小按钮\"降级为\"提示符\"：.fv-chev 无边框无底色、12px 宽、常显 38% 不透明，hover/active 提到 100%（保留常显是为了可发现性）；+N 改成独立 .fv-rest（6px + 中性灰 + tabular-nums），不再和符号名挤成一个词；整行仍是触发区。\n★② 这跟 #1480 是**同一条规则**，只是对象换了：文件树那行有 .peek（跟随 hoverPath），而卡片里的触发行只写了 :hover ⇒ 指针进子面板就没底色。改法：卡片加 active prop（FileTree 传 symbolPath === hoverPath），CSS .fv-row.more.active 与 :hover 同色。\n★判据 ㊿q：指针停子面板 700ms 后，卡片里 .fv-row.more.active 必须存在（只断\"卡片还在\"不够——行变回普通样式时卡片是整个还在的）。\n★破坏性验证：:active 传 false ⇒ 仅 ㊿q 红、其余 85 绿，报错「入口行 active=false」。\n★判据：check:studio-panel 86 绿 0 红 · cargo test 60 通过/1 失败（#1460 既存，本单未动 Rust）。\n★★写进规则：这类缺陷已出现两次 ⇒ **凡是\"触发入口\"，都要有与链路同源的 active 态，不能只靠 :hover**。目前两处各写一份（树行 .peek、卡内 prop active），第三次出现就该抽 useEntryActive()。\n★诚实边界：38% 常显是折中（要更淡就改一行 CSS）；卡片宽度未变、名字仍可能换行；本轮只调视觉不改时序。\n【Handoff】- 做到哪：极简化箭头 + +N 拆分 + active 态 + 判据 + 破坏性验证。- 未做：抽 useEntryActive、箭头彻底 hover 才显示。\n- 下一步：真机看极简效果是否够\"不低档\"；若嫌箭头碍眼，去掉常显即可。"
+    },
+    {
+      "id": "T-studio-row-metrics",
+      "title": "行高档位化（20/24）+ 箭头右对齐 + 全局类名撞车修复（㊿r）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/ui/src/styles.css",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/panels/SymbolPanel.vue",
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs"
+      ],
+      "decision": 1485,
+      "verification": "cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-card-minimal",
+        "T-studio-popover-fit"
+      ],
+      "note": "【done · 决策 #1485（2026-11-09）】用户：①「箭头紧挨着内容放着，看着很别扭」②「悬浮高亮时行高没固定规范，有的面板高有的面板低」。\n★① `.fv-v.names` 缺 flex:1 ⇒ chevron 紧贴符号名。改为 flex:1 把箭头顶到右边缘（实测距右 13px = --sp3 12 + 边框 1）。\n★② 三处列表各写各的行高：文件树 24 / 悬停卡 line-height 1.5（≈16.5 浮动）/ 大纲面板 padding 2px（≈20.5）⇒ hover 背景块高低不一。在 styles.css 定两档：--row-h-tight:20px（悬停卡）/ --row-h:24px（文件树 + 大纲面板），三处都引用变量（卡片用 min-height 以容纳换行，列表用 height）。\n★★③ 顺手抓到类名撞车：卡片标签原来叫 class=\"chip\"，而**全局 .chip**（标题栏语言 chip）有 height:22px ⇒ 那行被撑到 24px。㊿r 第一次跑就红在那里，改名 fv-chip 才齐。教训：组件内部类名不要用 chip/tag/row 这类通用词，作用域样式救不了——全局规则仍会命中同一元素。\n★判据 ㊿r 三条：卡片所有 .fv-row 等高=20 / chevron 距右 10~16px / 面板 .sym-i 等高=24（只断第一条则箭头挤字尾也能绿）。\n★破坏性验证：flex 1→0 ⇒ 仅 ㊿r 红、其余 86 绿，报错「行高=不一致(20/76/…)/箭头距右=165px」。\n★判据：check:studio-panel 87 绿 0 红 · cargo test 60 通过/1 失败（#1460 既存，本单未动 Rust）。\n★诚实边界：卡片行 min-height 20，名字换行时该行自然变高；两档只覆盖三处列表；.fv-chip 仍有底色。\n【Handoff】- 做到哪：行高变量化 + 箭头右对齐 + 类名修复 + 判据 + 破坏性验证。- 未做：编辑器内浮层的度量统一、chip 去底色。\n- 下一步：真机看极简效果；若还嫌箭头碍眼，可改成仅 hover 显示。"
     }
   ]
 }

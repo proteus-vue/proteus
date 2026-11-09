@@ -365,7 +365,8 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
   align-items: center;
   gap: var(--sp1);
   width: 100%;
-  height: 24px;
+  /* ★决策 #1485：与大纲面板同一档（标准 24px）—— 两处列表的 hover 背景块必须等高 */
+  height: var(--row-h, 24px);
   padding-right: var(--sp2);
   border: 0;
   border-radius: 0;

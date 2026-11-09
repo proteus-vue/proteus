@@ -155,6 +155,30 @@ export async function checksHover(page) {
       `㊿q 触发入口激活态（决策 #1484）：指针在子面板上时 入口行 active=${chain.rowActive}`,
       chain.rowActive === true,
     ],
+    /* ㊿r 行高规范 + 箭头右对齐（决策 #1485）
+       ★三条一起断：① 卡片各行等高（否则 hover 背景块忽高忽低）；
+         ② chevron 贴右边缘（短名字时它不能挤在字后面）；
+         ③ 面板行 = 标准档 24px（与文件树同一档）。
+       只断①的话，箭头挤在内容后面照样能绿。 */
+    (() => {
+      const g = chain.geo
+      const cardRows = new Set(g?.rows ?? [])
+      const symRows = new Set(g?.sym ?? [])
+      const chevGap = g && g.chevRight > 0 ? g.cardRight - g.chevRight : -1
+      return [
+        `㊿r 行高规范 + 箭头右对齐（决策 #1485）：卡片行高=${
+          cardRows.size === 1 ? [...cardRows][0] : `不一致(${[...(g?.rows ?? [])].join('/')})`
+        } · 面板行高=${symRows.size === 1 ? [...symRows][0] : '不一致'} · 箭头距右=${
+          chevGap >= 0 ? chevGap : '?'
+        }px`,
+        cardRows.size === 1 &&
+          [...cardRows][0] === 20 &&
+          symRows.size === 1 &&
+          [...symRows][0] === 24 &&
+          chevGap >= 10 &&
+          chevGap <= 16,
+      ]
+    })(),
     /* ㊿p 不得穿出可用区域（决策 #1483）——守用户这句"没考虑到被下面窗口遮挡"：
        窗口压到 420 高时，面板底边必须停在**状态栏上沿 8px 以内**，
        而且不能退化成高度 0（那样等于判据自己把内容藏了）。

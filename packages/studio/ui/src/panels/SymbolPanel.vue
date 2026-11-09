@@ -239,7 +239,8 @@ function go(r: SymbolRow) {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px var(--sp3) 2px;
+  height: 18px;
+  padding: 0 var(--sp3);
   color: var(--fg-subtle);
   font-size: 10px;
   letter-spacing: 0.04em;
@@ -253,10 +254,13 @@ function go(r: SymbolRow) {
 }
 .sym-i {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sp2);
   width: 100%;
-  padding: 2px var(--sp3);
+  /* ★决策 #1485：行高走统一档位（标准 24px）。原来用 `padding: 2px` + line-height
+     撑出 ~20.5px，与文件树的 24px 不一致 —— hover 背景块在两个面板里高低不同。 */
+  height: var(--row-h, 24px);
+  padding: 0 var(--sp3);
   border: 0;
   background: transparent;
   color: var(--fg);
