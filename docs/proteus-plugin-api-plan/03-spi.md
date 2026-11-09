@@ -85,6 +85,153 @@ interface ContributionPoints {
 
 ---
 
+## 3.5 Provider 范式（学 VS Code 的能力插槽）
+
+> 参考 VS Code 的 **Provider 模型**——但只抄"接口形状"，不抄它的运行时信任模型（那部分由 04 的
+> capability 模型覆盖）。这是 VS Code 扩展体系里**最值得抄的一块**：它把"宿主问、插件答"
+> 变成标准接口，于是同一个插槽可以有多份实现共存、可替换、可 conformance 化。
+
+**与贡献点的区别（别混）**：
+
+| | 贡献点（contributes） | Provider |
+|---|---|---|
+| 方向 | 插件 → 宿主（push 声明） | 宿主 → 插件（pull 回调） |
+| 时机 | 加载时读一次 | 用户触发时按需调用（**懒，且可超时**） |
+| 典型 | 菜单项、快捷键、主题 | 格式化、补全、跳转定义 |
+| 失败语义 | 声明非法 ⇒ 安装失败 | 单次失败 ⇒ **降级到下一实现**，不杀插件 |
+
+```typescript
+// ★ 不新增顶层 SPI 类型（守 G-58「仅 4 类型」）：Provider 是 ContributionPoints 的一个字段，
+//   具体实现方法由 Tier 1/2 的运行时导入函数承担（WASM 侧 export，宿主侧 link）。
+interface ContributionPoints {
+  // ... 既有字段见 §3 ...
+  providers?: ProviderDecl[]
+}
+
+interface ProviderDecl {
+  /** 插槽种类——有限枚举，新增须走 API 版本（见 05） */
+  kind: ProviderKind
+  /** 同 kind 多份实现的排序；小者优先。相同时按插件 id 字典序（可复现） */
+  priority?: number
+  /** 触发条件（见 §3.6 when 子句）；缺省 = 总是可被调用 */
+  when?: WhenClause
+}
+
+type ProviderKind =
+  // ---- 编辑器语义插槽（Studio 现有 IPC 通道的插件化出口）----
+  | 'documentFormatting'   // format.rs（prettier）→ 返回整篇文本
+  | 'completion'           // diag_complete（tsserver）
+  | 'hover'                // diag_quickinfo
+  | 'definition'           // diag_definition
+  | 'reference'            // diag_references
+  | 'rename'               // diag_rename
+  | 'documentSymbol'       // diag_symbols
+  | 'diagnostics'          // diag（tsserver + eslint）
+  | 'foldingRange'         // 现由 CodeMirror foldGutter 直接算，尚无通道
+  | 'codeAction'           // 尚无通道（未来）
+```
+
+**为什么把 Studio 现有 8 条 IPC 通道都归到 Provider**：
+
+这 8 条（`format` / `complete` / `quickinfo` / `definition` / `references` / `rename` / `symbols` /
+`diag`）现在都是**宿主内写死的固定命令**，各自独立接线。归一到 Provider 后：
+
+- **G-58.1「内置功能必须走插件 API」**有了具体落点：内置实现 = priority 更小的 Provider
+- 可被第三方插件**替换或叠加**（例如 rustfmt 提供 `documentFormatting`，只对 `when: 'editorLangId == rust'` 生效）
+- 一次 conformance 覆盖全部实现（同一套断言，内置与插件都要过）
+
+> ★ 这不改变权限模型：Provider 只是"谁来答"，能不能答仍由 `capabilities` 决定
+> （`documentFormatting` 需要 `spawnProcess` 或纯计算，取决于实现形态）。
+
+> **诚实边界（必须连同本文一起读）**：§3.5~§3.8 是**范式补充**，`reference-impl.cjs`
+> 的自测（104/104）**尚未覆盖** Provider 路由、when 求值、激活事件校验、version 比对这四项。
+> 也就是说：这四块的"机制已定义"成立，"已模拟验证"不成立。改造落地时须同步补用例，
+> 否则会重复本仓反复踩过的"判据通过 ≠ 功能可用"。
+
+---
+
+## 3.6 when 子句与激活事件（VS Code 的两个必要件）
+
+### when 子句
+
+```typescript
+type WhenClause = string   // 例：'editorLangId == rust && !editorHasSelection'
+```
+
+用途：菜单可见性（`menus[].when`）、快捷键生效条件（`keybindings[].when`）、Provider 触发条件。
+
+**Studio 现状**：`keybindings.ts` 只有 `ActionScope = 'global' | 'terminal'`——粗到无法表达
+"这条快捷键只在 Rust 文件里生效"。插件一旦变多，这个粒度必然不够。
+
+**可用上下文键（首批，须与宿主实现一一对应，不许多造）**：
+
+| key | 取值 |
+|---|---|
+| `editorLangId` | 当前文档语言 id（同 `languages.json` 的值） |
+| `editorHasSelection` | `true` / `false` |
+| `editorIsDirty` | `true` / `false` |
+| `workspaceRoot` 末段目录名 | 字符串（用于按项目定制） |
+| `deviceAttached` | `true` / `false` |
+
+### 激活事件
+
+G-59 禁了 `activationEvents: ["*"]`，但**没给合法枚举** ⇒ 那条禁令目前是空的。本份补齐：
+
+```typescript
+type ActivationEvent =
+  | 'onStartup'                      // ★ 需在安装页显式提示"启动即加载"，默认不建议
+  | `onLanguage:${string}`
+  | `onCommand:${string}`
+  | `onView:${string}`
+  | `workspaceContains:${string}`
+```
+
+**校验规则**（安装闸）：空数组或含 `*` ⇒ 拒绝安装；含未登记项 ⇒ 拒绝安装。
+
+---
+
+## 3.7 运行时上下文（★ 不属于 SPI 类型，属 Tier 1/2 的导入函数）
+
+> 这些是**插件代码看到的东西**，不是 manifest 的一部分。因此不计入 G-58「仅 4 类型」的约束。
+
+```typescript
+interface ExtensionContext {
+  subscriptions: Disposable[]   // 卸载/禁用时按序 dispose——对应 G-59「去激活对称审计」
+  globalState: Memento          // 跨 workspace 的键值存储
+  workspaceState: Memento       // 本 workspace
+  secrets: SecretStorage        // 敏感存储：独立加密区，绝不写进 settings.json
+}
+```
+
+**`Disposable` 为什么必须有**：G-59 要求"禁用 ≠ 卸载，二者都要得到同样的清理"。没有统一的
+dispose 协议，插件注册的 Provider / 命令 / 监听就会在禁用后残留——这正是 VS Code 生态里
+"禁用后快捷键还在响应"那类缺陷的来源。
+
+---
+
+## 3.8 文档版本号（修正 Studio 现状的一个具体缺陷）
+
+Studio 现在的"诊断是否过期"用**时间戳比较**（`editedAt > diagAt` / `editedAt > savedAt`，决策 #1417/#1418）：
+
+- 同一毫秒内的两次编辑会漏判（`mtime_us` 用微秒就是为了绕这个，但内存侧仍是毫秒级时钟）
+- 时间戳只能回答"谁更晚"，回答不了"回包对应的是第几版文档"
+
+VS Code 的做法更可靠：**文档带单调递增 `version`**，请求携带 version，回包时比对。
+
+```typescript
+interface DocumentSnapshot {
+  uri: string
+  version: number      // ★ 单调递增，每次 docChanged +1（不是时间戳）
+  languageId: string
+  text: string
+}
+```
+
+**协议要求**：Provider 的请求必须带 `version`；回包若 `version !== 当前 version` ⇒ **丢弃**，
+不按行号映射（行号已失效）。这条比时间戳判定更硬，建议在 Provider 化改造时一并替换。
+
+---
+
 ## 4. Capability（能力授权单元）
 
 ```typescript
