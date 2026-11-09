@@ -239,6 +239,10 @@ export function stubTauri(payload) {
           return {
             isRepo: true,
             branch: 'main',
+            /* ★决策 #1477：HEAD 与提交标题由 Rust 侧给（oid 来自 `status --branch`，
+               标题来自额外一次 `git log -1`）。桩里给固定的假值，判据据此刻意核对文案。 */
+            head: 'abc1234',
+            subject: '演示提交标题',
             ahead: 1,
             behind: 0,
             files: [

@@ -4352,6 +4352,30 @@
         "T-studio-project-detect"
       ],
       "note": "【done · 决策 #1476（2026-11-09）】两件事同批：① 用户批准批次 1（角色 + 文档骨架）；② 用户报缺陷「大文件显示-行，现在总以为是1行」。★「—」必须废：含糊占位符会被当成数值读，实际意思是「我没数」⇒ 超过 8MB 明确显示「未统计」（不做假数据的 UI 版）。★行数上限 64KB→8MB：64KB~8MB 走 256KB 分块流式数换行符（不驻留全文），>8MB 才回 None。判据 `streaming_line_count_matches_inline` 用**两条独立实现对拍**（300KB 跨块、末行不带换行），不是同一函数算两遍。★一次读取两处消费：数行与摘要共用同一份 text（原来数行自己 read 一遍）。★新增 `file_brief.rs` 而非塞 `fs_guard.rs`（后者已 838 行贴 1000 上限），职责也不同。★角色判定纯路径、顺序即优先级：generated（dist/target/prebuilt/node_modules/.min./.generated.）→test（.test./.spec./_test.rs/tests 目录）→config（9 个已知名 + .config.）→doc（.md/.mdx）→entry（index/main/mod/App.vue）→**普通源码不显示**（role 回 None，每张卡都写「源码」是噪音）。★doc 排在 entry 前（docs/index.md 是文档）；generated 排最前（dist 里的 .md 是生成物不是文档）。★`.md` 骨架：一/二级标题数 + 首标题（按字符截 24，中文不能按字节切）；**跳过围栏代码块**——本仓文档大量 ```sh，段内 `# 注释` 会被算成一级标题，错的摘要比没有更糟。★判据：Rust file_brief 4 条 + streaming 对拍 1 条 + 面板 **㊿i**（App.vue→角色入口；12MB .m→未统计且不含「— 行」，两条都断）。★破坏性验证：① fenced=!fenced 改 false ⇒ 仅 md_facts_skip_fenced_code 红，报错原文显示多算了围栏内注释；② UI 改回「— 行」⇒ 仅 ㊿i 红、其余 77 绿。★判据：check:studio-panel **78 绿 0 红** · cargo test **53 通过/1 失败**（唯一红为 #1460 既存）。★诚实边界：角色只看路径（内容级 AUTO-SYNCED 未做）；.md 只数 # / ##（### 不统计）；摘要只在文件树悬停；.vue/.ts/.rs 结构摘要属批次 2/3 未做；>8MB 仍「未统计」（如实承认）。【Handoff】- 做到哪：角色 + md 骨架 + 行数流式 + 判据 + 破坏性验证。- 未做：批次 2（.vue props / .ts 导出）、批次 3（.rs pub 符号）。- 下一步：真机看卡片；批次 2 开工前先定「抽不出就不显示」的边界。"
+    },
+    {
+      "id": "T-studio-hover-git",
+      "title": "悬停卡 Git 信息：分支 / HEAD / 提交标题 / 变更状态（㊿j）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/git.rs",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/icons/StudioIcon.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1477,
+      "verification": "cd packages/studio && cargo test git::tests && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-file-hover",
+        "T-studio-file-brief"
+      ],
+      "note": "【done · 决策 #1477（2026-11-09）】用户：「git 分支提交信息感觉也可以放上去吧？这个应该没有任何 I/O 消耗」。★判断对一半：✅悬停确实零 I/O（数据来自前端已有的 `git` ref）；❌但 `status --branch` 输出里没有提交标题，要单独一次 `git log -1 --format=%s`——成本挪到**刷新时那一次**，不是每次悬停。★HEAD 短哈希是白捡的：`# branch.oid` 本来就在 porcelain v2 输出里，此前没解析；`(initial)` 如实留空不拿 40 个 0 充数。★展示放卡片最后（仓库级信息不该压住角色/规模）：分支+短哈希+↑↓ / 提交标题 / 变更(MADRU?→人话，与文件树徽标同源 git.files)；文件与目录都显示分支。★判据：Rust `git::tests::status_includes_head_and_subject`（真跑 git status：7 位十六进制、分支非空、有 HEAD 必有标题）；面板 **㊿j** 四条一起断（main+abc1234+演示提交标题+已修改）。★破坏性验证：掐掉 `:git=\"hoverGit\"` 接线 ⇒ 仅 ㊿j 红、其余 78 绿。选接线而非改桩值——接线才是真风险（#1404 的 isRepo 缺陷就死在这条缝）。★该 Rust 判据**不写「没 git 就跳过」**（#1469 踩过 skip 也算 passed）：本仓测试本来就跑在 git 仓库里，取不到 is_repo 应当红。★判据：check:studio-panel **79 绿 0 红** · cargo test **54 通过/1 失败**（唯一红 #1460 既存）。★诚实边界：显示的是 HEAD 的提交标题，不是该文件最后一次提交（后者每文件一次 git log，悬停付不起）；刷新节奏沿用 git_status；未跟踪文件显示「未跟踪」。【Handoff】- 做到哪：Rust 字段 + 卡片渲染 + 桩 + 判据 + 破坏性验证。- 未做：文件级最后一次提交（需 git log -- path）。- 下一步：真机看卡片高度是否可接受（现在最多 9 行）；批次 2（.vue/.ts 结构摘要）。"
     }
   ]
 }

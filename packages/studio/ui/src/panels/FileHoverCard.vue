@@ -23,6 +23,10 @@ const props = defineProps<{
   stat: FileStat | null
   /** 悬停行的矩形（锚点） */
   anchor: { top: number; left: number; right: number } | null
+  /** Git 仓库级信息（决策 #1477）。★来自**已拉过**的 `git` ref ⇒ 悬停零额外 I/O */
+  git: { branch: string; head: string; subject: string; ahead: number; behind: number } | null
+  /** 该路径在 git 里的状态码（M/A/D/R/U/?）；空串 = 干净 */
+  mark: string
 }>()
 
 /** 卡片宽度：与文件树 240px 量级匹配，但不跟着树宽变（避免窄树里折行） */
@@ -117,6 +121,45 @@ const projFacts = computed(() => {
  * ★普通源码没有 brief（Rust 侧就不生成）——绝大多数文件都是源码，每张卡都写"源码"是噪音。
  */
 const brief = computed(() => props.stat?.brief ?? null)
+
+/* ===== Git（决策 #1477）=====
+ * 用户："git 分支提交信息感觉也可以放上去吧？这个应该没有任何 I/O 消耗"。
+ * ★前半句对、后半句要修正：**悬停本身确实零 I/O**——数据来自 `git` 这个 ref，
+ *   树加载/手动刷新时拉过一次。但 `git status` 的输出里**没有提交标题**，
+ *   标题要单独一次 `git log -1`。那一次被挪到**刷新时**，不是每次悬停。
+ */
+const gitInfo = computed(() => props.git)
+
+/** 追踪信息：短哈希 + 领先/落后。没有 HEAD（unborn）就只有分支名 */
+const track = computed(() => {
+  const g = gitInfo.value
+  if (!g) return ''
+  const bits: string[] = []
+  if (g.head) bits.push(g.head)
+  if (g.ahead > 0) bits.push(`↑${g.ahead}`)
+  if (g.behind > 0) bits.push(`↓${g.behind}`)
+  return bits.join(' · ')
+})
+
+/** 状态码 → 人话。与文件树上那个 M/A/D 徽标是同一个来源（`git.files`） */
+const markLabel = computed(() => {
+  switch (props.mark) {
+    case 'M':
+      return '已修改'
+    case 'A':
+      return '新增'
+    case 'D':
+      return '已删除'
+    case 'R':
+      return '重命名'
+    case 'U':
+      return '有冲突'
+    case '?':
+      return '未跟踪'
+    default:
+      return ''
+  }
+})
 </script>
 
 <template>
@@ -224,6 +267,31 @@ const brief = computed(() => props.stat?.brief ?? null)
           <span class="fv-v">凭据/密钥类文件</span>
         </div>
       </template>
+
+      <!-- Git（决策 #1477）：放在最后 —— 分支/提交是**仓库级**信息，
+           对"这是什么文件"只是背景，不该压住角色与规模。
+           ★文件与目录都显示：分支对"看这个目录"同样有意义。 -->
+      <div v-if="gitInfo" class="fv-row">
+        <StudioIcon name="branch" :size="13" />
+        <span class="fv-k">分支</span>
+        <span class="fv-v">
+          {{ gitInfo.branch || '(游离 HEAD)' }}
+          <span v-if="track" class="fv-sub">{{ track }}</span>
+        </span>
+      </div>
+      <div v-if="gitInfo?.subject" class="fv-row">
+        <StudioIcon name="record" :size="13" />
+        <span class="fv-k">提交</span>
+        <span class="fv-v">
+          {{ gitInfo.subject }}
+          <span class="fv-sub">{{ gitInfo.head }}</span>
+        </span>
+      </div>
+      <div v-if="markLabel" class="fv-row">
+        <StudioIcon name="record" :size="13" />
+        <span class="fv-k">变更</span>
+        <span class="fv-v">{{ markLabel }}</span>
+      </div>
     </div>
   </div>
 </template>

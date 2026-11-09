@@ -167,6 +167,10 @@ export interface GitFileStatus {
 export interface GitStatusInfo {
   isRepo: boolean
   branch: string
+  /** HEAD 短哈希（7 位，决策 #1477）；空串 = 还没有提交 */
+  head: string
+  /** HEAD 提交标题；空串 = 取不到 */
+  subject: string
   ahead: number
   behind: number
   files: GitFileStatus[]

@@ -89,6 +89,17 @@ const hoverStat = ref<FileStat | null>(null)
 let hoverTimer: ReturnType<typeof setTimeout> | null = null
 const statCache = new Map<string, FileStat>()
 
+/**
+ * 悬停卡要显示的 Git 信息（决策 #1477）。
+ * ★**零额外 I/O**：全部来自 `git` 这个已经拉过的 ref（树加载/手动刷新时拉的），
+ *   悬停只是把它读出来。原先的「— 行」那种"额外去查"在这里不存在。
+ */
+const hoverGit = computed(() => {
+  const g = git.value
+  if (!g?.isRepo) return null
+  return { branch: g.branch, head: g.head, subject: g.subject, ahead: g.ahead, behind: g.behind }
+})
+
 function clearHover() {
   if (hoverTimer) {
     clearTimeout(hoverTimer)
@@ -204,6 +215,8 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       :path="hoverPath"
       :stat="hoverStat"
       :anchor="hoverAnchor"
+      :git="hoverGit"
+      :mark="mark(hoverPath)"
     />
   </Teleport>
 </template>

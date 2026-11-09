@@ -32,6 +32,14 @@ export async function checksHover(page) {
   const roleOk = /角色/.test(onApp?.text ?? '') && /入口/.test(onApp?.text ?? '')
   const bigOk = /未统计/.test(onBig?.text ?? '') && !/—\s*行/.test(onBig?.text ?? '')
 
+  /* ㊿j Git 信息（决策 #1477）：分支 / HEAD / 提交标题 / 该文件的变更状态。
+     ★四条一起断：只断分支的话，"提交标题取不到"会静默降级成空行而没人发现。 */
+  const gitOk =
+    /main/.test(onApp?.text ?? '') &&
+    /abc1234/.test(onApp?.text ?? '') &&
+    /演示提交标题/.test(onApp?.text ?? '') &&
+    /已修改/.test(onApp?.text ?? '')
+
   return [
     [
       `㊿g 悬停属性预览（决策 #1474）：App.vue→${onApp?.name || '(无卡片)'}/${
@@ -52,6 +60,12 @@ export async function checksHover(page) {
         roleOk ? '入口' : '未命中'
       } · 12MB 文件→${bigOk ? '未统计（不含「— 行」）' : '仍显示含糊占位'}`,
       roleOk && bigOk,
+    ],
+    [
+      `㊿j Git 悬停信息（决策 #1477）：分支+HEAD+提交标题+变更=${
+        gitOk ? 'main/abc1234/演示提交标题/已修改' : '未命中'
+      }`,
+      gitOk,
     ],
   ]
 }

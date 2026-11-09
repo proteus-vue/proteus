@@ -26,6 +26,10 @@ pub struct GitFile {
 pub struct GitStatus {
     pub is_repo: bool,
     pub branch: String,
+    /// HEAD 短哈希（取 7 位）。空串 = 还没有任何提交（unborn 分支）
+    pub head: String,
+    /// HEAD 提交标题。空串 = 取不到（非仓库 / 无提交）
+    pub subject: String,
     pub ahead: i32,
     pub behind: i32,
     pub files: Vec<GitFile>,
@@ -43,14 +47,37 @@ fn git(args: &[&str]) -> Option<String> {
 
 /// 仓库状态（`git status --porcelain=v2` 的解析结果）。
 pub fn git_status() -> GitStatus {
-    let empty = GitStatus { is_repo: false, branch: String::new(), ahead: 0, behind: 0, files: vec![] };
+    let empty = GitStatus {
+        is_repo: false,
+        branch: String::new(),
+        head: String::new(),
+        subject: String::new(),
+        ahead: 0,
+        behind: 0,
+        files: vec![],
+    };
     let Some(text) = git(&["status", "--porcelain=v2", "--branch"]) else {
         return empty;
     };
-    let mut st = GitStatus { is_repo: true, branch: String::new(), ahead: 0, behind: 0, files: vec![] };
+    let mut st = GitStatus {
+        is_repo: true,
+        branch: String::new(),
+        head: String::new(),
+        subject: String::new(),
+        ahead: 0,
+        behind: 0,
+        files: vec![],
+    };
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("# branch.head ") {
             st.branch = rest.trim().to_string();
+        } else if let Some(rest) = line.strip_prefix("# branch.oid ") {
+            /* ★决策 #1477：HEAD 哈希本来就在 `status --branch` 的输出里，此前只是没解析。
+               `(initial)` 表示还没有任何提交，如实留空（不拿 40 个 0 充数）。 */
+            let oid = rest.trim();
+            if oid != "(initial)" {
+                st.head = oid.chars().take(7).collect();
+            }
         } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
             for part in rest.split_whitespace() {
                 if let Some(v) = part.strip_prefix('+') {
@@ -83,10 +110,39 @@ pub fn git_status() -> GitStatus {
             }
         }
     }
+
+    /* 提交标题不在 `status` 的输出里，要单独一次 `git log`。
+       ★**成本只在刷新时**（树加载 / 手动刷新）付一次，悬停读的是前端内存里的 `git` ref
+         ⇒ "悬停零 I/O"成立。无提交（unborn）时不跑，省一次进程。 */
+    if !st.head.is_empty() {
+        st.subject = git(&["log", "-1", "--format=%s"])
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+    }
     st
 }
 
 /// 取某个文件在 HEAD 里的内容（用于"与 HEAD 比较"）；未跟踪/不存在 ⇒ None。
 pub fn git_head(path: String) -> Option<String> {
     git(&["show", &format!("HEAD:{path}")])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 决策 #1477：`status --porcelain=v2 --branch` 的输出里**本来就有** `# branch.oid`，
+    /// 此前只是没解析。这条判据锁住"悬停卡上的 HEAD 哈希与提交标题是真的"。
+    ///
+    /// ★不写"没有 git 就跳过"——那会让它在任何环境都绿（#1469 踩过"skip 也算 passed"）。
+    ///   本仓测试本来就跑在 git 仓库里，取不到 `is_repo` 说明环境坏了，应当红。
+    #[test]
+    fn status_includes_head_and_subject() {
+        let st = git_status();
+        assert!(st.is_repo, "测试环境应当是一个 git 仓库（这台机器上一直是）");
+        assert!(!st.branch.is_empty(), "分支名不该为空：{:?}", st.branch);
+        assert_eq!(st.head.len(), 7, "HEAD 应取 7 位短哈希：{:?}", st.head);
+        assert!(st.head.chars().all(|c| c.is_ascii_hexdigit()), "{:?}", st.head);
+        assert!(!st.subject.is_empty(), "有 HEAD 的仓库必须能取到提交标题");
+    }
 }
