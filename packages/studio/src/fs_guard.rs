@@ -277,6 +277,137 @@ mod tests {
         assert!(!within_root(root, "/tmp/evil.rs"));
         assert!(!within_root(root, ""));
     }
+
+    /// 决策 #1467：数据敏感度的规则表（纯函数，不触盘）。
+    /// ★两侧都要测：只测"拦住了"会让人把整类文件都拦掉（例如 `.env.example`），
+    ///   而模板文件被拦是**真实可用性事故**——它正是"照着模板建 .env"的必要前提。
+    #[test]
+    fn sensitivity_rules() {
+        use std::path::Path as P;
+        for s in [
+            "/home/u/.env",
+            "/home/u/proj/.env.local",
+            "/home/u/proj/.env.production",
+            "/home/u/.ssh/known_hosts.json",
+            "/home/u/.docker/config.json",
+            "/home/u/.aws/sso/cache/x.json",
+            "/home/u/.kube/config",
+            "/home/u/id_rsa",
+            "/home/u/cert.pem",
+            "/home/u/key.p12",
+            "/home/u/.npmrc",
+            "/home/u/.netrc",
+        ] {
+            assert_eq!(sensitivity(P::new(s)), Sensitivity::Secret, "{s} 应判为敏感");
+        }
+        for s in [
+            "/home/u/.env.example",
+            "/home/u/proj/.env.template",
+            "/home/u/proj/src/a.ts",
+            "/home/u/proj/node_modules/vue/index.js",
+            "/home/u/.config/app/settings.json",
+        ] {
+            assert_eq!(sensitivity(P::new(s)), Sensitivity::Normal, "{s} 不应判为敏感");
+        }
+    }
+
+    /// ★决策 #1467 的核心判据：**扩展名白名单挡不住的凭据**必须被敏感度挡住。
+    /// 这条的价值全在"造一个能过白名单的敏感文件"（`.ssh/known_hosts.json`），
+    /// 而不是拿 `/etc/shadow`（那是扩展名白名单本来就挡的，测了等于没测）。
+    /// 反证一并做：同样内容放非敏感目录必须能读 ⇒ 证明拦的是**路径语义**，不是内容。
+    #[test]
+    fn external_rejects_secret_even_when_ext_allowed() {
+        let dir = std::env::temp_dir().join(format!("proteus-sens-{}", std::process::id()));
+        let ssh = dir.join(".ssh");
+        std::fs::create_dir_all(&ssh).expect("建 .ssh");
+        let probe = ssh.join("known_hosts.json");
+        std::fs::write(&probe, "{\"a\":1}").expect("写探针");
+
+        /* ★不用 `unwrap_err()`：它要求 `FileText: Debug`，而该类型刻意不派生 Debug
+           （里面是整篇源码，误打进日志就是一次泄漏）。用 match 取错误。 */
+        let e = match read_text_external(probe.to_string_lossy().to_string()) {
+            Ok(_) => panic!("敏感文件（.ssh 下的 .json）不该被读出来"),
+            Err(e) => e,
+        };
+        assert!(e.contains("敏感"), "应报敏感文件被拒：{e}");
+
+        let ok = dir.join("deps.json");
+        std::fs::write(&ok, "{\"a\":1}").expect("写对照");
+        assert!(
+            read_text_external(ok.to_string_lossy().to_string()).is_ok(),
+            "非敏感目录的同类型文件必须仍可读"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// 数据敏感度（决策 #1467 · 落实 G-59「权限建在**数据敏感度**上，不建在 API 危险度上」）。
+///
+/// 【为什么单独一个轴】`read_text_external` 的扩展名白名单回答的是"这是什么格式"，
+///   但风险取决于"里面装的是什么数据"——两个不同的轴。现实反例：
+///   `~/.docker/config.json`（registry 凭据）、`~/.aws/sso/cache/*.json`、
+///   `~/.ssh/known_hosts.json` **全都是 `.json`**，能顺利通过白名单。
+///   同理 `clipboard.writeText` 是"第一方无害 API"，却能拿走助记词（G-59 原文的例子）。
+///
+/// ★规则只做**保守升级**（Normal → Secret），从不反向放行：
+///   误判 Secret 的代价是"编辑器跳不进去"；误判 Normal 的代价是"凭据被读出来"。
+///   两者不对称，所以宁可多拦。
+#[derive(Debug, PartialEq, Eq)]
+pub enum Sensitivity {
+    Normal,
+    Secret,
+}
+
+/// 判断一个路径的数据敏感度。纯函数，不触盘（只看路径形状）。
+pub fn sensitivity(p: &std::path::Path) -> Sensitivity {
+    use std::path::Component;
+
+    // ① 路径中任一段是凭据目录 ⇒ 整棵子树敏感（.ssh 里没有"不敏感的 .json"）
+    const SECRET_DIRS: [&str; 6] = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".password-store"];
+    let in_secret_dir = p.components().any(|c| match c {
+        Component::Normal(s) => {
+            SECRET_DIRS.contains(&s.to_string_lossy().to_ascii_lowercase().as_str())
+        }
+        _ => false,
+    });
+    if in_secret_dir {
+        return Sensitivity::Secret;
+    }
+
+    let name = p
+        .file_name()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+
+    // ② `.env` 家族（示例/模板除外——它们是给人看的占位符，本来就不含真值；
+    //    把它们也拦掉会让"照着 .env.example 建 .env"这个最常见的动作失效）
+    const ENV_TEMPLATES: [&str; 4] = [".env.example", ".env.sample", ".env.template", ".env.dist"];
+    if name == ".env" || (name.starts_with(".env.") && !ENV_TEMPLATES.contains(&name.as_str())) {
+        return Sensitivity::Secret;
+    }
+
+    // ③ 精确文件名（无扩展名或扩展名普通，但内容就是凭据）
+    const SECRET_NAMES: [&str; 10] = [
+        "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "credentials", "secrets", ".npmrc", ".netrc",
+        ".pgpass", ".htpasswd",
+    ];
+    if SECRET_NAMES.contains(&name.as_str()) {
+        return Sensitivity::Secret;
+    }
+
+    // ④ 密钥类扩展名
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    const SECRET_EXT: [&str; 7] = ["pem", "key", "p12", "pfx", "keystore", "jks", "ppk"];
+    if SECRET_EXT.contains(&ext.as_str()) {
+        return Sensitivity::Secret;
+    }
+
+    Sensitivity::Normal
 }
 
 /// 只读读取**仓库外**的文本文件（决策 #1435）。
@@ -285,10 +416,13 @@ mod tests {
 ///   pnpm store 之外的位置），主流 IDE 都是"打开即可看、但不许改"
 ///   （JetBrains 的 External Libraries 直接就带锁）。
 ///
-/// 【安全边界】三条，缺一不可：
+/// 【安全边界】四条，缺一不可：
 ///   ① 必须**绝对路径**（相对路径一律走仓库内那套判定，避免两套语义混淆）；
-///   ② **扩展名白名单**（只认源码/类型/JSON —— 不让人借这个口子读 `/etc/shadow`）；
-///   ③ **大小上限 512KB**（与仓库内读取一致，防超大文件把 webview 卡死）。
+///   ② **数据敏感度**（决策 #1467）：`.ssh`/`.aws`/`.kube`/`.docker` 等子树、`.env` 家族、
+///      `id_rsa`、`*.pem` 一律拒绝 —— ★这条是补上"扩展名白名单挡不住凭据"的洞
+///      （`~/.docker/config.json` 就是合法的 `.json`）；
+///   ③ **扩展名白名单**（只认源码/类型/JSON —— 不让人借这个口子读 `/etc/shadow`）；
+///   ④ **大小上限 512KB**（与仓库内读取一致，防超大文件把 webview 卡死）。
 /// 全程只读：这个函数之外没有任何写路径经过它。
 pub fn read_text_external(path: String) -> Result<FileText, String> {
     let raw = std::path::Path::new(&path);
@@ -296,6 +430,15 @@ pub fn read_text_external(path: String) -> Result<FileText, String> {
         return Err(format!("需要绝对路径：{path}"));
     }
     let p = raw.canonicalize().map_err(|e| format!("打不开 {path}：{e}"))?;
+    /* 决策 #1467：先判敏感度再判扩展名 —— 顺序有意义。
+       敏感文件的提示要说"这是凭据"，而不是"不支持的文件类型"：
+       后者会让人以为"换个扩展名就能读"，前者才说清是**内容**不允许。 */
+    if sensitivity(&p) == Sensitivity::Secret {
+        return Err(format!(
+            "拒绝读取敏感文件：{}（凭据/密钥类不开放给编辑器跳转）",
+            p.display()
+        ));
+    }
     let ext = p
         .extension()
         .and_then(|e| e.to_str())

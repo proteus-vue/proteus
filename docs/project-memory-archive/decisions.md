@@ -16374,3 +16374,62 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     **让框架源码（`packages/` 45 包 · `hosts/`）进文件树是另一个议题**，属产品范围决策，不在本单。
     另：prettier 2.8.8 仍是 `@changesets` 的传递依赖，未显式钉版本（#1464 已登记）。
 
+1466. **★★G-58 补 VS Code 范式：Provider 插槽 / when 子句 / 激活事件枚举 / document.version**（2026-11-09 · 用户「插件API范式设计可以参考 vscode 现成的范式」）:
+  - **前提澄清**：G-58 立项时**已经**是「VS Code 范式 + 权限收紧」——`ContributionPoints` 就是
+    `contributes` 的移植。它抄的是 **API 形状**，刻意不抄**运行时信任模型**（那块由 04 的
+    capability 模型覆盖）。所以本单不是重新设计，是补 VS Code 范式里**漏掉的四块**。
+  - **★§3.5 Provider（最大缺口）**：VS Code 扩展体系里最值得抄的一块，G-58 原本**完全没有**。
+    新增 `ContributionPoints.providers?: ProviderDecl[]` + `ProviderKind` 10 种插槽
+    （`documentFormatting`/`completion`/`hover`/`definition`/`reference`/`rename`/
+    `documentSymbol`/`diagnostics`/`foldingRange`/`codeAction`）。
+    ★**真正的价值是把 Studio 现有 8 条写死的独立 IPC 通道归一**（`format.rs` / `diag_complete` /
+    `diag_quickinfo` / `diag_definition` / `diag_references` / `diag_rename` / `diag_symbols` /
+    `diag`）⇒ G-58.1「内置功能必须走插件 API」第一次有了具体落点（内置实现 = priority 更小的
+    Provider），且第三方可叠加/替换、一套 conformance 覆盖两份实现。
+    另标出两个「尚无通道」口子：`foldingRange`（现由 CodeMirror `foldGutter` 自算）、`codeAction`（未做）。
+  - **★§3.6 激活事件枚举**：G-59 禁了 `activationEvents:["*"]` 却**没给合法集合** ⇒ 那条禁令
+    此前是**空的**。补 `onStartup`/`onLanguage:`/`onCommand:`/`onView:`/`workspaceContains:`
+    + 安装闸校验（空数组或含 `*` ⇒ 拒装）。同时补 when 子句与首批上下文键
+    （`editorLangId`/`editorHasSelection`/`editorIsDirty`/`deviceAttached`）——Studio 现状
+    `ActionScope = 'global'|'terminal'` 粗到无法表达"只在 Rust 文件里生效"。
+  - **§3.7 运行时上下文**：`ExtensionContext{subscriptions, globalState, workspaceState, secrets}`
+    + `Disposable` —— 补上 G-59「禁用 ≠ 卸载，两者都要同样清理」缺的协议。
+    ★明确标注这些**不属于 SPI 类型**，不破坏 G-58「新增类型仅 4 个」的约束。
+  - **★§3.8 document.version（修正一个具体缺陷）**：Studio 判断诊断是否过期用**时间戳**
+    （`editedAt > diagAt`，#1417/#1418）——同毫秒漏判，且回答不了"回包对应第几版"。
+    VS Code 用单调递增 version + 回包比对（不一致直接丢弃，不按行号映射），更硬。
+  - **自检**：`03-spi.md` 218 → 365 行 · `verify.sh` **PASS=40 FAIL=0** · CHECKSUM 重算 12/12 匹配。
+  - **诚实边界**：`reference-impl.cjs` 自测 104/104 **未覆盖**这四项（Provider 路由 / when 求值 /
+    激活事件校验 / version 比对）⇒「机制已定义」成立、「已模拟验证」不成立，落地须同步补用例。
+    ★踩坑：BSD `sed -i ''` 在 `&&` 链里参数被吞（报 `No such file or directory`）⇒ 改哈希用精确替换。
+
+1467. **★★Studio 数据敏感度判定：补上 `read_text_external` 的凭据盲区（G-59「权限建在数据敏感度上」首次落地）**（2026-11-09 · 用户「推送，然后继续」）:
+  - **真缺口（取证，非推测）**：`read_text_external`（#1435 仓库外只读通道）的边界只有
+    绝对路径 + **扩展名白名单**（ts/tsx/mts/cts/js/jsx/mjs/cjs/vue/**json**）+ 512KB。
+    而 `.json` 在白名单里 ⇒ `~/.docker/config.json`（registry 凭据）、`~/.aws/sso/cache/*.json`、
+    `~/.ssh/known_hosts.json` **全部能读**。
+    ★类型白名单回答的是"这是什么格式"，风险却取决于"里面装的是什么数据"——两个不同的轴
+    （G-59 原文的例子：`clipboard.writeText` 是第一方无害 API，却能拿走助记词）。
+  - **改法**：新增纯函数 `fs_guard::sensitivity(&Path) -> Sensitivity{Normal, Secret}`：
+    ① 路径任一段命中 `.ssh/.aws/.gnupg/.kube/.docker/.password-store` ⇒ 整棵子树敏感；
+    ② `.env` 家族（**`.env.example/.sample/.template/.dist` 除外**——它们是模板，拦掉会让
+       "照 `.env.example` 建 `.env`"这个最常见动作失效）；
+    ③ 精确文件名 `id_rsa/id_dsa/id_ecdsa/id_ed25519/credentials/secrets/.npmrc/.netrc/.pgpass/.htpasswd`；
+    ④ 密钥扩展名 `pem/key/p12/pfx/keystore/jks/ppk`。
+    ★只做**保守升级**（Normal→Secret），从不反向放行——两种误判代价不对称
+    （误杀=跳不进去；漏放=凭据被读出来）。
+    `read_text_external` 中**先判敏感度、再判扩展名**：顺序有意义，报"这是凭据"比报
+    "不支持的文件类型"准确（后者会让人以为换个扩展名就能读）。
+  - **判据**：`sensitivity_rules`（12 正向 + 5 反向）· **`external_rejects_secret_even_when_ext_allowed`**
+    ——核心判据，★造一个**能通过扩展名白名单**的敏感文件（`.ssh/known_hosts.json`）断言被拒，
+    并反证同内容放非敏感目录仍可读（证明拦的是**路径语义**，不是内容）。
+    不拿 `/etc/shadow` 去测——那是白名单本来就挡的，测了等于没测。
+  - **破坏性验证 2 条，都精确翻红**：M1 判定改 `== Sensitivity::Normal`（永不成立）⇒ 核心判据红；
+    M2 把 `.env.example` 移出模板白名单 ⇒ 规则表红，报错原文即「/home/u/.env.example 不应判为敏感」。
+  - **诚实边界**：① 仓库内 `read_text` **未加拦截**（项目自己的 `.env` 本该可编辑），这条轴只用于
+    「仓库外 / 未来插件」；② `.config` 目录**故意不收**（`.config/xxx` 大量非敏感，收进去是误杀）；
+    ③ 这是**纵深防御而非当前漏洞**——Studio 现在没有第三方插件、前端代码是我们自己的；
+    它的真实价值是插件权限模型的现成构件（G-58 B1 前置）。
+  - **判据**：`cargo test` **34 通过 / 1 失败**（唯一红 `new_path_boundary` 是 #1460 既存、#1464 已登记）·
+    `check:file-size` 3 处既存红未变 · `fs_guard.rs` 314 → 457 行。
+
