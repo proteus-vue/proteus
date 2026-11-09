@@ -446,7 +446,7 @@ const { gitBar, gitList, gitOpened, headDiff, linked, afterTree, diffState, diff
 
 // 留一张代码视图快照（人眼可核）
 await page.screenshot({ path: outPath.replace(/\.png$/, '-code.png') })
-const fileOpsChecks = await (await import('./studio-panel-checks-fileops.mjs')).checksFileOps(page)
+const fileOpsChecks = await (await import('./studio-panel-checks-fileops.mjs')).checksFileOps(page); const hoverChecks = await (await import('./studio-panel-checks-hover.mjs')).checksHover(page) // ㊿g ★须在 ㊻/㊽/㊼ 改视图前
 
 /* ── ㊻ iOS 接法引导卡（采集段在 studio-panel-probes-ios.mjs，决策 #1277）──
    ★位置很关键：它会临时把 frames 归零（造"没画面"），跑完自己恢复。
@@ -519,7 +519,7 @@ const objcColors = [objcKw, objcNum, objcComment]
 const { missing: missingExt, seen: seenExtCount } = langExtCoverage(STUDIO)
 
 const capability = checkCapability(STUDIO)
-const checks = [...fileOpsChecks, ...termKeysChecks, ...formatChecks,
+const checks = [...fileOpsChecks, ...hoverChecks, ...termKeysChecks, ...formatChecks,
   ['① 面板调到了 stats（IPC 接线通）', seen.calls.includes('stats')],
   ['② 画布矩形也被同步（HTML 驱动原生）', seen.calls.some((c) => c === 'set_canvas_rect')],
   ['③ 机型/画面/解码三行都有值（不是 "—"）', seen.dev !== '—' && seen.stream !== '—' && seen.dec !== '—'],

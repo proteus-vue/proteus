@@ -52,6 +52,12 @@ pub fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
     crate::fs_guard::list_files(roots)
 }
 
+/// 文件/目录属性（决策 #1474）：文件树悬停预览用，按需单查。
+#[tauri::command]
+pub fn file_stat(path: String) -> Result<crate::fs_guard::FileStat, String> {
+    crate::fs_guard::file_stat(path)
+}
+
 /// 读剪贴板（右键菜单"粘贴"用）。
 /// 【为什么走 `pbpaste`】写用的是 ObjC 桥（`poc_copy_text`），但没做读；`pbpaste` 是系统自带、
 ///   行为稳定、无需新增依赖。命令是 **async + spawn_blocking**（起进程几十 ms，不能堵 UI 主线程）。

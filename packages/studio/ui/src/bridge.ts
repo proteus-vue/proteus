@@ -89,6 +89,26 @@ export const writeText = (path: string, text: string, expect: number): Promise<n
 /** 列仓库内若干子树下的源码文件（G4 文件列表）。边界同上，另有扩展名白名单与 300 条上限。 */
 export const listFiles = (roots: string[]): Promise<string[]> => invoke<string[]>('list_files', { roots })
 
+/** 单个文件/目录的属性（决策 #1474）—— 文件树**悬停预览**的数据源。
+ *  ★为什么不并进 `listFiles`：那个返回类型被三处消费，改契约的半径远大于收益；
+ *    而悬停天然按需（指到哪行查哪行），比一次性 stat 300 个文件更省。 */
+export interface FileStat {
+  path: string
+  /** `file` | `dir` */
+  kind: string
+  /** 文件字节数；目录恒 0（不递归算） */
+  size: number
+  mtime_us: number
+  /** 数据敏感度（决策 #1467）：凭据类为 true，卡片据此标红 */
+  sensitive: boolean
+  ext: string
+  /** 行数：仅「文件 + ≤64KB」有值，其余 null */
+  lines: number | null
+  /** 直接子项数 `[文件, 目录]`；仅目录有值 */
+  children: [number, number] | null
+}
+export const fileStat = (path: string): Promise<FileStat> => invoke<FileStat>('file_stat', { path })
+
 /** 文件树写操作（决策 #1460）：路径沙箱 / 空目录限制 / 扩展名白名单全在 Rust 侧，前端只传相对路径。 */
 export const createFile = (path: string): Promise<void> => invoke<void>('create_file', { path })
 export const createDir = (path: string): Promise<void> => invoke<void>('create_dir', { path })

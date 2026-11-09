@@ -250,6 +250,92 @@ pub fn list_files(roots: Vec<String>) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// 单个文件/目录的属性（决策 #1474）—— 文件树**悬停预览**的数据源。
+///
+/// 【为什么单开一个命令，而不给 `list_files` 加字段】后者的返回类型被 `CodePanel` /
+///   `fileOps` / 门禁桩**三处**消费，改契约的半径远大于收益；而悬停天然是**按需**的
+///   （指到哪一行才查哪一行），比一次性 stat 300 个文件更省。
+///
+/// 【行数为什么限 64KB】数行数要读全文，对大文件是纯浪费（`node_modules` 里几 MB 的
+///   JSON 悬停一下就卡）。超限一律回 `None`，前端显示「—」，**不做假数据**。
+///
+/// 【目录为什么不算总大小】递归 stat 在 300 文件的树上会明显卡，而用户悬停目录时想知道的
+///   通常是"里面有几个东西"，不是"一共多少 MB"。要总量就该做成显式动作（右键→计算大小）。
+#[derive(Serialize)]
+pub struct FileStat {
+    pub path: String,
+    /// `file` | `dir`
+    pub kind: String,
+    /// 文件字节数；目录恒为 0（见上面的理由）
+    pub size: u64,
+    pub mtime_us: u64,
+    /// 数据敏感度（决策 #1467）：凭据类命中为 true，前端据此标红
+    pub sensitive: bool,
+    pub ext: String,
+    /// 行数：仅「文件 + ≤64KB」能算出，其余 `None`
+    pub lines: Option<usize>,
+    /// 直接子项数 `[文件, 目录]`；仅目录有值
+    pub children: Option<[usize; 2]>,
+}
+
+/// 数行数的上限（64KB）。超了就回 `None`，不读。
+const LINE_COUNT_MAX: u64 = 64 * 1024;
+
+pub fn file_stat(path: String) -> Result<FileStat, String> {
+    let p = resolve_in_repo(&path)?;
+    let md = std::fs::metadata(&p).map_err(|e| format!("读不到 {path}：{e}"))?;
+    let is_dir = md.is_dir();
+    let size = md.len();
+
+    let lines = if is_dir || size > LINE_COUNT_MAX {
+        None
+    } else {
+        count_lines(&p)
+    };
+
+    let children = if is_dir { Some(count_children(&p)?) } else { None };
+
+    Ok(FileStat {
+        path,
+        kind: if is_dir { "dir".to_string() } else { "file".to_string() },
+        size: if is_dir { 0 } else { size },
+        mtime_us: mtime_us(&p),
+        sensitive: sensitivity(&p) == Sensitivity::Secret,
+        ext: p
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase(),
+        lines,
+        children,
+    })
+}
+
+/// 数换行符。末行没有换行符也要算一行（与编辑器显示一致）。
+fn count_lines(p: &std::path::Path) -> Option<usize> {
+    let bytes = std::fs::read(p).ok()?;
+    let mut n = bytes.iter().filter(|b| **b == b'\n').count();
+    if !bytes.is_empty() && !bytes.ends_with(b"\n") {
+        n += 1;
+    }
+    Some(n)
+}
+
+/// 目录的直接子项数 `[文件, 目录]`。**不递归**（理由见 `FileStat` 的注释）。
+fn count_children(p: &std::path::Path) -> Result<[usize; 2], String> {
+    let rd = std::fs::read_dir(p).map_err(|e| format!("读不到目录：{e}"))?;
+    let mut files = 0usize;
+    let mut dirs = 0usize;
+    for e in rd.flatten() {
+        if e.path().is_dir() {
+            dirs += 1;
+        } else {
+            files += 1;
+        }
+    }
+    Ok([files, dirs])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,6 +425,37 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 决策 #1474：文件树悬停预览的数据源。★测**真实仓库里的真实文件**，不用假路径——
+    /// 假路径只能证明"函数会返回结构体"，证明不了 stat 取值对不对。
+    #[test]
+    fn file_stat_reads_real_file_and_dir() {
+        // ① 文件：类型/大小/行数/敏感度都对得上
+        let f = file_stat("packages/studio/src/fs_guard.rs".to_string()).expect("仓库内文件应可 stat");
+        assert_eq!(f.kind, "file");
+        assert!(f.size > 1024, "源码文件不该是 0 字节：{}", f.size);
+        assert!(f.lines.unwrap_or(0) > 100, "这份文件不止 100 行");
+        assert!(f.mtime_us > 0, "mtime 应可读到");
+        assert!(!f.sensitive, "源码不是凭据类");
+        assert!(f.children.is_none(), "文件不该有 children");
+        assert_eq!(f.ext, "rs");
+
+        // ② 目录：只给直接子项数，**不递归算大小**（否则悬停会卡）
+        let d = file_stat("packages/studio/src".to_string()).expect("仓库内目录应可 stat");
+        assert_eq!(d.kind, "dir");
+        assert_eq!(d.size, 0, "目录不递归算总大小");
+        assert!(d.lines.is_none(), "目录没有行数");
+        let [files, dirs] = d.children.expect("目录应有 children");
+        assert!(files > 5, "src 下文件不止 5 个：{files}");
+        assert_eq!(dirs, 0, "packages/studio/src 是平铺的（实际有子目录则说明结构变了）");
+    }
+
+    /// 决策 #1474：路径越界原位拒绝——与 read/write 共用同一条沙箱，不另起一套语义。
+    #[test]
+    fn file_stat_respects_sandbox() {
+        assert!(file_stat("../etc/passwd".to_string()).is_err());
+        assert!(file_stat("/etc/passwd".to_string()).is_err());
     }
 }
 

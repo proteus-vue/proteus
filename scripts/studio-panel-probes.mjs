@@ -741,3 +741,45 @@ export async function probeHole(page) {
  *   **永远测不出这个错**。⇒ 这里专门换一台"物理尺寸 ≠ 码流尺寸"的桩，断中心点必须是
  *   物理中心 (600,1304)，而不是码流中心 (442,960)。
  */
+
+/**
+ * ㊿g 文件树悬停属性预览（决策 #1474）
+ *
+ * 【三条判据，缺一条都可能假绿】
+ *   ① 悬停 250ms 后卡片**出现**（延迟是刻意的，测 0ms 就等于没测延迟）；
+ *   ② 卡片内容跟着**被悬停的那一项**变——桩里 App.vue=371 行、main.rs=997 行，
+ *      全都返回 42 的话"换文件卡片跟着换"这件事根本测不出来；
+ *   ③ 移开即消失（残留卡片会挡住下一行的点击，这是可感知的缺陷）。
+ *
+ * ★用真实 `page.hover`（走浏览器命中测试），不用 dispatchEvent ——
+ *   本仓踩过"注入事件 ⇒ 判据绿但用户点不到"的坑（#1404b 的 ⑬）。
+ * ★调用前提：文件树已展开、代码视图在前（`probeCodeExtras` 结束时正好是这个状态）。
+ */
+export async function probeFileHover(page) {
+  const read = () =>
+    page.evaluate(() => {
+      const c = document.getElementById('fileHoverCard')
+      if (!c) return null
+      return {
+        name: c.querySelector('.fv-name')?.textContent?.trim() ?? '',
+        text: c.textContent ?? '',
+      }
+    })
+
+  // ① 悬停 App.vue：卡片出现，且是 371 行（桩数据按文件区分）
+  await page.hover('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
+  await page.waitForTimeout(520) // 250ms 延迟 + IPC 桩往返
+  const onApp = await read()
+
+  // ② 换悬停 main.rs：卡片必须**换人**（防"沿用上一项数据"这类串数据缺陷）
+  await page.hover('#codeFiles button[data-file="packages/studio/src/main.rs"]')
+  await page.waitForTimeout(520)
+  const onMain = await read()
+
+  // ③ 移开指针：卡片消失
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(320)
+  const gone = await read()
+
+  return { onApp, onMain, gone }
+}

@@ -10,7 +10,7 @@
 //   ① **不画折叠箭头**（决策 #1238）：目录图标本身就是开关，闭合与展开是两套形状；
 //      去掉 12px 箭头后，同级文件名的左边界才真正对齐。
 //   ② **布局必须有几何判据**（决策 #1218 的教训）：文件树宽度/行高变化会被判据 ㉓ 盯住。
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { buildTree, flatten, toggleCollapsed, type TreeNode } from '../fileTree'
 import { useWorkspaceState } from '../useWorkspaceState'
 import { git } from '../git'
@@ -19,6 +19,8 @@ import FileIcon from '../icons/FileIcon.vue'
 import FolderIcon from '../icons/FolderIcon.vue'
 import { fileTypeIcon } from '../fileIcons'
 import type { FileOp, FileOpKind } from '../fileOps'
+import { fileStat, type FileStat } from '../bridge'
+import FileHoverCard from './FileHoverCard.vue'
 
 const props = defineProps<{
   files: string[]
@@ -70,6 +72,61 @@ function nodeIcon(node: { path: string; dir: boolean }): { name: string; color?:
   return t ? { name: t.icon, color: t.color } : { name: 'file' }
 }
 
+/* ===== 悬停属性预览（决策 #1474）=====
+ *
+ * 【三条约定，都被既有缺陷教过】
+ *   ① **250ms 才出现**：鼠标扫过整棵树时不该连续弹卡（那是噪音不是信息）。
+ *   ② **锚定行矩形，不跟鼠标**（#1421）：跟随鼠标重定位会让卡片在相邻两行间闪跳。
+ *   ③ **滚轮即收起**：卡片位置是屏幕坐标，树一滚就错位；收起比"跟着重算"更简单也更稳。
+ *
+ * 【缓存】同一路径只查一次。文件改动后缓存会短暂过期——可接受：悬停只是提示，
+ *   真正的内容以打开后的编辑器为准。
+ */
+const HOVER_DELAY = 250
+const hoverPath = ref('')
+const hoverAnchor = ref<{ top: number; left: number; right: number } | null>(null)
+const hoverStat = ref<FileStat | null>(null)
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
+const statCache = new Map<string, FileStat>()
+
+function clearHover() {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer)
+    hoverTimer = null
+  }
+  hoverPath.value = ''
+  hoverAnchor.value = null
+  hoverStat.value = null
+}
+
+function onHover(e: Event, node: TreeNode) {
+  if (hoverTimer) clearTimeout(hoverTimer)
+  const el = e.currentTarget as HTMLElement | null
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  const anchor = { top: r.top, left: r.left, right: r.right }
+  hoverTimer = setTimeout(() => {
+    hoverPath.value = node.path
+    hoverAnchor.value = anchor
+    const cached = statCache.get(node.path)
+    hoverStat.value = cached ?? null
+    if (cached) return
+    fileStat(node.path)
+      .then((s) => {
+        statCache.set(node.path, s)
+        /* 只回填**当前仍在悬停的那一项**：慢查询回来时用户可能已经移到别的行了 */
+        if (hoverPath.value === node.path) hoverStat.value = s
+      })
+      .catch(() => {
+        /* 读不到就不显示数字。悬停是**非显式动作**，不该弹错误打扰用户 */
+      })
+  }, HOVER_DELAY)
+}
+
+onBeforeUnmount(() => {
+  if (hoverTimer) clearTimeout(hoverTimer)
+})
+
 function onNodeMenu(e: MouseEvent, node: TreeNode) {
   const collapsed = ws.codeCollapsed.includes(node.path)
   openMenu(
@@ -113,18 +170,21 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     />
     <span v-if="q" class="fcount">{{ filteredRows.length }}</span>
   </div>
-  <nav class="files" id="codeFiles">
+  <nav class="files" id="codeFiles" @scroll.passive="clearHover">
     <button
       v-for="r in filteredRows"
       :key="r.node.path"
       :class="{ on: r.node.path === cur, dir: r.node.dir }"
       :style="{ paddingLeft: `${8 + r.depth * 14}px` }"
-      :title="r.node.path"
       :data-dir="r.node.dir ? r.node.path : undefined"
       :data-file="r.node.dir ? undefined : r.node.path"
       :aria-expanded="r.node.dir ? !ws.codeCollapsed.includes(r.node.path) : undefined"
       :data-icon="nodeIcon(r.node).name"
       @click="r.node.dir ? toggle(r.node.path) : emit('open', r.node.path)"
+      @mouseenter="onHover($event, r.node)"
+      @mouseleave="clearHover"
+      @focus="onHover($event, r.node)"
+      @blur="clearHover"
       @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
     >
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
@@ -135,6 +195,17 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       }}</span>
     </button>
   </nav>
+
+  <!-- 悬停预览卡：Teleport 到 body —— 布局里若有 transform/filter，`position: fixed` 会
+       退化成相对该祖先定位（卡片错位到树里）。挂到 body 下才真正相对视口。 -->
+  <Teleport to="body">
+    <FileHoverCard
+      v-if="hoverPath"
+      :path="hoverPath"
+      :stat="hoverStat"
+      :anchor="hoverAnchor"
+    />
+  </Teleport>
 </template>
 
 <style scoped>

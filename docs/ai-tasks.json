@@ -31,7 +31,12 @@
       "type": "bugfix",
       "status": "done",
       "owner": "session:wb-20261108",
-      "scope": ["packages/studio/src/format.rs", "packages/studio/src/ios_stream.rs", "packages/studio/package-app.sh", "scripts/studio-panel-checks-format.mjs"],
+      "scope": [
+        "packages/studio/src/format.rs",
+        "packages/studio/src/ios_stream.rs",
+        "packages/studio/package-app.sh",
+        "scripts/studio-panel-checks-format.mjs"
+      ],
       "decision": 1464,
       "verification": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path packages/studio/Cargo.toml 'format::'（4/4，新增 gui_minimal_env_end_to_end：env_clear() 重开整个测试二进制走完整 format_via_cli，并断言 1 passed 防 filter 失配）· 同 cargo test 'ios_stream::'（8/8，新增 最小PATH下仍能解析版本管理器node）· node scripts/check-studio-panel.mjs --no-build（全绿，㊿f 增 nodeScan）· cargo check · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint scripts/studio-panel-checks-format.mjs（0）· node scripts/check-tauri-handlers.mjs（49/49）",
       "note": "【done · 决策 #1464（2026-11-08）】用户第二次截图「找不到 node（GUI 启动未继承终端 PATH）」⇒ wrapper 已绕开，失败在解析。★取证：GUI 最小 env 下 /bin/zsh -lc 的 PATH 无 node、12 个硬编码安装位无 node；本机唯一 node 在 ~/.workbuddy/binaries/node/versions/22.22.2-6/bin/node（版本目录 + 登录 shell 只 source .zprofile）。★修法：child_path 增补 versioned_node_bin_dirs（nvm/fnm/mise/asdf/volta/WorkBuddy/brew keg-only）+ 抽出纯函数 child_path_from 供最小 PATH 判据复用；package-app.sh 签名前写 Contents/Resources/node-path.txt（realpath，运行时会用的那个），format.rs packaged_node_path() 校验 is_file 后优先用、换机回落；PROTEUS_NODE 兜底。★顺手修 package-app.sh 无证书时 grep rc=1 被 set -euo pipefail 打断、ad-hoc 回落分支进不去（加 || true）。★判据教训：formats_under_gui_minimal_path 是「先解析后 env_clear」⇒ 真机解析失败它仍绿；新判据把整个测试进程放进最小环境，并断言 1 passed。★新发现既存红（未修）：cargo test 全量 31/32，fs_guard::tests::new_path_boundary 的 within_root(root,\"\")=true；fs_guard.rs 与 HEAD 一致 ⇒ #1460 遗留，以前只跑 format:: 过滤没暴露。★诚实边界：prettier 仍是传递依赖；node-path.txt 是打包机路径；Windows/Linux 未验证；只改 buffer 不保存。"
@@ -42,7 +47,11 @@
       "type": "bugfix",
       "status": "done",
       "owner": "session:wb-20261108",
-      "scope": ["packages/studio/src/format.rs", "packages/studio/src/ios_stream.rs", "scripts/studio-panel-checks-format.mjs"],
+      "scope": [
+        "packages/studio/src/format.rs",
+        "packages/studio/src/ios_stream.rs",
+        "scripts/studio-panel-checks-format.mjs"
+      ],
       "decision": 1463,
       "verification": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path packages/studio/Cargo.toml 'format::'（3/3，新增 formats_under_gui_minimal_path 在 env_clear()+PATH=/usr/bin:/bin 子进程真跑）· pnpm check:studio-panel（75/75，新增 ㊿e 设置窗口真实可见 + ㊿f GUI 最小 PATH 真跑）· cargo check · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint scripts/studio-panel-checks-format.mjs（0 error）· node scripts/check-file-size.mjs（主门禁 998 行）· pnpm check:ai-tasks ✅",
       "note": "【done · 决策 #1463（2026-11-08）】用户截图 `prettier: line 16: exec: node: not found`。★根因：`.bin/prettier` 是 sh wrapper，GUI 从 Dock 启动只继承 launchd 的 /usr/bin:/bin，没有 node；#1462 判据在 Node 侧/终端跑都有 node ⇒ 全绿但真机不可用。★修复：`ios_stream::child_path()`/`which()`（#1277 同源解法）提升 pub(crate) 复用；format.rs 新增 node_for_prettier()（解析绝对路径 + OnceLock 只缓存成功）与 format_command()，PRETTIER_BIN→PRETTIER_JS，固定 `node(绝对路径) + bin-prettier.js + FORMAT_ARGS`。★同轮另一起问题：用户屏幕上仍是 11:55 的 PID 51645（#1461 版），12:20 重打包未重启 ⇒ open -n 起新实例 77955，旧窗口保留不杀；设置页是独立窗口且默认在「开发环境」分类，快捷键列表藏在「编辑器」分类。★诚实边界：仍依赖 node_modules/prettier 传递依赖；child_path 起一次 /bin/zsh -lc；Windows/Linux 未专门验证。"
@@ -53,7 +62,13 @@
       "type": "framework-feature",
       "status": "done",
       "owner": "session:wb-20261108",
-      "scope": ["packages/studio/**", "scripts/studio-panel-checks-format.mjs", "scripts/studio-panel-stub.mjs", "scripts/check-studio-panel.mjs", "tests/studio-format.test.ts"],
+      "scope": [
+        "packages/studio/**",
+        "scripts/studio-panel-checks-format.mjs",
+        "scripts/studio-panel-stub.mjs",
+        "scripts/check-studio-panel.mjs",
+        "tests/studio-format.test.ts"
+      ],
       "decision": 1462,
       "verification": "pnpm check:studio-panel（73/73，含新增 ㊿c/㊿d：真实键盘 ⇧⌥F → Node 侧真跑 prettier 回包 → buffer → ⌘Z 回退 → 右键菜单 → .rs 拒绝）· npx vitest run tests/studio-format.test.ts（5/5）· PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --manifest-path packages/studio/Cargo.toml 'format::'（2/2，含真跑 CLI）· cargo check · pnpm build:studio-ui · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint <改动文件>（0 error）· node scripts/check-tauri-handlers.mjs（49/49）· pnpm check:ai-tasks ✅ · node scripts/check-file-size.mjs（主门禁 998 行、CodePanel 997 行不增）",
       "note": "【done · 决策 #1462（2026-11-08）】Rust src/format.rs 固定 prettier CLI（参数写死在 FORMAT_ARGS，前端只传 path/text），stdin 进 stdout 出、三条流各起线程防管道死锁、15s 超时、512KB 上限、路径校验、NO_PARSER_EXT 提前拒绝、全程不写盘；main.rs 注册后 49 命令。前端 editorFormat.ts 单一 formatDocument() 供 onAction（⇧⌥F / JetBrains ⌥⌘L）与右键菜单共用，dispatch 整篇替换保留 undo + mapPos 保留选区，只读文件拒绝、busy 防重入；CodePanel.vue 零增行。★修掉真实缺陷：keyOf 只比 e.key，macOS Option 把 ⌥F 改成 ƒ ⇒ 真机 ⇧⌥F 永不命中而 CDP 按键会假绿，改为 Alt+字母回落到 e.code。★顺手补 main.rs tests 一行 use 解锁 cargo test（#1344 抽出 fs_guard 后遗留 6 个 E0425）。★判据回包不是手写 fixture：page.exposeFunction 在 Node 侧真跑同一 CLI，参数从 Rust 常量静态读出。★诚实边界：prettier 是 @changesets 传递依赖未显式声明（缺失时明确报错，根治需用户终端装包）；rs/m/h/py 无 parser 明确拒绝；只改 buffer 不自动保存；UI 判据的 .rs 错误不是 Rust 进程本身，Rust 真跑由 cargo test 覆盖。"
@@ -64,7 +79,9 @@
       "type": "framework-feature",
       "status": "done",
       "owner": "session:wb-20261108",
-      "scope": ["packages/studio/**"],
+      "scope": [
+        "packages/studio/**"
+      ],
       "decision": 1461,
       "verification": "pnpm check:studio-panel（71/71，含新增 ㊿/㊿b：真实键盘 11 组键 + 焦点内/外 + ⌘W 必须触发 term_close + 自定义键走 storage 通道）· npx vitest run tests/studio-term-keys.test.ts（8/8）· pnpm build:studio-ui · npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx eslint <5 个改动文件>（0 error）· node scripts/check-file-size.mjs（主门禁保持 998 行；3 条既存红未动）· pnpm check:ai-tasks ✅",
       "note": "【done · 决策 #1461（2026-11-08）】11 个 term.* 收进 keybindings.ts（BASE / ACTIONS / onAction 三方齐），新增 ActionScope=global|terminal：installKeymap 按 e.target.closest('.termwrap') 算 scope，终端内 terminal 动作优先于全局，终端外完全不参与；conflictOf 改同 scope 才冲突；keyOf 补 {→[ / }→]；删 JetBrains 把 term.new 也映射 ⌥F12 的错配。TerminalPanel.vue 删 onPanelKey 手写 11 分支与 @keydown.capture，改 11 条 onAction（953→905 行）。★修掉的真实缺陷：window 捕获阶段的全局分发抢走终端内 ⌘W/⌘=/⌘-/⌘0/⌘1 并 stopPropagation，App.vue 的 onZoomKey 让路代码根本没机会执行。★判据独立模块 studio-panel-checks-termkeys.mjs（主脚本不增行），单测覆盖分发纯函数。★诚实边界：自定义键段模拟设置窗口写 localStorage + storage 事件，不是从设置 UI 点入；真 pty 由 Rust 单测覆盖，UI 判据只验界面→IPC→DOM。★既存欠账未动：check:file-size 3 红、check-decision-numbers #1242 重号。"
@@ -75,7 +92,9 @@
       "type": "framework-feature",
       "status": "done",
       "owner": "session:wb-20261108",
-      "scope": ["packages/studio/**"],
+      "scope": [
+        "packages/studio/**"
+      ],
       "decision": 1460,
       "verification": "node scripts/check-tauri-handlers.mjs（48/48 注册）· PATH=\"$HOME/.cargo/bin:$PATH\" cargo check --manifest-path packages/studio/Cargo.toml（Finished dev）· pnpm build:studio-ui · npx eslint <6 个改动文件>（0）· npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（0）· npx vitest run tests/studio-file-ops.test.ts（8/8）· pnpm check:studio-panel（69/69，含新增 ㊾：真实右键→新建→create_file 参数→刷树出现→删除取消无 IPC→已打开标签保护）",
       "note": "【done · 决策 #1460（2026-11-08）】Rust `fs_ops.rs` 四命令 + `fs_guard::resolve_in_repo_new` 新写边界 + 前端 `fileOps.ts` / `FileOpsBox.vue` 编排 + 判据 ㊾。★三条硬边界：create_new 原子创建不覆盖 / 只删空目录绝不递归 / 扩展名白名单与 list_files 同源。★已打开标签一律整体拒绝（不自动改路径）。★诚实边界：只同级重命名、删目录只删空、未做回收站式撤销；UI 判据用 invoke 桩，不碰真实磁盘（Rust 侧沙箱由 cargo check + 路径纯函数单测覆盖，未做真机删文件破坏性验证）。★既存欠账未动：check:file-size 的 Android/Harmony 3 处增长、check-decision-numbers 的 #1242 重号（git show HEAD 确认均为本单之前）。"
@@ -4257,6 +4276,33 @@
         "T-plugin-ipc-capability-map"
       ],
       "note": "【done · 决策 #1471（2026-11-09）】取证先行：`@proteus-vue/mcp`（G-36 B1）早有 11 个工具但 `grep plugin` 零命中 ⇒ 插件开发是空白，本单是增量不是从零搭。★新增 4 个只读工具：list_capabilities（tier 过滤 + implementedOnly）· validate_manifest（安装闸同规则）· scaffold（只返文本不落盘）· describe_provider（10 个 ProviderKind 通道状态）。★★硬边界：不提供 install/enable/任意执行——MCP 客户端是 AI，能装插件=能给自己装后门；已写成判据（工具名黑名单 /install|enable|activate|uninstall|spawn|exec/i）。★不做 plugin_dry_run（要起进程，等于拆 #1470 的 spawnProcess 边界）。★单一真源：capability 表落 packages/mcp/src/plugin-capabilities.json（15 条 + 10 ProviderKind），Rust 侧安装闸将来必须读同一份；成本仅 resolveJsonModule 一行。★严重度分离：implemented=false 是 **error**（kernel.* 四项，装了也没反应），status=proposed 是 **warning**（terminal/clipboard.*/writeWorkspace.structure）——AI 第一次能知道「这个能力现在用不了」。★判据 16 条含三条核心：工具名黑名单 · scaffold 产物必须能过自己的校验 · 提案只 warning。★连带修正 mcp-server/mcp-stdio/mcp-http 四处 11→15（后三处是 grep 才发现的）⇒ 四文件 58 条全绿。★诚实边界：工具跑在 MCP server 进程，不证明 Studio 安装闸行为一致（校验代码仍是两份，将来应共用 validateManifest）；scaffold 无 Provider 实现桩（入出参未冻结）；**未在真实 MCP 客户端跑过端到端闭环**。【Handoff】- 做到哪：4 工具 + 单一真源表 + 16 条判据 + 四处断言同步。- 未做：端到端（Claude Desktop/Cursor 里让 AI 真写一个插件）；validateManifest 与 Rust 侧共用一份实现；Provider 桩。- 下一步：真实 MCP 客户端跑一次闭环，这才能证明「AI 能按 API 写插件」不是构想。"
+    },
+    {
+      "id": "T-studio-file-hover",
+      "title": "文件树悬停属性预览：file_stat + FileHoverCard + 判据 ㊿g",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/fs_guard.rs",
+        "packages/studio/src/ipc_fs.rs",
+        "packages/studio/src/main.rs",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "packages/studio/ui/src/icons/StudioIcon.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs",
+        "scripts/check-studio-panel.mjs"
+      ],
+      "decision": 1474,
+      "verification": "cd packages/studio && cargo test fs_guard::tests::file_stat && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-proc-template"
+      ],
+      "note": "【done · 决策 #1474（2026-11-09）】用户给 WorkBuddy 截图：「鼠标放到项目上自动预览，直来直去很高效，不需要一直点点点」。★数据层新增 `fs_guard::file_stat` + `ipc_fs::file_stat`，**不改 list_files 契约**（三处消费，改半径大；悬停天然按需）。★目录不算总大小（递归 stat 会卡，用户想知道的是「里面有几个东西」）；行数限 64KB（超限回 None，前端显示「—」不做假数据）。★复用 #1467 的 `sensitivity()`：凭据类文件悬停标红——该判定从纯防御变成用户可见信息。★交互三约定：250ms 延迟 / 锚定行矩形不跟鼠标（#1421 闪跳教训）/ 滚轮即收起；卡片 pointer-events:none。★Teleport 到 body（transform 会让 fixed 退化）。★判据 ㊿g：悬停 App.vue→371 行、切 main.rs→997 行、移开消失；**桩数据按文件名区分**，否则串数据缺陷抓不到。破坏性验证：清空桩行数表 ⇒ 只有 ㊿g 红。★反巨型化：判据初版把 check-studio-panel.mjs 推到 1019 行，拆成 studio-panel-checks-hover.mjs；剩 999 行门禁仍算 1000 ⇒ 用分号连写压回 998。★判据：check:studio-panel 76 绿 0 红 · cargo test 46 通过/1 失败（唯一红为 #1460 既存）· file-size 3 处既存红未变。★诚实边界：无目录总大小；大文件行数「—」（待优化）；stat 按会话缓存会短暂过期；只覆盖文件树。【Handoff】- 做到哪：Rust 命令 + 卡片组件 + 图标 + 桩 + 判据 + 破坏性验证。- 未做：大文件行数显示优化（用户点名「再不断探索」）；目录总大小（建议做成右键显式动作）。- 下一步：大文件行数（分块计数/按需触发）。"
     }
   ]
 }

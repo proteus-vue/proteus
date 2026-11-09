@@ -156,6 +156,38 @@ export function stubTauri(payload) {
            FORMAT_ARGS 常量读取），桩只做转发。真 CLI 报错也原样 reject 给前端。 */
         if (cmd === 'format_text')
           return await window.__formatWithPrettier(String(args?.path ?? ''), String(args?.text ?? ''))
+        /* ★决策 #1474：文件树悬停预览的数据源。
+           ★桩数据**按文件名区分**（App.vue/main.rs 行数不同）——判据要能证明
+             "卡片显示的是当前悬停那一项"，而不是"卡片上恰好有个数字"。
+             全都返回 42 的话，悬停哪个文件都看不出差别，那种判据等于没测。 */
+        if (cmd === 'file_stat') {
+          const p = String(args?.path ?? '')
+          const name = p.slice(p.lastIndexOf('/') + 1)
+          const dir = !name.includes('.')
+          if (dir) {
+            return {
+              path: p,
+              kind: 'dir',
+              size: 0,
+              mtime_us: 1762666666000000,
+              sensitive: false,
+              ext: '',
+              lines: null,
+              children: [9, 2],
+            }
+          }
+          const LINE_STUB = { 'App.vue': 371, 'main.rs': 997, 'bridge.ts': 551 }
+          return {
+            path: p,
+            kind: 'file',
+            size: 8421,
+            mtime_us: 1762666666000000,
+            sensitive: /^\.env/.test(name) || /^id_rsa$/.test(name) || /\.pem$/.test(name),
+            ext: name.split('.').pop()?.toLowerCase() ?? '',
+            lines: LINE_STUB[name] ?? 42,
+            children: null,
+          }
+        }
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open
         // 搜索（决策 #1222）：只给两条固定命中。★行/列要能在 RUST 桩里对上号：
         //   RUST 桩第 4 行是 `    let stubLine = 1;`，`stubLine` 从第 9 个字符开始。

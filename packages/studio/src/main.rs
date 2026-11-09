@@ -613,6 +613,7 @@ fn main() {
             ipc_fs::read_text_external,
             ipc_fs::write_text,
             ipc_fs::list_files,
+            ipc_fs::file_stat,
             /* ★决策 #1460：四个命令同样必须列进 generate_handler! —— `#[tauri::command]`
                只是生成 wrapper，漏注册时 cargo build 仍通过、只有真机调用才报
                "Command xxx not found"（check-tauri-handlers 静态兜底）。 */
