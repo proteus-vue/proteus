@@ -791,7 +791,12 @@ export async function probeFileHover(page) {
   await page.waitForTimeout(520)
   const onBig = await read()
 
-  // ⑥ 卡片可交互（决策 #1478）：指针移到卡片上后，超过宽限期（220ms）也**不能**消失
+  // ⑥ 悬停 `.ts`（普通源码）：决策 #1479 —— **没有角色行**，但有「结构」行
+  await page.hover('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]')
+  await page.waitForTimeout(520)
+  const onTs = await read()
+
+  // ⑦ 卡片可交互（决策 #1478）：指针移到卡片上后，超过宽限期（220ms）也**不能**消失
   //    ★`hover` 要 catch：若卡片在指针到达前就消失了，Playwright 会等到超时抛错，
   //      那会把整轮门禁炸掉而不是给出一条红。这里降级成"读不到卡片" ⇒ 判据自然红。
   await page.hover('#codeFiles button[data-file="packages/studio/ui/src/App.vue"]')
@@ -800,10 +805,10 @@ export async function probeFileHover(page) {
   await page.waitForTimeout(600)
   const onCard = await read()
 
-  // ⑦ 移开指针：按宽限期消失（等 700ms > 220ms）
+  // ⑧ 移开指针：按宽限期消失（等 700ms > 220ms）
   await page.mouse.move(5, 5)
   await page.waitForTimeout(700)
   const gone = await read()
 
-  return { onApp, onMain, onProj, onOwner, onBig, onCard, gone }
+  return { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, gone }
 }

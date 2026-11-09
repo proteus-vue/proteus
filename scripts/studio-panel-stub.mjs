@@ -196,12 +196,17 @@ export function stubTauri(payload) {
             }
           }
           const LINE_STUB = { 'App.vue': 371, 'main.rs': 997, 'bridge.ts': 551 }
-          /* ★决策 #1476：`.m` 桩成"未统计"（lines: null）——判据要能验"大文件不显示含糊的「—」"。
-             角色/摘要也按文件区分：App.vue 是入口，bridge.ts 是普通源码（**必须没有 brief**，
-             否则"每张卡都写源码"这种噪音没人能测出来）。 */
+          /* ★决策 #1476/#1479：`.m` 桩成"未统计"（lines: null）；角色/摘要按文件区分。
+             ★`bridge.ts` 故意给「无角色 + 有结构」——这正是普通源码的形态，
+               判据要能证明"角色行不出现、结构行仍出现"。 */
           const BRIEF_STUB = {
-            'App.vue': { role: 'entry', label: '入口', facts: [] },
+            'App.vue': {
+              role: 'entry',
+              label: '入口',
+              facts: ['script setup · props · scoped', '模板根 <div>'],
+            },
             'main.rs': { role: 'entry', label: '入口', facts: [] },
+            'bridge.ts': { role: '', label: '', facts: ['95 导出 · 6 interface · 9 type', 'a · b · c …'] },
           }
           return {
             path: p,

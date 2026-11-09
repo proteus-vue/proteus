@@ -4397,6 +4397,28 @@
         "T-studio-hover-git"
       ],
       "note": "【done · 决策 #1478（2026-11-09）】用户两条：① 「深层信息这个项目里是不是验证不了？」② 「卡片移走就消失，内容越来越丰富，后面要加折叠展开/一键复制，需要优化」。\n★① 能验、只有 .md 验不了：ROOTS 实测 ts 42 · vue 40 · rs 20 · json 2 · css 2 · m 1 · h 1 ⇒ 批次 2(.vue/.ts)、批次 3(.rs) 都有真实样本；md 为 0，文档骨架目前只有单测。\n★② 问题本质不是「消失太快」而是「卡片点不到」：行与卡片隔 8px 缝，鼠标穿过先触发行 mouseleave，原来立即清 ⇒ 卡内交互在物理上不可能。\n★改法三条：行/卡片 mouseleave 都走 scheduleHide(220ms)、卡片 mouseenter 取消；pointer-events none→auto；给退出方式（Esc + 点卡片外）。\n★明确推翻 #1474 约定③：从「离开即消失、不做动画延迟」改为「延迟 220ms、仍不做淡出动画」——旧结论不是错的，是前提变了（只读提示 → 可交互面板）。\n★判据 ㊿k 三条一起断：进卡 600ms 仍在（>220ms）+ 移开 700ms 消失 + 两者同时成立才算宽限存在（只断前者的「永不消失」也能绿）。\n★探针 page.hover(#fileHoverCard) 必须 catch：卡片若先消失，Playwright 抛错会炸掉整轮门禁，那不是一条红而是没有门禁。\n★破坏性验证：行 mouseleave 恢复 clearHover ⇒ 仅 ㊿k 红、其余 79 绿，报错原文「指针进卡 600ms 后仍在=false」。\n★判据：check:studio-panel 80 绿 0 红 · cargo test 54 通过/1 失败（#1460 既存，本单未动 Rust）。\n★诚实边界：卡片翻到左侧会盖住行（可交互的代价）；220ms 内 DOM 还在；卡内滚动与树滚动未测；折叠/复制入口尚未做。\n【Handoff】- 做到哪：宽限状态机 + pointer-events + Esc/点外关 + 判据 + 破坏性验证。- 未做：卡内交互入口（折叠/复制）。\n- 下一步：真机试「鼠标走进卡片」的手感；若 220ms 不够或太长，只调 HIDE_GRACE 一个常量。"
+    },
+    {
+      "id": "T-studio-brief-symbols",
+      "title": ".ts 符号/类型声明摘要 + .vue 结构标记（㊿l）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/file_brief.rs",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1479,
+      "verification": "cd packages/studio && cargo test file_brief::tests && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-file-brief",
+        "T-studio-hover-interactive"
+      ],
+      "note": "【done · 决策 #1479（2026-11-09）】用户贴悬停截图问「你说的符号类型声明是在哪里可以体现？」——答案是**一处都没有**；上一轮\"能验\"指有 42 个 .ts / 40 个 .vue 样本可验，不是已实现，表述需更正。本单开工批次 2。\n★改掉自己埋的死结：原 file_brief 是 role(rel)?（没有角色直接 None）⇒ 普通 .ts 永远不会有结构摘要。现改为「角色为空但结构非空也返回」，role/label 用空串表示无角色，前端据空串不渲染角色行。**不加这条，ts_facts 写了也永远不显示**。\n★.ts/.js 抽：N 导出 · N interface · N type + 前 3 个导出名（超出补 …）。精度依据：实测 ui/src 的 export 语句只有 7 种形态且全在行首（function 119 / const 116 / interface 53 / async function 16 / type 11 / class 1 / { x } from 3），行扫描够用，不引 SWC/tsserver（后者首次 4~5s）。注释行整行跳过；export { a } / export * 取不到名字就只计数不编名字。\n★.vue 只报有没有：script setup / props / emit / scoped + 模板根标签（第一个 template 的直接子元素）。**不数 props 成员**——行扫描会把嵌套对象/注释/跨行属性数错，数错比不显示更糟。\n★判据：ts_facts_counts_exports_and_types（期望值人工数出 5 导出/2 interface/1 type，非实现反推）、ts_facts_handles_barrel_without_names、vue_facts_reports_flags_and_root_tag、ts_facts_on_real_file_names_exist_in_text（真跑 breadcrumbs.ts，断言每个符号名都在正文里；**不写死数字**避免无关改动翻红）；面板 ㊿l（.ts 有 95 导出且无角色行 + .vue 有 script setup）。\n★破坏性验证：角色行 v-if 从 brief?.label 回退成 brief ⇒ 仅 ㊿l 红、其余 80 绿，报错「无角色行=false」。\n★判据：check:studio-panel 81 绿 0 红 · cargo test 58 通过/1 失败（#1460 既存）。\n★诚实边界：行扫描不是 AST（export default {…} 匿名、export =、装饰器、.d.ts declare module 不保证）；解构导出只计数不给名；只列前 3 名；.vue 不数 props 成员；.java/.go/.py 仍无摘要。\n【Handoff】- 做到哪：ts/js 符号+类型、vue 结构标记、file_brief 语义修正、判据与破坏性验证。\n- 未做：.rs pub 符号（批次 3）、props 成员数、深层折叠/复制入口。\n- 下一步：真机看 breadcrumbs.ts 之类的卡；若要更准，再考虑保存时用 tsserver 补一次精确值（悬停仍走行扫描）。"
     }
   ]
 }

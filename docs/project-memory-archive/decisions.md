@@ -16820,4 +16820,41 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     **未测**（卡片现在能滚了，`max-height:70vh`）；④ 折叠/复制等**入口尚未做**——
     本单只把"能不能点"这件事打通。
 
+1479. **★★`.ts/.js` 符号与类型声明摘要 + `.vue` 结构标记 · 改掉"无角色就没有摘要"的死结 · 判据 ㊿l**（2026-11-09 · 用户贴悬停截图问「你说的符号类型声明是在哪里可以体现？」）:
+  - **★用户的问法本身就是答案**：卡片里**一处都没有**。上一轮我说的"能验"指的是
+    **有 42 个 `.ts` / 40 个 `.vue` 真实样本**可验，不是说已经做了——表述容易被读成"已实现"，
+    这里更正：批次 2 此前**没开工**。
+  - **★改掉一个自己埋的死结**：原来 `file_brief` 是 `role(rel)?` ——**没有角色就直接返回 None**，
+    于是普通 `.ts`（绝大多数文件）永远不可能有结构摘要。现在改成
+    **"角色为空但结构非空也返回"**（`role` / `label` 用空串表示无角色，前端据空串不渲染角色行）。
+    这是本单最关键的一行：不加这条，`ts_facts` 写了也永远不显示。
+  - **`.ts` / `.js` 抽什么**：`N 导出 · N interface · N type` + 前 3 个导出名（超出补 `…`）。
+    - **精度依据不是猜的**：实测 `ui/src` 下 `export` 语句只有 7 种形态、**全部在行首**
+      （`export function` 119 / `export const` 116 / `export interface` 53 /
+      `export async function` 16 / `export type` 11 / `export class` 1 / `export { x } from` 3），
+      所以行扫描是够的 —— 不引 SWC / tsserver（后者首次 4~5 秒，悬停等不起）。
+    - **注释行整行跳过**：`/** export foo */` 这类文档注释会污染计数。
+    - `export { a, b }` / `export *` **取不到名字就只计数**，不编名字（计数确定、名字不确定，两者不能混）。
+  - **`.vue` 只报"有没有"**：`script setup` / props / emit / scoped 标记 + **模板根标签**
+    （取第一个 `<template>` 的**直接子元素**，测过 `<section>` 里套 `<div>` 时必须是 `section`）。
+    ★**不数 props 成员**：那要真解析类型字面量，行扫描会把嵌套对象/注释/跨行属性数错——
+    数错比不显示更糟（#1476 的自律 ①）。
+  - **判据**：
+    - Rust `ts_facts_counts_exports_and_types`：**期望值是人工数出来的**（5 导出 / 2 interface / 1 type），
+      不是跑实现反推；同时验证注释行里的 `export` 不算。
+    - Rust `ts_facts_handles_barrel_without_names`：`export { a } from` ⇒ 只计数、没有名字行。
+    - Rust `vue_facts_reports_flags_and_root_tag`：标记串 + 模板根 `section`。
+    - Rust `ts_facts_on_real_file_names_exist_in_text`：**真跑** `breadcrumbs.ts`，
+      断言"摘要里出现的每个符号名都真的在文件正文里"。★**不写死数字**——本仓常驻多会话改文件，
+      写死会让判据在无关改动上翻红，那种红会训练人忽略它。
+    - 面板 **㊿l** 两条一起断：`.ts` → 有 `95 导出` **且没有角色行**；`.vue` → 有 `script setup`。
+      只断前者则 .vue 分支坏了没人发现；只断后者则"普通源码被硬加角色行"这种噪音回潮测不出。
+  - **破坏性验证**：把角色行的 `v-if="brief?.label"` 回退成 `v-if="brief"`
+    ⇒ **只有 ㊿l 红，其余 80 绿**，报错原文 `无角色行=false`。
+  - **判据**：`check:studio-panel` **81 绿 0 红**；`cargo test` **58 通过 / 1 失败**
+    （唯一红 `new_path_boundary` 为 #1460 既存）。
+  - **诚实边界**：① 行扫描不是 AST：`export default { … }`（匿名）、`export =`、装饰器导出、
+    `.d.ts` 的 `declare module` 都不保证准；② 解构导出（`export const { a, b } = …`）只计数不给名；
+    ③ 只列前 3 个名字；④ `.vue` **不数 props 成员数**（见上）；⑤ `.java/.go/.py` 等仍无结构摘要。
+
 

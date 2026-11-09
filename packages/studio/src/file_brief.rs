@@ -18,14 +18,15 @@
 //   所以 `role()` 对普通源码返回 `None`——**没有信息就不占一行**。
 use serde::Serialize;
 
-/// 文件角色 + 结构摘要。`role` 为 `None` 时整个结构不出现（见上）。
+/// 文件角色 + 结构摘要。`label` 为空串表示**没有角色**（普通源码），此时卡片不显示角色行；
+/// 结构事实仍可能有（`.ts` 的导出、`.vue` 的 script setup）。
 #[derive(Serialize, Debug)]
 pub struct FileBrief {
-    /// test / entry / config / doc / generated
+    /// test / entry / config / doc / generated；空串 = 普通源码
     pub role: String,
     /// 人话标签，卡片直接显示。★文案留在 Rust：kind→文案的表只留一份，两处必然漂移
     pub label: String,
-    /// 结构事实（`.md` 的标题骨架等）。空数组表示"只有角色、没有可说的结构"
+    /// 结构事实（导出符号、类型声明数、`.vue` 的 script setup…）。空数组 = 只有角色
     pub facts: Vec<String>,
 }
 
@@ -76,18 +77,165 @@ fn role(rel: &str) -> Option<(&'static str, &'static str)> {
 
 /// 生成一个文件的摘要。`text` 是**已读进内存的正文**（调用方保证 ≤64KB）。
 ///
-/// ★`text` 为 `None`（大文件没读）时仍返回角色——角色只看路径，不需要内容。
+/// ★`text` 为 `None`（大文件没读）时仍可能返回角色——角色只看路径，不需要内容。
 pub fn file_brief(rel: &str, text: Option<&str>) -> Option<FileBrief> {
-    let (role, label) = role(rel)?;
-    let facts = match (role, text) {
-        ("doc", Some(t)) => md_facts(t),
-        _ => Vec::new(),
+    let role = role(rel);
+    let ext = rel
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    let facts = match text {
+        Some(t) => match ext.as_str() {
+            "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => ts_facts(t),
+            "vue" => vue_facts(t),
+            "md" | "mdx" => md_facts(t),
+            _ => Vec::new(),
+        },
+        None => Vec::new(),
     };
+    /* ★角色为空但结构非空时仍要返回：`.ts` 里"导出了 12 个符号"本身就是有用信息，
+       不该因为"它只是普通源码"就整条丢掉（这正是用户问"符号体现在哪"的直接原因）。 */
+    if role.is_none() && facts.is_empty() {
+        return None;
+    }
+    let (code, label) = role.unwrap_or(("", ""));
     Some(FileBrief {
-        role: role.to_string(),
+        role: code.to_string(),
         label: label.to_string(),
         facts,
     })
+}
+
+/// `.ts` / `.js`：导出符号 + 类型声明。
+///
+/// 【★为什么是"行扫描"而不是真解析】这里跑在悬停热路径上，不能引 SWC / tsserver
+///   （tsserver 首次 4~5 秒，见 #1476 头注释）。行扫描对**本仓的代码风格**是准的：
+///   实测 `ui/src` 下 `export` 语句形态只有 `export function`(119) / `export const`(116) /
+///   `export interface`(53) / `export async function`(16) / `export type`(11) /
+///   `export class`(1) / `export { x } from`(3) —— 全部在行首，没有缩进或跨行变体。
+///
+/// ★**抽不出就不显示**：`export const { a, b } = …`（解构）取不到名字时，这条事实就不产出名字，
+///   但计数仍然加一（计数是确定的，名字是不确定的，两者不能混）。
+fn ts_facts(text: &str) -> Vec<String> {
+    let mut exports = 0usize;
+    let mut interfaces = 0usize;
+    let mut types = 0usize;
+    let mut names: Vec<String> = Vec::new();
+
+    for line in text.lines() {
+        let t = line.trim_start();
+        /* 注释行整行跳过：`/** export foo */` 这类文档注释会污染计数 */
+        if t.starts_with("//") || t.starts_with('*') || t.starts_with("/*") {
+            continue;
+        }
+        if t.starts_with("interface ") || t.starts_with("export interface ") {
+            interfaces += 1;
+        } else if (t.starts_with("type ") || t.starts_with("export type ")) && t.contains('=') {
+            types += 1;
+        }
+        if !t.starts_with("export ") {
+            continue;
+        }
+        exports += 1;
+        if names.len() < 3 {
+            if let Some(n) = export_name(t) {
+                if !names.contains(&n) {
+                    names.push(n);
+                }
+            }
+        }
+    }
+
+    let mut facts: Vec<String> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
+    if exports > 0 {
+        parts.push(format!("{exports} 导出"));
+    }
+    if interfaces > 0 {
+        parts.push(format!("{interfaces} interface"));
+    }
+    if types > 0 {
+        parts.push(format!("{types} type"));
+    }
+    if !parts.is_empty() {
+        facts.push(parts.join(" · "));
+    }
+    if !names.is_empty() {
+        let mut s = names.join(" · ");
+        if exports > names.len() {
+            s.push_str(" …");
+        }
+        facts.push(s);
+    }
+    facts.truncate(3);
+    facts
+}
+
+/// 从一条 `export …` 语句里取被导出的名字。取不到（`export { a, b }` / `export *`）回 `None`。
+fn export_name(t: &str) -> Option<String> {
+    let mut r = t.strip_prefix("export ")?.trim_start();
+    for p in ["default ", "async ", "abstract ", "declare "] {
+        if let Some(x) = r.strip_prefix(p) {
+            r = x.trim_start();
+        }
+    }
+    const KWS: [&str; 8] = ["function", "const", "let", "var", "class", "interface", "type", "enum"];
+    for kw in KWS {
+        if let Some(x) = r.strip_prefix(kw) {
+            let x = x.trim_start().strip_prefix('*').unwrap_or(x.trim_start());
+            let name: String = x
+                .trim_start()
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+                .collect();
+            if !name.is_empty() {
+                return Some(name);
+            }
+        }
+    }
+    None
+}
+
+/// `.vue`：结构标记（`<script setup>` / props / emits / scoped）+ 模板根标签。
+///
+/// ★**只报"有没有"，不报"有几个"**：`defineProps<{…}>` 的成员数要真解析类型字面量，
+///   行扫描会把嵌套对象、注释、跨行属性数错。数错比不显示更糟（#1476 的自律 ①）。
+fn vue_facts(text: &str) -> Vec<String> {
+    let mut flags: Vec<&str> = Vec::new();
+    if text.contains("<script setup") {
+        flags.push("script setup");
+    }
+    if text.contains("defineProps") {
+        flags.push("props");
+    }
+    if text.contains("defineEmits") {
+        flags.push("emit");
+    }
+    if text.contains("<style scoped") {
+        flags.push("scoped");
+    }
+    let mut facts: Vec<String> = Vec::new();
+    if !flags.is_empty() {
+        facts.push(flags.join(" · "));
+    }
+    if let Some(tag) = template_root(text) {
+        facts.push(format!("模板根 <{tag}>"));
+    }
+    facts.truncate(3);
+    facts
+}
+
+/// SFC 里第一个 `<template>` 的直接子元素名（如 `div` / `section`）。
+fn template_root(text: &str) -> Option<String> {
+    let i = text.find("<template")?;
+    let after = &text[i + "<template".len()..];
+    let after = after.split_once('>')?.1.trim_start();
+    let rest = after.strip_prefix('<')?;
+    let name: String = rest
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '-')
+        .collect();
+    (!name.is_empty()).then_some(name)
 }
 
 /// `.md` 骨架：各级标题数 + 首个标题。
@@ -201,12 +349,88 @@ mod tests {
         assert_eq!(b.role, "entry");
         assert!(b.facts.is_empty());
 
-        /* 普通源码：整个摘要不出现 */
-        assert!(file_brief("ui/src/bridge.ts", Some("export const a = 1\n")).is_none());
+        /* ★决策 #1479 改了这条：普通 `.ts` 以前整个摘要不出现，现在**有结构事实就出现**
+           （角色仍为空串，卡片不显示角色行）。这正是用户问"符号体现在哪"的修正。 */
+        let ts = file_brief("ui/src/bridge.ts", Some("export const a = 1\n")).expect("有导出就该有摘要");
+        assert_eq!(ts.role, "", "普通源码没有角色");
+        assert_eq!(ts.label, "");
+        assert_eq!(ts.facts.first().map(|s| s.as_str()), Some("1 导出"));
+        assert_eq!(ts.facts.get(1).map(|s| s.as_str()), Some("a"));
+
+        /* 真正啥也抽不出来的（.m）仍然整条不出现 */
+        assert!(file_brief("native/embed_view.m", Some("int main(){return 0;}\n")).is_none());
 
         /* 文档：角色 + 骨架 */
         let d = file_brief("README.md", Some("# A\n## B\n")).expect("md 是文档");
         assert_eq!(d.label, "文档");
         assert!(!d.facts.is_empty());
+    }
+
+    /// 决策 #1479：导出符号 + 类型声明计数。
+    /// ★期望值是**人工数出来**的（5 个 export / 1 interface / 1 type），不是跑实现反推的。
+    #[test]
+    fn ts_facts_counts_exports_and_types() {
+        let text = r#"
+import x from 'y'
+export interface Opts { a: number }
+export type Id = string
+export const useA = () => 1
+export async function b() {}
+export default class C {}
+// export const commented = 1
+function notExported() {}
+interface NotExported { b: number }
+"#;
+        let f = ts_facts(text);
+        assert_eq!(f.first().map(|s| s.as_str()), Some("5 导出 · 2 interface · 1 type"), "{f:?}");
+        /* 前三个导出名，顺序即文件顺序 */
+        assert_eq!(f.get(1).map(|s| s.as_str()), Some("Opts · Id · useA …"), "{f:?}");
+    }
+
+    /// `export { a, b }` / `export *` 取不到名字 ⇒ 只计数，**不编名字**
+    #[test]
+    fn ts_facts_handles_barrel_without_names() {
+        let f = ts_facts("export { a, b } from './x'\nexport * from './y'\n");
+        assert_eq!(f.first().map(|s| s.as_str()), Some("2 导出"), "{f:?}");
+        assert_eq!(f.len(), 1, "取不到名字就不该有第二行：{f:?}");
+    }
+
+    /// 决策 #1479：`.vue` 只报"有没有"，不报"有几个"（成员数行扫描会数错）
+    #[test]
+    fn vue_facts_reports_flags_and_root_tag() {
+        let text = "<template>\n  <section class=\"x\">\n    <div/>\n  </section>\n</template>\n<script setup lang=\"ts\">\nconst p = defineProps<{ a: number }>()\ndefineEmits<{ (e: 'x'): void }>()\n</script>\n<style scoped>\n.a{}\n</style>\n";
+        let f = vue_facts(text);
+        assert_eq!(
+            f.first().map(|s| s.as_str()),
+            Some("script setup · props · emit · scoped"),
+            "{f:?}"
+        );
+        /* ★根标签必须是 `section` 而不是 `div`：取第一个 `<template>` 的**直接子元素** */
+        assert_eq!(f.get(1).map(|s| s.as_str()), Some("模板根 <section>"), "{f:?}");
+    }
+
+    /// 决策 #1479：**真跑仓库里的真实文件**，断言"摘要里出现的每个符号名都真的在文件里"。
+    ///
+    /// ★为什么不写死"2 导出 / 1 interface"：本仓常驻多个会话改文件，写死数字会让这条
+    ///   判据在无关改动上翻红（那种红会训练人忽略它）。这里断的是**不变量**：
+    ///   ① 能抽出事实；② 计数 ≥ 2（`breadcrumbs.ts` 至少导出 interface + function）；
+    ///   ③ **每一个被列出的符号名都是文件正文的子串**——这条能抓到"把注释里的词当符号"
+    ///   或"截错 token"这类缺陷，而且不随内容变动失效。
+    #[test]
+    fn ts_facts_on_real_file_names_exist_in_text() {
+        let root = crate::fs_guard::repo_root().expect("仓库根");
+        let p = root.join("packages/studio/ui/src/breadcrumbs.ts");
+        let text = std::fs::read_to_string(&p).expect("读 breadcrumbs.ts");
+        let f = ts_facts(&text);
+        assert!(!f.is_empty(), "真实文件不该抽不出任何事实");
+        assert!(f[0].contains("导出"), "{f:?}");
+
+        let names = f.get(1).expect("应有导出名那一行");
+        for name in names.split(" · ").filter(|s| !s.is_empty() && *s != "…") {
+            assert!(
+                text.contains(name),
+                "摘要里的符号 {name:?} 在文件正文里不存在 —— 抽取错位了：{f:?}"
+            );
+        }
     }
 }

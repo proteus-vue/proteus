@@ -12,7 +12,7 @@
 import { probeFileHover } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
-  const { onApp, onMain, onProj, onOwner, onBig, onCard, gone } = await probeFileHover(page)
+  const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, gone } = await probeFileHover(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -76,6 +76,21 @@ export async function checksHover(page) {
         onCard !== null
       } · 移开 700ms 后消失=${gone === null}`,
       onCard !== null && gone === null,
+    ],
+    /* ㊿l 符号/类型声明（决策 #1479）
+       ★两条一起断：
+         ① `.ts` 普通源码 → **不该有角色行**，但必须有「结构」行且含导出数；
+         ② `.vue` → 结构行含 `script setup`。
+       只断 ① 的话，vue 分支坏了没人发现；只断 ② 的话，"普通源码被硬加上角色"这种噪音回潮也测不出。 */
+    [
+      `㊿l 结构摘要（决策 #1479）：.ts→${
+        /95 导出/.test(onTs?.text ?? '') ? '95 导出' : '未命中'
+      }/无角色行=${!/角色/.test(onTs?.text ?? '')} · .vue→${
+        /script setup/.test(onApp?.text ?? '') ? 'script setup' : '未命中'
+      }`,
+      /95 导出/.test(onTs?.text ?? '') &&
+        !/角色/.test(onTs?.text ?? '') &&
+        /script setup/.test(onApp?.text ?? ''),
     ],
   ]
 }

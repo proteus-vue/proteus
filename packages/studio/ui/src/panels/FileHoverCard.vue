@@ -225,13 +225,14 @@ const markLabel = computed(() => {
 
       <!-- 文件：角色 / 结构 / 行数+大小 / 修改时间 / 类型；敏感文件单独一行 -->
       <template v-else>
-        <!-- 角色：只在不普通时出现（测试/入口/配置/文档/生成物） -->
-        <div v-if="brief" class="fv-row">
+        <!-- 角色：只在不普通时出现（测试/入口/配置/文档/生成物）。
+             ★普通源码的 label 是空串（决策 #1479）——那时只显示下面的「结构」行。 -->
+        <div v-if="brief?.label" class="fv-row">
           <StudioIcon name="tag" :size="13" />
           <span class="fv-k">角色</span>
           <span class="fv-v">{{ brief.label }}</span>
         </div>
-        <!-- 结构：目前只有 `.md` 有（标题骨架），其余类型 Rust 侧就给空数组 -->
+        <!-- 结构：`.ts` 导出/类型声明、`.vue` 的 script setup / 模板根、`.md` 标题骨架 -->
         <div v-if="brief?.facts?.length" class="fv-row">
           <StudioIcon name="rows" :size="13" />
           <span class="fv-k">结构</span>
