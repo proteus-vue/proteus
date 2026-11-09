@@ -27,7 +27,21 @@ use serde::Serialize;
 /// 文件树只列这些扩展名（`list_files` 与「新建文件 / 改扩展名」共用一条白名单）。
 /// ★放在模块级而不是函数内（决策 #1460）：`fs_ops::create_file` 必须复用它——
 ///   新建出白名单外的文件会「写盘成功但文件树看不见」，那是最难排查的假失败。
-pub const LIST_EXT: [&str; 10] = ["ts", "tsx", "vue", "rs", "m", "h", "py", "md", "json", "css"];
+///
+/// 【决策 #1465：10 → 24 项】原来只放 ts/tsx/vue/rs/m/h/py/md/json/css，于是
+///   `.js/.jsx/.mjs/.scss/.less/.html/.yaml` 这些 **prettier 真能格式化**的类型
+///   既不能在 Studio 里新建、也不会出现在文件树 ⇒ "格式化器支持、界面不给用"。
+/// ★本表每一项都经 prettier 2.8.8 **真跑验证**（2026-11-09）：要么能格式化，
+///   要么在 `format::NO_PARSER_EXT` 里被**提前拒绝 + 中文原因**。新增一项前必须先确认
+///   它落在哪一边——否则用户会拿到英文 `No parser could be inferred`。
+///   守这条的是 `format::tests::list_ext_is_either_formattable_or_rejected`（真跑 CLI，不是对表）。
+pub const LIST_EXT: [&str; 24] = [
+    // ① prettier 有 parser —— 可直接格式化（20 项）
+    "ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "vue", "md", "json", "jsonc", "json5",
+    "css", "scss", "less", "wxss", "html", "yaml", "yml",
+    // ② prettier 无 parser —— 由 `format::NO_PARSER_EXT` 提前拒绝（4 项，见该常量注释）
+    "rs", "m", "h", "py",
+];
 
 /// 文件 mtime 用**微秒**（Unix epoch）；取不到就 0（上层据此判断"无法做冲突检测"）。
 /// ★用微秒而不是毫秒：两次保存可能落在同一毫秒里，那时冲突检测会漏判。

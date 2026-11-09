@@ -16345,3 +16345,32 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
       `node-path.txt` 记录的是**打包这台机器**的路径，换机靠扫描/`PROTEUS_NODE` 回落；
       Windows/Linux 未验证；格式化只改内存 buffer，不自动保存。
 
+1465. **★★Studio 格式化覆盖面：`LIST_EXT` 10→24 · `NO_PARSER_EXT` 4→28（两张表全部真跑 prettier 验证）**（2026-11-09 · 用户「格式化这个好像做了一部分了，不过应该是支持的格式化语言比较少」→「按这个顺序补，小改动高收益肯定要做的」）:
+  - **取证（用户判断正确，但根因不在格式化器）**：
+    ① `fs_guard::LIST_EXT` 只有 10 项 —— `.js/.jsx/.mjs/.scss/.less/.html/.yaml` 这些
+      **prettier 真能格式化**的类型，在 Studio 里既不能新建、也不出现在文件树
+      ⇒ "格式化器支持、界面不给用"。
+    ② `format::NO_PARSER_EXT` 只有 4 项 —— 编辑器还能通过 ⇧⌘F **仓库搜索**打开任意扩展名的
+      文件（`search.rs` 不做扩展名过滤），于是 `.go/.toml/.sh/.ets/.wgsl` 会真去 spawn prettier，
+      再拿回**英文**的 `No parser could be inferred`（用户看不懂，也不知道该换什么工具）。
+  - **改法**：`LIST_EXT` **24** = 20 个可格式化（+js/jsx/mjs/cjs/mts/cts/jsonc/json5/scss/
+    less/wxss/html/yaml/yml）+ 4 个无 parser（rs/m/h/py）；`NO_PARSER_EXT` **28** 补全
+    搜索可达的无 parser 类型（sh/bash/zsh/java/kt/kts/swift/c/cc/cpp/cxx/hpp/hh/mm/ets/
+    wgsl/wxml/toml/xml/svg/sql/go/rb/lua）。`fs_ops` 的拒绝消息只列前 8 项 + 总数
+    （24 项全 join 是一屏噪音）；`languages.json` 补 `.json5→json` / `.wxss→css`
+    （门禁 ⑳ 要求树里出现的扩展名必须登记）。
+  - **★两张表全部逐个真跑 prettier 2.8.8 验证**（3 轮探针；28 个无 parser 扩展名 **28/28** 确认
+    返回 `No parser could be inferred`），**不按语言名推断**——本仓纪律「禁止外推」。
+  - **新增真跑判据** `format::tests::list_ext_is_either_formattable_or_rejected`：遍历
+    `LIST_EXT` 每项**真跑 CLI**，报 `No parser` ⇒ 真缺陷（漏在拒绝表外）；
+    报语法错 ⇒ 有 parser，正常。**不拿另一张手写白名单对数**（两张手写表互证是同义反复，
+    不产生新信息；只有真跑能发现"prettier 实际不支持"）。
+  - **判据**：`cargo test format::` **5/5**（含新判据）· `check:studio-panel` **75 绿 0 红** ·
+    `check:ai-tasks` ✅ · 行数 314 / 397 / 105（均远低 1000）。
+  - **★★诚实边界**：Studio 文件树 `ROOTS` 只列 `packages/studio/{ui/src,src,native}` ——
+    实测 **105 个文件 / 7 种扩展名**（ts 42 · vue 39 · rs 18 · json 2 · css 2 · m 1 · h 1）
+    ⇒ **本单的 `LIST_EXT` 扩容对现有目录零命中**（判据 ⑳ 仍报"树里 7 种扩展名"）。
+    真实收益 =「新建文件的可用类型变多」+「将来扩 ROOTS 不用再改」；
+    **让框架源码（`packages/` 45 包 · `hosts/`）进文件树是另一个议题**，属产品范围决策，不在本单。
+    另：prettier 2.8.8 仍是 `@changesets` 的传递依赖，未显式钉版本（#1464 已登记）。
+

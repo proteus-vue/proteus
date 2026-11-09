@@ -4143,6 +4143,24 @@
         "T-app-capability-open-document"
       ],
       "note": "【done · 决策 #1430（2026-11-05）】C16 `getPermission` 三端落地，语义 = **只查询当前授权状态、不申请**（申请发生在业务真正使用该能力时）。★两处\"伪装\"被消除：① \"没配置\"伪装成\"用户拒绝\"——Android 清单未声明时 `checkSelfPermission` 同样回 DENIED、iOS 缺 UsageDescription 时真申请会**直接杀进程** ⇒ 宿主回执带 `declared` 位；② \"框架不认识\"伪装成\"系统拒绝\"——未知 scope **直接报错**，不回 denied。★口径：App 端只有两态（Android `getPermissionFlags` 是 SystemApi、鸿蒙 `checkAccessTokenSync` 只给两态 ⇒ 未授予如实报 denied；iOS `notDetermined` 同归 denied 以保三端一致，属刻意的信息损失）。★首批三项 camera/microphone/geolocation（收小程序 scope 写法）；notifications 不进首批（iOS 只有异步 API，而宿主 invoke 契约是同步的）。★判据：单测 8/8 · **Android 真机 20/20（含 `pm grant`⇒granted / `pm revoke`⇒denied 的授权翻转取证）** · 破坏性验证 5 层（JS 3 层各自精确翻红；★宿主层 M4 短路 `checkSelfPermission` ⇒ 真机 18/20，翻转两条精确红）。★零设备编译全绿（Android javac / iOS swiftc / 鸿蒙 -fsyntax-only）+ **HAP 真构建成功**。★诚实边界：**iOS 真机未跑**（描述文件失效，本机无 team XKH568R7A5 有效 profile，设备 unavailable）· **鸿蒙真机未跑**（hdc 无设备）· 授权翻转只在 Android 验过（iOS/鸿蒙无 pm grant 等价命令）· 鸿蒙走渲染前快照 ⇒ 不证明查询瞬间实时性（延迟上界 = 一次渲染间隔）· 只覆盖三个 scope。【Handoff】- 做到哪：三端代码 + 契约 + 抽取器 + 文档 + 探针全部就绪，Android 真机闭环。- 未做：iOS/鸿蒙真机复跑（探针已就绪，各一行命令）。- 下一步：描述文件补签后 `bash hosts/ios/run-permission-probe.sh`；hdc 设备上线后 `bash hosts/harmony/run-permission-probe.sh`。- 坑：`run-selfdraw.sh` 加 4 行 plist 就破 1000 行上限（已压回 998）；`check-file-size` 另报的 3 处是既存欠账（HEAD 已超基线），不在本单 scope。"
+    },
+    {
+      "id": "T-studio-format-ext",
+      "title": "Studio 格式化覆盖：LIST_EXT 补齐可格式化类型 + NO_PARSER_EXT 补全（以 prettier 2.8.8 实测为准）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/fs_guard.rs",
+        "packages/studio/src/fs_ops.rs",
+        "packages/studio/src/format.rs",
+        "packages/studio/ui/src/languages.json"
+      ],
+      "decision": 1465,
+      "verification": "cd packages/studio && cargo test && cd ../.. && node scripts/studio-panel-checks-format.mjs",
+      "branch": null,
+      "related": [],
+      "note": "【done · 决策 #1465（2026-11-09）】用户指出「格式化支持的语言比较少」。★取证结论（不是猜）：① `fs_guard::LIST_EXT` 只有 10 项，`.js/.jsx/.mjs/.scss/.less/.html/.yaml` 这些 prettier **真能格式化**的类型在 Studio 里既不能新建也不出现在文件树；② `format::NO_PARSER_EXT` 只有 4 项（rs/m/h/py），通过 ⇧⌘F 打开 `.go/.toml/.sh/.ets/.wgsl` 点格式化会拿到 prettier 的**英文** `No parser could be inferred`。★两张表全部按 prettier 2.8.8 **逐个真跑验证**（3 轮探针，28 个无 parser 扩展名 28/28 确认）。★新增真跑判据 `format::tests::list_ext_is_either_formattable_or_rejected`（不拿手写白名单对数——那是同义反复）。★判据：`cargo test format::` 5/5 · 全量 `cargo test` 32 通过 / 1 失败（唯一红 `fs_guard::tests::new_path_boundary` 是 #1460 遗留、#1464 已登记，非本单）· `check:studio-panel` **75 绿 0 红** · `check:ai-tasks` ✅。★诚实边界：Studio 文件树 `ROOTS` 只列 `packages/studio/{ui/src,src,native}`（实测 105 个文件 / 7 种扩展名），所以 LIST_EXT 扩容对**现有目录零命中**——真实收益在「新建文件可用类型变多」与「未来扩 ROOTS 不用再改」，扩 ROOTS 是另一个议题需用户决策。【Handoff】- 做到哪：两张表 + 配套消息 + languages.json 全改完，判据全绿。- 未做：真机 Studio 里点「新建 .yaml」未验（需重打包 .app）；ROOTS 扩容未做。- 下一步：与用户确认 ROOTS 应含哪些目录后再立单。"
     }
   ]
 }

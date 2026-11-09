@@ -62,8 +62,24 @@ pub const FORMAT_ARGS: [&str; 6] = [
     "--trailing-comma",
     "all",
 ];
-/// `fs_guard::LIST_EXT` 里 prettier **没有 parser** 的那几个；提前拒绝，省一次 spawn 且错误可懂。
-const NO_PARSER_EXT: [&str; 4] = ["rs", "m", "h", "py"];
+/// `LIST_EXT` 里 prettier **没有 parser** 的那几个；提前拒绝，省一次 spawn 且错误可懂。
+///
+/// 【决策 #1465：4 → 28 项】原来只列 `LIST_EXT` 里的 rs/m/h/py。但编辑器还能通过
+///   ⇧⌘F **仓库搜索**打开任意扩展名的文件（`search.rs` 不做扩展名过滤），于是
+///   `.go/.toml/.sh/.ets/.wgsl` 这些会真去 spawn prettier，再拿回英文的
+///   `No parser could be inferred` —— 用户看不懂，也不知道该换什么工具。
+/// ★整张表**逐个真跑 prettier 2.8.8 验过**（2026-11-09，28/28 均返回 `No parser could be inferred`），
+///   不是按语言名推断的。覆盖本仓真实存在的类型（`git ls-files` 统计：sh 201 · java 85 ·
+///   swift 66 · h 61 · py 32 · ets 24 · svg 22 · cpp 12 · toml 9 · xml 5 · wgsl 5 · wxml 7）。
+/// ★这张表**只做"提前拒绝"**，不限制文件能否打开（那是 `fs_guard::LIST_EXT` 的事）——
+///   两表职责不同，不要合并：一个是"界面给不给用"，一个是"格式化器会不会失败"。
+const NO_PARSER_EXT: [&str; 28] = [
+    // ① `LIST_EXT` 里的 4 个（文件树可见 ⇒ 必然会被点到）
+    "rs", "m", "h", "py",
+    // ② 搜索可打开、prettier 无 parser 的常见类型
+    "sh", "bash", "zsh", "java", "kt", "kts", "swift", "c", "cc", "cpp", "cxx", "hpp", "hh",
+    "mm", "ets", "wgsl", "wxml", "toml", "xml", "svg", "sql", "go", "rb", "lua",
+];
 const TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BYTES: usize = 512 * 1024;
 
@@ -240,6 +256,39 @@ mod tests {
         assert!(check_path("a\\b.ts").is_err());
         assert!(check_path("packages/studio/src/main.rs").is_err());
         assert!(check_path("packages/studio/native/embed_view.m").is_err());
+    }
+
+    /// ★决策 #1465：`LIST_EXT` 每一项必须"要么真能格式化、要么被明确拒绝"。
+    /// 不拿另一张手写白名单对数（那只是同义反复），而是**真跑 prettier**：
+    ///   · 报"暂不支持" ⇒ 该项必须在 `NO_PARSER_EXT` 里，否则两表在撒谎；
+    ///   · 报 `No parser could be inferred` ⇒ **真缺陷**（漏在拒绝表外，用户看到英文）；
+    ///   · 报语法错 ⇒ 说明 parser 存在，正常（样例文本本来就不是合法源码）。
+    /// ★为什么必须真跑：两张表都是手写的，只对常量做断言无法发现"prettier 实际不支持"。
+    #[test]
+    fn list_ext_is_either_formattable_or_rejected() {
+        let root = match crate::fs_guard::repo_root() {
+            Ok(r) => r,
+            Err(_) => {
+                eprintln!("skip: 仓库根不可达");
+                return;
+            }
+        };
+        if !root.join(PRETTIER_JS).exists() {
+            eprintln!("skip: {PRETTIER_JS} 不存在");
+            return;
+        }
+        for ext in crate::fs_guard::LIST_EXT {
+            let path = format!("packages/studio/ui/src/__fmt_probe.{ext}");
+            if let Err(e) = format_via_cli(&path, "x\n") {
+                assert!(
+                    !e.contains("No parser could be inferred"),
+                    ".{ext} 漏在 NO_PARSER_EXT 之外（用户会拿到英文报错）：{e}"
+                );
+                if e.contains("暂不支持") {
+                    assert!(NO_PARSER_EXT.contains(&ext), ".{ext} 被拒绝但不在 NO_PARSER_EXT");
+                }
+            }
+        }
     }
 
     /// ★真跑 CLI（不是桩）：本机仓库有 prettier 时，断言产物就是本仓风格。

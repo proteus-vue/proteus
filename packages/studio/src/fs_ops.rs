@@ -38,7 +38,12 @@ where
 fn create_file_impl(path: String) -> Result<(), String> {
     let p = fs_guard::resolve_in_repo_new(&path)?;
     if !has_listed_ext(&p) {
-        return Err(format!("不支持的扩展名：{path}（文件树只列 {}）", LIST_EXT.join("/")));
+        /* 决策 #1465：白名单已 24 项，全量 join 出来是一屏噪音 ⇒ 只列前 8 个 + 总数 */
+        return Err(format!(
+            "不支持的扩展名：{path}（可新建/改名的类型：{} 等 {} 种）",
+            LIST_EXT[..8].join("/"),
+            LIST_EXT.len()
+        ));
     }
     // create_new：原子创建，已存在直接失败（绝不覆盖任何已有文件）
     std::fs::OpenOptions::new()
