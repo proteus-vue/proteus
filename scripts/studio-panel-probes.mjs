@@ -830,7 +830,7 @@ export async function probeSymbolPanel(page) {
   await page.hover('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]')
   await page.waitForTimeout(520)
 
-  const arrow = await page.$('#fileHoverCard .fv-more')
+  const arrow = await page.$('#fileHoverCard .fv-chev')
   if (!arrow) return { info: null, gone: false }
 
   await arrow.click()
@@ -881,6 +881,11 @@ export async function probePopoverChain(page) {
   await page.waitForTimeout(700)
   const cardKept = (await rect('fileHoverCard')) !== null
   const panelKept = (await rect('symbolPanel')) !== null
+  /* ★决策 #1484：指针在子面板上时，卡片里那个**触发入口行**必须仍是激活态
+     （与文件树 `.peek` 同一条规则）。只断"卡片还在"的话，行变回普通样式测不出来。 */
+  const rowActive = await page.evaluate(() =>
+    !!document.querySelector('#fileHoverCard .fv-row.more.active'),
+  )
 
   /* ③ 关子面板：不能被"同步连带"关掉父面板 */
   await page.click('#symbolPanel .sym-x').catch(() => {})
@@ -892,7 +897,7 @@ export async function probePopoverChain(page) {
   await page.waitForTimeout(760)
   const goneBoth = (await rect('fileHoverCard')) === null && (await rect('symbolPanel')) === null
 
-  return { card0, card1, panel, cardKept, panelKept, cardAfterClose, goneBoth }
+  return { card0, card1, panel, cardKept, panelKept, rowActive, cardAfterClose, goneBoth }
 }
 
 /**

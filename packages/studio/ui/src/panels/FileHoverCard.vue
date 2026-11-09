@@ -30,6 +30,10 @@ const props = defineProps<{
   git: { branch: string; head: string; subject: string; ahead: number; behind: number } | null
   /** 该路径在 git 里的状态码（M/A/D/R/U/?）；空串 = 干净 */
   mark: string
+  /** ★决策 #1484：这个文件的子面板正开着 ⇒ 触发入口要保持"激活"态。
+   *  否则指针移进子面板后这一行的底色就没了，用户会以为自己走错了地方
+   *  （与文件树 `.peek` 是同一条规则，只是对象从树行换成了卡内的行）。 */
+  active?: boolean
 }>()
 
 /** 决策 #1481：`more` = 点箭头要看**完整结构清单**（卡片只给总览，清单交给面板） */
@@ -261,10 +265,15 @@ const markLabel = computed(() => {
             <span v-for="c in brief.chips" :key="c" class="chip">{{ c }}</span>
           </span>
         </div>
-        <!-- 符号名单独一行、**允许换行**（monospace 淡色），不再被 ellipsis 吃掉 -->
+        <!-- 符号名：整行是下一级的触发区。排版按"极简"重做（决策 #1484）：
+             ① 名字与上面的 chips **左边界对齐**（靠 `margin-left` 而不是空 span 占位，
+                空 span 一旦字号变化就会错位）；
+             ② `+N` 用中性灰、与名字之间留 6px，读作"还有多少"，而不是符号名的一部分；
+             ③ 箭头**去掉边框与背景**，只留一个淡色 chevron，hover/active 时才提亮。 -->
         <div
           v-if="brief?.names?.length"
           class="fv-row more"
+          :class="{ active }"
           role="button"
           tabindex="0"
           :title="`点击或悬停 ${MORE_DWELL}ms 打开结构面板`"
@@ -274,16 +283,12 @@ const markLabel = computed(() => {
           @mouseleave="disarmMore"
         >
           <span class="fv-k" />
-          <span class="fv-v names">
-            {{ brief.names.join(' · ') }}
-            <span v-if="brief.names_total > brief.names.length" class="fv-sub"
-              >+{{ brief.names_total - brief.names.length }}</span
-            >
-          </span>
-          <!-- ★决策 #1482：箭头只是"这里还有下一级"的视觉提示，整行都能点/能悬停，
-               不再强迫用户去瞄准一个 16px 的按钮。 -->
+          <span class="fv-v names">{{ brief.names.join(' · ') }}</span>
+          <span v-if="brief.names_total > brief.names.length" class="fv-rest"
+            >+{{ brief.names_total - brief.names.length }}</span
+          >
           <button
-            class="fv-more"
+            class="fv-chev"
             title="打开结构面板（完整清单）"
             aria-label="打开结构面板"
             @click.stop="emit('more', path)"
@@ -460,34 +465,49 @@ const markLabel = computed(() => {
   white-space: normal;
   word-break: break-word;
 }
-/* 箭头入口（决策 #1481）：卡片里唯一的按钮，右侧贴边，小到不抢注意力 */
-.fv-more {
+/* 箭头：**没有边框、没有底色**，只有一个淡色 chevron（决策 #1484）。
+   常显 38% 不透明，hover / 激活时提到 100% —— 极简但不至于让人看不出"还有下一级"。 */
+.fv-chev {
   flex: none;
-  width: 16px;
-  height: 16px;
-  margin-left: 2px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  width: 12px;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: var(--fg-subtle);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
+  opacity: 0.38;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease;
 }
-.fv-more:hover {
-  border-color: var(--accent);
-  background: var(--bg-overlay);
+.fv-row.more:hover .fv-chev,
+.fv-row.more.active .fv-chev {
+  color: var(--fg-muted);
+  opacity: 1;
+}
+.fv-chev:hover {
   color: var(--fg);
 }
-/* ★决策 #1482：符号行**整行都是触发区**（把手/箭头只是提示）。
-   之前只有 16px 的按钮能点，用户说"太固化"——命中面积太小本身就是缺陷。 */
+/* "+N"：中性灰、与符号名之间 6px，读作"还有多少"，不要混进名字里 */
+.fv-rest {
+  flex: none;
+  margin-left: 6px;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+/* ★决策 #1482：符号行**整行都是触发区**（箭头只是提示）。
+   ★决策 #1484：`active` 与 `:hover` 同色 —— 子面板打开期间入口行保持点亮。 */
 .fv-row.more {
   margin: 0 calc(-1 * var(--sp3));
   padding: 0 var(--sp3);
   border-radius: 5px;
   cursor: pointer;
 }
-.fv-row.more:hover {
+.fv-row.more:hover,
+.fv-row.more.active {
   background: var(--bg-overlay);
 }
 .fv-sub {

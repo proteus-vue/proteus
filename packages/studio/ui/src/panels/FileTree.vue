@@ -298,6 +298,7 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       :anchor="hoverAnchor"
       :git="hoverGit"
       :mark="mark(hoverPath)"
+      :active="!!symbolPath && symbolPath === hoverPath"
       @mouseenter="cancelHide"
       @mouseleave="scheduleHide"
       @more="openSymbols"
