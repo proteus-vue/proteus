@@ -4376,6 +4376,27 @@
         "T-studio-file-brief"
       ],
       "note": "【done · 决策 #1477（2026-11-09）】用户：「git 分支提交信息感觉也可以放上去吧？这个应该没有任何 I/O 消耗」。★判断对一半：✅悬停确实零 I/O（数据来自前端已有的 `git` ref）；❌但 `status --branch` 输出里没有提交标题，要单独一次 `git log -1 --format=%s`——成本挪到**刷新时那一次**，不是每次悬停。★HEAD 短哈希是白捡的：`# branch.oid` 本来就在 porcelain v2 输出里，此前没解析；`(initial)` 如实留空不拿 40 个 0 充数。★展示放卡片最后（仓库级信息不该压住角色/规模）：分支+短哈希+↑↓ / 提交标题 / 变更(MADRU?→人话，与文件树徽标同源 git.files)；文件与目录都显示分支。★判据：Rust `git::tests::status_includes_head_and_subject`（真跑 git status：7 位十六进制、分支非空、有 HEAD 必有标题）；面板 **㊿j** 四条一起断（main+abc1234+演示提交标题+已修改）。★破坏性验证：掐掉 `:git=\"hoverGit\"` 接线 ⇒ 仅 ㊿j 红、其余 78 绿。选接线而非改桩值——接线才是真风险（#1404 的 isRepo 缺陷就死在这条缝）。★该 Rust 判据**不写「没 git 就跳过」**（#1469 踩过 skip 也算 passed）：本仓测试本来就跑在 git 仓库里，取不到 is_repo 应当红。★判据：check:studio-panel **79 绿 0 红** · cargo test **54 通过/1 失败**（唯一红 #1460 既存）。★诚实边界：显示的是 HEAD 的提交标题，不是该文件最后一次提交（后者每文件一次 git log，悬停付不起）；刷新节奏沿用 git_status；未跟踪文件显示「未跟踪」。【Handoff】- 做到哪：Rust 字段 + 卡片渲染 + 桩 + 判据 + 破坏性验证。- 未做：文件级最后一次提交（需 git log -- path）。- 下一步：真机看卡片高度是否可接受（现在最多 9 行）；批次 2（.vue/.ts 结构摘要）。"
+    },
+    {
+      "id": "T-studio-hover-interactive",
+      "title": "悬停卡可交互化：220ms 宽限 + Esc/点外关闭（㊿k）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs"
+      ],
+      "decision": 1478,
+      "verification": "cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-file-hover",
+        "T-studio-hover-git"
+      ],
+      "note": "【done · 决策 #1478（2026-11-09）】用户两条：① 「深层信息这个项目里是不是验证不了？」② 「卡片移走就消失，内容越来越丰富，后面要加折叠展开/一键复制，需要优化」。\n★① 能验、只有 .md 验不了：ROOTS 实测 ts 42 · vue 40 · rs 20 · json 2 · css 2 · m 1 · h 1 ⇒ 批次 2(.vue/.ts)、批次 3(.rs) 都有真实样本；md 为 0，文档骨架目前只有单测。\n★② 问题本质不是「消失太快」而是「卡片点不到」：行与卡片隔 8px 缝，鼠标穿过先触发行 mouseleave，原来立即清 ⇒ 卡内交互在物理上不可能。\n★改法三条：行/卡片 mouseleave 都走 scheduleHide(220ms)、卡片 mouseenter 取消；pointer-events none→auto；给退出方式（Esc + 点卡片外）。\n★明确推翻 #1474 约定③：从「离开即消失、不做动画延迟」改为「延迟 220ms、仍不做淡出动画」——旧结论不是错的，是前提变了（只读提示 → 可交互面板）。\n★判据 ㊿k 三条一起断：进卡 600ms 仍在（>220ms）+ 移开 700ms 消失 + 两者同时成立才算宽限存在（只断前者的「永不消失」也能绿）。\n★探针 page.hover(#fileHoverCard) 必须 catch：卡片若先消失，Playwright 抛错会炸掉整轮门禁，那不是一条红而是没有门禁。\n★破坏性验证：行 mouseleave 恢复 clearHover ⇒ 仅 ㊿k 红、其余 79 绿，报错原文「指针进卡 600ms 后仍在=false」。\n★判据：check:studio-panel 80 绿 0 红 · cargo test 54 通过/1 失败（#1460 既存，本单未动 Rust）。\n★诚实边界：卡片翻到左侧会盖住行（可交互的代价）；220ms 内 DOM 还在；卡内滚动与树滚动未测；折叠/复制入口尚未做。\n【Handoff】- 做到哪：宽限状态机 + pointer-events + Esc/点外关 + 判据 + 破坏性验证。- 未做：卡内交互入口（折叠/复制）。\n- 下一步：真机试「鼠标走进卡片」的手感；若 220ms 不够或太长，只调 HIDE_GRACE 一个常量。"
     }
   ]
 }

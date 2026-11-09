@@ -12,7 +12,7 @@
 import { probeFileHover } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
-  const { onApp, onMain, onProj, onOwner, onBig, gone } = await probeFileHover(page)
+  const { onApp, onMain, onProj, onOwner, onBig, onCard, gone } = await probeFileHover(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -66,6 +66,16 @@ export async function checksHover(page) {
         gitOk ? 'main/abc1234/演示提交标题/已修改' : '未命中'
       }`,
       gitOk,
+    ],
+    /* ㊿k 卡片可交互（决策 #1478）
+       ★三条缺一不可：① 指针进卡片后 600ms（> 220ms 宽限）**还在**；
+         ② 移开后 700ms **消失**（否则就是"挂住不走了"，比闪退更烦）；
+         ③ 消失不是靠"本来就不消失"——两者一起才能证明宽限真的存在。 */
+    [
+      `㊿k 悬停卡可交互（决策 #1478）：指针进卡 600ms 后仍在=${
+        onCard !== null
+      } · 移开 700ms 后消失=${gone === null}`,
+      onCard !== null && gone === null,
     ],
   ]
 }

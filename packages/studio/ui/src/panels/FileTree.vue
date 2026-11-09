@@ -10,7 +10,7 @@
 //   ① **不画折叠箭头**（决策 #1238）：目录图标本身就是开关，闭合与展开是两套形状；
 //      去掉 12px 箭头后，同级文件名的左边界才真正对齐。
 //   ② **布局必须有几何判据**（决策 #1218 的教训）：文件树宽度/行高变化会被判据 ㉓ 盯住。
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { buildTree, flatten, toggleCollapsed, type TreeNode } from '../fileTree'
 import { useWorkspaceState } from '../useWorkspaceState'
 import { git } from '../git'
@@ -72,21 +72,29 @@ function nodeIcon(node: { path: string; dir: boolean }): { name: string; color?:
   return t ? { name: t.icon, color: t.color } : { name: 'file' }
 }
 
-/* ===== 悬停属性预览（决策 #1474）=====
+/* ===== 悬停属性预览（决策 #1474 · 交互化改造 #1478）=====
  *
- * 【三条约定，都被既有缺陷教过】
+ * 【四条约定，都被既有缺陷教过】
  *   ① **250ms 才出现**：鼠标扫过整棵树时不该连续弹卡（那是噪音不是信息）。
  *   ② **锚定行矩形，不跟鼠标**（#1421）：跟随鼠标重定位会让卡片在相邻两行间闪跳。
  *   ③ **滚轮即收起**：卡片位置是屏幕坐标，树一滚就错位；收起比"跟着重算"更简单也更稳。
+ *   ④ **★离开后延迟 220ms 才消失**（#1478 推翻了原先的"立即消失"）：
+ *      行与卡片之间隔着 8px 缝，鼠标穿过去时**先触发行的 mouseleave**。立即消失 ⇒
+ *      卡片在你够到它之前就没了，「折叠展开 / 一键复制」这类卡内交互**无从谈起**。
+ *      220ms 够穿过 8px，又短到不会在扫树时留残影。
+ *      —— 这是"内容越丰富 → 越需要被点到"的直接结果，不是妥协。
  *
  * 【缓存】同一路径只查一次。文件改动后缓存会短暂过期——可接受：悬停只是提示，
  *   真正的内容以打开后的编辑器为准。
  */
 const HOVER_DELAY = 250
+/** 离开行/卡片后到真正消失的宽限（见约定 ④） */
+const HIDE_GRACE = 220
 const hoverPath = ref('')
 const hoverAnchor = ref<{ top: number; left: number; right: number } | null>(null)
 const hoverStat = ref<FileStat | null>(null)
 let hoverTimer: ReturnType<typeof setTimeout> | null = null
+let hideTimer: ReturnType<typeof setTimeout> | null = null
 const statCache = new Map<string, FileStat>()
 
 /**
@@ -100,7 +108,16 @@ const hoverGit = computed(() => {
   return { branch: g.branch, head: g.head, subject: g.subject, ahead: g.ahead, behind: g.behind }
 })
 
+function cancelHide() {
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+}
+
+/** 立刻收起（滚轮 / Esc / 点了别处）——与 `scheduleHide` 的区别是**不给宽限** */
 function clearHover() {
+  cancelHide()
   if (hoverTimer) {
     clearTimeout(hoverTimer)
     hoverTimer = null
@@ -110,7 +127,14 @@ function clearHover() {
   hoverStat.value = null
 }
 
+/** 延迟收起（决策 #1478）：离开行或离开卡片后给 220ms 宽限，好让指针走进卡片 */
+function scheduleHide() {
+  cancelHide()
+  hideTimer = setTimeout(clearHover, HIDE_GRACE)
+}
+
 function onHover(e: Event, node: TreeNode) {
+  cancelHide()
   if (hoverTimer) clearTimeout(hoverTimer)
   const el = e.currentTarget as HTMLElement | null
   if (!el) return
@@ -134,8 +158,30 @@ function onHover(e: Event, node: TreeNode) {
   }, HOVER_DELAY)
 }
 
+/* 卡片一旦可交互，就必须给它**明确的退出方式**（决策 #1478）：
+   Esc 关、点别处关。否则用户只能靠把鼠标甩到很远来关它——那是"隐藏功能"。 */
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && hoverPath.value) clearHover()
+}
+
+function onDocPointerDown(e: Event) {
+  if (!hoverPath.value) return
+  const t = e.target as Element | null
+  /* 卡片内的点击（将来的复制/展开按钮）不算"点别处" */
+  if (t?.closest?.('#fileHoverCard')) return
+  clearHover()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  document.addEventListener('pointerdown', onDocPointerDown, true)
+})
+
 onBeforeUnmount(() => {
   if (hoverTimer) clearTimeout(hoverTimer)
+  if (hideTimer) clearTimeout(hideTimer)
+  window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
 })
 
 function onNodeMenu(e: MouseEvent, node: TreeNode) {
@@ -193,9 +239,9 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       :data-icon="nodeIcon(r.node).name"
       @click="r.node.dir ? toggle(r.node.path) : emit('open', r.node.path)"
       @mouseenter="onHover($event, r.node)"
-      @mouseleave="clearHover"
+      @mouseleave="scheduleHide"
       @focus="onHover($event, r.node)"
-      @blur="clearHover"
+      @blur="scheduleHide"
       @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
     >
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
@@ -208,7 +254,9 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
   </nav>
 
   <!-- 悬停预览卡：Teleport 到 body —— 布局里若有 transform/filter，`position: fixed` 会
-       退化成相对该祖先定位（卡片错位到树里）。挂到 body 下才真正相对视口。 -->
+       退化成相对该祖先定位（卡片错位到树里）。挂到 body 下才真正相对视口。
+       ★卡片**接收鼠标**（决策 #1478）：指针进卡就取消收起，出去才重新计时——
+         这是"卡内可交互"（折叠展开 / 一键复制）的前提。 -->
   <Teleport to="body">
     <FileHoverCard
       v-if="hoverPath"
@@ -217,6 +265,8 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       :anchor="hoverAnchor"
       :git="hoverGit"
       :mark="mark(hoverPath)"
+      @mouseenter="cancelHide"
+      @mouseleave="scheduleHide"
     />
   </Teleport>
 </template>
