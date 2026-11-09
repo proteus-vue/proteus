@@ -4493,6 +4493,29 @@
         "T-studio-hover-interactive"
       ],
       "note": "【done · 决策 #1482（2026-11-09）】用户三条批评：① 只能点箭头太固化；② 前面的面板不该自动关闭；③ 缺面板弹出模型，面板应紧挨触发入口。★这三条不是细节，是缺一条模型：旧实现里悬停卡自己算位置（right+8）、结构面板固定 top:88/right:24、且 openSymbols 里主动 clearHover 把父面板关掉 ⇒ 面板飞角落 + 父消失 = 用户说的\"整套逻辑是分离的\"。两套位置规则必然分离。\n★新增 ui/src/popover.ts：placeBeside(anchor,size,gap=8) → {left,top,side}。三条硬约束：紧挨（间距恒 8）/ 不遮挡（右不够翻左，不压上去）/ 级联同向（子锚父子矩形，台阶式右延）。卡片与结构面板都改调用它。\n★链路状态机三条：① 子面板开着时父面板不自动关（scheduleHide 到期 if symbolPath return）；② 子面板内点击不算\"点别处\"（onDocPointerDown 排除 #fileHoverCard,#symbolPanel —— **这是 ㊿o 抓到的真缺陷**，修前点面板 ✕ 会同步杀掉父卡片）；③ 换行=换文件自动收子面板；关子后父按正常宽限走。\n★触发：符号行整行可点 + 悬停 380ms 自动开（比卡片 250ms 长，避免扫过误开）；16px 箭头降级为视觉提示。\n★判据 ㊿o 五条：整行可点 / 指针进子面板 700ms 父仍在 / 间距 8±1 / 关子后父仍在 / 移开双收。\n★破坏性验证：子面板位置回退成固定 24/88 ⇒ 仅 ㊿o 红，报错「间距=-539px」，其余 83 绿。\n★判据：check:studio-panel 84 绿 0 红 · cargo test 60 通过/1 失败（#1460 既存，本单未动 Rust）。\n★诚实边界：只覆盖两级；计时为经验值需真机调；没有 pin（用户要的就是移走自动收）；翻边左侧分支已被判据覆盖。\n【Handoff】- 做到哪：模型 + 两个面板接入 + 链路状态机 + 判据 + 破坏性验证。\n- 未做：三级面板锚点传递、pin、拖拽。\n- 下一步：真机调 380/300ms 手感；若以后加第三级，锚点仍传父矩形即可。"
+    },
+    {
+      "id": "T-studio-popover-fit",
+      "title": "面板不穿底：usableBottom + 实测高度 + 缩放重算（㊿p）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/ui/src/popover.ts",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/panels/SymbolPanel.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1483,
+      "verification": "cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-popover-model",
+        "T-studio-symbol-panel"
+      ],
+      "note": "【done · 决策 #1483（2026-11-09）】用户：「体验好很多了，不过没有考虑到被下面窗口遮挡」。\n★根因四条叠加：① placeBeside 用 window.innerHeight 判底边，而状态栏是 shell 的 24px grid 行、浮层是 fixed 相对视口 ⇒ 面板压到状态栏；② max-height:70vh 也没扣；③ size.h 用估算值（卡片140/面板420），真实内容更高 ⇒ 夹取用错数；④ box-sizing:content-box ⇒ max-height 不含边框，实测多出 2px。\n★改法都在模型内：usableBottom() 运行时读 .status 真实高度；useAnchoredPopover() 用 ResizeObserver 把**实测高度**回灌 placeBeside，并给 maxH = usableBottom-top-gap（面板内部滚动而非溢出）；★pos/maxH 各写一行 `void vh.value` —— usableBottom/innerWidth 是命令式读取、非响应式，不加这行窗口缩放后 computed 不重算（㊿p 抓到的第二个缺陷）；两个面板根元素加 box-sizing:border-box（修 2px 边框）。\n★判据 ㊿p：先在正常窗口开面板**再**压窗口到 420（顺序关键：先压矮再 hover 树行会滚出视口，click 超时炸掉整轮门禁）；断底边 ≤ 状态栏上沿 −8 且高度 ≥160（只断底边则\"高度0\"也能过）。桩从 5 条改 80 条符号，否则面板矮得碰不到底边、判据形同虚设。\n★破坏性验证：usableBottom 忽略状态栏 ⇒ 仅 ㊿p 红、其余 84 绿，报错「底边=412 / 状态栏上沿=396」。\n★判据：check:studio-panel 85 绿 0 红（实测 底边 388/396，正好 8px）· cargo test 60 通过/1 失败（#1460 既存，本单未动 Rust）。\n★诚实边界：只扣状态栏（终端 overlay 未扣，按浮层盖终端处理，未验）；maxH 有 160 下限 ⇒ 窗口低于约 220px 不保证；多显示器/缩放未单独验。\n【Handoff】- 做到哪：模型补可用底边 + 实测高度 + 缩放重算 + 盒模型 + 判据 + 破坏性验证。\n- 未做：终端 pane 的避让、pin。\n- 下一步：真机把窗口拖矮看面板是否随动收窄（判据已覆盖，但手感需人看）。"
     }
   ]
 }

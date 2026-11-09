@@ -16,7 +16,7 @@
 //   （文件名/路径）渲染骨架，stat 回来后再填数字——宁可短暂显示"—"，也不让卡片高度抖动。
 import { computed, onBeforeUnmount } from 'vue'
 import type { FileStat } from '../bridge'
-import { placeBeside } from '../popover'
+import { useAnchoredPopover } from '../popover'
 import StudioIcon from '../icons/StudioIcon.vue'
 
 const props = defineProps<{
@@ -54,16 +54,13 @@ onBeforeUnmount(disarmMore)
 
 /** 卡片宽度：与文件树 240px 量级匹配，但不跟着树宽变（避免窄树里折行） */
 const W = 272
-/** 高度估算值：只用于"底部放不下就上移"，误差靠 max-height + 滚动兜底 */
+/** 高度估算值：只用于首帧定位，真实高度由 `useAnchoredPopover` 实测回灌（#1483） */
 const EST_H = 140
 
-const pos = computed(() => {
-  const a = props.anchor
-  if (!a) return { left: -9999, top: -9999 }
-  /* ★位置规则统一走 `placeBeside`（决策 #1482）：卡片与结构面板共用同一套"紧挨触发入口"
-     的模型。以前这里是手写的一份，结构面板又固定在右上角——两份规则必然分离。 */
-  return placeBeside(a, { w: W, h: EST_H })
-})
+/* ★位置规则统一走模型（决策 #1482 / #1483）：卡片与结构面板共用同一套
+   "紧挨触发入口 + 不穿出可用区域"的规则。以前这里是手写的一份，结构面板又固定在
+   右上角——两份规则必然分离。 */
+const { el, pos, maxH } = useAnchoredPopover(computed(() => props.anchor), W, EST_H)
 
 const name = computed(() => props.path.slice(props.path.lastIndexOf('/') + 1))
 const dirPath = computed(() => {
@@ -186,7 +183,13 @@ const markLabel = computed(() => {
     class="fv-card"
     id="fileHoverCard"
     role="tooltip"
-    :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: `${W}px` }"
+    ref="el"
+    :style="{
+      left: `${pos.left}px`,
+      top: `${pos.top}px`,
+      width: `${W}px`,
+      maxHeight: `${maxH}px`,
+    }"
   >
     <div class="fv-head">
       <div class="fv-name" :title="name">{{ name }}</div>
@@ -360,6 +363,9 @@ const markLabel = computed(() => {
 .fv-card {
   position: fixed;
   z-index: 60;
+  /* ★决策 #1483：`max-height` 由模型按"可用底边"算，必须含 padding + 边框（content-box
+     下会多出 2px 边框 + 8px 上内边距，直接把底边顶出状态栏）。 */
+  box-sizing: border-box;
   max-height: 70vh;
   overflow: auto;
   padding: var(--sp2) 0 0;

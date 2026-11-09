@@ -17,7 +17,7 @@
 //   摘要与清单是两条命令：悬停是热路径，不为"可能不会点开的面板"付钱。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { fileSymbols, type SymbolRow } from '../bridge'
-import { placeBeside, type AnchorRect } from '../popover'
+import { useAnchoredPopover, type AnchorRect } from '../popover'
 import { useWorkspaceState } from '../useWorkspaceState'
 import StudioIcon from '../icons/StudioIcon.vue'
 
@@ -29,16 +29,14 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 const ws = useWorkspaceState()
 
-/* 面板尺寸：宽度固定（清单是等宽名字 + 行号，窄了会截断），高度用于垂直夹取 */
+/* 面板尺寸：宽度固定（清单是等宽名字 + 行号，窄了会截断），高度只作首帧估算 */
 const W = 340
 const EST_H = 420
 const LEAVE_GRACE = 300
 
-const pos = computed(() => {
-  const a = props.anchor
-  if (!a) return { left: 24, top: 88, side: 'right' as const }
-  return placeBeside(a, { w: W, h: EST_H })
-})
+/* ★位置与最大高度都交给模型（决策 #1482 / #1483）：子面板锚定**父面板矩形**，
+   并且永远不穿出"可用底边"（状态栏上方）。 */
+const { el, pos, maxH } = useAnchoredPopover(computed(() => props.anchor), W, EST_H)
 
 const rows = ref<SymbolRow[]>([])
 const err = ref('')
@@ -115,7 +113,13 @@ function go(r: SymbolRow) {
       id="symbolPanel"
       role="dialog"
       aria-label="结构大纲"
-      :style="{ left: `${pos.left}px`, top: `${pos.top}px`, width: `${W}px` }"
+      ref="el"
+      :style="{
+        left: `${pos.left}px`,
+        top: `${pos.top}px`,
+        width: `${W}px`,
+        maxHeight: `${maxH}px`,
+      }"
       :data-side="pos.side"
       @mouseenter="onEnter"
       @mouseleave="onLeave"
@@ -166,6 +170,9 @@ function go(r: SymbolRow) {
   z-index: 70;
   display: flex;
   flex-direction: column;
+  /* ★决策 #1483：`max-height` 由模型按"可用底边"算出，必须是**含边框**的高度，
+     否则 content-box 下会多出 2px（上/下各 1px 边框）——实测正好把底边顶出状态栏 2px。 */
+  box-sizing: border-box;
   max-height: 70vh;
   border: 1px solid var(--border-strong);
   border-radius: 10px;

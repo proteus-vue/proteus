@@ -9,13 +9,19 @@
 //   ② 卡片内容跟着**被悬停的那一项**变 —— 桩里 App.vue=371 行、main.rs=997 行。
 //      若桩对所有文件都返回同一个数，"卡片沿用了上一项数据"这类串数据缺陷根本抓不到；
 //   ③ 移开即消失 —— 残留卡片会挡住下一行的点击，是可感知的缺陷。
-import { probeFileHover, probePopoverChain, probeSymbolPanel } from './studio-panel-probes.mjs'
+import {
+  probeFileHover,
+  probePopoverChain,
+  probePopoverFit,
+  probeSymbolPanel,
+} from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
   const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone } =
     await probeFileHover(page)
   const sym = await probeSymbolPanel(page)
   const chain = await probePopoverChain(page)
+  const fit = await probePopoverFit(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -105,15 +111,15 @@ export async function checksHover(page) {
       peekWhileCard === 'packages/studio/ui/src/App.vue' && peekAfterGone === null,
     ],
     /* ㊿n 结构面板（决策 #1481）
-       ★四条：面板出现 + 标题是当前文件 + 条目数对（桩给 5）+ Esc 能关。
+       ★四条：面板出现 + 标题是当前文件 + 条目数对（桩给 80，见 #1483）+ Esc 能关。
          只断"出现了"的话，列错文件的清单、或永远关不掉的面板都能绿。 */
     [
       `㊿n 结构面板（决策 #1481）：${
         sym.info ? `${sym.info.name} · ${sym.info.items} 条 · 非导出 ${sym.info.dim} 条` : '未打开'
       } · Esc 关闭=${sym.gone}`,
       sym.info?.name === 'bridge.ts' &&
-        sym.info.items === 5 &&
-        sym.info.dim === 2 &&
+        sym.info.items === 80 &&
+        sym.info.dim === 20 &&
         sym.gone === true,
     ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
@@ -142,5 +148,18 @@ export async function checksHover(page) {
           chain.goneBoth === true,
       ]
     })(),
+    /* ㊿p 不得穿出可用区域（决策 #1483）——守用户这句"没考虑到被下面窗口遮挡"：
+       窗口压到 420 高时，面板底边必须停在**状态栏上沿 8px 以内**，
+       而且不能退化成高度 0（那样等于判据自己把内容藏了）。
+       ★两条都断：只断底边的话，"高度 0" 也能过。 */
+    [
+      `㊿p 面板不穿底（决策 #1483）：420 高窗口下 底边=${fit?.bottom ?? '?'} / 状态栏上沿=${
+        fit?.statusTop ?? '?'
+      } · 高度=${fit?.height ?? '?'}px`,
+      fit !== null &&
+        fit !== undefined &&
+        fit.bottom <= fit.statusTop - 8 + 1 &&
+        fit.height >= 160,
+    ],
   ]
 }

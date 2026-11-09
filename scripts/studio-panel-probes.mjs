@@ -894,3 +894,41 @@ export async function probePopoverChain(page) {
 
   return { card0, card1, panel, cardKept, panelKept, cardAfterClose, goneBoth }
 }
+
+/**
+ * 面板不能穿出可用区域（决策 #1483）：把窗口压到 420 高，面板必须止步于**状态栏上方**。
+ * ★桩给 80 条符号（真实 bridge.ts 有 100），否则面板矮得根本碰不到底边，这条判据形同虚设。
+ */
+export async function probePopoverFit(page) {
+  const vp = page.viewportSize() ?? { width: 1280, height: 720 }
+
+  /* ★先在正常窗口里打开面板，**然后**把窗口压矮：
+     反过来（先压矮再 hover 树行）行会滚出视口，click 直接超时把整轮门禁炸掉——
+     而且那测的不是"缩放后是否重算"，恰恰漏掉了真正要验的路径。 */
+  await page.hover('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]')
+  await page.waitForTimeout(520)
+  await page.click('#fileHoverCard .fv-row.more').catch(() => {})
+  await page.waitForTimeout(420)
+
+  await page.setViewportSize({ width: vp.width, height: 420 })
+  await page.waitForTimeout(420)
+
+  const m = await page.evaluate(() => {
+    const p = document.getElementById('symbolPanel')
+    if (!p) return null
+    const pr = p.getBoundingClientRect()
+    const st = document.querySelector('.status')
+    return {
+      bottom: Math.round(pr.bottom),
+      height: Math.round(pr.height),
+      statusTop: Math.round(st ? st.getBoundingClientRect().top : window.innerHeight),
+      vh: window.innerHeight,
+    }
+  })
+
+  await page.keyboard.press('Escape').catch(() => {})
+  await page.mouse.move(5, 5)
+  await page.setViewportSize(vp)
+  await page.waitForTimeout(220)
+  return m
+}

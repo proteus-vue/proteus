@@ -165,14 +165,18 @@ export function stubTauri(payload) {
            ★按路径区分是为了能验"面板列的是当前文件"而不是固定数据。 */
         if (cmd === 'file_symbols') {
           const p = String(args?.path ?? '')
-          if (p.endsWith('/bridge.ts'))
-            return [
-              { name: 'Stats', kind: 'interface', line: 12, exported: true },
-              { name: 'BridgeState', kind: 'type', line: 8, exported: true },
-              { name: 'hasBridge', kind: 'function', line: 40, exported: true },
-              { name: 'invoke', kind: 'function', line: 55, exported: false },
-              { name: 'MAX_BYTES', kind: 'const', line: 3, exported: false },
-            ]
+          if (p.endsWith('/bridge.ts')) {
+            /* ★决策 #1483：造 **80 条**（真实 bridge.ts 有 100 个符号）。
+              只给 5 条时面板很矮，"会不会被底边/状态栏切掉"这条根本测不出来。
+              每 4 条里 1 条非导出 ⇒ 20 条淡色。 */
+            const named = ['Stats', 'BridgeState', 'hasBridge', 'invoke', 'MAX_BYTES']
+            return Array.from({ length: 80 }, (_, i) => ({
+              name: i < named.length ? named[i] : `sym${i}`,
+              kind: i === 0 ? 'interface' : i === 1 ? 'type' : 'function',
+              line: 3 + i * 7,
+              exported: i % 4 !== 0,
+            }))
+          }
           return [{ name: 'onlyOne', kind: 'const', line: 1, exported: true }]
         }
         if (cmd === 'file_stat') {
