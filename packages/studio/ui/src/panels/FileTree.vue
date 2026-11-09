@@ -21,6 +21,7 @@ import { fileTypeIcon } from '../fileIcons'
 import type { FileOp, FileOpKind } from '../fileOps'
 import { fileStat, type FileStat } from '../bridge'
 import FileHoverCard from './FileHoverCard.vue'
+import SymbolPanel from './SymbolPanel.vue'
 
 const props = defineProps<{
   files: string[]
@@ -131,6 +132,14 @@ function clearHover() {
 function scheduleHide() {
   cancelHide()
   hideTimer = setTimeout(clearHover, HIDE_GRACE)
+}
+
+/** 结构面板（决策 #1481）：卡片上的箭头点开后，清单在独立面板里列。
+ *  ★打开时顺手收起卡片：接下来视线和指针都在面板上，留着卡片只会互相压。 */
+const symbolPath = ref('')
+function openSymbols(p: string) {
+  clearHover()
+  symbolPath.value = p
 }
 
 function onHover(e: Event, node: TreeNode) {
@@ -267,8 +276,12 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       :mark="mark(hoverPath)"
       @mouseenter="cancelHide"
       @mouseleave="scheduleHide"
+      @more="openSymbols"
     />
   </Teleport>
+
+  <!-- 结构大纲面板（决策 #1481）：自己 Teleport 到 body，可滚、可 Esc 关闭 -->
+  <SymbolPanel v-if="symbolPath" :path="symbolPath" @close="symbolPath = ''" />
 </template>
 
 <style scoped>

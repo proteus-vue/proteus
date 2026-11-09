@@ -155,6 +155,18 @@ export interface ProjectRef {
 }
 export const fileStat = (path: string): Promise<FileStat> => invoke<FileStat>('file_stat', { path })
 
+/** 结构大纲的一行（决策 #1481）。悬停卡只给前 3 个名字，点箭头才取这个全量清单。 */
+export interface SymbolRow {
+  name: string
+  /** interface / type / function / const / let / var / class / enum */
+  kind: string
+  /** 1-based 行号（点一下要跳过去） */
+  line: number
+  exported: boolean
+}
+export const fileSymbols = (path: string): Promise<SymbolRow[]> =>
+  invoke<SymbolRow[]>('file_symbols', { path })
+
 /** 文件树写操作（决策 #1460）：路径沙箱 / 空目录限制 / 扩展名白名单全在 Rust 侧，前端只传相对路径。 */
 export const createFile = (path: string): Promise<void> => invoke<void>('create_file', { path })
 export const createDir = (path: string): Promise<void> => invoke<void>('create_dir', { path })

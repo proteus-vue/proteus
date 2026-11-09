@@ -4443,6 +4443,33 @@
         "T-studio-hover-interactive"
       ],
       "note": "【done · 决策 #1480（2026-11-09）】用户两条：① 结构预览实用性不大，需优化展示方式；② 鼠标移到卡片上后，原来文件行的高亮消失了。\n★① 根因在**数据结构**不在文案：`facts: Vec<String>` 把「计数」和「符号名」混成同类，前端只能 nowrap+ellipsis ⇒ `5 导出 · 1 type · AutoSaveMode …` 数字看到一半、符号露半截。改为四字段：chips（小标签横排，可换行但标签自身不断行）/ names（单独一行、允许换行、等宽淡色）/ names_total（差额显示 +N）/ facts（.md 句子型）。\n★`names_total` **不能拿 chips 的导出数减**：`export { a, b }` 是 1 条语句 2 个名字，混用会算出「还有 -1 个」。扫描时额外统计具名导出总数（不受前 3 上限影响）。\n★② 指针进卡片后行不再 :hover ⇒ 高亮消失，用户失去「正在看哪一条」的锚点。改为行绑 `peek: hoverPath === node.path`（CSS 与 :hover 同色），卡片消失即清除。不用「延长 :hover」——那要 JS 改样式，用与状态同源的 class 更可靠。\n★判据：Rust 4 条更新（chips 顺序 / names 前 3 / names_total 数全 / barrel 只计数）；面板 ㊿m 两头断——卡片打开时 peek 必须指向被悬停文件，**消失后必须为 null**（只断前者的话「高亮永不摘」也能绿）。读 DOM class 而非截图颜色（颜色判据脆且慢）。\n★破坏性验证：去掉 peek ⇒ 仅 ㊿m 红、其余 81 绿，报错「卡片打开时 peek=(无)」。\n★判据：check:studio-panel 82 绿 0 红 · cargo test 58 通过/1 失败（#1460 既存）。\n★诚实边界：names 只前 3（+N 说明余量）；chips 换行会让卡片变高（信息优先，要收就做折叠）；.peek 与 .on 并存时 .on 的左侧强调条仍生效。\n【Handoff】- 做到哪：数据结构拆分 + 卡片排版 + peek 高亮 + 判据 + 破坏性验证。\n- 未做：折叠展开/一键复制入口（#1478 已把\"能点\"打通）；.rs 批次 3。\n- 下一步：真机看 chips 与 names 的可读性；若仍嫌高，把 chips 收成一行 + names 折叠。"
+    },
+    {
+      "id": "T-studio-symbol-panel",
+      "title": "结构大纲面板：file_symbols + SymbolPanel + 箭头入口（㊿n）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/file_brief.rs",
+        "packages/studio/src/ipc_fs.rs",
+        "packages/studio/src/main.rs",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/panels/SymbolPanel.vue",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1481,
+      "verification": "cd packages/studio && cargo test file_brief::tests && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-brief-layout",
+        "T-studio-hover-interactive"
+      ],
+      "note": "【done · 决策 #1481（2026-11-09）】用户：「预览面板其实是结构提取总览，点击箭头可以单开新的面板展示更详细的结构输出列表」。切中本质：卡片要小要扫一眼，清单要能滚能分组能跳转，塞一起两头都不好用。\n★数据分两条命令：file_stat.brief 继续只给前 3 名 + 计数（热路径）；新增 file_symbols(path) → SymbolRow{name,kind,line,exported}（点箭头才取）。为\"可能不点开的面板\"每次算 95 条是在热路径白花钱。\n★scan_symbols 只认**第 0 列**（缩进的同名声明在函数体里）；关键词后必须跟空白或 * —— 否则 `constX = 1` 被 const 前缀吃掉变假符号 X。行号 1-based 供跳转。\n★不改布局：CodePanel 997 / App 985 都贴 1000 行线，动布局还牵 ㉓ ⇒ 做成 Teleport 浮层（可滚、Esc 关）；常驻侧栏大纲属布局决策，另开单。\n★面板按 kind 分组（interface→type→class→enum→function→const→let→var），组内按行号；非导出淡一档；点一条写 ws.jump 并收起。**面板不碰 EditorView**（沿用 #1409：父组件只写 ws.jump）。\n★判据：Rust scan_symbols_only_top_level（合成 11 条，嵌套 const 与 constX 都不能进）+ scan_symbols_on_real_file_points_at_right_lines（真跑 breadcrumbs.ts，断言**行号那行确实含该名字**）；面板 ㊿n 四条（出现 + 标题 bridge.ts + 5 条 + 非导出 2 条 + Esc 关）。\n★破坏性验证：去掉 @more 接线 ⇒ 仅 ㊿n 红、其余 82 绿，报错「未打开」。\n★判据：check:studio-panel 83 绿 0 红 · cargo test 60 通过/1 失败（#1460 既存）· main.rs 999 行（余 1 行）。\n★诚实边界：浮层非侧栏；只列 TS/JS 顶层声明（.rs 批次 3、.vue setup 成员不在内）⇒ 箭头只对有符号的文件出现；>512KB 报错不截断；点击跳转未进门禁（ws.jump 是组件内状态，需真机验）。\n【Handoff】- 做到哪：命令 + 扫描 + 面板 + 箭头接线 + 判据 + 破坏性验证。- 未做：跳转的门禁覆盖、常驻侧栏、.rs/.vue 结构。\n- 下一步：真机点一条符号看是否跳到对应行（这是唯一没被门禁覆盖的一环）。"
     }
   ]
 }

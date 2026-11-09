@@ -9,11 +9,12 @@
 //   ② 卡片内容跟着**被悬停的那一项**变 —— 桩里 App.vue=371 行、main.rs=997 行。
 //      若桩对所有文件都返回同一个数，"卡片沿用了上一项数据"这类串数据缺陷根本抓不到；
 //   ③ 移开即消失 —— 残留卡片会挡住下一行的点击，是可感知的缺陷。
-import { probeFileHover } from './studio-panel-probes.mjs'
+import { probeFileHover, probeSymbolPanel } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
   const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone } =
     await probeFileHover(page)
+  const sym = await probeSymbolPanel(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -101,6 +102,18 @@ export async function checksHover(page) {
         peekWhileCard ? peekWhileCard.split('/').pop() : '(无)'
       } · 卡片消失后已清除=${peekAfterGone === null}`,
       peekWhileCard === 'packages/studio/ui/src/App.vue' && peekAfterGone === null,
+    ],
+    /* ㊿n 结构面板（决策 #1481）
+       ★四条：面板出现 + 标题是当前文件 + 条目数对（桩给 5）+ Esc 能关。
+         只断"出现了"的话，列错文件的清单、或永远关不掉的面板都能绿。 */
+    [
+      `㊿n 结构面板（决策 #1481）：${
+        sym.info ? `${sym.info.name} · ${sym.info.items} 条 · 非导出 ${sym.info.dim} 条` : '未打开'
+      } · Esc 关闭=${sym.gone}`,
+      sym.info?.name === 'bridge.ts' &&
+        sym.info.items === 5 &&
+        sym.info.dim === 2 &&
+        sym.gone === true,
     ],
   ]
 }

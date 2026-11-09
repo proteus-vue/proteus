@@ -310,6 +310,101 @@ fn clip(s: &str, max_chars: usize) -> String {
     out
 }
 
+/// 结构大纲的一行（决策 #1481）——悬停卡上那个箭头点开后，面板列的就是它。
+///
+/// 【为什么另起一个命令，而不是让 `file_brief` 多返回一份清单】
+///   悬停是**热路径**：卡片只要前 3 个名字 + 计数就够。把 95 条符号每次都算出来传过去，
+///   是在为"可能不会点开的面板"付钱。所以摘要继续轻，清单按需取。
+#[derive(Serialize, Debug, PartialEq)]
+pub struct SymbolRow {
+    pub name: String,
+    /// interface / type / function / const / let / var / class / enum
+    pub kind: String,
+    /// 1-based 行号（面板里点一下要跳过去）
+    pub line: u32,
+    /// 是否 `export` —— 大纲里要能区分"对外契约"与"内部实现"
+    pub exported: bool,
+}
+
+/// 结构清单的读取上限（512KB，与 `read_text` 一致）。超过就不列，**不截断**
+/// —— 截一半的清单最坏：用户以为那就是全部。
+const SYMBOL_SCAN_MAX: u64 = 512 * 1024;
+
+/// 读一个文件并列出**顶层声明**。
+pub fn file_symbols(path: String) -> Result<Vec<SymbolRow>, String> {
+    let p = crate::fs_guard::resolve_in_repo(&path)?;
+    let md = std::fs::metadata(&p).map_err(|e| format!("读不到 {path}：{e}"))?;
+    if md.is_dir() {
+        return Err(format!("{path} 是目录"));
+    }
+    if md.len() > SYMBOL_SCAN_MAX {
+        return Err(format!(
+            "文件过大（{}KB > {}KB），不列结构",
+            md.len() / 1024,
+            SYMBOL_SCAN_MAX / 1024
+        ));
+    }
+    let text = std::fs::read_to_string(&p).map_err(|e| format!("读不到 {path}：{e}"))?;
+    Ok(scan_symbols(&text))
+}
+
+/// 扫描顶层声明。**只认第 0 列**——缩进的同名声明在函数体/对象里，不是文件结构。
+///
+/// ★关键词后面必须跟空白或 `*`：否则 `constant = 1` 会被 `const` 前缀吃掉，抽出一个
+///   叫 `ant` 的假符号。这是手写扫描最容易犯的错（与 `toml_pkg_field` 同一类）。
+fn scan_symbols(text: &str) -> Vec<SymbolRow> {
+    const KWS: [&str; 8] = ["interface", "type", "function", "const", "let", "var", "class", "enum"];
+    let mut out: Vec<SymbolRow> = Vec::new();
+
+    for (i, line) in text.lines().enumerate() {
+        if line.starts_with(' ')
+            || line.starts_with('\t')
+            || line.starts_with("//")
+            || line.starts_with('*')
+            || line.starts_with("/*")
+        {
+            continue;
+        }
+        let (exported, rest) = match line.strip_prefix("export ") {
+            Some(r) => (true, r),
+            None => (false, line),
+        };
+        let mut rest = rest;
+        for p in ["default ", "async ", "abstract ", "declare "] {
+            if let Some(x) = rest.strip_prefix(p) {
+                rest = x;
+            }
+        }
+        for kw in KWS {
+            let Some(x) = rest.strip_prefix(kw) else { continue };
+            /* ★关键词后必须是空白或 `*`（生成器）：`constant` 不是 `const ant` */
+            if !(x.starts_with(' ') || x.starts_with('\t') || x.starts_with('*')) {
+                continue;
+            }
+            let x = x.trim_start().strip_prefix('*').unwrap_or(x.trim_start()).trim_start();
+            let name: String = x
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+                .collect();
+            if name.is_empty() {
+                continue;
+            }
+            /* `type` 一定是 `type X = …`；没有 `=` 的多半是变量名叫 type */
+            if kw == "type" && !x.contains('=') {
+                continue;
+            }
+            out.push(SymbolRow {
+                name,
+                kind: kw.to_string(),
+                line: (i + 1) as u32,
+                exported,
+            });
+            break;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -437,6 +532,58 @@ interface NotExported { b: number }
             "{chips:?}"
         );
         assert!(names.is_empty(), ".vue 不产符号名（不数 props 成员）");
+    }
+
+    /// 决策 #1481：只认**第 0 列**的顶层声明；关键词后面必须跟空白/`*`。
+    /// ★这条专守手写扫描最经典的错：`const constant = 5` 被 `const` 前缀吃掉、
+    ///   于是清单里多出一个叫 `ant` 的假符号。
+    #[test]
+    fn scan_symbols_only_top_level() {
+        let text = "\
+export interface A { a: number }
+interface B { b: number }
+export const c = 1
+const d = 2
+  const nested = 3
+export function e() {}
+export async function f() {}
+export type G = string
+type H = number
+export default class I {}
+const constant = 5
+constX = 1
+export enum J { X }
+";
+        let rows = scan_symbols(text);
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["A", "B", "c", "d", "e", "f", "G", "H", "I", "constant", "J"],
+            "顶层 11 条：嵌套 const 不能进；`constX` 不能被 `const` 前缀吃成假符号 X"
+        );
+        assert_eq!(rows[0].kind, "interface");
+        assert!(rows[0].exported, "export interface 应标记为导出");
+        assert!(!rows[1].exported, "裸 interface 是内部实现");
+        assert_eq!(rows[0].line, 1, "行号 1-based，面板靠它跳转");
+        assert_eq!(rows[2].line, 3);
+    }
+
+    /// 决策 #1481：真跑 —— 清单条目必须与文件正文一致（名字能搜到、行号那行确实有它）。
+    #[test]
+    fn scan_symbols_on_real_file_points_at_right_lines() {
+        let root = crate::fs_guard::repo_root().expect("仓库根");
+        let p = root.join("packages/studio/ui/src/breadcrumbs.ts");
+        let text = std::fs::read_to_string(&p).expect("读 breadcrumbs.ts");
+        let rows = scan_symbols(&text);
+        assert!(rows.len() >= 2, "breadcrumbs.ts 至少有 interface + function：{rows:?}");
+
+        let lines: Vec<&str> = text.lines().collect();
+        for r in &rows {
+            let l = lines
+                .get((r.line - 1) as usize)
+                .unwrap_or_else(|| panic!("行号越界：{r:?}"));
+            assert!(l.contains(&r.name), "第 {} 行里没有 {}：{l}", r.line, r.name);
+        }
     }
 
     /// 决策 #1479：**真跑仓库里的真实文件**，断言"摘要里出现的每个符号名都真的在文件里"。

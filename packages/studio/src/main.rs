@@ -26,6 +26,7 @@ mod format;
 
 /// Tier 2（外部进程）的约束机制（决策 #1468）：宿主持有命令模板，调用方只能填洞。
 mod proc_template;
+/// 文件"扫一眼就知道大概"的轻量摘要 + 结构清单（决策 #1476 / #1479 / #1481）
 mod file_brief;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
@@ -271,7 +272,6 @@ fn stats() -> Stats {
     }
 }
 
-
 /// 仓库内全文搜索（决策 #1222）。
 ///
 /// 【为什么是 `async` + `spawn_blocking`】rg 是**阻塞子进程**：写进同步 command 会占住
@@ -481,7 +481,6 @@ fn save_state(json: String) -> Result<(), String> {
     std::fs::rename(&tmp, &p).map_err(|e| format!("替换状态文件失败：{e}"))
 }
 
-
 /// 设置窗口入口（实现见 `settings::open_window`）
 #[tauri::command]
 fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
@@ -615,6 +614,7 @@ fn main() {
             ipc_fs::write_text,
             ipc_fs::list_files,
             ipc_fs::file_stat,
+            ipc_fs::file_symbols,
             /* ★决策 #1460：四个命令同样必须列进 generate_handler! —— `#[tauri::command]`
                只是生成 wrapper，漏注册时 cargo build 仍通过、只有真机调用才报
                "Command xxx not found"（check-tauri-handlers 静态兜底）。 */

@@ -820,3 +820,34 @@ export async function probeFileHover(page) {
 
   return { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone }
 }
+
+/**
+ * 结构大纲面板（决策 #1481）：悬停 → 点卡片上的箭头 → 面板出现 → Esc 关闭。
+ * ★返回 `info = null` 表示面板没出现（而不是抛错）——抛错会把整轮门禁炸掉，
+ *   那不是一条红，是**没有门禁**（#1478 踩过同样的坑）。
+ */
+export async function probeSymbolPanel(page) {
+  await page.hover('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]')
+  await page.waitForTimeout(520)
+
+  const arrow = await page.$('#fileHoverCard .fv-more')
+  if (!arrow) return { info: null, gone: false }
+
+  await arrow.click()
+  await page.waitForTimeout(420)
+  const info = await page.evaluate(() => {
+    const p = document.getElementById('symbolPanel')
+    if (!p) return null
+    return {
+      name: p.querySelector('.sym-name')?.textContent?.trim() ?? '',
+      items: p.querySelectorAll('.sym-i').length,
+      dim: p.querySelectorAll('.sym-i.dim').length,
+      groups: [...p.querySelectorAll('.sym-gh')].map((g) => g.textContent?.replace(/\d+$/, '').trim()),
+    }
+  })
+
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(220)
+  const gone = await page.evaluate(() => !document.getElementById('symbolPanel'))
+  return { info, gone }
+}

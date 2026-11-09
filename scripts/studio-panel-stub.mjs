@@ -160,6 +160,21 @@ export function stubTauri(payload) {
            ★桩数据**按文件名区分**（App.vue/main.rs 行数不同）——判据要能证明
              "卡片显示的是当前悬停那一项"，而不是"卡片上恰好有个数字"。
              全都返回 42 的话，悬停哪个文件都看不出差别，那种判据等于没测。 */
+        /* 结构大纲（决策 #1481）：桥接文件给 5 条（含 interface/type/function/const 四类，
+           其中 2 条非导出 ⇒ 分组与"内部实现淡一档"都能判）。其他文件只给 1 条，
+           ★按路径区分是为了能验"面板列的是当前文件"而不是固定数据。 */
+        if (cmd === 'file_symbols') {
+          const p = String(args?.path ?? '')
+          if (p.endsWith('/bridge.ts'))
+            return [
+              { name: 'Stats', kind: 'interface', line: 12, exported: true },
+              { name: 'BridgeState', kind: 'type', line: 8, exported: true },
+              { name: 'hasBridge', kind: 'function', line: 40, exported: true },
+              { name: 'invoke', kind: 'function', line: 55, exported: false },
+              { name: 'MAX_BYTES', kind: 'const', line: 3, exported: false },
+            ]
+          return [{ name: 'onlyOne', kind: 'const', line: 1, exported: true }]
+        }
         if (cmd === 'file_stat') {
           const p = String(args?.path ?? '')
           const name = p.slice(p.lastIndexOf('/') + 1)

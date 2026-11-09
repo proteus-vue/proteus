@@ -58,6 +58,13 @@ pub fn file_stat(path: String) -> Result<crate::fs_guard::FileStat, String> {
     crate::fs_guard::file_stat(path)
 }
 
+/// 完整结构清单（决策 #1481）：悬停卡只给前 3 个名字，点箭头才取全量。
+/// ★与 `file_stat` 分开是刻意的——悬停是热路径，不能为"可能不会点开的面板"付钱。
+#[tauri::command]
+pub fn file_symbols(path: String) -> Result<Vec<crate::file_brief::SymbolRow>, String> {
+    crate::file_brief::file_symbols(path)
+}
+
 /// 读剪贴板（右键菜单"粘贴"用）。
 /// 【为什么走 `pbpaste`】写用的是 ObjC 桥（`poc_copy_text`），但没做读；`pbpaste` 是系统自带、
 ///   行为稳定、无需新增依赖。命令是 **async + spawn_blocking**（起进程几十 ms，不能堵 UI 主线程）。

@@ -31,6 +31,9 @@ const props = defineProps<{
   mark: string
 }>()
 
+/** 决策 #1481：`more` = 点箭头要看**完整结构清单**（卡片只给总览，清单交给面板） */
+const emit = defineEmits<{ more: [path: string] }>()
+
 /** 卡片宽度：与文件树 240px 量级匹配，但不跟着树宽变（避免窄树里折行） */
 const W = 272
 /** 高度估算值：只用于"底部放不下就上移"，误差靠 max-height + 滚动兜底 */
@@ -250,6 +253,15 @@ const markLabel = computed(() => {
               >+{{ brief.names_total - brief.names.length }}</span
             >
           </span>
+          <!-- ★决策 #1481：箭头 → 单开结构面板（卡片只做总览，清单交给面板） -->
+          <button
+            class="fv-more"
+            title="打开结构面板（完整清单）"
+            aria-label="打开结构面板"
+            @click.stop="emit('more', path)"
+          >
+            ›
+          </button>
         </div>
         <!-- 句子型事实（`.md` 标题骨架）：它不是一个"标签"，所以单独成行 -->
         <div v-if="brief?.facts?.length" class="fv-row">
@@ -416,6 +428,25 @@ const markLabel = computed(() => {
   line-height: 1.45;
   white-space: normal;
   word-break: break-word;
+}
+/* 箭头入口（决策 #1481）：卡片里唯一的按钮，右侧贴边，小到不抢注意力 */
+.fv-more {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-subtle);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.fv-more:hover {
+  border-color: var(--accent);
+  background: var(--bg-overlay);
+  color: var(--fg);
 }
 .fv-sub {
   margin-left: 5px;
