@@ -231,7 +231,7 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     <button
       v-for="r in filteredRows"
       :key="r.node.path"
-      :class="{ on: r.node.path === cur, dir: r.node.dir }"
+      :class="{ on: r.node.path === cur, dir: r.node.dir, peek: hoverPath === r.node.path }"
       :style="{ paddingLeft: `${8 + r.depth * 14}px` }"
       :data-dir="r.node.dir ? r.node.path : undefined"
       :data-file="r.node.dir ? undefined : r.node.path"
@@ -336,6 +336,13 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     color var(--dur) var(--ease);
 }
 .files button:hover {
+  background: var(--bg-overlay);
+  color: var(--fg);
+}
+/* ★决策 #1480：卡片打开期间，被预览的那一行要保持高亮。
+   原因：指针移进卡片后行就不再 `:hover`，原来的高亮一消失，用户会瞬间失去
+   "我正在看哪一条"的锚点——尤其卡片内容变多、视线离开树之后更容易迷路。 */
+.files button.peek {
   background: var(--bg-overlay);
   color: var(--fg);
 }

@@ -4419,6 +4419,30 @@
         "T-studio-hover-interactive"
       ],
       "note": "【done · 决策 #1479（2026-11-09）】用户贴悬停截图问「你说的符号类型声明是在哪里可以体现？」——答案是**一处都没有**；上一轮\"能验\"指有 42 个 .ts / 40 个 .vue 样本可验，不是已实现，表述需更正。本单开工批次 2。\n★改掉自己埋的死结：原 file_brief 是 role(rel)?（没有角色直接 None）⇒ 普通 .ts 永远不会有结构摘要。现改为「角色为空但结构非空也返回」，role/label 用空串表示无角色，前端据空串不渲染角色行。**不加这条，ts_facts 写了也永远不显示**。\n★.ts/.js 抽：N 导出 · N interface · N type + 前 3 个导出名（超出补 …）。精度依据：实测 ui/src 的 export 语句只有 7 种形态且全在行首（function 119 / const 116 / interface 53 / async function 16 / type 11 / class 1 / { x } from 3），行扫描够用，不引 SWC/tsserver（后者首次 4~5s）。注释行整行跳过；export { a } / export * 取不到名字就只计数不编名字。\n★.vue 只报有没有：script setup / props / emit / scoped + 模板根标签（第一个 template 的直接子元素）。**不数 props 成员**——行扫描会把嵌套对象/注释/跨行属性数错，数错比不显示更糟。\n★判据：ts_facts_counts_exports_and_types（期望值人工数出 5 导出/2 interface/1 type，非实现反推）、ts_facts_handles_barrel_without_names、vue_facts_reports_flags_and_root_tag、ts_facts_on_real_file_names_exist_in_text（真跑 breadcrumbs.ts，断言每个符号名都在正文里；**不写死数字**避免无关改动翻红）；面板 ㊿l（.ts 有 95 导出且无角色行 + .vue 有 script setup）。\n★破坏性验证：角色行 v-if 从 brief?.label 回退成 brief ⇒ 仅 ㊿l 红、其余 80 绿，报错「无角色行=false」。\n★判据：check:studio-panel 81 绿 0 红 · cargo test 58 通过/1 失败（#1460 既存）。\n★诚实边界：行扫描不是 AST（export default {…} 匿名、export =、装饰器、.d.ts declare module 不保证）；解构导出只计数不给名；只列前 3 名；.vue 不数 props 成员；.java/.go/.py 仍无摘要。\n【Handoff】- 做到哪：ts/js 符号+类型、vue 结构标记、file_brief 语义修正、判据与破坏性验证。\n- 未做：.rs pub 符号（批次 3）、props 成员数、深层折叠/复制入口。\n- 下一步：真机看 breadcrumbs.ts 之类的卡；若要更准，再考虑保存时用 tsserver 补一次精确值（悬停仍走行扫描）。"
+    },
+    {
+      "id": "T-studio-brief-layout",
+      "title": "结构摘要排版优化（chips/names）+ 悬停行 peek 高亮（㊿m）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/file_brief.rs",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1480,
+      "verification": "cd packages/studio && cargo test file_brief::tests && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-brief-symbols",
+        "T-studio-hover-interactive"
+      ],
+      "note": "【done · 决策 #1480（2026-11-09）】用户两条：① 结构预览实用性不大，需优化展示方式；② 鼠标移到卡片上后，原来文件行的高亮消失了。\n★① 根因在**数据结构**不在文案：`facts: Vec<String>` 把「计数」和「符号名」混成同类，前端只能 nowrap+ellipsis ⇒ `5 导出 · 1 type · AutoSaveMode …` 数字看到一半、符号露半截。改为四字段：chips（小标签横排，可换行但标签自身不断行）/ names（单独一行、允许换行、等宽淡色）/ names_total（差额显示 +N）/ facts（.md 句子型）。\n★`names_total` **不能拿 chips 的导出数减**：`export { a, b }` 是 1 条语句 2 个名字，混用会算出「还有 -1 个」。扫描时额外统计具名导出总数（不受前 3 上限影响）。\n★② 指针进卡片后行不再 :hover ⇒ 高亮消失，用户失去「正在看哪一条」的锚点。改为行绑 `peek: hoverPath === node.path`（CSS 与 :hover 同色），卡片消失即清除。不用「延长 :hover」——那要 JS 改样式，用与状态同源的 class 更可靠。\n★判据：Rust 4 条更新（chips 顺序 / names 前 3 / names_total 数全 / barrel 只计数）；面板 ㊿m 两头断——卡片打开时 peek 必须指向被悬停文件，**消失后必须为 null**（只断前者的话「高亮永不摘」也能绿）。读 DOM class 而非截图颜色（颜色判据脆且慢）。\n★破坏性验证：去掉 peek ⇒ 仅 ㊿m 红、其余 81 绿，报错「卡片打开时 peek=(无)」。\n★判据：check:studio-panel 82 绿 0 红 · cargo test 58 通过/1 失败（#1460 既存）。\n★诚实边界：names 只前 3（+N 说明余量）；chips 换行会让卡片变高（信息优先，要收就做折叠）；.peek 与 .on 并存时 .on 的左侧强调条仍生效。\n【Handoff】- 做到哪：数据结构拆分 + 卡片排版 + peek 高亮 + 判据 + 破坏性验证。\n- 未做：折叠展开/一键复制入口（#1478 已把\"能点\"打通）；.rs 批次 3。\n- 下一步：真机看 chips 与 names 的可读性；若仍嫌高，把 chips 收成一行 + names 折叠。"
     }
   ]
 }

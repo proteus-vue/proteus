@@ -116,10 +116,16 @@ export interface FileStat {
 
 /** 文件摘要（决策 #1476）。★`label` / `facts` 的文案由 Rust 给：文案表只留一份。 */
 export interface FileBrief {
-  /** test / entry / config / doc / generated */
+  /** test / entry / config / doc / generated；空串 = 普通源码（不显示角色行） */
   role: string
   label: string
-  /** 结构事实（`.md` 的标题骨架等），可能为空 */
+  /** 短统计，渲染成小标签横排（"5 导出" · "1 type" · "props"）——决策 #1480 */
+  chips: string[]
+  /** 符号名，**允许换行**显示；只给前 3 个 */
+  names: string[]
+  /** 具名导出总数：与 `names.length` 的差额用 `+N` 表示（不是拿 chips 的数字减） */
+  names_total: number
+  /** 句子型事实（`.md` 标题骨架） */
   facts: string[]
 }
 

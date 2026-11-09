@@ -232,10 +232,29 @@ const markLabel = computed(() => {
           <span class="fv-k">角色</span>
           <span class="fv-v">{{ brief.label }}</span>
         </div>
-        <!-- 结构：`.ts` 导出/类型声明、`.vue` 的 script setup / 模板根、`.md` 标题骨架 -->
-        <div v-if="brief?.facts?.length" class="fv-row">
+        <!-- 结构：短统计渲染成小标签（决策 #1480）——原先统计与符号挤在一行被截断，
+             用户反馈"实用性不大"：数字看不到全貌、符号只露半截。 -->
+        <div v-if="brief?.chips?.length" class="fv-row">
           <StudioIcon name="rows" :size="13" />
           <span class="fv-k">结构</span>
+          <span class="fv-v chips">
+            <span v-for="c in brief.chips" :key="c" class="chip">{{ c }}</span>
+          </span>
+        </div>
+        <!-- 符号名单独一行、**允许换行**（monospace 淡色），不再被 ellipsis 吃掉 -->
+        <div v-if="brief?.names?.length" class="fv-row">
+          <span class="fv-k" />
+          <span class="fv-v names">
+            {{ brief.names.join(' · ') }}
+            <span v-if="brief.names_total > brief.names.length" class="fv-sub"
+              >+{{ brief.names_total - brief.names.length }}</span
+            >
+          </span>
+        </div>
+        <!-- 句子型事实（`.md` 标题骨架）：它不是一个"标签"，所以单独成行 -->
+        <div v-if="brief?.facts?.length" class="fv-row">
+          <StudioIcon name="rows" :size="13" />
+          <span class="fv-k">骨架</span>
           <span class="fv-v">{{ brief.facts.join(' · ') }}</span>
         </div>
         <div class="fv-row">
@@ -370,6 +389,33 @@ const markLabel = computed(() => {
   color: var(--fg);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 结构小标签（决策 #1480）：横排；放不下就换行，但**每个标签自己不断行** */
+.fv-v.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  overflow: visible;
+  white-space: normal;
+}
+.chip {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-overlay);
+  color: var(--fg-muted);
+  font-size: 10px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+/* 符号名：**允许换行**（等宽淡色），不再被 ellipsis 吃掉半截（#1480） */
+.fv-v.names {
+  overflow: visible;
+  color: var(--fg-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
 }
 .fv-sub {
   margin-left: 5px;

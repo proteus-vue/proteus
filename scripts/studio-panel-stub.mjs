@@ -203,10 +203,20 @@ export function stubTauri(payload) {
             'App.vue': {
               role: 'entry',
               label: '入口',
-              facts: ['script setup · props · scoped', '模板根 <div>'],
+              chips: ['script setup', 'props', 'scoped'],
+              names: [],
+              names_total: 0,
+              facts: [],
             },
-            'main.rs': { role: 'entry', label: '入口', facts: [] },
-            'bridge.ts': { role: '', label: '', facts: ['95 导出 · 6 interface · 9 type', 'a · b · c …'] },
+            'main.rs': { role: 'entry', label: '入口', chips: [], names: [], names_total: 0, facts: [] },
+            'bridge.ts': {
+              role: '',
+              label: '',
+              chips: ['95 导出', '6 interface', '9 type'],
+              names: ['a', 'b', 'c'],
+              names_total: 42,
+              facts: [],
+            },
           }
           return {
             path: p,

@@ -20,13 +20,27 @@ use serde::Serialize;
 
 /// 文件角色 + 结构摘要。`label` 为空串表示**没有角色**（普通源码），此时卡片不显示角色行；
 /// 结构事实仍可能有（`.ts` 的导出、`.vue` 的 script setup）。
+///
+/// 【★为什么 chips / names / facts 要分三个字段，而不是一个 `Vec<String>`】决策 #1480。
+///   原先把"5 导出"和"AutoSaveMode"塞进同一个字符串数组，前端只能一律 `nowrap + ellipsis`
+///   ⇒ 用户看到的是 `5 导出 · 1 type · AutoSaveMode …`，**统计与符号挤在一行被截断**，
+///   信息密度高但读不出来（用户原话："实用性不大，需要优化展示方式"）。
+///   分成三类之后：chips 渲染成小标签横排、names 单独一行且**允许换行**、facts 留给句子型内容。
 #[derive(Serialize, Debug)]
 pub struct FileBrief {
     /// test / entry / config / doc / generated；空串 = 普通源码
     pub role: String,
     /// 人话标签，卡片直接显示。★文案留在 Rust：kind→文案的表只留一份，两处必然漂移
     pub label: String,
-    /// 结构事实（导出符号、类型声明数、`.vue` 的 script setup…）。空数组 = 只有角色
+    /// 短统计，前端渲染成小标签（"5 导出" · "1 type" · "props"）
+    pub chips: Vec<String>,
+    /// 符号名，前端**允许多行**显示（"AutoSaveMode · SavedState · useAutoSave"）
+    pub names: Vec<String>,
+    /// 实际收集到的**具名导出总数**（`names` 只留前 3 个）。前端据此显示 `+N`，
+    /// ★不是拿 `N 导出` 那个计数算的：`export { a, b }` 是 1 条语句但 2 个名字，
+    ///   混用会显示成"还有 -1 个"这种鬼话。
+    pub names_total: u32,
+    /// 句子型事实（`.md` 的标题骨架）。它不是"标签"，所以不能进 chips
     pub facts: Vec<String>,
 }
 
@@ -86,22 +100,40 @@ pub fn file_brief(rel: &str, text: Option<&str>) -> Option<FileBrief> {
         .unwrap_or_default();
     let facts = match text {
         Some(t) => match ext.as_str() {
-            "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => ts_facts(t),
-            "vue" => vue_facts(t),
+            "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "mts" | "cts" => {
+                let (chips, names, total) = ts_facts(t);
+                return wrap_brief(role, chips, names, total, Vec::new());
+            }
+            "vue" => {
+                let (chips, names) = vue_facts(t);
+                return wrap_brief(role, chips, names, 0, Vec::new());
+            }
             "md" | "mdx" => md_facts(t),
             _ => Vec::new(),
         },
         None => Vec::new(),
     };
-    /* ★角色为空但结构非空时仍要返回：`.ts` 里"导出了 12 个符号"本身就是有用信息，
-       不该因为"它只是普通源码"就整条丢掉（这正是用户问"符号体现在哪"的直接原因）。 */
-    if role.is_none() && facts.is_empty() {
+    wrap_brief(role, Vec::new(), Vec::new(), 0, facts)
+}
+
+/// 收口：角色为空且三类事实都空 ⇒ 整条摘要不出现（**没有信息就不占一行**）。
+fn wrap_brief(
+    role: Option<(&'static str, &'static str)>,
+    chips: Vec<String>,
+    names: Vec<String>,
+    names_total: u32,
+    facts: Vec<String>,
+) -> Option<FileBrief> {
+    if role.is_none() && chips.is_empty() && names.is_empty() && facts.is_empty() {
         return None;
     }
     let (code, label) = role.unwrap_or(("", ""));
     Some(FileBrief {
         role: code.to_string(),
         label: label.to_string(),
+        chips,
+        names,
+        names_total,
         facts,
     })
 }
@@ -116,11 +148,12 @@ pub fn file_brief(rel: &str, text: Option<&str>) -> Option<FileBrief> {
 ///
 /// ★**抽不出就不显示**：`export const { a, b } = …`（解构）取不到名字时，这条事实就不产出名字，
 ///   但计数仍然加一（计数是确定的，名字是不确定的，两者不能混）。
-fn ts_facts(text: &str) -> Vec<String> {
+fn ts_facts(text: &str) -> (Vec<String>, Vec<String>, u32) {
     let mut exports = 0usize;
     let mut interfaces = 0usize;
     let mut types = 0usize;
     let mut names: Vec<String> = Vec::new();
+    let mut named_total = 0u32;
 
     for line in text.lines() {
         let t = line.trim_start();
@@ -137,38 +170,27 @@ fn ts_facts(text: &str) -> Vec<String> {
             continue;
         }
         exports += 1;
-        if names.len() < 3 {
-            if let Some(n) = export_name(t) {
-                if !names.contains(&n) {
-                    names.push(n);
-                }
+        if let Some(n) = export_name(t) {
+            named_total += 1;
+            if names.len() < 3 && !names.contains(&n) {
+                names.push(n);
             }
         }
     }
 
-    let mut facts: Vec<String> = Vec::new();
-    let mut parts: Vec<String> = Vec::new();
+    /* ★chips 只有**确定的计数**，names 只有**确定的符号**——不把两者拼成一句话：
+       前端要分别排版（chips 横排不换行、names 可换行），拼在一起就只能被截断（#1480）。 */
+    let mut chips: Vec<String> = Vec::new();
     if exports > 0 {
-        parts.push(format!("{exports} 导出"));
+        chips.push(format!("{exports} 导出"));
     }
     if interfaces > 0 {
-        parts.push(format!("{interfaces} interface"));
+        chips.push(format!("{interfaces} interface"));
     }
     if types > 0 {
-        parts.push(format!("{types} type"));
+        chips.push(format!("{types} type"));
     }
-    if !parts.is_empty() {
-        facts.push(parts.join(" · "));
-    }
-    if !names.is_empty() {
-        let mut s = names.join(" · ");
-        if exports > names.len() {
-            s.push_str(" …");
-        }
-        facts.push(s);
-    }
-    facts.truncate(3);
-    facts
+    (chips, names, named_total)
 }
 
 /// 从一条 `export …` 语句里取被导出的名字。取不到（`export { a, b }` / `export *`）回 `None`。
@@ -200,29 +222,24 @@ fn export_name(t: &str) -> Option<String> {
 ///
 /// ★**只报"有没有"，不报"有几个"**：`defineProps<{…}>` 的成员数要真解析类型字面量，
 ///   行扫描会把嵌套对象、注释、跨行属性数错。数错比不显示更糟（#1476 的自律 ①）。
-fn vue_facts(text: &str) -> Vec<String> {
-    let mut flags: Vec<&str> = Vec::new();
+fn vue_facts(text: &str) -> (Vec<String>, Vec<String>) {
+    let mut chips: Vec<String> = Vec::new();
     if text.contains("<script setup") {
-        flags.push("script setup");
+        chips.push("script setup".into());
     }
     if text.contains("defineProps") {
-        flags.push("props");
+        chips.push("props".into());
     }
     if text.contains("defineEmits") {
-        flags.push("emit");
+        chips.push("emit".into());
     }
     if text.contains("<style scoped") {
-        flags.push("scoped");
-    }
-    let mut facts: Vec<String> = Vec::new();
-    if !flags.is_empty() {
-        facts.push(flags.join(" · "));
+        chips.push("scoped".into());
     }
     if let Some(tag) = template_root(text) {
-        facts.push(format!("模板根 <{tag}>"));
+        chips.push(format!("根 <{tag}>"));
     }
-    facts.truncate(3);
-    facts
+    (chips, Vec::new())
 }
 
 /// SFC 里第一个 `<template>` 的直接子元素名（如 `div` / `section`）。
@@ -354,8 +371,9 @@ mod tests {
         let ts = file_brief("ui/src/bridge.ts", Some("export const a = 1\n")).expect("有导出就该有摘要");
         assert_eq!(ts.role, "", "普通源码没有角色");
         assert_eq!(ts.label, "");
-        assert_eq!(ts.facts.first().map(|s| s.as_str()), Some("1 导出"));
-        assert_eq!(ts.facts.get(1).map(|s| s.as_str()), Some("a"));
+        assert_eq!(ts.chips, vec!["1 导出".to_string()]);
+        assert_eq!(ts.names, vec!["a".to_string()]);
+        assert_eq!(ts.names_total, 1);
 
         /* 真正啥也抽不出来的（.m）仍然整条不出现 */
         assert!(file_brief("native/embed_view.m", Some("int main(){return 0;}\n")).is_none());
@@ -381,32 +399,44 @@ export default class C {}
 function notExported() {}
 interface NotExported { b: number }
 "#;
-        let f = ts_facts(text);
-        assert_eq!(f.first().map(|s| s.as_str()), Some("5 导出 · 2 interface · 1 type"), "{f:?}");
+        let (chips, names, total) = ts_facts(text);
+        assert_eq!(
+            chips,
+            vec!["5 导出".to_string(), "2 interface".to_string(), "1 type".to_string()],
+            "计数必须是人工数出来的那三个"
+        );
         /* 前三个导出名，顺序即文件顺序 */
-        assert_eq!(f.get(1).map(|s| s.as_str()), Some("Opts · Id · useA …"), "{f:?}");
+        assert_eq!(names, vec!["Opts".to_string(), "Id".to_string(), "useA".to_string()]);
+        assert_eq!(total, 5, "具名导出总数要**数全**（不是只数前 3 个）");
     }
 
     /// `export { a, b }` / `export *` 取不到名字 ⇒ 只计数，**不编名字**
     #[test]
     fn ts_facts_handles_barrel_without_names() {
-        let f = ts_facts("export { a, b } from './x'\nexport * from './y'\n");
-        assert_eq!(f.first().map(|s| s.as_str()), Some("2 导出"), "{f:?}");
-        assert_eq!(f.len(), 1, "取不到名字就不该有第二行：{f:?}");
+        let (chips, names, total) = ts_facts("export { a, b } from './x'\nexport * from './y'\n");
+        assert_eq!(chips, vec!["2 导出".to_string()], "{chips:?}");
+        assert!(names.is_empty(), "取不到名字就不该有名字：{names:?}");
+        assert_eq!(total, 0, "具名导出为 0（这两条都是无名/批量导出）");
     }
 
     /// 决策 #1479：`.vue` 只报"有没有"，不报"有几个"（成员数行扫描会数错）
     #[test]
     fn vue_facts_reports_flags_and_root_tag() {
         let text = "<template>\n  <section class=\"x\">\n    <div/>\n  </section>\n</template>\n<script setup lang=\"ts\">\nconst p = defineProps<{ a: number }>()\ndefineEmits<{ (e: 'x'): void }>()\n</script>\n<style scoped>\n.a{}\n</style>\n";
-        let f = vue_facts(text);
+        let (chips, names) = vue_facts(text);
         assert_eq!(
-            f.first().map(|s| s.as_str()),
-            Some("script setup · props · emit · scoped"),
-            "{f:?}"
+            chips,
+            vec![
+                "script setup".to_string(),
+                "props".to_string(),
+                "emit".to_string(),
+                "scoped".to_string(),
+                /* ★根标签必须是 `section` 而不是 `div`：取第一个 `<template>` 的**直接子元素** */
+                "根 <section>".to_string()
+            ],
+            "{chips:?}"
         );
-        /* ★根标签必须是 `section` 而不是 `div`：取第一个 `<template>` 的**直接子元素** */
-        assert_eq!(f.get(1).map(|s| s.as_str()), Some("模板根 <section>"), "{f:?}");
+        assert!(names.is_empty(), ".vue 不产符号名（不数 props 成员）");
     }
 
     /// 决策 #1479：**真跑仓库里的真实文件**，断言"摘要里出现的每个符号名都真的在文件里"。
@@ -421,15 +451,15 @@ interface NotExported { b: number }
         let root = crate::fs_guard::repo_root().expect("仓库根");
         let p = root.join("packages/studio/ui/src/breadcrumbs.ts");
         let text = std::fs::read_to_string(&p).expect("读 breadcrumbs.ts");
-        let f = ts_facts(&text);
-        assert!(!f.is_empty(), "真实文件不该抽不出任何事实");
-        assert!(f[0].contains("导出"), "{f:?}");
+        let (chips, names, total) = ts_facts(&text);
+        assert!(!chips.is_empty(), "真实文件不该抽不出任何计数");
+        assert!(chips[0].ends_with("导出"), "{chips:?}");
+        assert!(total >= 2, "breadcrumbs.ts 至少导出 interface + function：{total}");
 
-        let names = f.get(1).expect("应有导出名那一行");
-        for name in names.split(" · ").filter(|s| !s.is_empty() && *s != "…") {
+        for name in &names {
             assert!(
                 text.contains(name),
-                "摘要里的符号 {name:?} 在文件正文里不存在 —— 抽取错位了：{f:?}"
+                "摘要里的符号 {name:?} 在文件正文里不存在 —— 抽取错位了：{chips:?} {names:?}"
             );
         }
     }

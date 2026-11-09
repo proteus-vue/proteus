@@ -12,7 +12,8 @@
 import { probeFileHover } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
-  const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, gone } = await probeFileHover(page)
+  const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone } =
+    await probeFileHover(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -91,6 +92,15 @@ export async function checksHover(page) {
       /95 导出/.test(onTs?.text ?? '') &&
         !/角色/.test(onTs?.text ?? '') &&
         /script setup/.test(onApp?.text ?? ''),
+    ],
+    /* ㊿m 悬停行保持高亮（决策 #1480）
+       ★两头都要断：卡片打开期间**有** `.peek`，卡片消失后**没有**。
+         只断前者的话，"高亮永远不摘"也能绿——那会留下一个假的选中态。 */
+    [
+      `㊿m 悬停行高亮跟随（决策 #1480）：卡片打开时 peek=${
+        peekWhileCard ? peekWhileCard.split('/').pop() : '(无)'
+      } · 卡片消失后已清除=${peekAfterGone === null}`,
+      peekWhileCard === 'packages/studio/ui/src/App.vue' && peekAfterGone === null,
     ],
   ]
 }

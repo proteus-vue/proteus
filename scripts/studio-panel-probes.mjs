@@ -804,11 +804,19 @@ export async function probeFileHover(page) {
   await page.hover('#fileHoverCard', { timeout: 3000 }).catch(() => {})
   await page.waitForTimeout(600)
   const onCard = await read()
+  /* 决策 #1480：卡片打开期间，被预览的那一行必须仍高亮（`.peek`）。
+     ★读 DOM class 而不是看截图：颜色判据既脆又慢，而"有没有这个类"是可判定的。 */
+  const peekWhileCard = await page.evaluate(
+    () => document.querySelector('#codeFiles button.peek')?.getAttribute('data-file') ?? null,
+  )
 
   // ⑧ 移开指针：按宽限期消失（等 700ms > 220ms）
   await page.mouse.move(5, 5)
   await page.waitForTimeout(700)
   const gone = await read()
+  const peekAfterGone = await page.evaluate(
+    () => document.querySelector('#codeFiles button.peek')?.getAttribute('data-file') ?? null,
+  )
 
-  return { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, gone }
+  return { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone }
 }
