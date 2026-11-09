@@ -16670,4 +16670,50 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     外部改文件后数字会短暂过期——悬停只是提示，真实内容以打开后的编辑器为准；
     ④ 只覆盖文件树（编辑器内的 hover 是 #1421 那套，两套独立）。
 
+1475. **★★项目识别：目录悬停自动判定"是不是一个项目"· 复用 `file_stat` 不加新 IPC · 判据 ㊿h**（2026-11-09 · 用户「项目根目录的预览是不是可以做单独的类型？或者自动检测是不是一个项目类型？」）:
+  - **用户要的**：项目根目录不该显示成"一个目录里有几个文件"，它就是**项目本身**；
+    最好还能自动认出是哪种项目（Tauri / Rust / npm / 工作区…），不用手配。
+  - **★为什么自动检测、不做配置项**：标记文件本来就是项目的**自证方式**
+    （`tauri.conf.json`=Tauri、`Cargo.toml`=Rust、`pnpm-workspace.yaml`=工作区…）。
+    让人再配一遍等于把机器已知的事问第二遍，而手配比识别更容易错。
+    ——与 `languages.json` / `LIST_EXT` 同一条原则：**能从文件系统推出来的，绝不另存一份配置**。
+  - **★不新增 IPC**：`FileStat` 加两个字段 `project`（自身标记）/ `owner`（所属项目根）。
+    理由：`main.rs` 已 **997 行**（硬上限 1000），且 #1470 的 capability 映射表刚把 62 条命令逐条落位，
+    多一条命令就得多维护一行映射；而悬停本来就是**一次**取全更省。
+  - **标记表 `PROJECT_MARKERS`（9 种，顺序即优先级）**：tauri → harmony(`module.json5`/
+    `build-profile.json5`) → gradle → swift(`Package.swift`) → cargo → pnpm-workspace → npm →
+    go → python。★**Tauri 必须排在 cargo 前**：Tauri 目录同时有 `tauri.conf.json` 与
+    `Cargo.toml`，报"Rust crate"是降级信息。同理根目录有 `package.json`+`pnpm-workspace.yaml`，
+    报"工作区"比"npm 包"准。
+  - **★显示名优先级**：Tauri 的 `productName` > `package.json` 的 `name` > `Cargo.toml` 的
+    `[package].name`。前者的理由是 `Cargo.toml` 里常是 `xxx-shell` 这类内部命名，给用户看不如
+    productName 准（本仓实测：Cargo 名 `proteus-studio-shell` vs productName `proteus-studio`）。
+  - **`owner` 往上找最近项目根，但只在仓库沙箱内走**（`starts_with(root)`）——
+    否则仓库外面某个 `package.json` 会被当成"所属项目"，那是越界信息。
+    ★仓库根自己**没有** owner（往上一步就越界），这也顺带回答了"根在树上没有单独一行"：
+    `packages` 那一行的「所属」就是根的入口。
+  - **依赖/脚本数只有 `package.json` 能算**，其他类型一律 `None`（卡片少显示一行，**不猜**）。
+    `Cargo.toml` 只取 `[package]` 段的 name/version —— 手写解析最容易犯的错是匹配到
+    `[dependencies.foo] version = "1.2"`，所以**先判段头再判键**。
+  - **判据**：
+    - Rust `project_probe_by_markers`：`packages/studio` → tauri + 两个标记 + 名字不是 crate 名；
+      仓库根 → pnpm-workspace + `proteus-vue` + scripts > 0；`ui/src` → `None`（反证）
+    - Rust `owner_walks_up_inside_sandbox_only`：`ui/src` → `packages/studio`（distance 2）；
+      `packages` → 根（path 空串）；根 → `None`
+    - 面板门禁 **㊿h**：悬停 `packages/studio` → 项目卡含「Tauri 桌面应用 / Proteus Studio /
+      tauri.conf.json」；悬停 `packages` → 「所属 proteus-vue」
+  - **破坏性验证 2 条都精确翻红**：
+    ① 把 `if kind.is_empty()` 改成 `|| true`（优先级失效）⇒ 两个 Rust 判据红，
+       报错原文 `left: "cargo" / right: "tauri"`；
+    ② 桩里把 `PROJ_STUB` 的键从 `packages/studio` 改成 `packages/studio/ui`（识别错目录）
+       ⇒ **只有 ㊿h 红，其余 76 条绿**。
+  - **判据**：`check:studio-panel` **77 绿 0 红**；`cargo test` **48 通过 / 1 失败**
+    （唯一红 `new_path_boundary` 为 #1460 既存）。`check-studio-panel.mjs` 仍是 **998 行**
+    （判据全部落在 `studio-panel-checks-hover.mjs`，没碰那个贴线文件）；`fs_guard.rs` 574 → 838 行。
+  - **诚实边界**：① 只对**目录**做识别，文件不查（否则每次悬停多读两份清单，只为回答
+    "它属于哪个包"）；② 只认**当前目录**的标记文件，不解析构建系统细节（不知道 Gradle 有几个
+    flavor、Cargo 开了几个 feature）；③ 标记文件改了不会主动失效——按会话缓存，与 #1474 同一条；
+    ④ 仓库根在文件树上**仍没有单独一行**（`ROOTS` 只列三个子目录），要真正"点得开项目根"
+    得先解决 ROOTS 扩容，那是另一个产品决策。
+
 

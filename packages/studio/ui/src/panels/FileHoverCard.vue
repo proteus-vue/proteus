@@ -86,6 +86,31 @@ const dirSummary = computed(() => {
   if (dirs > 0) parts.push(`${dirs} 个目录`)
   return parts.length ? parts.join(' · ') : '空目录'
 })
+
+/* ===== 项目识别（决策 #1475）=====
+ * 用户原话："项目根目录可能就是项目本身了，或者自动检测是不是一个项目类型"。
+ * 判定全部在 Rust（`fs_guard::probe_project`）：前端**不写标记文件名表**——
+ * 那种表一旦存在两份，迟早一个认 `.xcodeproj`、一个不认。
+ */
+const project = computed(() => props.stat?.project ?? null)
+const owner = computed(() => props.stat?.owner ?? null)
+
+/** 项目副标题：「Tauri 桌面应用 · v0.1.0」——名字是主角，类型与版本退到小字 */
+const projMeta = computed(() => {
+  const p = project.value
+  if (!p) return ''
+  return p.version ? `${p.label} · v${p.version}` : p.label
+})
+
+/** 能有几行「构成」：依赖/脚本数（只有 package.json 能算）+ 命中的标记文件 */
+const projFacts = computed(() => {
+  const p = project.value
+  if (!p) return []
+  const out: string[] = []
+  if (p.deps !== null) out.push(`${p.deps} 依赖`)
+  if (p.scripts !== null) out.push(`${p.scripts} 脚本`)
+  return out
+})
 </script>
 
 <template>
@@ -103,6 +128,35 @@ const dirSummary = computed(() => {
     <div class="fv-body">
       <!-- 目录：子项数 + 修改时间 -->
       <template v-if="isDir">
+        <!-- 项目卡（决策 #1475）：目录自带项目标记时，先答"这是什么项目"，再答"里面有几个东西" -->
+        <template v-if="project">
+          <div class="fv-row proj">
+            <StudioIcon name="box" :size="13" />
+            <span class="fv-k">项目</span>
+            <span class="fv-v">
+              {{ project.name || '(未命名)' }}
+              <span class="fv-sub">{{ projMeta }}</span>
+            </span>
+          </div>
+          <div v-if="projFacts.length || project.markers.length" class="fv-row">
+            <StudioIcon name="settings" :size="13" />
+            <span class="fv-k">构成</span>
+            <span class="fv-v">
+              {{ projFacts.join(' · ') || '—' }}
+              <span class="fv-sub">{{ project.markers.join(' · ') }}</span>
+            </span>
+          </div>
+        </template>
+        <!-- 自己不是项目：告诉它属于谁。★仓库根在文件树上没有单独一行，
+             这是**唯一**能露出根信息的地方（ROOTS 只列三个子目录）。 -->
+        <div v-else-if="owner" class="fv-row">
+          <StudioIcon name="box" :size="13" />
+          <span class="fv-k">所属</span>
+          <span class="fv-v">
+            {{ owner.name || '(仓库根)' }}
+            <span class="fv-sub">{{ owner.label }} · 上 {{ owner.distance }} 层</span>
+          </span>
+        </div>
         <div class="fv-row">
           <StudioIcon name="folderOpen" :size="13" />
           <span class="fv-k">内容</span>
@@ -204,6 +258,10 @@ const dirSummary = computed(() => {
 .fv-row svg {
   flex: none;
   opacity: 0.7;
+}
+/* 项目名是这一屏的主语，比其它行重一档（决策 #1475） */
+.fv-row.proj .fv-v {
+  font-weight: 600;
 }
 .fv-k {
   flex: none;

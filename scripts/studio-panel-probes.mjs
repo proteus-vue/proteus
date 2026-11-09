@@ -776,10 +776,20 @@ export async function probeFileHover(page) {
   await page.waitForTimeout(520)
   const onMain = await read()
 
-  // ③ 移开指针：卡片消失
+  // ③ 悬停**项目根目录**（决策 #1475）：卡片要从"几个文件"切成"项目卡"
+  await page.hover('#codeFiles button[data-dir="packages/studio"]')
+  await page.waitForTimeout(520)
+  const onProj = await read()
+
+  // ④ 悬停**非项目目录**：自己没标记，要报"所属"（根在树上没有单独一行，这是唯一露出点）
+  await page.hover('#codeFiles button[data-dir="packages"]')
+  await page.waitForTimeout(520)
+  const onOwner = await read()
+
+  // ⑤ 移开指针：卡片消失
   await page.mouse.move(5, 5)
   await page.waitForTimeout(320)
   const gone = await read()
 
-  return { onApp, onMain, gone }
+  return { onApp, onMain, onProj, onOwner, gone }
 }

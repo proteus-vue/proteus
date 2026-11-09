@@ -4303,6 +4303,29 @@
         "T-studio-proc-template"
       ],
       "note": "【done · 决策 #1474（2026-11-09）】用户给 WorkBuddy 截图：「鼠标放到项目上自动预览，直来直去很高效，不需要一直点点点」。★数据层新增 `fs_guard::file_stat` + `ipc_fs::file_stat`，**不改 list_files 契约**（三处消费，改半径大；悬停天然按需）。★目录不算总大小（递归 stat 会卡，用户想知道的是「里面有几个东西」）；行数限 64KB（超限回 None，前端显示「—」不做假数据）。★复用 #1467 的 `sensitivity()`：凭据类文件悬停标红——该判定从纯防御变成用户可见信息。★交互三约定：250ms 延迟 / 锚定行矩形不跟鼠标（#1421 闪跳教训）/ 滚轮即收起；卡片 pointer-events:none。★Teleport 到 body（transform 会让 fixed 退化）。★判据 ㊿g：悬停 App.vue→371 行、切 main.rs→997 行、移开消失；**桩数据按文件名区分**，否则串数据缺陷抓不到。破坏性验证：清空桩行数表 ⇒ 只有 ㊿g 红。★反巨型化：判据初版把 check-studio-panel.mjs 推到 1019 行，拆成 studio-panel-checks-hover.mjs；剩 999 行门禁仍算 1000 ⇒ 用分号连写压回 998。★判据：check:studio-panel 76 绿 0 红 · cargo test 46 通过/1 失败（唯一红为 #1460 既存）· file-size 3 处既存红未变。★诚实边界：无目录总大小；大文件行数「—」（待优化）；stat 按会话缓存会短暂过期；只覆盖文件树。【Handoff】- 做到哪：Rust 命令 + 卡片组件 + 图标 + 桩 + 判据 + 破坏性验证。- 未做：大文件行数显示优化（用户点名「再不断探索」）；目录总大小（建议做成右键显式动作）。- 下一步：大文件行数（分块计数/按需触发）。"
+    },
+    {
+      "id": "T-studio-project-detect",
+      "title": "文件树项目识别：project/owner 字段 + 项目卡 + 判据 ㊿h",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/fs_guard.rs",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/icons/StudioIcon.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1475,
+      "verification": "cd packages/studio && cargo test fs_guard::tests && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-file-hover"
+      ],
+      "note": "【done · 决策 #1475（2026-11-09）】用户：「项目根目录的预览是不是可以做单独的类型？或者自动检测是不是一个项目类型？」★做法：**不新增 IPC**——`FileStat` 加 `project`（自身标记）/`owner`（所属项目根）两个字段。理由：`main.rs` 已 997 行贴线（硬上限 1000），且 #1470 的 capability 映射表刚把 62 条命令逐条落位，多一条就多维护一行。★标记表 `PROJECT_MARKERS` 9 种、顺序即优先级：tauri→harmony→gradle→swift→cargo→pnpm-workspace→npm→go→python。**Tauri 必须排在 cargo 前**（Tauri 目录同时有 tauri.conf.json 与 Cargo.toml，报「Rust crate」是降级信息）。★显示名优先级：Tauri `productName` > `package.json.name` > `Cargo.toml [package].name`（Cargo 名常是 `xxx-shell` 内部命名）。★`owner` 往上找最近项目根，**只在仓库沙箱内走**（`starts_with(root)`），否则仓库外的 package.json 会被当成「所属」。仓库根自己无 owner；`packages` 那一行的「所属」就是根的入口（ROOTS 只列三个子目录，根在树上没有单独一行）。★依赖/脚本数只有 package.json 能算，其他类型 None（不猜）；Cargo.toml 只取 `[package]` 段，先判段头再判键。★判据：Rust `project_probe_by_markers` + `owner_walks_up_inside_sandbox_only`；面板门禁 **㊿h**（悬停 packages/studio → Tauri 项目卡；悬停 packages → 所属 proteus-vue）。★破坏性验证 2 条精确翻红：① `if kind.is_empty() || true`（优先级失效）⇒ 报 `left cargo / right tauri`；② 桩里 PROJ_STUB 键错位到 packages/studio/ui ⇒ 仅 ㊿h 红、其余 76 绿。★判据：check:studio-panel **77 绿 0 红** · cargo test **48 通过/1 失败**（唯一红为 #1460 既存）· check-studio-panel.mjs 仍 998 行（判据全落在 hover 模块）。★诚实边界：只对目录识别（文件不查）；不解析构建系统细节；标记改动不主动失效（按会话缓存）；仓库根在树上仍无单独一行（需 ROOTS 扩容，另议）。【Handoff】- 做到哪：Rust 识别 + 卡片渲染 + 桩 + 判据 + 破坏性验证。- 未做：ROOTS 扩容让项目根成为可点节点；文件也显示所属。- 下一步：真机看一眼卡片排版；若要「项目根可点」，先定 ROOTS 该含哪些目录。"
     }
   ]
 }

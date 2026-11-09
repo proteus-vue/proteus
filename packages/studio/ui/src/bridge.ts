@@ -106,6 +106,35 @@ export interface FileStat {
   lines: number | null
   /** 直接子项数 `[文件, 目录]`；仅目录有值 */
   children: [number, number] | null
+  /** 该目录**自身**的项目标记（决策 #1475）：非项目目录与所有文件为 null */
+  project: ProjectInfo | null
+  /** 该目录**所属**的最近项目根（决策 #1475）；仓库根自身没有所属 */
+  owner: ProjectRef | null
+}
+
+/** 项目卡数据（决策 #1475）。★`label` 由 Rust 给：kind→文案的映射只留一份，两处表必然漂移。 */
+export interface ProjectInfo {
+  /** tauri / harmony / gradle / swift / cargo / pnpm-workspace / npm / go / python */
+  kind: string
+  label: string
+  name: string
+  version: string
+  /** 命中的标记文件名，可能多个（Tauri 目录同时有 tauri.conf.json 与 Cargo.toml） */
+  markers: string[]
+  /** 依赖条数：只有 package.json 能算，其余 null（不猜） */
+  deps: number | null
+  /** npm scripts 条数 */
+  scripts: number | null
+}
+
+/** 目录所属的项目根（决策 #1475） */
+export interface ProjectRef {
+  /** 仓库内相对路径；仓库根为空串 */
+  path: string
+  name: string
+  label: string
+  /** 往上几层到该项目根（1 = 直接父目录） */
+  distance: number
 }
 export const fileStat = (path: string): Promise<FileStat> => invoke<FileStat>('file_stat', { path })
 

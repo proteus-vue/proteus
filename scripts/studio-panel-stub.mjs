@@ -165,6 +165,23 @@ export function stubTauri(payload) {
           const name = p.slice(p.lastIndexOf('/') + 1)
           const dir = !name.includes('.')
           if (dir) {
+            /* ★决策 #1475：项目卡桩。**按路径区分**（与 LINE_STUB 同一个道理）——
+               若所有目录回同一份 project/owner，"卡片沿用了上一项数据"这类串数据缺陷抓不到。
+               `packages/studio` 是项目根，`packages` 自己不是项目、只报"所属"。 */
+            const PROJ_STUB = {
+              'packages/studio': {
+                kind: 'tauri',
+                label: 'Tauri 桌面应用',
+                name: 'Proteus Studio',
+                version: '0.1.0',
+                markers: ['tauri.conf.json', 'Cargo.toml'],
+                deps: null,
+                scripts: null,
+              },
+            }
+            const OWNER_STUB = {
+              packages: { path: '', name: 'proteus-vue', label: 'pnpm 工作区根', distance: 1 },
+            }
             return {
               path: p,
               kind: 'dir',
@@ -174,6 +191,8 @@ export function stubTauri(payload) {
               ext: '',
               lines: null,
               children: [9, 2],
+              project: PROJ_STUB[p] ?? null,
+              owner: OWNER_STUB[p] ?? null,
             }
           }
           const LINE_STUB = { 'App.vue': 371, 'main.rs': 997, 'bridge.ts': 551 }
@@ -186,6 +205,8 @@ export function stubTauri(payload) {
             ext: name.split('.').pop()?.toLowerCase() ?? '',
             lines: LINE_STUB[name] ?? 42,
             children: null,
+            project: null,
+            owner: null,
           }
         }
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open

@@ -12,10 +12,19 @@
 import { probeFileHover } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
-  const { onApp, onMain, gone } = await probeFileHover(page)
+  const { onApp, onMain, onProj, onOwner, gone } = await probeFileHover(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
+
+  /* ㊿h 项目识别（决策 #1475）：桩里 `packages/studio` 有项目标记、`packages` 没有。
+     ★三条一起断：类型/名称（项目卡真的出现）、标记文件（不是只贴了个标签）、
+       "所属"（非项目目录要能往上找到归属）。只断前两条的话，owner 分支坏了测不出来。 */
+  const projOk =
+    /Tauri 桌面应用/.test(onProj?.text ?? '') &&
+    /Proteus Studio/.test(onProj?.text ?? '') &&
+    /tauri\.conf\.json/.test(onProj?.text ?? '')
+  const ownerOk = /所属/.test(onOwner?.text ?? '') && /proteus-vue/.test(onOwner?.text ?? '')
 
   return [
     [
@@ -25,6 +34,12 @@ export async function checksHover(page) {
         /997 行/.test(onMain?.text ?? '') ? '997 行' : '行数未命中'
       } · 移开即消失=${gone === null}`,
       appOk && mainOk && gone === null,
+    ],
+    [
+      `㊿h 项目识别（决策 #1475）：项目根→${
+        projOk ? 'Tauri 桌面应用/Proteus Studio' : '项目卡未命中'
+      } · 普通目录→${ownerOk ? '所属 proteus-vue' : '所属未命中'}`,
+      projOk && ownerOk,
     ],
   ]
 }

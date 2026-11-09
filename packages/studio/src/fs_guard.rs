@@ -276,6 +276,202 @@ pub struct FileStat {
     pub lines: Option<usize>,
     /// 直接子项数 `[文件, 目录]`；仅目录有值
     pub children: Option<[usize; 2]>,
+    /// 该目录**自身**的项目标记（决策 #1475）；非项目目录、以及所有文件，都是 `None`
+    pub project: Option<ProjectInfo>,
+    /// 该目录**所属**的最近项目根（决策 #1475）；仓库根自身没有所属
+    pub owner: Option<ProjectRef>,
+}
+
+/// 项目属性（决策 #1475）—— 目录**自身带项目标记**时，悬停显示项目卡而不是"几个文件"。
+///
+/// 【为什么自动检测，不让用户配置】标记文件本来就是项目的**自证方式**
+///   （`tauri.conf.json` = Tauri、`Cargo.toml` = Rust crate、`pnpm-workspace.yaml` = 工作区…）。
+///   让人再配一遍，等于把机器已经知道的事问第二遍；而且手配比识别更容易错。
+///   —— 这与 `languages.json` / `LIST_EXT` 的做法一致：**能从文件系统推出来的，绝不另存一份配置**。
+///
+/// 【★诚实边界】只认**当前目录**的标记文件，不解析构建系统细节（不知道 Gradle 有几个 flavor、
+///   Cargo 开了几个 feature）；`deps` / `scripts` 只有 `package.json` 能算，
+///   其他类型一律 `None`——**不猜**，卡片就少显示一行。
+#[derive(Serialize)]
+pub struct ProjectInfo {
+    /// 机器码：tauri / harmony / gradle / swift / cargo / pnpm-workspace / npm / go / python
+    pub kind: String,
+    /// 人话标签。★文案放在这里而不是前端做 `kind → 文案` 映射：两处表迟早漂移
+    pub label: String,
+    /// 标记文件里没写名字时为空串（例如只有 `build.gradle`）
+    pub name: String,
+    pub version: String,
+    /// 命中的标记文件名，**可能多个**：Tauri 目录同时有 `tauri.conf.json` 与 `Cargo.toml`
+    pub markers: Vec<String>,
+    /// 依赖条数（仅 `package.json` 能算）
+    pub deps: Option<u32>,
+    /// npm scripts 条数
+    pub scripts: Option<u32>,
+}
+
+/// 目录**所属**的项目根（决策 #1475）：自己不是项目时，往上找最近一个带标记的目录。
+///
+/// 【为什么不直接复用 `ProjectInfo`】悬停 `packages/studio/ui/src` 时，想知道的是
+///   「它在哪个项目里、隔了几层」，不是那个项目的依赖条数——后者对当前目录没有解释力。
+#[derive(Serialize)]
+pub struct ProjectRef {
+    /// 仓库内相对路径；仓库根为空串
+    pub path: String,
+    pub name: String,
+    pub label: String,
+    /// 从悬停目录往上几层到这个项目根（1 = 直接父目录）
+    pub distance: u32,
+}
+
+/// 标记文件名 → 项目类型。**顺序即优先级**，不要重排：
+/// Tauri 目录同时有 `tauri.conf.json` 和 `Cargo.toml`，报「Tauri 桌面应用」比报「Rust crate」
+/// 更准确；同理根目录有 `package.json` + `pnpm-workspace.yaml`，工作区比"npm 包"更准确。
+const PROJECT_MARKERS: [(&str, &str, &[&str]); 9] = [
+    ("tauri", "Tauri 桌面应用", &["tauri.conf.json"]),
+    ("harmony", "鸿蒙应用", &["module.json5", "build-profile.json5"]),
+    ("gradle", "Android (Gradle)", &["build.gradle", "build.gradle.kts"]),
+    ("swift", "Swift 包", &["Package.swift"]),
+    ("cargo", "Rust crate", &["Cargo.toml"]),
+    ("pnpm-workspace", "pnpm 工作区根", &["pnpm-workspace.yaml"]),
+    ("npm", "npm 包", &["package.json"]),
+    ("go", "Go 模块", &["go.mod"]),
+    ("python", "Python 项目", &["pyproject.toml"]),
+];
+
+/// 检测目录**自身**的项目标记。全不命中回 `None`（普通目录，走原来的目录卡）。
+fn probe_project(dir: &std::path::Path) -> Option<ProjectInfo> {
+    let mut kind = "";
+    let mut label = "";
+    let mut markers: Vec<String> = Vec::new();
+    for (k, l, files) in PROJECT_MARKERS {
+        for f in files {
+            if dir.join(f).exists() {
+                markers.push((*f).to_string());
+                if kind.is_empty() {
+                    kind = k;
+                    label = l;
+                }
+            }
+        }
+    }
+    if kind.is_empty() {
+        return None;
+    }
+
+    let pkg = read_json(dir.join("package.json"));
+    let mut name = pkg.as_ref().map(|v| json_str(v, "name")).unwrap_or_default();
+    let mut version = pkg.as_ref().map(|v| json_str(v, "version")).unwrap_or_default();
+    let deps = pkg.as_ref().and_then(|v| {
+        let a = json_obj_len(v, "dependencies");
+        let b = json_obj_len(v, "devDependencies");
+        (a + b > 0).then_some(a + b)
+    });
+    let scripts = pkg
+        .as_ref()
+        .map(|v| json_obj_len(v, "scripts"))
+        .filter(|n| *n > 0);
+
+    /* Tauri 的显示名在 tauri.conf.json 的 productName（`Cargo.toml` 里是 crate 名，
+       通常是 `xxx-shell` 这种内部命名，给用户看不如 productName 准）。 */
+    if kind == "tauri" {
+        if let Some(t) = read_json(dir.join("tauri.conf.json")) {
+            let pn = json_str(&t, "productName");
+            if !pn.is_empty() {
+                name = pn;
+            }
+        }
+    }
+    if name.is_empty() || version.is_empty() {
+        if let Ok(toml) = std::fs::read_to_string(dir.join("Cargo.toml")) {
+            if name.is_empty() {
+                name = toml_pkg_field(&toml, "name").unwrap_or_default();
+            }
+            if version.is_empty() {
+                version = toml_pkg_field(&toml, "version").unwrap_or_default();
+            }
+        }
+    }
+
+    Some(ProjectInfo {
+        kind: kind.to_string(),
+        label: label.to_string(),
+        name,
+        version,
+        markers,
+        deps,
+        scripts,
+    })
+}
+
+/// 往上找**最近**的项目根。只在仓库沙箱内走（`starts_with(root)`）——
+/// 否则仓库上面的某个 `package.json` 会被当成"所属项目"，那是越界信息。
+fn find_owner(root: &std::path::Path, dir: &std::path::Path) -> Option<ProjectRef> {
+    let mut cur = dir.parent();
+    let mut distance = 1u32;
+    while let Some(d) = cur {
+        if !d.starts_with(root) {
+            break;
+        }
+        if let Some(info) = probe_project(d) {
+            return Some(ProjectRef {
+                path: d
+                    .strip_prefix(root)
+                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_default(),
+                name: info.name,
+                label: info.label,
+                distance,
+            });
+        }
+        if d == root {
+            break;
+        }
+        cur = d.parent();
+        distance += 1;
+    }
+    None
+}
+
+fn read_json(p: std::path::PathBuf) -> Option<serde_json::Value> {
+    let text = std::fs::read_to_string(p).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+fn json_str(v: &serde_json::Value, key: &str) -> String {
+    v.get(key).and_then(|x| x.as_str()).unwrap_or("").to_string()
+}
+
+fn json_obj_len(v: &serde_json::Value, key: &str) -> u32 {
+    v.get(key)
+        .and_then(|x| x.as_object())
+        .map(|o| o.len() as u32)
+        .unwrap_or(0)
+}
+
+/// 从 `Cargo.toml` 的 `[package]` 段取一个字符串字段。
+///
+/// 【为什么手写而不是引 `toml` crate】只要两个字段（name/version），而 `[package]` 段是
+///   TOML 里最规矩的部分；引一个 crate 换 4 个传递依赖不划算。**只在 `[package]` 段内匹配**，
+///   避免把 `[dependencies.foo] version = "1.2"` 当成包版本——这是手写解析最容易犯的错。
+fn toml_pkg_field(text: &str, key: &str) -> Option<String> {
+    let mut in_pkg = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            in_pkg = t == "[package]";
+            continue;
+        }
+        if !in_pkg || t.starts_with('#') {
+            continue;
+        }
+        let Some(rest) = t.strip_prefix(key) else { continue };
+        let Some(rest) = rest.trim_start().strip_prefix('=') else { continue };
+        let v = rest.trim().trim_matches('"').trim();
+        if !v.is_empty() {
+            return Some(v.to_string());
+        }
+    }
+    None
 }
 
 /// 数行数的上限（64KB）。超了就回 `None`，不读。
@@ -295,6 +491,18 @@ pub fn file_stat(path: String) -> Result<FileStat, String> {
 
     let children = if is_dir { Some(count_children(&p)?) } else { None };
 
+    /* 项目识别（决策 #1475）：只对目录做。文件不查——一次悬停要读两份清单只为回答
+       "这个文件属于哪个包"，而文件卡已经在答"它是什么类型、多少行"。 */
+    let (project, owner) = if is_dir {
+        let root = repo_root().ok();
+        (
+            probe_project(&p),
+            root.as_deref().and_then(|r| find_owner(r, &p)),
+        )
+    } else {
+        (None, None)
+    };
+
     Ok(FileStat {
         path,
         kind: if is_dir { "dir".to_string() } else { "file".to_string() },
@@ -308,6 +516,8 @@ pub fn file_stat(path: String) -> Result<FileStat, String> {
             .to_ascii_lowercase(),
         lines,
         children,
+        project,
+        owner,
     })
 }
 
@@ -456,6 +666,60 @@ mod tests {
     fn file_stat_respects_sandbox() {
         assert!(file_stat("../etc/passwd".to_string()).is_err());
         assert!(file_stat("/etc/passwd".to_string()).is_err());
+    }
+
+    /// 决策 #1475：项目类型按**标记文件的真实存在**判定，不按目录名猜。
+    /// ★能翻红的改法：把 `PROJECT_MARKERS` 里 cargo 与 tauri 调换顺序会立刻红——
+    ///   那正是"Tauri 目录被误报成 Rust crate"的真实退化。
+    /// ★`repo_root()` 是**仓库根**（monorepo），不是 studio 包目录，所以这里必须点到
+    ///   `packages/studio`——写成 `root` 会测到 pnpm 工作区而不是 Tauri 应用。
+    #[test]
+    fn project_probe_by_markers() {
+        let root = repo_root().expect("测试环境应有仓库根");
+
+        let tauri = root.join("packages/studio");
+        let p = probe_project(&tauri).expect("packages/studio 有 tauri.conf.json + Cargo.toml");
+        assert_eq!(p.kind, "tauri", "有 tauri.conf.json 时必须报 Tauri 而不是 Rust crate");
+        assert!(p.markers.iter().any(|m| m == "tauri.conf.json"), "标记清单应含 tauri.conf.json");
+        assert!(p.markers.iter().any(|m| m == "Cargo.toml"));
+        /* ★productName 优先于 Cargo.toml 的 crate 名：后者是内部命名（`xxx-shell`），
+           给用户看不如 productName 准。这条专守该优先级——写反会显示 `proteus-studio-shell`。 */
+        assert_ne!(p.name, "proteus-studio-shell", "Tauri 应用应显示 productName");
+        assert!(!p.name.is_empty());
+        assert_eq!(p.version, "0.1.0");
+
+        /* 仓库根是"工作区根"而不是 npm 包：有 pnpm-workspace.yaml 时必须报工作区 */
+        let ws = probe_project(&root).expect("仓库根有 package.json + pnpm-workspace.yaml");
+        assert_eq!(ws.kind, "pnpm-workspace", "有 pnpm-workspace.yaml 时必须报工作区根");
+        assert_eq!(ws.name, "proteus-vue");
+        assert!(ws.scripts.unwrap_or(0) > 0, "根 package.json 有 scripts，应数出来");
+
+        /* 反证：没有标记文件的目录不能被当成项目（否则每个目录都变成项目卡） */
+        assert!(
+            probe_project(&root.join("packages/studio/ui/src")).is_none(),
+            "无标记的目录不该识别为项目"
+        );
+    }
+
+    /// 决策 #1475：往上找归属的项目根，**只在仓库沙箱内走**。
+    #[test]
+    fn owner_walks_up_inside_sandbox_only() {
+        let root = repo_root().expect("测试环境应有仓库根");
+        let deep = root.join("packages/studio/ui/src");
+
+        let o = find_owner(&root, &deep).expect("ui/src 的所属项目是 packages/studio");
+        assert_eq!(o.path, "packages/studio", "相对路径要能直接显示给用户");
+        assert_eq!(o.distance, 2, "ui/src → ui → packages/studio，隔 2 层");
+        assert_eq!(o.label, "Tauri 桌面应用");
+
+        /* `packages` 自己不是项目，它的归属就是仓库根（相对路径为空串） */
+        let up = find_owner(&root, &root.join("packages")).expect("packages 的所属是仓库根");
+        assert_eq!(up.path, "");
+        assert_eq!(up.label, "pnpm 工作区根");
+
+        /* ★根目录自己不该有"所属项目"：往上一步就越出沙箱，
+           否则仓库外面某个 package.json 会被当成"所属项目"——那是越界信息。 */
+        assert!(find_owner(&root, &root).is_none());
     }
 }
 
