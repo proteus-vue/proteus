@@ -4197,6 +4197,24 @@
         "T-studio-secret-path"
       ],
       "note": "【done · 决策 #1468（2026-11-09）】补 G-58 §5 的空白：WASM 沙箱管不到 Tier 2（Studio 的 format/diag/git/device 全在沙箱外），而 §5 只写了「安装时警示」，没有机制。★机制：宿主持有 `TemplateSpec{id,pre_args,args,slots}`，调用方只能引用模板 + 填声明过的占位符 + 多传 key 就拒。★真实消费方：`format.rs::format_command` 改走模板（参数从 `FORMAT_ARGS` 派生，门禁 ㊿d 静态读它），`check_path` 复用 `is_safe_rel_path`（单一真源）。★关键边界：RelPath **故意不拦 `;` `|` `$`**（`Command::arg` 不经 shell，拦了只误杀真实文件名），只拦控制字符与形态（绝对路径/`..`）；Literal 档才禁元字符。★判据：proc_template 6 条 + format 原有 4 条真跑判据全绿（证明改造不改行为）；破坏性验证 M3（去掉多余参数检查）/M4（去掉 `..` 检查）均精确翻红。★诚实边界：只有一条模板 ⇒ 按 SPI-First「单后端是假 SPI」，只主张机制跑通与真实消费方，不主张已达成 SPI；插件还不能注册模板（G-58 B1）；**main.rs 已 996 行**，下次动它必须先拆。【Handoff】- 做到哪：模板机制 + format 接入 + 判据 + 破坏性验证。- 未做：第二条模板（rustfmt，可让 18 个 .rs 文件可格式化）；插件注册模板。- 下一步：加 rustfmt 模板（第二条实现，才够格谈 SPI）+ G-58 B1 映射表。"
+    },
+    {
+      "id": "T-studio-rustfmt",
+      "title": "Studio 接 rustfmt：.rs 从「拒绝」变「可格式化」——第二条 Tier 2 模板",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/format.rs",
+        "scripts/studio-panel-checks-format.mjs"
+      ],
+      "decision": 1469,
+      "verification": "cd packages/studio && cargo test --bin proteus-studio-shell && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-proc-template"
+      ],
+      "note": "【done · 决策 #1469（2026-11-09）】Studio 后端自己就有 18 个 .rs，却不能格式化——接 rustfmt。★改法：`Formatter{Prettier,Rustfmt}` + `formatter_for()` 唯一判定入口；`rustfmt_command()` 用第二条模板（`--emit stdout --edition 2021`）；`rustfmt_exe()` 与 node 同款三层解析（`~/.cargo/bin` 早在 `child_path_from` 硬编码表里，#1464 顺带覆盖）；`NO_PARSER_EXT` 28→27（rs 移出，语义改为「Studio 没有任何格式化器能处理」）。★★安全前提单独验证：实测 rustfmt 语法错误 `rc=1` + stdout 0 字节 + stderr 有 error——若返回 0 则会把空内容 dispatch 回编辑器（=清空用户文件）；判据 `rustfmt_syntax_error_is_rejected_not_silently_empty` 专守。★`--emit stdout` 是必须的（不带它会改写源文件）。★三张表不变量 `formatter_tables_are_consistent`：LIST_EXT 每项要么有格式化器要么在拒绝表；拒绝表每项不得被判给格式化器；判给 Rustfmt 的只能是 rs。★判据：真跑 rustfmt 单测绿 · `cargo test` 41 通过/1 失败（唯一红为 #1460 既存）· `check:studio-panel` **75 绿 0 红**。★门禁同步（判据跟着代码搬家）：拒绝用例 .rs→.m；`noDiskWrite`/`guiNode` 的证明位置扩到 proc_template 并改查证据链（`let node = node_for_prettier()?` + `assemble(&node,`）。★诚实边界：**GUI 真机未验**（没在 Dock 启动的 Studio 里真点 ⇧⌥F 格式化 .rs——#1463/#1464 栽过同类坑，必须补跑）；只支持 .rs（.m/.h 仍无格式化器）；`.rustfmt.toml` 未接，风格随用户 rustup 版本。【Handoff】- 做到哪：路由 + 第二条模板 + 真跑判据 + 门禁同步。- 未做：GUI 真机复验；.rustfmt.toml 读取。- 下一步：真机点一次 ⇧⌥F（.rs）；再谈 G-58 B1 映射表。"
     }
   ]
 }

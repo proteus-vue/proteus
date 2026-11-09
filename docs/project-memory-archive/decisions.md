@@ -16463,3 +16463,45 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     插件**还不能**注册自己的模板（那是 G-58 B1 的范围）。③ **`main.rs` 已 996 行**（硬上限 1000），
     下次动它必须先拆文件。
 
+1469. **★★Studio 接 rustfmt：`.rs` 从"拒绝"变"可格式化" · 第二条 Tier 2 模板（首次真正具备"两种格式化器"）**（2026-11-09 · 用户「推送然后继续」）:
+  - **动机**：`NO_PARSER_EXT` 里 `rs` 一直是拒绝项，而 Studio 自己的后端就有 **18 个 `.rs`**——
+    "写 Rust 的人用着不能格式化 Rust 的 IDE"是最刺眼的一处。#1468 把命令装配抽成模板后，
+    加第二个格式化器的成本降到"一条模板 + 一次路由"。
+  - **改法**：新增 `Formatter{Prettier, Rustfmt}` + `formatter_for(path)` 作为**唯一判定入口**；
+    `format_via_cli` 按 formatter 分派；`rustfmt_command()` 用**第二条模板**
+    （`--emit stdout --edition 2021`，零占位符）；`rustfmt_exe()` 与 node 同款三层解析
+    （★`~/.cargo/bin` **早在 `child_path_from` 的硬编码列表里**——#1464 修 node 时顺带覆盖，
+    这次不用重蹈"GUI 找不到"的覆辙）；`NO_PARSER_EXT` **28 → 27**（rs 移出，
+    该表语义从"prettier 无 parser"改为"**Studio 没有任何格式化器能处理**"）。
+  - **★★安全前提被单独验证（这条最重要）**：实测 rustfmt 语法错误时
+    **`rc=1` + stdout 0 字节 + stderr 有 error**。若它返回 0，现有代码会把**空内容 dispatch
+    回编辑器 = 清空用户文件**。判据 `rustfmt_syntax_error_is_rejected_not_silently_empty` 专守这条。
+    另：`--emit stdout` 是**必须的**——不带它 rustfmt 会**直接改写源文件**，违反"只回文本不写盘"。
+  - **★三张表的不变量（新增第三张表就必须机器检查）**：`formatter_tables_are_consistent` ——
+    `LIST_EXT` 每一项要么判给某格式化器、要么在拒绝表；`NO_PARSER_EXT` 每一项都不得被判给
+    格式化器；判给 `Rustfmt` 的**只能是 `rs`**。否则三张手写表迟早互相矛盾。
+  - **判据**：`formats_rust_with_real_rustfmt`（真跑 rustfmt，断言产物含 `fn main() {` /
+    `let a = 1;` / `println!("{}", a);`）· **`rustfmt_gui_minimal_env_end_to_end`**
+    （`env_clear()` 重开测试二进制、只给 launchd 的 PATH 与 HOME ⇒ **解析 rustfmt + 真跑都在最小环境**，
+    这是 #1463/#1464 栽过的同一类坑）· `path_guard`（rs 改判 `is_ok` 且 `== Rustfmt`）·
+    `formats_with_real_cli` 的拒绝用例改用 `.m`。
+    ★**顺手堵了一个判据漏洞**：GUI 端到端那条原写法里，**子进程 skip 也算 `1 passed`**
+    （"没装 rustfmt 就跳过"），于是这条判据在缺环境的机器上永远绿、什么都不证明。
+    已加断言 `!text.contains("skip:")`——与 #1404b 的"声称已验必须有读数"同族修正。
+  - **★门禁同步（判据跟着代码搬家，不是放宽）**：`studio-panel-checks-format.mjs` 三处改动——
+    ① `noParser.includes('rs')` → `'m'`；② 拒绝路径用例 `.rs` → `.m`（`embed_view.m`，在 `LIST_EXT`
+    里可点但无格式化器）；③ `noDiskWrite` 与 `guiNode` 的证明位置从 `format.rs` 扩到
+    `proc_template.rs`（`Stdio::piped()` / `Command::new(program)` 已搬走），并改为查**证据链**
+    （`let node = node_for_prettier()?;` + `assemble(&node,`）而不是查一个已不存在的字符串。
+    ★教训：**重构搬走字符串会让静态判据假红**——但不能因此放宽判据，要跟着**性质**搬到新位置。
+  - **判据**：`cargo test` **44 通过 / 1 失败**（唯一红 `new_path_boundary` 是 #1460 既存）·
+    `check:studio-panel` **75 绿 0 红**（含 ㊿c 的 `.m 拒绝=true/buffer不变=true`）·
+    `check:file-size` 3 处既存红未变（`format.rs` 409 → 619 行）。
+  - **诚实边界**：① **真机 GUI 未验**——最小环境判据（`env_clear` + 只给 launchd PATH）
+    已覆盖"解析"这一步，但它与**真正从 Dock 启动的 Studio** 仍有差异（#1464 的教训），
+    所以"用户在 app 里点 ⇧⌥F 格式化 `.rs`"这一条**仍缺真机证据**，设备就绪后补跑；
+    ② 只支持 `.rs`，`.m/.h`（ObjC）仍无格式化器；③ rustfmt 版本由用户的 rustup 决定
+    ⇒ 不同机器格式化风格可能不同（`.rustfmt.toml` 未接）。
+  - ★**本单同时兑现了 #1468 的欠账**：`proc_template` 从"单模板"变成"双模板"
+    （prettier + rustfmt），这才够格谈"机制"，但仍不等于完整插件 SPI（插件还不能注册模板）。
+

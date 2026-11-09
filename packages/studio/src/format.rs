@@ -62,7 +62,7 @@ pub const FORMAT_ARGS: [&str; 6] = [
     "--trailing-comma",
     "all",
 ];
-/// `LIST_EXT` 里 prettier **没有 parser** 的那几个；提前拒绝，省一次 spawn 且错误可懂。
+/// `LIST_EXT` 里 **Studio 无法格式化**的那几个；提前拒绝，省一次 spawn 且错误可懂。
 ///
 /// 【决策 #1465：4 → 28 项】原来只列 `LIST_EXT` 里的 rs/m/h/py。但编辑器还能通过
 ///   ⇧⌘F **仓库搜索**打开任意扩展名的文件（`search.rs` 不做扩展名过滤），于是
@@ -73,9 +73,14 @@ pub const FORMAT_ARGS: [&str; 6] = [
 ///   swift 66 · h 61 · py 32 · ets 24 · svg 22 · cpp 12 · toml 9 · xml 5 · wgsl 5 · wxml 7）。
 /// ★这张表**只做"提前拒绝"**，不限制文件能否打开（那是 `fs_guard::LIST_EXT` 的事）——
 ///   两表职责不同，不要合并：一个是"界面给不给用"，一个是"格式化器会不会失败"。
-const NO_PARSER_EXT: [&str; 28] = [
-    // ① `LIST_EXT` 里的 4 个（文件树可见 ⇒ 必然会被点到）
-    "rs", "m", "h", "py",
+///
+/// 【决策 #1469：28 → 27】`rs` **移出本表**——Studio 接了 rustfmt，`.rs` 从"拒绝"变成
+///   "由另一个格式化器处理"。★这张表从此语义变了：不再是"prettier 无 parser"，
+///   而是"**Studio 没有任何格式化器能处理**"。两者的区别由 `formatter_for()` 表达。
+///   ★`embed_view.m` / `proteus_host.h` 仍在此表（ObjC 无格式化器），判据用它做"拒绝路径"。
+const NO_PARSER_EXT: [&str; 27] = [
+    // ① `LIST_EXT` 里的其余 3 个（文件树可见 ⇒ 必然会被点到）
+    "m", "h", "py",
     // ② 搜索可打开、prettier 无 parser 的常见类型
     "sh", "bash", "zsh", "java", "kt", "kts", "swift", "c", "cc", "cpp", "cxx", "hpp", "hh",
     "mm", "ets", "wgsl", "wxml", "toml", "xml", "svg", "sql", "go", "rb", "lua",
@@ -83,21 +88,47 @@ const NO_PARSER_EXT: [&str; 28] = [
 const TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BYTES: usize = 512 * 1024;
 
-fn check_path(path: &str) -> Result<(), String> {
+/// 谁来做这次格式化（决策 #1469）。
+/// ★这张"分派表"是新增的第三张表，所以必须写成**可检查的不变量**（见单测
+///   `formatter_tables_are_consistent`）：`NO_PARSER_EXT` 里的项不得被判给任何格式化器，
+///   `LIST_EXT` 的每一项要么有格式化器、要么在拒绝表里。否则三张表迟早互相矛盾。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Formatter {
+    /// 走 prettier（TS/JS/Vue/CSS/JSON/MD/YAML/HTML…）
+    Prettier,
+    /// 走 rustfmt（`rs`）——★Tier 2 的第二条模板，也是"两种格式化器"的实证
+    Rustfmt,
+}
+
+fn ext_of(path: &str) -> String {
+    std::path::Path::new(path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+/// 判定一个路径该由谁格式化。**这是"能不能格式化"的唯一判定入口。**
+fn formatter_for(path: &str) -> Result<Formatter, String> {
+    let ext = ext_of(path);
+    if ext == "rs" {
+        return Ok(Formatter::Rustfmt);
+    }
+    if NO_PARSER_EXT.contains(&ext.as_str()) {
+        return Err(format!(
+            "暂不支持 .{ext} 格式化（Studio 未接该语言的格式化器）"
+        ));
+    }
+    Ok(Formatter::Prettier)
+}
+
+fn check_path(path: &str) -> Result<Formatter, String> {
     /* ★形态校验走 `proc_template::is_safe_rel_path`（决策 #1468）——单一真源：
        同一个"什么算仓库内相对路径"的判定，Tier 2 模板与这里必须一致，
        否则两处迟早分叉（一个放行、一个拒绝，排查起来极痛）。 */
     if !crate::proc_template::is_safe_rel_path(path) {
         return Err(format!("非法路径：{path}"));
     }
-    let ext = std::path::Path::new(path)
-        .extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default();
-    if NO_PARSER_EXT.contains(&ext.as_str()) {
-        return Err(format!("暂不支持 .{ext} 格式化（prettier 没有对应 parser）"));
-    }
-    Ok(())
+    formatter_for(path)
 }
 
 /// stderr 只取第一行：prettier 的语法错误会连源码片段一起打，整段塞进 toast 没意义。
@@ -157,7 +188,12 @@ fn node_for_prettier() -> Result<PathBuf, String> {
 ///   由宿主持有，本函数只填 `{path}` 一个洞。这样它与将来插件的 `spawnProcess` 走**同一套**
 ///   约束，而不是"内置能力一套、插件另一套"。
 fn format_command(root: &Path, path: &str) -> Result<Command, String> {
-    check_path(path)?;
+    /* ★显式断言路由正确（决策 #1469）：`.rs` 必须由 rustfmt 走，若将来有人把 rs 放进
+       prettier 分支，这里立刻报错而不是让 prettier 吐一句英文的 No parser。 */
+    match check_path(path)? {
+        Formatter::Prettier => {}
+        Formatter::Rustfmt => return Err("内部路由错误：.rs 应由 rustfmt 处理".to_string()),
+    }
     let js = root.join(PRETTIER_JS);
     if !js.exists() {
         return Err(format!("格式化器不存在：{PRETTIER_JS}（依赖没装？）"));
@@ -186,8 +222,61 @@ fn prettier_spec() -> crate::proc_template::TemplateSpec {
     }
 }
 
+/// rustfmt 的可执行文件（决策 #1469）。
+/// ★与 node 同款**三层解析**（#1464 的教训：GUI 启动不继承终端 PATH）：
+///   显式 `PROTEUS_RUSTFMT` → `child_path()` 里的 `~/.cargo/bin`（rustup 默认位，
+///   `child_path_from` 的硬编码列表已含它）→ 找不到就明确报错。
+fn rustfmt_exe() -> Result<PathBuf, String> {
+    static CACHED: OnceLock<PathBuf> = OnceLock::new();
+    if let Some(p) = CACHED.get() {
+        return Ok(p.clone());
+    }
+    let found = std::env::var_os("PROTEUS_RUSTFMT")
+        .map(PathBuf::from)
+        .filter(|p| p.is_file())
+        .or_else(|| {
+            crate::ios_stream::which("rustfmt", &crate::ios_stream::child_path())
+                .map(PathBuf::from)
+                .filter(|p| p.is_file())
+        });
+    match found {
+        Some(p) => {
+            let _ = CACHED.set(p.clone());
+            Ok(p)
+        }
+        None => Err(
+            "找不到 rustfmt（GUI 启动未继承终端 PATH）。装 rustup，或用 PROTEUS_RUSTFMT=/绝对路径/rustfmt 启动 Studio"
+                .to_string(),
+        ),
+    }
+}
+
+/// rustfmt 的命令模板（决策 #1469 · 第二条 Tier 2 模板）。
+/// ★`--emit stdout` 是**安全前提**：不加它 rustfmt 会**直接改写源文件**，而本模块的
+///   约定是"只回文本、不写盘"（写盘只有 `write_text`，带 mtime 冲突检测）。
+/// ★空输入由 `format_via_cli` 提前返回，不会走到这里。
+fn rustfmt_spec() -> crate::proc_template::TemplateSpec {
+    crate::proc_template::TemplateSpec {
+        id: "format.rustfmt",
+        pre_args: vec![],
+        args: vec![
+            "--emit".to_string(),
+            "stdout".to_string(),
+            "--edition".to_string(),
+            "2021".to_string(),
+        ],
+        slots: vec![],
+    }
+}
+
+fn rustfmt_command(root: &Path) -> Result<Command, String> {
+    let exe = rustfmt_exe()?;
+    let values = std::collections::BTreeMap::new();
+    crate::proc_template::assemble(&exe, root, &rustfmt_spec(), &values)
+}
+
 fn format_via_cli(path: &str, text: &str) -> Result<String, String> {
-    check_path(path)?;
+    let formatter = check_path(path)?;
     if text.len() > MAX_BYTES {
         return Err(format!("内容过大：{} 字节（上限 512KB）", text.len()));
     }
@@ -195,7 +284,11 @@ fn format_via_cli(path: &str, text: &str) -> Result<String, String> {
         return Ok(text.to_string());
     }
     let root = crate::fs_guard::repo_root()?;
-    let mut child = format_command(&root, path)?
+    let mut cmd = match formatter {
+        Formatter::Prettier => format_command(&root, path)?,
+        Formatter::Rustfmt => rustfmt_command(&root)?,
+    };
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("启动格式化器失败：{e}"))?;
 
@@ -266,7 +359,12 @@ mod tests {
         assert!(check_path("../etc/passwd").is_err());
         assert!(check_path("/etc/passwd").is_err());
         assert!(check_path("a\\b.ts").is_err());
-        assert!(check_path("packages/studio/src/main.rs").is_err());
+        /* 决策 #1469：`.rs` 现在**合法**（走 rustfmt），不再是拒绝项 */
+        assert_eq!(
+            check_path("packages/studio/src/main.rs").ok(),
+            Some(Formatter::Rustfmt)
+        );
+        /* ObjC 没有任何格式化器 ⇒ 仍必须被提前拒绝 */
         assert!(check_path("packages/studio/native/embed_view.m").is_err());
     }
 
@@ -323,8 +421,64 @@ mod tests {
         assert!(out.contains("const a = { x: 1, y: 2 }"), "{out}");
         assert!(out.contains("return 'hi'"), "{out}");
         assert!(!out.contains(';'), "{out}");
-        /* .rs 由 check_path 提前拒绝，不能落到 prettier 的英文报错 */
-        assert!(format_via_cli("packages/studio/src/main.rs", "fn main(){}").is_err());
+        /* `.m`（ObjC）没有任何格式化器 ⇒ 必须被提前拒绝，不能落到 prettier 的英文报错。
+           ★决策 #1469：这条原本用 `.rs`，rs 接了 rustfmt 后改用 `.m`。 */
+        assert!(format_via_cli("packages/studio/native/embed_view.m", "int a;").is_err());
+    }
+
+    /// ★决策 #1469：`.rs` **真跑 rustfmt**（第二条 Tier 2 模板的实证）。
+    /// 没装 rustfmt 就打印后跳过——不把"环境缺失"伪装成通过。
+    #[test]
+    fn formats_rust_with_real_rustfmt() {
+        let src = "fn main(){let a=1;println!(\"{}\",a);}\n";
+        let out = match format_via_cli("packages/studio/src/__fmt_probe.rs", src) {
+            Ok(o) => o,
+            Err(e) if e.contains("找不到 rustfmt") => {
+                eprintln!("skip: {e}");
+                return;
+            }
+            Err(e) => panic!("真跑 rustfmt 应成功：{e}"),
+        };
+        assert!(out.contains("fn main() {"), "{out}");
+        assert!(out.contains("let a = 1;"), "{out}");
+        assert!(out.contains("println!(\"{}\", a);"), "{out}");
+    }
+
+    /// ★★决策 #1469 的**安全前提**：语法错误时 rustfmt 返回非零且 stdout 为空
+    /// （实测 rc=1 / 0 字节）。若它返回 0，我们就会把空内容 dispatch 回编辑器
+    /// ——那等于**清空用户文件**。所以这条必须单独判。
+    #[test]
+    fn rustfmt_syntax_error_is_rejected_not_silently_empty() {
+        let e = match format_via_cli("packages/studio/src/__fmt_probe.rs", "fn main(){let a=;}\n") {
+            Ok(o) => panic!("语法错误不该成功，却返回了 {} 字节", o.len()),
+            Err(e) => e,
+        };
+        assert!(e.contains("格式化失败"), "{e}");
+    }
+
+    /// ★决策 #1469：新增 `Formatter` 后，表从两张变三张 ⇒ 必须**机器检查**不变量，
+    /// 否则三张手写表迟早互相矛盾（一个说能格式化、一个说必须拒绝）。
+    #[test]
+    fn formatter_tables_are_consistent() {
+        for ext in crate::fs_guard::LIST_EXT {
+            let path = format!("x.{ext}");
+            match formatter_for(&path) {
+                Ok(Formatter::Rustfmt) => {
+                    assert_eq!(ext, "rs", "{ext} 被判给 rustfmt 但不是 rs")
+                }
+                Ok(Formatter::Prettier) => assert!(
+                    !NO_PARSER_EXT.contains(&ext),
+                    "{ext} 既被判给 prettier 又出现在拒绝表"
+                ),
+                Err(_) => assert!(NO_PARSER_EXT.contains(&ext), "{ext} 被拒却不在拒绝表里"),
+            }
+        }
+        for ext in NO_PARSER_EXT {
+            assert!(
+                formatter_for(&format!("x.{ext}")).is_err(),
+                "{ext} 在拒绝表里却仍被判给了格式化器"
+            );
+        }
     }
 
     /// ★决策 #1463：**证明执行阶段不依赖 PATH**。
@@ -405,5 +559,50 @@ mod tests {
         assert!(out.status.success(), "GUI 最小环境判据失败：\n{text}");
         // 光 exit 0 不够：filter 写错会「0 tests」也绿 ⇒ 必须确认真的跑了 1 条
         assert!(text.contains("1 passed"), "判据没真正跑到（test filter 失配？）：\n{text}");
+    }
+
+    /// ★★决策 #1469：**真·GUI 环境**下 `.rs` 端到端——覆盖「解析 rustfmt」这一步。
+    /// 与上一条同构（`env_clear()` 重开本测试二进制），走 rustfmt 分支。
+    /// ★这条要挡的正是 #1463/#1464 栽过的坑：**静态绿 + 单测绿，真机 GUI 里找不到可执行文件**。
+    /// （`~/.cargo/bin` 在 `child_path_from` 的硬编码位里，这正是本条要证明的事。）
+    #[test]
+    fn rustfmt_gui_minimal_env_end_to_end() {
+        const FLAG: &str = "PROTEUS_RUSTFMT_GUI_CHILD";
+        const NAME: &str = "format::tests::rustfmt_gui_minimal_env_end_to_end";
+        if std::env::var_os(FLAG).is_some() {
+            match format_via_cli("packages/studio/src/__fmt_probe.rs", "fn main(){let a=1;}\n") {
+                Ok(out) => assert!(out.contains("fn main() {"), "{out}"),
+                /* 真机没装 rustfmt 属环境缺失、不是缺陷；但**必须显式说出来**，
+                   不能静默通过（否则这条判据就成了"什么都不证明"的假绿）。 */
+                Err(e) if e.contains("找不到 rustfmt") => eprintln!("skip: {e}"),
+                Err(e) => panic!("GUI 最小环境下格式化 .rs 失败：{e}"),
+            }
+            return;
+        }
+        let Some(home) = std::env::var_os("HOME") else {
+            eprintln!("skip: 无 HOME");
+            return;
+        };
+        let out = std::process::Command::new(std::env::current_exe().expect("测试二进制"))
+            .args(["--exact", NAME, "--nocapture"])
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("HOME", home)
+            .env(FLAG, "1")
+            .output()
+            .expect("起最小环境子进程");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.status.success(), "GUI 最小环境（rustfmt）判据失败：\n{text}");
+        assert!(text.contains("1 passed"), "判据没真正跑到（test filter 失配？）：\n{text}");
+        /* ★子进程 skip 也算 `1 passed` ⇒ 必须额外排除，否则这条判据在"没装 rustfmt"的机器上
+           永远绿，等于什么都不证明（本仓"判据通过 ≠ 功能可用"的同族陷阱）。 */
+        assert!(
+            !text.contains("skip:"),
+            "子进程跳过了（最小环境里没找到 rustfmt），本条未真正证明任何事：\n{text}"
+        );
     }
 }

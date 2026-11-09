@@ -17,7 +17,9 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const TS_FILE = 'packages/studio/ui/src/bridge.ts'
-const RS_FILE = 'packages/studio/src/main.rs'
+/** ★决策 #1469：`.rs` 已由 rustfmt 接管（不再是"拒绝路径"），改用 ObjC 文件做拒绝用例。
+ *  `embed_view.m` 在 `LIST_EXT` 里（文件树可见、点得到），但没有任何格式化器。 */
+const REJECT_FILE = 'packages/studio/native/embed_view.m'
 /** CM 对「末尾换行」是否多渲染一个空行元素不稳定 ⇒ 比较时统一去掉尾部换行 */
 const norm = (s) => String(s ?? '').replace(/\n+$/, '')
 
@@ -45,6 +47,10 @@ function staticParity(studioDir, cfg) {
   const fmt = read('ui/src/editorFormat.ts')
   const main = read('src/main.rs')
   const rs = read('src/format.rs')
+  /* ★决策 #1468/#1469：命令装配已下沉到 `proc_template`，所以"管道/绝对路径"这两条的
+     证明位置换了文件 —— 判据必须跟着真实位置走，否则要么假绿（查一个不存在的字符串），
+     要么假红（像本次这样：字符串搬走了但性质还在）。 */
+  const tpl = read('src/proc_template.rs')
   const ios = read('src/ios_stream.rs')
   return {
     action: kb.includes("| 'editor.formatDocument'") && kb.includes(`{ id: 'editor.formatDocument',`),
@@ -54,18 +60,30 @@ function staticParity(studioDir, cfg) {
     oneImpl: (fmt.match(/export async function formatDocument/g) ?? []).length === 1,
     dispatch: fmt.includes('view.dispatch(') && fmt.includes('mapPos('),
     handler: main.includes('mod format;') && main.includes('format::format_text,'),
-    noDiskWrite: rs.includes('Stdio::piped()') && rs.includes('--stdin-filepath') && !rs.includes('std::fs::write'),
+    /* ★决策 #1468：`Stdio::piped()` 已下沉到 proc_template::assemble。
+       "不写盘"这条**两边都要查**：format.rs 不许写盘，模板层也不许写盘。 */
+    noDiskWrite:
+      tpl.includes('Stdio::piped()') &&
+      rs.includes('--stdin-filepath') &&
+      !rs.includes('std::fs::write') &&
+      !tpl.includes('std::fs::write'),
     /* ★Option 改写字母时按物理键码回落（真机 ⇧⌥F 能命中，而 CDP 按键本来就会假绿） */
     altSafe: kb.includes("e.altKey && /^Key[A-Z]$/.test(e.code"),
-    sharedArgs: cfg.args.includes('--single-quote') && cfg.args.includes('--no-semi') && cfg.args.includes('100') && cfg.noParser.includes('rs'),
+    /* ★决策 #1469：`.rs` 已移出拒绝表（改由 rustfmt 处理），改用 `.m` 验证"拒绝表被读到了" */
+    sharedArgs: cfg.args.includes('--single-quote') && cfg.args.includes('--no-semi') && cfg.args.includes('100') && cfg.noParser.includes('m'),
     /* ★决策 #1463：GUI 不继承终端 PATH ⇒ 不许再执行 `.bin/prettier` 那个 sh wrapper。
-       静态只证明「代码形态」，真跑证明见 ㊿f 与本模块 Rust 单测，两者缺一都会假绿。 */
+       静态只证明「代码形态」，真跑证明见 ㊿f 与本模块 Rust 单测，两者缺一都会假绿。
+       ★决策 #1468/#1469：`Command::new(node)` 改由 `proc_template::assemble` 装配，
+       所以这里改查**证据链**：node 仍由三层解析得到（`node_for_prettier()`），
+       并被原样交给 assemble（`assemble(&node,`）——绝对路径这条性质没有丢。 */
     guiNode:
       rs.includes('pub const PRETTIER_JS') &&
       !rs.includes('pub const PRETTIER_BIN') &&
       rs.includes('ios_stream::child_path()') &&
       rs.includes('ios_stream::which(') &&
-      rs.includes('Command::new(node)') &&
+      rs.includes('let node = node_for_prettier()?;') &&
+      rs.includes('assemble(&node,') &&
+      tpl.includes('Command::new(program)') &&
       rs.includes('env_clear()'),
     sharedPath: ios.includes('pub(crate) fn child_path') && ios.includes('pub(crate) fn which'),
     /* ★决策 #1464：#1463 真机仍失败 —— 登录 shell PATH 与 12 个硬编码目录里都没有
@@ -109,7 +127,11 @@ export async function checksFormat(page, studioDir) {
   /** 真跑 CLI：前端 IPC 的回包与 expected 都出自这一个函数，不手写格式化结果。 */
   const runPrettier = (p, text) => {
     const ext = String(p).split('.').pop().toLowerCase()
-    if (cfg.noParser.includes(ext)) throw new Error(`暂不支持 .${ext} 格式化（prettier 没有对应 parser）`)
+    /* ★决策 #1469：`.rs` 已不在此表（走 rustfmt）。**桩这里不模拟 rustfmt** ——
+       UI 判据只覆盖"真实键盘 → IPC → buffer → ⌘Z"这一段，`.rs` 的格式化验由
+       `cargo test format::tests::formats_rust_with_real_rustfmt` 真跑 rustfmt 覆盖。
+       两边分工，不是漏测。 */
+    if (cfg.noParser.includes(ext)) throw new Error(`暂不支持 .${ext} 格式化（Studio 未接该语言的格式化器）`)
     if (!p || p.startsWith('/') || p.includes('..')) throw new Error(`非法路径：${p}`)
     return execFileSync(process.execPath, [cfg.js, ...cfg.args, '--stdin-filepath', p], {
       input: text,
@@ -191,8 +213,8 @@ export async function checksFormat(page, studioDir) {
   await page.waitForTimeout(320)
   const doc4 = await doc()
 
-  // ⑤ 错误路径：.rs 没有 parser ⇒ 必须给「格式化失败」提示且 buffer 一个字不变
-  await page.click(`#codeFiles button[data-file="${RS_FILE}"]`)
+  // ⑤ 错误路径：`.m`（ObjC）没有任何格式化器 ⇒ 必须给「格式化失败」提示且 buffer 一个字不变
+  await page.click(`#codeFiles button[data-file="${REJECT_FILE}"]`)
   await page.waitForTimeout(220)
   const rsBefore = await doc()
   await page.locator('.cm-content').click()
@@ -255,7 +277,7 @@ export async function checksFormat(page, studioDir) {
 
   return [
     [
-      `㊿c 格式化文档（决策 #1462 · 真实键盘 + 真 prettier 回包）：⇧⌥F → ${first?.path ?? '未调用'} · buffer ${norm(doc1).slice(0, 24)}→${norm(doc2).slice(0, 24)} · ⌘Z 回退=${norm(doc3) === norm(doc1)} · 右键菜单=${hasFormatItem}/${norm(doc4) === norm(expected)} · .rs 拒绝=${errToast}/buffer不变=${norm(rsAfter) === norm(rsBefore)}`,
+      `㊿c 格式化文档（决策 #1462 · 真实键盘 + 真 prettier 回包）：⇧⌥F → ${first?.path ?? '未调用'} · buffer ${norm(doc1).slice(0, 24)}→${norm(doc2).slice(0, 24)} · ⌘Z 回退=${norm(doc3) === norm(doc1)} · 右键菜单=${hasFormatItem}/${norm(doc4) === norm(expected)} · .m 拒绝=${errToast}/buffer不变=${norm(rsAfter) === norm(rsBefore)}`,
       keyOk && errToast && norm(rsAfter) === norm(rsBefore) && errCalls === 1,
     ],
     [
