@@ -110,6 +110,17 @@ export interface FileStat {
   project: ProjectInfo | null
   /** 该目录**所属**的最近项目根（决策 #1475）；仓库根自身没有所属 */
   owner: ProjectRef | null
+  /** 文件角色 + 结构摘要（决策 #1476）：普通源码与目录都是 null */
+  brief: FileBrief | null
+}
+
+/** 文件摘要（决策 #1476）。★`label` / `facts` 的文案由 Rust 给：文案表只留一份。 */
+export interface FileBrief {
+  /** test / entry / config / doc / generated */
+  role: string
+  label: string
+  /** 结构事实（`.md` 的标题骨架等），可能为空 */
+  facts: string[]
 }
 
 /** 项目卡数据（决策 #1475）。★`label` 由 Rust 给：kind→文案的映射只留一份，两处表必然漂移。 */

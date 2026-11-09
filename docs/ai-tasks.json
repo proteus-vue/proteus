@@ -4326,6 +4326,32 @@
         "T-studio-file-hover"
       ],
       "note": "【done · 决策 #1475（2026-11-09）】用户：「项目根目录的预览是不是可以做单独的类型？或者自动检测是不是一个项目类型？」★做法：**不新增 IPC**——`FileStat` 加 `project`（自身标记）/`owner`（所属项目根）两个字段。理由：`main.rs` 已 997 行贴线（硬上限 1000），且 #1470 的 capability 映射表刚把 62 条命令逐条落位，多一条就多维护一行。★标记表 `PROJECT_MARKERS` 9 种、顺序即优先级：tauri→harmony→gradle→swift→cargo→pnpm-workspace→npm→go→python。**Tauri 必须排在 cargo 前**（Tauri 目录同时有 tauri.conf.json 与 Cargo.toml，报「Rust crate」是降级信息）。★显示名优先级：Tauri `productName` > `package.json.name` > `Cargo.toml [package].name`（Cargo 名常是 `xxx-shell` 内部命名）。★`owner` 往上找最近项目根，**只在仓库沙箱内走**（`starts_with(root)`），否则仓库外的 package.json 会被当成「所属」。仓库根自己无 owner；`packages` 那一行的「所属」就是根的入口（ROOTS 只列三个子目录，根在树上没有单独一行）。★依赖/脚本数只有 package.json 能算，其他类型 None（不猜）；Cargo.toml 只取 `[package]` 段，先判段头再判键。★判据：Rust `project_probe_by_markers` + `owner_walks_up_inside_sandbox_only`；面板门禁 **㊿h**（悬停 packages/studio → Tauri 项目卡；悬停 packages → 所属 proteus-vue）。★破坏性验证 2 条精确翻红：① `if kind.is_empty() || true`（优先级失效）⇒ 报 `left cargo / right tauri`；② 桩里 PROJ_STUB 键错位到 packages/studio/ui ⇒ 仅 ㊿h 红、其余 76 绿。★判据：check:studio-panel **77 绿 0 红** · cargo test **48 通过/1 失败**（唯一红为 #1460 既存）· check-studio-panel.mjs 仍 998 行（判据全落在 hover 模块）。★诚实边界：只对目录识别（文件不查）；不解析构建系统细节；标记改动不主动失效（按会话缓存）；仓库根在树上仍无单独一行（需 ROOTS 扩容，另议）。【Handoff】- 做到哪：Rust 识别 + 卡片渲染 + 桩 + 判据 + 破坏性验证。- 未做：ROOTS 扩容让项目根成为可点节点；文件也显示所属。- 下一步：真机看一眼卡片排版；若要「项目根可点」，先定 ROOTS 该含哪些目录。"
+    },
+    {
+      "id": "T-studio-file-brief",
+      "title": "文件摘要：角色判定 + .md 骨架 + 大文件行数流式统计（㊿i）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/file_brief.rs",
+        "packages/studio/src/fs_guard.rs",
+        "packages/studio/src/main.rs",
+        "packages/studio/ui/src/bridge.ts",
+        "packages/studio/ui/src/panels/FileHoverCard.vue",
+        "packages/studio/ui/src/icons/StudioIcon.vue",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-stub.mjs"
+      ],
+      "decision": 1476,
+      "verification": "cd packages/studio && cargo test file_brief && cargo test streaming_line_count && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-file-hover",
+        "T-studio-project-detect"
+      ],
+      "note": "【done · 决策 #1476（2026-11-09）】两件事同批：① 用户批准批次 1（角色 + 文档骨架）；② 用户报缺陷「大文件显示-行，现在总以为是1行」。★「—」必须废：含糊占位符会被当成数值读，实际意思是「我没数」⇒ 超过 8MB 明确显示「未统计」（不做假数据的 UI 版）。★行数上限 64KB→8MB：64KB~8MB 走 256KB 分块流式数换行符（不驻留全文），>8MB 才回 None。判据 `streaming_line_count_matches_inline` 用**两条独立实现对拍**（300KB 跨块、末行不带换行），不是同一函数算两遍。★一次读取两处消费：数行与摘要共用同一份 text（原来数行自己 read 一遍）。★新增 `file_brief.rs` 而非塞 `fs_guard.rs`（后者已 838 行贴 1000 上限），职责也不同。★角色判定纯路径、顺序即优先级：generated（dist/target/prebuilt/node_modules/.min./.generated.）→test（.test./.spec./_test.rs/tests 目录）→config（9 个已知名 + .config.）→doc（.md/.mdx）→entry（index/main/mod/App.vue）→**普通源码不显示**（role 回 None，每张卡都写「源码」是噪音）。★doc 排在 entry 前（docs/index.md 是文档）；generated 排最前（dist 里的 .md 是生成物不是文档）。★`.md` 骨架：一/二级标题数 + 首标题（按字符截 24，中文不能按字节切）；**跳过围栏代码块**——本仓文档大量 ```sh，段内 `# 注释` 会被算成一级标题，错的摘要比没有更糟。★判据：Rust file_brief 4 条 + streaming 对拍 1 条 + 面板 **㊿i**（App.vue→角色入口；12MB .m→未统计且不含「— 行」，两条都断）。★破坏性验证：① fenced=!fenced 改 false ⇒ 仅 md_facts_skip_fenced_code 红，报错原文显示多算了围栏内注释；② UI 改回「— 行」⇒ 仅 ㊿i 红、其余 77 绿。★判据：check:studio-panel **78 绿 0 红** · cargo test **53 通过/1 失败**（唯一红为 #1460 既存）。★诚实边界：角色只看路径（内容级 AUTO-SYNCED 未做）；.md 只数 # / ##（### 不统计）；摘要只在文件树悬停；.vue/.ts/.rs 结构摘要属批次 2/3 未做；>8MB 仍「未统计」（如实承认）。【Handoff】- 做到哪：角色 + md 骨架 + 行数流式 + 判据 + 破坏性验证。- 未做：批次 2（.vue props / .ts 导出）、批次 3（.rs pub 符号）。- 下一步：真机看卡片；批次 2 开工前先定「抽不出就不显示」的边界。"
     }
   ]
 }

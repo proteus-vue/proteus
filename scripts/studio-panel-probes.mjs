@@ -786,10 +786,15 @@ export async function probeFileHover(page) {
   await page.waitForTimeout(520)
   const onOwner = await read()
 
-  // ⑤ 移开指针：卡片消失
+  // ⑤ 悬停大文件（桩里 `.m` 的 lines=null）：卡片必须说「未统计」而不是含糊的「—」
+  await page.hover('#codeFiles button[data-file="packages/studio/native/embed_view.m"]')
+  await page.waitForTimeout(520)
+  const onBig = await read()
+
+  // ⑥ 移开指针：卡片消失
   await page.mouse.move(5, 5)
   await page.waitForTimeout(320)
   const gone = await read()
 
-  return { onApp, onMain, onProj, onOwner, gone }
+  return { onApp, onMain, onProj, onOwner, onBig, gone }
 }

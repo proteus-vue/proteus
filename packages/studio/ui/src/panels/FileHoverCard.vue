@@ -111,6 +111,12 @@ const projFacts = computed(() => {
   if (p.scripts !== null) out.push(`${p.scripts} 脚本`)
   return out
 })
+
+/* ===== 文件角色 + 结构摘要（决策 #1476）=====
+ * 「鼠标一扫就知道这文件的大概」：角色回答"要不要打开它"，结构回答"打开会看到什么"。
+ * ★普通源码没有 brief（Rust 侧就不生成）——绝大多数文件都是源码，每张卡都写"源码"是噪音。
+ */
+const brief = computed(() => props.stat?.brief ?? null)
 </script>
 
 <template>
@@ -172,14 +178,28 @@ const projFacts = computed(() => {
         </div>
       </template>
 
-      <!-- 文件：行数+大小 / 修改时间 / 类型；敏感文件单独一行 -->
+      <!-- 文件：角色 / 结构 / 行数+大小 / 修改时间 / 类型；敏感文件单独一行 -->
       <template v-else>
+        <!-- 角色：只在不普通时出现（测试/入口/配置/文档/生成物） -->
+        <div v-if="brief" class="fv-row">
+          <StudioIcon name="tag" :size="13" />
+          <span class="fv-k">角色</span>
+          <span class="fv-v">{{ brief.label }}</span>
+        </div>
+        <!-- 结构：目前只有 `.md` 有（标题骨架），其余类型 Rust 侧就给空数组 -->
+        <div v-if="brief?.facts?.length" class="fv-row">
+          <StudioIcon name="rows" :size="13" />
+          <span class="fv-k">结构</span>
+          <span class="fv-v">{{ brief.facts.join(' · ') }}</span>
+        </div>
         <div class="fv-row">
           <StudioIcon name="rows" :size="13" />
           <span class="fv-k">规模</span>
           <span class="fv-v">
             <template v-if="stat">
-              {{ stat.lines === null ? '— 行' : `${stat.lines} 行` }}
+              <!-- ★决策 #1476：不再用「—」——那个占位符会被读成"1 行"。
+                   超过 8MB 明确说"未统计"，宁可承认没数，也不给一个可被误解的符号。 -->
+              {{ stat.lines === null ? '未统计' : `${stat.lines} 行` }}
               <span class="fv-sub">{{ humanSize(stat.size) }}</span>
             </template>
             <template v-else>读取中…</template>

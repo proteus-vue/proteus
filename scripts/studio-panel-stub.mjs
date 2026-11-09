@@ -196,17 +196,25 @@ export function stubTauri(payload) {
             }
           }
           const LINE_STUB = { 'App.vue': 371, 'main.rs': 997, 'bridge.ts': 551 }
+          /* ★决策 #1476：`.m` 桩成"未统计"（lines: null）——判据要能验"大文件不显示含糊的「—」"。
+             角色/摘要也按文件区分：App.vue 是入口，bridge.ts 是普通源码（**必须没有 brief**，
+             否则"每张卡都写源码"这种噪音没人能测出来）。 */
+          const BRIEF_STUB = {
+            'App.vue': { role: 'entry', label: '入口', facts: [] },
+            'main.rs': { role: 'entry', label: '入口', facts: [] },
+          }
           return {
             path: p,
             kind: 'file',
-            size: 8421,
+            size: name === 'embed_view.m' ? 12 * 1024 * 1024 : 8421,
             mtime_us: 1762666666000000,
             sensitive: /^\.env/.test(name) || /^id_rsa$/.test(name) || /\.pem$/.test(name),
             ext: name.split('.').pop()?.toLowerCase() ?? '',
-            lines: LINE_STUB[name] ?? 42,
+            lines: name === 'embed_view.m' ? null : (LINE_STUB[name] ?? 42),
             children: null,
             project: null,
             owner: null,
+            brief: BRIEF_STUB[name] ?? null,
           }
         }
         // ★文件列表也要桩：代码视图启动时先 list_files 再 default open

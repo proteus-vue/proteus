@@ -12,7 +12,7 @@
 import { probeFileHover } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
-  const { onApp, onMain, onProj, onOwner, gone } = await probeFileHover(page)
+  const { onApp, onMain, onProj, onOwner, onBig, gone } = await probeFileHover(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -25,6 +25,12 @@ export async function checksHover(page) {
     /Proteus Studio/.test(onProj?.text ?? '') &&
     /tauri\.conf\.json/.test(onProj?.text ?? '')
   const ownerOk = /所属/.test(onOwner?.text ?? '') && /proteus-vue/.test(onOwner?.text ?? '')
+
+  /* ㊿i 角色 + 大文件行数（决策 #1476）
+     ★「未统计」与「不含『— 行』」**两条都要断**：只断前者的话，把「—」留在别处也能绿；
+       只断后者的话，什么都不显示也能绿。 */
+  const roleOk = /角色/.test(onApp?.text ?? '') && /入口/.test(onApp?.text ?? '')
+  const bigOk = /未统计/.test(onBig?.text ?? '') && !/—\s*行/.test(onBig?.text ?? '')
 
   return [
     [
@@ -40,6 +46,12 @@ export async function checksHover(page) {
         projOk ? 'Tauri 桌面应用/Proteus Studio' : '项目卡未命中'
       } · 普通目录→${ownerOk ? '所属 proteus-vue' : '所属未命中'}`,
       projOk && ownerOk,
+    ],
+    [
+      `㊿i 文件角色 + 大文件行数（决策 #1476）：App.vue→角色=${
+        roleOk ? '入口' : '未命中'
+      } · 12MB 文件→${bigOk ? '未统计（不含「— 行」）' : '仍显示含糊占位'}`,
+      roleOk && bigOk,
     ],
   ]
 }

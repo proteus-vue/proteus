@@ -280,6 +280,8 @@ pub struct FileStat {
     pub project: Option<ProjectInfo>,
     /// 该目录**所属**的最近项目根（决策 #1475）；仓库根自身没有所属
     pub owner: Option<ProjectRef>,
+    /// 文件角色 + 结构摘要（决策 #1476）：纯源码与目录都没有——**没有信息就不占一行**
+    pub brief: Option<crate::file_brief::FileBrief>,
 }
 
 /// 项目属性（决策 #1475）—— 目录**自身带项目标记**时，悬停显示项目卡而不是"几个文件"。
@@ -474,8 +476,15 @@ fn toml_pkg_field(text: &str, key: &str) -> Option<String> {
     None
 }
 
-/// 数行数的上限（64KB）。超了就回 `None`，不读。
-const LINE_COUNT_MAX: u64 = 64 * 1024;
+/// 整篇读进内存的上限（64KB）。超过它就不读全文——**摘要**（`file_brief`）与精确数行
+/// 都需要正文；低于它的文件一次读完、两件事共用同一份文本（不重复 I/O）。
+const INLINE_READ_MAX: u64 = 64 * 1024;
+
+/// 流式数行的上限（8MB）。决策 #1476：原来超过 64KB 直接回 `None`，卡片显示「—」，
+/// 用户反馈"总以为是 1 行"——**含糊的占位符比没有更糟**。
+/// 现在 64KB~8MB 走**分块数换行符**（每次 256KB，不驻留全文）；超过 8MB 仍回 `None`，
+/// 但前端会明确显示「未统计」，不再用「—」。
+const LINE_COUNT_STREAM_MAX: u64 = 8 * 1024 * 1024;
 
 pub fn file_stat(path: String) -> Result<FileStat, String> {
     let p = resolve_in_repo(&path)?;
@@ -483,13 +492,32 @@ pub fn file_stat(path: String) -> Result<FileStat, String> {
     let is_dir = md.is_dir();
     let size = md.len();
 
-    let lines = if is_dir || size > LINE_COUNT_MAX {
+    /* ★一次读取、两处消费（决策 #1476）：数行与摘要共用这份文本。
+       原来数行自己 `read` 一遍，摘要若再加一遍就是两次 I/O——白花。 */
+    let text = if is_dir || size > INLINE_READ_MAX {
         None
     } else {
-        count_lines(&p)
+        std::fs::read_to_string(&p).ok()
+    };
+
+    let lines = if is_dir {
+        None
+    } else if let Some(t) = &text {
+        Some(count_lines_in(t))
+    } else if size <= LINE_COUNT_STREAM_MAX {
+        count_lines_stream(&p)
+    } else {
+        None
     };
 
     let children = if is_dir { Some(count_children(&p)?) } else { None };
+
+    /* 文件摘要（决策 #1476）：角色只看路径 ⇒ 大文件（text=None）也照样有角色 */
+    let brief = if is_dir {
+        None
+    } else {
+        crate::file_brief::file_brief(&path, text.as_deref())
+    };
 
     /* 项目识别（决策 #1475）：只对目录做。文件不查——一次悬停要读两份清单只为回答
        "这个文件属于哪个包"，而文件卡已经在答"它是什么类型、多少行"。 */
@@ -518,14 +546,42 @@ pub fn file_stat(path: String) -> Result<FileStat, String> {
         children,
         project,
         owner,
+        brief,
     })
 }
 
 /// 数换行符。末行没有换行符也要算一行（与编辑器显示一致）。
-fn count_lines(p: &std::path::Path) -> Option<usize> {
-    let bytes = std::fs::read(p).ok()?;
+fn count_lines_in(text: &str) -> usize {
+    let bytes = text.as_bytes();
     let mut n = bytes.iter().filter(|b| **b == b'\n').count();
     if !bytes.is_empty() && !bytes.ends_with(b"\n") {
+        n += 1;
+    }
+    n
+}
+
+/// 分块数换行符（决策 #1476）：不把大文件读进内存，只累加 `\n`。
+/// 上限由调用方先用 `size` 卡（`LINE_COUNT_STREAM_MAX`），这里不再判断。
+///
+/// ★跨块边界不能漏：末块是否以 `\n` 结尾要单独记（`tail_is_nl`），
+///   否则"末行没有换行符"这一行会少算。
+fn count_lines_stream(p: &std::path::Path) -> Option<usize> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(p).ok()?;
+    let mut buf = vec![0u8; 256 * 1024];
+    let mut n = 0usize;
+    let mut tail_is_nl = true;
+    let mut saw_any = false;
+    loop {
+        let k = f.read(&mut buf).ok()?;
+        if k == 0 {
+            break;
+        }
+        saw_any = true;
+        n += buf[..k].iter().filter(|b| **b == b'\n').count();
+        tail_is_nl = buf[k - 1] == b'\n';
+    }
+    if saw_any && !tail_is_nl {
         n += 1;
     }
     Some(n)
@@ -720,6 +776,32 @@ mod tests {
         /* ★根目录自己不该有"所属项目"：往上一步就越出沙箱，
            否则仓库外面某个 package.json 会被当成"所属项目"——那是越界信息。 */
         assert!(find_owner(&root, &root).is_none());
+    }
+
+    /// 决策 #1476：分块数行必须与"整篇数"**逐行一致**——包括跨块边界与末行无换行。
+    ///
+    /// ★两条独立实现互相对拍（一条数 slice，一条流式读 256KB 块），比"拿同一个函数
+    ///   算两遍"有意义得多。文件刻意造到 300KB：跨过 256KB 块边界。
+    #[test]
+    fn streaming_line_count_matches_inline() {
+        let dir = std::env::temp_dir().join(format!("proteus-lines-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("建临时目录");
+        let f = dir.join("big.txt");
+
+        let mut s = String::new();
+        while s.len() < 300 * 1024 {
+            s.push_str("0123456789abcdef0123456789abcde\n");
+        }
+        /* ★末行**不带**换行：这是最容易少算 1 行的位置 */
+        s.push_str("tail-no-newline");
+        std::fs::write(&f, &s).expect("写临时文件");
+
+        assert_eq!(
+            count_lines_stream(&f),
+            Some(count_lines_in(&s)),
+            "分块数行与整篇数行必须一致（含末行无换行）"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
