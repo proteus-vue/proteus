@@ -1,0 +1,173 @@
+{
+  "note": "Proteus Studio 插件 capability 表 —— ★唯一真源。TS 侧（MCP 工具）直接读本文件；Rust 侧安装闸将来必须读同一份（禁止再抄一份，否则 MCP 说通过、宿主拒装 = 判据通过≠功能可用）。来源：G-58 04-capability-model.md + 决策 #1470 的 62 条 IPC 映射。status=proposed 表示『建议新增、G-58 原文没有，须走 05 的版本流程正式收编』；implemented=false 表示『宿主还没有对应实现，插件声明了也跑不起来』。",
+  "version": "0.1.0",
+  "tiers": ["builtin", "trusted", "third-party"],
+  "capabilities": [
+    {
+      "id": "readWorkspace",
+      "grant": "auto",
+      "minTier": "third-party",
+      "reasonRequired": false,
+      "status": "stable",
+      "implemented": true,
+      "summary": "只读工作区文件内容与文件列表（经宿主代理，沙箱内无路径概念）",
+      "commands": ["read_text", "read_text_external", "list_files", "search_text"]
+    },
+    {
+      "id": "writeWorkspace",
+      "grant": "user",
+      "minTier": "third-party",
+      "reasonRequired": true,
+      "requires": "paths",
+      "status": "stable",
+      "implemented": true,
+      "summary": "写工作区内已存在文件的内容（带 mtime 冲突检测与原子替换）",
+      "commands": ["write_text"]
+    },
+    {
+      "id": "writeWorkspace.structure",
+      "grant": "user",
+      "minTier": "third-party",
+      "reasonRequired": true,
+      "status": "proposed",
+      "implemented": true,
+      "summary": "改目录结构：新建/重命名/删除。比改内容危险（误删误改名不可逆），故与 writeWorkspace 分开授权",
+      "commands": ["create_file", "create_dir", "rename_path", "delete_path"]
+    },
+    {
+      "id": "network",
+      "grant": "user",
+      "minTier": "third-party",
+      "reasonRequired": true,
+      "requires": "hosts",
+      "status": "stable",
+      "implemented": false,
+      "summary": "出网，必须带 hosts 白名单（禁裸 * 与多级通配）；白名单在清单加载期校验",
+      "commands": []
+    },
+    {
+      "id": "spawnProcess",
+      "grant": "user",
+      "minTier": "trusted",
+      "reasonRequired": true,
+      "requires": "commands",
+      "status": "stable",
+      "implemented": true,
+      "summary": "按宿主命令模板起子进程（命令与固定参数由宿主持有，插件只能填声明过的占位符）",
+      "commands": ["format_text", "diag_tsc", "diag_eslint", "diag_lsp_start", "diag_lsp_sync", "diag_complete", "diag_definition", "diag_references", "diag_rename", "diag_symbols", "diag_quickinfo", "diag_lsp_stop", "diag_watch_start", "diag_watch_stop", "git_status", "git_head"]
+    },
+    {
+      "id": "terminal",
+      "grant": "user",
+      "minTier": "trusted",
+      "reasonRequired": true,
+      "status": "proposed",
+      "implemented": true,
+      "summary": "内置终端（pty + execve = 任意命令）。★它绕开 spawnProcess 的命令白名单，故必须单列且 trusted 起；第三方插件一律拒装",
+      "commands": ["term_open", "term_write", "term_resize", "term_close", "term_info"]
+    },
+    {
+      "id": "device.attach",
+      "grant": "user",
+      "minTier": "trusted",
+      "reasonRequired": true,
+      "requires": "runtimes",
+      "status": "stable",
+      "implemented": true,
+      "summary": "连接设备/模拟器：枚举、选择、投屏、安装卸载",
+      "commands": ["list_devices", "select_device", "capture_preset", "ios_stream_start", "ios_start_host", "ios_uninstall", "ios_run_state", "ios_stream_hint"]
+    },
+    {
+      "id": "device.input",
+      "grant": "user",
+      "minTier": "trusted",
+      "reasonRequired": true,
+      "status": "stable",
+      "implemented": true,
+      "summary": "向设备注入输入（点击/滑动/按键/长按）。★能在用户设备上『替用户操作』，高危",
+      "commands": ["device_tap", "device_swipe", "ios_tap", "ios_scroll", "ios_key", "ios_longpress", "ios_swipe", "ios_touch_state"]
+    },
+    {
+      "id": "clipboard.read",
+      "grant": "user",
+      "minTier": "trusted",
+      "reasonRequired": true,
+      "status": "proposed",
+      "implemented": true,
+      "summary": "读系统剪贴板内容。★看似『粘贴用的小功能』，但剪贴板里可能是密码/助记词/验证码 ⇒ 数据敏感度 secret（G-59 的原例）",
+      "commands": ["read_clipboard"]
+    },
+    {
+      "id": "clipboard.write",
+      "grant": "user",
+      "minTier": "trusted",
+      "reasonRequired": true,
+      "status": "proposed",
+      "implemented": true,
+      "summary": "写系统剪贴板（可被用来替换用户即将粘贴的内容）",
+      "commands": ["copy_text"]
+    },
+    {
+      "id": "kernel.spiTopology",
+      "grant": "auto",
+      "minTier": "third-party",
+      "reasonRequired": false,
+      "status": "stable",
+      "implemented": false,
+      "summary": "查询 SPI 依赖图与循环检测（只读查询，不是内核控制权）",
+      "commands": []
+    },
+    {
+      "id": "kernel.layerRules",
+      "grant": "auto",
+      "minTier": "third-party",
+      "reasonRequired": false,
+      "status": "stable",
+      "implemented": false,
+      "summary": "查询分层违规检查结果（只读）",
+      "commands": []
+    },
+    {
+      "id": "kernel.conformance",
+      "grant": "auto",
+      "minTier": "third-party",
+      "reasonRequired": false,
+      "status": "stable",
+      "implemented": false,
+      "summary": "查询按端一致性断言（conformance）结果（只读）",
+      "commands": []
+    },
+    {
+      "id": "kernel.deviceImpact",
+      "grant": "auto",
+      "minTier": "third-party",
+      "reasonRequired": false,
+      "status": "stable",
+      "implemented": false,
+      "summary": "查询改动影响的等价类（只读）",
+      "commands": []
+    },
+    {
+      "id": "system.internal",
+      "grant": "auto",
+      "minTier": "builtin",
+      "reasonRequired": false,
+      "status": "stable",
+      "implemented": true,
+      "summary": "调用宿主内部命令（diag/git 等）。仅内置插件可用，第三方声明即拒装",
+      "commands": []
+    }
+  ],
+  "providerKinds": [
+    { "kind": "documentFormatting", "status": "has-channel", "summary": "整篇格式化：入参文本 + 语言，出参格式化后文本", "channel": "format_text" },
+    { "kind": "completion", "status": "has-channel", "summary": "补全项：位置 + 前缀，出参候选列表（label/insertText/detail）", "channel": "diag_complete" },
+    { "kind": "hover", "status": "has-channel", "summary": "悬浮信息：位置，出参 markdown 文本 + 范围", "channel": "diag_quickinfo" },
+    { "kind": "definition", "status": "has-channel", "summary": "跳转定义：位置，出参目标文件 + 行列", "channel": "diag_definition" },
+    { "kind": "reference", "status": "has-channel", "summary": "查找引用：位置，出参引用列表（含是否写引用）", "channel": "diag_references" },
+    { "kind": "rename", "status": "has-channel", "summary": "重命名符号：位置 + 新名，出参跨文件编辑列表", "channel": "diag_rename" },
+    { "kind": "documentSymbol", "status": "has-channel", "summary": "符号导航：出参带层级的符号树", "channel": "diag_symbols" },
+    { "kind": "diagnostics", "status": "has-channel", "summary": "诊断推送：文件 + 条目（severity/message/range）", "channel": "diag_tsc 与 diag_eslint" },
+    { "kind": "foldingRange", "status": "no-channel", "summary": "折叠范围。★Studio 现在由 CodeMirror foldGutter 自算，尚无 Provider 通道", "channel": null },
+    { "kind": "codeAction", "status": "no-channel", "summary": "快速修复。★尚未实现", "channel": null }
+  ]
+}

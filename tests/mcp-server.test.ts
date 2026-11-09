@@ -25,10 +25,10 @@ function validIR(): Record<string, unknown> {
 }
 
 describe('G-36 B1 MCP Server 协议面', () => {
-  it('tools/list：11 工具（只读 10 + 写入 1，write_file 需确认）', () => {
+  it('tools/list：15 工具（只读 14 + 写入 1，write_file 需确认；插件开发 4 个均为只读）', () => {
     const s = makeServer()
     const tools = s.listTools()
-    expect(tools).toHaveLength(11)
+    expect(tools).toHaveLength(15)
     expect(tools.map((t) => t.name)).toEqual([
       'search_primitives',
       'get_primitive',
@@ -41,11 +41,16 @@ describe('G-36 B1 MCP Server 协议面', () => {
       'run_conformance',
       'generate_code',
       'write_file',
+      /* ★决策 #1471：插件开发 4 个（全只读/静态校验，无 install/enable） */
+      'plugin_list_capabilities',
+      'plugin_validate_manifest',
+      'plugin_scaffold',
+      'plugin_describe_provider',
     ])
     const wf = tools.find((t) => t.name === 'write_file')
     expect(wf?.readonly).toBe(false)
     expect(wf?.requireConfirm).toBe(true)
-    expect(tools.filter((t) => t.readonly).length).toBe(10)
+    expect(tools.filter((t) => t.readonly).length).toBe(14)
   })
 
   it('resources/list+read：5 资源（原语目录/token 树/能力矩阵/C-IR Schema/范例）', () => {

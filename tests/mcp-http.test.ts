@@ -90,7 +90,7 @@ describe.skipIf(!HAS_WEB_CRYPTO)('★#682 Streamable HTTP 传输（需 Node ≥2
   it('往返：tools/list(11) + callTool + resources + prompts', async () => {
     ;({ handle, client } = await startPair({ documentLike: await resolveDocumentLike() }))
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(11)
+    expect(tools).toHaveLength(15)
     const call = await client.callTool({ name: 'search_primitives', arguments: { query: 'button' } })
     expect(call.isError).toBeFalsy()
     const { resources } = await client.listResources()
@@ -111,8 +111,8 @@ describe.skipIf(!HAS_WEB_CRYPTO)('★#682 Streamable HTTP 传输（需 Node ≥2
     }
     const [a, b] = await Promise.all([mk(), mk()])
     const [ta, tb] = await Promise.all([a.listTools(), b.listTools()])
-    expect(ta.tools).toHaveLength(11)
-    expect(tb.tools).toHaveLength(11)
+    expect(ta.tools).toHaveLength(15)
+    expect(tb.tools).toHaveLength(15)
     await a.close()
     await b.close()
   }, 30000)
@@ -176,7 +176,7 @@ describe.skipIf(!HAS_WEB_CRYPTO)('★#682 HTTP 鉴权与通道纪律（需 Node 
 describe('★#682 工具清单自洽（HTTP 与 stdio 同源）', () => {
   it('toProtocolTools 输出 11 工具且 write_file readOnly=false', () => {
     const tools = toProtocolTools(createMcpServer())
-    expect(tools).toHaveLength(11)
+    expect(tools).toHaveLength(15)
     expect(tools.find((t) => t.name === 'write_file')!.annotations.readOnlyHint).toBe(false)
   })
 })

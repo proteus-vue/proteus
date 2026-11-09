@@ -4232,6 +4232,31 @@
         "T-studio-rustfmt"
       ],
       "note": "【done · 决策 #1470（2026-11-09）】把 G-58 的抽象 capability 落到 Studio 的 62 条 IPC 命令上（`main.rs::generate_handler!` 逐条数，按实现方式核实归属：git 是 Command::new(\"git\")、search 双路径、term 是 openpty+fork+execve）。★分布：宿主壳 14（不开放）· 只读 4 · 写 5 · 外部进程 16 · 终端 5 · 设备连接 8 · 设备输入 8 · 剪贴板 2 · 内核查询 0。★★两个漏洞：① `term_*` —— spawnProcess 靠命令白名单，而终端是任意命令，**一旦开放白名单形同虚设** ⇒ 新增 `terminal` capability 且 minTier=trusted；② `clipboard` —— 正是 G-59 的原例，read_clipboard 看似无害但剪贴板可能是密码/助记词 ⇒ 数据敏感度 secret。★欠账：G-58 的 `kernel.*` 四项在 Studio **一条命令都没有**。★口径：search_text 能力随环境变化（rg/内置），授权取最宽那条，否则授权结果随机器不同。★落点：04-capability-model.md 新增 §9（188→316 行），verify.sh PASS=40 FAIL=0。★诚实边界：静态映射未改代码；`writeWorkspace.structure`/`terminal`/`clipboard.*` 三个 capability 是**我建议新增的**、G-58 原文没有，须走 05 的版本流程正式收编；归属按当前实现判定，实现变了要重核。【Handoff】- 做到哪：映射表 + 两个漏洞定级建议 + 分组规则。- 未做：没改任何代码；三个新 capability 未进 API 版本定义。- 下一步：kernel.* 四项要么实现要么在文档里标「未实现」（当前是空白）。"
+    },
+    {
+      "id": "T-mcp-plugin-tools",
+      "title": "MCP 加插件开发工具集（4 个只读/静态校验）· 封死「AI 给自己装插件」",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/mcp/src/plugin-tools.ts",
+        "packages/mcp/src/plugin-capabilities.json",
+        "packages/mcp/src/tools.ts",
+        "packages/mcp/src/index.ts",
+        "packages/mcp/tsconfig.build.json",
+        "tests/mcp-plugin-tools.test.ts",
+        "tests/mcp-server.test.ts",
+        "tests/mcp-stdio.test.ts",
+        "tests/mcp-http.test.ts"
+      ],
+      "decision": 1471,
+      "verification": "npx vitest run tests/mcp-plugin-tools.test.ts tests/mcp-server.test.ts tests/mcp-stdio.test.ts tests/mcp-http.test.ts",
+      "branch": null,
+      "related": [
+        "T-plugin-ipc-capability-map"
+      ],
+      "note": "【done · 决策 #1471（2026-11-09）】取证先行：`@proteus-vue/mcp`（G-36 B1）早有 11 个工具但 `grep plugin` 零命中 ⇒ 插件开发是空白，本单是增量不是从零搭。★新增 4 个只读工具：list_capabilities（tier 过滤 + implementedOnly）· validate_manifest（安装闸同规则）· scaffold（只返文本不落盘）· describe_provider（10 个 ProviderKind 通道状态）。★★硬边界：不提供 install/enable/任意执行——MCP 客户端是 AI，能装插件=能给自己装后门；已写成判据（工具名黑名单 /install|enable|activate|uninstall|spawn|exec/i）。★不做 plugin_dry_run（要起进程，等于拆 #1470 的 spawnProcess 边界）。★单一真源：capability 表落 packages/mcp/src/plugin-capabilities.json（15 条 + 10 ProviderKind），Rust 侧安装闸将来必须读同一份；成本仅 resolveJsonModule 一行。★严重度分离：implemented=false 是 **error**（kernel.* 四项，装了也没反应），status=proposed 是 **warning**（terminal/clipboard.*/writeWorkspace.structure）——AI 第一次能知道「这个能力现在用不了」。★判据 16 条含三条核心：工具名黑名单 · scaffold 产物必须能过自己的校验 · 提案只 warning。★连带修正 mcp-server/mcp-stdio/mcp-http 四处 11→15（后三处是 grep 才发现的）⇒ 四文件 58 条全绿。★诚实边界：工具跑在 MCP server 进程，不证明 Studio 安装闸行为一致（校验代码仍是两份，将来应共用 validateManifest）；scaffold 无 Provider 实现桩（入出参未冻结）；**未在真实 MCP 客户端跑过端到端闭环**。【Handoff】- 做到哪：4 工具 + 单一真源表 + 16 条判据 + 四处断言同步。- 未做：端到端（Claude Desktop/Cursor 里让 AI 真写一个插件）；validateManifest 与 Rust 侧共用一份实现；Provider 桩。- 下一步：真实 MCP 客户端跑一次闭环，这才能证明「AI 能按 API 写插件」不是构想。"
     }
   ]
 }

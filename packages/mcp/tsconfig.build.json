@@ -11,6 +11,9 @@
     "rootDir": "src",
     "skipLibCheck": true,
     "esModuleInterop": true,
+    /* 决策 #1471：capability 表以 `plugin-capabilities.json` 为唯一真源（单一真源，
+       禁止在 TS 里再抄一份）。esbuild --bundle 会把它内联进 dist，产物无独立副本。 */
+    "resolveJsonModule": true,
     "types": ["node"]
   },
   "include": ["src"]

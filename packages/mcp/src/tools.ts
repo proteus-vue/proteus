@@ -10,6 +10,9 @@ import {
   primitiveById,
 } from '@proteus-vue/component-ir'
 import type { ComponentIR } from '@proteus-vue/component-ir'
+/* ★决策 #1471：插件开发工具（只读/静态校验）。本文件对它是**运行时依赖**，
+   反向只有 type-only ⇒ 不构成循环。 */
+import { PLUGIN_TOOLS } from './plugin-tools'
 import {
   ENGINES,
   HOST_ENGINE_MATRIX,
@@ -125,7 +128,8 @@ export interface ToolContext {
 
 const SEARCH_MAX = 20
 
-export const MCP_TOOLS: readonly McpToolDefWithHandler[] = [
+/** 既有 11 个工具（G-36 B1）。★对外请用文件末尾的 `MCP_TOOLS`，它已并入插件工具。 */
+const BASE_TOOLS: readonly McpToolDefWithHandler[] = [
   // —— 只读类（默认可用）——
   {
     name: 'search_primitives',
@@ -328,6 +332,17 @@ export const MCP_TOOLS: readonly McpToolDefWithHandler[] = [
     },
   },
 ]
+
+/**
+ * 全部工具 = 既有 11 个 + 插件开发 4 个（决策 #1471）。
+ *
+ * ★插件工具**全是只读或静态校验**，没有 install / enable / 任意能力执行 ——
+ *   MCP 客户端是 AI，若 AI 能装插件，它就能给自己（或别人的仓库）装后门。
+ *   安装与人确认必须留在人这一侧。这与 G-58「提案 API 禁发布」同源：
+ *   危险动作靠能力边界挡，不靠文案提醒。
+ * ★`plugin-tools` 对 `tools` 只有 **type-only** 依赖，所以这里的 import 不构成运行时循环。
+ */
+export const MCP_TOOLS: readonly McpToolDefWithHandler[] = [...BASE_TOOLS, ...PLUGIN_TOOLS]
 
 /** G-30 Tier：引擎在各宿主的最高可用 Tier（1 = 任一宿主 Tier 1） */
 export function engineTier(engine: string): 0 | 1 | 3 {

@@ -59,7 +59,7 @@ describe('★#681 MCP stdio 适配器 · 协议往返（in-memory）', () => {
     const { client, close } = await connectedPair()
     try {
       const { tools } = await client.listTools()
-      expect(tools).toHaveLength(11)
+      expect(tools).toHaveLength(15)
       const names = tools.map((t) => t.name)
       for (const n of ['search_primitives', 'validate_ir', 'run_conformance', 'write_file']) expect(names).toContain(n)
       expect(tools.find((t) => t.name === 'write_file')!.annotations?.readOnlyHint).toBe(false)

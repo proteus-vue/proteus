@@ -4,6 +4,9 @@ export { createMcpServer } from './server'
 export type { McpServerOptions, ProteusMcpServer, McpCallResult } from './server'
 export { MCP_TOOLS, validateToolArgs, capabilityMatrix, engineTier } from './tools'
 export type { McpToolDef, McpToolDefWithHandler, McpToolSchemaProperty, ToolContext } from './tools'
+/* ★决策 #1471：插件开发工具（4 个，全只读/静态校验；无 install/enable）+ manifest 校验器。
+   `validateManifest` 导出是为了让 Studio 安装闸与 MCP 用**同一份**规则——两边各写一套必然漂移。 */
+export { PLUGIN_TOOLS, validateManifest } from './plugin-tools'
 export { MCP_RESOURCES } from './resources'
 export type { McpResource } from './resources'
 export { MCP_PROMPTS } from './prompts'

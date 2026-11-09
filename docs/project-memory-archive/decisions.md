@@ -16547,4 +16547,42 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     不能直接当成既有 API 用；③ 62 条命令的归属按**当前实现**判定，将来若 `git_status` 改成读
     `.git/` 就该降为 `readWorkspace`——映射表有保质期，实现变了要重核。
 
+1471. **★★MCP 加「插件开发」工具集（4 个只读/静态校验）· 让 AI 按真实 API 写插件，同时封死「AI 给自己装插件」**（2026-11-09 · 用户「MCP 服务，把插件能力封装对外提供，让开发者能用 AI 自动实现自己的插件」）:
+  - **前提取证（先查再动）**：`@proteus-vue/mcp`（G-36 B1）**早就存在**——11 个工具覆盖
+    "Agent 写 Proteus **业务页面**"（原语 / design token / 能力矩阵 / IR 校验 / conformance /
+    代码生成 / `write_file`），配套 `tool_policy`（写入双闸）、限流 60/min、参数 schema 校验、
+    路径逃逸防护。★但 `grep plugin` 在 `packages/mcp/src/*.ts` **零命中** ⇒ 插件开发是空白。
+  - **新增 4 个工具（全 `readonly`，不落盘、不起进程）**：
+    `plugin_list_capabilities`（按 tier 过滤 + `implementedOnly`）·
+    `plugin_validate_manifest`（**安装闸的同一套规则**）·
+    `plugin_scaffold`（生成 manifest + README，**只返文本**）·
+    `plugin_describe_provider`（10 个 ProviderKind 的通道状态）。
+  - **★★硬边界：不提供 `install` / `enable` / 任意能力执行**。MCP 客户端是 **AI**——若 AI 能装插件，
+    它就能给自己（或别人的仓库）装后门，G-58 整套权限模型会从侧门失效。
+    ★这条写成了**判据**（工具名黑名单 `/install|enable|activate|uninstall|spawn|exec/i`），
+    防的不是现在，是将来有人顺手加一个。
+  - **★为什么不做 `plugin_dry_run`（真跑格式化/Provider）**：它要起进程，等于把 #1470 刚定级的
+    `spawnProcess` 边界从侧门拆掉。要做也只能由**人**在 Studio 里点一下，不能由 MCP 直接调。
+  - **★单一真源**：capability 表落 `packages/mcp/src/plugin-capabilities.json`
+    （15 条 capability + 10 个 ProviderKind），TS 直接读；**Rust 侧安装闸将来必须读同一份**。
+    相比"两边各抄一份"，多花的成本只有 `resolveJsonModule: true` 一行
+    （esbuild `--bundle` 会把它内联进 dist，产物无独立副本，真源始终在源码树）。
+  - **★严重度必须分开（这条是本单最有价值的设计）**：
+    `implemented: false`（4 个 `kernel.*`）是 **error** —— 宿主没有对应命令，装上也是"点了没反应"；
+    `status: proposed`（`terminal` / `clipboard.*` / `writeWorkspace.structure`）是 **warning** ——
+    方向对但未收编，不该阻断安装。
+    ⇒ AI 第一次能知道"这个能力**现在根本用不了**"，而不是照文档幻想出一个跑不起来的插件。
+  - **判据**：`tests/mcp-plugin-tools.test.ts` **16 条**全绿，其中三条是核心：
+    ① **工具名黑名单**（无 install/enable/exec）；② **`plugin_scaffold` 的产物必须能过自己的校验**
+    （否则模板会批量生产非法插件）；③ 提案能力只给 warning 不阻断。
+  - **连带修正**：`mcp-server` / `mcp-stdio` / `mcp-http` 里**四处**工具数断言 11 → 15。
+    ★第二、三、四处是 `grep` 才发现的——只改第一处会让另外三个文件继续红。
+    "改判据要扫全"这条又用一次。四文件合计 **58 条**全绿。
+  - 类型检查：`tsc -p packages/mcp/tsconfig.build.json --noEmit` rc=0。
+  - **诚实边界**：① 工具跑在 **MCP server 进程（Node）**，不在 Studio 里——它校验的是 manifest
+    结构，**不证明** Studio 安装闸行为一致（两者读同一份表，但**校验代码仍是两份**；
+    将来应把 `validateManifest` 做成唯一实现、两边共用）；② `plugin_scaffold` 只产出
+    manifest + README，**没有 Provider 实现桩**（Provider 入出参尚未冻结，见 G-58 §3.5 的提案约束）；
+    ③ **未做端到端**：没在真实 MCP 客户端（Claude Desktop / Cursor）里跑过一次"AI 写插件"的完整闭环。
+
 
