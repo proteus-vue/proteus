@@ -4178,6 +4178,25 @@
         "T-studio-format-ext"
       ],
       "note": "【done · 决策 #1467（2026-11-09）】用户「推送，然后继续」——按建议顺序先做 C（敏感路径判定）。★真缺口：`read_text_external` 的扩展名白名单含 `.json`，而 `~/.docker/config.json`、`~/.aws/sso/cache/*.json`、`~/.ssh/known_hosts.json` 全是 `.json` ⇒ 凭据可读。类型白名单与「数据敏感度」是两个轴（G-59 原话：权限建在数据敏感度上，不建在 API 危险度上）。★改法：新增纯函数 `fs_guard::sensitivity()`（凭据目录子树 / `.env` 家族但保留模板 / 精确文件名 / 密钥扩展名），只做保守升级；`read_text_external` 先判敏感度再判扩展名。★判据：`sensitivity_rules`（12 正 + 5 反）+ **核心** `external_rejects_secret_even_when_ext_allowed`（造能过扩展名白名单的 `.ssh/known_hosts.json`，并反证同内容非敏感目录可读）。★破坏性验证 2 条全精确翻红（M1 判定改 `== Normal`；M2 把 `.env.example` 移出模板白名单）。★诚实边界：仓库内 `read_text` 不加拦截（自家 `.env` 该可编辑）；`.config` 故意不收录（误杀）；这是纵深防御不是当前漏洞，真实价值是插件权限模型（G-58 B1）的现成构件。【Handoff】- 做到哪：函数 + 消费方 + 判据 + 破坏性验证全绿。- 未做：未把该轴接进 UI（打开敏感文件时的提示）；未在插件权限判定里使用（等 G-58 B1）。- 下一步：G-58 B1 设计输入（Studio 50+ IPC → capability 映射）。"
+    },
+    {
+      "id": "T-studio-proc-template",
+      "title": "Tier 2 约束机制：proc_template（宿主持有命令模板，调用方只能填洞）——补 G-58 §5 机制空白",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261109",
+      "scope": [
+        "packages/studio/src/proc_template.rs",
+        "packages/studio/src/format.rs",
+        "packages/studio/src/main.rs"
+      ],
+      "decision": 1468,
+      "verification": "cd packages/studio && cargo test --bin proteus-studio-shell",
+      "branch": null,
+      "related": [
+        "T-studio-secret-path"
+      ],
+      "note": "【done · 决策 #1468（2026-11-09）】补 G-58 §5 的空白：WASM 沙箱管不到 Tier 2（Studio 的 format/diag/git/device 全在沙箱外），而 §5 只写了「安装时警示」，没有机制。★机制：宿主持有 `TemplateSpec{id,pre_args,args,slots}`，调用方只能引用模板 + 填声明过的占位符 + 多传 key 就拒。★真实消费方：`format.rs::format_command` 改走模板（参数从 `FORMAT_ARGS` 派生，门禁 ㊿d 静态读它），`check_path` 复用 `is_safe_rel_path`（单一真源）。★关键边界：RelPath **故意不拦 `;` `|` `$`**（`Command::arg` 不经 shell，拦了只误杀真实文件名），只拦控制字符与形态（绝对路径/`..`）；Literal 档才禁元字符。★判据：proc_template 6 条 + format 原有 4 条真跑判据全绿（证明改造不改行为）；破坏性验证 M3（去掉多余参数检查）/M4（去掉 `..` 检查）均精确翻红。★诚实边界：只有一条模板 ⇒ 按 SPI-First「单后端是假 SPI」，只主张机制跑通与真实消费方，不主张已达成 SPI；插件还不能注册模板（G-58 B1）；**main.rs 已 996 行**，下次动它必须先拆。【Handoff】- 做到哪：模板机制 + format 接入 + 判据 + 破坏性验证。- 未做：第二条模板（rustfmt，可让 18 个 .rs 文件可格式化）；插件注册模板。- 下一步：加 rustfmt 模板（第二条实现，才够格谈 SPI）+ G-58 B1 映射表。"
     }
   ]
 }

@@ -47,7 +47,7 @@
 //   保证判据回包不是手写的假文本（判据纪律：注入的东西必须说明真实运行时由谁产生）。
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::{mpsc, OnceLock};
 use std::time::Duration;
 
@@ -84,13 +84,10 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_BYTES: usize = 512 * 1024;
 
 fn check_path(path: &str) -> Result<(), String> {
-    if path.is_empty()
-        || path.starts_with('/')
-        || path.starts_with('\\')
-        || path.contains("..")
-        || path.contains('\\')
-        || path.chars().any(|c| c.is_control())
-    {
+    /* ★形态校验走 `proc_template::is_safe_rel_path`（决策 #1468）——单一真源：
+       同一个"什么算仓库内相对路径"的判定，Tier 2 模板与这里必须一致，
+       否则两处迟早分叉（一个放行、一个拒绝，排查起来极痛）。 */
+    if !crate::proc_template::is_safe_rel_path(path) {
         return Err(format!("非法路径：{path}"));
     }
     let ext = std::path::Path::new(path)
@@ -155,6 +152,10 @@ fn node_for_prettier() -> Result<PathBuf, String> {
 
 /// 构造固定命令：`node(绝对路径) + prettier 的 JS 入口 + 固定风格参数`。
 /// 抽成函数是为了让单测能在**最小 PATH 的子进程**里真跑同一条命令（#1463）。
+///
+/// ★决策 #1468：命令**不再手拼**，改由 `proc_template` 装配——模板（程序、固定参数、占位符）
+///   由宿主持有，本函数只填 `{path}` 一个洞。这样它与将来插件的 `spawnProcess` 走**同一套**
+///   约束，而不是"内置能力一套、插件另一套"。
 fn format_command(root: &Path, path: &str) -> Result<Command, String> {
     check_path(path)?;
     let js = root.join(PRETTIER_JS);
@@ -162,16 +163,27 @@ fn format_command(root: &Path, path: &str) -> Result<Command, String> {
         return Err(format!("格式化器不存在：{PRETTIER_JS}（依赖没装？）"));
     }
     let node = node_for_prettier()?;
-    let mut c = Command::new(node);
-    c.arg(js)
-        .args(FORMAT_ARGS)
-        .arg("--stdin-filepath")
-        .arg(path)
-        .current_dir(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    Ok(c)
+    let mut values = std::collections::BTreeMap::new();
+    values.insert("path".to_string(), path.to_string());
+    crate::proc_template::assemble(&node, root, &prettier_spec(), &values)
+}
+
+/// prettier 的命令模板（决策 #1468）。
+/// ★参数**从 `FORMAT_ARGS` 派生**而不是另抄一份：门禁 ㊿d 会静态读取 `FORMAT_ARGS`
+///   并真跑同一条 CLI，抄两份必然漂移。
+fn prettier_spec() -> crate::proc_template::TemplateSpec {
+    let mut args: Vec<String> = FORMAT_ARGS.iter().map(|s| s.to_string()).collect();
+    args.push("--stdin-filepath".to_string());
+    args.push("{path}".to_string());
+    crate::proc_template::TemplateSpec {
+        id: "format.prettier",
+        pre_args: vec![PRETTIER_JS.to_string()],
+        args,
+        slots: vec![crate::proc_template::Slot {
+            name: "path",
+            check: crate::proc_template::SlotCheck::RelPath,
+        }],
+    }
 }
 
 fn format_via_cli(path: &str, text: &str) -> Result<String, String> {

@@ -16433,3 +16433,33 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
   - **判据**：`cargo test` **34 通过 / 1 失败**（唯一红 `new_path_boundary` 是 #1460 既存、#1464 已登记）·
     `check:file-size` 3 处既存红未变 · `fs_guard.rs` 314 → 457 行。
 
+1468. **★★Tier 2 约束机制落地：`proc_template`（宿主持有命令模板，调用方只能填洞）· 补 G-58 §5 的机制空白**（2026-11-09 · 用户「好的」→ 按既定顺序做 B）:
+  - **要补的空白**：G-58 的 WASM 沙箱管不到 Tier 2——Studio 的 `format`/`diag`/`git`/`device`
+    **全部**是起外部进程或碰系统 API。而 G-58 §5 对 Tier 2 只写了"安装时如实警示
+    '将运行外部可执行程序'"，**没给机制**。警示不等于约束。
+  - **机制**：新增 `packages/studio/src/proc_template.rs`（237 行）——宿主持有
+    `TemplateSpec{ id, pre_args, args, slots }`；调用方只能 ① 引用模板 ② 填**声明过的**占位符
+    ③ **多传一个 key 就拒**。等价于把 `format.rs` 里"命令与参数全部写死"从**一个函数**
+    推广成**一张表**，将来插件的 `spawnProcess` 与内置能力走**同一套**约束。
+  - **★真实消费方（不是死代码）**：`format.rs::format_command` 已改为走模板
+    （`prettier_spec()`，参数**从 `FORMAT_ARGS` 派生**而非另抄：门禁 ㊿d 会静态读 `FORMAT_ARGS`
+    并真跑同一 CLI，抄两份必然漂移）；`check_path` 的形态校验改为复用
+    `proc_template::is_safe_rel_path`（单一真源——两处分叉会一个放行一个拒绝，极难排查）。
+  - **★一条重要的边界区分**：路径白名单**故意不拦 `;` `|` `$`** —— `Command::arg` **不经 shell**，
+    这些字符在文件名里合法（`a;b.ts` 真实存在过），拦它们只误杀。真正要拦的是**控制字符**
+    （`\n` 污染日志与终端显示）与**形态**（绝对路径 / `..`）。把"shell 注入"与"路径逃逸"
+    当成同一件事，会两头都做不好；`Literal` 档才禁 shell 元字符（用于值可能进命令行字符串的场景）。
+  - **判据**：`proc_template::tests` **6 条**（越界 / 绝对路径 / 多余参数 / 缺参数 /
+    模板自身用了未声明占位符 / `Literal` 拦元字符 / `RelPath` 允许 `;` 但拒控制字符）；
+    **format 原有 4 条真跑判据全绿**（含 `formats_with_real_cli` 与 `gui_minimal_env_end_to_end`）
+    ⇒ 改造后命令行为与改造前**一致**（这是"纯重构不改行为"的硬证据）。
+  - **破坏性验证 2 条精确翻红**：M3 去掉"不接受多余参数" ⇒ `rejects_undeclared_arg` 红；
+    M4 去掉 `p.contains("..")` ⇒ `rejects_traversal_and_absolute` 红。
+  - **判据**：`cargo test` **40 通过 / 1 失败**（唯一红 `new_path_boundary` 是 #1460 既存）·
+    `check:file-size` 3 处既存红未变（`proc_template.rs` 237 / `format.rs` 409 / `main.rs` **996**）。
+  - **★诚实边界**：① 目前只有 format **一条**模板，没有第二份实现——按 SPI-First 的说法
+    "单后端 SPI 是假 SPI"，所以本单只主张「机制跑通且有真实消费方」，**不主张已达成 SPI**；
+    第二条模板（rustfmt）落地后才有资格这么讲。② 模板仍由宿主手写在 Rust 里，
+    插件**还不能**注册自己的模板（那是 G-58 B1 的范围）。③ **`main.rs` 已 996 行**（硬上限 1000），
+    下次动它必须先拆文件。
+

@@ -23,6 +23,9 @@ mod ipc_fs;
 mod fs_ops;
 /// 编辑器格式化：固定 prettier CLI，stdin 进 / stdout 出、**不写盘**（决策 #1462）
 mod format;
+
+/// Tier 2（外部进程）的约束机制（决策 #1468）：宿主持有命令模板，调用方只能填洞。
+mod proc_template;
 /// 自有菜单栏（决策 #1221）：取代 Tauri 的默认菜单，动作项转给前端
 mod menu;
 /// 仓库内全文搜索（决策 #1222）：rg 子进程 + 字节偏移→字符列的换算
