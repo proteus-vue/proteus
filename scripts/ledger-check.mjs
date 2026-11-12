@@ -21,10 +21,16 @@
 //
 // 退出码：0 通过 / 1 存在未收口项（仅 --check）/ 2 台账本身不合格（schema 错）
 //
+// ★2026-11-12 新增：`verification_breakdown` 一致性判据（第三条退出码 2 的来源之一）
+//   该字段长期是**手写快照**，无任何门禁校验 ⇒ 实测漂移（entries 已 unverified:2/n_a:1，
+//   快照仍写 unverified:1/n_a:2，统计时间停在一个月前）。派生数据必须由唯一实现重算：
+//   `scripts/lib/cobuild-stats.mjs` 的 computeBreakdown()（sync-cobuild 也用它）。
+//
 // 台账 schema 见 docs/外部报告台账.json 的 schema 字段（自描述）。
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { computeBreakdown, diffBreakdown } from './lib/cobuild-stats.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DEFAULT_LEDGER = path.join(HERE, '..', 'docs', '外部报告台账.json')
@@ -141,10 +147,29 @@ function main () {
     return 2
   }
   const data = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'))
+  // ★--fix-breakdown：把派生字段重算成本地唯一实现的结果（修数据，不参与对账输出）。
+  if (args.includes('--fix-breakdown')) {
+    data.verification_breakdown = computeBreakdown(data)
+    fs.writeFileSync(ledgerPath, JSON.stringify(data, null, 2) + '\n')
+    console.log(`✓ 已按 entries 重算 verification_breakdown → ${ledgerPath}`)
+    console.log(`  收口率 ${data.verification_breakdown.真实收口率}% · ${JSON.stringify(data.verification_breakdown.by_verification)}`)
+    return 0
+  }
   const entries = data.entries ?? []
   const published = data.last_verified_published
 
   const errs = validate(entries, published)
+  // ★verification_breakdown 必须与 entries 一致（派生态不许手写漂移）。
+  //   只在台账**声明了**该字段时校验——没有该字段的台账（如外部侧副本）不因此判红。
+  const breakdownDiffs = 'verification_breakdown' in data
+    ? diffBreakdown(data.verification_breakdown, computeBreakdown(data))
+    : []
+  if (breakdownDiffs.length) {
+    errs.push(
+      `verification_breakdown 与 entries 不一致（${breakdownDiffs.join(', ')}）——` +
+      `它是派生数据，请跑 \`node scripts/ledger-check.mjs --fix-breakdown\` 重算（或 pnpm sync:cobuild），不要手改`,
+    )
+  }
   const b = reconcile(entries)
   const total = entries.length
   const nRes = b.resolved.length

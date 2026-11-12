@@ -20,6 +20,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { computeBreakdown } from './lib/cobuild-stats.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(HERE, '..')
@@ -160,8 +161,14 @@ if (ext.last_verified_published && ext.last_verified_published !== ourLedger.las
 }
 ourLedger.last_external_sync_at = new Date().toISOString().slice(0, 10)
 
-// ── ② 报告：合并外部新增的轮次小节（按 `## 第N轮复测` 标题去重）──
-const roundHeadings = (src) => [...src.matchAll(/^## [^\n]*第([0-9一二三四五六七八九十]+)轮复测[^\n]*$/gm)].map((m) => m[1])
+// ── ② 报告：合并外部新增的轮次小节（按 `## 第N轮复测` / `## 第N轮` 标题去重）──
+/**
+ * ★`复测` 必须**可选**（2026-11-12 修）：外部报告实测混用两种写法——
+ *   `## 第13轮复测：…`（有）与 `## 第14轮：…` / `## 第15轮：…`（无）。
+ *   原先强制 `轮复测` ⇒ 第 14/15 轮**静默漏掉**（脚本只报缺第 13 轮），报告正文根本没被提示合并。
+ *   与 `cobuild-check.mjs` 的 ROUND_RE 保持同一口径：中文/阿拉伯数字都认，空格可有。
+ */
+const roundHeadings = (src) => [...src.matchAll(/^## [^\n]*第\s*([0-9]+|[一二三四五六七八九十]+)\s*轮(?:复测)?[^\n]*$/gm)].map((m) => m[1])
 const ourRounds = new Set(roundHeadings(ourReport))
 const extRounds = roundHeadings(extReportSrc)
 const missingRounds = extRounds.filter((r) => !ourRounds.has(r))
@@ -170,6 +177,44 @@ if (missingRounds.length) {
 }
 for (const r of ourRounds) {
   if (!extRounds.includes(r)) changes.push({ kind: 'note', detail: `框架报告有第${r}轮但外部报告没有（多为框架侧回执节）` })
+}
+
+// ── ③ 台账 rounds[]：按 entries 补齐缺失轮次（2026-11-12 加）──
+// 为什么脚本要管这个：`rounds[]` 是规则 B/E 判据的锚点（每条必需有出处、回执必需有轮次），
+// 但 sync 原先**只合并 entries**、不补 rounds ⇒ 同步进 F-36~F-43 之后
+// cobuild-check 规则 B 会因「第 13/14/15 轮无 rounds 条目也无 report_section」直接报红。
+// 口径：轮次与版本取自**外部报告的小节标题**（`## 第N轮复测：`0.3.0-beta.31``），
+//       标题里没有版本号时留 null（不猜）。
+const headingByRound = new Map() // round → { version, summary }
+for (const m of extReportSrc.matchAll(/^## ([^\n]+)$/gm)) {
+  const h = m[1]
+  const r = /第\s*([0-9]+|[一二三四五六七八九十]+)\s*轮/.exec(h)
+  if (!r || /回执/.test(h)) continue
+  const n = /^\d+$/.test(r[1]) ? Number(r[1]) : null
+  if (n === null) continue
+  if (headingByRound.has(n)) continue
+  const v = /(0\.\d+\.\d+-beta\.\d+|0\.\d+\.\d+)/.exec(h)
+  // summary = 标题里 `——` 之后的结论句（去掉版本号与日期片段）
+  const after = /——\s*([\s\S]*)$/.exec(h)
+  headingByRound.set(n, { version: v ? v[1] : null, summary: after ? after[1].trim() : h })
+}
+ourLedger.rounds ??= []
+const knownRounds = new Set(ourLedger.rounds.map((r) => Number(r.round)))
+for (const [n, info] of headingByRound) {
+  if (knownRounds.has(n)) continue
+  if (!(ourLedger.entries ?? []).some((e) => Number(e.round) === n)) continue // 只补「真的有条目」的轮次
+  ourLedger.rounds.push({ round: n, version: info.version, date: new Date().toISOString().slice(0, 10), summary: info.summary })
+  changes.push({ kind: 'rounds-add', detail: `补 rounds[${n}]：version=${info.version ?? '(标题无版本)'}` })
+}
+ourLedger.rounds.sort((a, b) => Number(a.round) - Number(b.round))
+
+// ── ④ verification_breakdown：从 entries 重算（2026-11-12 加）──
+// 为什么：该字段原先是**手写快照**，无任何门禁校验 ⇒ 实测漂移（entries 已 unverified:2/n_a:1，
+// 快照仍写 unverified:1/n_a:2）。派生数据必须由唯一实现重算，不能手填。
+const before = JSON.stringify({ ...ourLedger.verification_breakdown, 统计时间: 0 })
+ourLedger.verification_breakdown = computeBreakdown(ourLedger)
+if (before !== JSON.stringify({ ...ourLedger.verification_breakdown, 统计时间: 0 })) {
+  changes.push({ kind: 'breakdown-recompute', detail: `verification_breakdown 已按 entries 重算（收口率 ${ourLedger.verification_breakdown.真实收口率}%）` })
 }
 
 // ── 输出 / 写入 ──

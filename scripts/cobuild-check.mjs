@@ -81,11 +81,20 @@ try {
 
 // ── 从报告抽取：轮次小节（第 N 轮复测：`版本`）+ 回执小节（处理回执（第 N 轮））──
 const reportRounds = new Map() // round → { version, heading }
+/**
+ * ★轮次数字**同时接受中文与阿拉伯数字**（2026-11-12 修）。
+ *   原先只认 `第([一二三四五六七八九十]+)轮` ⇒ 外部报告改用 `## 第13轮复测：…` 之后，
+ *   第 13/14/15 轮**一条都抓不到**，规则 B 会对这 8 条误报「无出处」。
+ *   实际写法共存：`第13轮复测` / `第14轮` / `第 15 轮复测`（空格可有）。
+ */
+const ROUND_RE = /第\s*([0-9]+|[一二三四五六七八九十]+)\s*轮/
+/** 轮次数字 → number；中文走 cnNum，阿拉伯直接解析。 */
+const parseRoundNo = (s) => (!s ? null : (/^\d+$/.test(s) ? Number(s) : cnNum(s)))
 for (const m of report.matchAll(/^## ([^\n]+)$/gm)) {
   const h = m[1]
-  const r = /第([一二三四五六七八九十]+)轮/.exec(h)
+  const r = ROUND_RE.exec(h)
   if (!r) continue
-  const n = cnNum(r[1])
+  const n = parseRoundNo(r[1])
   if (n === null) continue
   // 只认「复测」性质的轮次小节（回执是另一类，见下）
   if (!/复测|轮/.test(h)) continue
@@ -100,9 +109,8 @@ const reportReceipts = new Set()
  *   而单轮回执写成「第六轮」（中文）；两种都出现过，正则必须都认（否则会误报「无回执」）。
  */
 for (const m of report.matchAll(/^## [^\n]*处理回执[^\n]*（第\s*([0-9一二三四五六七八九十]+)\s*(?:~\s*第?\s*([0-9一二三四五六七八九十]+)\s*)?轮）[^\n]*$/gm)) {
-  const parse = (x) => (/^\d+$/.test(x) ? Number(x) : cnNum(x))
-  const from = parse(m[1])
-  const to = m[2] ? parse(m[2]) : from
+  const from = parseRoundNo(m[1])
+  const to = m[2] ? parseRoundNo(m[2]) : from
   if (from === null || to === null) continue
   for (let n = from; n <= to; n++) reportReceipts.add(n)
 }

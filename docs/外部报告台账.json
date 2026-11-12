@@ -62,7 +62,7 @@
       "fix_state": "published",
       "fixed_in": "0.1.1-beta.0",
       "verification": "passed",
-      "verification_note": "[framework] 独立 import() 求值：12 个导出（含 createFlamegraphCollector 等）齐全\n[external] [framework] 独立 import() 求值：12 个导出（含 createFlamegraphCollector 等）齐全",
+      "verification_note": "[framework] 独立 import() 求值：12 个导出（含 createFlamegraphCollector 等）齐全\n[external] [framework] 独立 import() 求值：12 个导出（含 createFlamegraphCollector 等）齐全\n[external] [framework] 独立 import() 求值：12 个导出（含 createFlamegraphCollector 等）齐全\n[external] [framework] 独立 import() 求值：12 个导出（含 createFlamegraphCollector 等）齐全",
       "evidence": "SyntaxError: The requested module '@proteus-vue/devtools-runtime' does not provide an export named 'createFlamegraphCollector'",
       "repro": "npm i @proteus-vue/cli@0.3.0-beta.2 && npx proteus --help",
       "verified_by": "external"
@@ -79,7 +79,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.4",
       "verification": "passed",
-      "verification_note": "[framework] 删除工程侧 vite.config.ts 桥接后构建成功（官方主路径 runTargetedBuildProgrammatic）\n[external] [framework] 删除工程侧 vite.config.ts 桥接后构建成功（官方主路径 runTargetedBuildProgrammatic）",
+      "verification_note": "[framework] 删除工程侧 vite.config.ts 桥接后构建成功（官方主路径 runTargetedBuildProgrammatic）\n[external] [framework] 删除工程侧 vite.config.ts 桥接后构建成功（官方主路径 runTargetedBuildProgrammatic）\n[external] [framework] 删除工程侧 vite.config.ts 桥接后构建成功（官方主路径 runTargetedBuildProgrammatic）\n[external] [framework] 删除工程侧 vite.config.ts 桥接后构建成功（官方主路径 runTargetedBuildProgrammatic）",
       "evidence": "构建需工程侧维护 vite.config.ts 桥接层",
       "repro": "删除工程 vite.config.ts 后 proteus build --target web",
       "verified_by": "external"
@@ -96,7 +96,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.4",
       "verification": "passed",
-      "verification_note": "[framework] 构建后 auto-routes.ts 自动生成 5 条路由\n[external] [framework] 构建后 auto-routes.ts 自动生成 5 条路由",
+      "verification_note": "[framework] 构建后 auto-routes.ts 自动生成 5 条路由\n[external] [framework] 构建后 auto-routes.ts 自动生成 5 条路由\n[external] [framework] 构建后 auto-routes.ts 自动生成 5 条路由\n[external] [framework] 构建后 auto-routes.ts 自动生成 5 条路由",
       "evidence": "auto-routes.ts 只在 MP 目标生成，web 端 routeMap 为空",
       "repro": "proteus build --target web → 检查 src/router/auto-routes.ts",
       "verified_by": "external"
@@ -113,7 +113,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.7",
       "verification": "passed",
-      "verification_note": "[framework] 双路核对（adapter 当前页保留 query + 模板 RouterView v-bind 透传）；在 0.3.0-beta.8 复测时确认生效（commit d5a5fec3，附处理回执）\n[external] [framework] 双路核对（adapter 当前页保留 query + 模板 RouterView v-bind 透传）；在 0.3.0-beta.8 复测时确认生效（commit d5a5fec3，附处理回执）",
+      "verification_note": "[framework] 双路核对（adapter 当前页保留 query + 模板 RouterView v-bind 透传）；在 0.3.0-beta.8 复测时确认生效（commit d5a5fec3，附处理回执）\n[external] [framework] 双路核对（adapter 当前页保留 query + 模板 RouterView v-bind 透传）；在 0.3.0-beta.8 复测时确认生效（commit d5a5fec3，附处理回执）\n[external] [framework] 双路核对（adapter 当前页保留 query + 模板 RouterView v-bind 透传）；在 0.3.0-beta.8 复测时确认生效（commit d5a5fec3，附处理回执）\n[external] [framework] 双路核对（adapter 当前页保留 query + 模板 RouterView v-bind 透传）；在 0.3.0-beta.8 复测时确认生效（commit d5a5fec3，附处理回执）",
       "evidence": "写作页恒显示「第 0 章」——路由参数两条路都断",
       "repro": "Web 端带 query 导航到页面，页面读不到参数",
       "verified_by": "external"
@@ -130,7 +130,7 @@
       "fix_state": "published",
       "fixed_in": "0.2.0-beta.2",
       "verification": "passed",
-      "verification_note": "[framework] adapter 改走 globalThis 单例（源码核对）+ 浏览器实测 __PROTEUS_ADAPTER_WEB__ 存在且生效\n[external] [framework] adapter 改走 globalThis 单例（源码核对）+ 浏览器实测 __PROTEUS_ADAPTER_WEB__ 存在且生效",
+      "verification_note": "[framework] adapter 改走 globalThis 单例（源码核对）+ 浏览器实测 __PROTEUS_ADAPTER_WEB__ 存在且生效\n[external] [framework] adapter 改走 globalThis 单例（源码核对）+ 浏览器实测 __PROTEUS_ADAPTER_WEB__ 存在且生效\n[external] [framework] adapter 改走 globalThis 单例（源码核对）+ 浏览器实测 __PROTEUS_ADAPTER_WEB__ 存在且生效\n[external] [framework] adapter 改走 globalThis 单例（源码核对）+ 浏览器实测 __PROTEUS_ADAPTER_WEB__ 存在且生效",
       "evidence": "RouterView 从顶层副本注册 onPageLoad，router 从嵌套副本 emit → 视图永不更新",
       "repro": "find node_modules -path '*@proteus-vue/shared/package.json' | wc -l  （>1 即风险）",
       "verified_by": "external"
@@ -147,7 +147,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.7",
       "verification": "passed",
-      "verification_note": "[framework] 删除工程侧 overrides 后全新安装，shared 自然去重为 1 份\n[external] [framework] 删除工程侧 overrides 后全新安装，shared 自然去重为 1 份",
+      "verification_note": "[framework] 删除工程侧 overrides 后全新安装，shared 自然去重为 1 份\n[external] [framework] 删除工程侧 overrides 后全新安装，shared 自然去重为 1 份\n[external] [framework] 删除工程侧 overrides 后全新安装，shared 自然去重为 1 份\n[external] [framework] 删除工程侧 overrides 后全新安装，shared 自然去重为 1 份",
       "evidence": "components 钉 beta.1、router/runtime 要 beta.2 → npm 各嵌一份，全树 8 份",
       "repro": "移除 overrides → npm install → find node_modules -path '*shared/package.json' | wc -l",
       "verified_by": "external"
@@ -164,7 +164,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 端到端：编辑器输入 18 个字符（18 次重渲染）后仍只有 1 个 clamp 声明（旧版累加到 13+）\n[external] [framework] 端到端：编辑器输入 18 个字符（18 次重渲染）后仍只有 1 个 clamp 声明（旧版累加到 13+）",
+      "verification_note": "[framework] 端到端：编辑器输入 18 个字符（18 次重渲染）后仍只有 1 个 clamp 声明（旧版累加到 13+）\n[external] [framework] 端到端：编辑器输入 18 个字符（18 次重渲染）后仍只有 1 个 clamp 声明（旧版累加到 13+）\n[external] [framework] 端到端：编辑器输入 18 个字符（18 次重渲染）后仍只有 1 个 clamp 声明（旧版累加到 13+）\n[external] [framework] 端到端：编辑器输入 18 个字符（18 次重渲染）后仍只有 1 个 clamp 声明（旧版累加到 13+）",
       "evidence": "existing + '; ' + css 无条件追加；指令挂 mounted+updated → 输入即膨胀",
       "repro": "给 textarea 加 p-fluid 后输入 10 个字符，数 style 里 clamp 出现次数",
       "verified_by": "external"
@@ -181,7 +181,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 端到端：属性被改写且不残留 DOM，clamp 生成、计算字号与配置吻合；且原生 button 未被误转 proteus-*\n[external] [framework] 端到端：属性被改写且不残留 DOM，clamp 生成、计算字号与配置吻合；且原生 button 未被误转 proteus-*",
+      "verification_note": "[framework] 端到端：属性被改写且不残留 DOM，clamp 生成、计算字号与配置吻合；且原生 button 未被误转 proteus-*\n[external] [framework] 端到端：属性被改写且不残留 DOM，clamp 生成、计算字号与配置吻合；且原生 button 未被误转 proteus-*\n[external] [framework] 端到端：属性被改写且不残留 DOM，clamp 生成、计算字号与配置吻合；且原生 button 未被误转 proteus-*\n[external] [framework] 端到端：属性被改写且不残留 DOM，clamp 生成、计算字号与配置吻合；且原生 button 未被误转 proteus-*",
       "evidence": "Web 插件链只装 5 个插件，defaultScopedPlugin 仅导出未注册",
       "repro": "给元素加 p-fluid=\"font-size(20,32)\" → Web 端 DOM 原样保留、无样式、无报错",
       "verified_by": "external"
@@ -198,7 +198,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 真实 Chromium 连续跨页 6/6 通过（旧版从工作台跳走即永久卡死）\n[external] [framework] 真实 Chromium 连续跨页 6/6 通过（旧版从工作台跳走即永久卡死）",
+      "verification_note": "[framework] 真实 Chromium 连续跨页 6/6 通过（旧版从工作台跳走即永久卡死）\n[external] [framework] 真实 Chromium 连续跨页 6/6 通过（旧版从工作台跳走即永久卡死）\n[external] [framework] 真实 Chromium 连续跨页 6/6 通过（旧版从工作台跳走即永久卡死）\n[external] [framework] 真实 Chromium 连续跨页 6/6 通过（旧版从工作台跳走即永久卡死）",
       "evidence": "BaseTransition out-in 的 state.isLeaving 靠 afterLeave 复位；该回调在特定页面永不触发 → 后续渲染全成空注释",
       "repro": "首页→工作台→找内容（旧版此步 URL 变、页面空白、零报错，此后所有切换失效）",
       "verified_by": "external"
@@ -215,7 +215,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 构造真实递归工程实测（vite.config.ts + build:web=proteus build → 第二跳即报「检测到自递归」并给出两条可执行修法，不再无限刷屏）；删除 vite.config.ts 后进入程序化构建路径。★属 CLI 内部路径，外部未独立复测\n[external] 源码核对（DELEGATED_ENV=PROTEUS_DELEGATED + detectDelegationLoop，dev/build 双路径）——未独立构造递归现场实测\n[external] [framework] 构造真实递归工程实测（vite.config.ts + build:web=proteus build → 第二跳即报「检测到自递归」并给出两条可执行修法，不再无限刷屏）；删除 vite.config.ts 后进入程序化构建路径。★属 CLI 内部路径，外部未独立复测\n[external] 源码核对（DELEGATED_ENV=PROTEUS_DELEGATED + detectDelegationLoop，dev/build 双路径）——未独立构造递归现场实测",
+      "verification_note": "[framework] 构造真实递归工程实测（vite.config.ts + build:web=proteus build → 第二跳即报「检测到自递归」并给出两条可执行修法，不再无限刷屏）；删除 vite.config.ts 后进入程序化构建路径。★属 CLI 内部路径，外部未独立复测\n[external] 源码核对（DELEGATED_ENV=PROTEUS_DELEGATED + detectDelegationLoop，dev/build 双路径）——未独立构造递归现场实测\n[external] [framework] 构造真实递归工程实测（vite.config.ts + build:web=proteus build → 第二跳即报「检测到自递归」并给出两条可执行修法，不再无限刷屏）；删除 vite.config.ts 后进入程序化构建路径。★属 CLI 内部路径，外部未独立复测\n[external] [framework] 构造真实递归工程实测（vite.config.ts + build:web=proteus build → 第二跳即报「检测到自递归」并给出两条可执行修法，不再无限刷屏）；删除 vite.config.ts 后进入程序化构建路径。★属 CLI 内部路径，外部未独立复测\n[external] 源码核对（DELEGATED_ENV=PROTEUS_DELEGATED + detectDelegationLoop，dev/build 双路径）——未独立构造递归现场实测\n[external] [framework] 构造真实递归工程实测（vite.config.ts + build:web=proteus build → 第二跳即报「检测到自递归」并给出两条可执行修法，不再无限刷屏）；删除 vite.config.ts 后进入程序化构建路径。★属 CLI 内部路径，外部未独立复测\n[external] 源码核对（DELEGATED_ENV=PROTEUS_DELEGATED + detectDelegationLoop，dev/build 双路径）——未独立构造递归现场实测",
       "evidence": "有 vite.config.ts 时 proteus build → npm run build:web → proteus build → …刷屏",
       "repro": "含 vite.config.ts + build:web=\"proteus build\" 的工程跑 proteus build",
       "verified_by": "framework"
@@ -232,7 +232,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 实际构建输出核对：报错给出应用/框架两个候选路径\n[external] [framework] 实际构建输出核对：报错给出应用/框架两个候选路径",
+      "verification_note": "[framework] 实际构建输出核对：报错给出应用/框架两个候选路径\n[external] [framework] 实际构建输出核对：报错给出应用/框架两个候选路径\n[external] [framework] 实际构建输出核对：报错给出应用/框架两个候选路径\n[external] [framework] 实际构建输出核对：报错给出应用/框架两个候选路径",
       "evidence": "「未找到组件 <teleport>」——不知道要放到什么位置",
       "repro": "在页面里用一个不存在的组件标签 → proteus build --target skyline",
       "verified_by": "external"
@@ -249,7 +249,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] registry tarball 94 文件 / 76 个 p-* 文件（beta.7 为 17/0）；安装后 74 个组件目录齐全\n[external] [framework] registry tarball 94 文件 / 76 个 p-* 文件（beta.7 为 17/0）；安装后 74 个组件目录齐全",
+      "verification_note": "[framework] registry tarball 94 文件 / 76 个 p-* 文件（beta.7 为 17/0）；安装后 74 个组件目录齐全\n[external] [framework] registry tarball 94 文件 / 76 个 p-* 文件（beta.7 为 17/0）；安装后 74 个组件目录齐全\n[external] [framework] registry tarball 94 文件 / 76 个 p-* 文件（beta.7 为 17/0）；安装后 74 个组件目录齐全\n[external] [framework] registry tarball 94 文件 / 76 个 p-* 文件（beta.7 为 17/0）；安装后 74 个组件目录齐全",
       "evidence": "Could not resolve \"./p-view/index.vue\" from \".../components/index.ts\"；tarball 与本地 npm pack 逐字节相同（shasum bbe61aff…）",
       "repro": "npm pack --dry-run（npm 打包器，files 含 \"p-*\"）→ 17 文件；pnpm pack → 94 文件。修复：files 改 \"p-*/**\" + pnpm 打包 / npm 上传 tarball",
       "verified_by": "external"
@@ -266,7 +266,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 沙箱实测三场景（从 beta.7 起跑 / 从 beta.8 重跑 / 人为制造残局→自愈）+ beta.10/beta.11 真实发布成功佐证（41/41 上架）。★属发布链内部机制，外部无法独立复测\n[external] 框架方沙箱验证（含人为制造残局自愈）；外部未独立复测该发布链内部缺陷\n[external] [framework] 沙箱实测三场景（从 beta.7 起跑 / 从 beta.8 重跑 / 人为制造残局→自愈）+ beta.10/beta.11 真实发布成功佐证（41/41 上架）。★属发布链内部机制，外部无法独立复测\n[external] 框架方沙箱验证（含人为制造残局自愈）；外部未独立复测该发布链内部缺陷",
+      "verification_note": "[framework] 沙箱实测三场景（从 beta.7 起跑 / 从 beta.8 重跑 / 人为制造残局→自愈）+ beta.10/beta.11 真实发布成功佐证（41/41 上架）。★属发布链内部机制，外部无法独立复测\n[external] 框架方沙箱验证（含人为制造残局自愈）；外部未独立复测该发布链内部缺陷\n[external] [framework] 沙箱实测三场景（从 beta.7 起跑 / 从 beta.8 重跑 / 人为制造残局→自愈）+ beta.10/beta.11 真实发布成功佐证（41/41 上架）。★属发布链内部机制，外部无法独立复测\n[external] [framework] 沙箱实测三场景（从 beta.7 起跑 / 从 beta.8 重跑 / 人为制造残局→自愈）+ beta.10/beta.11 真实发布成功佐证（41/41 上架）。★属发布链内部机制，外部无法独立复测\n[external] 框架方沙箱验证（含人为制造残局自愈）；外部未独立复测该发布链内部缺陷\n[external] [framework] 沙箱实测三场景（从 beta.7 起跑 / 从 beta.8 重跑 / 人为制造残局→自愈）+ beta.10/beta.11 真实发布成功佐证（41/41 上架）。★属发布链内部机制，外部无法独立复测\n[external] 框架方沙箱验证（含人为制造残局自愈）；外部未独立复测该发布链内部缺陷",
       "evidence": "pre 模式不删除已消费 changeset，按文件名记入 pre.json 并跳过 → auto-release-bump.md 早已在册 → 每次 release 都是 no-op 却打印成功",
       "repro": "proteus 仓库：pnpm release（同名 changeset 存在时观察版本未提升）",
       "verified_by": "framework"
@@ -283,7 +283,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
-      "verification_note": "[framework] 逐项破坏性复测：check-publish-contents（回退 files → exit 1）、check-publish-drift 改 pnpm pack、smoke 扩面至 41 包；★并补「与打包器无关」的静态规则（禁止纯目录通配）。★属门禁内部机制，外部未逐项复测\n[external] 核对到新门禁存在（check-publish-contents / smoke 扩面至全包 / drift 改 pnpm pack）；未逐项独立破坏性复测\n[external] [framework] 逐项破坏性复测：check-publish-contents（回退 files → exit 1）、check-publish-drift 改 pnpm pack、smoke 扩面至 41 包；★并补「与打包器无关」的静态规则（禁止纯目录通配）。★属门禁内部机制，外部未逐项复测\n[external] 核对到新门禁存在（check-publish-contents / smoke 扩面至全包 / drift 改 pnpm pack）；未逐项独立破坏性复测",
+      "verification_note": "[framework] 逐项破坏性复测：check-publish-contents（回退 files → exit 1）、check-publish-drift 改 pnpm pack、smoke 扩面至 41 包；★并补「与打包器无关」的静态规则（禁止纯目录通配）。★属门禁内部机制，外部未逐项复测\n[external] 核对到新门禁存在（check-publish-contents / smoke 扩面至全包 / drift 改 pnpm pack）；未逐项独立破坏性复测\n[external] [framework] 逐项破坏性复测：check-publish-contents（回退 files → exit 1）、check-publish-drift 改 pnpm pack、smoke 扩面至 41 包；★并补「与打包器无关」的静态规则（禁止纯目录通配）。★属门禁内部机制，外部未逐项复测\n[external] [framework] 逐项破坏性复测：check-publish-contents（回退 files → exit 1）、check-publish-drift 改 pnpm pack、smoke 扩面至 41 包；★并补「与打包器无关」的静态规则（禁止纯目录通配）。★属门禁内部机制，外部未逐项复测\n[external] 核对到新门禁存在（check-publish-contents / smoke 扩面至全包 / drift 改 pnpm pack）；未逐项独立破坏性复测\n[external] [framework] 逐项破坏性复测：check-publish-contents（回退 files → exit 1）、check-publish-drift 改 pnpm pack、smoke 扩面至 41 包；★并补「与打包器无关」的静态规则（禁止纯目录通配）。★属门禁内部机制，外部未逐项复测\n[external] 核对到新门禁存在（check-publish-contents / smoke 扩面至全包 / drift 改 pnpm pack）；未逐项独立破坏性复测",
       "evidence": "drift 两侧同用 npm pack（同样缺件判 identical）；smoke 包清单不含 components；health 只查磁盘；--dry-run 只验命令可执行",
       "repro": "对 registry 上的坏版本跑 verify-publish-smoke → 修复前应报「包内 0 个 .vue」",
       "verified_by": "framework"
@@ -300,7 +300,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.9",
       "verification": "passed",
-      "verification_note": "[framework] 最小复现 4/4（含 set: (v: string) 与 set: function(v: string) 两形态）；框架侧另有回归锁\n[external] [framework] 最小复现 4/4（含 set: (v: string) 与 set: function(v: string) 两形态）；框架侧另有回归锁",
+      "verification_note": "[framework] 最小复现 4/4（含 set: (v: string) 与 set: function(v: string) 两形态）；框架侧另有回归锁\n[external] [framework] 最小复现 4/4（含 set: (v: string) 与 set: function(v: string) 两形态）；框架侧另有回归锁\n[external] [framework] 最小复现 4/4（含 set: (v: string) 与 set: function(v: string) 两形态）；框架侧另有回归锁\n[external] [framework] 最小复现 4/4（含 set: (v: string) 与 set: function(v: string) 两形态）；框架侧另有回归锁",
       "evidence": "产物 proteusSetC(v: string) { → js 产物语法错误：Unexpected token ':'",
       "repro": "transformScriptToPage(\"const t=ref('');const c=computed({get:()=>t.value,set:(v:string)=>{t.value=v}})\")",
       "verified_by": "external"
@@ -317,7 +317,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.10",
       "verification": "passed",
-      "verification_note": "[framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）",
+      "verification_note": "[framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）",
       "evidence": "产物 replace(/\\this.s/g,'')；[\\s\\S] → [\\this.s\\S]；本工程 editor.vue 10 处",
       "repro": "const s=1; function f(){return (x||'').replace(/\\s/g,'')}",
       "verified_by": "external"
@@ -334,7 +334,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.10",
       "verification": "passed",
-      "verification_note": "[framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）",
+      "verification_note": "[framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）",
       "evidence": "script.ts:1528(computedInitLine) 与 2210(rewriteBareMethodCalls) 仍是朴素 RegExp 改写；且会误改字符串（'count s here' → 'count this.s here'）",
       "repro": "const s=useSession(); function msg(){return 'count s here'}  → 产物字符串被改",
       "verified_by": "external"
@@ -351,7 +351,7 @@
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.10",
       "verification": "passed",
-      "verification_note": "[framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）",
+      "verification_note": "[framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）\n[external] [framework] [external · 第七轮复测] registry 包 0.3.0-beta.11 复跑我方最小复现通过；编译器类合计 7/7（含字符类 [\\s\\S]、字符串内容、async 生命周期 + 反向用例）",
       "evidence": "产物 onReady() { await Promise.all(...) } → await is only valid in async functions；本工程 3 文件命中（含首页 index.vue）",
       "repro": "onMounted(async () => { await load() }) → 看产物 onReady 是否带 async",
       "verified_by": "external"
@@ -369,7 +369,7 @@
       "fixed_in": "0.3.0-beta.9",
       "verification": "passed",
       "verified_by": "framework",
-      "verification_note": "[framework] 解包 registry 的 types@0.3.0-beta.9 核对 exports 已无该键；全仓 grep 确认无人消费该子路径（真正的消费者走 @proteus-vue/types/config-schema → dist/，一直可用）",
+      "verification_note": "[framework] 解包 registry 的 types@0.3.0-beta.9 核对 exports 已无该键；全仓 grep 确认无人消费该子路径（真正的消费者走 @proteus-vue/types/config-schema → dist/，一直可用）\n[external] [framework] 解包 registry 的 types@0.3.0-beta.9 核对 exports 已无该键；全仓 grep 确认无人消费该子路径（真正的消费者走 @proteus-vue/types/config-schema → dist/，一直可用）",
       "evidence": "exports[\"./proteus.config.schema.json\"] = \"./src/config-schema.ts\"，而 files 只发 dist → 该子路径永远解析失败",
       "repro": "npm i @proteus-vue/types@0.3.0-beta.8 && node -e \"import('@proteus-vue/types/proteus.config.schema.json')\""
     },
@@ -386,7 +386,7 @@
       "fixed_in": "0.3.0-beta.9",
       "verification": "passed",
       "verified_by": "framework",
-      "verification_note": "[framework] 从 registry 的 tarball 解包实测：Cargo.toml/Cargo.lock/src/ 齐全 → cargo build --release 成功 → 产出正确 CompilerIR；同时修了 files 里从未产出的 dist 声明",
+      "verification_note": "[framework] 从 registry 的 tarball 解包实测：Cargo.toml/Cargo.lock/src/ 齐全 → cargo build --release 成功 → 产出正确 CompilerIR；同时修了 files 里从未产出的 dist 声明\n[external] [framework] 从 registry 的 tarball 解包实测：Cargo.toml/Cargo.lock/src/ 齐全 → cargo build --release 成功 → 产出正确 CompilerIR；同时修了 files 里从未产出的 dist 声明",
       "evidence": "tarball 只有 bin/cli.js + package.json；而 bin/cli.js 依赖 cargo build（需 crate 源码）→ 用户侧必然失败",
       "repro": "npm pack @proteus-vue/compiler-backend-rust@0.3.0-beta.8 && tar tzf *.tgz  # 无 Cargo.toml/src"
     },
@@ -403,7 +403,7 @@
       "fixed_in": "0.3.0-beta.9",
       "verification": "passed",
       "verified_by": "framework",
-      "verification_note": "[framework] 两个包均补齐 README.md（按仓库统一格式），check-publish-contents 复跑不再报悬空声明",
+      "verification_note": "[framework] 两个包均补齐 README.md（按仓库统一格式），check-publish-contents 复跑不再报悬空声明\n[external] [framework] 两个包均补齐 README.md（按仓库统一格式），check-publish-contents 复跑不再报悬空声明",
       "evidence": "files 里列了 README.md，但两个包目录下均无该文件 → 声明与实际发布物不符（悬空声明）",
       "repro": "node scripts/check-publish-contents.mjs  # 修前报 files 项 \"README.md\" 在磁盘上就不存在"
     },
@@ -420,7 +420,7 @@
       "fixed_in": "0.3.0-beta.10",
       "verification": "passed",
       "verified_by": "external",
-      "verification_note": "[framework] 框架侧改为 mapCodeOutsideLiterals 包裹（字面量保护由统一原语提供）；★外部第七轮独立复测通过（report §十七「F-22 方法名字符串不被改（同族第 3 处）✅」）",
+      "verification_note": "[framework] 框架侧改为 mapCodeOutsideLiterals 包裹（字面量保护由统一原语提供）；★外部第七轮独立复测通过（report §十七「F-22 方法名字符串不被改（同族第 3 处）✅」）\n[external] [framework] 框架侧改为 mapCodeOutsideLiterals 包裹（字面量保护由统一原语提供）；★外部第七轮独立复测通过（report §十七「F-22 方法名字符串不被改（同族第 3 处）✅」）",
       "evidence": "function f(){ return 'call save() now' } → 产物 'call this.save() now'（字符串内容被改写）",
       "repro": "transformScriptToPage(\"function save(){return 1}\\nfunction f(){return 'call save() now'}\\nfunction g(){save()}\")"
     },
@@ -437,7 +437,7 @@
       "fixed_in": "0.3.0-beta.10",
       "verification": "passed",
       "verified_by": "external",
-      "verification_note": "[framework] 工作树用统一原语包裹 rwExpr；★外部第七轮独立复测通过（report §十七「F-23 SVG 属性字符串完好（同族第 4 处）✅」）",
+      "verification_note": "[framework] 工作树用统一原语包裹 rwExpr；★外部第七轮独立复测通过（report §十七「F-23 SVG 属性字符串完好（同族第 4 处）✅」）\n[external] [framework] 工作树用统一原语包裹 rwExpr；★外部第七轮独立复测通过（report §十七「F-23 SVG 属性字符串完好（同族第 4 处）✅」）",
       "evidence": "动态 SVG 属性表达式里的 'has s inside' → 产物 'this.data.has this.data.s this.data.inside'",
       "repro": "compileVueSfc('<svg viewBox=\"0 0 10 10\"><circle :cx=\"s===1?3:4\" r=\"1\"/><title :aria-label=\"\\'has s inside\\'\"></title></svg>' + 顶层 const s)"
     },
@@ -454,7 +454,7 @@
       "fixed_in": "0.3.0-beta.10",
       "verification": "passed",
       "verified_by": "framework",
-      "verification_note": "[framework] 新增 check:stats 门禁（7 项可机器重算逐项比对）+ 回归测试；破坏性验证：把组件数改回 66 → 门禁 exit 1。★该门禁与官网数字随本仓发布（官网不随 npm 包分发，故以仓库状态为准）",
+      "verification_note": "[framework] 新增 check:stats 门禁（7 项可机器重算逐项比对）+ 回归测试；破坏性验证：把组件数改回 66 → 门禁 exit 1。★该门禁与官网数字随本仓发布（官网不随 npm 包分发，故以仓库状态为准）\n[external] [framework] 新增 check:stats 门禁（7 项可机器重算逐项比对）+ 回归测试；破坏性验证：把组件数改回 66 → 门禁 exit 1。★该门禁与官网数字随本仓发布（官网不随 npm 包分发，故以仓库状态为准）",
       "evidence": "stats.ts 8 项里 7 项过时：包 40/41 并存（Hero 与数字区各说一个）、单测 2966→3447、原语 176→183、implemented 54→64、组件 66→76、规则 106→111、套件 8→10、plan 81→85",
       "repro": "node website/scripts/check-stats.ts  # 修前无此门禁；现在任一项不符即 exit 1"
     },
@@ -471,7 +471,7 @@
       "fixed_in": "0.3.0-beta.9",
       "verification": "passed",
       "verified_by": "framework",
-      "verification_note": "[framework] 变量提到 if 之外 + 「模板 pin 同步/lockfile/对齐核验」移出提升分支无条件执行（幂等 → 崩溃重跑自愈）；沙箱实测三种场景 + 真实 release 跑通。★发布链内部机制，外部无法独立复测",
+      "verification_note": "[framework] 变量提到 if 之外 + 「模板 pin 同步/lockfile/对齐核验」移出提升分支无条件执行（幂等 → 崩溃重跑自愈）；沙箱实测三种场景 + 真实 release 跑通。★发布链内部机制，外部无法独立复测\n[external] [framework] 变量提到 if 之外 + 「模板 pin 同步/lockfile/对齐核验」移出提升分支无条件执行（幂等 → 崩溃重跑自愈）；沙箱实测三种场景 + 真实 release 跑通。★发布链内部机制，外部无法独立复测",
       "evidence": "ReferenceError: versionBeforeBump is not defined；且因崩在 changeset version 之后 → 模板 pin 仍停在旧版本（用户 npm create 会装到旧包）",
       "repro": "pnpm release  #（修前：提升完成后崩在核验；模板 pin 未同步）"
     },
@@ -488,7 +488,7 @@
       "fixed_in": "0.3.0-beta.8",
       "verification": "passed",
       "verified_by": "external",
-      "verification_note": "[framework] 解包 fluid@0.3.0-beta.8 核对 dist 含 styleToString 导出；外部第五轮复测确认「聚合入口导入成功」。★注：报告第九节报的这条此前未登记入台账（属「报了没立项」），2026-09-20 对齐时补登",
+      "verification_note": "[framework] 解包 fluid@0.3.0-beta.8 核对 dist 含 styleToString 导出；外部第五轮复测确认「聚合入口导入成功」。★注：报告第九节报的这条此前未登记入台账（属「报了没立项」），2026-09-20 对齐时补登\n[external] [framework] 解包 fluid@0.3.0-beta.8 核对 dist 含 styleToString 导出；外部第五轮复测确认「聚合入口导入成功」。★注：报告第九节报的这条此前未登记入台账（属「报了没立项」），2026-09-20 对齐时补登",
       "evidence": "SyntaxError: The requested module '@proteus-vue/fluid' does not provide an export named 'styleToString'；components/index.ts 顶层 import 全部组件 → 模块图求值失败、app 白屏",
       "repro": "import { PDrawer } from '@proteus-vue/components'  → 白屏（改按路径 import 可绕过）"
     },
@@ -504,7 +504,7 @@
       "verification": "passed",
       "evidence": "CompilerError: js 产物语法错误：Unexpected token '.'（newbook.vue 8 处，整个新建作品表单）；v-model=\"arr[0]\" → Unexpected token '['",
       "repro": "compileVueSfc(`<script setup lang=\"ts\">const f = ref({ title: '' })</script><template><input v-model=\"f.title\" /></template>`, { filename: 't.vue', platform: 'mp-weixin' })",
-      "verification_note": "[framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）\n[external] [external · 第八轮复测] registry 包 beta.12 实测三种形态全部通过：f.title / o.a.b / arr[0]；产物 handler=proteusOnFTitleInput、setData 键路径=\"f.title\"。另：框架本工程全量构建通过（newbook 8 处全部产出正确 handler）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）\n[external] [external · 第八轮复测] registry 包 beta.12 实测三种形态全部通过：f.title / o.a.b / arr[0]；产物 handler=proteusOnFTitleInput、setData 键路径=\"f.title\"。另：框架本工程全量构建通过（newbook 8 处全部产出正确 handler）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
+      "verification_note": "[framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）\n[external] [external · 第八轮复测] registry 包 beta.12 实测三种形态全部通过：f.title / o.a.b / arr[0]；产物 handler=proteusOnFTitleInput、setData 键路径=\"f.title\"。另：框架本工程全量构建通过（newbook 8 处全部产出正确 handler）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] [framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）\n[external] [external · 第八轮复测] registry 包 beta.12 实测三种形态全部通过：f.title / o.a.b / arr[0]；产物 handler=proteusOnFTitleInput、setData 键路径=\"f.title\"。另：框架本工程全量构建通过（newbook 8 处全部产出正确 handler）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）\n[external] [external · 第八轮复测] registry 包 beta.12 实测三种形态全部通过：f.title / o.a.b / arr[0]；产物 handler=proteusOnFTitleInput、setData 键路径=\"f.title\"。另：框架本工程全量构建通过（newbook 8 处全部产出正确 handler）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.12",
       "verified_by": "external",
@@ -524,7 +524,7 @@
       "verification": "passed",
       "evidence": "wxml 产物平台标准违规：[DuplicatedAttribute] <input> 属性 bindinput 重复（微信仅保留其一——编译器应合并）",
       "repro": "compileVueSfc(`<script setup lang=\"ts\">const q = ref(''); function onInput() {}</script><template><input v-model=\"q\" @input=\"onInput\" /></template>`, { filename: 't.vue', platform: 'mp-weixin' })",
-      "verification_note": "[framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建\n[external] [external · 第八轮复测] registry 包 beta.12 实测：产物 bindinput 合并为 1 个（bindinput=\"proteusMergeQAndOnInput\"），合并函数已生成\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建\n[external] [external · 第八轮复测] registry 包 beta.12 实测：产物 bindinput 合并为 1 个（bindinput=\"proteusMergeQAndOnInput\"），合并函数已生成\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
+      "verification_note": "[framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建\n[external] [external · 第八轮复测] registry 包 beta.12 实测：产物 bindinput 合并为 1 个（bindinput=\"proteusMergeQAndOnInput\"），合并函数已生成\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] [framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建\n[external] [external · 第八轮复测] registry 包 beta.12 实测：产物 bindinput 合并为 1 个（bindinput=\"proteusMergeQAndOnInput\"），合并函数已生成\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建\n[external] [external · 第八轮复测] registry 包 beta.12 实测：产物 bindinput 合并为 1 个（bindinput=\"proteusMergeQAndOnInput\"），合并函数已生成\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `modelHandlerSuffix`）：@proteus-vue/compiler@0.3.0-beta.12 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.12",
       "verified_by": "external",
@@ -544,7 +544,7 @@
       "verification": "unverified",
       "evidence": "npx 上 compiler@0.3.0-beta.12 已含 F-27/F-28 修复（实测通过），但台账这两条仍写 fix_state=worktree / fixed_in=null / verification=unverified。框架同批提交完成修复+发布（3b508aa5、dd65004f），台账回填是独立动作 → 出现窗口期",
       "repro": "对比 `npm view @proteus-vue/compiler dist-tags` 与 docs/外部报告台账.json 中该轮条目的 fix_state/fixed_in",
-      "verification_note": "[framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）\n[framework · 2026-09-20] ★复发记录（诚实）：本轮为写第 12 轮回执而核对台账时，发现 F-27~F-32 仍标 fix_state=worktree——而 registry 实证它们早已发布。即**本条报告的失效模式在修复后再次发生**。已按 registry 实证补正，并新增机器门禁：① ledger-check 校验 packages 字段；② release.mjs 发布成功后，若刚发的包里含仍标 worktree 的条目 → 直接列出待翻转清单（发布链末端强制提醒，不再靠人工想起来）。\n[external] [framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）\n[framework · 2026-09-20] ★复发记录（诚实）：本轮为写第 12 轮回执而核对台账时，发现 F-27~F-32 仍标 fix_state=worktree——而 registry 实证它们早已发布。即**本条报告的失效模式在修复后再次发生**。已按 registry 实证补正，并新增机器门禁：① ledger-check 校验 packages 字段；② release.mjs 发布成功后，若刚发的包里含仍标 worktree 的条目 → 直接列出待翻转清单（发布链末端强制提醒，不再靠人工想起来）。\n[framework · 2026-09-29] 本条**失效模式的结构性成因**今日定位并修掉一半：① 本仓发布已迁 OIDC（`publish.yml` workflow_dispatch + `id-token: write`），本地不再持有 token；而 `release.mjs` 的第①步「凭据预检」**在版本提升之前**执行 ⇒ 本地 `pnpm release` 直接中止 ⇒「改了源码但未 bump」的 16 个包**永远等不到版本前进**（版本不动 ⇒ npm 不可覆盖 ⇒ 发不出去 ⇒ 台账只能长期停在工作树）。② 已新增 `--bump-only` / `pnpm release:bump`（**版本提升不需要凭据**，跳过预检，提升后停在'待 CI 发布'并打印下一步）——把「本地 bump + 提交推送」与「CI 发布」解耦。③ 今日实跑：16 包 bump 至 0.3.0-beta.21 + 模板 pin 同步 + lockfile 更新，`check-publish-drift` 真漂移**归零**。⇒ 台账回填滞后这一失效模式的两端（版本链、发布后提醒）现均已有机器判据；待发布动作完成后再翻转本条 `fix_state`。",
+      "verification_note": "[framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）\n[framework · 2026-09-20] ★复发记录（诚实）：本轮为写第 12 轮回执而核对台账时，发现 F-27~F-32 仍标 fix_state=worktree——而 registry 实证它们早已发布。即**本条报告的失效模式在修复后再次发生**。已按 registry 实证补正，并新增机器门禁：① ledger-check 校验 packages 字段；② release.mjs 发布成功后，若刚发的包里含仍标 worktree 的条目 → 直接列出待翻转清单（发布链末端强制提醒，不再靠人工想起来）。\n[external] [framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）\n[framework · 2026-09-20] ★复发记录（诚实）：本轮为写第 12 轮回执而核对台账时，发现 F-27~F-32 仍标 fix_state=worktree——而 registry 实证它们早已发布。即**本条报告的失效模式在修复后再次发生**。已按 registry 实证补正，并新增机器门禁：① ledger-check 校验 packages 字段；② release.mjs 发布成功后，若刚发的包里含仍标 worktree 的条目 → 直接列出待翻转清单（发布链末端强制提醒，不再靠人工想起来）。\n[framework · 2026-09-29] 本条**失效模式的结构性成因**今日定位并修掉一半：① 本仓发布已迁 OIDC（`publish.yml` workflow_dispatch + `id-token: write`），本地不再持有 token；而 `release.mjs` 的第①步「凭据预检」**在版本提升之前**执行 ⇒ 本地 `pnpm release` 直接中止 ⇒「改了源码但未 bump」的 16 个包**永远等不到版本前进**（版本不动 ⇒ npm 不可覆盖 ⇒ 发不出去 ⇒ 台账只能长期停在工作树）。② 已新增 `--bump-only` / `pnpm release:bump`（**版本提升不需要凭据**，跳过预检，提升后停在'待 CI 发布'并打印下一步）——把「本地 bump + 提交推送」与「CI 发布」解耦。③ 今日实跑：16 包 bump 至 0.3.0-beta.21 + 模板 pin 同步 + lockfile 更新，`check-publish-drift` 真漂移**归零**。⇒ 台账回填滞后这一失效模式的两端（版本链、发布后提醒）现均已有机器判据；待发布动作完成后再翻转本条 `fix_state`。\n[external] [framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）\n[framework · 2026-09-20] ★复发记录（诚实）：本轮为写第 12 轮回执而核对台账时，发现 F-27~F-32 仍标 fix_state=worktree——而 registry 实证它们早已发布。即**本条报告的失效模式在修复后再次发生**。已按 registry 实证补正，并新增机器门禁：① ledger-check 校验 packages 字段；② release.mjs 发布成功后，若刚发的包里含仍标 worktree 的条目 → 直接列出待翻转清单（发布链末端强制提醒，不再靠人工想起来）。\n[external] [framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）\n[framework · 2026-09-20] ★复发记录（诚实）：本轮为写第 12 轮回执而核对台账时，发现 F-27~F-32 仍标 fix_state=worktree——而 registry 实证它们早已发布。即**本条报告的失效模式在修复后再次发生**。已按 registry 实证补正，并新增机器门禁：① ledger-check 校验 packages 字段；② release.mjs 发布成功后，若刚发的包里含仍标 worktree 的条目 → 直接列出待翻转清单（发布链末端强制提醒，不再靠人工想起来）。",
       "fix_state": "worktree",
       "fixed_in": null,
       "packages": [
@@ -563,7 +563,7 @@
       "verification": "passed",
       "evidence": "真机（微信模拟器）启动失败：components/job-drawer/index.json: [\"usingComponents\"][\"p-drawer\"]: \"/proteus/p-drawer/index\" 路径下未找到组件。产物实况：76 个 proteus/p-* 目录只有 index.json，js/wxml/wxss 全部缺失（0/304 应有文件）。构建退出码 0、无告警。",
       "repro": "collectUsedFrameworkComponents([pageFile], componentsDir)：构造 page 用 <my-card>、src/components/my-card/index.vue 用 <p-button> → 收集到 0 个（应为 ≥1）。对照：page 直接写 <p-button> → 收集到 1 个 ✅",
-      "verification_note": "[framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [external · 真机复测] 框架组件产物从 0 → 3 个（真正被引用的）；usingComponents 9 条映射全部四件套齐全（F-30 核心判据）。另用工作树源码独立复测 collectUsedFrameworkComponents：经应用组件收集 2 个（修前 0）、页面直写 1 个，与报告最小复现一致\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `resolveAppComponentFile`）：@proteus-vue/plugin-vite@0.3.0-beta.14 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [external · 真机复测] 框架组件产物从 0 → 3 个（真正被引用的）；usingComponents 9 条映射全部四件套齐全（F-30 核心判据）。另用工作树源码独立复测 collectUsedFrameworkComponents：经应用组件收集 2 个（修前 0）、页面直写 1 个，与报告最小复现一致\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `resolveAppComponentFile`）：@proteus-vue/plugin-vite@0.3.0-beta.14 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
+      "verification_note": "[framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [external · 真机复测] 框架组件产物从 0 → 3 个（真正被引用的）；usingComponents 9 条映射全部四件套齐全（F-30 核心判据）。另用工作树源码独立复测 collectUsedFrameworkComponents：经应用组件收集 2 个（修前 0）、页面直写 1 个，与报告最小复现一致\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `resolveAppComponentFile`）：@proteus-vue/plugin-vite@0.3.0-beta.14 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [external · 真机复测] 框架组件产物从 0 → 3 个（真正被引用的）；usingComponents 9 条映射全部四件套齐全（F-30 核心判据）。另用工作树源码独立复测 collectUsedFrameworkComponents：经应用组件收集 2 个（修前 0）、页面直写 1 个，与报告最小复现一致\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `resolveAppComponentFile`）：@proteus-vue/plugin-vite@0.3.0-beta.14 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [external · 真机复测] 框架组件产物从 0 → 3 个（真正被引用的）；usingComponents 9 条映射全部四件套齐全（F-30 核心判据）。另用工作树源码独立复测 collectUsedFrameworkComponents：经应用组件收集 2 个（修前 0）、页面直写 1 个，与报告最小复现一致\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `resolveAppComponentFile`）：@proteus-vue/plugin-vite@0.3.0-beta.14 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.14",
       "verified_by": "external",
@@ -584,7 +584,7 @@
       "verification": "passed",
       "evidence": "模板 {{ store.x }} 拿不到值（产物 setData({store: 整个对象})，模板绑定不支持）。位置：packages/compiler/src/script.ts:3032 —— `runtimeInits.find((i) => i.name === 'store' && /^use\\w*Store\\(/.test(i.call))`",
       "repro": "用官方 examples/pages/pinia-demo.vue 只改声明做对照：`const store = usePlayerStore()` → ✅ 字段展开+$subscribe；`const s = usePlayerStore()` → ❌ setData({s: this.s})；`const session = ...` → ❌ 同上；`const store = useSessionStore()` → ✅（函数名含 Store 即可）",
-      "verification_note": "[framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] beta.15 源码核对：判据已放宽为「本文件唯一 useXxxStore() 即可」（不再强制变量名叫 store），且未识别时新增醒目告警（此前完全静默）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `storeCandidates`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] beta.15 源码核对：判据已放宽为「本文件唯一 useXxxStore() 即可」（不再强制变量名叫 store），且未识别时新增醒目告警（此前完全静默）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `storeCandidates`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
+      "verification_note": "[framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] beta.15 源码核对：判据已放宽为「本文件唯一 useXxxStore() 即可」（不再强制变量名叫 store），且未识别时新增醒目告警（此前完全静默）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `storeCandidates`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] beta.15 源码核对：判据已放宽为「本文件唯一 useXxxStore() 即可」（不再强制变量名叫 store），且未识别时新增醒目告警（此前完全静默）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `storeCandidates`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] beta.15 源码核对：判据已放宽为「本文件唯一 useXxxStore() 即可」（不再强制变量名叫 store），且未识别时新增醒目告警（此前完全静默）\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `storeCandidates`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.15",
       "verified_by": "external",
@@ -605,7 +605,7 @@
       "verification": "passed",
       "evidence": "微信开发者工具控制台 8 条 WXML 编译错误：`Fatal: unexpected character inside expression`（反引号模板字面量，chapter-tree×2/editor×1/workbench×2/writing-progress×1）、`Error: child nodes are not allowed for this element`（<template wx:if> 含子元素，writing-progress）、`Error: missing module name`。结果：整页黑屏，而 build:mp 退出码 0、产物齐全",
       "repro": "① compileVueSfc(`<text :title=\"\\`第 ${n} 章\\`\">x</text>`) → 期望报错，现状静默产出；② `<template v-if><text>a</text><text>b</text></template>` → 期望报错，现状静默产出；③ `<table><tr><td>a</td></tr></table>` → 期望报错或映射，现状原样输出",
-      "verification_note": "[framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] registry beta.15 实测：① 模板字面量 → 报错拦截（新错误码 TemplateLiteralInExpression）；② <template> 含子元素 → 报错拦截（TemplateChildNodes）；③ 非 WXML 标签 → 自动映射（table/details/select/header→view，pre/strong→text）；合法模板正常通过\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `UnknownHtmlTag`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] registry beta.15 实测：① 模板字面量 → 报错拦截（新错误码 TemplateLiteralInExpression）；② <template> 含子元素 → 报错拦截（TemplateChildNodes）；③ 非 WXML 标签 → 自动映射（table/details/select/header→view，pre/strong→text）；合法模板正常通过\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `UnknownHtmlTag`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
+      "verification_note": "[framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] registry beta.15 实测：① 模板字面量 → 报错拦截（新错误码 TemplateLiteralInExpression）；② <template> 含子元素 → 报错拦截（TemplateChildNodes）；③ 非 WXML 标签 → 自动映射（table/details/select/header→view，pre/strong→text）；合法模板正常通过\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `UnknownHtmlTag`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] registry beta.15 实测：① 模板字面量 → 报错拦截（新错误码 TemplateLiteralInExpression）；② <template> 含子元素 → 报错拦截（TemplateChildNodes）；③ 非 WXML 标签 → 自动映射（table/details/select/header→view，pre/strong→text）；合法模板正常通过\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `UnknownHtmlTag`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。\n[external] [framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] registry beta.15 实测：① 模板字面量 → 报错拦截（新错误码 TemplateLiteralInExpression）；② <template> 含子元素 → 报错拦截（TemplateChildNodes）；③ 非 WXML 标签 → 自动映射（table/details/select/header→view，pre/strong→text）；合法模板正常通过\n[framework · 2026-09-20 补正] 修正 fix_state：worktree → **published**。判据为 registry 实证（npm pack 解包后 grep 修复标记 `UnknownHtmlTag`）：@proteus-vue/compiler@0.3.0-beta.15 已包含该修复。此前误标 worktree 属 F-29 同一失效模式（台账滞后于实际发布）复发——已加机器门禁防重（见 scripts/release.mjs 发布后核对 + ledger-check 的 packages 字段校验）。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.15",
       "verified_by": "external",
@@ -626,7 +626,7 @@
       "verification": "passed",
       "evidence": "proteus.config.ts 配置 vite.define: { __API_BASE__: ... }（MP 无 dev proxy，API 绝对地址靠它注入），但 dist/mp-weixin/store/session.js 里 `typeof __API_BASE__` 原样残留未被替换；真机 console：`RangeError: Maximum call stack size exceeded`（取值失败路径在 store $subscribe 链里反复触发）",
       "repro": "proteus.config.ts 配 vite.define.__API_BASE__，任意 .ts 模块里用 __API_BASE__，然后：dist/web/assets/*.js → 已替换 ✅；dist/mp-weixin/**/*.js → 原样残留 ❌",
-      "verification_note": "[framework] 框架侧已修（工作树）**两条 MP 通道**：① 共享模块 esbuild 直出——define 合并 `cfg.vite.define`（与 vite 路径同源，用户 define 在框架白名单之后，语义同 vite 的 { ...framework, ...user }）；② `main.mp.ts` → app.js（纯 esbuildTransform 无 define，故做文本级替换，与既有 __PROTEUS_DEBUG__ 同一手法）。★实测（你们的配置）：MP 产物 `__API_BASE__` 零残留、正确注入 `http://127.0.0.1:8760`；外部工程重建后产物门禁全绿。回归锁 2 例（define 合并且 MP/Web 同源 + 两条直出通道源码断言），破坏性验证：撤掉合并 → 当场红。★待发布 + 待外部复测\n[external] [external · 第十二轮复测] 严格验证：用 PROTEUS_API_BASE=:9999 构建，MP 产物里出现 9999（证明宏真从配置注入，而非兜底值）；恢复后回到 8760。框架修了两处通道（共享模块 esbuild + main.mp.ts→app.js），我方报告只指出一处\n[external] [external · 第十二轮] 严格验证：用 PROTEUS_API_BASE=:9999 构建，MP 产物里出现 9999（证明宏真从配置注入，而非我方兜底值）；恢复后回到 8760。框架修了两处 MP 直出通道（共享模块 esbuild + main.mp.ts→app.js），我方报告只指出一处。★修后我方首次实现小程序端端到端连后端并渲染数据。",
+      "verification_note": "[framework] 框架侧已修（工作树）**两条 MP 通道**：① 共享模块 esbuild 直出——define 合并 `cfg.vite.define`（与 vite 路径同源，用户 define 在框架白名单之后，语义同 vite 的 { ...framework, ...user }）；② `main.mp.ts` → app.js（纯 esbuildTransform 无 define，故做文本级替换，与既有 __PROTEUS_DEBUG__ 同一手法）。★实测（你们的配置）：MP 产物 `__API_BASE__` 零残留、正确注入 `http://127.0.0.1:8760`；外部工程重建后产物门禁全绿。回归锁 2 例（define 合并且 MP/Web 同源 + 两条直出通道源码断言），破坏性验证：撤掉合并 → 当场红。★待发布 + 待外部复测\n[external] [external · 第十二轮复测] 严格验证：用 PROTEUS_API_BASE=:9999 构建，MP 产物里出现 9999（证明宏真从配置注入，而非兜底值）；恢复后回到 8760。框架修了两处通道（共享模块 esbuild + main.mp.ts→app.js），我方报告只指出一处\n[external] [external · 第十二轮] 严格验证：用 PROTEUS_API_BASE=:9999 构建，MP 产物里出现 9999（证明宏真从配置注入，而非我方兜底值）；恢复后回到 8760。框架修了两处 MP 直出通道（共享模块 esbuild + main.mp.ts→app.js），我方报告只指出一处。★修后我方首次实现小程序端端到端连后端并渲染数据。\n[external] [framework] 框架侧已修（工作树）**两条 MP 通道**：① 共享模块 esbuild 直出——define 合并 `cfg.vite.define`（与 vite 路径同源，用户 define 在框架白名单之后，语义同 vite 的 { ...framework, ...user }）；② `main.mp.ts` → app.js（纯 esbuildTransform 无 define，故做文本级替换，与既有 __PROTEUS_DEBUG__ 同一手法）。★实测（你们的配置）：MP 产物 `__API_BASE__` 零残留、正确注入 `http://127.0.0.1:8760`；外部工程重建后产物门禁全绿。回归锁 2 例（define 合并且 MP/Web 同源 + 两条直出通道源码断言），破坏性验证：撤掉合并 → 当场红。★待发布 + 待外部复测\n[external] [external · 第十二轮复测] 严格验证：用 PROTEUS_API_BASE=:9999 构建，MP 产物里出现 9999（证明宏真从配置注入，而非兜底值）；恢复后回到 8760。框架修了两处通道（共享模块 esbuild + main.mp.ts→app.js），我方报告只指出一处\n[external] [external · 第十二轮] 严格验证：用 PROTEUS_API_BASE=:9999 构建，MP 产物里出现 9999（证明宏真从配置注入，而非我方兜底值）；恢复后回到 8760。框架修了两处 MP 直出通道（共享模块 esbuild + main.mp.ts→app.js），我方报告只指出一处。★修后我方首次实现小程序端端到端连后端并渲染数据。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.17",
       "verified_by": "external"
@@ -640,16 +640,17 @@
       "reported_in": "0.3.0-beta.17",
       "found_by": "external",
       "status": "fixed",
-      "verification": "unverified",
+      "verification": "passed",
       "evidence": "产物 wxml 里 `wx:if=\"{{store.err}}\"` / `wx:for=\"{{store.projects}}\"` 前缀原样残留；另一侧：模板全改裸名 computed 后，框架收集不到 store.xxx → 不生成 $subscribe → 数据到达后视图不更新",
       "repro": "compileVueSfc 对照（同文件）：插值 `{{ store.err }}` → 剥离 ✅；`:title=\"store.x\"` → 剥离 ✅；`v-if=\"store.err\"` → ❌ 残留；`v-for=\"p in store.projects\"` → ❌ 残留\n★框架侧修复后（2026-09-20，同组对照）：`v-if=\"store.err\"` → `wx:if=\"{{err}}\"` ✅；`v-else-if=\"store.apiReady\"` → `wx:elif=\"{{apiReady}}\"` ✅；`v-for=\"p in store.projects\"` → `wx:for=\"{{projects}}\"` ✅；`v-show=\"store.tree\"` → `hidden=\"{{!tree}}\"` ✅；`v-html=\"store.html\"` → `nodes=\"{{html}}\"` ✅；这些字段同时进 $subscribe（数据到达即重渲染）。",
-      "verification_note": "[framework] 已修（工作树）：rewriteStoreRefs 接入 **5 条指令通道**——v-if / v-else-if / v-for / v-show / v-html（不再是「插值 + :prop 两处」的漏网形态）。★端到端证据：把工作树编译产物换入你们工程的 `node_modules/@proteus-vue/compiler` 后重建，`dist/mp-weixin/**/*.wxml` 的 `store.` **零残留**（workbench.wxml 的 todayWords / err / apiReady / tree / jobs 全部为裸名），还原你们原包后残留复现——差异只在编译产物本身。★顺带定位「改了却仍残留」的原因：你们解析到的是 node_modules 里的**已发布 beta.15**（其 dist 内仅 3 处 rewrite 调用），我的修复当时还在工作树未发布——**不是修复无效，是包还没到你们手上**。回归锁 6 例（五通道 + $subscribe 字段映射 + v-for 别名不误改），破坏性验证：逐条撤掉任一通道的 rewriteStoreRefs → 当场红。★待发布 + 待外部复测\n[external] 根因：rewriteStoreRefs()（剥离前缀 + 收集字段）只接在**插值**（template.ts:1706）与**:prop**（:1392）两处；v-if（:1192 用 exprContent）与 v-for（:1208 用 f.list）走各自表达式通道，均未调用它。影响：任何用 store 驱动条件/列表渲染的页面在 MP 端都取不到数据。建议：把 rewriteStoreRefs 收敛为**表达式处理的唯一入口**（所有取表达式处都过它）——与 F-30/F-32 同一条纪律「同一件事只允许一份实现」。我方已规避：指令用 computed 裸名 + 插值处保留 store.xxx 引用（使 $subscribe 仍生成）；实测端到端跑通（三个作品正确渲染、console 零错误）\n[external] [external · 第十二轮] 我方最小复现确认了缺陷（v-if/v-for 前缀残留）；随后用**工作树源码**独立复测修复：6/6 通过（插值 / v-if / v-else-if / v-for 全部剥离）——即修复有效、但**尚未发布**（`fix_state=worktree`），故 verification 保持 unverified，待含该修复的版本发布后复测升级。★ 另确认维护方回执中的说明属实：我首次复现残留时解析到的是已发布的 compiler@0.3.0-beta.15，而修复当时还在工作树。\n[framework · 2026-09-29] 工作树最小复现**今日重跑复验**：`compileVueSfc` 对 5 条指令通道（v-if/v-else-if/v-for/v-show/v-html）产物 `store.` **残留 0**（`wx:if=\"{{err}}\"` / `wx:elif=\"{{apiReady}}\"` / `wx:for=\"{{projects}}\"` / `hidden=\"{{!tree}}\"` / `nodes=\"{{html}}\"`），且 `$subscribe` 的 setData 映射五个字段齐备。回归锁 `tests/pinia-mp-compile.test.ts` 17/17 通过。★**结构性阻断已解除**：此前'待发布'实际卡在**版本号未前进**（同版本 npm 不可覆盖 ⇒ 静默跳过）。今日 `release --bump-only` 完成提升（compiler **0.3.0-beta.19 → 0.3.0-beta.21**，16 个漂移包一次收敛），`check-publish-drift` 真漂移 **16 → 0**（余 27 项为 unpublished，属正常待发）。⇒ 待 CI（`.github/workflows/publish.yml`，workflow_dispatch + OIDC）发布后翻转 `published`，再由使用方复测升级 verification。\n[framework · 2026-09-29] ★**已发布核实（npm pack 实证，非推断）**：`npm pack @proteus-vue/compiler@0.3.0-beta.21` 解包后 grep，`rewriteStoreRefs`（F-34 五通道收敛）出现 **11 次** · `proteusInline`（F-35 包装方法）出现 **8 次** ⇒ 修复**确已在 registry 上**（`dist-tags.latest = 0.3.0-beta.21`）。⇒ `fix_state` 由 `worktree` 翻转为 **`published`**、`fixed_in=0.3.0-beta.21`。★**verification 保持 `unverified`**——按共建铁律 3，只有使用方在**自己工程里**跑最小复现才能升 `external`；框架方自测不算独立验证。**提请使用方复测该版本**。",
+      "verification_note": "[framework] 已修（工作树）：rewriteStoreRefs 接入 **5 条指令通道**——v-if / v-else-if / v-for / v-show / v-html（不再是「插值 + :prop 两处」的漏网形态）。★端到端证据：把工作树编译产物换入你们工程的 `node_modules/@proteus-vue/compiler` 后重建，`dist/mp-weixin/**/*.wxml` 的 `store.` **零残留**（workbench.wxml 的 todayWords / err / apiReady / tree / jobs 全部为裸名），还原你们原包后残留复现——差异只在编译产物本身。★顺带定位「改了却仍残留」的原因：你们解析到的是 node_modules 里的**已发布 beta.15**（其 dist 内仅 3 处 rewrite 调用），我的修复当时还在工作树未发布——**不是修复无效，是包还没到你们手上**。回归锁 6 例（五通道 + $subscribe 字段映射 + v-for 别名不误改），破坏性验证：逐条撤掉任一通道的 rewriteStoreRefs → 当场红。★待发布 + 待外部复测\n[external] 根因：rewriteStoreRefs()（剥离前缀 + 收集字段）只接在**插值**（template.ts:1706）与**:prop**（:1392）两处；v-if（:1192 用 exprContent）与 v-for（:1208 用 f.list）走各自表达式通道，均未调用它。影响：任何用 store 驱动条件/列表渲染的页面在 MP 端都取不到数据。建议：把 rewriteStoreRefs 收敛为**表达式处理的唯一入口**（所有取表达式处都过它）——与 F-30/F-32 同一条纪律「同一件事只允许一份实现」。我方已规避：指令用 computed 裸名 + 插值处保留 store.xxx 引用（使 $subscribe 仍生成）；实测端到端跑通（三个作品正确渲染、console 零错误）\n[external] [external · 第十二轮] 我方最小复现确认了缺陷（v-if/v-for 前缀残留）；随后用**工作树源码**独立复测修复：6/6 通过（插值 / v-if / v-else-if / v-for 全部剥离）——即修复有效、但**尚未发布**（`fix_state=worktree`），故 verification 保持 unverified，待含该修复的版本发布后复测升级。★ 另确认维护方回执中的说明属实：我首次复现残留时解析到的是已发布的 compiler@0.3.0-beta.15，而修复当时还在工作树。\n[framework · 2026-09-29] 工作树最小复现**今日重跑复验**：`compileVueSfc` 对 5 条指令通道（v-if/v-else-if/v-for/v-show/v-html）产物 `store.` **残留 0**（`wx:if=\"{{err}}\"` / `wx:elif=\"{{apiReady}}\"` / `wx:for=\"{{projects}}\"` / `hidden=\"{{!tree}}\"` / `nodes=\"{{html}}\"`），且 `$subscribe` 的 setData 映射五个字段齐备。回归锁 `tests/pinia-mp-compile.test.ts` 17/17 通过。★**结构性阻断已解除**：此前'待发布'实际卡在**版本号未前进**（同版本 npm 不可覆盖 ⇒ 静默跳过）。今日 `release --bump-only` 完成提升（compiler **0.3.0-beta.19 → 0.3.0-beta.21**，16 个漂移包一次收敛），`check-publish-drift` 真漂移 **16 → 0**（余 27 项为 unpublished，属正常待发）。⇒ 待 CI（`.github/workflows/publish.yml`，workflow_dispatch + OIDC）发布后翻转 `published`，再由使用方复测升级 verification。\n[framework · 2026-09-29] ★**已发布核实（npm pack 实证，非推断）**：`npm pack @proteus-vue/compiler@0.3.0-beta.21` 解包后 grep，`rewriteStoreRefs`（F-34 五通道收敛）出现 **11 次** · `proteusInline`（F-35 包装方法）出现 **8 次** ⇒ 修复**确已在 registry 上**（`dist-tags.latest = 0.3.0-beta.21`）。⇒ `fix_state` 由 `worktree` 翻转为 **`published`**、`fixed_in=0.3.0-beta.21`。★**verification 保持 `unverified`**——按共建铁律 3，只有使用方在**自己工程里**跑最小复现才能升 `external`；框架方自测不算独立验证。**提请使用方复测该版本**。\n[external] [external · 2026-11-12 · @proteus-vue/{compiler,plugin-vite,cli}@0.3.0-beta.31] 在 OPERATOR 工程真实构建产物上复测：dist/mp-weixin/**/*.wxml 的 `store.` **零残留**（workbench.wxml 此前 5 处 `wx:if=\"{{store.x}}\"` 全部剥离为裸名），且这些字段仍进 $subscribe——数据到达后视图更新（Web 端实测三本书列表渲染成功）。另用 compileVueSfc 探针逐通道确认：v-if / v-else-if / v-for / v-show / v-html 五条指令通道全部剥离。台账此前标 worktree/fixed_in=null 属滞后（F-29 同类），已按 registry 实证补正。",
       "fix_state": "published",
       "fixed_in": "0.3.0-beta.21",
       "packages": [
         "@proteus-vue/compiler"
       ],
-      "published_evidence": "npm pack 实证（2026-09-29）：`npm pack @proteus-vue/compiler@0.3.0-beta.21` → 解包 → grep 修复标记：`rewriteStoreRefs` **11 处**（F-34 五通道收敛）· `proteusInline` **8 处**（F-35 包装方法）；`npm view @proteus-vue/compiler dist-tags` 的 `latest` = 0.3.0-beta.21 ⇒ **修复确在 registry 上**（非推断）。★verification 仍 `unverified`（须使用方在自己工程复测才可升 external）"
+      "published_evidence": "npm pack 实证（2026-09-29）：`npm pack @proteus-vue/compiler@0.3.0-beta.21` → 解包 → grep 修复标记：`rewriteStoreRefs` **11 处**（F-34 五通道收敛）· `proteusInline` **8 处**（F-35 包装方法）；`npm view @proteus-vue/compiler dist-tags` 的 `latest` = 0.3.0-beta.21 ⇒ **修复确在 registry 上**（非推断）。★verification 仍 `unverified`（须使用方在自己工程复测才可升 external）",
+      "verified_by": "external"
     },
     {
       "id": "F-35",
@@ -665,11 +666,123 @@
       "verification": "n_a",
       "evidence": "复测外部工程产物时顺带发现：`dist/mp-weixin/pages/workbench.wxml` 的 `<chapter-tree ... bind:open=\"(n) => continueWriting(n)\" bind:write=\"(n) => continueWriting(n)\" />`——WXML 事件属性值必须是**方法名**，整句箭头函数是非法处理器名：真机点击不报错、不触发，只有一条编译期 console 警告兜底（静默失效）。",
       "repro": "compileVueSfc：`<view @tap=\"(n) => onTap(n)\" />` → 修复前 `bind:tap=\"(n) => onTap(n)\"`（警告「不是简单方法引用（MVP 仅支持方法名），已原样输出」）；修复后 `bind:tap=\"proteusInlineOnTapPayloadDet\"` + 方法 `this.onTap(e.detail)`。原生事件对照：`<button @click=\"(e) => handle(e)\" />` → `proteusInlineHandlePayloadEvt` + `this.handle(e)`。",
-      "verification_note": "[framework] 与 #500（赋值型）/ #505（方法调用型）同族——都是「事件处理器不是裸方法名时被原样输出」。修法：单方法调用体的箭头形态 → 包装方法；参数按**事件类型**绑定载荷：自定义事件 `e.detail`（框架约定 emit 裸载荷 → 页面 e.detail = payload，见 skyline-pitfalls S37/S51）、原生事件 `e`。不可校准形态（体含 setup 局部变量 / 纯表达式 / 嵌套调用）仍诚实警告 + 原样输出，不静默改写。名称去重键含载荷来源（PayloadDet / PayloadEvt）——同一箭头在自定义/原生事件上方法体不同，同名会被 inlineHandlers 按名去重吃错方法体（已加防碰撞回归锁）。回归锁 5 例于 tests/pinia-mp-compile.test.ts（含「不产生箭头函数」的反向断言），破坏性验证：让箭头分支返回 null → 4 例当场红。★影响面：任何用 `@event=\"(x) => fn(x)\"` 的页面在 MP 端事件全部静默失效。★待发布 + 待外部复测\n[external] [framework] 与 #500（赋值型）/ #505（方法调用型）同族——都是「事件处理器不是裸方法名时被原样输出」。修法：单方法调用体的箭头形态 → 包装方法；参数按**事件类型**绑定载荷：自定义事件 `e.detail`（框架约定 emit 裸载荷 → 页面 e.detail = payload，见 skyline-pitfalls S37/S51）、原生事件 `e`。不可校准形态（体含 setup 局部变量 / 纯表达式 / 嵌套调用）仍诚实警告 + 原样输出，不静默改写。名称去重键含载荷来源（PayloadDet / PayloadEvt）——同一箭头在自定义/原生事件上方法体不同，同名会被 inlineHandlers 按名去重吃错方法体（已加防碰撞回归锁）。回归锁 5 例于 tests/pinia-mp-compile.test.ts（含「不产生箭头函数」的反向断言），破坏性验证：让箭头分支返回 null → 4 例当场红。★影响面：任何用 `@event=\"(x) => fn(x)\"` 的页面在 MP 端事件全部静默失效。★待发布 + 待外部复测\n[framework · 2026-09-29] 工作树最小复现**今日重跑复验**：`compileVueSfc` 对 5 条指令通道（v-if/v-else-if/v-for/v-show/v-html）产物 `store.` **残留 0**（`wx:if=\"{{err}}\"` / `wx:elif=\"{{apiReady}}\"` / `wx:for=\"{{projects}}\"` / `hidden=\"{{!tree}}\"` / `nodes=\"{{html}}\"`），且 `$subscribe` 的 setData 映射五个字段齐备。回归锁 `tests/pinia-mp-compile.test.ts` 17/17 通过。★**结构性阻断已解除**：此前'待发布'实际卡在**版本号未前进**（同版本 npm 不可覆盖 ⇒ 静默跳过）。今日 `release --bump-only` 完成提升（compiler **0.3.0-beta.19 → 0.3.0-beta.21**，16 个漂移包一次收敛），`check-publish-drift` 真漂移 **16 → 0**（余 27 项为 unpublished，属正常待发）。⇒ 待 CI（`.github/workflows/publish.yml`，workflow_dispatch + OIDC）发布后翻转 `published`，再由使用方复测升级 verification。\n[framework · 2026-09-29] ★**已发布核实（npm pack 实证，非推断）**：`npm pack @proteus-vue/compiler@0.3.0-beta.21` 解包后 grep，`rewriteStoreRefs`（F-34 五通道收敛）出现 **11 次** · `proteusInline`（F-35 包装方法）出现 **8 次** ⇒ 修复**确已在 registry 上**（`dist-tags.latest = 0.3.0-beta.21`）。⇒ `fix_state` 由 `worktree` 翻转为 **`published`**、`fixed_in=0.3.0-beta.21`。★**verification 保持 `unverified`**——按共建铁律 3，只有使用方在**自己工程里**跑最小复现才能升 `external`；框架方自测不算独立验证。**提请使用方复测该版本**。",
+      "verification_note": "[framework] 与 #500（赋值型）/ #505（方法调用型）同族——都是「事件处理器不是裸方法名时被原样输出」。修法：单方法调用体的箭头形态 → 包装方法；参数按**事件类型**绑定载荷：自定义事件 `e.detail`（框架约定 emit 裸载荷 → 页面 e.detail = payload，见 skyline-pitfalls S37/S51）、原生事件 `e`。不可校准形态（体含 setup 局部变量 / 纯表达式 / 嵌套调用）仍诚实警告 + 原样输出，不静默改写。名称去重键含载荷来源（PayloadDet / PayloadEvt）——同一箭头在自定义/原生事件上方法体不同，同名会被 inlineHandlers 按名去重吃错方法体（已加防碰撞回归锁）。回归锁 5 例于 tests/pinia-mp-compile.test.ts（含「不产生箭头函数」的反向断言），破坏性验证：让箭头分支返回 null → 4 例当场红。★影响面：任何用 `@event=\"(x) => fn(x)\"` 的页面在 MP 端事件全部静默失效。★待发布 + 待外部复测\n[external] [framework] 与 #500（赋值型）/ #505（方法调用型）同族——都是「事件处理器不是裸方法名时被原样输出」。修法：单方法调用体的箭头形态 → 包装方法；参数按**事件类型**绑定载荷：自定义事件 `e.detail`（框架约定 emit 裸载荷 → 页面 e.detail = payload，见 skyline-pitfalls S37/S51）、原生事件 `e`。不可校准形态（体含 setup 局部变量 / 纯表达式 / 嵌套调用）仍诚实警告 + 原样输出，不静默改写。名称去重键含载荷来源（PayloadDet / PayloadEvt）——同一箭头在自定义/原生事件上方法体不同，同名会被 inlineHandlers 按名去重吃错方法体（已加防碰撞回归锁）。回归锁 5 例于 tests/pinia-mp-compile.test.ts（含「不产生箭头函数」的反向断言），破坏性验证：让箭头分支返回 null → 4 例当场红。★影响面：任何用 `@event=\"(x) => fn(x)\"` 的页面在 MP 端事件全部静默失效。★待发布 + 待外部复测\n[framework · 2026-09-29] 工作树最小复现**今日重跑复验**：`compileVueSfc` 对 5 条指令通道（v-if/v-else-if/v-for/v-show/v-html）产物 `store.` **残留 0**（`wx:if=\"{{err}}\"` / `wx:elif=\"{{apiReady}}\"` / `wx:for=\"{{projects}}\"` / `hidden=\"{{!tree}}\"` / `nodes=\"{{html}}\"`），且 `$subscribe` 的 setData 映射五个字段齐备。回归锁 `tests/pinia-mp-compile.test.ts` 17/17 通过。★**结构性阻断已解除**：此前'待发布'实际卡在**版本号未前进**（同版本 npm 不可覆盖 ⇒ 静默跳过）。今日 `release --bump-only` 完成提升（compiler **0.3.0-beta.19 → 0.3.0-beta.21**，16 个漂移包一次收敛），`check-publish-drift` 真漂移 **16 → 0**（余 27 项为 unpublished，属正常待发）。⇒ 待 CI（`.github/workflows/publish.yml`，workflow_dispatch + OIDC）发布后翻转 `published`，再由使用方复测升级 verification。\n[framework · 2026-09-29] ★**已发布核实（npm pack 实证，非推断）**：`npm pack @proteus-vue/compiler@0.3.0-beta.21` 解包后 grep，`rewriteStoreRefs`（F-34 五通道收敛）出现 **11 次** · `proteusInline`（F-35 包装方法）出现 **8 次** ⇒ 修复**确已在 registry 上**（`dist-tags.latest = 0.3.0-beta.21`）。⇒ `fix_state` 由 `worktree` 翻转为 **`published`**、`fixed_in=0.3.0-beta.21`。★**verification 保持 `unverified`**——按共建铁律 3，只有使用方在**自己工程里**跑最小复现才能升 `external`；框架方自测不算独立验证。**提请使用方复测该版本**。\n[external] [framework] 与 #500（赋值型）/ #505（方法调用型）同族——都是「事件处理器不是裸方法名时被原样输出」。修法：单方法调用体的箭头形态 → 包装方法；参数按**事件类型**绑定载荷：自定义事件 `e.detail`（框架约定 emit 裸载荷 → 页面 e.detail = payload，见 skyline-pitfalls S37/S51）、原生事件 `e`。不可校准形态（体含 setup 局部变量 / 纯表达式 / 嵌套调用）仍诚实警告 + 原样输出，不静默改写。名称去重键含载荷来源（PayloadDet / PayloadEvt）——同一箭头在自定义/原生事件上方法体不同，同名会被 inlineHandlers 按名去重吃错方法体（已加防碰撞回归锁）。回归锁 5 例于 tests/pinia-mp-compile.test.ts（含「不产生箭头函数」的反向断言），破坏性验证：让箭头分支返回 null → 4 例当场红。★影响面：任何用 `@event=\"(x) => fn(x)\"` 的页面在 MP 端事件全部静默失效。★待发布 + 待外部复测\n[external] [framework] 与 #500（赋值型）/ #505（方法调用型）同族——都是「事件处理器不是裸方法名时被原样输出」。修法：单方法调用体的箭头形态 → 包装方法；参数按**事件类型**绑定载荷：自定义事件 `e.detail`（框架约定 emit 裸载荷 → 页面 e.detail = payload，见 skyline-pitfalls S37/S51）、原生事件 `e`。不可校准形态（体含 setup 局部变量 / 纯表达式 / 嵌套调用）仍诚实警告 + 原样输出，不静默改写。名称去重键含载荷来源（PayloadDet / PayloadEvt）——同一箭头在自定义/原生事件上方法体不同，同名会被 inlineHandlers 按名去重吃错方法体（已加防碰撞回归锁）。回归锁 5 例于 tests/pinia-mp-compile.test.ts（含「不产生箭头函数」的反向断言），破坏性验证：让箭头分支返回 null → 4 例当场红。★影响面：任何用 `@event=\"(x) => fn(x)\"` 的页面在 MP 端事件全部静默失效。★待发布 + 待外部复测 [external · 2026-11-12 · beta.31] 顺带实证已发布且生效：dist/mp-weixin/pages/workbench.wxml 的 `<chapter-tree bind:open=\"(n) => continueWriting(n)\">` 已编译为 `bind:open=\"proteusInlineContinueWritingPayloadDet\"`，对应方法在 workbench.js:242 存在；全产物 wxml 箭头函数 handler 零残留。★但因本条 found_by=framework，仍保持 verification=n_a，不冒充独立验证。",
       "packages": [
         "@proteus-vue/compiler"
       ],
       "published_evidence": "npm pack 实证（2026-09-29）：`npm pack @proteus-vue/compiler@0.3.0-beta.21` → 解包 → grep 修复标记：`rewriteStoreRefs` **11 处**（F-34 五通道收敛）· `proteusInline` **8 处**（F-35 包装方法）；`npm view @proteus-vue/compiler dist-tags` 的 `latest` = 0.3.0-beta.21 ⇒ **修复确在 registry 上**（非推断）。★verification 仍 `unverified`（须使用方在自己工程复测才可升 external）"
+    },
+    {
+      "id": "F-36",
+      "title": "@proteus-vue/components 的 .vue 源码使用全局 getCurrentPages 但包未声明 miniprogram-api-typings 依赖 → 消费者 vue-tsc 必红、proteus build 中断",
+      "kind": "packaging",
+      "severity": "blocker",
+      "round": 13,
+      "reported_in": "0.3.0-beta.28",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "引用任何一个 p-* 组件（或聚合入口）后，vue-tsc 报：\nnode_modules/@proteus-vue/components/p-auth-gate/index.vue(80,22): error TS2304: Cannot find name 'getCurrentPages'.\np-loading-host/index.vue(88,20)、p-toast-host/index.vue(106,22) 同样。\n而 proteus build 在 vite build 之前先跑 vue-tsc，故整条构建链中断（exit 1）。",
+      "repro": "mkdir probe && cd probe && npx @proteus-vue/create-proteus@latest app && cd app\nnpm install && npm i @proteus-vue/components@0.3.0-beta.28\n# 写一个引用组件的页面：\ncat > src/pages/btn.vue <<'EOF'\n<template><view><p-button>x</p-button></view></template>\n<script setup lang=\"ts\">import PButton from '@proteus-vue/components/p-button/index.vue'</script>\nEOF\nnpx vue-tsc --noEmit   # → 3 处 TS2304（空模板工程本身是 0 报错）\nnpx proteus build --target web   # → 同样报错后中断",
+      "verification_note": "[external 观察] 框架仓库根 package.json 里有 miniprogram-api-typings ^5.2.3 的 devDependency，所以框架自测全绿——workspace 软链下类型拿得到；但 components 包自身的 package.json 未声明该依赖，也没有随包发布 d.ts 兜底，npm 安装形态下消费者拿不到。与 F-14（四道门禁只查『声明的』、不查『实际打出去的包里有什么』）同族。我方规避：在消费者工程显式安装 miniprogram-api-typings（已验证可消除 3 处报错）。建议：components 包 dependencies 或 peerDependencies 补 miniprogram-api-typings，并在发布门禁里加一条『包内 .vue/.ts 引用的全局类型是否有对应依赖声明』。"
+    },
+    {
+      "id": "F-37",
+      "title": "框架自带的两道样式门禁（profile-boundary / cse-lint）在 npm 安装形态下封死框架自己的 p-* 组件 → 模板工程只要引用组件就无法 Web 构建",
+      "kind": "process",
+      "severity": "blocker",
+      "round": 13,
+      "reported_in": "0.3.0-beta.28",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "全新 create-proteus 工程 + npm i @proteus-vue/components，引用一个 p-button，Web 构建失败：\n[profile-boundary/error] components/p-button/index.vue:133 CSS-PB-display `display: inline-flex` 在 skyline 端不受支持\n放行后继续失败：\n[proteus-cse-lint/error] components/p-popup/index.vue: E-CSS-004 `:class=\"panelPhaseCls\"` 无法编译期枚举候选类\n\n全量扫描 @proteus-vue/components@0.3.0-beta.28：profile-boundary 24 条（17 个文件）、cse-lint E-CSS-004 22 个文件（25 处），全部是框架组件自身。",
+      "repro": "cd 任意新工程 && npm i @proteus-vue/components@0.3.0-beta.28\n# 页面里 import 任一 p-* 组件后：\nnpx proteus build --target web\n# → profile-boundary 报 p-button 的 inline-flex（消费者无法改 node_modules）",
+      "verification_note": "[external 观察] 框架仓库 examples/ 下有 profile-boundary-baseline.json（37 条）与 cse-lint-baseline.json，把 p-button 等组件列进了基线——所以框架自己构建是绿的。但 create-proteus 模板**没有随包下发这两个基线文件**，也没有自动生成机制，于是同一批组件在消费者工程里变成阻断项。根因与 F-36 同族：门禁的基线是『仓库内绝对路径』（../packages/components/...），换到消费者 npx 目录结构后键对不上，且消费者无权修改 node_modules。我方规避：自己生成了 profile-boundary-baseline.json（24 键）与 cse-lint-baseline.json（22 键），只放行框架组件、不放行自有代码（自有代码 5 处 overflow/grid/pre-wrap 已按 Skyline 限制真实修掉）。建议：① 门禁对 node_modules/** 默认跳过或自动基线（消费者无法修的代码不该阻断）；② 若坚持校验，基线键改用『包名+相对包内路径』而非仓库相对路径，做到跨安装形态可复用。"
+    },
+    {
+      "id": "F-38",
+      "title": "组件事件两个编译缺口：defineEmits 编译成 data.emit=undefined；v-for 作用域内的参数化 handler 被原样输出或丢掉参数",
+      "kind": "compiler",
+      "severity": "blocker",
+      "round": 14,
+      "reported_in": "0.3.0-beta.31",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "缺陷 A（defineEmits → data.emit=undefined）：\n  const emit = defineEmits<{ (e:'go', n:number): void }>()\n  → 产物 data: { emit: undefined }，调用点原样 this.emit('go', 1)\n  → 小程序端一点就抛 this.emit is not a function\n  ★ 本工程 chapter-tree / job-drawer / book-search 三个既有组件全部中招：\n    点击章节卡片跳转、抽屉关闭/取消、跳转检索——MP 端**全部无响应**。\n缺陷 B（v-for 作用域丢参数）：\n  @click=\"run(a.key)\" → bindtap=\"run(a.key)\"  ← 非法处理器名，永不触发\n  @click=\"run(a)\"     → bindtap=\"proteusInlineRuna\"，但方法体 this.run(a) —— a 未定义\n  @click=\"(e)=>run(a)\"→ 原样输出 bindtap=\"(e)=>run(a)\" ← 非法\n  只有「裸方法名」和「参数为 e.target.dataset 的箭头」能被正确包装。",
+      "repro": "// 缺陷 A\nnode -e \"import('@proteus-vue/compiler').then(({compileVueSfc})=>{\nconst o=compileVueSfc(`<template><view @click=\\\"emit('go',1)\\\">x</view></template>\n<script setup lang=ts>const emit=defineEmits()</script>`,{px2rpx:true,rpxRatio:2},{file:'t.vue'})\nconsole.log(o.js.match(/emit:\\\\s*\\\\w+/)?.[0]) })  // → emit: undefined\"\n\n// 缺陷 B\ncompileVueSfc(`<template><view v-for=\\\"a in ACTIONS\\\"><button @click=\\\"run(a.key)\\\">x</button></view></template>\n<script setup lang=ts>const ACTIONS=[{key:'x'}];function run(k){}</script>`, ...)\n// → wxml: bindtap=\"run(a.key)\"（非法处理器名）",
+      "verification_note": "[external 定位] F-35 只修了「箭头函数事件处理器」这一形态，本轮实测发现同族还有两条路径没修：\n① defineEmits 整条链路——编译成 data.emit=undefined 而非 this.triggerEvent；\n② v-for 作用域内的参数化 handler——参数变量不进入包装方法体。\n★ 与 F-35 是同一家族（事件处理器不是裸方法名时处理不当），建议按「事件处理器形态矩阵」一次性收口，\n  而不是继续逐个形态补。矩阵维度：裸方法名 / 方法调用带参 / 箭头（无参/带参/带 e）/ v-for 作用域 / store 方法。\n我方规避（已落地）：AI 面板三个按钮**分别写死为无参方法**（onTapGenerate/onTapReview/onTapCheck），\n组件向上通知改走 pinia store 字段 + 父级 watch，不使用 defineEmits。\n既有三个组件的同类问题**未修**——它们的 emit 调用在 MP 端仍是死的，需框架修复或逐个改写。"
+    },
+    {
+      "id": "F-39",
+      "title": "p-fluid 表达式只接受纯数字：(min, max) 里的 var(--x) / 百分比 / auto 被静默剥离，且无任何警告 → 柔性布局与 CSS 变量 token 体系无法共存",
+      "kind": "compiler",
+      "severity": "major",
+      "round": 15,
+      "reported_in": "0.3.0-beta.31",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "把工程里既有的间距 token 喂给 p-fluid，属性被整条剥掉，产物里没有 style、也没有任何 warning：\n  <div p-fluid=\"padding(var(--sp-4))\">  → 产物无 style\n  <div p-fluid=\"width(50%, 100%)\">      → 产物无 style\n  <div p-fluid=\"padding(16, 24)\">       → style=\"padding: calc(13.18px + 0.7512vw)\"（对照，正常）\n根因在编译期解析器：parseFluidExpr 的正则是 /([A-Za-z][A-Za-z-]*)\\s*\\(\\s*([\\d.]+)\\s*,\\s*([\\d.]+)\\s*\\)/g，\nmin/max 只匹配纯数字，var()、%、auto 全不匹配 → 整组被跳过且不报警。",
+      "repro": "node -e \"import('@proteus-vue/compiler').then(({compileVueSfc})=>{\n  for (const e of ['padding(var(--sp-4))','width(50%,100%)','padding(16,24)']) {\n    const o = compileVueSfc(`<template><div p-fluid=\\\"${e}\\\">x</div></template>`,\n      {px2rpx:true,rpxRatio:2},{file:'t.vue'})\n    console.log(e, '->', (o.wxml.match(/style=\\\"[^\\\"]*\\\"/)||['(no style)'])[0])\n  }})",
+      "verification_note": "[external 影响] 这不是少一个特性，而是让柔性系统与设计令牌二选一：\n本工程已把间距收敛成 --gutter / --card-pad / --block-gap / --sp-1..7，全部页面引用。\n若改用 p-fluid 就必须把每个 token 展开成字面量写进每个模板，token 体系（一处改全局生效）随之失效。\n已实测：无法两者兼得。\n[external 建议] ① parseFluidExpr 支持 var() / 百分比 / auto 透传（不参与插值，原样输出）；\n② 匹配失败时必须 warn —— 现在是静默剥离，用户以为写了（与 F-14 / F-37 同族：不报错即静默失效）。\n[我方处置] 暂停 p-fluid 改造，间距/字号继续用 token；布局层（p-grid）先行替换。"
+    },
+    {
+      "id": "F-40",
+      "title": "p-fluid 的 MP 产物是裸 calc() 无 clamp 上下界：viewportMax 之外不夹取（实测 1600 宽出 33.8px 应为 32），designWidth 偏离实际端时还会外推出负值（390 宽 = -46.8px）",
+      "kind": "compiler",
+      "severity": "major",
+      "round": 15,
+      "reported_in": "0.3.0-beta.31",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "同一份 p-fluid=\"font-size(20, 32)\"：\n  Web（运行时 clamp）: clamp(20px, calc(15.77px + 1.1268vw), 32px)  ← 两端有夹取\n  MP （编译期 calc）: calc(15.77px + 1.1268vw)                      ← 无夹取\n量化后果（designWidth=375 / viewportMax=1440）：\n  375 宽 → 20.00px（正确）\n 1600 宽 → 33.80px（超出 max=32，未夹取）\ndesignWidth=1280 / viewportMax=1920 时更严重：产物 calc(-76.00px + 7.5vw)，\n  390 宽 → -46.8px（负字号）。",
+      "repro": "node -e \"import('@proteus-vue/compiler').then(({compileVueSfc})=>{\n  const src='<template><div p-fluid=\\\"font-size(20,32)\\\">x</div></template>'\n  for (const f of [{designWidth:375,viewportMax:1440},{designWidth:1280,viewportMax:1920}]) {\n    const o=compileVueSfc(src,{px2rpx:true,rpxRatio:2,fluidLayout:f},{file:'t.vue'})\n    console.log(JSON.stringify(f),'->',o.wxml.match(/style=\\\"[^\\\"]*\\\"/)[0])\n  }})",
+      "verification_note": "[external 定位] 这是有文档的降级（rules 里 fluid/p-fluid 的 description 写明「Skyline 无 clamp，故 MP 产物用线性 calc」），所以不是实现疏漏。但后果有两个没被文档覆盖：\n① 超出 [designWidth, viewportMax] 区间时不夹取 —— 文档说「超界 ±1-2px 可忽略」，\n   但那是 designWidth 接近实际端的前提。designWidth 与窄端差 900px 时误差是 47px（负值），不是 1-2px。\n② 没有下限保护：任何 min>0 的属性（font-size / padding / gap）都可能算出负值，\n   而 CSS 对负 padding 是丢弃整条声明（不报错），表现为样式莫名消失。\n[external 建议] ① MP 产物在可能越界时给构建期警告（designWidth 与 fluidViewport.min 差距过大时）；\n② 或产物补 max(0px, calc(...)) —— Skyline 不支持 clamp，max() 是否支持需框架确认；\n③ 文档把「超界 ±1-2px」改为量化表述（= slope × 越界像素数），避免用户按旧说法低估。\n[我方处置] designWidth 已由 1280/1920 改为 375/1440（与实际落地端手机对齐），负值问题在当前配置下不复现；但越界不夹取（1600 宽 33.8 > 32）仍然存在。"
+    },
+    {
+      "id": "F-41",
+      "title": "p-grid 的 minColWidth 是固定下限，无法随容器宽度变化：手机端列数无法与手写断点方案对齐（390 宽下 2 列 vs 手写 3 列）",
+      "kind": "compiler",
+      "severity": "minor",
+      "round": 15,
+      "reported_in": "0.3.0-beta.31",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "Web 端四档实测（minColWidth=142, gap=12，容器与手写版相同）：\n 1440 → 7 列（手写版 7 列 ✅）\n 1024 → 5 列（手写版 5 列 ✅）\n  768 → 4 列（手写版 4 列 ✅）\n  390 → 2 列 / 卡 144px（手写版 3 列 / 卡 95px ❌）\n差异根因：minColWidth 是固定下限，手机内容区 308px 只放得下 2x142。\n手写版是在小屏断点里把 min-width 降到 96px 才排到 3 列。\n另：组件内使用（本工程 chapter-tree）产物保留 <p-grid ...> 标签 = 运行时组件回退；\n页面内使用才语义展开为 flex + p-grid-item 包装层（文档 06-semantic-compile §5 已声明此边界，不算缺陷）。",
+      "repro": "// 页面内：语义展开（正确）\ncompileVueSfc('<template><view><p-grid :min-col-width=\"142\" :gap=\"12\"><view v-for=\"it in items\" :key=\"it.id\">{{it.t}}</view></p-grid></view></template>',\n  {px2rpx:true,rpxRatio:2}, {file:'page.vue'})\n// → <view id=\"pgrid0\" style=\"display:flex;flex-wrap:wrap;gap:12px\">\n//   + 子项包 <view class=\"p-grid-item\" style=\"{{pgridStyle0}}\">\n// 放进 src/components/x/index.vue → <p-grid ...> 标签原样保留（运行时回退）\n\n// 列数差异：浏览器实测 390 宽下 minColWidth=142 → 2 列；手写 min-width:96 → 3 列",
+      "verification_note": "[external 说明] 真正的缺口是「minColWidth 无法随容器宽度变化」。\n而「小屏密排、大屏疏排」是网格最常见的诉求（本工程章节卡就是：桌面 7 列扫读、手机 3 列省滚动）。\n手写 flex + 断点能表达，p-grid 不能 —— 这是用框架方案时能力倒退的一处具体案例。\n[external 建议] p-grid 支持 minColWidth 的区间表达式（如 min-col-width=\"96(0,600) | 142(600,inf)\"），\n或直接复用 p-adaptive 的 modes 语法，让「列宽随容器变」与「形态随容器变」用同一套表达式。\n[我方处置] 已改用 p-grid（试验田优先用框架方案），接受手机端 2 列、滚动长度增加约 50%；\n若框架补齐上述能力，改回 3 列只需调一个 prop。"
+    },
+    {
+      "id": "F-42",
+      "title": "p-adaptive 在 MP 端完全不可用：模板 ref 拿不到元素 → onReady 首行就 return，controller 从不创建，形态恒为首区间（不是降级，是整段逻辑被跳过）",
+      "kind": "runtime",
+      "severity": "major",
+      "round": 15,
+      "reported_in": "0.3.0-beta.31",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "把 @proteus-vue/components/p-adaptive/index.vue 直接送进 MP 编译器，产物 js 关键三行：\n   19   wrapEl: undefined,                                  ← 模板 ref 在 MP 端拿不到元素\n   22   onReady() {\n   24     if (!this.data.wrapEl) return                    ← 必然命中，直接退出\n   25     this.controller = createAdaptiveController(...)   ← 永远执行不到\n后果：form 恒为初始值 'sheet'，modes 表达式等于没写。\n组件注释写的是「MP：无 ResizeObserver → 形态恒首区间兜底」——\n但实际连「按静态宽度求一次形态」都没做，是整段逻辑被跳过，比注释描述的更彻底。",
+      "repro": "// 编译组件源码（不经页面）\nnode -e \"const fs=require('fs');import('@proteus-vue/compiler').then(({compileVueSfc})=>{\n  const src=fs.readFileSync('node_modules/@proteus-vue/components/p-adaptive/index.vue','utf8')\n  const o=compileVueSfc(src,{px2rpx:true,rpxRatio:2},{file:'p-adaptive/index.vue'})\n  o.js.split('\\n').forEach((l,i)=>{ if(/wrapEl|createAdaptiveController|onReady/.test(l)) console.log(i+1,l.trim()) })\n})\"\n// 观察 wrapEl: undefined + if (!this.data.wrapEl) return",
+      "verification_note": "[external 归因] 这不是「平台能力缺失」——fluid 包**自带 MP 适配器**且文档写明了用法：\n  createMpSizeObserverFactory({ measure: () => adapter.measureRect(...) })\n  createContainerQuery(null, { createObserver: factory })\ncreateContainerQuery 也保留了 createObserver / readSize 注入点。\n但 p-adaptive 组件**没有接这个适配器**：它直接依赖 Vue 模板 ref（wrapEl），而 ref 在 MP 端取不到元素。\n★ 全量核对：node_modules/@proteus-vue/components/*/index.vue 里 **0 个组件**使用 createMpSizeObserverFactory。\n  即：MP 尺寸观察能力已实现、已导出、有文档，但没有一个组件接线。\n[external 影响] 「小屏单栏 / 大屏多栏」这类**拓扑切换**此前全靠 @media，\n若要在小程序端实现，p-adaptive 是唯一候选。它现在不可用，等于跨端拓扑自适应这条路由封死。\n[external 建议] ① p-adaptive 接入 createMpSizeObserverFactory（组件层注入 wx.createSelectorQuery().boundingClientRect）；\n② 短期至少在构建期对「MP + p-adaptive」给警告，说明形态不会切换——现在的静默恒首区间会让人以为配错了表达式。\n[我方处置] 拓扑切换（docs 页手机上下堆叠、review 页顶栏换行）暂不迁移，保留 @media 并记录为待办。"
+    },
+    {
+      "id": "F-43",
+      "title": "MP 尺寸观察能力已实现但零接线：fluid 导出 createMpSizeObserverFactory + 文档写明用法，components 包内 0 个组件使用",
+      "kind": "runtime",
+      "severity": "major",
+      "round": 15,
+      "reported_in": "0.3.0-beta.31",
+      "found_by": "external",
+      "status": "open",
+      "verification": "unverified",
+      "evidence": "fluid/dist/mp-observer.d.ts 完整定义了 MP 测量源契约：\n  MpMeasureSource { measure(): Promise<{width,height}|null>; onResize?(cb): ()=>void; delays?: number[] }\n  createMpSizeObserverFactory(source): SizeObserverFactory   （兼容 createContainerQuery 的 createObserver 注入）\n注释明确写了调用方式与「Skyline onReady 首帧尺寸不稳，默认重测 [0, 50, 120] ms」。\n实测：grep -rln 'createMpSizeObserverFactory' node_modules/@proteus-vue/components/*/index.vue → 0 个命中。",
+      "repro": "grep -rln 'createMpSizeObserverFactory' node_modules/@proteus-vue/components/*/index.vue\n# → 无输出（0 个组件接线）\ngrep -n 'createMpSizeObserverFactory' node_modules/@proteus-vue/fluid/dist/index.js\n# → 函数存在且已导出",
+      "verification_note": "[external 说明] 本条与 F-42 是同一根因的两面：F-42 是「p-adaptive 因此不可用」的表象，\n本条是「能力造了没接线」的机制。分开记是因为修法不同：\n  修 F-42 = 给 p-adaptive 接上适配器；\n  修本条 = 审视还有哪些组件声明了「容器尺寸自适应」语义但只做了 Web 分支\n           （p-grid 的 gridOk 也是初始化时一次性判定，同样不感知后续宽度变化）。\n[external 影响] 这类「Web 分支完整、MP 分支留空且不报警」的形态最难查：\n两端都能构建、Web 端表现完美，只有真机才发现行为恒等于初始值。\n[external 建议] 给需要尺寸感知的组件加一条构建期检查：\n  声明了容器自适应语义的组件，若 MP 产物里 createObserver 为默认工厂（=ResizeObserver 不存在时返回空对象），\n  构建期警告「该组件在 MP 端不会响应尺寸变化」。"
     }
   ],
   "rounds": [
@@ -756,28 +869,49 @@
       "date": "2026-09-20",
       "report_section": "二十六",
       "summary": "F-33 修复确认（strict：:9999 注入验证）；小程序端首次真实连通后端（health/projects 200、三个作品正确渲染、console 零错误）；新发现 F-34（store 前缀在指令通道不剥离，major）"
+    },
+    {
+      "round": 13,
+      "version": "0.3.0-beta.28",
+      "date": "2026-11-12",
+      "summary": "配置迁 v4 才能构建；两道自带门禁封死框架自己的组件"
+    },
+    {
+      "round": 14,
+      "version": "0.3.0-beta.28",
+      "date": "2026-11-12",
+      "summary": "补 AI 创作入口时撞上组件事件的三个编译缺口"
+    },
+    {
+      "round": 15,
+      "version": "0.3.0-beta.31",
+      "date": "2026-11-12",
+      "summary": "首次真正启用柔性布局系统，暴露三个能力缺口"
     }
   ],
   "verification_breakdown": {
     "说明": "按 verification 字段统计（external=使用方独立复测通过；framework=框架自证；其他见字段说明）",
-    "统计时间": "2026-09-20",
-    "total": 35,
+    "统计时间": "2026-11-12",
+    "total": 43,
     "by_verification": {
-      "passed": 32,
-      "unverified": 1,
-      "n_a": 2
+      "passed": 33,
+      "unverified": 9,
+      "n_a": 1
     },
     "by_verified_by": {
-      "external": 24,
+      "external": 25,
       "framework": 8,
-      "(未标注)": 3
+      "(未标注)": 0
     },
     "by_status": {
-      "fixed": 35
-    }
+      "fixed": 35,
+      "open": 8
+    },
+    "resolved": 33,
+    "真实收口率": 77
   },
   "version_scheme_note": "★版本口径：第 1~3 轮处「独立版本号」时代（41 包各走各的版本，实测 14 种），故那几轮的 reported_in 记的是**相关包当时的版本**。第 4 轮起 changesets fixed 分组生效 → 全仓统一版本号。**跨工件对齐的锚点是 round（轮次），不是版本号**。",
-  "last_external_sync_at": "2026-09-20",
+  "last_external_sync_at": "2026-11-12",
   "pending_rounds": [
     12
   ]

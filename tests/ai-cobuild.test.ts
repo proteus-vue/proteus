@@ -70,8 +70,9 @@ describe('AI 共建三方一致性（报告 ↔ 台账 ↔ 回执）', () => {
   it('报告每轮都有台账条目、台账每条都有轮次（防「报了没立项」）', () => {
     const reportRounds = new Set<number>()
     const CN: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 }
-    for (const m of report.matchAll(/^## [^\n]*第([一二三四五六七八九十]+)轮[^\n]*$/gm)) {
-      const n = CN[m[1]]
+    // ★与 cobuild-check.mjs 同口径：中文/阿拉伯数字都认（外部报告第 13 轮起改用 `## 第13轮复测`）
+    for (const m of report.matchAll(/^## [^\n]*第\s*([0-9]+|[一二三四五六七八九十]+)\s*轮[^\n]*$/gm)) {
+      const n = /^\d+$/.test(m[1]) ? Number(m[1]) : CN[m[1]]
       if (n) reportRounds.add(n)
     }
     const ledgerRounds = new Set(ledger.entries.map((e) => Number(e.round)))
@@ -126,5 +127,67 @@ describe('AI 共建三方一致性（报告 ↔ 台账 ↔ 回执）', () => {
     // found_by=framework 的自查条目也是被覆盖的高危项（框架自找的缺陷不来自外部报告）
     const fw = (raw.entries as LedgerEntry[]).filter((e) => e.found_by === 'framework')
     expect(fw.length, '框架自查条目不得丢失').toBeGreaterThan(0)
+  })
+
+  // ★2026-11-12：`verification_breakdown` 是**派生数据**，长期手写 ⇒ 实测漂移
+  //   （entries 已 unverified:2/n_a:1，快照仍写 unverified:1/n_a:2，统计时间停在 09-20）。
+  //   现在 ledger-check 会重算比对，这里再锁一层「当前台账确实一致」。
+  //   ★破坏性：把台账里任意一个 by_verification 数字改错 → 本用例当场红（已实测 exit 2）。
+  it('★verification_breakdown 与 entries 一致（派生态不许手写漂移）', () => {
+    const out = execFileSync('node', ['scripts/ledger-check.mjs'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 120_000,
+    })
+    expect(out).toContain('真实收口率')
+    expect(out, 'breakdown 漂移必须被判红').not.toContain('verification_breakdown 与 entries 不一致')
+  }, 120_000)
+
+  // ★2026-11-12：轮次小节的数字形态（中文/阿拉伯 × 有无「复测」）必须两个脚本都认得。
+  //   scipy: 外部报告第 13/14/15 轮写成 `## 第13轮复测` / `## 第14轮` / `## 第15轮`，
+  //   而 cobuild-check 只认中文数字、sync-cobuild 强制「轮复测」⇒ 三条全抓不到/只抓到一条。
+  //   ★破坏性：把任一脚本的正则退回旧形态 → 本用例当场红。
+  it('★轮次小节解析：中文/阿拉伯 × 有无「复测」都能认出（两脚本同口径）', () => {
+    const cases = [
+      '## 第13轮复测：`0.3.0-beta.31`（2026-11-12）—— 结论',
+      '## 第14轮：`0.3.0-beta.31`（2026-11-12）—— 结论',
+      '## 第十二轮复测：`0.3.0-beta.17`（2026-09-20）—— 结论',
+      '## 第 15 轮复测：`0.3.0-beta.31` —— 结论',
+    ]
+    // cobuild-check 的口径
+    const checkRe = /第\s*([0-9]+|[一二三四五六七八九十]+)\s*轮/
+    for (const h of cases) expect(checkRe.test(h), `cobuild-check 认不出：${h}`).toBe(true)
+    // sync-cobuild 的口径：「复测」必须可选
+    const syncRe = /^## [^\n]*第\s*([0-9]+|[一二三四五六七八九十]+)\s*轮(?:复测)?[^\n]*$/gm
+    for (const h of cases) expect([...h.matchAll(syncRe)].length, `sync-cobuild 认不出：${h}`).toBe(1)
+    // 且脚本源码里确实是这两种形态（防止改回旧正则而测试自身也跟着改）
+    const checkSrc = fs.readFileSync(path.join(root, 'scripts/cobuild-check.mjs'), 'utf8')
+    const syncSrc = fs.readFileSync(path.join(root, 'scripts/sync-cobuild.mjs'), 'utf8')
+    expect(checkSrc, 'cobuild-check 的轮次正则须含阿拉伯数字分支').toContain('[0-9]+|[一二三四五六七八九十]+')
+    expect(syncSrc, 'sync-cobuild 的「复测」须可省略').toContain('轮(?:复测)?')
+    expect(syncSrc, 'sync-cobuild 的轮次正则须含阿拉伯数字分支').toContain('[0-9]+|[一二三四五六七八九十]+')
+  })
+
+  // ★2026-11-12：sync 必须能补齐 rounds[]——否则同步进新条目后，
+  //   cobuild-check 规则 B（立项必须有出处）会因「rounds 无该轮 + 无 report_section」直接报红。
+  //   ★破坏性：删掉 sync-cobuild.mjs 里 rounds-add 那段 → 本用例当场红。
+  it('★sync 能从报告标题补齐 rounds[]（否则同步后规则 B 必红）', () => {
+    const src = fs.readFileSync(path.join(root, 'scripts/sync-cobuild.mjs'), 'utf8')
+    expect(src, 'rounds 补齐逻辑必须在位').toContain("kind: 'rounds-add'")
+    expect(src, '补 rounds 时版本号取自报告标题').toContain('headingByRound')
+    // 现网台账的 rounds 必须覆盖所有有條目的轮次（sync 跑过之后应恒成立）
+    const raw = JSON.parse(fs.readFileSync(path.join(root, 'docs/外部报告台账.json'), 'utf8')) as {
+      rounds?: Array<{ round: number }>
+      entries: Array<{ round: number }>
+    }
+    const known = new Set((raw.rounds ?? []).map((r) => Number(r.round)))
+    const entryRounds = new Set(raw.entries.map((e) => Number(e.round)))
+    // 早期轮次（1/2/9/10）靠 report_section 兜底，属历史形态，不算缺失
+    const BY_SECTION = new Set([1, 2, 9, 10])
+    for (const r of entryRounds) {
+      if (BY_SECTION.has(r)) continue
+      expect(known.has(r), `台账有第 ${r} 轮条目但 rounds[] 里没有——sync 补齐逻辑失效`).toBe(true)
+    }
   })
 })

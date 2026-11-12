@@ -2178,3 +2178,441 @@ F-34 的麻烦在于**两侧都不能动**：
 2. **F-35**：`workbench.vue:161` 的章节树 `@open`/`@write` 应能真实跳转（这是本轮顺带修好的，你们可当新功能验）。
 3. **F-29 复发**：本轮已加两道机器门禁，但「台账是否真的不再滞后」需要下次发布后由你们核对一轮——
    这也是这条流程类缺陷**唯一可信的验证方式**（框架自证不算数）。
+
+## 二十八、★ 第13轮复测：`0.3.0-beta.28 / beta.31`（2026-11-12）—— 配置迁 v4 才能构建；两道自带门禁封死框架自己的组件
+
+> 本轮起点不是"找新 bug"，是**把这个停了近两个月的工程重新跑起来**。
+> 上个提交（2026-09-20）时依赖还停在 beta.11–17；本次已升到 beta.28（运行时）/ beta.31（构建链），
+> 但 `proteus.config.ts` 没跟着迁 → 构建在 typecheck 闸门处直接中断。顺带暴露两个新阻断项。
+
+### 一、结论速览
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| F-34 `store.` 前缀剥离 | ✅ **独立复测通过** | 真实产物 `dist/mp-weixin/**/*.wxml` 零残留；compileVueSfc 五通道逐条确认 |
+| F-35 箭头事件处理器 | ✅ 已发布且生效（保持 `n_a`） | `bind:open="proteusInlineContinueWritingPayloadDet"`，方法在 workbench.js:242 |
+| 配置模型 v4 | ⚠️ **不迁移就构建不了** | `platform` 已不在 `ProteusConfig` 类型里 → vue-tsc exit 2 → build 中断 |
+| F-36 components 缺 typings 依赖 | ❌ **新报（blocker）** | 引用任一 `p-*` → 3 处 `TS2304: Cannot find name 'getCurrentPages'` |
+| F-37 门禁封死自带组件 | ❌ **新报（blocker）** | 全新模板 + `p-button` → profile-boundary / cse-lint 连环阻断 |
+| F-29 台账滞后 | ⚠️ **第三次复发** | F-27~F-32、F-34、F-35 全部仍标 `worktree`，而 registry 实证早已发布 |
+
+### 二、已验证修复（逐项实测，非源码推断）
+
+#### F-34（`v-if="store.x"` 前缀不剥离）—— ✅ 已修，可收口
+
+本工程 `workbench.vue` 此前正是这个缺陷的活样本，产物里 5 处 `store.` 残留：
+
+```
+wx:if="{{store.todayWords}}" / wx:if="{{store.err}}" / wx:if="{{!store.apiReady}}"
+wx:if="{{store.tree}}"       / wx:if="{{store.jobs.length}}"
+```
+
+升级到 beta.31 后在真实产物上复测：
+
+```
+$ grep -rn 'store\.' dist/mp-weixin --include='*.wxml' | wc -l
+0
+```
+
+且这些字段**依然进 `$subscribe`**（数据到达后视图更新，Web 端三本书列表实测渲染成功）——
+"指令要裸名 / 插值要留前缀"的两头堵确实没了。
+
+另用 `compileVueSfc` 探针逐通道确认（`repro` 可直接做回归用例）：
+
+```js
+// v-if / v-else-if / v-for / v-show / v-html 全通道
+// 产物：wx:if="{{err}}" / wx:elif="{{apiReady}}" / wx:for="{{projects}}" /
+//       hidden="{{!tree}}" / nodes="{{html}}"   ← 全部剥离 ✅
+```
+
+> 台账此前标 `fix_state=worktree / fixed_in=null`，按 registry 实证应为 **`published / 0.3.0-beta.21`**。已回写 `verification=passed / verified_by=external`。
+
+#### F-35（箭头事件处理器）—— ✅ 已发布且生效
+
+```
+<chapter-tree bind:open="proteusInlineContinueWritingPayloadDet"
+              bind:write="proteusInlineContinueWritingPayloadDet" />
+$ grep -n proteusInline dist/mp-weixin/pages/workbench.js
+239:  proteusInlineContinueWritingNoArgs(e) {
+242:  proteusInlineContinueWritingPayloadDet(e) {
+```
+
+全产物 wxml 箭头函数 handler 零残留。**但本条 `found_by=framework`，故维持 `verification=n_a`**，不冒充独立验证。
+
+### 三、新发现的问题
+
+#### F-36（blocker · packaging）：components 包用 `getCurrentPages` 却未声明 `miniprogram-api-typings`
+
+**现象**——引用任一 `p-*` 组件后，`vue-tsc` 报 3 处：
+
+```
+@proteus-vue/components/p-auth-gate/index.vue(80,22): error TS2304: Cannot find name 'getCurrentPages'.
+p-loading-host/index.vue(88,20): ... 同上
+p-toast-host/index.vue(106,22): ... 同上
+```
+
+而 `proteus build` 在 `vite build` 之前先跑 `vue-tsc`（`cli/dist/index.js:10146`），于是整条链中断。
+
+**最小复现**（全新工程，空模板本身 `vue-tsc` 是 0 报错）：
+
+```bash
+npx @proteus-vue/create-proteus@latest app && cd app && npm install
+npm i @proteus-vue/components@0.3.0-beta.28
+npx vue-tsc --noEmit      # 引用一个 p-button 后 → 3 处 TS2304
+```
+
+**根因**：框架仓库根 `package.json` 有 `miniprogram-api-typings ^5.2.3` 的 devDependency——
+所以**自测全绿**（workspace 软链下类型拿得到）；但 `components` 包自身 dependencies 没声明它，
+也没随包发布对应 d.ts，npm 安装形态下消费者拿不到。与 **F-14**（门禁只查"声明的"、不查"实际打出去的包里有什么"）同族。
+
+**顺带一个放大伤害的机制**：模板 tsconfig 用 `"types": ["./src/shims/mp.d.ts"]` + `skipLibCheck: true`，
+shim 里那句 `/// <reference types="miniprogram-api-typings" />` **解析失败被静默吞掉**
+（`.d.ts` 不检查，但 `.vue` 检查）→ 错误只在组件里冒出来，指向的还不是真正缺的东西。
+
+**我方规避**：消费者工程显式 `pnpm add -D miniprogram-api-typings`（实测三步全绿）。
+**建议**：`components` 补 `peerDependencies`（或 dependencies）+ 发布门禁加一条
+"包内 `.vue/.ts` 引用的全局类型是否有对应依赖声明"。
+
+#### F-37（blocker · process）：两道自带样式门禁在 npm 形态下封死框架自己的组件
+
+**现象**——全新 `create-proteus` 工程 + 官方组件 + 一个 `p-button`，Web 构建连环失败：
+
+```
+[profile-boundary/error] components/p-button/index.vue:133
+  CSS-PB-display `display: inline-flex` 在 skyline 端不受支持（该端接受：none / flex / block）
+→ 放行后继续：
+[proteus-cse-lint/error] components/p-popup/index.vue:
+  E-CSS-004 `:class="panelPhaseCls"` 无法编译期枚举候选类
+```
+
+**全量扫描** `@proteus-vue/components@0.3.0-beta.28`：
+
+| 门禁 | 违规数 | 涉及文件 |
+|---|---|---|
+| profile-boundary | 24 条 | 17 个 |
+| cse-lint E-CSS-004 | 25 处 | 22 个 |
+
+**全部是框架组件自身**，消费者一条都改不了（在 `node_modules` 里）。
+
+**为什么框架自己构建是绿的**：`examples/` 下有 `profile-boundary-baseline.json`（37 条）与
+`cse-lint-baseline.json`，`p-button` 的 `display: inline-flex` 明明白白列在里面。
+**但 `create-proteus` 模板没有随包下发这两个基线文件，也没有自动生成机制**——
+同一批组件换到消费者工程就从"已放行"变成"阻断"。
+
+**根因与 F-36 同族**：基线键是**仓库相对路径**（`../packages/components/p-button/index.vue:display:inline-flex`），
+换到消费者 npx 目录结构后键对不上；且消费者无权修改 `node_modules`。
+**门禁本该保护消费者，现在挡住的是消费者无法修的东西。**
+
+**我方规避**（已落地，棘轮只减不增）：
+- `profile-boundary-baseline.json`：24 键，只含 `node_modules/@proteus-vue/components/**`
+- `cse-lint-baseline.json`：22 键，同上
+- **自有代码一条不放行**：扫描出的 5 处（`overflow:auto` ×3 / `display:grid` / `pre-wrap`）
+  全部按 Skyline 限制**真实修掉**，没有进基线
+
+**建议**：
+1. 门禁对 `node_modules/**` 默认跳过，或自动生成基线——消费者无法修的代码不该阻断构建；
+2. 若坚持校验，基线键改用"包名 + 相对包内路径"，做到跨安装形态可复用；
+3. 更根本的：先让框架自己的组件过自己的门禁（这批组件在 examples 里是靠基线放行的，说明本来就没过）。
+
+### 四、我方适配（平台限制，非框架缺陷）
+
+| 项 | 原因 | 处理 |
+|---|---|---|
+| `:class="someComputed"` / `:class="fn(x)"` 共 6 处 | cse-lint E-CSS-004：编译期必须能静态枚举候选类 | 全部改为模板内对象字面量 `{ ok: cond, warn: cond }` |
+| `overflow: auto` ×3（editor / book-search） | Skyline 不支持；且整页已被 `page.autoScrollContainer` 包进 `scroll-view`，嵌套滚动容器不成立 | 删除（滚动交给框架） |
+| `display: grid`（chapter-tree） | Skyline 不支持 | 改 `flex-wrap` + `flex: 1 1 142px` |
+| `display: -webkit-box` 多行截断 | Skyline 不支持 | 改 `max-height + overflow: hidden` |
+| `white-space: pre-wrap` / `word-break: break-word` | Skyline 取值集合不同 | 改 `normal` / `break-all` |
+
+> 顺带修出一个**真缺陷**（非门禁噪声）：`editor.vue` 的标注块 CSS 还留着 `details/summary` 时代的选择器
+> （`.ed-ann > summary` / `> pre`），而模板早已换成 `view/text`（`ed-ann-h` / `ed-ann-body`）——
+> **标注块在两端都完全没有样式**。已按实际模板对齐。
+
+### 五、诚实澄清
+
+**`opacity: 0` 是一场虚惊**。本轮浏览器验证时曾读到首屏 `.pick-root` 的 `getComputedStyle().opacity === "0"`
+且 `fade-enter-from` 类一直不摘，一度判断为"转场卡死"。**这是误判**：
+该标签页 `document.hasFocus() === false`、`requestAnimationFrame` **一次都没触发**
+（实测 5 帧 800ms 超时），自动化后台标签页的 rAF 被节流 → Vue Transition 的 remove 回调永不执行。
+截图证明页面正常渲染（透明度处于 0.22s 淡入中途）。**结论：不是应用缺陷，收回。**
+
+### 六、本轮结果
+
+```
+vue-tsc --noEmit     → 0 报错
+npm run build:mp     → exit 0，84 个产物文件
+npm run build:web    → exit 0，dist/web 284K
+浏览器实测            → 三本书（宴者 15 / 狂臣 37 / 默者 198 章）全部加载
+```
+
+**顺带修掉一个我们自己埋的坑**（与框架无关，但会让人误判框架）：
+`src/api/index.ts` 的 `base()` 在 `__API_BASE__` 为空时**一律兜底绝对地址** `http://127.0.0.1:8760`。
+Web 端于是绕过 vite proxy 变成跨域直连，而后端没有 CORS 头 → 浏览器拦掉 →
+界面永远显示"连不上本地服务"（实测：`/api/health` 代理 200，直连 `Failed to fetch`）。
+已改为：Web 端返回空串（同源相对路径），仅小程序端兜底绝对地址。
+
+---
+
+## 二十九、★ 第14轮复测：`0.3.0-beta.28 / beta.31`（2026-11-12）—— 补 AI 创作入口时撞上组件事件的三个编译缺口
+
+> 背景：本工程的 Proteus 前端此前只有"看 + 写 + 存"，**没有任何发起 AI 任务的入口**
+> （`api.submitJob` 定义了但全工程零调用）。本轮补齐「生成 / 审阅 / 门禁」三个动作，
+> 过程中撞到 F-38。
+
+### 一、结论速览
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| `defineEmits` 在 MP 端 | ❌ **新报（blocker）** | 编译成 `data.emit = undefined`，调用点原样 `this.emit(...)` |
+| v-for 作用域内的参数化 handler | ❌ **新报（blocker）** | `bindtap="run(a.key)"` / `this.run(a)` 两种错误形态 |
+| 既有三组件受影响 | ⚠️ **MP 端功能已死** | chapter-tree / job-drawer / book-search |
+| F-35 修复覆盖度 | ⚠️ 只修了箭头形态 | 裸方法名之外的路径仍未收口 |
+
+### 二、缺陷 A：`defineEmits` 编译成 `data.emit = undefined`
+
+**最小复现**
+
+```js
+const src = `<template><view @click="emit('go', 1)">x</view></template>
+<script setup lang="ts">
+const emit = defineEmits<{ (e: 'go', n: number): void }>()
+</script>`
+const o = compileVueSfc(src, { px2rpx: true, rpxRatio: 2 }, { file: 'a.vue' })
+// 产物：data: { emit: undefined }
+//       this.emit('go', 1)          ← 既不是 emit 也不是 triggerEvent
+```
+
+编译期只有一条 warning（"defineEmits 的初始值无法静态求值，data.emit 将设为 undefined"），
+**构建照样通过**——所以这个问题一路进了真机。
+
+**影响面（本工程实测，全部既有代码）**
+
+```
+$ grep -l "emit: undefined" dist/mp-weixin/components/*/index.js
+components/ai-panel/index.js      ← 本轮新增（已规避）
+components/job-drawer/index.js    ← 抽屉关闭 / 取消任务
+components/book-search/index.js   ← 点击结果跳转
+components/chapter-tree/index.js  ← 点击章节卡片进入写作
+```
+
+即：**小程序端点章节卡片跳转、关抽屉、点检索结果，全部无响应**（点下去抛
+`this.emit is not a function`）。Web 端一切正常，所以此前一直没发现。
+
+框架 `runtime/dist/pageLifecycle.d.ts` 的注释写的是"methods 中可调用 `this.triggerEvent` 触发事件"，
+但**从 `defineEmits` 到 `this.triggerEvent` 的映射没有实现**。
+
+### 三、缺陷 B：v-for 作用域内的参数化 handler
+
+**三种写法实测（v-for 内）**
+
+| 源码写法 | 产物 bindtap | 方法体 | 结果 |
+|---|---|---|---|
+| `@click="run(a.key)"` | `run(a.key)` | — | ❌ 非法处理器名，永不触发 |
+| `@click="run(a)"` | `proteusInlineRuna` | `this.run(a)` | ❌ `a` 未定义 |
+| `@click="(e) => run(a)"` | `(e) => run(a)` | — | ❌ 非法处理器名 |
+| `@click="onTap"` | `onTap` | — | ✅ 但拿不到循环变量 |
+
+**只有"裸方法名"能被可靠绑定。** F-35 修的箭头形态在**非 v-for** 场景有效，
+但在 v-for 作用域里 `(e)=>run(a)` 又会退化成原样输出。
+
+> 这与 F-35 同族（"事件处理器不是裸方法名时处理不当"）。**建议按形态矩阵一次性收口**，
+> 不要再逐个形态补：裸方法名 / 方法调用带参 / 箭头（无参·带参·带 e）/ v-for 作用域 / store 方法。
+
+### 四、我方规避（已落地并实测）
+
+1. **AI 面板不用 `defineEmits`**：完成通知走 pinia store
+   （`lastAiJobId` / `aiDoneTick` / `wantJobId`），父级 `watch` 感知。
+   好处是零平台分支、两端同一份代码。
+2. **三个按钮分别写死为无参方法**（`onTapGenerate` / `onTapReview` / `onTapCheck`），
+   不用 `v-for` 生成按钮。三行重复换来两端真的能点。
+3. **模板里不写 `store.xxx`**：MP 端 store 是实例属性，模板绑定取不到——统一用 `computed` 暴露裸名。
+
+**验证（真实浏览器 + 真实后端）**
+
+```
+点击「跑一遍门禁」→ 跨端确认框弹出（书名 + 第 101 章 + 成本 + 只读提示）
+→ 确认 → 任务 #11 提交 → 轮询 → 完成
+→ 后端实证：status=succeeded, exit=0
+   五项流水线全绿：章纲 / 转换 / 通用门禁 / preflight / 时间轴
+   结论：✅ 全流程通过，可发布。
+```
+
+产物检查：`bindtap="onTapGenerate"` / `onTapReview` / `onTapCheck` 均为合法方法名，
+`data.emit` 已消失，wxml 里 `store.` 零残留。
+
+### 五、诚实边界
+
+- **`F-38` 只规避、未修既有三组件**：`chapter-tree` / `job-drawer` / `book-search`
+  的 emit 在 MP 端仍然是死的，需要框架修或逐个改写。**Web 端不受影响。**
+- **真机未验**：只做了 Web 端浏览器实测 + MP 端产物静态核对。MP 真机行为
+  （尤其 `wx.showModal` 的确认框）未实测。
+- 生成 / 审阅两个花钱动作**未在本轮真实执行**（环境未配 `CDA_API_KEY`，
+  按钮按设计自动禁用）。门禁是免费动作，已完整跑通。
+
+---
+
+## 三十、★ 第15轮复测：`0.3.0-beta.31`（2026-11-12）—— 首次真正启用柔性布局系统，暴露三个能力缺口
+
+> 背景：本工程此前**装了柔性系统但一次没用**（`installFluidLayout` 调了、`p-fluid` 全工程 0 处），
+> 排版全靠手写 flex + 11 处 `@media` 断点。本轮按「试验田必须用框架自己的方案」的要求，
+> 零媒体查询地切过去，并把做不到的地方如实记成缺口。
+
+### 一、结论速览
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| `p-grid` Web 端 | ✅ 可用，四档中三档与手写版一致 | 1440/1024/768 列数完全相同 |
+| `p-grid` 手机端 | ⚠️ 390 宽 2 列 vs 手写 3 列 | 见 F-41 |
+| `p-fluid` 消费 token | ❌ **静默剥离** | `padding(var(--sp-4))` 产物无 style |
+| `p-fluid` MP 产物 | ⚠️ 裸 calc 无 clamp 上下界 | 1600 宽出 33.8px（应 32） |
+
+### 二、先修掉一处配置错误（我方问题）
+
+`proteus.config.ts` 原来是 `designWidth: 1280 / fluidViewport: 768–1920`，注释写着"本工程是桌面写作工具"。
+但公式是 `linearFluid(min, max, designWidth, viewportRange)` —— **min 是设计稿宽度处的值，max 是 viewportMax 处的值，两点连线外推**。
+
+在 390 手机上实测产物：`calc(-76.00px + 7.5vw)` = **-46.8px（负字号）**。
+
+已改为 `designWidth: 375 / fluidViewport: 320–1440`（与实际首要落地端手机对齐），
+`main.ts` 的 `installFluidLayout` 同步为 `{ designWidth: 375, viewportMax: 1440 }`。
+
+> 这条本身**不算框架缺陷**——是我们选错了基准。但它暴露一件事：
+> **框架没有任何机制提示"designWidth 与视口跨度差太大"**。差 900px 时会外推出负值，
+> 而负 padding 在 CSS 里是"丢弃整条声明"，表现为样式莫名消失、无报错。
+
+### 三、新发现的问题
+
+#### F-39（major · compiler）：`p-fluid` 只接受纯数字，token 被静默剥离
+
+```
+<div p-fluid="padding(var(--sp-4))">  → 产物无 style、无警告
+<div p-fluid="width(50%, 100%)">      → 产物无 style、无警告
+<div p-fluid="padding(16, 24)">       → style="padding: calc(13.18px + 0.7512vw)"  ← 对照
+```
+
+根因：`parseFluidExpr` 的正则是 `([A-Za-z][A-Za-z-]*)\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\)`，
+min/max 只匹配纯数字，`var()` / `%` / `auto` 全不匹配 → **整组被跳过且不报警**。
+
+**这不是少一个特性，而是让柔性系统与设计令牌二选一。** 本工程已把间距收敛成
+`--gutter / --card-pad / --block-gap / --sp-1..7`，全站引用。改用 p-fluid 就必须把
+每个 token 展开成字面量写进每个模板，token 体系（一处改、全局生效）随之失效。
+
+> 顺带发现文档与实现不符：`02-compiler-implementation.md:59` 写着
+> "CSS 变量提取：`p-fluid` 值提取为 `--p-fluid-{hash}`，便于运行时覆盖"——
+> 实现里没有这个功能。
+
+#### F-40（major · compiler）：MP 产物裸 calc 无 clamp 上下界
+
+| 端 | 产物 |
+|---|---|
+| Web（运行时 clamp） | `clamp(20px, calc(15.77px + 1.1268vw), 32px)` |
+| MP（编译期 calc） | `calc(15.77px + 1.1268vw)` ← 无夹取 |
+
+量化：
+
+```
+designWidth=375 / viewportMax=1440
+  375 宽 → 20.00px（正确）
+ 1600 宽 → 33.80px（超出 max=32，未夹取）
+```
+
+这是**有文档的降级**（rules 里写明"Skyline 无 clamp"），但文档说"超界 ±1-2px 可忽略"
+——那只在 `designWidth` 接近实际端时成立。差 900px 时误差是 47px（负值）。
+
+#### F-41（minor · compiler）：`p-grid` 的 minColWidth 无法随容器变
+
+Web 端四档实测（`minColWidth=142, gap=12`，与手写版同容器）：
+
+| 视口 | p-grid | 手写版 |
+|---|---|---|
+| 1440 | 7 列 ✅ | 7 列 |
+| 1024 | 5 列 ✅ | 5 列 |
+| 768 | 4 列 ✅ | 4 列 |
+| **390** | **2 列 / 卡 144px** | **3 列 / 卡 95px** |
+
+根因：`minColWidth` 是固定下限，手机内容区 308px 只放得下 2×142。
+手写版是在小屏断点里把 `min-width` 降到 96px 才排到 3 列。
+
+**「小屏密排、大屏疏排」是网格最常见的诉求**，手写 flex + 断点能表达，p-grid 不能。
+
+> 另记录一条**不算缺陷的边界**（文档 06-semantic-compile §5 已声明）：
+> `p-grid` 放在**自定义组件**里会回退运行时组件（产物保留 `<p-grid>` 标签），
+> 只有放在**页面**内才语义展开成 `flex + p-grid-item` 包装层。两者产物已实测确认。
+
+### 四、我方处置
+
+| 项 | 决定 |
+|---|---|
+| 章节网格 | **已改用 `p-grid`**（试验田优先用框架方案），接受手机端 2 列、滚动长度 +50% |
+| 间距 / 字号 | **暂不切 p-fluid**（F-39 未修，切了就丢 token 体系），继续用 token |
+| `@media` 断点 | 保留（p-fluid 不可用期间，断点是唯一能表达"小屏换布局"的手段） |
+| designWidth | 已改 375/1440 并同步 `main.ts` |
+
+### 五、诚实边界
+
+- **本轮只完成了 1/11 处断点的替换**（章节网格）。零媒体查询的目标在 F-39 修复前无法达成
+  —— 因为剩下 10 处断点里，绝大多数是"间距/字号变化"或"拓扑切换"，前者依赖 F-39，后者需要 `p-adaptive`。
+- **`p-adaptive` 未实测**。它的组件注释写明"MP：无 ResizeObserver → 形态恒首区间兜底"，
+  若属实，则"手机上单栏 / 桌面上双栏"这类拓扑切换在小程序端根本不可用。
+  这是下一个该验证的点，本轮未做。
+- **未上真机**。所有结论来自 Web 浏览器实测 + MP 产物静态分析。
+
+### 六、追加：`p-adaptive` 实测（同日）—— MP 端整段逻辑被跳过
+
+上一节说「`p-adaptive` 未实测，下一个该验的点」。验了，结论比预期更糟。
+
+**Web 端：可用。** `ResizeObserver` 实测正常收到容器尺寸变化（700 → 390 两次回调），
+`createAdaptiveController` → `createContainerQuery` → `defaultObserverFactory` 链路完整。
+纯逻辑层 `parseAdaptiveExpression` / `computeAdaptiveForm` / `validateAdaptiveRanges` 全部正确
+（390→sheet / 650→dialog / 900→popover，区间校验无告警）。
+
+**MP 端：整段逻辑被跳过，不是降级。**
+
+把组件源码直接送进 MP 编译器，产物 js 的关键三行：
+
+```js
+ 19   wrapEl: undefined,                                  // 模板 ref 在 MP 端拿不到元素
+ 22   onReady() {
+ 24     if (!this.data.wrapEl) return                    // 必然命中
+ 25     this.controller = createAdaptiveController(...)   // 永远执行不到
+```
+
+`form` 恒为初始值 `'sheet'`，`modes` 表达式等于没写。
+
+> 组件注释写的是「MP：无 ResizeObserver → 形态恒首区间兜底」——
+> 实际连「按静态宽度求一次形态」都没做。注释低估了严重程度。
+
+#### 关键归因：能力有，组件没接（F-43）
+
+这不是平台限制。fluid 包**自带 MP 适配器**，文档还写了用法：
+
+```ts
+// node_modules/@proteus-vue/fluid/dist/mp-observer.d.ts
+createMpSizeObserverFactory(source: MpMeasureSource): SizeObserverFactory
+// 用法（组件层）：
+//   const factory = createMpSizeObserverFactory({ measure: () => adapter.measureRect('.x', scope).then(...) })
+//   createContainerQuery(null, { createObserver: factory })
+```
+
+`createContainerQuery` 也保留了 `createObserver` / `readSize` 注入点。
+
+但 p-adaptive 没接——它直接依赖 Vue 模板 ref（`wrapEl`），而 ref 在 MP 端取不到元素。
+
+**全量核对**：`components/*/index.vue` 里 **0 个组件**使用 `createMpSizeObserverFactory`。
+能力已实现、已导出、有文档，但**没有一个组件接线**。
+
+> 这类形态最难查：两端都能构建、Web 端表现完美，只有真机才发现行为恒等于初始值。
+> 与 F-14（门禁只查"声明的"、不查"实际打出去的包里有什么"）、F-37（门禁只查仓库形态）
+> 是同一族：**能力存在 ≠ 能力被接上**。
+
+#### 对「零媒体查询」目标的影响
+
+剩下 10 处断点分两类，现在两类的框架路径都被堵住：
+
+| 类 | 例子 | 依赖 | 状态 |
+|---|---|---|---|
+| 间距/字号变化 | 手机端 gutter 24→16 | `p-fluid` 认 `var()` | ❌ F-39 |
+| 拓扑切换 | docs 页手机上两栏→上下堆叠 | `p-adaptive` | ❌ F-42/F-43 |
+
+**结论：零媒体查询在当前版框架下不可达成。** 这不是放弃，是能力边界已量化——
+F-39 与 F-42/F-43 修复前，`@media` 是唯一能表达这两类需求的手段。
