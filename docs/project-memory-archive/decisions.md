@@ -17254,4 +17254,17 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ② 徽标只显示计数，点它**不会跳转到诊断面板**（下一步可做）；
     ③ 目录行不聚合子文件的错误数（只显示文件级）。
 
+1493. **★柔性布局 MP 端五缺口一次性收口（F-39~F-43）：两处重复解析器收敛 + clamp 夹取 + 测量源接线**（2026-11-12 · 外部第 15 轮指定最高优先级）:
+**① 背景**：外部报告第 15 轮报 F-39~F-43（1 blocker+3 major+1 minor），全部同源——**柔性布局系统在 MP 端没接完**。框架侧此前把这批标成"已实现"（fluid 包确实有完整实现），实际是**能力与接线分离**：原语写好了，消费方一个没接。
 
+**② F-39（parseFluidExpr 只认纯数字）**：根因不是"正则写漏了"，而是**两处完全相同的实现**——`compiler/src/fluid-layout.ts:69` 与 `compiler/src/template.ts:439` 各有一份正则副本，模板用的是后者。改一处等于没改（本仓 F-30/F-32/#500/#505 已反复踩过同一类）。修法：① 删除 template.ts 的副本，改为 import 唯一实现；② 解析器改用**括号配平扫描器**（不再用正则），支持两类实参——纯数字（走线性插值）与 `var()`/百分比/auto（原样透传）。→ 理由：这些值本就随容器/主题变化，不需要插值；强行插值等于猜。
+
+**③ F-40（MP 产物裸 calc 无夹取）**：旧注释写的判据是「clamp 边界仅超界屏 ±1-2px，小程序宽度域可忽略」——**这个前提被实测证伪**：1600 宽出 33.8px（应 32）；designWidth=1280 / viewportMax=1920 时 390 宽只有 3.31px（应 ≥20，再窄会外推为负）。修法：新增 `fluidDecl()` 作为 p-fluid 的**唯一出口**，纯数字输出 `clamp(min, calc(...), max)`。★教训与 F-24 同源：**"影响可忽略"是结论不是前提，必须实测**。
+
+**④ F-41（p-grid minColWidth 固定下限）**：手写断点方案在小屏会降 min-width（390 宽 96px→3 列），固定 142px 只有 2 列。修法：新增 `minColWidthMin` + `minColWidthVw` 两个 prop，合成 CSS `max(96px, min(142px, 22vw))`——**纯 CSS 函数、零运行时**，不改"只声明下限、列数自动"的契约。★选这个方案而非 JS 断点表：后者要 ResizeObserver（MP 没有），而 CSS max/min 各端都有。
+
+**⑤ F-42+F-43（p-adaptive MP 端整段逻辑被跳过 / 测量能力零接线）**：这两条是**同一根因的两面**。组件 onMounted 首行是「元素为空就直接 return」，而 **MP 端模板 ref 永远拿不到元素** ⇒ 该守卫必然命中 ⇒ controller 从不创建 ⇒ form 恒 sheet、modes 等于没写。组件注释却写着"MP：无 RO → 形态恒首区间兜底"——**注释描述的行为比实际更保守**（实际是跳过，不是兜底）。而框架早就有 `createMpSizeObserverFactory`（含 Skyline 首帧重测 [0,50,120]ms）+ 组件层的 `mpContainerObserverFactory`，p-zone/p-split/p-toolbar 都在用，**只有 p-adaptive 没接**。修法：照 p-zone 范式接线（加测量类 + onMounted 里取 factory + 传给 createAdaptiveController）。
+
+**⑥ 回归锁**：`tests/fluid-mp-gaps.test.ts` 12 例（新增）+ `tests/fluid-layout.test.ts` 3 条旧断言按新行为更新（旧断言把"Skyline 无 clamp"写死了）。**破坏性验证 5 条全部见红**：parseFluidExpr 退回纯数字正则→4 failed / fluidDecl 退回裸 calc→6 failed / p-adaptive 退回元素空 return→2 failed / colWidthCss 退回固定值→1 failed / 删 defineProps 声明→1 failed；还原后 12/12 + 29/29 全绿。★第五条的破坏性验证是**第二轮才做对**的：首版只断言"字符串存在"，删掉 prop 声明测试照样绿 ⇒ 改为真解析 computed 体求值 + 断言 defineProps 块结构。
+
+**⑦ 判据**：`test:coupled` 317 tests 全绿；`check:ai-tasks` ✅。**诚实边界**：① 未做真机验证——MP 端 p-adaptive 的实际形态切换需真机跑（selectorQuery 命中依赖运行时类不加 scoped 后缀，本仓 p-zone 已验证该机制，但 p-adaptive 未单独验）；② F-40 的 clamp 在 Skyline（不支持 clamp）上的行为是"忽略该声明"，比负值安全但仍非流式；③ F-41 只改 Web 端（p-grid 本就是 Web-only）。

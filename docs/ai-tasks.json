@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-11-05",
+  "updated_at": "2026-11-12",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -4697,6 +4697,25 @@
         "T-studio-symbol-filter"
       ],
       "note": "【done · 决策 #1492（2026-11-12）】功能：树行右侧显示该文件错误数（红）/警告数（黄），无诊断不占位；此前错误只有打开文件才看得见。★与编辑器同规则：diagStale（有未保存改动）时全部不显示（诊断读磁盘，对不上就不画，#1412）。★★最大的坑：桩里一开 __TAURI__.event，onCloseBlocked 的 if (ev?.listen) 立刻改判为有原生通路 ⇒ studio:close-blocked 的 DOM 兜底再也不接 ⇒ ⑱f 确认框 30s 超时（两轮才定位）。教训：__TAURI__.event 是全局开关不是单事件开关；桩头部第 9-10 行早写着「event 刻意不桩」，我没读就加了。★正确解法（沿用双路惯例）：诊断原本只有原生事件一条路 ⇒ 门禁驱动不了 ⇒ 长期没有判据；现在 ensureWatch 补 studio:diag-update 的 DOM 兜底（与 studio:menu / studio:close-blocked 一致）。★这条副产品比徽标重要：功能没有「门禁能驱动」的入口=不可验。★判据 ㊿u 两段：Rust 源里确有 diag:update（改名即红）+ 事件到达后按文件分组显示（App.vue 错误 2 / bridge.ts 警告 1 / styles.css 无徽标）；只断后者则分组写错也能绿。★破坏性验证：分组 key 写常量 ⇒ 仅 ㊿u 红（App.vue 错误 1，两错并成一条）。★判据：90 绿 0 红（基线 90）。★诚实边界：vue-tsc 真产出不在本门禁；徽标不可点跳诊断面板；目录行不聚合子文件。【Handoff】- 做到哪：徽标 + DOM 兜底 + 判据 + 破坏性验证。- 未做：点徽标打开诊断面板、目录聚合。- 下一步：真机打开一个有错的文件看树行是否出数字。"
+    },
+    {
+      "id": "T-fluid-mp-gaps",
+      "title": "柔性布局系统 MP 端能力缺口（F-39~F-43）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:cobuild-20261112",
+      "scope": [
+        "packages/compiler/src/fluid-layout.ts",
+        "packages/compiler/src/template.ts",
+        "packages/components/p-adaptive/index.vue",
+        "packages/components/p-grid/index.vue",
+        "tests/fluid-layout.test.ts",
+        "tests/fluid-mp-gaps.test.ts"
+      ],
+      "decision": 1493,
+      "verification": "npx vitest run tests/fluid-layout.test.ts tests/fluid-mp-gaps.test.ts",
+      "branch": null,
+      "note": "认领原因：外部第 15 轮报 F-39~F-43 并指定为最高优先级。五条同源——柔性布局在 MP 端没接完：F-39（parseFluidExpr 两处重复实现且只认纯数字）/ F-40（MP 产物裸 calc 无夹取）/ F-41（p-grid minColWidth 不随容器变）/ F-42（p-adaptive 拿不到 ref → 整段逻辑跳过）/ F-43（createMpSizeObserverFactory 已实现零接线）。★F-42+F-43 同根：mpContainerObserverFactory 已存在，p-adaptive 没接。\n\n【done · 决策 #1493（2026-11-12）】五条全修：F-39（parseFluidExpr 两处重复实现收敛为 fluid-layout.ts 唯一实现，改用括号配平扫描器支持 var()/百分比/auto，非纯数字实参原样透传）/ F-40（新增 fluidDecl 唯一出口，纯数字走 clamp(min, calc, max) 两端夹取——实测 1600 宽 33.8→32、designWidth=1280 时 390 宽 3.31→20）/ F-41（p-grid 新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时，390 宽 2 列→3 列与手写断点一致）/ F-42+F-43（p-adaptive 接 mpContainerObserverFactory —— 此前 onMounted 首行「元素空就 return」在 MP 端必然命中，controller 从不创建，整段逻辑被跳过；现与 p-zone/p-split/p-toolbar 同范式）。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新。★破坏性验证 5 条全部见红（parseFluidExpr 退回纯数字正则→4 failed / fluidDecl 退回裸 calc→6 failed / p-adaptive 退回元素空 return→2 failed / p-grid colWidthCss 退回固定值→1 failed / 删 defineProps 声明→1 failed），还原后 12/12 + 29/29 全绿。★test:coupled 317 tests 全绿。"
     }
   ]
 }

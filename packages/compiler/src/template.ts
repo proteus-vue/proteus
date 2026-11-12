@@ -10,7 +10,7 @@ import type {
 } from '@vue/compiler-dom'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
 import type { FluidLayoutConfig, VModelComponentHandler } from '@proteus-vue/types/compiler-types'
-import { linearFluid, calcColumns } from './fluid-layout'
+import { linearFluid, calcColumns, parseFluidExpr, fluidDecl } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
 import { TAG_SEMANTIC_MAP, MP_UNSUPPORTED_PROPS, PROP_NO_DEGRADATION, FRAMEWORK_INTERNAL_TAGS } from '@proteus-vue/component-ir'
@@ -433,18 +433,12 @@ function warnTemplateMethodCall(expr: string, ctx: SerializeContext): void {
 }
 
 /**
- * ★G-22 柔性布局：解析 p-fluid 表达式（prop(min,max) 空格分隔组）
- * `font-size(20, 32) gap(12,20)` → [{ prop: 'font-size', min: 20, max: 32 }, ...]；非法组忽略（FLD003 由调用方告警）
+ * ★G-22 柔性布局：解析 p-fluid 表达式
+ * ★2026-11-12（F-39）：**本函数已删除**，改由 `fluid-layout.ts` 的 parseFluidExpr 唯一实现。
+ *   原先这里有一份**完全相同的正则副本**（同样只认纯数字）——两处重复实现是
+ *   「改了这处、漏了那处」的经典温床（本仓已在 F-30/F-32/#500/#505 反复踩过）。
+ *   现改为顶部 import，模板与 CLI fluid:check 共用同一份解析器 + fluidDecl 出口。
  */
-function parseFluidExpr(expr: string): Array<{ prop: string; min: number; max: number }> {
-  const out: Array<{ prop: string; min: number; max: number }> = []
-  const re = /([A-Za-z][A-Za-z-]*)\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\)/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(expr))) {
-    out.push({ prop: m[1], min: Number(m[2]), max: Number(m[3]) })
-  }
-  return out
-}
 
 /** ★16-progress-skyline-degrade：<progress> → 自定义 view 进度条（Skyline 官方不支持原生 progress，真机实测不渲染）
  * 属性映射：percent → inner 宽度；active-color/color → 填充色；stroke-width → track 高度；show-info → 百分比文字
@@ -1281,14 +1275,17 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         const groups = parseFluidExpr(expr)
         if (!groups.length) {
-          // FLD003：p-fluid 须提供 prop(min, max) 区间——无法解析则剥离 + 告警，不生成样式
-          ctx.warnings.push(`p-fluid="${expr}" 未解析出 prop(min, max) 组（FLD003：须提供 min/max 区间）——已剥离，未生成样式`)
+          // FLD003：p-fluid 须提供 prop(…) 区间——无法解析则剥离 + 告警，不生成样式
+          ctx.warnings.push(`p-fluid="${expr}" 未解析出 prop(…) 组（FLD003：须提供 min/max 或 var()/百分比实参）——已剥离，未生成样式`)
         } else {
           const cfg = ctx.fluidLayout
           const designWidth = cfg?.designWidth ?? 375
           const viewport = { min: cfg?.viewport?.min ?? 320, max: cfg?.viewport?.max ?? 1440 }
-          // ★#496 M3：MP 产物用 calc 线性（Skyline/WebView 共用 wxml——Skyline 无 clamp，WebView 支持 calc+vw；clamp 边界仅超界屏 ±1-2px）
-          const decls = groups.map((g) => `${g.prop}: ${linearFluid(g.min, g.max, designWidth, viewport)}`).join('; ')
+          // ★2026-11-12（F-39/F-40）：改用 fluidDecl 唯一出口——
+          //   纯数字 → clamp(min, calc(...), max) 两端夹取；非纯数字实参（var()/百分比/auto）原样透传。
+          //   旧实现直接 linearFluid ⇒ ① 裸 calc 在 viewportMax 外不夹取（F-40）
+          //   ② var() 等实参根本解析不出来（F-39）。
+          const decls = groups.map((g) => fluidDecl(g, designWidth, viewport)).join('; ')
           staticStyle = staticStyle ? staticStyle + '; ' + decls : decls
           ctx.trace?.add('fluid/p-fluid', { line: node.loc.start.line, before: `p-fluid="${expr}"`, after: `style 追加 ${decls}` })
         }

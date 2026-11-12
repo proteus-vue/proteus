@@ -51,9 +51,13 @@ describe('fluid-layout B1（纯算法）', () => {
 })
 
 describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
-  it('transformTemplateToWxml：p-fluid 属性 → style 追加 calc 线性声明（★#496 M3 Skyline 无 clamp）；属性本身剥离', () => {
+  // ★2026-11-12（外部 F-40）行为变更：MP 产物从**裸 calc** 改为 `clamp(min, calc(...), max)`。
+  //   旧断言写死「Skyline 无 clamp」，前提是「超界屏只差 ±1-2px 可忽略」——**该前提已被实测证伪**：
+  //   1600 宽 → 33.8px（应 32）；designWidth=1280 时 390 宽 → 3.31px（应 ≥20，甚至会外推为负）。
+  //   WebView 与 Web 都支持 clamp；不支持 clamp 的渲染端会忽略该声明（比越界/负值更安全）。
+  it('transformTemplateToWxml：p-fluid 属性 → style 追加 clamp 声明（★F-40 两端夹取）；属性本身剥离', () => {
     const result = transformTemplateToWxml('<h1 p-fluid="font-size(20, 32)">标题</h1>', { px2rpx: true, rpxRatio: 2 })
-    expect(result.wxml).toContain('style="font-size: calc(15.77px + 1.1268vw)"')
+    expect(result.wxml).toContain('style="font-size: clamp(20px, calc(15.77px + 1.1268vw), 32px)"')
     expect(result.wxml).not.toContain('p-fluid')
     expect(result.warnings.length).toBe(0)
   })
@@ -65,13 +69,37 @@ describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
       fluidLayout: { designWidth: 400, viewport: { min: 320, max: 1280 } },
     })
     // slope(gap)=(20-12)/(1280-400)=0.00909；intercept=12-0.00909*400=8.36；margin slope=0.01818，intercept=16-0.01818*400=8.73
-    expect(result.wxml).toContain('style="color:red; gap: calc(8.36px + 0.9091vw); margin: calc(8.73px + 1.8182vw)"')
+    expect(result.wxml).toContain(
+      'style="color:red; gap: clamp(12px, calc(8.36px + 0.9091vw), 20px); margin: clamp(16px, calc(8.73px + 1.8182vw), 32px)"',
+    )
   })
 
+  // ★2026-11-12（F-39）语义变更：`font-size(20)` 单实参**现在合法**（原样透传为 `font-size: 20`），
+  //   因为「单实参」正是 var()/百分比/auto 的天然形态（`padding(var(--sp-4))` 也是单实参）。
+  //   FLD003 改为只在**真的解析不出任何 prop(...) 组**时触发——下面用三个真无法解析的输入覆盖。
   it('FLD003：无法解析的表达式 → 剥离 + 警告，不生成样式', () => {
-    const result = transformTemplateToWxml('<p p-fluid="font-size(20)">x</p>', { px2rpx: true, rpxRatio: 2 })
-    expect(result.wxml).not.toContain('p-fluid')
-    expect(result.warnings.some((w) => w.includes('FLD003'))).toBe(true)
+    for (const bad of ['font-size', 'font-size()', 'font-size 20']) {
+      const result = transformTemplateToWxml(`<p p-fluid="${bad}">x</p>`, { px2rpx: true, rpxRatio: 2 })
+      expect(result.wxml, `${bad} 应被剥离`).not.toContain('p-fluid')
+      expect(result.warnings.some((w) => w.includes('FLD003')), `${bad} 应报 FLD003`).toBe(true)
+    }
+    // 对照：单实参现在合法（原样透传），不应报 FLD003
+    const ok = transformTemplateToWxml('<p p-fluid="font-size(20)">x</p>', { px2rpx: true, rpxRatio: 2 })
+    expect(ok.warnings.some((w) => w.includes('FLD003'))).toBe(false)
+    expect(ok.wxml).toContain('font-size: 20')
+  })
+
+  // ★2026-11-12（外部 F-39）：`var()` / 百分比 / auto 实参必须**原样透传**，不再整组静默剥离。
+  it('★F-39：var()/百分比/auto 实参原样透传（不再静默剥离）', () => {
+    const r1 = transformTemplateToWxml('<div p-fluid="padding(var(--sp-4))">x</div>', { px2rpx: true, rpxRatio: 2 })
+    expect(r1.wxml).toContain('style="padding: var(--sp-4)"')
+    expect(r1.warnings.length, '不应报 FLD003').toBe(0)
+
+    const r2 = transformTemplateToWxml('<div p-fluid="width(50%, 100%)">x</div>', { px2rpx: true, rpxRatio: 2 })
+    expect(r2.wxml).toContain('width: 50%')
+
+    const r3 = transformTemplateToWxml('<div p-fluid="margin(0, auto)">x</div>', { px2rpx: true, rpxRatio: 2 })
+    expect(r3.wxml).toContain('margin: auto') // 取非数字侧（auto 优先于 0）
   })
 })
 

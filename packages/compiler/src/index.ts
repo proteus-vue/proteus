@@ -102,7 +102,7 @@ export { validateJs, validateWxml, validateWxmlPlatform, scanWxmlPlatformIssues,
 export type { WxmlPlatformIssue } from './validate'
 
 // ★G-22 柔性布局（fluid-layout-plan B1）：clamp 生成 / 断点推导 / 网格列数（Web/Skyline 编译期用）
-export { generateClamp, linearFluid, deriveBreakpoints, calcColumns, gridTemplate, parseFluidExpr, DEFAULT_VIEWPORT_RANGE, DEFAULT_BREAKPOINT_RATIOS } from './fluid-layout'
+export { generateClamp, linearFluid, fluidDecl, deriveBreakpoints, calcColumns, gridTemplate, parseFluidExpr, DEFAULT_VIEWPORT_RANGE, DEFAULT_BREAKPOINT_RATIOS } from './fluid-layout'
 export type { Breakpoint, ViewportRange, FluidGroup } from './fluid-layout'
 
 // ★#505 CompileIR 构建（M1 骨架搬迁：TemplateTransformResult → TemplateIR 投影）
