@@ -277,6 +277,11 @@ onBeforeUnmount(() => {
 })
 
 function onNodeMenu(e: MouseEvent, node: TreeNode) {
+  /* ★决策 #1496：右键**先把悬停卡收掉**。
+     卡是 `position: fixed` 浮层（z-index 60），右键那一瞬 `mouseenter` 已经把卡叫起来了；
+     它与右键菜单**同为 60 层**，谁压谁取决于 DOM 顺序 ⇒ 菜单项被卡片挡住、点不中。
+     产品语义也更清楚：**右键了就不再看预览**。 */
+  clearHover()
   const collapsed = ws.codeCollapsed.includes(node.path)
   openMenu(
     e,
@@ -320,46 +325,60 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     <span v-if="q" class="fcount">{{ filteredRows.length }}</span>
   </div>
   <nav class="files" id="codeFiles" @scroll.passive="clearHover">
-    <button
+    <!-- ★决策 #1495：行改由 `.frow` 定位容器 + 内部 `<button class="fbtn">` 组成。
+         原因是徽标曾经是**嵌在按钮里的可点元素** —— `button` 里不能放交互内容（HTML 规范），
+         而它又要能点（跳诊断）。现在徽标是按钮的**同级兄弟**（`position: absolute` 浮在行尾），
+         结构合法、仍可点，`button[data-file]` 这 60 处选择器也不用改。 -->
+    <div
       v-for="r in filteredRows"
       :key="r.node.path"
-      :class="{ on: r.node.path === cur, dir: r.node.dir, peek: hoverPath === r.node.path }"
+      class="frow"
+      :data-row="r.node.path"
       :style="{ paddingLeft: `${8 + r.depth * 14}px` }"
-      :data-dir="r.node.dir ? r.node.path : undefined"
-      :data-file="r.node.dir ? undefined : r.node.path"
-      :aria-expanded="r.node.dir ? !ws.codeCollapsed.includes(r.node.path) : undefined"
-      :data-icon="nodeIcon(r.node).name"
-      @click="r.node.dir ? toggle(r.node.path) : emit('open', r.node.path)"
-      @mouseenter="onHover($event, r.node)"
-      @mouseleave="scheduleHide"
-      @focus="onHover($event, r.node)"
-      @blur="scheduleHide"
-      @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
     >
-      <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
-      <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
-      <span class="name" :title="q ? r.node.path : undefined">{{ q ? r.node.path : r.node.name }}</span>
-      <!-- 诊断徽标（决策 #1492 / #1493 / #1494）：文件行是自己的数，目录行是子树聚合；
-           点它 → 跳到该文件/该子树的第一条诊断（`@click.stop` 不触发"打开文件"） -->
-      <span
+      <button
+        class="fbtn"
+        :class="{ on: r.node.path === cur, dir: r.node.dir, peek: hoverPath === r.node.path }"
+        :data-dir="r.node.dir ? r.node.path : undefined"
+        :data-file="r.node.dir ? undefined : r.node.path"
+        :aria-expanded="r.node.dir ? !ws.codeCollapsed.includes(r.node.path) : undefined"
+        :data-icon="nodeIcon(r.node).name"
+        @click="r.node.dir ? toggle(r.node.path) : emit('open', r.node.path)"
+        @mouseenter="onHover($event, r.node)"
+        @mouseleave="scheduleHide"
+        @focus="onHover($event, r.node)"
+        @blur="scheduleHide"
+        @contextmenu.prevent.stop="onNodeMenu($event, r.node)"
+      >
+        <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
+        <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
+        <span class="name" :title="q ? r.node.path : undefined">{{ q ? r.node.path : r.node.name }}</span>
+        <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
+          mark(r.node.path)
+        }}</span>
+      </button>
+      <!-- ★徽标是 `<button>` 同级元素：可点、可 Tab 到、不违反"按钮不能嵌交互内容" -->
+      <button
         v-if="dg(r).e > 0"
         class="dg err"
         :title="`${dg(r).e} 个错误 · 点击跳到第一个`"
-        @click.stop.prevent="jumpDiag(r)"
-        >{{ dg(r).e }}</span
+        :aria-label="`跳到 ${r.node.name} 的第一个错误`"
+        @click.stop="jumpDiag(r)"
       >
-      <span
+        {{ dg(r).e }}
+      </button>
+      <button
         v-if="dg(r).w > 0"
         class="dg warn"
         :title="`${dg(r).w} 个警告 · 点击跳到第一个`"
-        @click.stop.prevent="jumpDiag(r)"
-        >{{ dg(r).w }}</span
+        :aria-label="`跳到 ${r.node.name} 的第一个警告`"
+        @click.stop="jumpDiag(r)"
       >
-      <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
-        mark(r.node.path)
-      }}</span>
-    </button>
+        {{ dg(r).w }}
+      </button>
+    </div>
   </nav>
+
 
   <!-- 悬停预览卡：Teleport 到 body —— 布局里若有 transform/filter，`position: fixed` 会
        退化成相对该祖先定位（卡片错位到树里）。挂到 body 下才真正相对视口。
@@ -436,8 +455,12 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
 .gst[data-s='?'] { color: var(--fg-subtle); }
 
 /* 诊断徽标（决策 #1492）：极简 —— 无底色方块，只有数字 + 语义色，紧贴名字右侧 */
+/* 徽标浮在行尾（决策 #1495）：不再挤在按钮内部，因此可以是真的 `<button>` */
 .dg {
-  flex: none;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
   cursor: pointer;
   min-width: 12px;
   height: 14px;
@@ -456,8 +479,15 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
   color: var(--warn, #d29922);
   background: color-mix(in srgb, var(--warn, #d29922) 16%, transparent);
 }
-.files button {
+.frow {
+  position: relative;
   display: flex;
+  align-items: center;
+}
+.files .fbtn {
+  display: flex;
+  /* 给右上角的诊断徽标留位（决策 #1495） */
+  padding-right: 22px;
   align-items: center;
   gap: var(--sp1);
   width: 100%;
@@ -475,28 +505,28 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
     background var(--dur) var(--ease),
     color var(--dur) var(--ease);
 }
-.files button:hover {
+.files .fbtn:hover {
   background: var(--bg-overlay);
   color: var(--fg);
 }
 /* ★决策 #1480：卡片打开期间，被预览的那一行要保持高亮。
    原因：指针移进卡片后行就不再 `:hover`，原来的高亮一消失，用户会瞬间失去
    "我正在看哪一条"的锚点——尤其卡片内容变多、视线离开树之后更容易迷路。 */
-.files button.peek {
+.files .fbtn.peek {
   background: var(--bg-overlay);
   color: var(--fg);
 }
-.files button.on {
+.files .fbtn.on {
   background: var(--bg-elevated);
   color: var(--fg);
   /* 选中态：左侧 2px 强调条（与活动栏同一套语汇，不靠"变亮"单维度区分） */
   box-shadow: inset 2px 0 0 var(--accent);
 }
-.files button:focus-visible {
+.files .fbtn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.files button.dir {
+.files .fbtn.dir {
   color: var(--fg);
 }
 .ico {

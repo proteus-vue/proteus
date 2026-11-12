@@ -1075,21 +1075,22 @@ export async function probeDiagBadges(page) {
   await page.waitForTimeout(260)
 
   const shown = await page.evaluate(() => {
+    /* ★决策 #1495：徽标已移出按钮（成为同级元素）⇒ 从 `.frow` 容器上读，不再从按钮里找 */
     const read = (p) => {
-      const b = document.querySelector(`#codeFiles button[data-file="${p}"]`)
-      if (!b) return null
+      const r = document.querySelector(`#codeFiles .frow[data-row="${p}"]`)
+      if (!r) return null
       return {
-        e: b.querySelector('.dg.err')?.textContent?.trim() ?? '',
-        w: b.querySelector('.dg.warn')?.textContent?.trim() ?? '',
+        e: r.querySelector('.dg.err')?.textContent?.trim() ?? '',
+        w: r.querySelector('.dg.warn')?.textContent?.trim() ?? '',
       }
     }
     /* ★决策 #1493：目录行 = 子树聚合。折叠着也要能看出"哪个目录有问题"。 */
     const readDir = (p) => {
-      const b = document.querySelector(`#codeFiles button[data-dir="${p}"]`)
-      if (!b) return null
+      const r = document.querySelector(`#codeFiles .frow[data-row="${p}"]`)
+      if (!r) return null
       return {
-        e: b.querySelector('.dg.err')?.textContent?.trim() ?? '',
-        w: b.querySelector('.dg.warn')?.textContent?.trim() ?? '',
+        e: r.querySelector('.dg.err')?.textContent?.trim() ?? '',
+        w: r.querySelector('.dg.warn')?.textContent?.trim() ?? '',
       }
     }
     return {
@@ -1110,7 +1111,7 @@ export async function probeDiagBadges(page) {
   const before = await page.evaluate(
     () => document.querySelector('#codeFiles button.on')?.getAttribute('data-file') ?? '',
   )
-  await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"] .dg.err').catch(() => {})
+  await page.click('#codeFiles .frow[data-row="packages/studio/ui/src/App.vue"] .dg.err').catch(() => {})
   await page.waitForTimeout(460)
   const after = await page.evaluate(
     () => document.querySelector('#codeFiles button.on')?.getAttribute('data-file') ?? '',
@@ -1118,7 +1119,7 @@ export async function probeDiagBadges(page) {
   const expBefore = await page.evaluate(
     () => document.querySelector('#codeFiles button[data-dir="packages"]')?.getAttribute('aria-expanded') ?? '',
   )
-  await page.click('#codeFiles button[data-dir="packages"] .dg.err').catch(() => {})
+  await page.click('#codeFiles .frow[data-row="packages"] .dg.err').catch(() => {})
   await page.waitForTimeout(320)
   const expAfter = await page.evaluate(
     () => document.querySelector('#codeFiles button[data-dir="packages"]')?.getAttribute('aria-expanded') ?? '',
@@ -1131,5 +1132,34 @@ export async function probeDiagBadges(page) {
     await page.waitForTimeout(260)
   }
 
-  return { emits, listenerReady, shown, jump: { before, after, expBefore, expAfter } }
+  /* ★决策 #1495：结构合法性 + **键盘可达性**。
+     ① `button` 里不能再有可交互元素（HTML 规范）；② 徽标本身是真 `<button>`；
+     ③ 用**键盘**（聚焦 + Enter）也能跳 —— 这才是"修 a11y"要证的，而不是"换了个标签"。 */
+  const a11y = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('#codeFiles .frow')]
+    let nested = 0
+    for (const r of rows) nested += r.querySelectorAll('button button, button [tabindex], button a').length
+    const dg = document.querySelector('#codeFiles .frow[data-row="packages/studio/ui/src/App.vue"] .dg.err')
+    return {
+      nested,
+      isButton: dg?.tagName === 'BUTTON',
+      label: dg?.getAttribute('aria-label') ?? '',
+    }
+  })
+
+  /* 先离开 App.vue，再用键盘跳回来。
+     ★点之前必须把指针移开、等悬停卡收起 —— 卡片是 `position: fixed` 浮在行上方，
+       不收就走 click 会被它 intercept（本轮实测 30s 超时）。 */
+  await page.mouse.move(4, 4)
+  await page.waitForTimeout(360)
+  await page.click('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]').catch(() => {})
+  await page.waitForTimeout(300)
+  await page.focus('#codeFiles .frow[data-row="packages/studio/ui/src/App.vue"] .dg.err').catch(() => {})
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(440)
+  const kbd = await page.evaluate(
+    () => document.querySelector('#codeFiles button.on')?.getAttribute('data-file') ?? '',
+  )
+
+  return { emits, listenerReady, shown, jump: { before, after, expBefore, expAfter }, a11y: { ...a11y, kbd } }
 }

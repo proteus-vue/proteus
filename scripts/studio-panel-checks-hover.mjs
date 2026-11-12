@@ -211,6 +211,21 @@ export async function checksHover(page) {
         (dg.jump?.after ?? '').endsWith('ui/src/App.vue') === true &&
         dg.jump?.expBefore === dg.jump?.expAfter,
     ],
+    /* ㊿x 徽标结构合法 + 键盘可达（决策 #1495）
+       ★四条：① `button` 内**没有**嵌套可交互元素；② 徽标本身是 `<button>`；
+         ③ 有 `aria-label`；④ **键盘**（聚焦 + Enter）也能跳到那个文件。
+       只断①②③ 的话，"标签换了但 Tab 顺序/焦点不可用"照样绿；④ 才是 a11y 的实质。 */
+    [
+      `㊿x 徽标结构/键盘（决策 #1495）：button 内嵌交互=${dg.a11y?.nested} 个 · 徽标是 button=${
+        dg.a11y?.isButton
+      } · aria-label「${(dg.a11y?.label ?? '').slice(0, 16)}」· 键盘 Enter 跳到=${
+        (dg.a11y?.kbd ?? '').split('/').pop() || '(无)'
+      }`,
+      dg.a11y?.nested === 0 &&
+        dg.a11y?.isButton === true &&
+        /跳到/.test(dg.a11y?.label ?? '') &&
+        (dg.a11y?.kbd ?? '').endsWith('ui/src/App.vue'),
+    ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；
        "前面的面板不需要自动关闭" ⇒ 指针进子面板 700ms 后父面板仍在；
