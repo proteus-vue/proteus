@@ -17271,6 +17271,30 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ② 聚合是**字符串前缀**匹配，不做真实文件系统归属校验（树的路径本身就是全路径，够用）；
     ③ 计数不做上限（理论上某目录可显示三位数，宽度会撑开——实际当前规模不会）。
 
+1494. **★点诊断徽标 = 一步到错误现场（文件取自己、目录取子树第一条）· 判据 ㊿w**（2026-11-12 · 用户「继续」IDE 主线）:
+  - **先纠正一个前提**：诊断面板是右栏**常驻**的（`App.vue` 的 `.side`），不存在"打开面板"这个动作。
+    所以徽标该做的是**跳到错误现场**，而不是"打开面板"。
+  - **做法**：`jumpDiag(r)` —— 文件行取该文件的第一条诊断，目录行取**子树里最靠前**的一条
+    （`diagList` 已按 文件→行→列 排好），然后 `ws.jump = { path, line }`。
+    `@click.stop.prevent`：**不压住行点击**（否则点徽标会顺带打开文件/折叠目录）。
+  - **判据 ㊿w（三条一起断）**：① 点之前**不在**该文件（否则"跳过去"证明不了）；
+    ② 点之后当前文件变成它；③ 点**目录**徽标**不折叠**。
+    ★只断②的话，"点徽标顺手把文件打开了"也能绿 —— 那说明根本没走 jump 这条路。
+  - **★★变异暴露了探针设计缺陷（比判据本身更值得记）**：去掉 `@click.stop` 后，
+    点击真的把 `packages` 折叠了 ⇒ **后续探针找不到 `bridge.ts` 行，30s 超时整轮崩溃**，
+    结果报出来的是 `TimeoutError`（0 绿 0 红）而不是"㊿w 红"——人会去查完全错误的地方。
+    修法：探针发现 `expBefore !== expAfter` 时**主动复原**（再点一次展开），
+    让"缺 stop"表现为**一条红**而不是一场崩溃。
+    ★**教训：破坏性验证不只要"能变红"，还要"红得干净"**——会污染后续状态的探针，
+      在真出 bug 时同样会崩溃，那样就失去了定位价值。
+  - **破坏性验证（修完之后）**：去掉 `.stop` ⇒ **91 绿 + 1 红**，
+    报错原文 `点目录徽标不折叠=false`，无崩溃。
+  - **判据**：面板门禁 **92 绿 0 红**（基线 92 条）。
+  - **诚实边界**：① 徽标是 `<span @click>` 套在 `<button>` 里，**A11y 上不合法**
+    （交互元素不能嵌套）——键盘用户只能靠行点击打开文件，跳诊断是纯鼠标路径；
+    ② 只跳第一条，不循环/不列表；③ 目录徽标跳的是子树里**路径顺序最靠前**的文件，
+    不是"错误最多的文件"。
+
 1493. **★柔性布局 MP 端五缺口一次性收口（F-39~F-43）：两处重复解析器收敛 + clamp 夹取 + 测量源接线**（2026-11-12 · 外部第 15 轮指定最高优先级）:
 **① 背景**：外部报告第 15 轮报 F-39~F-43（1 blocker+3 major+1 minor），全部同源——**柔性布局系统在 MP 端没接完**。框架侧此前把这批标成"已实现"（fluid 包确实有完整实现），实际是**能力与接线分离**：原语写好了，消费方一个没接。
 
@@ -17285,3 +17309,18 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 回归锁**：`tests/fluid-mp-gaps.test.ts` 12 例（新增）+ `tests/fluid-layout.test.ts` 3 条旧断言按新行为更新（旧断言把"Skyline 无 clamp"写死了）。**破坏性验证 5 条全部见红**：parseFluidExpr 退回纯数字正则→4 failed / fluidDecl 退回裸 calc→6 failed / p-adaptive 退回元素空 return→2 failed / colWidthCss 退回固定值→1 failed / 删 defineProps 声明→1 failed；还原后 12/12 + 29/29 全绿。★第五条的破坏性验证是**第二轮才做对**的：首版只断言"字符串存在"，删掉 prop 声明测试照样绿 ⇒ 改为真解析 computed 体求值 + 断言 defineProps 块结构。
 
 **⑦ 判据**：`test:coupled` 317 tests 全绿；`check:ai-tasks` ✅。**诚实边界**：① 未做真机验证——MP 端 p-adaptive 的实际形态切换需真机跑（selectorQuery 命中依赖运行时类不加 scoped 后缀，本仓 p-zone 已验证该机制，但 p-adaptive 未单独验）；② F-40 的 clamp 在 Skyline（不支持 clamp）上的行为是"忽略该声明"，比负值安全但仍非流式；③ F-41 只改 Web 端（p-grid 本就是 Web-only）。
+
+1494. **★外部三条 blocker 收口（F-36/F-37/F-38）：平台全局收敛到 adapter + 门禁排除 node_modules + 宏泛型形态 + v-for 作用域 data-* 传参**（2026-11-12 · 外部第 13/14 轮）:
+**① F-36（blocker/packaging）**：@proteus-vue/components 的 .vue 源码直接调全局 \`getCurrentPages?.()\`（p-auth-gate/p-loading-host/p-toast-host 三处）——那是**小程序运行时全局**，.vue 里既无类型声明也无 Web 实现 ⇒ 消费者 \`vue-tsc\` 报 TS2304、而 proteus build 在 vite build 前先跑 vue-tsc ⇒ **整条构建链中断**。★根因不是"忘了写类型"，而是**又一次能力与接线分离**：\`adapter.getCurrentPages()\`（shared/platform/adapter.ts:29，MP 走 wx 页面栈投影、Web 返回长度 1 的当前页）**早就有**，组件却绕过抽象直连平台 API。修法：三处重复的 \`routeOf()\` 收敛到新 \`packages/components/runtime/page-route.ts\` 的 \`currentPageRoute(fallback)\`（唯一实现，内部只依赖 adapter；fallback 参数保留各组件原有语义差异：auth-gate/toast-host 用 unknown，loading-host 用 ）。
+
+**② F-37（blocker/process）**：框架自带的两道样式门禁（\`profile-boundary\` / \`cse-lint\`）在 \`transform(code, id)\` 里只判 \`id.endsWith(.vue)\`，**不排除 node_modules** ⇒ 消费者引用任一 p-* 组件时，vite 把 \`node_modules/@proteus-vue/components\` 的源码也送进门禁 ⇒ 框架自己的 \`display: inline-flex\`（CSS-PB-display）与 \`:class\` 动态类（E-CSS-004）被判 error ⇒ **消费者的 Web 构建被框架自家组件封死**，且消费者无法修改 node_modules。修法：两道门禁都在 transform 入口加 \`if (/[\\/]node_modules[\\/]/.test(id)) return null\`。★**语义边界（写进注释）**：门禁约束的是**消费者的源码写法**；已发布依赖是既成事实，它的问题应在框架仓库 CI（同规则跑 packages/**）拦住，不该在消费者侧二次执法。这条边界必须写清楚——否则"排除 node_modules"看起来像放宽标准。
+
+**③ F-38 缺陷 A（blocker/compiler）**：\`const emit = defineEmits<{ (e:go, n:number): void }>()\` 是 TS 最常见写法（泛型实参在 \`(\` 之前），而宏过滤正则写的是 \`defineEmits\\s*\\(\` ——**只认调用形式不认泛型形式** ⇒ 该 const 被当普通初始化 ⇒ 产物 \`data: { emit: undefined }\` ⇒ 运行时 \`this.emit is not a function\`，**组件事件全部静默失效**（外部工程 chapter-tree / job-drawer / book-search 三个组件全中招）。两处都要改：宏过滤（script.ts:1097）与 \`emitEnabled\` 判定（script.ts:3504）。与 defineProps/defineModel 的 \`[<(]\` 形态对齐即可。★教训：**同一个宏有多种语法形态时，判据必须覆盖全形态**——只按"我见过的那种写法"写正则，就是对另一种写法静默失效。
+
+**④ F-38 缺陷 B（blocker/compiler）**：v-for 作用域内的参数化 handler 三种形态全坏：\`run(a.key)\` → 原样输出成非法处理器名（永不触发）；\`run(a)\` → 通用路径当 state 引用包装成 \`this.run(a)\`（方法作用域无 a）；\`(e)=>run(a)\` → 原样输出。★**为什么通用路径修不了**：它在**方法作用域**生成 \`this.fn(...)\`，而 v-for 的 item/index 是**模板作用域**变量——方法体里根本不存在。\`run(count)\` 只在校验"裸标识符"时安全（count 长得像 state 名），换成 \`run(a)\` 就错，说明"裸标识符"这个判据本身分不清 state 与 for 变量。修法（小程序标准做法）：**\`data-*\` 传参**——\`<button data-proteus-arg-0="{{a.key}}" bindtap="proteusForRunakey">\` + 方法体 \`this.run(e.currentTarget.dataset.proteusArg0)\`。\`data-*\` 由 WXML 引擎在模板作用域求值，故 \`a\` 不需要进方法作用域。实现：\`SerializeContext.forScope\`（v-for 作用域集合，\`serializeElement\` 入口压栈 / try-finally 还原，早于 props 循环 ⇒ 子树可见、兄弟不污染、early return 也被覆盖）+ \`tryForScopedHandler\`（transforms/template.ts，判定「实参根标识符 ∈ forScope」）+ on case 里**先于**通用 inline 路径与 cleanHandler 的优先分支。字面量实参不过 data-*（直接进方法体）。
+
+**⑤ 回归锁**：\`tests/cobuild-f36-f38.test.ts\` 12 例。**破坏性验证 4 条全部见红**：组件退回全局 getCurrentPages→1 failed / defineEmits 退回只认调用形式→1 failed / 两道门禁去掉 node_modules 排除→2 failed / 禁用 v-for 作用域路径→4 failed；还原后 12/12 绿。
+
+**⑥ 顺带修掉一处既有红（诚实记录）**：\`tests/compiler-ir-m4.test.ts\` 因 \`examples/pages/request-vue-demo.vue\` 用了 wxml 不支持的 \`?.\` 与 \`??\`（官方 UnsupportedSyntax）而红——\`git stash\` 掉本轮改动后同样红，**证明确非本轮引入**（来自 10-30 的 fb67b13e）。已改守卫写法（\`x && x.length\` / \`x || 占位\`），22/22 转绿。
+
+**⑦ 判据**：\`test:coupled\` **507 tests 全绿**；\`check:ai-tasks\` ✅。**诚实边界**：① F-36 的类型修复未经真实 \`vue-tsc\` 在干净 npm 安装工程验证（本仓 workspace 软链，见 ai-cobuild §4「维护方跑仓库内单测不算独立验证」）——须走发布 + 外部复测；② F-37 的端到端同样需干净工程 \`npm i\` 后跑 \`proteus build\`，本仓只锁住「排除判定存在且早于诊断收集」；③ F-38 缺陷 B 的 data-* 传参依赖小程序 dataset 驼峰化（\`proteus-arg-0\` → \`proteusArg0\`），该行为微信官方文档明确，但未真机验。

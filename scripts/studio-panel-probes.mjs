@@ -1104,5 +1104,32 @@ export async function probeDiagBadges(page) {
     }
   })
 
-  return { emits, listenerReady, shown }
+  /* ★决策 #1494：点徽标 = 一步到错误现场。三条要一起看：
+     ① 点之前**不在**那个文件（否则"跳过去"证明不了）；
+     ② 点之后当前文件变成它；③ 点**目录**徽标只跳转、**不折叠**（`@click.stop`）。 */
+  const before = await page.evaluate(
+    () => document.querySelector('#codeFiles button.on')?.getAttribute('data-file') ?? '',
+  )
+  await page.click('#codeFiles button[data-file="packages/studio/ui/src/App.vue"] .dg.err').catch(() => {})
+  await page.waitForTimeout(460)
+  const after = await page.evaluate(
+    () => document.querySelector('#codeFiles button.on')?.getAttribute('data-file') ?? '',
+  )
+  const expBefore = await page.evaluate(
+    () => document.querySelector('#codeFiles button[data-dir="packages"]')?.getAttribute('aria-expanded') ?? '',
+  )
+  await page.click('#codeFiles button[data-dir="packages"] .dg.err').catch(() => {})
+  await page.waitForTimeout(320)
+  const expAfter = await page.evaluate(
+    () => document.querySelector('#codeFiles button[data-dir="packages"]')?.getAttribute('aria-expanded') ?? '',
+  )
+  /* ★如果这次点击把目录折叠了（正是 `@click.stop` 缺失的症状），**必须复原**：
+     否则后续探针要在展开的树里找行，会 30s 超时把整轮门禁炸掉 ——
+     那样报出来的是"崩溃"，不是"㊿w 红"，人会去查错地方。（2026-11-12 实测踩过） */
+  if (expBefore !== expAfter) {
+    await page.click('#codeFiles button[data-dir="packages"]').catch(() => {})
+    await page.waitForTimeout(260)
+  }
+
+  return { emits, listenerReady, shown, jump: { before, after, expBefore, expAfter } }
 }

@@ -199,6 +199,18 @@ export async function checksHover(page) {
         dg.shown.dirs?.pkg?.e === '2' &&
         dg.shown.dirs?.pkg?.w === '1',
     ],
+    /* ㊿w 点徽标跳到首条诊断（决策 #1494）
+       ★三条：① 点之前不在该文件（否则证明不了"跳"）；② 点之后当前文件是它；
+         ③ 点**目录**徽标只跳转、**不折叠**（`@click.stop` 那一下）。
+       只断②的话，"点徽标顺手把文件打开了"也能绿 —— 那其实是另一件事。 */
+    [
+      `㊿w 点徽标跳诊断（决策 #1494）：跳前=${(dg.jump?.before ?? '').split('/').pop() || '(空)'} → 跳后=${
+        (dg.jump?.after ?? '').split('/').pop() || '(空)'
+      } · 点目录徽标不折叠=${dg.jump?.expBefore === dg.jump?.expAfter}`,
+      (dg.jump?.before ?? '').endsWith('ui/src/App.vue') === false &&
+        (dg.jump?.after ?? '').endsWith('ui/src/App.vue') === true &&
+        dg.jump?.expBefore === dg.jump?.expAfter,
+    ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；
        "前面的面板不需要自动关闭" ⇒ 指针进子面板 700ms 后父面板仍在；

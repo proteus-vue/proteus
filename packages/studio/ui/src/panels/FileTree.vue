@@ -81,6 +81,23 @@ const diagMark = computed(() => {
   return { files, dirs }
 })
 
+/**
+ * 点徽标 → 跳到**该文件/该子树的第一条诊断**（决策 #1494）。
+ *
+ * 【为什么不是"打开诊断面板"】诊断面板是右栏常驻的（App.vue 的 `.side`），
+ *   没有"打开"这个动作。用户点徽标真正想要的是一步到错误现场。
+ * 【为什么取第一条而不是循环】"跳到错误"的语义是定位，不是浏览；要看全量，
+ *   右栏的 DiagPanel 本来就在。★目录徽标取的是**子树里最靠前**的那条（按 diagList 顺序，
+ *   已按 文件→行→列 排好），这样"折叠着点顶层目录"也能一步落到第一个问题。
+ */
+function jumpDiag(r: { node: { path: string; dir: boolean } }) {
+  const first = r.node.dir
+    ? diagList.value.find((d) => d.path.startsWith(`${r.node.path}/`))
+    : diagList.value.find((d) => d.path === r.node.path)
+  if (!first) return
+  ws.jump = { path: first.path, line: first.line }
+}
+
 /** 一行（目录或文件）要显示的两枚计数；没有就返回 0/0 */
 const dg = (r: { node: { path: string; dir: boolean } }): DgCount =>
   (r.node.dir ? diagMark.value.dirs.get(r.node.path) : diagMark.value.files.get(r.node.path)) ?? {
@@ -322,9 +339,22 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
       <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
       <span class="name" :title="q ? r.node.path : undefined">{{ q ? r.node.path : r.node.name }}</span>
-      <!-- 诊断徽标（决策 #1492 / #1493）：文件行是自己的数，目录行是**子树聚合** -->
-      <span v-if="dg(r).e > 0" class="dg err" :title="`${dg(r).e} 个错误`">{{ dg(r).e }}</span>
-      <span v-if="dg(r).w > 0" class="dg warn" :title="`${dg(r).w} 个警告`">{{ dg(r).w }}</span>
+      <!-- 诊断徽标（决策 #1492 / #1493 / #1494）：文件行是自己的数，目录行是子树聚合；
+           点它 → 跳到该文件/该子树的第一条诊断（`@click.stop` 不触发"打开文件"） -->
+      <span
+        v-if="dg(r).e > 0"
+        class="dg err"
+        :title="`${dg(r).e} 个错误 · 点击跳到第一个`"
+        @click.stop.prevent="jumpDiag(r)"
+        >{{ dg(r).e }}</span
+      >
+      <span
+        v-if="dg(r).w > 0"
+        class="dg warn"
+        :title="`${dg(r).w} 个警告 · 点击跳到第一个`"
+        @click.stop.prevent="jumpDiag(r)"
+        >{{ dg(r).w }}</span
+      >
       <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
         mark(r.node.path)
       }}</span>
@@ -408,6 +438,7 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
 /* 诊断徽标（决策 #1492）：极简 —— 无底色方块，只有数字 + 语义色，紧贴名字右侧 */
 .dg {
   flex: none;
+  cursor: pointer;
   min-width: 12px;
   height: 14px;
   padding: 0 3px;
