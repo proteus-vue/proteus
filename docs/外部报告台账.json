@@ -722,11 +722,16 @@
       "round": 15,
       "reported_in": "0.3.0-beta.31",
       "found_by": "external",
-      "status": "open",
+      "status": "fixed",
       "verification": "unverified",
       "evidence": "把工程里既有的间距 token 喂给 p-fluid，属性被整条剥掉，产物里没有 style、也没有任何 warning：\n  <div p-fluid=\"padding(var(--sp-4))\">  → 产物无 style\n  <div p-fluid=\"width(50%, 100%)\">      → 产物无 style\n  <div p-fluid=\"padding(16, 24)\">       → style=\"padding: calc(13.18px + 0.7512vw)\"（对照，正常）\n根因在编译期解析器：parseFluidExpr 的正则是 /([A-Za-z][A-Za-z-]*)\\s*\\(\\s*([\\d.]+)\\s*,\\s*([\\d.]+)\\s*\\)/g，\nmin/max 只匹配纯数字，var()、%、auto 全不匹配 → 整组被跳过且不报警。",
       "repro": "node -e \"import('@proteus-vue/compiler').then(({compileVueSfc})=>{\n  for (const e of ['padding(var(--sp-4))','width(50%,100%)','padding(16,24)']) {\n    const o = compileVueSfc(`<template><div p-fluid=\\\"${e}\\\">x</div></template>`,\n      {px2rpx:true,rpxRatio:2},{file:'t.vue'})\n    console.log(e, '->', (o.wxml.match(/style=\\\"[^\\\"]*\\\"/)||['(no style)'])[0])\n  }})",
-      "verification_note": "[external] 这不是少一个特性，而是让柔性系统与设计令牌二选一：\n本工程已把间距收敛成 --gutter / --card-pad / --block-gap / --sp-1..7，全部页面引用。\n若改用 p-fluid 就必须把每个 token 展开成字面量写进每个模板，token 体系（一处改全局生效）随之失效。\n已实测：无法两者兼得。\n[external] ① parseFluidExpr 支持 var() / 百分比 / auto 透传（不参与插值，原样输出）；\n② 匹配失败时必须 warn —— 现在是静默剥离，用户以为写了（与 F-14 / F-37 同族：不报错即静默失效）。\n[external] 暂停 p-fluid 改造，间距/字号继续用 token；布局层（p-grid）先行替换。"
+      "verification_note": "[external] 这不是少一个特性，而是让柔性系统与设计令牌二选一：\n本工程已把间距收敛成 --gutter / --card-pad / --block-gap / --sp-1..7，全部页面引用。\n若改用 p-fluid 就必须把每个 token 展开成字面量写进每个模板，token 体系（一处改全局生效）随之失效。\n已实测：无法两者兼得。\n[external] ① parseFluidExpr 支持 var() / 百分比 / auto 透传（不参与插值，原样输出）；\n② 匹配失败时必须 warn —— 现在是静默剥离，用户以为写了（与 F-14 / F-37 同族：不报错即静默失效）。\n[external] 暂停 p-fluid 改造，间距/字号继续用 token；布局层（p-grid）先行替换。\n[framework · 2026-11-12 · 决策 #1493] 已修（工作树，commit 4b77e515）。五条同源——柔性布局在 MP 端没接完（fluid 包能力齐全，消费方一个没接）。F-39：根因是**两处完全相同的 parseFluidExpr**（fluid-layout.ts:69 与 template.ts:439），删掉 template.ts 副本改为唯一实现；解析器改括号配平扫描器，支持纯数字（线性插值）与 var()/百分比/auto（原样透传——这些值本就随容器/主题变，强行插值等于猜）。F-40：旧注释「±1-2px 可忽略」被实测证伪（1600 宽 33.8px 应 32；designWidth=1280 时 390 宽 3.31px 应 ≥20），新增 fluidDecl() 唯一出口输出 clamp(min, calc, max)。F-41：新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时（选它而非 JS 断点表：后者要 RO，MP 没有）。F-42+F-43 同一根因两面：onMounted 首行「元素空就 return」而 MP 模板 ref 永远拿不到元素 ⇒ controller 从不创建 ⇒ form 恒 sheet；框架早有 mpContainerObserverFactory（p-zone/p-split/p-toolbar 都在用）只 p-adaptive 没接，照 p-zone 范式接线。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新；破坏性验证 5 条全部见红（4/6/2/1/1 failed）还原后全绿；test:coupled 317 tests 绿。★诚实边界：① MP 端 p-adaptive 形态切换未真机验（运行时类不加 scoped 后缀机制 p-zone 已验证）；② clamp 在 Skyline 表现为忽略该声明（比负值安全但仍非流式）；③ F-41 只改 Web（p-grid 本就 Web-only）。★待发布 + 待外部复测。",
+      "fix_state": "worktree",
+      "packages": [
+        "@proteus-vue/compiler",
+        "@proteus-vue/components"
+      ]
     },
     {
       "id": "F-40",
@@ -736,11 +741,16 @@
       "round": 15,
       "reported_in": "0.3.0-beta.31",
       "found_by": "external",
-      "status": "open",
+      "status": "fixed",
       "verification": "unverified",
       "evidence": "同一份 p-fluid=\"font-size(20, 32)\"：\n  Web（运行时 clamp）: clamp(20px, calc(15.77px + 1.1268vw), 32px)  ← 两端有夹取\n  MP （编译期 calc）: calc(15.77px + 1.1268vw)                      ← 无夹取\n量化后果（designWidth=375 / viewportMax=1440）：\n  375 宽 → 20.00px（正确）\n 1600 宽 → 33.80px（超出 max=32，未夹取）\ndesignWidth=1280 / viewportMax=1920 时更严重：产物 calc(-76.00px + 7.5vw)，\n  390 宽 → -46.8px（负字号）。",
       "repro": "node -e \"import('@proteus-vue/compiler').then(({compileVueSfc})=>{\n  const src='<template><div p-fluid=\\\"font-size(20,32)\\\">x</div></template>'\n  for (const f of [{designWidth:375,viewportMax:1440},{designWidth:1280,viewportMax:1920}]) {\n    const o=compileVueSfc(src,{px2rpx:true,rpxRatio:2,fluidLayout:f},{file:'t.vue'})\n    console.log(JSON.stringify(f),'->',o.wxml.match(/style=\\\"[^\\\"]*\\\"/)[0])\n  }})",
-      "verification_note": "[external] 这是有文档的降级（rules 里 fluid/p-fluid 的 description 写明「Skyline 无 clamp，故 MP 产物用线性 calc」），所以不是实现疏漏。但后果有两个没被文档覆盖：\n① 超出 [designWidth, viewportMax] 区间时不夹取 —— 文档说「超界 ±1-2px 可忽略」，\n   但那是 designWidth 接近实际端的前提。designWidth 与窄端差 900px 时误差是 47px（负值），不是 1-2px。\n② 没有下限保护：任何 min>0 的属性（font-size / padding / gap）都可能算出负值，\n   而 CSS 对负 padding 是丢弃整条声明（不报错），表现为样式莫名消失。\n[external] ① MP 产物在可能越界时给构建期警告（designWidth 与 fluidViewport.min 差距过大时）；\n② 或产物补 max(0px, calc(...)) —— Skyline 不支持 clamp，max() 是否支持需框架确认；\n③ 文档把「超界 ±1-2px」改为量化表述（= slope × 越界像素数），避免用户按旧说法低估。\n[external] designWidth 已由 1280/1920 改为 375/1440（与实际落地端手机对齐），负值问题在当前配置下不复现；但越界不夹取（1600 宽 33.8 > 32）仍然存在。"
+      "verification_note": "[external] 这是有文档的降级（rules 里 fluid/p-fluid 的 description 写明「Skyline 无 clamp，故 MP 产物用线性 calc」），所以不是实现疏漏。但后果有两个没被文档覆盖：\n① 超出 [designWidth, viewportMax] 区间时不夹取 —— 文档说「超界 ±1-2px 可忽略」，\n   但那是 designWidth 接近实际端的前提。designWidth 与窄端差 900px 时误差是 47px（负值），不是 1-2px。\n② 没有下限保护：任何 min>0 的属性（font-size / padding / gap）都可能算出负值，\n   而 CSS 对负 padding 是丢弃整条声明（不报错），表现为样式莫名消失。\n[external] ① MP 产物在可能越界时给构建期警告（designWidth 与 fluidViewport.min 差距过大时）；\n② 或产物补 max(0px, calc(...)) —— Skyline 不支持 clamp，max() 是否支持需框架确认；\n③ 文档把「超界 ±1-2px」改为量化表述（= slope × 越界像素数），避免用户按旧说法低估。\n[external] designWidth 已由 1280/1920 改为 375/1440（与实际落地端手机对齐），负值问题在当前配置下不复现；但越界不夹取（1600 宽 33.8 > 32）仍然存在。\n[framework · 2026-11-12 · 决策 #1493] 已修（工作树，commit 4b77e515）。五条同源——柔性布局在 MP 端没接完（fluid 包能力齐全，消费方一个没接）。F-39：根因是**两处完全相同的 parseFluidExpr**（fluid-layout.ts:69 与 template.ts:439），删掉 template.ts 副本改为唯一实现；解析器改括号配平扫描器，支持纯数字（线性插值）与 var()/百分比/auto（原样透传——这些值本就随容器/主题变，强行插值等于猜）。F-40：旧注释「±1-2px 可忽略」被实测证伪（1600 宽 33.8px 应 32；designWidth=1280 时 390 宽 3.31px 应 ≥20），新增 fluidDecl() 唯一出口输出 clamp(min, calc, max)。F-41：新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时（选它而非 JS 断点表：后者要 RO，MP 没有）。F-42+F-43 同一根因两面：onMounted 首行「元素空就 return」而 MP 模板 ref 永远拿不到元素 ⇒ controller 从不创建 ⇒ form 恒 sheet；框架早有 mpContainerObserverFactory（p-zone/p-split/p-toolbar 都在用）只 p-adaptive 没接，照 p-zone 范式接线。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新；破坏性验证 5 条全部见红（4/6/2/1/1 failed）还原后全绿；test:coupled 317 tests 绿。★诚实边界：① MP 端 p-adaptive 形态切换未真机验（运行时类不加 scoped 后缀机制 p-zone 已验证）；② clamp 在 Skyline 表现为忽略该声明（比负值安全但仍非流式）；③ F-41 只改 Web（p-grid 本就 Web-only）。★待发布 + 待外部复测。",
+      "fix_state": "worktree",
+      "packages": [
+        "@proteus-vue/compiler",
+        "@proteus-vue/components"
+      ]
     },
     {
       "id": "F-41",
@@ -750,11 +760,16 @@
       "round": 15,
       "reported_in": "0.3.0-beta.31",
       "found_by": "external",
-      "status": "open",
+      "status": "fixed",
       "verification": "unverified",
       "evidence": "Web 端四档实测（minColWidth=142, gap=12，容器与手写版相同）：\n 1440 → 7 列（手写版 7 列 ✅）\n 1024 → 5 列（手写版 5 列 ✅）\n  768 → 4 列（手写版 4 列 ✅）\n  390 → 2 列 / 卡 144px（手写版 3 列 / 卡 95px ❌）\n差异根因：minColWidth 是固定下限，手机内容区 308px 只放得下 2x142。\n手写版是在小屏断点里把 min-width 降到 96px 才排到 3 列。\n另：组件内使用（本工程 chapter-tree）产物保留 <p-grid ...> 标签 = 运行时组件回退；\n页面内使用才语义展开为 flex + p-grid-item 包装层（文档 06-semantic-compile §5 已声明此边界，不算缺陷）。",
       "repro": "// 页面内：语义展开（正确）\ncompileVueSfc('<template><view><p-grid :min-col-width=\"142\" :gap=\"12\"><view v-for=\"it in items\" :key=\"it.id\">{{it.t}}</view></p-grid></view></template>',\n  {px2rpx:true,rpxRatio:2}, {file:'page.vue'})\n// → <view id=\"pgrid0\" style=\"display:flex;flex-wrap:wrap;gap:12px\">\n//   + 子项包 <view class=\"p-grid-item\" style=\"{{pgridStyle0}}\">\n// 放进 src/components/x/index.vue → <p-grid ...> 标签原样保留（运行时回退）\n\n// 列数差异：浏览器实测 390 宽下 minColWidth=142 → 2 列；手写 min-width:96 → 3 列",
-      "verification_note": "[external] 真正的缺口是「minColWidth 无法随容器宽度变化」。\n而「小屏密排、大屏疏排」是网格最常见的诉求（本工程章节卡就是：桌面 7 列扫读、手机 3 列省滚动）。\n手写 flex + 断点能表达，p-grid 不能 —— 这是用框架方案时能力倒退的一处具体案例。\n[external] p-grid 支持 minColWidth 的区间表达式（如 min-col-width=\"96(0,600) | 142(600,inf)\"），\n或直接复用 p-adaptive 的 modes 语法，让「列宽随容器变」与「形态随容器变」用同一套表达式。\n[external] 已改用 p-grid（试验田优先用框架方案），接受手机端 2 列、滚动长度增加约 50%；\n若框架补齐上述能力，改回 3 列只需调一个 prop。"
+      "verification_note": "[external] 真正的缺口是「minColWidth 无法随容器宽度变化」。\n而「小屏密排、大屏疏排」是网格最常见的诉求（本工程章节卡就是：桌面 7 列扫读、手机 3 列省滚动）。\n手写 flex + 断点能表达，p-grid 不能 —— 这是用框架方案时能力倒退的一处具体案例。\n[external] p-grid 支持 minColWidth 的区间表达式（如 min-col-width=\"96(0,600) | 142(600,inf)\"），\n或直接复用 p-adaptive 的 modes 语法，让「列宽随容器变」与「形态随容器变」用同一套表达式。\n[external] 已改用 p-grid（试验田优先用框架方案），接受手机端 2 列、滚动长度增加约 50%；\n若框架补齐上述能力，改回 3 列只需调一个 prop。\n[framework · 2026-11-12 · 决策 #1493] 已修（工作树，commit 4b77e515）。五条同源——柔性布局在 MP 端没接完（fluid 包能力齐全，消费方一个没接）。F-39：根因是**两处完全相同的 parseFluidExpr**（fluid-layout.ts:69 与 template.ts:439），删掉 template.ts 副本改为唯一实现；解析器改括号配平扫描器，支持纯数字（线性插值）与 var()/百分比/auto（原样透传——这些值本就随容器/主题变，强行插值等于猜）。F-40：旧注释「±1-2px 可忽略」被实测证伪（1600 宽 33.8px 应 32；designWidth=1280 时 390 宽 3.31px 应 ≥20），新增 fluidDecl() 唯一出口输出 clamp(min, calc, max)。F-41：新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时（选它而非 JS 断点表：后者要 RO，MP 没有）。F-42+F-43 同一根因两面：onMounted 首行「元素空就 return」而 MP 模板 ref 永远拿不到元素 ⇒ controller 从不创建 ⇒ form 恒 sheet；框架早有 mpContainerObserverFactory（p-zone/p-split/p-toolbar 都在用）只 p-adaptive 没接，照 p-zone 范式接线。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新；破坏性验证 5 条全部见红（4/6/2/1/1 failed）还原后全绿；test:coupled 317 tests 绿。★诚实边界：① MP 端 p-adaptive 形态切换未真机验（运行时类不加 scoped 后缀机制 p-zone 已验证）；② clamp 在 Skyline 表现为忽略该声明（比负值安全但仍非流式）；③ F-41 只改 Web（p-grid 本就 Web-only）。★待发布 + 待外部复测。",
+      "fix_state": "worktree",
+      "packages": [
+        "@proteus-vue/compiler",
+        "@proteus-vue/components"
+      ]
     },
     {
       "id": "F-42",
@@ -764,11 +779,16 @@
       "round": 15,
       "reported_in": "0.3.0-beta.31",
       "found_by": "external",
-      "status": "open",
+      "status": "fixed",
       "verification": "unverified",
       "evidence": "把 @proteus-vue/components/p-adaptive/index.vue 直接送进 MP 编译器，产物 js 关键三行：\n   19   wrapEl: undefined,                                  ← 模板 ref 在 MP 端拿不到元素\n   22   onReady() {\n   24     if (!this.data.wrapEl) return                    ← 必然命中，直接退出\n   25     this.controller = createAdaptiveController(...)   ← 永远执行不到\n后果：form 恒为初始值 'sheet'，modes 表达式等于没写。\n组件注释写的是「MP：无 ResizeObserver → 形态恒首区间兜底」——\n但实际连「按静态宽度求一次形态」都没做，是整段逻辑被跳过，比注释描述的更彻底。",
       "repro": "// 编译组件源码（不经页面）\nnode -e \"const fs=require('fs');import('@proteus-vue/compiler').then(({compileVueSfc})=>{\n  const src=fs.readFileSync('node_modules/@proteus-vue/components/p-adaptive/index.vue','utf8')\n  const o=compileVueSfc(src,{px2rpx:true,rpxRatio:2},{file:'p-adaptive/index.vue'})\n  o.js.split('\\n').forEach((l,i)=>{ if(/wrapEl|createAdaptiveController|onReady/.test(l)) console.log(i+1,l.trim()) })\n})\"\n// 观察 wrapEl: undefined + if (!this.data.wrapEl) return",
-      "verification_note": "[external] 这不是「平台能力缺失」——fluid 包**自带 MP 适配器**且文档写明了用法：\n  createMpSizeObserverFactory({ measure: () => adapter.measureRect(...) })\n  createContainerQuery(null, { createObserver: factory })\ncreateContainerQuery 也保留了 createObserver / readSize 注入点。\n但 p-adaptive 组件**没有接这个适配器**：它直接依赖 Vue 模板 ref（wrapEl），而 ref 在 MP 端取不到元素。\n★ 全量核对：node_modules/@proteus-vue/components/*/index.vue 里 **0 个组件**使用 createMpSizeObserverFactory。\n  即：MP 尺寸观察能力已实现、已导出、有文档，但没有一个组件接线。\n[external] 「小屏单栏 / 大屏多栏」这类**拓扑切换**此前全靠 @media，\n若要在小程序端实现，p-adaptive 是唯一候选。它现在不可用，等于跨端拓扑自适应这条路由封死。\n[external] ① p-adaptive 接入 createMpSizeObserverFactory（组件层注入 wx.createSelectorQuery().boundingClientRect）；\n② 短期至少在构建期对「MP + p-adaptive」给警告，说明形态不会切换——现在的静默恒首区间会让人以为配错了表达式。\n[external] 拓扑切换（docs 页手机上下堆叠、review 页顶栏换行）暂不迁移，保留 @media 并记录为待办。"
+      "verification_note": "[external] 这不是「平台能力缺失」——fluid 包**自带 MP 适配器**且文档写明了用法：\n  createMpSizeObserverFactory({ measure: () => adapter.measureRect(...) })\n  createContainerQuery(null, { createObserver: factory })\ncreateContainerQuery 也保留了 createObserver / readSize 注入点。\n但 p-adaptive 组件**没有接这个适配器**：它直接依赖 Vue 模板 ref（wrapEl），而 ref 在 MP 端取不到元素。\n★ 全量核对：node_modules/@proteus-vue/components/*/index.vue 里 **0 个组件**使用 createMpSizeObserverFactory。\n  即：MP 尺寸观察能力已实现、已导出、有文档，但没有一个组件接线。\n[external] 「小屏单栏 / 大屏多栏」这类**拓扑切换**此前全靠 @media，\n若要在小程序端实现，p-adaptive 是唯一候选。它现在不可用，等于跨端拓扑自适应这条路由封死。\n[external] ① p-adaptive 接入 createMpSizeObserverFactory（组件层注入 wx.createSelectorQuery().boundingClientRect）；\n② 短期至少在构建期对「MP + p-adaptive」给警告，说明形态不会切换——现在的静默恒首区间会让人以为配错了表达式。\n[external] 拓扑切换（docs 页手机上下堆叠、review 页顶栏换行）暂不迁移，保留 @media 并记录为待办。\n[framework · 2026-11-12 · 决策 #1493] 已修（工作树，commit 4b77e515）。五条同源——柔性布局在 MP 端没接完（fluid 包能力齐全，消费方一个没接）。F-39：根因是**两处完全相同的 parseFluidExpr**（fluid-layout.ts:69 与 template.ts:439），删掉 template.ts 副本改为唯一实现；解析器改括号配平扫描器，支持纯数字（线性插值）与 var()/百分比/auto（原样透传——这些值本就随容器/主题变，强行插值等于猜）。F-40：旧注释「±1-2px 可忽略」被实测证伪（1600 宽 33.8px 应 32；designWidth=1280 时 390 宽 3.31px 应 ≥20），新增 fluidDecl() 唯一出口输出 clamp(min, calc, max)。F-41：新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时（选它而非 JS 断点表：后者要 RO，MP 没有）。F-42+F-43 同一根因两面：onMounted 首行「元素空就 return」而 MP 模板 ref 永远拿不到元素 ⇒ controller 从不创建 ⇒ form 恒 sheet；框架早有 mpContainerObserverFactory（p-zone/p-split/p-toolbar 都在用）只 p-adaptive 没接，照 p-zone 范式接线。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新；破坏性验证 5 条全部见红（4/6/2/1/1 failed）还原后全绿；test:coupled 317 tests 绿。★诚实边界：① MP 端 p-adaptive 形态切换未真机验（运行时类不加 scoped 后缀机制 p-zone 已验证）；② clamp 在 Skyline 表现为忽略该声明（比负值安全但仍非流式）；③ F-41 只改 Web（p-grid 本就 Web-only）。★待发布 + 待外部复测。",
+      "fix_state": "worktree",
+      "packages": [
+        "@proteus-vue/compiler",
+        "@proteus-vue/components"
+      ]
     },
     {
       "id": "F-43",
@@ -778,11 +798,16 @@
       "round": 15,
       "reported_in": "0.3.0-beta.31",
       "found_by": "external",
-      "status": "open",
+      "status": "fixed",
       "verification": "unverified",
       "evidence": "fluid/dist/mp-observer.d.ts 完整定义了 MP 测量源契约：\n  MpMeasureSource { measure(): Promise<{width,height}|null>; onResize?(cb): ()=>void; delays?: number[] }\n  createMpSizeObserverFactory(source): SizeObserverFactory   （兼容 createContainerQuery 的 createObserver 注入）\n注释明确写了调用方式与「Skyline onReady 首帧尺寸不稳，默认重测 [0, 50, 120] ms」。\n实测：grep -rln 'createMpSizeObserverFactory' node_modules/@proteus-vue/components/*/index.vue → 0 个命中。",
       "repro": "grep -rln 'createMpSizeObserverFactory' node_modules/@proteus-vue/components/*/index.vue\n# → 无输出（0 个组件接线）\ngrep -n 'createMpSizeObserverFactory' node_modules/@proteus-vue/fluid/dist/index.js\n# → 函数存在且已导出",
-      "verification_note": "[external] 本条与 F-42 是同一根因的两面：F-42 是「p-adaptive 因此不可用」的表象，\n本条是「能力造了没接线」的机制。分开记是因为修法不同：\n  修 F-42 = 给 p-adaptive 接上适配器；\n  修本条 = 审视还有哪些组件声明了「容器尺寸自适应」语义但只做了 Web 分支\n           （p-grid 的 gridOk 也是初始化时一次性判定，同样不感知后续宽度变化）。\n[external] 这类「Web 分支完整、MP 分支留空且不报警」的形态最难查：\n两端都能构建、Web 端表现完美，只有真机才发现行为恒等于初始值。\n[external] 给需要尺寸感知的组件加一条构建期检查：\n  声明了容器自适应语义的组件，若 MP 产物里 createObserver 为默认工厂（=ResizeObserver 不存在时返回空对象），\n  构建期警告「该组件在 MP 端不会响应尺寸变化」。"
+      "verification_note": "[external] 本条与 F-42 是同一根因的两面：F-42 是「p-adaptive 因此不可用」的表象，\n本条是「能力造了没接线」的机制。分开记是因为修法不同：\n  修 F-42 = 给 p-adaptive 接上适配器；\n  修本条 = 审视还有哪些组件声明了「容器尺寸自适应」语义但只做了 Web 分支\n           （p-grid 的 gridOk 也是初始化时一次性判定，同样不感知后续宽度变化）。\n[external] 这类「Web 分支完整、MP 分支留空且不报警」的形态最难查：\n两端都能构建、Web 端表现完美，只有真机才发现行为恒等于初始值。\n[external] 给需要尺寸感知的组件加一条构建期检查：\n  声明了容器自适应语义的组件，若 MP 产物里 createObserver 为默认工厂（=ResizeObserver 不存在时返回空对象），\n  构建期警告「该组件在 MP 端不会响应尺寸变化」。\n[framework · 2026-11-12 · 决策 #1493] 已修（工作树，commit 4b77e515）。五条同源——柔性布局在 MP 端没接完（fluid 包能力齐全，消费方一个没接）。F-39：根因是**两处完全相同的 parseFluidExpr**（fluid-layout.ts:69 与 template.ts:439），删掉 template.ts 副本改为唯一实现；解析器改括号配平扫描器，支持纯数字（线性插值）与 var()/百分比/auto（原样透传——这些值本就随容器/主题变，强行插值等于猜）。F-40：旧注释「±1-2px 可忽略」被实测证伪（1600 宽 33.8px 应 32；designWidth=1280 时 390 宽 3.31px 应 ≥20），新增 fluidDecl() 唯一出口输出 clamp(min, calc, max)。F-41：新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时（选它而非 JS 断点表：后者要 RO，MP 没有）。F-42+F-43 同一根因两面：onMounted 首行「元素空就 return」而 MP 模板 ref 永远拿不到元素 ⇒ controller 从不创建 ⇒ form 恒 sheet；框架早有 mpContainerObserverFactory（p-zone/p-split/p-toolbar 都在用）只 p-adaptive 没接，照 p-zone 范式接线。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新；破坏性验证 5 条全部见红（4/6/2/1/1 failed）还原后全绿；test:coupled 317 tests 绿。★诚实边界：① MP 端 p-adaptive 形态切换未真机验（运行时类不加 scoped 后缀机制 p-zone 已验证）；② clamp 在 Skyline 表现为忽略该声明（比负值安全但仍非流式）；③ F-41 只改 Web（p-grid 本就 Web-only）。★待发布 + 待外部复测。",
+      "fix_state": "worktree",
+      "packages": [
+        "@proteus-vue/compiler",
+        "@proteus-vue/components"
+      ]
     },
     {
       "id": "F-44",
@@ -918,8 +943,8 @@
       "(未标注)": 0
     },
     "by_status": {
-      "fixed": 35,
-      "open": 9
+      "fixed": 40,
+      "open": 4
     },
     "resolved": 33,
     "真实收口率": 75
