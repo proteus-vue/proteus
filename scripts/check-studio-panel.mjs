@@ -39,6 +39,7 @@ import { langExtCoverage } from './studio-panel-langext.mjs'
 import { checkCapability } from './studio-panel-capability.mjs'
 import { checkFixture } from './studio-panel-fixture.mjs'
 import { checksConfig } from './studio-panel-checks-config.mjs'
+import { reportChecks } from './studio-panel-report.mjs'
 import { checksUiGuides, checksIosStream } from './studio-panel-checks-ui.mjs'
 import { probeIosGuide } from './studio-panel-probes-ios.mjs'
 import { probeTerminal } from './studio-panel-probes-term.mjs'
@@ -984,11 +985,8 @@ const checks = [...fileOpsChecks, ...hoverChecks, ...termKeysChecks, ...formatCh
       perf.openMs <= 1500,
   ],
 ]
-let bad = 0
-for (const [label, ok] of checks) {
-  console.log(`${ok ? '✓' : '✗'} ${label}`)
-  if (!ok) bad++
-}
+/* 打印 + 判据编号自检（决策 #1489）：见 `studio-panel-report.mjs` */
+const bad = reportChecks(checks)
 if (errors.length) console.log('  JS 错误：\n' + errors.map((e) => '   ' + e).join('\n'))
 console.log(`\n面板快照：${path.relative(ROOT, outPath)}`)
 console.log(`数据来源：${path.relative(ROOT, dataPath)}（真实跑机读数）· 机型来源：${deviceFrom}`)

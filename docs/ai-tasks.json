@@ -4620,6 +4620,25 @@
         "T-studio-split-boot"
       ],
       "note": "【done · 决策 #1488（2026-11-12）】fn main 的身体（菜单/51 命令注册/setup 闭包 4 线程+5 钩子/窗口事件）+ poll_window + start_ticks → app_setup::run()（389 行）；main.rs 只剩 fn main() { app_setup::run() }。★全用 crate:: 前缀不用 use（capture_preset 既是模块又是命令，use 进来靠猜）。★4 类编译错误全是作用域不是逻辑：命令表裸名（含最后无逗号的 search_text）、extern poc_* 17 个、ALLOW_CLOSE、★trait 没导入（use tauri::{Emitter,Manager}，报「no method named emit」看着像 API 变了）。★★真正的坑在门禁：㊿d 与 ㊼ 硬编码 grep main.rs 的 generate_handler ⇒ 搬家当场假红。改成跟随真实位置：check-tauri-handlers 全 src 找含 generate_handler 的文件；㊿d 读 app_setup.rs；㊼ 先在全部 .rs 定位 generate_handler 块再取 term::*。与 #1468 同类：判据写死路径 = 一次重构假红一次。★更隐蔽的假红：[\\s\\S]*? 停在注释里的第一个 ] （命令表注释含 `#[tauri::command]`），只解析 735 字符 ⇒ term::* 全被截断；改用 ]\\s*) 定界。★破坏性验证：删 crate::format::format_text, ⇒ check:tauri-handlers 报 format_text 未注册 + ㊿d handler=false，证明修完的判据仍能抓真缺陷。★判据：check:tauri-handlers 51/51 · 面板 88 绿 0 红 · cargo test 63/1（#1460 既存）· 真机 [boot] 3ms→4ms→650ms→1023ms 全在。★行数：main 519 / app_setup 389 / boot 137。★诚实边界：main 519 里仍有 51 条命令实现，可按域再拆；setup 闭包不再拆（只跑一次，顺序即语义）；纯搬家无逻辑改动。【Handoff】- 做到哪：装配搬家 + 3 处判据改路径 + 破坏性验证 + 真机启动。- 未做：命令实现按域再拆。- 下一步：真机点一遍设置窗口/终端（都走 setup 里的钩子路径）。"
+    },
+    {
+      "id": "T-studio-gate-ids",
+      "title": "门禁判据自检：编号唯一 + 基线比对（拆主脚本的前置）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "scripts/check-studio-panel.mjs",
+        "scripts/studio-panel-report.mjs",
+        "scripts/studio-panel-check-ids.json"
+      ],
+      "decision": 1489,
+      "verification": "node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-split-app-setup"
+      ],
+      "note": "【done · 决策 #1489（2026-11-12）】动机：check-studio-panel.mjs 998 行贴线，拆它之前先补「判据不重复、不遗漏」——拆门禁的危险不是编译错误而是假绿（删一条判据只是少打印一行，依旧全绿）。★主脚本一行都不能加 ⇒ 把「打印+自检」收进 studio-panel-report.mjs，1 行 reportChecks(checks) 替掉 4 行打印循环，998→996。★两条自检：① 编号唯一（两个 ㊿d 并存时漏判无法察觉）；② 编号集合与基线 studio-panel-check-ids.json（入库）一致，丢/增都红并点名编号。★基线必须入库：运行时生成=橡皮章，删一条会安静重生；有意增删用 --update-ids（唯一合法入口）。★破坏性验证：把 ㊿s 改成 ㊿S ⇒ 功能 88 条全绿却额外冒出 2 条自检红（丢失 ㊿s / 新增 ㊿S），rc=1 —— 正是假绿被挡住的样子。★判据：88 绿 0 红、基线 88 条无重复、主脚本 996 行。★诚实边界：基线只校验编号不校验断言强度；--update-ids 是故意留的口子（提交信息必须说明增删）；本轮没开始拆 996 行主脚本。【Handoff】- 做到哪：自检 + 收口打印 + 基线。- 未做：真正拆主脚本。- 下一步：按 996 行文件的自然段落拆成 modules（process/checks/probes），拆完自检会告诉我们有没有丢判据。"
     }
   ]
 }
