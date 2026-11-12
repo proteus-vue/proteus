@@ -31,7 +31,7 @@
 //       不放在本命令里——它会真的 npm create + install，耗时约 1~2 分钟。
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -259,6 +259,31 @@ if (pending.length === 0 && drifted.length === 0 && !REPUBLISH_ALL) {
   }
   if (round >= MAX_ROUNDS) die(`版本提升未收敛（${MAX_ROUNDS} 轮后仍有漂移）——请检查依赖环或手动处理`)
   console.log(`  版本提升完成（共 ${round} 轮，涉及 ${new Set(bumpedAll).size} 个包）`)
+}
+
+// ── ②a ★dist 新鲜度硬门禁（2026-11-12 事故后新增）──
+// 事故：修完 F-38/F-39/F-40 后直接 `pnpm release` 发布 beta.34——版本号对、dry-run 49 包全绿、
+//   check:publish-contents 全绿，**但发出去的是 10-29 的 dist**（`npm pack` 解包 grep 发现
+//   `fluidDecl`/`minRaw`/`NUMERIC_ARG` 全 0 次，`parseFluidExpr` 还是旧正则）。
+// 为什么所有既有判据都放行：它们验的是「形状」（文件在、能解析、能发出去），
+//   **没有一条在验「dist 是否比 src 旧」**——旧 dist 完全满足全部形状条件。
+// 故本步放在**发布之前、dry-run 也执行**（--dry-run 也该暴露这个问题）。
+// ★不自动 build：构建耗时且可能失败，静默自动构建会让"构建坏了"变成"发布旧代码"。
+//   这里只做**判定**，把决定权交给调用方（人看到红字就手动 build，语义清晰）。
+step('②a', '构建产物新鲜度（dist 不得比 src 旧）')
+try {
+  // ★用 execSync 直接跑字面命令串（而非 run(cmd, argsArr)）——两个原因：
+  //   ① 真执行路径与 `pnpm run check:dist-fresh` 完全一致；
+  //   ② `check:gates-sync` 的「执行形态取证」按**行内以空白分隔的命令段**识别，
+  //      JS 数组参数形态（['run','check:dist-fresh']）会被引号+逗号切断 ⇒ 判"未接线"。
+  //   这不是为了讨门禁欢心：门禁的意图是"证明它真被执行"，字面命令串是最直接的证据。
+  execSync('pnpm run check:dist-fresh', { cwd: ROOT, stdio: 'inherit', timeout: 600_000, env: { ...process.env, CI: 'true' } })
+} catch {
+  die(
+    'dist 已陈旧——**当前发布出去的就是旧代码**（源码改过但没重建）。\n' +
+      '  修复：pnpm build:packages  然后重跑 release。\n' +
+      '  ★不要跳过这一步：2026-11-12 已因此发出过一个坏版本（beta.34 的 compiler/plugin-vite 是旧 dist）。',
+  )
 }
 
 // ── ②b 提升后置同步（★**无条件执行**，不再只在提升分支里跑）──

@@ -395,6 +395,13 @@ jobs:
       - name: 发布物内容门禁（files 命中 / 入口 / 相对 import 闭包全在包内）
         run: node scripts/check-publish-contents.mjs
 
+      # ★构建产物新鲜度门禁（2026-11-12 事故后新增）：dist 不得比 src 旧。
+      #   事故：修完源码直接发布，版本号对、dry-run 全绿、内容预检全绿，但发出去的是两周前的 dist。
+      #   既有门禁全在看"形状"，没有一条看"内容是否陈旧"。本步骤位于 build-packages 之后，
+      #   能拦"改了源码但忘了重建"（CI 的 mtime 在 build 后是真实的构建时刻，判据有效）。
+      - name: 构建产物新鲜度门禁（dist 不得比 src 旧）
+        run: node scripts/check-dist-fresh.mjs --check
+
       - name: 内部版本对齐门禁（★2026-09-19 事故：模板/examples 的 @proteus-vue/* 声明必须 = workspace 实际——陈旧会让用户装到旧包并产生重复副本）
         run: node scripts/sync-internal-versions.mjs --check
 

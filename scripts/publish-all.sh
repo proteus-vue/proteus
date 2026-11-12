@@ -53,6 +53,19 @@ SKIP=0
 PUB=0
 DRIFT=0
 
+# ── 构建产物新鲜度（★不可跳过：发出去的必须是当前源码的构建产物）──
+# 2026-11-12 真实事故：修完 F-38/F-39/F-40 后直接发布，版本号对、dry-run 全绿、
+# 内容预检全绿，**但 dist 是两周前的**（npm pack 解包 grep 发现新增符号 0 次）。
+# 既有判据全在看「形状」（文件在、能解析、能发出去）——旧 dist 完全满足，没有一条看「内容是否陈旧」。
+# 故此处**不提供 --skip 开关**：陈旧 dist 是发布链唯一无法事后补救的错误（npm 版本不可变）。
+if ! node "$ROOT/scripts/check-dist-fresh.mjs" --check; then
+  echo ""
+  echo "✗ dist 已陈旧——**发出去的就是旧代码**（npm 版本不可变，只能换版本号重发）。"
+  echo "  修复：pnpm build:packages  然后重新发布。"
+  exit 1
+fi
+echo ""
+
 # ── 发布物内容预检（★本次事故的直接拦截点：核对「实际打出去的包里有什么」）──
 if [ "$SKIP_CONTENT_CHECK" = "0" ]; then
   echo "=== 发布物内容预检（files 命中 / 入口 / 相对 import 闭包）==="

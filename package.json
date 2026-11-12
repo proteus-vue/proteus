@@ -176,6 +176,7 @@
     "check:platform-layering": "node scripts/check-platform-layering.mjs",
     "check:profile-baseline": "node scripts/gen-profile-baseline.mjs --check",
     "check:publish-contents": "node scripts/check-publish-contents.mjs",
+    "check:dist-fresh": "node scripts/check-dist-fresh.mjs --check",
     "check:pushed": "node scripts/check-pushed.mjs",
     "check:pushed:strict": "node scripts/check-pushed.mjs --require",
     "check:safe-edit": "node scripts/check-safe-edit.mjs",
