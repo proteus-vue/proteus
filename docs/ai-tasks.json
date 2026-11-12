@@ -4639,6 +4639,24 @@
         "T-studio-split-app-setup"
       ],
       "note": "【done · 决策 #1489（2026-11-12）】动机：check-studio-panel.mjs 998 行贴线，拆它之前先补「判据不重复、不遗漏」——拆门禁的危险不是编译错误而是假绿（删一条判据只是少打印一行，依旧全绿）。★主脚本一行都不能加 ⇒ 把「打印+自检」收进 studio-panel-report.mjs，1 行 reportChecks(checks) 替掉 4 行打印循环，998→996。★两条自检：① 编号唯一（两个 ㊿d 并存时漏判无法察觉）；② 编号集合与基线 studio-panel-check-ids.json（入库）一致，丢/增都红并点名编号。★基线必须入库：运行时生成=橡皮章，删一条会安静重生；有意增删用 --update-ids（唯一合法入口）。★破坏性验证：把 ㊿s 改成 ㊿S ⇒ 功能 88 条全绿却额外冒出 2 条自检红（丢失 ㊿s / 新增 ㊿S），rc=1 —— 正是假绿被挡住的样子。★判据：88 绿 0 红、基线 88 条无重复、主脚本 996 行。★诚实边界：基线只校验编号不校验断言强度；--update-ids 是故意留的口子（提交信息必须说明增删）；本轮没开始拆 996 行主脚本。【Handoff】- 做到哪：自检 + 收口打印 + 基线。- 未做：真正拆主脚本。- 下一步：按 996 行文件的自然段落拆成 modules（process/checks/probes），拆完自检会告诉我们有没有丢判据。"
+    },
+    {
+      "id": "T-studio-gate-split-core",
+      "title": "门禁主脚本拆出断言块（996→629）+ ESLint 找全依赖",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "scripts/check-studio-panel.mjs",
+        "scripts/studio-panel-checks-core.mjs"
+      ],
+      "decision": 1490,
+      "verification": "node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-gate-ids"
+      ],
+      "note": "【done · 决策 #1490（2026-11-12）】切法：996 行里近 460 行是纯断言（不碰浏览器/时序，只吃探测结果）⇒ 整块搬到 studio-panel-checks-core.mjs，主脚本只负责把浏览器戳成状态。★断言一字未改：解构传值（coreChecks({...}) + const {...} = ctx），让断言适配参数才是引入「看着一样判据变了」的地方。★★最大的坑：连续三轮用正则猜依赖，每次只差几个——errors（来自解构，^const NAME 匹配不到）、seenExtCount（在模板字符串 ${} 里被我剥掉了）、iconOk（同类），每漏一个白跑 1.5 分钟门禁。最终用 ESLint no-undef + 扁平配置一次列全 4 条补完。★教训：搬代码找依赖不要靠正则猜，语言服务/静态检查器就是干这个的。★没丢判据靠 #1489 的编号基线：搬完首跑即 88 绿 0 红。★破坏性验证：删 ⑪c ⇒ 87 绿 + 1 红（点名 ⑪c）。★行数：main 996→629、core 614。★诚实边界：断言块 614 仍偏大但单一职责；探测部分仍与页面操作交织（时序即语义）未动；ctx 60+ 字段是代价，换来断言原文不改。【Handoff】- 做到哪：断言块搬出 + 依赖用 ESLint 补齐 + 破坏性验证。- 未做：探测段按域拆（风险高）。- 下一步：若要继续，先给 ctx 建类型注释（JSDoc），否则 60 字段没人看得懂。"
     }
   ]
 }
