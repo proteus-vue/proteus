@@ -17,8 +17,19 @@ import {
 } from './studio-panel-probes.mjs'
 
 export async function checksHover(page) {
-  const { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone } =
-    await probeFileHover(page)
+  const {
+    onApp,
+    onMain,
+    onProj,
+    onOwner,
+    onBig,
+    onTs,
+    onRs,
+    onCard,
+    peekWhileCard,
+    gone,
+    peekAfterGone,
+  } = await probeFileHover(page)
   const sym = await probeSymbolPanel(page)
   const chain = await probePopoverChain(page)
   const fit = await probePopoverFit(page)
@@ -121,6 +132,13 @@ export async function checksHover(page) {
         sym.info.items === 80 &&
         sym.info.dim === 20 &&
         sym.gone === true,
+    ],
+    /* ㊿s `.rs` 结构摘要（决策 #1486 · 批次 3）
+       ★两条：Rust 源文件要有 `pub` 计数（否则箭头永远不出现），且**不能冒出角色行**
+         （普通源码显示"角色"就是噪音）。 */
+    [
+      `㊿s Rust 结构摘要（决策 #1486）：${/6 pub/.test(onRs?.text ?? '') ? '6 pub' : '未命中'}/无角色行=${!/角色/.test(onRs?.text ?? '')}｜${(onRs?.text ?? '').slice(0, 70)}`,
+      /6 pub/.test(onRs?.text ?? '') && !/角色/.test(onRs?.text ?? ''),
     ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；

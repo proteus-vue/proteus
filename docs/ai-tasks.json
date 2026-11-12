@@ -4560,6 +4560,27 @@
         "T-studio-popover-fit"
       ],
       "note": "【done · 决策 #1485（2026-11-09）】用户：①「箭头紧挨着内容放着，看着很别扭」②「悬浮高亮时行高没固定规范，有的面板高有的面板低」。\n★① `.fv-v.names` 缺 flex:1 ⇒ chevron 紧贴符号名。改为 flex:1 把箭头顶到右边缘（实测距右 13px = --sp3 12 + 边框 1）。\n★② 三处列表各写各的行高：文件树 24 / 悬停卡 line-height 1.5（≈16.5 浮动）/ 大纲面板 padding 2px（≈20.5）⇒ hover 背景块高低不一。在 styles.css 定两档：--row-h-tight:20px（悬停卡）/ --row-h:24px（文件树 + 大纲面板），三处都引用变量（卡片用 min-height 以容纳换行，列表用 height）。\n★★③ 顺手抓到类名撞车：卡片标签原来叫 class=\"chip\"，而**全局 .chip**（标题栏语言 chip）有 height:22px ⇒ 那行被撑到 24px。㊿r 第一次跑就红在那里，改名 fv-chip 才齐。教训：组件内部类名不要用 chip/tag/row 这类通用词，作用域样式救不了——全局规则仍会命中同一元素。\n★判据 ㊿r 三条：卡片所有 .fv-row 等高=20 / chevron 距右 10~16px / 面板 .sym-i 等高=24（只断第一条则箭头挤字尾也能绿）。\n★破坏性验证：flex 1→0 ⇒ 仅 ㊿r 红、其余 86 绿，报错「行高=不一致(20/76/…)/箭头距右=165px」。\n★判据：check:studio-panel 87 绿 0 红 · cargo test 60 通过/1 失败（#1460 既存，本单未动 Rust）。\n★诚实边界：卡片行 min-height 20，名字换行时该行自然变高；两档只覆盖三处列表；.fv-chip 仍有底色。\n【Handoff】- 做到哪：行高变量化 + 箭头右对齐 + 类名修复 + 判据 + 破坏性验证。- 未做：编辑器内浮层的度量统一、chip 去底色。\n- 下一步：真机看极简效果；若还嫌箭头碍眼，可改成仅 hover 显示。"
+    },
+    {
+      "id": "T-studio-brief-rust",
+      "title": ".rs 结构摘要 + 大纲（批次 3，㊿l 扩展）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/src/file_brief.rs",
+        "scripts/studio-panel-stub.mjs",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-probes.mjs"
+      ],
+      "decision": 1486,
+      "verification": "cd packages/studio && cargo test file_brief::tests && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-brief-symbols",
+        "T-studio-symbol-panel"
+      ],
+      "note": "【done · 决策 #1486（2026-11-12）】批次 3：`.rs` 之前只有角色/规模，20 个 Rust 文件连箭头都不出现。\n★摘要 rs_facts：只数第 0 列顶层声明 → `N pub` · `N struct` · `N enum` · `含测试` + 前 3 个 pub 名。★pub(crate) 必须算 pub：strip_prefix(\"pub \") 对 `pub(crate) fn` 失效，本仓大量模块内部共享都用它，漏掉会少算一大批 ⇒ 单独 strip_visibility 识别 `pub(`…`)`。\n★一张关键词表服务两语言：fn→function / static→const / mod→module，面板分组不分叉。★NOT_A_NAME 黑名单：`const fn make()` 会被 const 前缀吃成名字 `fn`，宁可跳过不编假符号。\n★判据：rs_facts_counts_pub_items（人工数 7 pub/1 struct/1 enum/含测试）+ scan_symbols_reads_rust（kind 映射 + 非 pub 也要进）+ scan_symbols_on_real_rust_file（真跑 fs_guard.rs 断行号）+ 面板 ㊿s（`6 pub` 且无角色行）。\n★★踩坑：门禁 list_files 是桩的固定 5 文件，format.rs 不在 → hover 等 30s 抛错，整轮 0 绿 0 红（=没有门禁）。两处修正：① 探针改软失败（page.$ 探存在，缺行返回文案带现存 .rs 路径，让判据红）；② 桩补 format.rs。改桩必须同步改判据——⑪c 的\"5 个文件\"当场红，改 6 才一致。\n★破坏性验证：删 strip_visibility 的 `pub(` 分支 ⇒ 两条测试同时红（6 pub vs 7 pub，epsilon 消失）。\n★判据：check:studio-panel 88 绿 0 红 · cargo test 63 通过/1 失败（+3 测试，#1460 既存）。\n★诚实边界：impl 不列；const fn/宏内/嵌套项跳过；只认第 0 列；trait 方法签名不算。\n【Handoff】- 做到哪：rs 摘要 + 扫描 + 面板分组 + 判据 + 破坏性验证。- 未做：impl 列表、.py 结构。\n- 下一步：真机看 Rust 卡与面板；若需要 impl 分组另开单。"
     }
   ]
 }

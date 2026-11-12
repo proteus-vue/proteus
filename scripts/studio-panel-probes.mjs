@@ -796,6 +796,24 @@ export async function probeFileHover(page) {
   await page.waitForTimeout(520)
   const onTs = await read()
 
+  // ⑥.5 悬停 `.rs`（决策 #1486）：普通 Rust 源文件 —— 同样**没有角色行**，但有结构
+  //    ★行不存在时**不要 hover**（会等 30s 后抛错，把整轮门禁炸掉，那不是一条红）；
+  //      这里降级成"读不到卡片"，并把实际存在的 .rs 路径带进判据文案，便于定位。
+  const rsRow = await page.$('#codeFiles button[data-file="packages/studio/src/format.rs"]')
+  let onRs = null
+  if (rsRow) {
+    await rsRow.hover()
+    await page.waitForTimeout(520)
+    onRs = await read()
+  } else {
+    const cands = await page.evaluate(() =>
+      [...document.querySelectorAll('#codeFiles button[data-file$=".rs"]')]
+        .map((b) => b.getAttribute('data-file'))
+        .slice(0, 5),
+    )
+    onRs = { name: '', text: `(行不存在；现存 .rs=${cands.join(',') || '无'})` }
+  }
+
   // ⑦ 卡片可交互（决策 #1478）：指针移到卡片上后，超过宽限期（220ms）也**不能**消失
   //    ★`hover` 要 catch：若卡片在指针到达前就消失了，Playwright 会等到超时抛错，
   //      那会把整轮门禁炸掉而不是给出一条红。这里降级成"读不到卡片" ⇒ 判据自然红。
@@ -818,7 +836,19 @@ export async function probeFileHover(page) {
     () => document.querySelector('#codeFiles button.peek')?.getAttribute('data-file') ?? null,
   )
 
-  return { onApp, onMain, onProj, onOwner, onBig, onTs, onCard, peekWhileCard, gone, peekAfterGone }
+  return {
+    onApp,
+    onMain,
+    onProj,
+    onOwner,
+    onBig,
+    onTs,
+    onRs,
+    onCard,
+    peekWhileCard,
+    gone,
+    peekAfterGone,
+  }
 }
 
 /**

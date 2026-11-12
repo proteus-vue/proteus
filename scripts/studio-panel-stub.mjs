@@ -228,6 +228,15 @@ export function stubTauri(payload) {
               facts: [],
             },
             'main.rs': { role: 'entry', label: '入口', chips: [], names: [], names_total: 0, facts: [] },
+            /* ★决策 #1486：`.rs` 现在也有结构摘要（批次 3）——没有角色，但有 pub 计数 */
+            'format.rs': {
+              role: '',
+              label: '',
+              chips: ['6 pub', '1 struct', '含测试'],
+              names: ['run_format', 'FmtResult', 'MAX_OUT'],
+              names_total: 6,
+              facts: [],
+            },
             'bridge.ts': {
               role: '',
               label: '',
@@ -354,6 +363,9 @@ export function stubTauri(payload) {
             'packages/studio/ui/src/bridge.ts',
             'packages/studio/ui/src/styles.css',
             'packages/studio/src/main.rs',
+            /* ★决策 #1486：给 `.rs` 结构摘要留一个**普通 Rust 源文件**（main.rs 是入口，
+               会走"角色"分支，测不到"无角色但有结构"这条）。 */
+            'packages/studio/src/format.rs',
             'packages/studio/native/embed_view.m',
             ...made,
           ].sort()

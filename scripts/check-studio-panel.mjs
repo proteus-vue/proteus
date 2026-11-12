@@ -542,7 +542,7 @@ const checks = [...fileOpsChecks, ...hoverChecks, ...termKeysChecks, ...formatCh
   [
     `⑪c 目录树渲染 ${codeView.dirCount} 个目录 + ${codeView.fileCount} 个文件，默认打开 App.vue`,
     codeView.listed &&
-      codeView.fileCount === 5 &&
+      codeView.fileCount === 6 &&
       codeView.dirCount === 6 &&
       codeView.curPath.endsWith('ui/src/App.vue'),
   ],

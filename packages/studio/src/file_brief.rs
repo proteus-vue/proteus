@@ -108,6 +108,12 @@ pub fn file_brief(rel: &str, text: Option<&str>) -> Option<FileBrief> {
                 let (chips, names) = vue_facts(t);
                 return wrap_brief(role, chips, names, 0, Vec::new());
             }
+            /* ★决策 #1486（批次 3）：`.rs` 之前只有角色/规模，箭头都不出现 ——
+               20 个 Rust 文件是唯一"点了没反应"的一类。 */
+            "rs" => {
+                let (chips, names, total) = rs_facts(t);
+                return wrap_brief(role, chips, names, total, Vec::new());
+            }
             "md" | "mdx" => md_facts(t),
             _ => Vec::new(),
         },
@@ -189,6 +195,111 @@ fn ts_facts(text: &str) -> (Vec<String>, Vec<String>, u32) {
     }
     if types > 0 {
         chips.push(format!("{types} type"));
+    }
+    (chips, names, named_total)
+}
+
+/// 剥掉 Rust 的可见性前缀，返回 (是否 pub, 剩余部分)。`pub(crate)` / `pub(super)` 也算 pub。
+///
+/// ★为什么要单独一个函数：`pub(crate) fn` 里的括号会让 `strip_prefix("pub ")` 失效，
+///   而这类写法在本仓很常见（模块内部共享）。漏掉它就会**少算一批函数**。
+fn strip_visibility(line: &str) -> (bool, &str) {
+    if let Some(r) = line.strip_prefix("pub(") {
+        if let Some(i) = r.find(')') {
+            return (true, r[i + 1..].trim_start());
+        }
+    }
+    if let Some(r) = line.strip_prefix("pub ") {
+        return (true, r.trim_start());
+    }
+    (false, line)
+}
+
+/// 跳过 Rust 的函数修饰符（`async` / `unsafe` / `extern "C"` / `default`）。
+fn strip_modifiers(mut r: &str) -> &str {
+    loop {
+        let before = r;
+        for p in ["async ", "unsafe ", "default ", "extern \"C\" "] {
+            if let Some(x) = r.strip_prefix(p) {
+                r = x.trim_start();
+            }
+        }
+        if r == before {
+            return r;
+        }
+    }
+}
+
+/// `.rs`：pub 项计数 + 类型计数 + 是否含测试。
+///
+/// 【口径】只数**第 0 列**的顶层声明（与 `scan_symbols` 同一口径，否则摘要与清单对不上）。
+/// ★`impl` 块**不计数**：它没有"名字"，硬塞进列表只会得到一堆 `impl<T> Foo<T>`。
+fn rs_facts(text: &str) -> (Vec<String>, Vec<String>, u32) {
+    const KWS: [&str; 8] = ["fn", "struct", "enum", "trait", "const", "static", "type", "mod"];
+    let mut pubs = 0usize;
+    let mut structs = 0usize;
+    let mut enums = 0usize;
+    let mut names: Vec<String> = Vec::new();
+    let mut named_total = 0u32;
+    let mut has_test = false;
+
+    for line in text.lines() {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
+        let t = line.trim_start();
+        if t.starts_with("//") || t.starts_with("/*") {
+            continue;
+        }
+        if t.starts_with("#[cfg(test)]") {
+            has_test = true;
+            continue;
+        }
+        let (is_pub, rest) = strip_visibility(t);
+        if !is_pub {
+            continue;
+        }
+        let r = strip_modifiers(rest);
+        for kw in KWS {
+            let Some(x) = r.strip_prefix(kw) else { continue };
+            /* 关键词后必须是空白（`fnord` 不是 `fn ord`） */
+            if !(x.starts_with(' ') || x.starts_with('\t')) {
+                continue;
+            }
+            let x = x.trim_start();
+            let name: String = x
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if name.is_empty() {
+                continue;
+            }
+            pubs += 1;
+            if kw == "struct" {
+                structs += 1;
+            } else if kw == "enum" {
+                enums += 1;
+            }
+            named_total += 1;
+            if names.len() < 3 && !names.contains(&name) {
+                names.push(name);
+            }
+            break;
+        }
+    }
+
+    let mut chips: Vec<String> = Vec::new();
+    if pubs > 0 {
+        chips.push(format!("{pubs} pub"));
+    }
+    if structs > 0 {
+        chips.push(format!("{structs} struct"));
+    }
+    if enums > 0 {
+        chips.push(format!("{enums} enum"));
+    }
+    if has_test {
+        chips.push("含测试".to_string());
     }
     (chips, names, named_total)
 }
@@ -353,7 +464,28 @@ pub fn file_symbols(path: String) -> Result<Vec<SymbolRow>, String> {
 /// ★关键词后面必须跟空白或 `*`：否则 `constant = 1` 会被 `const` 前缀吃掉，抽出一个
 ///   叫 `ant` 的假符号。这是手写扫描最容易犯的错（与 `toml_pkg_field` 同一类）。
 fn scan_symbols(text: &str) -> Vec<SymbolRow> {
-    const KWS: [&str; 8] = ["interface", "type", "function", "const", "let", "var", "class", "enum"];
+    /* ★决策 #1486：同一张表同时服务 TS 与 Rust —— `fn`→function、`static`→const、
+       `mod`→module，这样面板的 kind 分组不必按语言分叉。 */
+    const KWS: [(&str, &str); 13] = [
+        ("interface", "interface"),
+        ("type", "type"),
+        ("struct", "struct"),
+        ("class", "class"),
+        ("trait", "trait"),
+        ("enum", "enum"),
+        ("function", "function"),
+        ("fn", "function"),
+        ("const", "const"),
+        ("static", "const"),
+        ("let", "let"),
+        ("var", "var"),
+        ("mod", "module"),
+    ];
+    /* ★这些词出现在"名字"位置上说明我们截错了（典型：`const fn foo` 被 `const` 吃掉，
+       名字会变成 `fn`）。宁可跳过也不要编出一个假符号。 */
+    const NOT_A_NAME: [&str; 10] = [
+        "fn", "struct", "enum", "trait", "impl", "let", "const", "async", "unsafe", "default",
+    ];
     let mut out: Vec<SymbolRow> = Vec::new();
 
     for (i, line) in text.lines().enumerate() {
@@ -367,7 +499,11 @@ fn scan_symbols(text: &str) -> Vec<SymbolRow> {
         }
         let (exported, rest) = match line.strip_prefix("export ") {
             Some(r) => (true, r),
-            None => (false, line),
+            None => {
+                /* Rust：`pub` / `pub(crate)` 都算"导出"（对模块外可见） */
+                let (is_pub, r) = strip_visibility(line);
+                (is_pub, r)
+            }
         };
         let mut rest = rest;
         for p in ["default ", "async ", "abstract ", "declare "] {
@@ -375,7 +511,7 @@ fn scan_symbols(text: &str) -> Vec<SymbolRow> {
                 rest = x;
             }
         }
-        for kw in KWS {
+        for (kw, kind) in KWS {
             let Some(x) = rest.strip_prefix(kw) else { continue };
             /* ★关键词后必须是空白或 `*`（生成器）：`constant` 不是 `const ant` */
             if !(x.starts_with(' ') || x.starts_with('\t') || x.starts_with('*')) {
@@ -386,7 +522,7 @@ fn scan_symbols(text: &str) -> Vec<SymbolRow> {
                 .chars()
                 .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
                 .collect();
-            if name.is_empty() {
+            if name.is_empty() || NOT_A_NAME.contains(&name.as_str()) {
                 continue;
             }
             /* `type` 一定是 `type X = …`；没有 `=` 的多半是变量名叫 type */
@@ -395,7 +531,7 @@ fn scan_symbols(text: &str) -> Vec<SymbolRow> {
             }
             out.push(SymbolRow {
                 name,
-                kind: kw.to_string(),
+                kind: kind.to_string(),
                 line: (i + 1) as u32,
                 exported,
             });
@@ -584,6 +720,90 @@ export enum J { X }
                 .unwrap_or_else(|| panic!("行号越界：{r:?}"));
             assert!(l.contains(&r.name), "第 {} 行里没有 {}：{l}", r.line, r.name);
         }
+    }
+
+    /// 决策 #1486：`.rs` 的 pub 计数与类型计数（批次 3）。
+    /// ★期望值人工数出：7 个 pub 项（struct/enum/const/fn×3/trait）、1 struct、1 enum、含测试。
+    ///   `pub(crate)` 与 `pub async fn` 都必须算进去 —— 否则本仓会少算一大批。
+    #[test]
+    fn rs_facts_counts_pub_items() {
+        let text = "\
+use std::fmt;
+
+pub struct Alpha { a: u8 }
+pub enum Beta { X }
+pub const GAMMA: u8 = 1;
+pub fn delta() {}
+pub(crate) fn epsilon() {}
+pub async fn zeta() {}
+pub trait Eta {}
+static NOT_PUB: u8 = 0;
+fn private_fn() {}
+impl Alpha { fn method(&self) {} }
+#[cfg(test)]
+mod tests {}
+";
+        let (chips, names, total) = rs_facts(text);
+        assert_eq!(
+            chips,
+            vec![
+                "7 pub".to_string(),
+                "1 struct".to_string(),
+                "1 enum".to_string(),
+                "含测试".to_string()
+            ],
+            "{chips:?}"
+        );
+        assert_eq!(names, vec!["Alpha".to_string(), "Beta".to_string(), "GAMMA".to_string()]);
+        assert_eq!(total, 7, "具名 pub 总数要数全（不是只数前 3 个）");
+    }
+
+    /// 决策 #1486：`scan_symbols` 支持 Rust —— kind 映射为 function/struct/enum/trait/module/const。
+    #[test]
+    fn scan_symbols_reads_rust() {
+        let text = "\
+pub struct Alpha { a: u8 }
+pub enum Beta { X }
+pub fn delta() {}
+pub(crate) fn epsilon() {}
+pub async fn zeta() {}
+fn private_fn() {}
+impl Alpha { fn method(&self) {} }
+const fn make() -> u8 { 1 }
+";
+        let rows = scan_symbols(text);
+        let got: Vec<(&str, &str, bool)> = rows
+            .iter()
+            .map(|r| (r.name.as_str(), r.kind.as_str(), r.exported))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Alpha", "struct", true),
+                ("Beta", "enum", true),
+                ("delta", "function", true),
+                ("epsilon", "function", true),
+                ("zeta", "function", true),
+                ("private_fn", "function", false),
+            ],
+            "private_fn 要进（非导出）；`const fn make` 不能被截成假符号"
+        );
+    }
+
+    /// 决策 #1486：真跑 Rust 源文件，断行号与名字对得上。
+    #[test]
+    fn scan_symbols_on_real_rust_file() {
+        let root = crate::fs_guard::repo_root().expect("仓库根");
+        let p = root.join("packages/studio/src/fs_guard.rs");
+        let text = std::fs::read_to_string(&p).expect("读 fs_guard.rs");
+        let rows = scan_symbols(&text);
+        assert!(rows.len() >= 5, "fs_guard.rs 的 pub 项不止 3 个：{}", rows.len());
+        let lines: Vec<&str> = text.lines().collect();
+        for r in &rows {
+            let l = lines[(r.line - 1) as usize];
+            assert!(l.contains(&r.name), "第 {} 行没有 {}：{l}", r.line, r.name);
+        }
+        assert!(rows.iter().any(|r| r.kind == "struct"), "应有 struct：{rows:?}");
     }
 
     /// 决策 #1479：**真跑仓库里的真实文件**，断言"摘要里出现的每个符号名都真的在文件里"。

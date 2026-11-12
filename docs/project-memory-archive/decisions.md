@@ -17045,4 +17045,40 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     否则要截断内容）；② 两档只覆盖这三处列表，编辑器内的浮层（#1421）仍用自己的度量；
     ③ 极简风格里 `.fv-chip` 的底色仍是 `--bg-overlay`，未做"无底色纯文字"版本。
 
+1486. **★★`.rs` 结构摘要与大纲（批次 3）：pub 计数 + Rust 符号扫描 · 判据 ㊿s**（2026-11-12 · 用户「继续」，按上一轮建议做完 20 个 Rust 文件的空缺）:
+  - **缺口**：`.ts`/`.vue`/`.md` 都有结构了，**`.rs` 只有角色与规模** —— 20 个 Rust 文件
+    连箭头都不出现。这是"结构预览"最后一个空洞。
+  - **摘要口径（`rs_facts`）**：只数**第 0 列**顶层声明（与清单同一口径，否则摘要与清单对不上）；
+    输出 `N pub` · `N struct` · `N enum` · `含测试`（有 `#[cfg(test)]` 才加）+ 前 3 个 pub 名字。
+  - **★`pub(crate)` 必须算 pub**：`strip_prefix("pub ")` 对 `pub(crate) fn` 失效，
+    而本仓大量模块内部共享都用这种写法 —— 漏掉会**少算一大批**函数。
+    单独写了 `strip_visibility`（识别 `pub(` … `)`），并由单测钉死。
+  - **一张关键词表服务两种语言**：`fn`→function、`static`→const、`mod`→module，
+    面板 kind 分组不必按语言分叉；TS 的 `function` 与 Rust 的 `fn` 归同一组。
+  - **★`NOT_A_NAME` 黑名单**：`const fn make()` 会被 `const` 前缀吃掉，名字截成 `fn`。
+    与其编个假符号，不如**跳过**（宁可漏，不可错）。同一守卫也拦住了 `constant` 这类前缀。
+  - **判据**：
+    - `rs_facts_counts_pub_items`：**人工数出** 7 个 pub 项 / 1 struct / 1 enum / 含测试，
+      并要求 `pub(crate)`、`pub async fn` 都计入；
+    - `scan_symbols_reads_rust`：kind 映射 + 非 pub 的 `private_fn` 也要进（`exported:false`）；
+    - `scan_symbols_on_real_rust_file`：**真跑** `fs_guard.rs`，逐条断"行号那一行含该名字"；
+    - 面板 **㊿s**：`.rs` 卡要有 `6 pub` **且没有角色行**（普通源码显示"角色"就是噪音）。
+  - **★这轮踩的坑（值得单独记）**：门禁里 `list_files` 是**桩的固定 5 个文件**，
+    `format.rs` 不在其中 ⇒ `page.hover()` 等 30 秒后**抛错**，整轮门禁**0 绿 0 红**（等于没有门禁）。
+    两处修正：
+    ① **探针改成软失败**：先 `page.$()` 探是否存在，不存在就返回 `(行不存在；现存 .rs=…)`
+       让判据**红**，并把实际路径写进文案 —— 崩溃永远不该是"找不到元素"的表现形式；
+    ② 桩补 `packages/studio/src/format.rs`（`main.rs` 是入口，走"角色"分支，
+       测不到"无角色但有结构"这条）。
+    **改桩必须同步改判据**：补完文件后 ⑪c 的"5 个文件"当场红了，改成 6 才一致。
+  - **破坏性验证**：删掉 `strip_visibility` 里 `pub(` 那个分支
+    ⇒ `rs_facts_counts_pub_items` 与 `scan_symbols_reads_rust` **同时红**
+    （`6 pub` vs `7 pub`，且 `epsilon` 从清单里消失）。
+  - **判据**：`check:studio-panel` **88 绿 0 红**；`cargo test` **63 通过 / 1 失败**
+    （+3 条新测试；唯一红仍是 #1460 的 `new_path_boundary`）。
+  - **诚实边界**：① **`impl` 块不列**（没有名字，硬塞只会得到一堆 `impl<T> Foo<T>`）；
+    ② `const fn` / 宏内声明 / 嵌套项**一律跳过**（宁可漏不可错）；
+    ③ 只认第 0 列 ⇒ 写在 `mod` 内部但缩进的项不会出现；
+    ④ `trait` 里的方法签名不算（它们在 impl 里）。
+
 

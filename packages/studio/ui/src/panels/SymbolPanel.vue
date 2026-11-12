@@ -42,8 +42,20 @@ const rows = ref<SymbolRow[]>([])
 const err = ref('')
 const loading = ref(true)
 
-/** 分组顺序：先"契约"（interface/type/class）再"实现"（function/const/…） */
-const ORDER = ['interface', 'type', 'class', 'enum', 'function', 'const', 'let', 'var']
+/** 分组顺序：先"契约"（interface/type/struct/class/trait）再"实现"（function/const/…） */
+const ORDER = [
+  'interface',
+  'type',
+  'struct',
+  'class',
+  'trait',
+  'enum',
+  'function',
+  'const',
+  'let',
+  'var',
+  'module',
+]
 
 const groups = computed(() => {
   const m = new Map<string, SymbolRow[]>()
