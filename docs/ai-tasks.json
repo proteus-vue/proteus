@@ -4599,6 +4599,27 @@
         "T-studio-brief-rust"
       ],
       "note": "【done · 决策 #1487（2026-11-12）】main.rs 998 行贴 1000 行硬上限，且同时住着窗口/命令/菜单/日志/状态落盘/启动计时六件事。★先想清什么能搬：Rust 二进制入口 fn main 必须在 crate root ⇒ 只能搬它调用的东西。拆出 boot.rs（137 行）：① 状态落盘 state_path/load_state/save_state；② stderr→日志文件 init_log_file/dirs_log_dir/chrono_stamp；③ 启动计时 BOOT_T0/SRC_READY/mark_src_ready/wait_src_ready/boot_mark。★API 收口：BOOT_T0.set(...) → boot::start_clock()，外部不该知道计时器存在 OnceLock 里。★命令注册要带模块路径 boot::load_state/boot::save_state（宏按路径找 __cmd__，这是唯一搬家后必然编译失败处）。★误判一次：open_settings 落在被搬区间里顺手带进了 boot.rs，settings::open_window 立刻找不到模块 ⇒ 它不是启动期设施，放回 main。教训：按行号区间搬代码会带走语义无关的小函数，搬完要逐个函数问「它属于这个模块吗」。★判据：cargo build 过；面板门禁 88 绿 0 红（这次没加 --no-build，走完整重建 ⇒ 证明 IPC 注册真的通了）；cargo test 63/1（#1460 既存）。★flakes：与门禁并行跑 cargo test 时 formats_with_real_cli 红过一次，独占复跑通过 ⇒ 该测试起真实 prettier CLI，受并发负载影响，以后 cargo test 与门禁不要并行。★诚实边界：main() 体 270 行 + poll_window/start_ticks 仍在 main，下一步可抽 app_setup.rs；881 仍偏大（目标 ≤700）；纯搬家无逻辑改动。【Handoff】- 做到哪：boot.rs 拆分 + API 收口 + 命令路径 + 全量验。- 未做：app_setup.rs（main 体/poll_window/start_ticks）。- 下一步：真机启动一次确认日志与状态恢复正常（门禁已覆盖注册链路）。"
+    },
+    {
+      "id": "T-studio-split-app-setup",
+      "title": "拆 main.rs 身体 → app_setup.rs（881→519）+ 三处静态检查改跟随",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/src/main.rs",
+        "packages/studio/src/app_setup.rs",
+        "scripts/check-tauri-handlers.mjs",
+        "scripts/studio-panel-checks-format.mjs",
+        "scripts/studio-panel-probes-term.mjs"
+      ],
+      "decision": 1488,
+      "verification": "cd packages/studio && cargo build --bin proteus-studio-shell && cd ../.. && node scripts/check-tauri-handlers.mjs && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-split-boot"
+      ],
+      "note": "【done · 决策 #1488（2026-11-12）】fn main 的身体（菜单/51 命令注册/setup 闭包 4 线程+5 钩子/窗口事件）+ poll_window + start_ticks → app_setup::run()（389 行）；main.rs 只剩 fn main() { app_setup::run() }。★全用 crate:: 前缀不用 use（capture_preset 既是模块又是命令，use 进来靠猜）。★4 类编译错误全是作用域不是逻辑：命令表裸名（含最后无逗号的 search_text）、extern poc_* 17 个、ALLOW_CLOSE、★trait 没导入（use tauri::{Emitter,Manager}，报「no method named emit」看着像 API 变了）。★★真正的坑在门禁：㊿d 与 ㊼ 硬编码 grep main.rs 的 generate_handler ⇒ 搬家当场假红。改成跟随真实位置：check-tauri-handlers 全 src 找含 generate_handler 的文件；㊿d 读 app_setup.rs；㊼ 先在全部 .rs 定位 generate_handler 块再取 term::*。与 #1468 同类：判据写死路径 = 一次重构假红一次。★更隐蔽的假红：[\\s\\S]*? 停在注释里的第一个 ] （命令表注释含 `#[tauri::command]`），只解析 735 字符 ⇒ term::* 全被截断；改用 ]\\s*) 定界。★破坏性验证：删 crate::format::format_text, ⇒ check:tauri-handlers 报 format_text 未注册 + ㊿d handler=false，证明修完的判据仍能抓真缺陷。★判据：check:tauri-handlers 51/51 · 面板 88 绿 0 红 · cargo test 63/1（#1460 既存）· 真机 [boot] 3ms→4ms→650ms→1023ms 全在。★行数：main 519 / app_setup 389 / boot 137。★诚实边界：main 519 里仍有 51 条命令实现，可按域再拆；setup 闭包不再拆（只跑一次，顺序即语义）；纯搬家无逻辑改动。【Handoff】- 做到哪：装配搬家 + 3 处判据改路径 + 破坏性验证 + 真机启动。- 未做：命令实现按域再拆。- 下一步：真机点一遍设置窗口/终端（都走 setup 里的钩子路径）。"
     }
   ]
 }

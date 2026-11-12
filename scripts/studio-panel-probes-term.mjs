@@ -23,7 +23,18 @@ function staticParity(studioDir) {
        判据的本意是"三个文件里命令名一致"，跟同步/异步无关；
        早先只认 `pub fn` 会把 async 命令漏掉，导致**假红**。 */
   const cmds = [...rust.matchAll(/#\[tauri::command\]\s*\n\s*pub\s+(?:async\s+)?fn (term_\w+)/g)].map((m) => m[1])
-  const registered = [...main.matchAll(/term::(term_\w+)/g)].map((m) => m[1])
+  /* ★决策 #1488：注册表搬到了 `app_setup.rs` ⇒ 不再"在 main.rs 里 grep term::"，
+     而是**先定位 generate_handler 块**再在里面取 —— 位置变了也不假红，且不会误抓普通调用。 */
+  const allRs = fs
+    .readdirSync(path.join(studioDir, 'src'))
+    .filter((f) => f.endsWith('.rs'))
+    .map((f) => fs.readFileSync(path.join(studioDir, 'src', f), 'utf8'))
+    .join('\n')
+  /* ★定界必须是 `]` 紧跟 `)`：命令表里**注释中含 `]`**（`#[tauri::command]` 那句提醒），
+     非贪婪 `\[[\s\S]*?\]` 会停在注释里的第一个 `]` 上 ⇒ 只解析到前 735 字符，
+     `term::*` 全在截断之后 ⇒ 假红（这次就是这么红的）。 */
+  const handlerBlock = /generate_handler!\s*\[([\s\S]*?)\]\s*\)/.exec(allRs)?.[1] ?? ''
+  const registered = [...handlerBlock.matchAll(/term::(term_\w+)/g)].map((m) => m[1])
   const invoked = [...bridge.matchAll(/invoke<[^>]*>\('(term_\w+)'/g)].map((m) => m[1])
   const uni = (a) => [...new Set(a)].sort()
   return {

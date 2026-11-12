@@ -34,7 +34,18 @@ const defined = rsFiles.flatMap((f) => {
   return [...direct, ...viaMacro]
 })
 
-const listMatch = /generate_handler!\s*\[([\s\S]*?)\]/.exec(mainCode)
+/* ★决策 #1488：装配搬进了 `app_setup.rs`，`generate_handler!` 不再是 main.rs 的专属。
+   这里改成"全 src 找第一个含 generate_handler 的文件"——判据跟着**代码的真实位置**走，
+   而不是跟着历史记忆走（否则搬家一次就假红一次）。 */
+const setupFile = rsFiles.find((f) =>
+  /generate_handler!\s*\[/.test(f === 'main.rs' ? mainCode : strip(readFileSync(join(srcDir, f), 'utf8'))),
+)
+const setupCode = setupFile
+  ? setupFile === 'main.rs'
+    ? mainCode
+    : strip(readFileSync(join(srcDir, setupFile), 'utf8'))
+  : ''
+const listMatch = /generate_handler!\s*\[([\s\S]*?)\]/.exec(setupCode)
 if (!listMatch) {
   console.error('✗ 找不到 generate_handler![...]')
   process.exit(1)

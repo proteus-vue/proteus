@@ -17111,4 +17111,41 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     下一步可抽 `app_setup.rs`（这次没做，避免一次搬太多、风险叠乘）；
     ② 881 行仍偏大（目标 ≤700）；③ 只搬与界面无关的部分，**没有任何逻辑改动**（纯搬家）。
 
+1488. **★★`main` 的"身体"搬进 `app_setup.rs`：881 → 519 行 · 三处静态检查跟着真实位置走**（2026-11-12 · 用户「好的」，继续拆第二个贴线文件）:
+  - **拆法**：`fn main` 的**身体**（菜单装配 / 51 条命令注册 / setup 闭包里 4 个后台线程 + 5 个回归钩子 /
+    窗口事件）+ `poll_window` + `start_ticks` → `app_setup::run()`（389 行）。
+    `main.rs` 只剩 **`fn main() { app_setup::run() }`** —— 入口是入口，装配是装配。
+    ★Rust 二进制入口**必须在 crate root**，所以能搬的只有身体。
+  - **全用 `crate::` 前缀，不用 `use crate::xxx`**：本文件与 `main.rs` 里的命令同名
+    （`capture_preset` 既是模块又是命令），`use` 进来会让"是模块还是函数"靠猜。
+  - **搬家时踩到的 4 类编译错误（都是"作用域"而不是"逻辑"）**：
+    ① 命令表里裸名字要改成 `crate::xxx`（含**最后一个没有逗号**的 `search_text`，正则漏了它）；
+    ② `extern "C"` 的 `poc_*` 函数要 `crate::`（17 个）；
+    ③ `ALLOW_CLOSE` 等 crate 级 static 要 `crate::`；
+    ④ **trait 没导入**：`use tauri::{Emitter, Manager};` —— 缺了报的是
+       "no method named `emit`"，看着像 API 变了，其实是作用域里少了 trait。
+  - **★★真正的坑不在 Rust，在门禁**：搬完之后**两条判据当场假红**——
+    它们用**硬编码路径**去 grep `main.rs` 里的 `generate_handler!`：
+    · ㊿d「命令注册」查 `main.includes('format::format_text,')`；
+    · ㊼「命令名三方对齐」查 `main.matchAll(/term::(term_\w+)/)`。
+    ⇒ 改成**跟着真实位置走**：`check-tauri-handlers` 改成"全 src 找第一个含 `generate_handler` 的文件"；
+    ㊿d 改成读 `app_setup.rs`；㊼ 改成"先在全部 `.rs` 里定位 `generate_handler` **块**，再在块内取 `term::*`"。
+    ★**这条与 #1468 是同一类缺陷**（那次是命令装配下沉到 `proc_template`）：
+      **判据里写死文件路径 = 一次重构就假红一次**，而假红会训练人忽略它。
+  - **★顺带发现一个更隐蔽的假红**：㊼ 新写法仍报 `命令名对齐 false`，原因是
+    `\[[\s\S]*?\]` 会停在**注释里的第一个 `]`**（命令表里那句提醒写着 `` `#[tauri::command]` ``），
+    只解析到前 **735** 字符，`term::*` 全在截断之后。改成 `\]\s*\)` 定界才对。
+    ★**解析"代码块"时，结束定界符要能区分"块结束"和"块内字符串/注释里的同形字符"。**
+  - **破坏性验证**：从命令表删掉 `crate::format::format_text,`
+    ⇒ `check:tauri-handlers` 报 `✗ format_text 未注册`，㊿d 的 `handler=false`
+    —— 证明**修完的判据不是永远通过**（这比"改完是绿的"重要得多）。
+  - **判据**：`check:tauri-handlers` 51/51；面板门禁 **88 绿 0 红**；`cargo test` **63 通过 / 1 失败**
+    （#1460 既存）。真机启动：`[boot] 3ms 日志 → 4ms 设置 → 650ms setup → 1023ms webview 就绪`
+    —— 菜单/命令表/setup 闭包/窗口事件搬家后**全都还在跑**。
+  - **行数**：`main.rs` 881 → **519**；`app_setup.rs` **389**；`boot.rs` 137。
+  - **诚实边界**：① `main.rs` 519 行里仍有 51 条命令实现（`stats`/`git_*`/`device_*` 等），
+    下一步可按域再拆（`cmd_device.rs` / `cmd_workspace.rs`）；② `app_setup.rs` 389 行里
+    setup 闭包仍很长，但它只执行一次、顺序即语义，**不打算再拆**；
+    ③ 本轮纯搬家 + 判据改路径，**没有逻辑改动**。
+
 

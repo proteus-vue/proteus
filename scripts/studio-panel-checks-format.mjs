@@ -46,6 +46,10 @@ function staticParity(studioDir, cfg) {
   const menu = read('ui/src/editorMenu.ts')
   const fmt = read('ui/src/editorFormat.ts')
   const main = read('src/main.rs')
+  /* ★决策 #1488：`generate_handler!` 已搬到 `app_setup.rs`（装配单独成模块）。
+     判据必须跟着**真实位置**走 —— 与上面 #1468 那段是同一类教训：
+     字符串搬走了但性质还在，查旧文件就是**假红**（看着像漏注册，其实是查错地方）。 */
+  const setup = read('src/app_setup.rs')
   const rs = read('src/format.rs')
   /* ★决策 #1468/#1469：命令装配已下沉到 `proc_template`，所以"管道/绝对路径"这两条的
      证明位置换了文件 —— 判据必须跟着真实位置走，否则要么假绿（查一个不存在的字符串），
@@ -59,7 +63,7 @@ function staticParity(studioDir, cfg) {
     /* ★菜单与快捷键必须共用同一个执行函数，不能各写一遍 */
     oneImpl: (fmt.match(/export async function formatDocument/g) ?? []).length === 1,
     dispatch: fmt.includes('view.dispatch(') && fmt.includes('mapPos('),
-    handler: main.includes('mod format;') && main.includes('format::format_text,'),
+    handler: main.includes('mod format;') && setup.includes('format::format_text,'),
     /* ★决策 #1468：`Stdio::piped()` 已下沉到 proc_template::assemble。
        "不写盘"这条**两边都要查**：format.rs 不许写盘，模板层也不许写盘。 */
     noDiskWrite:
