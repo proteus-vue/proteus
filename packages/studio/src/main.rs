@@ -48,6 +48,8 @@ mod ios_touch;
 ///   ★只查询不写：stage/commit/push 一律不加（本仓纪律：push 必须人工批准）。
 mod diag;
 mod git;
+/// 启动期基础设施：状态落盘 / 日志文件 / 启动计时（决策 #1487，从本文件拆出）
+mod boot;
 /// ★#1344：仓库内文件读写 + 路径沙箱（同一组抽出；共享**同一条**安全边界）。
 ///   ★新增任何文件系统能力必须复用 `resolve_in_repo`，不要自己拼路径。
 /// 仓库内读写与路径沙箱（#1344 拆出）；`ipc_fs` 也要用，故 `pub(crate)`
@@ -446,40 +448,6 @@ fn dump_frame(path: String) {
     eprintln!("[studio] dump rc={rc}");
 }
 
-/// 工作区状态的落盘位置（G5）：`~/Library/Application Support/dev.proteus.studio/state.json`。
-///
-/// 【为什么不用 localStorage】WebView 的 localStorage 会随清缓存/换 identifier 丢，
-///   而且**用户看不见也改不了**；IDE 的会话状态属于"工程之外的用户偏好"，
-///   放标准位置（macOS 的 Application Support）才能备份、迁移、排障。
-fn state_path() -> Result<std::path::PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|_| "HOME 不可用".to_string())?;
-    let dir = std::path::PathBuf::from(home).join("Library/Application Support/dev.proteus.studio");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("建状态目录失败：{e}"))?;
-    Ok(dir.join("state.json"))
-}
-
-/// 读工作区状态。**首次运行没有文件是正常情况** ⇒ 返回 `{}` 而不是报错。
-#[tauri::command]
-fn load_state() -> Result<String, String> {
-    let p = state_path()?;
-    match std::fs::read_to_string(&p) {
-        Ok(s) => Ok(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("{}".to_string()),
-        Err(e) => Err(format!("读状态失败：{e}")),
-    }
-}
-
-/// 写工作区状态（原子替换：先写 `.tmp` 再 rename，避免半个 JSON 落盘）。
-#[tauri::command]
-fn save_state(json: String) -> Result<(), String> {
-    if json.len() > 64 * 1024 {
-        return Err(format!("状态过大：{} 字节（上限 64KB）", json.len()));
-    }
-    let p = state_path()?;
-    let tmp = p.with_extension("json.tmp");
-    std::fs::write(&tmp, json.as_bytes()).map_err(|e| format!("写临时状态失败：{e}"))?;
-    std::fs::rename(&tmp, &p).map_err(|e| format!("替换状态文件失败：{e}"))
-}
 
 /// 设置窗口入口（实现见 `settings::open_window`）
 #[tauri::command]
@@ -487,100 +455,15 @@ fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
     settings::open_window(&app)
 }
 
-/// PATH 补齐 / 设备尺寸 / 默认采集源：见 `live_source.rs`（决策 #1277 拆出，本文件只留调用）
-/// 把 stderr 同时落到日志文件（决策 #1310）。
-///
-/// ★为什么必须有：从 Finder 启动时 stdout/stderr 被 LaunchServices 丢掉，
-///   于是"为什么没画面"这类问题只能靠猜（今天已经猜错好几次）。
-///   有了它，用户点两下我就能看到真实原因。
-///
-/// ★为什么用 `freopen` 而不是换掉所有 `eprintln!`：一处生效、不侵入既有代码；
-///   终端里启动（stderr 是 tty）时**不重定向**，保持开发体验不变。
-fn init_log_file() {
-    use std::io::IsTerminal;
-    if std::io::stderr().is_terminal() {
-        return;
-    }
-    let dir = dirs_log_dir();
-    let _ = std::fs::create_dir_all(&dir);
-    use std::os::unix::io::AsRawFd;
-    let path = dir.join("studio.log");
-    /* ★用 `dup2(fd, 2)` 而不是 `freopen`：不依赖 libc crate，也不需要 `stderr` 这个 FILE* 符号。
-       Rust 的 `eprintln!` 写 fd 2，重定向后自然落到文件。 */
-    extern "C" {
-        fn dup2(oldfd: i32, newfd: i32) -> i32;
-    }
-    if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        unsafe {
-            dup2(f.as_raw_fd(), 2);
-        }
-        std::mem::forget(f); // 让 fd 一直开着（进程退出才关）
-    }
-    eprintln!("\n===== {} 启动 · {} =====", chrono_stamp(), env!("CARGO_PKG_VERSION"));
-}
-
-fn dirs_log_dir() -> std::path::PathBuf {
-    std::env::var("HOME")
-        .map(|h| std::path::PathBuf::from(h).join("Library/Logs/Proteus Studio"))
-        .unwrap_or_else(|_| std::env::temp_dir())
-}
-
-fn chrono_stamp() -> String {
-    // 不引 chrono：用 `date` 拿本地时间（只在启动时跑一次）
-    std::process::Command::new("/bin/date")
-        .arg("+%F %T")
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
-}
-
-/* ★启动计时（决策 #1379）：先量出"哪一段占了 10 秒"，再决定改什么。
-   用户痛点：点图标后**要 ~10 秒才出窗口**，观感像"没启动"。 */
-static BOOT_T0: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
-/* ★live source 就绪信号（决策 #1379）：把 `default_live_source()`（simctl 枚举 + boot 模拟器 +
-   adb 探测，本机实测 **4.5 秒**）挪到**窗口创建之后**的后台线程；自动重连必须等它完成，
-   用条件变量而不是 sleep —— 符合仓规"有条件等待，禁止盲等"。 */
-static SRC_READY: std::sync::OnceLock<(std::sync::Mutex<bool>, std::sync::Condvar)> =
-    std::sync::OnceLock::new();
-
-fn src_ready_pair() -> &'static (std::sync::Mutex<bool>, std::sync::Condvar) {
-    SRC_READY.get_or_init(|| (std::sync::Mutex::new(false), std::sync::Condvar::new()))
-}
-
-fn mark_src_ready() {
-    let (m, cv) = src_ready_pair();
-    if let Ok(mut g) = m.lock() {
-        *g = true;
-        cv.notify_all();
-    }
-}
-
-/// 等 live source 初始化完成（最多 `timeout`）；已就绪立刻返回。
-fn wait_src_ready(timeout: std::time::Duration) {
-    let (m, cv) = src_ready_pair();
-    if let Ok(g) = m.lock() {
-        if !*g {
-            let _ = cv.wait_timeout(g, timeout);
-        }
-    }
-}
-
-fn boot_mark(what: &str) {
-    if let Some(t) = BOOT_T0.get() {
-        eprintln!("[boot] {:>6}ms  {what}", t.elapsed().as_millis());
-    }
-}
-
 fn main() {
-    BOOT_T0.set(std::time::Instant::now()).ok();
-    init_log_file();
-    boot_mark("日志文件就绪");
+    boot::start_clock();
+    boot::init_log_file();
+    boot::boot_mark("日志文件就绪");
     live_source::ensure_tool_path();
     /* ★读设置要在**所有子进程之前**（决策 #1266）：DEVELOPER_DIR 决定 xcrun 用哪个 Xcode，
        而 adb 路径决定设备探测能不能跑。放后面就晚了——那正是"默认路径"假设的来源。 */
     settings::load_and_apply();
-    boot_mark("设置加载（含 Xcode/adb 探测）");
+    boot::boot_mark("设置加载（含 Xcode/adb 探测）");
     std::panic::set_hook(Box::new(|info| eprintln!("[studio] PANIC: {info}")));
     tauri::Builder::default()
         // 自有菜单栏（决策 #1221）。★必须在 setup 里 `set_menu` 之外另走这条：
@@ -624,8 +507,8 @@ fn main() {
             fs_ops::delete_path,
             /* 决策 #1462：同样必须列进 generate_handler!（check-tauri-handlers 静态兜底） */
             format::format_text,
-            load_state,
-            save_state,
+            boot::load_state,
+            boot::save_state,
             ipc_fs::copy_text,
             ipc_fs::read_clipboard,
             git_status,
@@ -666,14 +549,14 @@ fn main() {
             search_text
         ])
         .setup(|app| {
-            boot_mark("setup 开始（窗口即将创建）");
+            boot::boot_mark("setup 开始（窗口即将创建）");
             /* ★重活挪到**窗口之后**（决策 #1379）：它要枚举模拟器（simctl）、必要时 boot 模拟器、
                再探 adb，本机实测 4.5s ⇒ 放在窗口前就是"点图标 10 秒没反应"的主因。
                现在窗口先出来（~1.2s），这条在后台跑，跑完再让自动重连往下走。 */
             std::thread::spawn(move || {
                 live_source::default_live_source();
-                boot_mark("live source 就绪（后台）");
-                mark_src_ready();
+                boot::boot_mark("live source 就绪（后台）");
+                boot::mark_src_ready();
             });
             let handle = app.handle().clone();
             let h = handle.clone();
@@ -715,7 +598,7 @@ fn main() {
                 let h4 = app.handle().clone();
                 std::thread::spawn(move || {
                     /* ★等 live source 就绪（上限 12s），不盲等固定 900ms（决策 #1379） */
-                    wait_src_ready(Duration::from_secs(12));
+                    boot::wait_src_ready(Duration::from_secs(12));
                     if std::env::var("POC_LIVE").is_ok() {
                         return;
                     }
@@ -854,7 +737,7 @@ fn poll_window(handle: tauri::AppHandle, tries: u32) {
             Some(w) => match w.ns_window() {
                 Ok(p) => {
                     let rc = unsafe { poc_attach(p as *mut c_void) };
-                    boot_mark("webview 就绪 + 原生画布已挂载");
+                    boot::boot_mark("webview 就绪 + 原生画布已挂载");
                     eprintln!("[studio] attach rc={rc}");
                     start_ticks(h.clone());
                     // 取数模式（真机实时流没有容器、没法用 ffmpeg 侧统计，只能自己上报）：

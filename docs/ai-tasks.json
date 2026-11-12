@@ -4581,6 +4581,24 @@
         "T-studio-symbol-panel"
       ],
       "note": "【done · 决策 #1486（2026-11-12）】批次 3：`.rs` 之前只有角色/规模，20 个 Rust 文件连箭头都不出现。\n★摘要 rs_facts：只数第 0 列顶层声明 → `N pub` · `N struct` · `N enum` · `含测试` + 前 3 个 pub 名。★pub(crate) 必须算 pub：strip_prefix(\"pub \") 对 `pub(crate) fn` 失效，本仓大量模块内部共享都用它，漏掉会少算一大批 ⇒ 单独 strip_visibility 识别 `pub(`…`)`。\n★一张关键词表服务两语言：fn→function / static→const / mod→module，面板分组不分叉。★NOT_A_NAME 黑名单：`const fn make()` 会被 const 前缀吃成名字 `fn`，宁可跳过不编假符号。\n★判据：rs_facts_counts_pub_items（人工数 7 pub/1 struct/1 enum/含测试）+ scan_symbols_reads_rust（kind 映射 + 非 pub 也要进）+ scan_symbols_on_real_rust_file（真跑 fs_guard.rs 断行号）+ 面板 ㊿s（`6 pub` 且无角色行）。\n★★踩坑：门禁 list_files 是桩的固定 5 文件，format.rs 不在 → hover 等 30s 抛错，整轮 0 绿 0 红（=没有门禁）。两处修正：① 探针改软失败（page.$ 探存在，缺行返回文案带现存 .rs 路径，让判据红）；② 桩补 format.rs。改桩必须同步改判据——⑪c 的\"5 个文件\"当场红，改 6 才一致。\n★破坏性验证：删 strip_visibility 的 `pub(` 分支 ⇒ 两条测试同时红（6 pub vs 7 pub，epsilon 消失）。\n★判据：check:studio-panel 88 绿 0 红 · cargo test 63 通过/1 失败（+3 测试，#1460 既存）。\n★诚实边界：impl 不列；const fn/宏内/嵌套项跳过；只认第 0 列；trait 方法签名不算。\n【Handoff】- 做到哪：rs 摘要 + 扫描 + 面板分组 + 判据 + 破坏性验证。- 未做：impl 列表、.py 结构。\n- 下一步：真机看 Rust 卡与面板；若需要 impl 分组另开单。"
+    },
+    {
+      "id": "T-studio-split-boot",
+      "title": "拆 main.rs：状态/日志/启动计时 → boot.rs（998→881 行）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/src/main.rs",
+        "packages/studio/src/boot.rs"
+      ],
+      "decision": 1487,
+      "verification": "cd packages/studio && cargo build --bin proteus-studio-shell && cd ../.. && node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-brief-rust"
+      ],
+      "note": "【done · 决策 #1487（2026-11-12）】main.rs 998 行贴 1000 行硬上限，且同时住着窗口/命令/菜单/日志/状态落盘/启动计时六件事。★先想清什么能搬：Rust 二进制入口 fn main 必须在 crate root ⇒ 只能搬它调用的东西。拆出 boot.rs（137 行）：① 状态落盘 state_path/load_state/save_state；② stderr→日志文件 init_log_file/dirs_log_dir/chrono_stamp；③ 启动计时 BOOT_T0/SRC_READY/mark_src_ready/wait_src_ready/boot_mark。★API 收口：BOOT_T0.set(...) → boot::start_clock()，外部不该知道计时器存在 OnceLock 里。★命令注册要带模块路径 boot::load_state/boot::save_state（宏按路径找 __cmd__，这是唯一搬家后必然编译失败处）。★误判一次：open_settings 落在被搬区间里顺手带进了 boot.rs，settings::open_window 立刻找不到模块 ⇒ 它不是启动期设施，放回 main。教训：按行号区间搬代码会带走语义无关的小函数，搬完要逐个函数问「它属于这个模块吗」。★判据：cargo build 过；面板门禁 88 绿 0 红（这次没加 --no-build，走完整重建 ⇒ 证明 IPC 注册真的通了）；cargo test 63/1（#1460 既存）。★flakes：与门禁并行跑 cargo test 时 formats_with_real_cli 红过一次，独占复跑通过 ⇒ 该测试起真实 prettier CLI，受并发负载影响，以后 cargo test 与门禁不要并行。★诚实边界：main() 体 270 行 + poll_window/start_ticks 仍在 main，下一步可抽 app_setup.rs；881 仍偏大（目标 ≤700）；纯搬家无逻辑改动。【Handoff】- 做到哪：boot.rs 拆分 + API 收口 + 命令路径 + 全量验。- 未做：app_setup.rs（main 体/poll_window/start_ticks）。- 下一步：真机启动一次确认日志与状态恢复正常（门禁已覆盖注册链路）。"
     }
   ]
 }

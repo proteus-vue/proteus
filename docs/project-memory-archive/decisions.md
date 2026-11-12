@@ -17081,4 +17081,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
     ③ 只认第 0 列 ⇒ 写在 `mod` 内部但缩进的项不会出现；
     ④ `trait` 里的方法签名不算（它们在 impl 里）。
 
+1487. **★`main.rs` 拆出 `boot.rs`：998 → 881 行（第一次真正卸掉贴线风险）**（2026-11-12 · 用户「好的继续」，按建议先拆最贴线的文件）:
+  - **背景**：`main.rs` 已 **998 行**、贴上 `check:file-size` 的 1000 行硬上限；
+    #1481 加一条命令注册时靠"合并双空行"续过一次命，**再来一次就破线**。
+    根因是它同时住着"窗口 / 命令 / 菜单 / 日志 / 状态落盘 / 启动计时"六件事。
+  - **★先想清"什么能搬"**：Rust 二进制入口 `fn main` **必须在 crate root**，
+    所以入口只能留在 `main.rs`，能搬走的是它**调用的东西**。
+  - **拆出的 `boot.rs`（137 行）**收拢与界面无关的三件：
+    ① 工作区状态落盘（`state_path` / `load_state` / `save_state`，G5）；
+    ② stderr → 日志文件（`init_log_file` / `dirs_log_dir` / `chrono_stamp`，决策 #1310）；
+    ③ 启动计时 + live source 就绪信号（`BOOT_T0` / `SRC_READY` / `src_ready_pair` /
+       `mark_src_ready` / `wait_src_ready` / `boot_mark`，决策 #1379）。
+  - **API 收口**：`main` 里原来是 `BOOT_T0.set(Instant::now())`，搬走后改成
+    `boot::start_clock()` —— **外部只该知道"开始计时"**，不该知道它存在 `OnceLock` 里。
+  - **命令注册要带模块路径**：`generate_handler![… boot::load_state, boot::save_state …]`。
+    ★这是唯一"搬家后会编译失败"的地方（宏按路径找 `__cmd__load_state`）。
+  - **★搬家时的一次误判（已修）**：`open_settings` 落在被搬的区间里，
+    于是进了 `boot.rs`，`settings::open_window` 立刻报"找不到模块"。
+    它不是启动期设施，只是"设置窗口"的命令入口 ⇒ **放回 `main.rs`**。
+    教训：**按行号区间搬代码时，区间边界会顺手带走语义无关的小函数**，
+    搬完必须逐个函数问一遍"它属于这个模块吗"。
+  - **判据**：`cargo build` 通过；面板门禁 **88 绿 0 红**（这次**没有**加 `--no-build`，
+    走完整重建 ⇒ 证明 `boot::load_state/save_state` 的 IPC 注册真的通了，不只是编译过）；
+    `cargo test` **63 通过 / 1 失败**（唯一红仍是 #1460）。
+  - **★并行跑测试的 flake（记一笔）**：与门禁同时跑 `cargo test` 时
+    `format::tests::formats_with_real_cli` **红过一次**，独占复跑立即通过。
+    那条测试要起真实 prettier CLI，**受同机并发负载影响** ⇒ 以后 `cargo test` 与门禁**不要并行**跑。
+  - **诚实边界**：① `main()` 体（约 270 行）+ `poll_window` / `start_ticks` 仍在 `main.rs`，
+    下一步可抽 `app_setup.rs`（这次没做，避免一次搬太多、风险叠乘）；
+    ② 881 行仍偏大（目标 ≤700）；③ 只搬与界面无关的部分，**没有任何逻辑改动**（纯搬家）。
+
 
