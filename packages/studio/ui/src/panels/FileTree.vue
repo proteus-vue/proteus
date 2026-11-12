@@ -52,17 +52,41 @@ const mark = (p: string) => gitMark.value.get(p) ?? ''
      树行给出计数，是"从全局看哪儿有问题"的最低成本形态。
    【★为什么 stale 时全部不显示】诊断读的是**磁盘**，编辑器里有未保存改动时它对应旧内容；
      与编辑器里"错位就不画"是同一条规则（diag.ts 的 `diagStale`）。 */
+type DgCount = { e: number; w: number }
 const diagMark = computed(() => {
-  const m = new Map<string, { e: number; w: number }>()
-  if (diagStale.value) return m
-  for (const d of diagList.value) {
-    const cur = m.get(d.path) ?? { e: 0, w: 0 }
-    if (d.severity === 'warning') cur.w += 1
+  const files = new Map<string, DgCount>()
+  const dirs = new Map<string, DgCount>()
+  if (diagStale.value) return { files, dirs }
+
+  const bump = (m: Map<string, DgCount>, key: string, warn: boolean) => {
+    const cur = m.get(key) ?? { e: 0, w: 0 }
+    if (warn) cur.w += 1
     else cur.e += 1
-    m.set(d.path, cur)
+    m.set(key, cur)
   }
-  return m
+
+  for (const d of diagList.value) {
+    const warn = d.severity === 'warning'
+    bump(files, d.path, warn)
+    /* ★决策 #1493：**目录行聚合子文件**。折叠状态下"哪个目录有问题"必须一眼可见 ——
+       只给文件行加徽标，等于要求用户把目录全部展开才能看出问题在哪个子树。 */
+    let p = d.path
+    for (;;) {
+      const i = p.lastIndexOf('/')
+      if (i <= 0) break
+      p = p.slice(0, i)
+      bump(dirs, p, warn)
+    }
+  }
+  return { files, dirs }
 })
+
+/** 一行（目录或文件）要显示的两枚计数；没有就返回 0/0 */
+const dg = (r: { node: { path: string; dir: boolean } }): DgCount =>
+  (r.node.dir ? diagMark.value.dirs.get(r.node.path) : diagMark.value.files.get(r.node.path)) ?? {
+    e: 0,
+    w: 0,
+  }
 
 const tree = computed(() => buildTree(props.files))
 const rows = computed(() => flatten(tree.value, ws.codeCollapsed))
@@ -298,19 +322,9 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
       <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
       <span class="name" :title="q ? r.node.path : undefined">{{ q ? r.node.path : r.node.name }}</span>
-      <!-- 诊断徽标（决策 #1492）：只在有计数时占位，宽度稳定不跳 -->
-      <span
-        v-if="!r.node.dir && (diagMark.get(r.node.path)?.e ?? 0) > 0"
-        class="dg err"
-        :title="`${diagMark.get(r.node.path)!.e} 个错误`"
-        >{{ diagMark.get(r.node.path)!.e }}</span
-      >
-      <span
-        v-if="!r.node.dir && (diagMark.get(r.node.path)?.w ?? 0) > 0"
-        class="dg warn"
-        :title="`${diagMark.get(r.node.path)!.w} 个警告`"
-        >{{ diagMark.get(r.node.path)!.w }}</span
-      >
+      <!-- 诊断徽标（决策 #1492 / #1493）：文件行是自己的数，目录行是**子树聚合** -->
+      <span v-if="dg(r).e > 0" class="dg err" :title="`${dg(r).e} 个错误`">{{ dg(r).e }}</span>
+      <span v-if="dg(r).w > 0" class="dg warn" :title="`${dg(r).w} 个警告`">{{ dg(r).w }}</span>
       <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
         mark(r.node.path)
       }}</span>

@@ -4716,6 +4716,25 @@
       "verification": "npx vitest run tests/fluid-layout.test.ts tests/fluid-mp-gaps.test.ts",
       "branch": null,
       "note": "认领原因：外部第 15 轮报 F-39~F-43 并指定为最高优先级。五条同源——柔性布局在 MP 端没接完：F-39（parseFluidExpr 两处重复实现且只认纯数字）/ F-40（MP 产物裸 calc 无夹取）/ F-41（p-grid minColWidth 不随容器变）/ F-42（p-adaptive 拿不到 ref → 整段逻辑跳过）/ F-43（createMpSizeObserverFactory 已实现零接线）。★F-42+F-43 同根：mpContainerObserverFactory 已存在，p-adaptive 没接。\n\n【done · 决策 #1493（2026-11-12）】五条全修：F-39（parseFluidExpr 两处重复实现收敛为 fluid-layout.ts 唯一实现，改用括号配平扫描器支持 var()/百分比/auto，非纯数字实参原样透传）/ F-40（新增 fluidDecl 唯一出口，纯数字走 clamp(min, calc, max) 两端夹取——实测 1600 宽 33.8→32、designWidth=1280 时 390 宽 3.31→20）/ F-41（p-grid 新增 minColWidthMin + minColWidthVw → CSS max(96px, min(142px, 22vw))，纯 CSS 零运行时，390 宽 2 列→3 列与手写断点一致）/ F-42+F-43（p-adaptive 接 mpContainerObserverFactory —— 此前 onMounted 首行「元素空就 return」在 MP 端必然命中，controller 从不创建，整段逻辑被跳过；现与 p-zone/p-split/p-toolbar 同范式）。★回归锁 tests/fluid-mp-gaps.test.ts 12 例 + fluid-layout.test.ts 3 条旧断言按新行为更新。★破坏性验证 5 条全部见红（parseFluidExpr 退回纯数字正则→4 failed / fluidDecl 退回裸 calc→6 failed / p-adaptive 退回元素空 return→2 failed / p-grid colWidthCss 退回固定值→1 failed / 删 defineProps 声明→1 failed），还原后 12/12 + 29/29 全绿。★test:coupled 317 tests 全绿。"
+    },
+    {
+      "id": "T-studio-dir-diag-rollup",
+      "title": "目录行聚合子树诊断（㊿v）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-checks-hover.mjs"
+      ],
+      "decision": 1493,
+      "verification": "node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-tree-diag-badge"
+      ],
+      "note": "【done · 决策 #1493（2026-11-12）】问题：#1492 只给文件行加徽标，树默认折叠 ⇒ 想看问题在哪个子树要一个个展开。做法：diagMark 变两张表——files（自己）与 dirs（逐级向上累加到每一层祖先）；目录行显示子文件之和。★为什么逐级而不只是父目录：只累加直接父目录时 packages/ 顶层永远空，而用户看树是从上往下走的。★判据 ㊿v 三条：ui/src=2错1警 / native 无徽标 / 顶层 packages=2错1警；只断①则「只算直接父目录」照样绿。★破坏性验证：改成只 bump 直接父目录 ⇒ 仅 ㊿v 红、其余 90 绿（packages 错(无)/警(无)）。★判据：91 绿 0 红（基线 91）。★诚实边界：目录徽标不可点（点目录仍折叠）；聚合是字符串前缀匹配（树的路径本身是全路径，够用）；计数无上限。【Handoff】- 做到哪：聚合 + 判据 + 破坏性验证。- 未做：点徽标打开诊断面板。- 下一步：真机折叠一个含错目录看数字。"
     }
   ]
 }

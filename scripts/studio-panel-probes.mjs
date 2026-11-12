@@ -1083,10 +1083,24 @@ export async function probeDiagBadges(page) {
         w: b.querySelector('.dg.warn')?.textContent?.trim() ?? '',
       }
     }
+    /* ★决策 #1493：目录行 = 子树聚合。折叠着也要能看出"哪个目录有问题"。 */
+    const readDir = (p) => {
+      const b = document.querySelector(`#codeFiles button[data-dir="${p}"]`)
+      if (!b) return null
+      return {
+        e: b.querySelector('.dg.err')?.textContent?.trim() ?? '',
+        w: b.querySelector('.dg.warn')?.textContent?.trim() ?? '',
+      }
+    }
     return {
       app: read('packages/studio/ui/src/App.vue'),
       bridge: read('packages/studio/ui/src/bridge.ts'),
       css: read('packages/studio/ui/src/styles.css'),
+      dirs: {
+        uiSrc: readDir('packages/studio/ui/src'),
+        native: readDir('packages/studio/native'),
+        pkg: readDir('packages'),
+      },
     }
   })
 

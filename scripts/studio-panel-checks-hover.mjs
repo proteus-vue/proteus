@@ -182,6 +182,23 @@ export async function checksHover(page) {
         !dg.shown.css?.e &&
         !dg.shown.css?.w,
     ],
+    /* ㊿v 目录行聚合诊断（决策 #1493）
+       ★三条：① 有问题的目录显示**子文件之和**（ui/src = 2 错 1 警）；
+         ② 没有问题的目录（native）不显示徽标；③ **顶层目录也要聚合**（packages）。
+       只断①不够：把聚合只做一层（不向上传递）时，①照样绿、③会红。 */
+    [
+      `㊿v 目录聚合诊断（决策 #1493）：ui/src 错 ${dg.shown.dirs?.uiSrc?.e || '(无)'}/警 ${
+        dg.shown.dirs?.uiSrc?.w || '(无)'
+      } · native ${dg.shown.dirs?.native?.e || dg.shown.dirs?.native?.w ? '有徽标(错)' : '无徽标'} · packages 错 ${
+        dg.shown.dirs?.pkg?.e || '(无)'
+      }/警 ${dg.shown.dirs?.pkg?.w || '(无)'}`,
+      dg.shown.dirs?.uiSrc?.e === '2' &&
+        dg.shown.dirs?.uiSrc?.w === '1' &&
+        !dg.shown.dirs?.native?.e &&
+        !dg.shown.dirs?.native?.w &&
+        dg.shown.dirs?.pkg?.e === '2' &&
+        dg.shown.dirs?.pkg?.w === '1',
+    ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；
        "前面的面板不需要自动关闭" ⇒ 指针进子面板 700ms 后父面板仍在；
