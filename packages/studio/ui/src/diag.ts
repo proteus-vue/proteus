@@ -77,16 +77,23 @@ export async function ensureWatch(): Promise<void> {
     diagErr.value = String((e as Error)?.message ?? e).slice(0, 200)
     return
   }
-  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
-  if (!ev?.listen) return
-  await ev.listen('diag:update', (e) => {
-    const raw = e.payload
+  const apply = (raw: unknown) => {
     const tsc = Array.isArray(raw) ? (raw as Diag[]) : []
     /* 推送是全量：替换 tsc 部分，eslint 部分保留 */
     diagList.value = mergeSort(tsc, lintPart())
     diagAt.value = Date.now()
     diagErr.value = ''
-  })
+  }
+
+  const ev = (globalThis as { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__?.event
+  if (ev?.listen) {
+    await ev.listen('diag:update', (e) => apply(e.payload))
+    return
+  }
+  /* ★决策 #1492：**浏览器 / 门禁的兜底通路**（与菜单、`close-blocked` 同一套双路惯例）。
+     没有它，诊断这条链在门禁里**根本无法驱动** —— 之前就是这样：功能在，但一条判据都写不了，
+     等于"只有真机能验"，于是长期没人验。 */
+  addEventListener('studio:diag-update', (e) => apply((e as CustomEvent).detail))
 }
 
 /* ── ② eslint：按需一次（15s）──────────────────────────────────────────── */

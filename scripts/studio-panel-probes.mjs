@@ -1031,3 +1031,64 @@ export async function probeSymbolFilter(page) {
   await page.waitForTimeout(260)
   return { opened: true, filtered, curText, closed }
 }
+
+/**
+ * 树行诊断徽标（决策 #1492）。
+ * ★两段都要证：① **后端确实推 `diag:update`**（静态读 Rust 源，防止"事件名改了就静默失效"）；
+ *   ② 事件到达后树行按文件分组显示错误/警告数，且**未保存改动时不显示**（diagStale）。
+ */
+export async function probeDiagBadges(page) {
+  const fsMod = await import('node:fs')
+  const pathMod = await import('node:path')
+  const root = pathMod.resolve(pathMod.dirname(new URL(import.meta.url).pathname), '..')
+  const rustSrc = ['src/diag.rs', 'src/main.rs']
+    .map((f) => {
+      try {
+        return fsMod.readFileSync(pathMod.join(root, 'packages/studio', f), 'utf8')
+      } catch {
+        return ''
+      }
+    })
+    .join('\n')
+  const emits = /emit\(\s*"diag:update"/.test(rustSrc) || /"diag:update"/.test(rustSrc)
+
+  /* ★走 DOM 兜底（`studio:diag-update`），与菜单 / `close-blocked` 同一套双路惯例。
+     桩**不能**提供 `__TAURI__.event`：那是全局开关，一开就把其他功能的 DOM 兜底全切走
+     （本次实测：`onCloseBlocked` 立刻改走原生通路，⑱f 的确认框再也不弹）。 */
+  const listenerReady = await page.evaluate(() => {
+    let got = false
+    const probe = () => {
+      got = true
+    }
+    addEventListener('studio:diag-update', probe, { once: true })
+    dispatchEvent(
+      new CustomEvent('studio:diag-update', {
+        detail: [
+          { path: 'packages/studio/ui/src/App.vue', line: 10, col: 1, code: 'TS2339', message: 'e1', severity: 'error' },
+          { path: 'packages/studio/ui/src/App.vue', line: 12, col: 3, code: 'TS2322', message: 'e2', severity: 'error' },
+          { path: 'packages/studio/ui/src/bridge.ts', line: 20, col: 1, code: 'no-unused-vars', message: 'w1', severity: 'warning', source: 'eslint' },
+        ],
+      }),
+    )
+    return got
+  })
+  await page.waitForTimeout(260)
+
+  const shown = await page.evaluate(() => {
+    const read = (p) => {
+      const b = document.querySelector(`#codeFiles button[data-file="${p}"]`)
+      if (!b) return null
+      return {
+        e: b.querySelector('.dg.err')?.textContent?.trim() ?? '',
+        w: b.querySelector('.dg.warn')?.textContent?.trim() ?? '',
+      }
+    }
+    return {
+      app: read('packages/studio/ui/src/App.vue'),
+      bridge: read('packages/studio/ui/src/bridge.ts'),
+      css: read('packages/studio/ui/src/styles.css'),
+    }
+  })
+
+  return { emits, listenerReady, shown }
+}

@@ -4676,6 +4676,27 @@
         "T-studio-symbol-panel"
       ],
       "note": "【done · 决策 #1491（2026-11-12）】问题：bridge.ts 有 95 个符号，面板只能滚 = 能看不能用。做法：q → matched（name/kind 子串，忽略大小写）→ 分组与扁平都基于 matched；cursor 在扁平顺序上移动（与屏幕分组一致）；Enter 走与点击同一个 go()。★打字即过滤但不自动聚焦：面板可能悬停 380ms 自动开，那一刻用户手还在编辑器打字，抢焦点会把输入打进面板 ⇒ 改成按下可见字符才聚焦+写入。★判据 ㊿t 抓到真 bug：输入框 @keydown 与 window keydown 都处理 ↑↓ ⇒ 一次按键走两格（两下 ↓ 选中 sym14 而非 sym12）；修法 onKey 里 if (e.target === inputEl.value) return（Esc 仍全局）。这类「同一事件两处处理」不报错，只表现为手感发飘，没有精确判据人只会觉得怪。★㊿t 四条：条目<80 且全含该串 / 副标题「匹配 M/80」/ 两次↓后是 sym12 / 回车收起；全部走真实键盘（给 input 赋值只证明 v-model 通）。★破坏性验证：needle 固定 '' ⇒ 仅 ㊿t 红（80 条 allMatch=false、选中 hasBridge）。★判据：89 绿 0 红（基线 --update-ids 同步 89）· SymbolPanel 401 行。★诚实边界：只做子串（useAutoSave 搜 uas 不行）；无多选；过滤状态不记忆。【Handoff】- 做到哪：过滤 + 键盘 + 判据 + 破坏性验证。- 未做：模糊匹配/驼峰分词、多选、状态记忆。- 下一步：真机试一遍手感（↑↓ 一格一格走）。"
+    },
+    {
+      "id": "T-studio-tree-diag-badge",
+      "title": "树行诊断徽标 + 诊断补 DOM 兜底（㊿u）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "packages/studio/ui/src/diag.ts",
+        "scripts/studio-panel-stub.mjs",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-checks-hover.mjs"
+      ],
+      "decision": 1492,
+      "verification": "node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-symbol-filter"
+      ],
+      "note": "【done · 决策 #1492（2026-11-12）】功能：树行右侧显示该文件错误数（红）/警告数（黄），无诊断不占位；此前错误只有打开文件才看得见。★与编辑器同规则：diagStale（有未保存改动）时全部不显示（诊断读磁盘，对不上就不画，#1412）。★★最大的坑：桩里一开 __TAURI__.event，onCloseBlocked 的 if (ev?.listen) 立刻改判为有原生通路 ⇒ studio:close-blocked 的 DOM 兜底再也不接 ⇒ ⑱f 确认框 30s 超时（两轮才定位）。教训：__TAURI__.event 是全局开关不是单事件开关；桩头部第 9-10 行早写着「event 刻意不桩」，我没读就加了。★正确解法（沿用双路惯例）：诊断原本只有原生事件一条路 ⇒ 门禁驱动不了 ⇒ 长期没有判据；现在 ensureWatch 补 studio:diag-update 的 DOM 兜底（与 studio:menu / studio:close-blocked 一致）。★这条副产品比徽标重要：功能没有「门禁能驱动」的入口=不可验。★判据 ㊿u 两段：Rust 源里确有 diag:update（改名即红）+ 事件到达后按文件分组显示（App.vue 错误 2 / bridge.ts 警告 1 / styles.css 无徽标）；只断后者则分组写错也能绿。★破坏性验证：分组 key 写常量 ⇒ 仅 ㊿u 红（App.vue 错误 1，两错并成一条）。★判据：90 绿 0 红（基线 90）。★诚实边界：vue-tsc 真产出不在本门禁；徽标不可点跳诊断面板；目录行不聚合子文件。【Handoff】- 做到哪：徽标 + DOM 兜底 + 判据 + 破坏性验证。- 未做：点徽标打开诊断面板、目录聚合。- 下一步：真机打开一个有错的文件看树行是否出数字。"
     }
   ]
 }

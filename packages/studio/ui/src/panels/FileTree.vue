@@ -12,6 +12,7 @@
 //   ② **布局必须有几何判据**（决策 #1218 的教训）：文件树宽度/行高变化会被判据 ㉓ 盯住。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { buildTree, flatten, toggleCollapsed, type TreeNode } from '../fileTree'
+import { diagList, diagStale } from '../diag'
 import { useWorkspaceState } from '../useWorkspaceState'
 import { git } from '../git'
 import { openMenu } from '../contextmenu'
@@ -45,6 +46,23 @@ const gitMark = computed(() => {
   return m
 })
 const mark = (p: string) => gitMark.value.get(p) ?? ''
+
+/* ★决策 #1492：树行显示**该文件的诊断数**（错误红 / 警告黄）。
+   【为什么要它】错误现在只在打开文件后才看得见 —— 用户得"逐个文件点进去"才知道哪里红了。
+     树行给出计数，是"从全局看哪儿有问题"的最低成本形态。
+   【★为什么 stale 时全部不显示】诊断读的是**磁盘**，编辑器里有未保存改动时它对应旧内容；
+     与编辑器里"错位就不画"是同一条规则（diag.ts 的 `diagStale`）。 */
+const diagMark = computed(() => {
+  const m = new Map<string, { e: number; w: number }>()
+  if (diagStale.value) return m
+  for (const d of diagList.value) {
+    const cur = m.get(d.path) ?? { e: 0, w: 0 }
+    if (d.severity === 'warning') cur.w += 1
+    else cur.e += 1
+    m.set(d.path, cur)
+  }
+  return m
+})
 
 const tree = computed(() => buildTree(props.files))
 const rows = computed(() => flatten(tree.value, ws.codeCollapsed))
@@ -280,6 +298,19 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       <FolderIcon v-if="r.node.dir" :open="!ws.codeCollapsed.includes(r.node.path)" :size="16" class="ico" />
       <FileIcon v-else :path="r.node.path" :size="16" class="ico" />
       <span class="name" :title="q ? r.node.path : undefined">{{ q ? r.node.path : r.node.name }}</span>
+      <!-- 诊断徽标（决策 #1492）：只在有计数时占位，宽度稳定不跳 -->
+      <span
+        v-if="!r.node.dir && (diagMark.get(r.node.path)?.e ?? 0) > 0"
+        class="dg err"
+        :title="`${diagMark.get(r.node.path)!.e} 个错误`"
+        >{{ diagMark.get(r.node.path)!.e }}</span
+      >
+      <span
+        v-if="!r.node.dir && (diagMark.get(r.node.path)?.w ?? 0) > 0"
+        class="dg warn"
+        :title="`${diagMark.get(r.node.path)!.w} 个警告`"
+        >{{ diagMark.get(r.node.path)!.w }}</span
+      >
       <span v-if="!r.node.dir && mark(r.node.path)" class="gst" :data-s="mark(r.node.path)">{{
         mark(r.node.path)
       }}</span>
@@ -360,6 +391,26 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
 .gst[data-s='U'] { color: #c084fc; }
 .gst[data-s='?'] { color: var(--fg-subtle); }
 
+/* 诊断徽标（决策 #1492）：极简 —— 无底色方块，只有数字 + 语义色，紧贴名字右侧 */
+.dg {
+  flex: none;
+  min-width: 12px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 14px;
+  text-align: center;
+}
+.dg.err {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+}
+.dg.warn {
+  color: var(--warn, #d29922);
+  background: color-mix(in srgb, var(--warn, #d29922) 16%, transparent);
+}
 .files button {
   display: flex;
   align-items: center;

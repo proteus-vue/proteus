@@ -10,6 +10,7 @@
 //      若桩对所有文件都返回同一个数，"卡片沿用了上一项数据"这类串数据缺陷根本抓不到；
 //   ③ 移开即消失 —— 残留卡片会挡住下一行的点击，是可感知的缺陷。
 import {
+  probeDiagBadges,
   probeFileHover,
   probePopoverChain,
   probePopoverFit,
@@ -35,6 +36,7 @@ export async function checksHover(page) {
   const chain = await probePopoverChain(page)
   const fit = await probePopoverFit(page)
   const filt = await probeSymbolFilter(page)
+  const dg = await probeDiagBadges(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -160,6 +162,25 @@ export async function checksHover(page) {
         /匹配\s+\d+\/80/.test(filt.filtered?.sub ?? '') &&
         filt.curText === 'sym12' &&
         filt.closed === true,
+    ],
+    /* ㊿u 树行诊断徽标（决策 #1492）
+       ★两段都断：① Rust 源里确实存在 `diag:update`（事件名改掉就红，不会静默）；
+         ② 前端收到事件后**按文件分组**显示错误/警告数，且没有诊断的文件不显示徽标。
+       只断②的话，把路径分组写错（全挂到第一行）也能绿。 */
+    [
+      `㊿u 树行诊断徽标（决策 #1492）：后端推 diag:update=${dg.emits} · 监听就绪=${dg.listenerReady} · App.vue 错误 ${
+        dg.shown.app?.e || '(无)'
+      }/警告 ${dg.shown.app?.w || '(无)'} · bridge.ts 错误 ${dg.shown.bridge?.e || '(无)'}/警告 ${
+        dg.shown.bridge?.w || '(无)'
+      } · 无诊断文件=${!dg.shown.css?.e && !dg.shown.css?.w}`,
+      dg.emits === true &&
+        dg.listenerReady === true &&
+        dg.shown.app?.e === '2' &&
+        !dg.shown.app?.w &&
+        dg.shown.bridge?.e === '' &&
+        dg.shown.bridge?.w === '1' &&
+        !dg.shown.css?.e &&
+        !dg.shown.css?.w,
     ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；

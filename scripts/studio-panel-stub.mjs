@@ -278,6 +278,9 @@ export function stubTauri(payload) {
           }
         }
         // Git 只读（决策 #1246）
+        /* ★决策 #1492：诊断 watch 的起停。真实后端会拉起常驻 `vue-tsc --watch`，
+           桩只需回成功 —— 判据验的是"事件到了以后界面怎么画"。 */
+        if (cmd === 'diag_watch_start' || cmd === 'diag_watch_stop') return null
         if (cmd === 'git_status')
           return {
             isRepo: true,
