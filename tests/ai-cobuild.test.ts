@@ -166,7 +166,49 @@ describe('AI 共建三方一致性（报告 ↔ 台账 ↔ 回执）', () => {
     const syncSrc = fs.readFileSync(path.join(root, 'scripts/sync-cobuild.mjs'), 'utf8')
     expect(checkSrc, 'cobuild-check 的轮次正则须含阿拉伯数字分支').toContain('[0-9]+|[一二三四五六七八九十]+')
     expect(syncSrc, 'sync-cobuild 的「复测」须可省略').toContain('轮(?:复测)?')
-    expect(syncSrc, 'sync-cobuild 的轮次正则须含阿拉伯数字分支').toContain('[0-9]+|[一二三四五六七八九十]+')
+  })
+
+  // ★2026-11-12（外部 F-44 报告 + 自查扩展）：mergeNote 的三个缺陷——
+  //   ① 认不出标签的文本被默认归为 framework（外部 `[external 观察] xxx` → 被标成框架写的）
+  //   ② 外部 note 本身多段时被整体打包 ⇒ 产物出现 `[external] [external] …`
+  //   ③ 旧版每同步一次可能叠一层标签 ⇒ 台账里留 8 条脏数据
+  //   ★破坏性：把 splitNoteSegments 的 `else` 分支改回 push('framework',…) → 本用例红；
+  //            删掉 unwrapNestedTag → 脏数据自愈用例红。
+  it('★mergeNote：不擅自定义归属 / 不重复标签 / 递归剥离叠加（F-44）', async () => {
+    const { mergeNote } = await import('../scripts/lib/cobuild-note.mjs')
+    // ① 带修饰词的标签必须保留 external 归属，绝不误标成 framework
+    const r1 = mergeNote('[framework] 框架已修', '[external 观察] 根 package.json 里有 typings')
+    expect(r1).toBe('[framework] 框架已修\n[external] 根 package.json 里有 typings')
+    expect(r1, '外部原文被误标成 framework').not.toMatch(/\[framework\]\s*\[external/)
+    // ② 多段外部 note 逐段归属，不出现 `[external] [external]`
+    const r2 = mergeNote(undefined, '[external] 影响…\n[external 建议] 应该…')
+    expect(r2).toBe('[external] 影响…\n[external] 应该…')
+    expect(r2, '重复标签').not.toMatch(/\[(external|framework)\]\s*\[(external|framework)\]/)
+    // ③ 无标签原文原样保留（不擅自加归属）
+    expect(mergeNote(undefined, '我复测通过了')).toBe('我复测通过了')
+    // ④ 消费方自述 `[我方处置]` 归 external
+    expect(mergeNote(undefined, '[我方处置] 不提交')).toBe('[external] 不提交')
+    // ⑤ 历史脏数据自愈：外层误加的标签被剥离，取内层真归属
+    expect(mergeNote('[external] [framework] 独立 import() 求值：12 个导出齐全', undefined)).toBe(
+      '[framework] 独立 import() 求值：12 个导出齐全',
+    )
+    // ⑥ 幂等：结果再喂回自己必须完全不变
+    const once = mergeNote('[external] a\n[framework] b', undefined)
+    expect(mergeNote(once, undefined)).toBe(once)
+    expect(mergeNote(mergeNote(once, 'c'), 'c')).toBe(mergeNote(once, 'c'))
+  })
+
+  // ★现网台账不得残留「标签叠加」脏数据（旧版 mergeNote 的产物）。
+  //   判据放在「模拟一次同步之后」——修好后的首次同步会自动清洗历史脏数据。
+  it('★台账同步后不残留标签叠加（历史脏数据已自愈）', async () => {
+    const { mergeNote } = await import('../scripts/lib/cobuild-note.mjs')
+    const raw = JSON.parse(fs.readFileSync(path.join(root, 'docs/外部报告台账.json'), 'utf8')) as { entries: LedgerEntry[] }
+    const dirty: string[] = []
+    for (const e of raw.entries) {
+      const after = mergeNote(e.verification_note as string | undefined, undefined)
+      if (after && /\[(external|framework)\]\s*\[(external|framework)/.test(after)) dirty.push(e.id)
+    }
+    expect(dirty, `这些条目的 note 同步后仍带叠加标签：${dirty.join(', ')}`).toEqual([])
   })
 
   // ★2026-11-12：sync 必须能补齐 rounds[]——否则同步进新条目后，

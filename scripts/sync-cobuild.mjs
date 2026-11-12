@@ -21,6 +21,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { computeBreakdown } from './lib/cobuild-stats.mjs'
+import { mergeNote } from './lib/cobuild-note.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(HERE, '..')
@@ -40,28 +41,6 @@ const EXTERNAL_OWNED = ['title', 'kind', 'severity', 'round', 'reported_in', 'fo
 const FRAMEWORK_OWNED = ['status', 'fix_state', 'fixed_in']
 /** 外部优先的字段（外部有值则以外部为准；用于「使用方复测结论」回写） */
 const EXTERNAL_PRIORITY = ['verification', 'verified_by']
-
-/**
- * `verification_note` **不是冲突字段，而是「双方各自视角」的容器**——
- * 外部记「我在我项目里怎么验的」，框架记「我改了什么、怎么自证的」。两者都该保留。
- * 故合并为带归属的文本（`[external] …` / `[framework] …`），去重后拼接。
- */
-function mergeNote(mine, theirs) {
-  const parts = []
-  const push = (tag, text) => {
-    const t = String(text ?? '').trim()
-    if (t && !parts.some((p) => p.text === t)) parts.push({ tag, text: t })
-  }
-  // 已有文本可能已带归属前缀（前次同步的结果）
-  for (const seg of String(mine ?? '').split(/\n(?=\[(?:external|framework)\])/)) {
-    const m = /^\[(external|framework)\]\s*([\s\S]*)$/.exec(seg.trim())
-    if (m) push(m[1], m[2])
-    else push('framework', seg)
-  }
-  push('external', theirs ?? '')
-  if (!parts.length) return undefined
-  return parts.map((p) => `[${p.tag}] ${p.text}`).join('\n')
-}
 
 if (!FROM) {
   console.error('用法：node scripts/sync-cobuild.mjs --from <外部项目 web 目录> [--check] [--json]')
@@ -88,8 +67,17 @@ const byId = new Map(ourLedger.entries.map((e) => [e.id, e]))
 for (const ee of ext.entries ?? []) {
   const mine = byId.get(ee.id)
   if (!mine) {
-    // 外部新报的条目 → 整条并入
-    ourLedger.entries.push(ee)
+    // 外部新报的条目 → 整条并入。
+    // ★但 `verification_note` 必须先过 mergeNote 归一化（2026-11-12 修）：
+    //   直接 push 原文会导致**首次同步写入非规范形态、第二次同步再被规范化** ⇒ 不幂等
+    //   （实测 F-44：第一次写进 `[我方处置] …`，第二次才变成 `[external] …`，
+    //    使 `--check` 在同步后仍报 1 项变更）。
+    const added = { ...ee }
+    if (added.verification_note !== undefined) {
+      const normalized = mergeNote(undefined, added.verification_note)
+      if (normalized !== undefined) added.verification_note = normalized
+    }
+    ourLedger.entries.push(added)
     changes.push({ kind: 'ledger-add', id: ee.id, detail: `新增外部条目：${ee.title}` })
     continue
   }
@@ -153,11 +141,18 @@ for (const mine of ourLedger.entries) {
   }
 }
 // 版本对齐
+// ★`last_verified_published` / `last_verified_at` 的语义是「**使用方最后完整跑过的版本**」，
+//   与 `verification` 同属「外部优先」字段 ⇒ 外部给了值就采纳（2026-11-12 修）。
+//   原先只报 version-drift 不同步，导致框架侧永远停在外部第一次同步时的版本
+//   （实测停在 beta.17/09-20，而外部早已跑到 beta.31/11-12）——那个 drift 提示因此**每次同步都出现**，
+//   既不是「正常」也不是「待办」，纯噪声。
 if (ext.last_verified_published && ext.last_verified_published !== ourLedger.last_verified_published) {
   changes.push({
-    kind: 'version-drift',
-    detail: `外部最后已验版本 ${ext.last_verified_published} ≠ 框架 ${ourLedger.last_verified_published}（正常：外部尚未复测新版）`,
+    kind: 'version-sync',
+    detail: `采纳外部最后已验版本：${ourLedger.last_verified_published} → ${ext.last_verified_published}`,
   })
+  ourLedger.last_verified_published = ext.last_verified_published
+  if (ext.last_verified_at) ourLedger.last_verified_at = ext.last_verified_at
 }
 ourLedger.last_external_sync_at = new Date().toISOString().slice(0, 10)
 
