@@ -4735,6 +4735,45 @@
         "T-studio-tree-diag-badge"
       ],
       "note": "【done · 决策 #1493（2026-11-12）】问题：#1492 只给文件行加徽标，树默认折叠 ⇒ 想看问题在哪个子树要一个个展开。做法：diagMark 变两张表——files（自己）与 dirs（逐级向上累加到每一层祖先）；目录行显示子文件之和。★为什么逐级而不只是父目录：只累加直接父目录时 packages/ 顶层永远空，而用户看树是从上往下走的。★判据 ㊿v 三条：ui/src=2错1警 / native 无徽标 / 顶层 packages=2错1警；只断①则「只算直接父目录」照样绿。★破坏性验证：改成只 bump 直接父目录 ⇒ 仅 ㊿v 红、其余 90 绿（packages 错(无)/警(无)）。★判据：91 绿 0 红（基线 91）。★诚实边界：目录徽标不可点（点目录仍折叠）；聚合是字符串前缀匹配（树的路径本身是全路径，够用）；计数无上限。【Handoff】- 做到哪：聚合 + 判据 + 破坏性验证。- 未做：点徽标打开诊断面板。- 下一步：真机折叠一个含错目录看数字。"
+    },
+    {
+      "id": "T-cobuild-f36-f38",
+      "title": "外部 F-36/F-37/F-38 三条 blocker 收口",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:cobuild-20261112",
+      "scope": [
+        "packages/components/p-auth-gate/index.vue",
+        "packages/components/p-loading-host/index.vue",
+        "packages/components/p-toast-host/index.vue",
+        "packages/compiler/src/script.ts",
+        "packages/compiler/src/template.ts",
+        "packages/plugin-vite/src/cse-lint-plugin.ts",
+        "tests/cobuild-f36-f38.test.ts"
+      ],
+      "decision": 1495,
+      "verification": "npx vitest run tests/cobuild-f36-f38.test.ts",
+      "branch": null,
+      "note": "认领原因：外部第 13/14 轮剩的 3 条 blocker（F-39~F-43 已由 #1493 修完）。F-36=组件直接用全局 getCurrentPages → 消费者 vue-tsc TS2304（adapter.getCurrentPages 早已存在，又是能力与接线分离）；F-37=框架自带两道样式门禁扫到 node_modules 里的框架组件 → 消费者构建被自家组件封死；F-38=defineEmits 泛型形式漏在宏过滤正则外 → data.emit=undefined，v-for 作用域内参数化 handler 原样输出成非法处理器名。\n\n【done · 决策 #1495（2026-11-12）】三条全修：F-36（三处重复 routeOf 收敛到 runtime/page-route.ts 的 currentPageRoute，只依赖 adapter.getCurrentPages——抽象早就有，组件却直连平台全局）/ F-37（两道样式门禁 transform 入口加 node_modules 排除；语义边界写进注释：门禁约束消费者源码，已发布依赖由框架 CI 保证）/ F-38A（defineEmits 泛型形式 [<(] 两处判据对齐）/ F-38B（v-for 作用域 data-* 传参：SerializeContext.forScope 压栈 + tryForScopedHandler + on case 优先分支；三种形态 run(a.key)/run(a)/(e)=>run(a) 全部可运行）。★回归锁 12 例 + 破坏性验证 4 条全红（1/1/2/4 failed）。★test:coupled 507 全绿（顺带修掉 request-vue-demo 的 ?./?? 既有红——stash 验证过非本轮引入）。"
+    },
+    {
+      "id": "T-studio-diag-badge-jump",
+      "title": "点诊断徽标跳到错误现场（㊿w）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-checks-hover.mjs"
+      ],
+      "decision": 1494,
+      "verification": "node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-dir-diag-rollup"
+      ],
+      "note": "【done · 决策 #1494（2026-11-12）】先纠正前提：诊断面板是右栏常驻（App.vue .side），没有「打开面板」动作 ⇒ 徽标该做的是跳到错误现场。做法 jumpDiag：文件行取该文件第一条，目录行取子树里最靠前的一条（diagList 已按 文件→行→列 排好）→ ws.jump；@click.stop.prevent 不压住行点击。★判据 ㊿w 三条：点前不在该文件 / 点后是它 / 点目录徽标不折叠；只断第二条则「顺手把文件打开了」也能绿。★★变异暴露探针缺陷：去掉 .stop 后点击真折叠了 packages ⇒ 后续探针找不到 bridge.ts 行 30s 超时整轮崩溃（报 TimeoutError 而非㊿w 红）。修法：探针发现 expBefore≠expAfter 主动复原（再点一次展开），让缺 stop 表现为一条红。教训：破坏性验证不只要「能变红」还要「红得干净」——会污染后续状态的探针，真出 bug 时同样崩溃，失去定位价值。★修完后：去掉 .stop ⇒ 91 绿 + 1 红（点目录徽标不折叠=false），无崩溃。★判据：92 绿 0 红（基线 92）。★诚实边界：span@click 套在 button 里 A11y 不合法（键盘用户只能靠行点击）；只跳第一条；目录跳的是路径最靠前的文件不是错误最多的。【Handoff】- 做到哪：跳转 + 判据 + 探针复原 + 破坏性验证。- 未做：键盘可达的徽标、按错误数排序。- 下一步：真机点目录徽标看是否落在第一个错误行。"
     }
   ]
 }

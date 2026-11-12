@@ -1094,7 +1094,11 @@ function handleConstToData(
   //   const 不落 data（否则 withDefaults(...) 当函数调用初始化 → 产物裸调用/语法错误）
   //   ★defineComponent：SFC 已自动组件化，defineComponent(...) 包装为编译期 no-op（剥离+警告），不落 data/不裸注入 onLoad
   //   ★defineModel：v-model 组件契约（compileScript 权威源），const m = defineModel 不落 data（prop 由 modelRefs 注册；m.value 读写由 modelRefs 重写）
-  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\(|defineModel\s*[<(]|useModel\s*\()/.test(init)) return
+  //   ★★2026-11-12（外部 F-38 缺陷 A）：`defineEmits` 原写作 `defineEmits\s*\(`——**只认调用形式，不认泛型形式**。
+  //     而 TS 里 `const emit = defineEmits<{ (e:'go', n:number): void }>()` 才是最常见写法（泛型实参在 `(` 之前）。
+  //     漏判后果：该 const 被当普通初始化 → 产物 `data: { emit: undefined }` → 运行时
+  //     `this.emit is not a function`，**组件事件全部静默失效**。与 defineProps/defineModel 的 `[<(]` 形态对齐。
+  if (/^(?:defineProps\s*[<(]|defineEmits\s*[<(]|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\(|defineModel\s*[<(]|useModel\s*\()/.test(init)) return
   // 跳过函数/箭头函数（属于 methods）
   if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) return
   // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
@@ -3497,7 +3501,9 @@ export function transformScriptToPage(
     }
     modelRefs.set(md.varName, md.propName)
   }
-  const emitEnabled = extra.isComponent && /defineEmits\s*\(/.test(source) && !disabled.has('script/define-emits')
+  // ★★2026-11-12（F-38 缺陷 A）：这里同样要认泛型形式 `defineEmits<...>()`——
+  //   否则 emit 桥不启用（不发 import/不生成 this.emit），而模板里 `emit('go', 1)` 已被改写 ⇒ 运行时炸。
+  const emitEnabled = extra.isComponent && /defineEmits\s*[<(]/.test(source) && !disabled.has('script/define-emits')
   const methods = extractMethods(source, warnings, trace, disabled)
   // defineExpose（v0.3 尾）：no-op 校验（组件模式）
   if (extra.isComponent) checkDefineExpose(source, data, warnings, trace)

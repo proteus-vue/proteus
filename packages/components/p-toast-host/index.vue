@@ -54,6 +54,7 @@ import type { Ref } from 'vue'
 // ★GP4-a：队列状态与调度在 runtime（模块级单例）；本组件只做**渲染端**
 import { subscribeToast, toastSnapshot, hideToast } from '@proteus-vue/runtime'
 import type { ToastItem, ToastSnapshot } from '@proteus-vue/runtime'
+import { currentPageRoute } from '../runtime/page-route'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -102,12 +103,7 @@ onMounted(() => {
   const g = globalThis as unknown as Record<string, unknown>
   g.__PROTEUS_TOAST_HOST_MOUNTED__ = (Number(g.__PROTEUS_TOAST_HOST_MOUNTED__) || 0) + 1
   const routeOf = (): string => {
-    try {
-      const pages = (getCurrentPages?.() ?? []) as Array<{ route?: string }>
-      return pages.length ? pages[pages.length - 1].route ?? 'unknown' : 'unknown'
-    } catch {
-      return 'unknown'
-    }
+    return currentPageRoute('unknown')
   }
   const render = (snap?: ToastSnapshot): void => {
     const c = current.value

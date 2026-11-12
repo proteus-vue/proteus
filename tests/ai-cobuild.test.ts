@@ -199,16 +199,33 @@ describe('AI 共建三方一致性（报告 ↔ 台账 ↔ 回执）', () => {
   })
 
   // ★现网台账不得残留「标签叠加」脏数据（旧版 mergeNote 的产物）。
-  //   判据放在「模拟一次同步之后」——修好后的首次同步会自动清洗历史脏数据。
-  it('★台账同步后不残留标签叠加（历史脏数据已自愈）', async () => {
+  //
+  // ★2026-11-12 三次迭代（前两版都是假绿机，如实记录）：
+  //   ① 首版 `toContain`/宽松正则 → 正文里**描述**这个 bug 的句子（F-35/F-44 就在描述
+  //      `[framework] … ⇒ [external] [external] …`）被判成脏数据 ⇒ **误报**。
+  //   ② 锚行首 + 剥反引号引用 → 不误报了，但注入真脏数据 `[external] [framework] x` 测试**仍绿**——
+  //      因为 mergeNote 自身就会剥离它（自愈）⇒「判同步后」这个口径永远干净 ⇒ **测不到东西**。
+  //   ③ 最终判据：**分别看同步前后**——① 脏数据必须被 mergeNote 清洗（有自愈能力）；
+  //      ② 现网台账里不得还躺着未清洗的脏数据（真正的"残留"）。
+  //      注入 `[external] [framework] x` → ② 立刻红（这就是破坏性验证的落点）。
+  it('★台账无标签叠加残留 + mergeNote 具备自愈能力', async () => {
     const { mergeNote } = await import('../scripts/lib/cobuild-note.mjs')
+    // ① 自愈能力：脏数据喂进去必须被清洗成单层
+    expect(mergeNote('[external] [framework] 导出齐全', undefined)).toBe('[framework] 导出齐全')
+    expect(mergeNote('[framework] [external · 第七轮] 复跑通过', undefined)).toBe('[external] 复跑通过')
+    // ② 现网残留：台账里**当前**不得还有行首叠加（未清洗的）
     const raw = JSON.parse(fs.readFileSync(path.join(root, 'docs/外部报告台账.json'), 'utf8')) as { entries: LedgerEntry[] }
     const dirty: string[] = []
     for (const e of raw.entries) {
-      const after = mergeNote(e.verification_note as string | undefined, undefined)
-      if (after && /\[(external|framework)\]\s*\[(external|framework)/.test(after)) dirty.push(e.id)
+      const note = String(e.verification_note ?? '')
+      const bad = note.split('\n').some((l) => {
+        // 剥掉被反引号/引号包裹的引用片段——它们在讲缺陷形态，不是真标签
+        const scrubbed = l.replace(/`[^`]*`/g, '').replace(/“[^”]*”/g, '')
+        return /^\s*\[(external|framework)\]\s*\[(external|framework)\b/.test(scrubbed)
+      })
+      if (bad) dirty.push(e.id)
     }
-    expect(dirty, `这些条目的 note 同步后仍带叠加标签：${dirty.join(', ')}`).toEqual([])
+    expect(dirty, `台账里仍有未清洗的标签叠加：${dirty.join(', ')}`).toEqual([])
   })
 
   // ★2026-11-12：sync 必须能补齐 rounds[]——否则同步进新条目后，

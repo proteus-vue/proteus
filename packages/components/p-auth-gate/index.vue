@@ -46,6 +46,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { subscribeAuthGate, authGateState, markAuthRestored } from '@proteus-vue/runtime'
 import type { AuthGateState } from '@proteus-vue/runtime'
+import { currentPageRoute } from '../runtime/page-route'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -76,12 +77,7 @@ onMounted(() => {
   const g = globalThis as unknown as Record<string, unknown>
   g.__PROTEUS_AUTH_GATE_HOST_MOUNTED__ = (Number(g.__PROTEUS_AUTH_GATE_HOST_MOUNTED__) || 0) + 1
   const routeOf = (): string => {
-    try {
-      const pages = (getCurrentPages?.() ?? []) as Array<{ route?: string }>
-      return pages.length ? (pages[pages.length - 1].route ?? 'unknown') : 'unknown'
-    } catch {
-      return 'unknown'
-    }
+    return currentPageRoute('unknown')
   }
   const trace = (): void => {
     const byPage = (g.__PROTEUS_AUTH_GATE_RENDER_BY_PAGE__ as Record<string, unknown>) || {}

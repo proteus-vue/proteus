@@ -65,6 +65,13 @@ export function profileBoundaryPlugin(opts: ProfileBoundaryPluginOptions = {}): 
     },
     transform(code, id) {
       if (level === 'off' || !id.endsWith('.vue')) return null
+      // ★2026-11-12（外部 F-37，blocker）：**不得检查 node_modules 里的 .vue**。
+      //   缺陷：消费者引用 p-button 时，vite 把 node_modules/@proteus-vue/components 的源码也送进
+      //   transform ⇒ 框架组件里的 `display: inline-flex` 被判 CSS-PB-display error
+      //   ⇒ **消费者 Web 构建被框架自己的组件封死**（消费者无法改 node_modules）。
+      //   语义边界：本门禁约束消费者**自己代码**的 profile 边界；框架组件的 profile 合规
+      //   由框架仓库 CI（同一规则跑 packages/**）保证——不该在消费者侧二次执法。
+      if (/[\\/]node_modules[\\/]/.test(id)) return null
       const rel = (viteRoot ? relative(viteRoot, id) : id).replace(/\\/g, '/')
       // 基线懒加载（一次）
       if (opts.baselinePath && !baselineLoaded) {

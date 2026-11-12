@@ -65,6 +65,13 @@ export function cseLintPlugin(opts: CseLintPluginOptions = {}): Plugin {
     },
     transform(code: string, id: string) {
       if (level === 'off' || !id.endsWith('.vue')) return null
+      // ★2026-11-12（外部 F-37，blocker）：**不得 lint node_modules 里的 .vue**。
+      //   缺陷：消费者 `npm i @proteus-vue/components` 后引用任一 p-* 组件，vite 会把
+      //   node_modules 里的组件源码也送进 transform ⇒ 框架自己的 p-popup 等被判 E-CSS-004 error
+      //   ⇒ **消费者构建被框架自家组件封死**，且消费者无法修改 node_modules。
+      //   语义边界：本门禁约束的是**消费者的源码写法**；已发布依赖是既成事实，
+      //   它的问题应在框架仓库自己的 CI 拦住（本仓对 packages/** 有同规则门禁），不该让消费者承担。
+      if (/[\\/]node_modules[\\/]/.test(id)) return null
       const rel = (viteRoot ? path.relative(viteRoot, id) : id).replace(/\\/g, '/')
       if (opts.baselinePath && !baselineLoaded) {
         baselineLoaded = true

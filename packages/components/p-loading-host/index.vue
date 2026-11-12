@@ -70,6 +70,7 @@ import type { Ref } from 'vue'
 // ★GP4-b：活跃集合在 runtime（模块级单例）；本组件只做**渲染端**
 import { subscribeLoading, loadingSnapshot, hideLoading, sweepPageLoadings } from '@proteus-vue/runtime'
 import type { LoadingItem } from '@proteus-vue/runtime'
+import { currentPageRoute } from '../runtime/page-route'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -84,12 +85,7 @@ let instanceRef: unknown = null
 
 /** 当前页 route（page 范围过滤 + 卸载清理的判据） */
 function routeOf(): string {
-  try {
-    const pages = (getCurrentPages?.() ?? []) as Array<{ route?: string }>
-    return pages.length ? (pages[pages.length - 1].route ?? '') : ''
-  } catch {
-    return ''
-  }
+  return currentPageRoute('')
 }
 
 /** 把活跃集合投影到本页可见列表（page 范围按 route 过滤；global 始终可见；顺序保持 seq 升序） */

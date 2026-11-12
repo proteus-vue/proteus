@@ -12,8 +12,10 @@
     <view class="req-demo__card">
       <text class="req-demo__card-title">① useQuery（自动发起 · 竞态裁决）</text>
       <text class="req-demo__line">loading: {{ users.loading.value }}</text>
-      <text class="req-demo__line">outcome: {{ users.outcome.value ?? '（还没跑）' }}</text>
-      <text class="req-demo__line">数据条数: {{ users.data.value?.length ?? 0 }}</text>
+      <text class="req-demo__line">outcome: {{ users.outcome.value || '（还没跑）' }}</text>
+      <!-- ★2026-11-12：去可选链——小程序 wxml 表达式不支持可选链与空值合并（官方 UnsupportedSyntax），
+           改为守卫写法（`&&` 短路）。等价语义：data 为 null/undefined 时取 0。 -->
+      <text class="req-demo__line">数据条数: {{ (users.data.value && users.data.value.length) || 0 }}</text>
       <view class="req-demo__row">
         <button class="req-demo__btn" data-testid="req-refresh" @click="onRefresh">刷新</button>
         <button class="req-demo__btn" data-testid="req-failing" @click="onFailOnce">制造一次失败</button>
@@ -27,7 +29,7 @@
     <!-- ② useMutation：乐观更新 + 三态回滚 -->
     <view class="req-demo__card">
       <text class="req-demo__card-title">② useMutation（乐观更新 · 三态回滚）</text>
-      <text class="req-demo__line">outcome: {{ create.outcome.value ?? '（还没提交）' }}</text>
+      <text class="req-demo__line">outcome: {{ create.outcome.value || '（还没提交）' }}</text>
       <text class="req-demo__line">本地值: {{ create.data.value ? create.data.value.title : '（空）' }}</text>
       <view class="req-demo__row">
         <button class="req-demo__btn" data-testid="req-create-ok" @click="onCreateOk">提交（成功）</button>
@@ -45,8 +47,8 @@
     <!-- ③ useRequest：手动触发 -->
     <view class="req-demo__card">
       <text class="req-demo__card-title">③ useRequest（点了才查）</text>
-      <text class="req-demo__line">outcome: {{ search.outcome.value ?? '（还没查）' }}</text>
-      <text class="req-demo__line">结果: {{ search.data.value ?? '（空）' }}</text>
+      <text class="req-demo__line">outcome: {{ search.outcome.value || '（还没查）' }}</text>
+      <text class="req-demo__line">结果: {{ search.data.value || '（空）' }}</text>
       <button class="req-demo__btn" data-testid="req-search" @click="onSearch">查询当前关键词</button>
     </view>
 

@@ -30,6 +30,74 @@ function capitalize(s: string): string {
 }
 
 /**
+ * ★2026-11-12（外部 F-38 缺陷 B）：**v-for 作用域内**的参数化 handler → `data-*` 传参包装方法。
+ *
+ * 缺陷形态（三种都实测复现）：
+ *   `@click="run(a.key)"`  → `bindtap="run(a.key)"`      ← 整句非法处理器名，**永不触发**
+ *   `@click="run(a)"`      → `bindtap="proteusInlineRuna"` + 方法体 `this.run(a)` ← `a` 未定义
+ *   `@click="(e)=>run(a)"` → `bindtap="(e)=>run(a)"`     ← 非法处理器名
+ *
+ * 为什么上面 `tryInlineExpressionToWrapper` 处理不了：它在**方法作用域**生成 `this.fn(...)`，
+ * 而 v-for 的 item/index 是**模板作用域**变量——方法体里根本不存在（这正是 `run(count)` 只在校验
+ * 「裸标识符」时安全、换成 `run(a)` 就错的原因：`a` 长得像 state 名）。
+ *
+ * 修法（小程序标准做法）：把模板作用域的值经 `data-*` 属性带到事件对象上——
+ *   `<button data-proteus-arg-0="{{a.key}}" bindtap="proteusForRun0">`
+ *   方法体：`this.run(e.currentTarget.dataset.proteusArg0)`
+ * `data-*` 由 WXML 引擎求值（`{{a.key}}` 在 v-for 作用域内合法），故 `a` 不需要进方法作用域。
+ *
+ * @param exp    事件表达式（如 `run(a.key)` / `(e) => run(a)`）
+ * @param scope  v-for 作用域变量名集合（item/index；空集 = 不在 v-for 内）
+ * @returns 包装方法 + 需要注入的 data-* 声明；null = 不在范围内/不可校准（调用方走原路径）
+ */
+export function tryForScopedHandler(
+  exp: string,
+  scope: ReadonlySet<string>,
+): { name: string; code: string; dataAttrs: Array<{ attr: string; expr: string }> } | null {
+  if (scope.size === 0) return null
+  const t = exp.trim()
+  // 去掉可选的单参数箭头前缀（该参数用于 e 本身，不影响 data-* 传参）
+  let body = t
+  const arrow = /^(?:\(\s*[\w$]*\s*\)|[\w$]+)\s*=>\s*([\s\S]+)$/.exec(t)
+  if (arrow) body = arrow[1].trim().replace(/;$/, '').trim()
+  // 形态：fn(args)（允许 store. 前缀）
+  const call = /^(?:store\.)?([\w$]+)\s*\(([^()]*)\)$/.exec(body)
+  if (!call) return null
+  const method = call[1]
+  const argsRaw = call[2].trim()
+  if (argsRaw === '') return null // 无参不需要 data-*
+  const args = argsRaw.split(',').map((a) => a.trim())
+  const dataAttrs: Array<{ attr: string; expr: string }> = []
+  const argExprs: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '') return null
+    // 字面量原样进方法体（不必过 data-*）
+    const isLit = /^-?\d+(?:\.\d+)?$/.test(a) || /^'(?:[^']*)'$/.test(a) || /^"(?:[^"]*)"$/.test(a) ||
+      a === 'true' || a === 'false' || a === 'null' || a === 'undefined'
+    if (isLit) {
+      argExprs.push(a)
+      continue
+    }
+    // 其余必须**引用 v-for 作用域变量**（否则属 state 引用——由上游通用路径处理，不在此重复实现）
+    const rootId = /^([A-Za-z_$][\w$]*)/.exec(a)?.[1]
+    if (!rootId || !scope.has(rootId)) return null
+    const attr = `proteus-arg-${i}`
+    dataAttrs.push({ attr, expr: a })
+    // dataset 键：`proteus-arg-0` → `proteusArg0`（小程序 dataset 自动驼峰化）
+    argExprs.push(`e.currentTarget.dataset.proteusArg${i}`)
+  }
+  const isStore = body.startsWith('store.')
+  // 名称去重键：方法名 + 每个实参的形态（区分 run(a.key) 与 run(a.id)）
+  const key = args.map((a) => a.replace(/[^A-Za-z0-9_$]/g, '')).join('')
+  return {
+    name: `proteusFor${capitalize(method)}${key || 'NoArgs'}`,
+    code: `${isStore ? 'this.store.' : 'this.'}${method}(${argExprs.join(', ')})`,
+    dataAttrs,
+  }
+}
+
+/**
  * 参数是否可安全包装（**裸标识符** 或 **字面量**）——用于判定内联方法调用 `fn(标识符/字面量...)` 可包装。
  * 允许：裸标识符（count）/ 数字（含小数/负数：0.4 / -1）/ 字符串 / true|false|null|undefined。
  * 拒绝：成员访问（t.id）/ 表达式（a + b）等需运行时求值的形态 → 走 cleanHandler 警告原样。

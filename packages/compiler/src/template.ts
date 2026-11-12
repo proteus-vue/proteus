@@ -12,7 +12,7 @@ import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransform
 import type { FluidLayoutConfig, VModelComponentHandler } from '@proteus-vue/types/compiler-types'
 import { linearFluid, calcColumns, parseFluidExpr, fluidDecl } from './fluid-layout'
 import type { TransformTrace } from './trace'
-import { TAG_RULE_BY_TAG } from './transforms/template'
+import { TAG_RULE_BY_TAG, tryForScopedHandler } from './transforms/template'
 import { TAG_SEMANTIC_MAP, MP_UNSUPPORTED_PROPS, PROP_NO_DEGRADATION, FRAMEWORK_INTERNAL_TAGS } from '@proteus-vue/component-ir'
 import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
@@ -358,6 +358,13 @@ interface SerializeContext {
   onceHandlers: Set<string>
   /** vue-compat Batch B：内联事件表达式包装方法集合（自增/自减/简单方法调用） */
   inlineHandlers: Array<{ name: string; code: string }>
+  /**
+   * ★2026-11-12（外部 F-38 缺陷 B）：当前所在的 v-for 作用域变量名（item / index）。
+   *   v-for 的 item/index 是**模板作用域**变量，包装方法（方法作用域）取不到——
+   *   必须经 `data-*` 把值带到事件对象上（见 transforms/template.ts → tryForScopedHandler）。
+   *   进入 v-for 子节点时压栈、离开时还原（嵌套 v-for 累积）。
+   */
+  forScope: Set<string>
   /** vue-compat-advance Batch 2：<transition> 子元素注入的动画 class（装饰式，过渡标签不输出） */
   transitionClassName?: string
   /** vue-compat-advance Batch 2：模板使用 <transition> 标记（style 按需注入动画） */
@@ -737,6 +744,32 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   （semantic-grid / slot / root-portal / svg / progress 等）都不会再把标记带进子树。
   const isComponentRoot = ctx.isComponentRoot === true
   ctx.isComponentRoot = false
+  // ★2026-11-12（外部 F-38 缺陷 B）：本元素若带 v-for，其 item/index 是**子树的模板作用域变量**。
+  //   在入口处预扫描并压栈（早于 props 循环），子树序列化完再还原——这样：
+  //   ① 子元素的事件处理器能看到 `a` 在作用域内（走 data-* 传参路径）；
+  //   ② 兄弟元素看不到（不污染）；③ 任何 early return 都被 finally 覆盖。
+  const prevForScope = ctx.forScope
+  {
+    const forDir = node.props.find(
+      (p) => p.type === NodeTypes.DIRECTIVE && (p as DirectiveNode).name === 'for',
+    ) as DirectiveNode | undefined
+    if (forDir && !ctx.disabled.has('directive/v-for')) {
+      const f = parseForExpr(exprContent(forDir.exp))
+      const next = new Set(prevForScope)
+      if (f.item) next.add(f.item)
+      if (f.index) next.add(f.index)
+      ctx.forScope = next
+    }
+  }
+  try {
+    return serializeElementInner(node, ctx, isComponentRoot)
+  } finally {
+    ctx.forScope = prevForScope
+  }
+}
+
+/** serializeElement 的主体（拆出以便 v-for 作用域用 try/finally 包住全部 early return） */
+function serializeElementInner(node: ElementNode, ctx: SerializeContext, isComponentRoot: boolean): string {
   // ★2026-09-08 v-pre 诚实对齐：compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——
   //   用元素原始源码检测（node.loc.source 含 v-pre）。含 {{ }} 插值 → WXML 仍会插值（v-pre 跳过编译无法实现）→ 诚实警告；纯静态 → 等价（静默）
   if (/<[^>]*\bv-pre\b[^>]*>/.test(node.loc.source) && !ctx.disabled.has('directive/v-pre')) {
@@ -1386,6 +1419,29 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         //   / v-model 组件关不掉的真根因）。此处归一 `update:{arg}` → `update-{arg}`，使手写
         //   `@update:x` 与 `v-model:x`（后者本就走 update-x）同口径、两端一致。
         const mapped = (ctx.eventMap[raw] ?? raw).replace(/^update:/, 'update-')
+        const isCustomEvent = !(raw in ctx.eventMap)
+        const rawHandler = exprContent(dir.exp)
+        // ★2026-11-12（外部 F-38 缺陷 B）：**v-for 作用域内**的参数化 handler 优先走 data-* 传参。
+        //   必须在通用 inline 路径与 cleanHandler **之前**——否则：
+        //     `run(a)`    → 通用路径当 state 引用包装成 `this.run(a)`（方法作用域无 a）→ 运行时 undefined
+        //     `run(a.key)`/`(e)=>run(a)` → 原样输出成**非法处理器名** → 真机永不触发
+        //   v-for 变量只能经 `data-*` 由 WXML 在模板作用域求值后带进事件对象（模板作用域 ≠ 方法作用域）。
+        if (!ctx.disabled.has('event/inline-expression')) {
+          const forScoped = tryForScopedHandler(rawHandler, ctx.forScope)
+          if (forScoped) {
+            if (!ctx.inlineHandlers.some((h) => h.name === forScoped.name)) {
+              ctx.inlineHandlers.push({ name: forScoped.name, code: forScoped.code })
+            }
+            for (const d of forScoped.dataAttrs) attrs.push(`data-${d.attr}="{{${d.expr}}}"`)
+            attrs.push(`${isCustomEvent ? 'bind:' : 'bind'}${mapped}="${forScoped.name}"`)
+            ctx.trace?.add('event/inline-expression', {
+              line: node.loc.start.line,
+              before: `@${exprContent(dir.arg)}="${rawHandler}"（v-for 作用域）`,
+              after: `${forScoped.name} + data-* 传参（${forScoped.dataAttrs.map((d) => `${d.attr}="{{${d.expr}}}"`).join(' ')}）`,
+            })
+            break
+          }
+        }
         // 修饰符：运行时 modifiers 是 { content }[]（与声明类型 string[] 不一致，做兼容）
         const mods = (dir.modifiers as unknown as Array<{ content?: string } | string>).map((m) =>
           typeof m === 'string' ? m : (m?.content ?? ''),
@@ -1397,9 +1453,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         // ★vue-compat Batch B + #505 迁执行层：内联表达式（count++ / fn(1) / x = 字面量）→ 包装方法，
         //   判定经规则 apply（event/inline-expression）；其余走 cleanHandler（警告原样）。
         //   禁用规则 → 不包装 → bindtap="x = !x" 原样输出（#500 缺陷形态 + 反黑盒警告——删规则即红）。
-        const rawHandler = exprContent(dir.exp)
-        // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
-        const isCustomEvent = !(raw in ctx.eventMap)
+        //   ★rawHandler / isCustomEvent 已在 case 'on' 开头声明（供 v-for 作用域路径先行判定），此处不重复。
         let inline: { name: string; code: string } | null = null
         if (!isSelf && !isOnce && !ctx.disabled.has('event/inline-expression')) {
           // ★F-35：箭头处理器的参数绑定随事件类型分派——自定义事件载荷在 e.detail，原生事件本体在 e
@@ -2022,6 +2076,7 @@ export function transformTemplateToWxml(
     selfHandlers: new Set(),
     onceHandlers: new Set(),
     inlineHandlers: [],
+    forScope: new Set<string>(),
     usesTransition: false,
     transitions: [],
     storeBindings: new Set<string>(),
