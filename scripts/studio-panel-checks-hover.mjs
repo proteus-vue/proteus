@@ -13,6 +13,7 @@ import {
   probeFileHover,
   probePopoverChain,
   probePopoverFit,
+  probeSymbolFilter,
   probeSymbolPanel,
 } from './studio-panel-probes.mjs'
 
@@ -33,6 +34,7 @@ export async function checksHover(page) {
   const sym = await probeSymbolPanel(page)
   const chain = await probePopoverChain(page)
   const fit = await probePopoverFit(page)
+  const filt = await probeSymbolFilter(page)
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -139,6 +141,25 @@ export async function checksHover(page) {
     [
       `㊿s Rust 结构摘要（决策 #1486）：${/6 pub/.test(onRs?.text ?? '') ? '6 pub' : '未命中'}/无角色行=${!/角色/.test(onRs?.text ?? '')}｜${(onRs?.text ?? '').slice(0, 70)}`,
       /6 pub/.test(onRs?.text ?? '') && !/角色/.test(onRs?.text ?? ''),
+    ],
+    /* ㊿t 符号面板过滤 + 键盘导航（决策 #1491）
+       ★走真实键盘。四条一起断：① 打字后条目变少且**全部含该串**；
+         ② 副标题显示"匹配 M/N"；③ 能拿到当前光标行（↑↓ 真的在动）；
+         ④ 回车后面板收起（说明触发了跳转）。
+       只断②的话，"过滤后列表没变"也能绿；只断④的话，回车可能只是 Esc 的副作用。 */
+    [
+      `㊿t 符号面板过滤/键盘（决策 #1491）：面板=${filt.opened} · 过滤后 ${filt.filtered?.items ?? '?'} 条全含「sym1」=${
+        filt.filtered?.allMatch
+      } · 副标题「${(filt.filtered?.sub ?? '').slice(0, 28)}」· ↑↓选中=${filt.curText || '(无)'} · 回车关闭=${
+        filt.closed
+      }`,
+      filt.opened === true &&
+        (filt.filtered?.items ?? 0) > 0 &&
+        (filt.filtered?.items ?? 99) < 80 &&
+        filt.filtered?.allMatch === true &&
+        /匹配\s+\d+\/80/.test(filt.filtered?.sub ?? '') &&
+        filt.curText === 'sym12' &&
+        filt.closed === true,
     ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；

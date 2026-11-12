@@ -986,3 +986,48 @@ export async function probePopoverFit(page) {
   await page.waitForTimeout(220)
   return m
 }
+
+/**
+ * 符号面板的过滤 + 键盘导航（决策 #1491）。
+ * ★这里必须走**真实键盘**：判据要证明的是"打字能过滤、↑↓ 能选、回车能跳"，
+ *   直接给 input 赋值只能证明 v-model 通，证明不了快捷键这条路。
+ */
+export async function probeSymbolFilter(page) {
+  await page.hover('#codeFiles button[data-file="packages/studio/ui/src/bridge.ts"]')
+  await page.waitForTimeout(520)
+  await page.click('#fileHoverCard .fv-row.more').catch(() => {})
+  await page.waitForTimeout(420)
+
+  const opened = await page.evaluate(() => !!document.getElementById('symbolPanel'))
+  if (!opened) return { opened: false }
+
+  /* 真实敲键：第一个字符由面板的全局 keydown 接管（它会聚焦输入框），其余落进 input */
+  await page.keyboard.type('sym1', { delay: 40 })
+  await page.waitForTimeout(260)
+
+  const filtered = await page.evaluate(() => {
+    const p = document.getElementById('symbolPanel')
+    if (!p) return null
+    const names = [...p.querySelectorAll('.sym-i .sym-nm')].map((e) => e.textContent?.trim() ?? '')
+    return {
+      items: names.length,
+      allMatch: names.every((n) => n.includes('sym1')),
+      sub: p.querySelector('.sym-sub')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      inputFocused: document.activeElement?.classList.contains('sym-q') === true,
+    }
+  })
+
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.waitForTimeout(120)
+  const curText = await page.evaluate(
+    () => document.querySelector('#symbolPanel .sym-i.cur .sym-nm')?.textContent?.trim() ?? '',
+  )
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(320)
+  const closed = await page.evaluate(() => !document.getElementById('symbolPanel'))
+
+  await page.mouse.move(5, 5)
+  await page.waitForTimeout(260)
+  return { opened: true, filtered, curText, closed }
+}

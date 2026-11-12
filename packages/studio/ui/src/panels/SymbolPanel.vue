@@ -15,7 +15,7 @@
 //
 // 【数据】`file_symbols`（Rust 侧只认**第 0 列**的顶层声明，见 file_brief::scan_symbols）。
 //   摘要与清单是两条命令：悬停是热路径，不为"可能不会点开的面板"付钱。
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { fileSymbols, type SymbolRow } from '../bridge'
 import { useAnchoredPopover, type AnchorRect } from '../popover'
 import { useWorkspaceState } from '../useWorkspaceState'
@@ -57,9 +57,21 @@ const ORDER = [
   'module',
 ]
 
+/* ★决策 #1491：过滤 + 键盘导航。
+   真实的 `bridge.ts` 有 **95 个符号**，只靠鼠标滚是一件事倍功半的活；
+   IDE 里这个动作的标准形状是"**打字即过滤、↑↓ 选、回车跳**"。 */
+const q = ref('')
+const matched = computed(() => {
+  const needle = q.value.trim().toLowerCase()
+  if (!needle) return rows.value
+  return rows.value.filter(
+    (r) => r.name.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle),
+  )
+})
+
 const groups = computed(() => {
   const m = new Map<string, SymbolRow[]>()
-  for (const r of rows.value) {
+  for (const r of matched.value) {
     const k = r.kind
     if (!m.has(k)) m.set(k, [])
     m.get(k)!.push(r)
@@ -90,7 +102,23 @@ onMounted(async () => {
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key === 'Escape') {
+    emit('close')
+    return
+  }
+  /* ★输入框自己已经处理了 ↑↓/回车（`@keydown="onNavKey"`），而 keydown 会冒泡到 window
+     ⇒ 不拦的话**一次按键走两格**（门禁 ㊿t 就是因为这个红在 `sym14` 而不是 `sym12`）。 */
+  if (e.target === inputEl.value) return
+  onNavKey(e)
+  /* ★打字即过滤：**不自动聚焦输入框**——面板可能是悬停 380ms 自动开的，
+     那时用户手还在编辑器里打字，抢焦点会把输入打到面板里（很难受）。
+     做法是"按下一个可见字符才聚焦 + 写入"，与命令面板的手感一致。 */
+  const typing = e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey
+  if (typing && document.activeElement !== inputEl.value) {
+    q.value += e.key
+    inputEl.value?.focus()
+    e.preventDefault()
+  }
 }
 
 /* 悬停自动关闭（决策 #1482）：面板是"链路的第二级"，
@@ -112,6 +140,34 @@ onBeforeUnmount(() => {
 
 /** 点一条 → 交给 `ws.jump`（CodePanel 监听它并负责打开文件 + 定位），然后收起面板。
  *  ★这里不自己调编辑器：`EditorView` 只在 CodePanel 里，跨组件拿是错的（#1409 的既有约定）。 */
+/** 过滤后的**扁平**顺序（与屏幕上的分组顺序一致）—— ↑↓ 走的就是这个下标 */
+const flat = computed(() => groups.value.flatMap((g) => g.items))
+const cursor = ref(0)
+watch(q, () => (cursor.value = 0))
+watch(flat, (list) => {
+  if (cursor.value >= list.length) cursor.value = Math.max(0, list.length - 1)
+})
+
+const inputEl = ref<HTMLInputElement | null>(null)
+
+/** ↑↓ / 回车 / 打字即过滤：键盘操作都从面板自己的 keydown 进来（输入框里也走同一套） */
+function onNavKey(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    const n = flat.value.length
+    if (!n) return
+    cursor.value = (cursor.value + (e.key === 'ArrowDown' ? 1 : -1) + n) % n
+    return
+  }
+  if (e.key === 'Enter') {
+    const r = flat.value[cursor.value]
+    if (r) {
+      e.preventDefault()
+      go(r)
+    }
+  }
+}
+
 function go(r: SymbolRow) {
   ws.jump = { path: props.path, line: r.line }
   emit('close')
@@ -145,13 +201,30 @@ function go(r: SymbolRow) {
       </header>
       <div class="sym-sub">
         {{ dir }}<span v-if="!loading && !err" class="sym-n"
-          >· {{ rows.length }} 个符号 · {{ exportedCount }} 个导出</span
+          >· {{ q ? `匹配 ${matched.length}/${rows.length}` : rows.length }} 个符号<template
+            v-if="!q"
+            > · {{ exportedCount }} 个导出</template
+          ></span
         >
+      </div>
+
+      <!-- 过滤（决策 #1491）：95 个符号靠滚是折磨；这里是 IDE 的标准形状 -->
+      <div v-if="!loading && !err && rows.length" class="sym-f">
+        <input
+          ref="inputEl"
+          v-model="q"
+          class="sym-q"
+          type="text"
+          spellcheck="false"
+          :placeholder="`过滤 ${rows.length} 个符号…（直接打字即可）`"
+          @keydown="onNavKey"
+        />
       </div>
 
       <div v-if="loading" class="sym-empty">读取中…</div>
       <div v-else-if="err" class="sym-empty err">{{ err }}</div>
       <div v-else-if="!rows.length" class="sym-empty">这个文件里没有可列的顶层声明</div>
+      <div v-else-if="!matched.length" class="sym-empty">没有匹配「{{ q }}」的符号</div>
 
       <div v-else class="sym-list">
         <section v-for="g in groups" :key="g.kind" class="sym-g">
@@ -160,7 +233,7 @@ function go(r: SymbolRow) {
             v-for="r in g.items"
             :key="`${r.line}:${r.name}`"
             class="sym-i"
-            :class="{ dim: !r.exported }"
+            :class="{ dim: !r.exported, cur: flat[cursor] === r }"
             :data-sym="r.name"
             :title="`${r.exported ? '导出' : '内部'} · 第 ${r.line} 行`"
             @click="go(r)"
@@ -242,6 +315,33 @@ function go(r: SymbolRow) {
 }
 .sym-empty.err {
   color: var(--danger, #f87171);
+}
+/* 过滤框（决策 #1491）：无边框、贴面板底色的"隐形输入"，不抢视觉 */
+.sym-f {
+  padding: 0 var(--sp3) var(--sp2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sym-q {
+  width: 100%;
+  height: 22px;
+  padding: 0 var(--sp2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--fg);
+  font: 11px/1.4 inherit;
+  outline: none;
+}
+.sym-q:focus {
+  border-color: var(--accent);
+}
+.sym-q::placeholder {
+  color: var(--fg-subtle);
+}
+/* 键盘光标行：与 hover 同色，另加左侧 2px 强调条（与文件树选中态同一套语汇） */
+.sym-i.cur {
+  background: var(--bg-overlay);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .sym-list {
   overflow: auto;

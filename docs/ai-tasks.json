@@ -4657,6 +4657,25 @@
         "T-studio-gate-ids"
       ],
       "note": "【done · 决策 #1490（2026-11-12）】切法：996 行里近 460 行是纯断言（不碰浏览器/时序，只吃探测结果）⇒ 整块搬到 studio-panel-checks-core.mjs，主脚本只负责把浏览器戳成状态。★断言一字未改：解构传值（coreChecks({...}) + const {...} = ctx），让断言适配参数才是引入「看着一样判据变了」的地方。★★最大的坑：连续三轮用正则猜依赖，每次只差几个——errors（来自解构，^const NAME 匹配不到）、seenExtCount（在模板字符串 ${} 里被我剥掉了）、iconOk（同类），每漏一个白跑 1.5 分钟门禁。最终用 ESLint no-undef + 扁平配置一次列全 4 条补完。★教训：搬代码找依赖不要靠正则猜，语言服务/静态检查器就是干这个的。★没丢判据靠 #1489 的编号基线：搬完首跑即 88 绿 0 红。★破坏性验证：删 ⑪c ⇒ 87 绿 + 1 红（点名 ⑪c）。★行数：main 996→629、core 614。★诚实边界：断言块 614 仍偏大但单一职责；探测部分仍与页面操作交织（时序即语义）未动；ctx 60+ 字段是代价，换来断言原文不改。【Handoff】- 做到哪：断言块搬出 + 依赖用 ESLint 补齐 + 破坏性验证。- 未做：探测段按域拆（风险高）。- 下一步：若要继续，先给 ctx 建类型注释（JSDoc），否则 60 字段没人看得懂。"
+    },
+    {
+      "id": "T-studio-symbol-filter",
+      "title": "符号面板：打字即过滤 + ↑↓ 选 + 回车跳（㊿t）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261112",
+      "scope": [
+        "packages/studio/ui/src/panels/SymbolPanel.vue",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-checks-hover.mjs"
+      ],
+      "decision": 1491,
+      "verification": "node scripts/check-studio-panel.mjs",
+      "branch": null,
+      "related": [
+        "T-studio-symbol-panel"
+      ],
+      "note": "【done · 决策 #1491（2026-11-12）】问题：bridge.ts 有 95 个符号，面板只能滚 = 能看不能用。做法：q → matched（name/kind 子串，忽略大小写）→ 分组与扁平都基于 matched；cursor 在扁平顺序上移动（与屏幕分组一致）；Enter 走与点击同一个 go()。★打字即过滤但不自动聚焦：面板可能悬停 380ms 自动开，那一刻用户手还在编辑器打字，抢焦点会把输入打进面板 ⇒ 改成按下可见字符才聚焦+写入。★判据 ㊿t 抓到真 bug：输入框 @keydown 与 window keydown 都处理 ↑↓ ⇒ 一次按键走两格（两下 ↓ 选中 sym14 而非 sym12）；修法 onKey 里 if (e.target === inputEl.value) return（Esc 仍全局）。这类「同一事件两处处理」不报错，只表现为手感发飘，没有精确判据人只会觉得怪。★㊿t 四条：条目<80 且全含该串 / 副标题「匹配 M/80」/ 两次↓后是 sym12 / 回车收起；全部走真实键盘（给 input 赋值只证明 v-model 通）。★破坏性验证：needle 固定 '' ⇒ 仅 ㊿t 红（80 条 allMatch=false、选中 hasBridge）。★判据：89 绿 0 红（基线 --update-ids 同步 89）· SymbolPanel 401 行。★诚实边界：只做子串（useAutoSave 搜 uas 不行）；无多选；过滤状态不记忆。【Handoff】- 做到哪：过滤 + 键盘 + 判据 + 破坏性验证。- 未做：模糊匹配/驼峰分词、多选、状态记忆。- 下一步：真机试一遍手感（↑↓ 一格一格走）。"
     }
   ]
 }
