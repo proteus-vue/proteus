@@ -1,5 +1,12 @@
 # @proteus-vue/compiler-backend
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/component-ir@0.3.0-beta.34
+
 ## 0.3.0-beta.31
 
 ### Patch Changes

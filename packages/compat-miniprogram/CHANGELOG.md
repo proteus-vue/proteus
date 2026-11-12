@@ -1,5 +1,12 @@
 # @proteus-vue/compat-miniprogram
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/api@0.3.0-beta.34
+
 ## 0.3.0-beta.28
 
 ### Patch Changes

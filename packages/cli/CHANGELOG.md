@@ -1,5 +1,112 @@
 # @proteus-vue/cli
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/agent`
+  - `@proteus-vue/animation`
+  - `@proteus-vue/api`
+  - `@proteus-vue/built-in-components`
+  - `@proteus-vue/cli`
+  - `@proteus-vue/compiler`
+  - `@proteus-vue/component-ir`
+  - `@proteus-vue/components`
+  - `@proteus-vue/consistency`
+  - `@proteus-vue/contracts`
+  - `@proteus-vue/create-proteus`
+  - `@proteus-vue/devtools`
+  - `@proteus-vue/glass`
+  - `@proteus-vue/layout-core`
+  - `@proteus-vue/mcp`
+  - `@proteus-vue/plugin-vite`
+  - `@proteus-vue/render-backend`
+  - `@proteus-vue/renderer-app`
+  - `@proteus-vue/router`
+  - `@proteus-vue/runtime`
+  - `@proteus-vue/shared`
+  - `@proteus-vue/slot-runtime`
+  - `@proteus-vue/types`
+
+- 8a19fa5: 修 5 条长期红测的工具链漂移（doctor 分组 / host signing 注册 / check-deps 误报 / 鸿蒙 App 合成证据）
+
+  背景：全量测试长期 5 条红（`gate.test` ×4 + `app-screen-content-gate` ×1），非新改动引入，
+  是**特性提交改了 CLI/产物但漏同步元测试/证据**留下的漂移债。逐条根因 + 修法：
+
+  - **`doctor` 分组漂移**（`packages/cli/src/gate.ts`）：#686 把 `doctor` 误登记进「仓库治理」
+    （该族语义 = **无 CLI 面**的 npm/CI 治理门禁，不入 HELP）——而 `doctor` 有 CLI 面、在 HELP
+    「检查与门禁」组，且它吸收的 `health` 在「专项检查」⇒ 改为 `group: '专项检查'`。
+  - **`host signing` 漏登记**（`gate.ts`）：#688 把它加进 HELP 却漏登 Gate 注册表 ⇒ B4-lite
+    （HELP↔ 注册表 usage 双向一致）红。补一条 ○（未接线）入口。
+  - **`check-deps` 误报**（`scripts/check-deps.mjs`）：website playground 把一份 SFC demo
+    整段放进**模板串**，其中 `import { nanoid } from 'nanoid'` 是**示例字符串内容**、不是依赖。
+    既有"行内含 `${` 即跳过"的启发式看不到这种形态 ⇒ 误报。改为**代码掩码**（字符串/模板串/
+    注释内的 import 形态一律不算）——探针复核：全仓仅少报该 1 处误报、零真实依赖被隐藏。
+    同批给 `website` 补上真实依赖 `@vue/compiler-sfc`（playground 编 SFC 用）。
+  - **鸿蒙 App 合成证据失效**（`hosts/harmony`，设备证据 `results/app-screen-composite.json`）：
+    #658（2026-10-08）把 App 屏内容切到 css-conformance 展示页后**引入了 `env:` token**，而
+    Harmony **dev 探针** `ScreenContentProbe` 未接 env 解析（运行期 `AppScreenCommands` 早已接）
+    ⇒ `proteus_layout_create` 返 0 ⇒ App 屏内容整体挂载失败、合成页无输出 ⇒ 入库产物陈旧
+    （`real_touch_hits:0`）。修：dev 探针复用运行期同一 helper（`substituteEnvTokens`）。
+    ★ 并修出**第二个**真缺陷：`Index.ets` 仍从 `libproteus_bench.so` 导入 `appScreenCommands`/
+    `appScreenHitAt`/`appScreenAnimTick`——而 hosts 关注点分层（811e0524）已把它们迁到
+    `proteus_render` ⇒ 运行时 import 抛错（composite 块整段不执行）。改导入来源 + 同步 d.ts。
+    真机复跑：`real_touch_hits 0 → 6`，三端合成门禁复绿。
+
+  验证：`gate.test` 14/14 · `app-screen-content-gate.test` 全绿 · `check-deps` 零缺失 ·
+  `check:app-screen-content` 全部合规 · `check:harmony-runtime-prebuilt`（prebuilt 已随源再生）·
+  `check:host-layering`/`bridge-sync`/`host-variant-parity`/`gates-sync` 绿 · 鸿蒙真机复跑通过。
+  （`check:host-invoke-contract` 的 `dev.console` 违反在**干净树上同样存在**，属另一 pre-existing 问题，不在本批。）
+
+- 037281a: Vapor B5：脚本级生命周期钩子 `onMounted` / `onUnmounted` 降级为动作表（端上真执行）
+
+  背景（对齐计划 B5，承接事件-方法线 T1/T2/T3）：App 端**不执行 script** ⇒ 此前 `<script setup>` 的
+  `onMounted(() => { … })` 里的逻辑**永不运行**（只产 `VAPOR_SCRIPT_LIFECYCLE_NOT_RUN` 诊断）。
+  真实页面用 `onMounted` 做初始化很常见 ⇒ 这是「点了/进了页面没反应」的一类。
+
+  - **编译期**（`compileEvents`）：`<script setup>` 顶层 `onMounted(() => {…})` / `onUnmounted(() => {…})`
+    的**回调体降级为动作表**（复用事件-方法线同一降级器 `degradeStatements` + 同一执行器 `runHandlerActions`），
+    发射新产物 **`scriptLifecycle`**（`{phase:'mounted'|'unmounted', handler}`；缺省省略 ⇒ 既有产物不变）。
+    可降级体 ⇒ 端上真跑；**不可降级体**（循环 / async / 宿主 API）⇒ **精确诊断**（不静默）。空体 ⇒ 不产出、无诊断。
+  - **运行期**（`render-backend`）：`screen-runtime` 的 `ScreenRuntimeInstance` 增 `markMounted()`（首帧 mount 后，
+    **幂等**）与 `markUnmounted()`；`superapp-runtime` 在 `mountScreen`/`mountScreenInto` 成功后自动 `markMounted()`，
+    并暴露 `markUnmounted(screen?)`。同时**打通 App 壳的 `@vue:mounted`**（此前壳路径完全没接 lifecycle）。
+  - **产物**（`cli/app-runtime-content`）：`lifecycle` + `scriptLifecycle` 随 `runtime-content.json` 下发。
+  - **诊断修正**：`onMounted`/`onUnmounted` 从「不会运行」诊断列表移除（它们现在会运行）；其余钩子保留。
+
+  验证：`vapor-events` B5 组（mounted/unmounted 降级 / 空体 no-op / 循环诊断 / 与 `@vue:mounted` 同形态）·
+  `vapor-lifecycle`（不再报 NOT_RUN + 其余钩子仍报）· `screen-runtime` ⑤（markMounted 改数据 0→99、幂等、
+  markUnmounted 0）· **三端真机判据 ㉔**（b5 夹具 `b5x` 值/几何 `[0,88,0]`，Android/鸿蒙/iOS 全过 +
+  `check:vapor-three-end` 指纹一致）· 全量 5657 · vue-tsc 0。
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies [3492f53]
+- Updated dependencies [c9d830b]
+- Updated dependencies [6d737f1]
+- Updated dependencies [0245809]
+- Updated dependencies [c5a6e5f]
+- Updated dependencies [af67734]
+- Updated dependencies [90cdec6]
+- Updated dependencies [fe645a6]
+- Updated dependencies [037281a]
+  - @proteus-vue/compiler@0.3.0-beta.34
+  - @proteus-vue/component-ir@0.3.0-beta.34
+  - @proteus-vue/consistency@0.3.0-beta.34
+  - @proteus-vue/glass@0.3.0-beta.34
+  - @proteus-vue/mcp@0.3.0-beta.34
+  - @proteus-vue/plugin-vite@0.3.0-beta.34
+  - @proteus-vue/render-backend@0.3.0-beta.34
+  - @proteus-vue/router@0.3.0-beta.34
+  - @proteus-vue/runtime@0.3.0-beta.34
+  - @proteus-vue/slot-runtime@0.3.0-beta.34
+  - @proteus-vue/types@0.3.0-beta.34
+  - @proteus-vue/compiler-backend@0.3.0-beta.34
+  - @proteus-vue/capabilities@0.3.0-beta.34
+
 ## 0.3.0-beta.31
 
 ### Patch Changes

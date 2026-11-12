@@ -1,5 +1,46 @@
 # @proteus-vue/renderer-app
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/agent`
+  - `@proteus-vue/animation`
+  - `@proteus-vue/api`
+  - `@proteus-vue/built-in-components`
+  - `@proteus-vue/cli`
+  - `@proteus-vue/compiler`
+  - `@proteus-vue/component-ir`
+  - `@proteus-vue/components`
+  - `@proteus-vue/consistency`
+  - `@proteus-vue/contracts`
+  - `@proteus-vue/create-proteus`
+  - `@proteus-vue/devtools`
+  - `@proteus-vue/glass`
+  - `@proteus-vue/layout-core`
+  - `@proteus-vue/mcp`
+  - `@proteus-vue/plugin-vite`
+  - `@proteus-vue/render-backend`
+  - `@proteus-vue/renderer-app`
+  - `@proteus-vue/router`
+  - `@proteus-vue/runtime`
+  - `@proteus-vue/shared`
+  - `@proteus-vue/slot-runtime`
+  - `@proteus-vue/types`
+
+- Updated dependencies
+- Updated dependencies [3492f53]
+- Updated dependencies [c9d830b]
+- Updated dependencies [6d737f1]
+- Updated dependencies [0245809]
+- Updated dependencies [c5a6e5f]
+- Updated dependencies [90cdec6]
+- Updated dependencies [fe645a6]
+  - @proteus-vue/slot-runtime@0.3.0-beta.34
+
 ## 0.3.0-beta.28
 
 ### Patch Changes

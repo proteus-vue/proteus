@@ -1,5 +1,13 @@
 # @proteus-vue/capabilities
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/shared@0.3.0-beta.34
+  - @proteus-vue/types@0.3.0-beta.34
+
 ## 0.3.0-beta.28
 
 ### Patch Changes

@@ -51,14 +51,24 @@
     "proteus-css-conformance": "0.1.0",
     "@proteus-vue/animation": "0.3.0-beta.22",
     "@proteus-vue/consistency": "0.3.0-beta.21",
-    "proteus-superapp": "0.1.0"
+    "proteus-superapp": "0.1.0",
+    "demos-dactyl": "0.1.0",
+    "@proteus-vue/icons": "0.3.0-beta.28",
+    "@proteus-vue/request": "0.3.0-beta.28",
+    "@proteus-vue/shader": "0.3.0-beta.28",
+    "@proteus-vue/tokens": "0.3.0-beta.28"
   },
   "changesets": [
-    "auto-release-bump-1791552833683-bwzos",
+    "auto-release-bump-1794465185734-6pbf6",
     "batch3-host-capabilities",
+    "cobuild-f36-f43",
     "compiler-silent-traps",
     "css-doc-anchors",
+    "fix-gate-e2e-drift",
+    "fix-mixed-text-whitespace",
+    "fix-runtime-contract-fields",
     "fix-template-deps-and-smoke",
+    "fix-web-overlay-zindex",
     "framework-element-probe",
     "mp-e2e-wechatide-standard",
     "pinia-m1-m6",
@@ -74,6 +84,13 @@
     "template-app-scripts",
     "template-home-redesign",
     "transparency-hardening",
+    "vapor-dynclass-layout-enum-b3b",
+    "vapor-dynclass-layout-justify-b3c",
+    "vapor-dynclass-layout-numeric-b3a",
+    "vapor-event-methods-t1",
+    "vapor-event-methods-t2",
+    "vapor-event-methods-t3",
+    "vapor-script-lifecycle-b5",
     "web-sim-and-alignment-fixes"
   ]
 }

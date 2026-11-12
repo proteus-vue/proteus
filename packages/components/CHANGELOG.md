@@ -1,5 +1,103 @@
 # @proteus-vue/components
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/agent`
+  - `@proteus-vue/animation`
+  - `@proteus-vue/api`
+  - `@proteus-vue/built-in-components`
+  - `@proteus-vue/cli`
+  - `@proteus-vue/compiler`
+  - `@proteus-vue/component-ir`
+  - `@proteus-vue/components`
+  - `@proteus-vue/consistency`
+  - `@proteus-vue/contracts`
+  - `@proteus-vue/create-proteus`
+  - `@proteus-vue/devtools`
+  - `@proteus-vue/glass`
+  - `@proteus-vue/layout-core`
+  - `@proteus-vue/mcp`
+  - `@proteus-vue/plugin-vite`
+  - `@proteus-vue/render-backend`
+  - `@proteus-vue/renderer-app`
+  - `@proteus-vue/router`
+  - `@proteus-vue/runtime`
+  - `@proteus-vue/shared`
+  - `@proteus-vue/slot-runtime`
+  - `@proteus-vue/types`
+
+- 外部实战报告第 13-15 轮缺陷收口（F-36~F-43，8 条）：
+
+  **compiler**
+
+  - F-39：`p-fluid` 表达式支持 `var()` / 百分比 / auto 实参（原样透传，不再静默剥离）。
+    根因是 `parseFluidExpr` 有两处完全相同的实现（`fluid-layout.ts` + `template.ts`），
+    模板用的是后者——已收敛为唯一实现。
+  - F-40：MP 产物从裸 `calc()` 改为 `clamp(min, calc(...), max)` 两端夹取。
+    实测依据：1600 宽原出 33.8px（应 32）；`designWidth=1280` 时 390 宽只有 3.31px（应 ≥20）。
+  - F-38A：`defineEmits<泛型>()` 不再被当普通初始化落 `data.emit=undefined`
+    （组件事件此前在 MP 端全部静默失效）。
+  - F-38B：`v-for` 作用域内的参数化 handler（`run(a.key)` / `run(a)` / `(e)=>run(a)`）
+    改用 `data-*` 传参包装方法，产物不再是非法处理器名。
+
+  **components**
+
+  - F-36：三个组件不再直连平台全局 `getCurrentPages`，收敛到 `runtime/page-route.ts`
+    的 `currentPageRoute()`（只依赖 `adapter` 抽象）——消费者 `vue-tsc` 不再报 TS2304。
+  - F-42/F-43：`p-adaptive` 在 MP 端接线尺寸测量（`mpContainerObserverFactory`）。
+    此前 onMounted 首行「元素空就 return」在 MP 端必然命中 ⇒ controller 从不创建 ⇒ 整段逻辑被跳过。
+  - F-41：`p-grid` 新增 `minColWidthMin` + `minColWidthVw`，支持 `max(96px, min(142px, 22vw))`
+    式流式下限（纯 CSS、零运行时），窄屏列数可与手写断点方案对齐。
+
+  **plugin-vite**
+
+  - F-37：`cse-lint` / `profile-boundary` 两道样式门禁不再检查 `node_modules`。
+    此前消费者引用任一 `p-*` 组件都会被框架自家组件判 error ⇒ 构建被封死。
+    语义边界：门禁约束消费者源码写法，已发布依赖的合规由框架仓库 CI 保证。
+
+- 9790036: 修 Web 弹层被 page 挂载层盖住（"看得见、点不到、关不掉"）——body 追加弹层迁到 overlay 域
+
+  背景（CI e2e-web 长期 3 红 · 用户提来）：`e2e-overlay-family.test.ts`（p-drawer / p-popover）
+  与 `e2e-web-keypaths.test.ts`（showModal）**30s 超时**。真因不是"慢"、更不是"timeout 太短"：
+
+  - GP3-a 三层挂载（`packages/web/src/mount-layers.ts`）给 `page` 层 `z-index =
+mountLayerDomainOffset('page') = 1_000_000`（overlay=2_000_000）。
+  - 而**追加到 `<body>` 的弹层**（组件 `<teleport to="body">`、WeUI 平台层
+    `document.body.appendChild`）**不受挂载层约束** ⇒ 裸 z-index 若仍取旧值（999 / 9990 /
+    99990…），就被 page 层（1e6）**盖住**：遮罩/按钮可见但点不到 ⇒ Playwright 点不动、等超时。
+
+  修法（★ 对齐既有先例，非新造约定）：`p-loading-host`(2000000) / `p-toast-host`(2000010) /
+  `p-auth-gate`(2000020) 本轮之前就已用 **overlay 域**（注释写明"原 9999 < 页面层 1e6 ⇒ 被盖住"）。
+  把**其余** body 追加弹层一并迁到 overlay 域（≥ `mountLayerDomainOffset('overlay')`）：
+
+  - `p-drawer` `.p-drawer-root` 999 → 2000000
+  - `p-popover` `.p-popover-layer` 998 → 2000000 · `.p-popover-panel` 999 → 2000001
+  - `p-picker` `.p-picker-root` 9990 → 2000200
+  - WeUI 平台层（`@proteus-vue/built-in-components/style.css`）：ui-mask 99990→2000190 ·
+    modal 99991→2000191 · actionsheet 99991→2000191 · picker-sheet 99992→2000192 ·
+    toast 99999→2000199 · image-menu-mask 3000→2000100
+
+  （`p-modal` / `p-action-sheet` **不 teleport**（留在页面层内），其内部 999 相对页面内容仍在上层，不动。）
+
+  ★**回归锁**：新增 `tests/teleport-overlay-zindex.test.ts`——静态扫描所有 body 追加弹层的
+  z-index，断言 ≥ overlay 域（**破坏性验证过**：改回 999 即红）。
+
+  验证：`test:e2e:web` **28/28 全过**（原 3 红；overlay 61s→4.5s、keypaths 超时 →0.8s）· 全量
+  5620 通过 · `check:style-ir-golden` / `check:layers` / `check:app-css-surface` / `check:mp-attrs` 绿。
+  （`check:component-demo` 的 p-view/p-webview 漂移在干净树同样红，属另一 pre-existing，不在本批。）
+
+- Updated dependencies
+  - @proteus-vue/api@0.3.0-beta.34
+  - @proteus-vue/glass@0.3.0-beta.34
+  - @proteus-vue/runtime@0.3.0-beta.34
+  - @proteus-vue/shared@0.3.0-beta.34
+  - @proteus-vue/worklet@0.3.0-beta.34
+
 ## 0.3.0-beta.28
 
 ### Patch Changes

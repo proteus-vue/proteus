@@ -1,5 +1,14 @@
 # @proteus-vue/web
 
+## 0.3.0-beta.34
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies [9790036]
+  - @proteus-vue/built-in-components@0.3.0-beta.34
+  - @proteus-vue/contracts@0.3.0-beta.34
+
 ## 0.3.0-beta.28
 
 ### Patch Changes
