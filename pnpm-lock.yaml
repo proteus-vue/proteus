@@ -209,13 +209,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -370,16 +370,16 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/compiler
       '@proteus-vue/hmr':
         specifier: 0.3.0-beta.34
         version: link:../packages/hmr
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/plugin-vite
       '@proteus-vue/request':
         specifier: workspace:*
@@ -484,7 +484,7 @@ importers:
         specifier: 0.3.0-beta.34
         version: link:../capabilities
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../compiler
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.34
@@ -520,7 +520,7 @@ importers:
         specifier: 0.3.0-beta.28
         version: link:../module
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../plugin-vite
       '@proteus-vue/render-backend':
         specifier: 0.3.0-beta.34
@@ -815,7 +815,7 @@ importers:
   packages/plugin-vite:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../compiler
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.34
@@ -954,7 +954,7 @@ importers:
   packages/test-core:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../compiler
     devDependencies:
       '@vue/compiler-sfc':
@@ -1076,13 +1076,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -1134,13 +1134,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -1170,7 +1170,7 @@ importers:
         specifier: 0.3.0-beta.34
         version: link:../packages/api
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/compiler
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.34
@@ -1228,10 +1228,10 @@ importers:
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/cli
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.35
+        specifier: 0.3.0-beta.37
         version: link:../packages/plugin-vite
       '@proteus-vue/worklet':
         specifier: workspace:*
