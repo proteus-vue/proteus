@@ -18,12 +18,21 @@ import { computed, ref } from 'vue'
 import { diagEslint, diagWatchStart, hasBridge, type Diag } from './bridge'
 import { liveOf } from './diagSync'
 
+/* ★决策 #1498：排序口径的单一真源在 diagRank.ts，组件一律从本模块取。
+   诊断「状态」与诊断「顺序」都从同一个入口进，避免面板与文件树各排一次。 */
+export { diagGroups, diagScope, diagScopeFrom } from './diagRank'
+export type { DiagGroup } from './diagRank'
+
 /** eslint 结果的复用窗口：进视图/切文件时若 10s 内跑过就不重复跑 */
 const LINT_STALE_MS = 10_000
 
 export const diagList = ref<Diag[]>([])
 /** 最近一次诊断刷新时间（tsc 事件或 eslint 完成都会更新） */
 export const diagAt = ref(0)
+/** ★诊断刷新代数（决策 #1498）：给徽标跳转游标签名。
+ *  不用 `diagAt` 是因为连续两次推送可能落在同一毫秒，`Date.now()` 会重复；
+ *  单调计数才能让「诊断刷新后游标归零」这条判据稳定成立。 */
+export const diagSeq = ref(0)
 /** 最近一次 eslint 完成时间（控制复用窗口） */
 const lintAt = ref(0)
 export const diagCost = ref(0)
@@ -81,6 +90,7 @@ export async function ensureWatch(): Promise<void> {
     const tsc = Array.isArray(raw) ? (raw as Diag[]) : []
     /* 推送是全量：替换 tsc 部分，eslint 部分保留 */
     diagList.value = mergeSort(tsc, lintPart())
+    diagSeq.value += 1
     diagAt.value = Date.now()
     diagErr.value = ''
   }
@@ -119,6 +129,7 @@ export function runEslint(force = false): Promise<void> {
       const r = await diagEslint()
       const lint = Array.isArray(r) ? r : []
       diagList.value = mergeSort(tscPart(), lint)
+      diagSeq.value += 1
       diagCost.value = Math.round(performance.now() - t0)
       lintAt.value = Date.now()
       diagAt.value = Date.now()

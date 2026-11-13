@@ -17354,3 +17354,19 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 顺带修掉一处既有红（诚实记录）**：\`tests/compiler-ir-m4.test.ts\` 因 \`examples/pages/request-vue-demo.vue\` 用了 wxml 不支持的 \`?.\` 与 \`??\`（官方 UnsupportedSyntax）而红——\`git stash\` 掉本轮改动后同样红，**证明确非本轮引入**（来自 10-30 的 fb67b13e）。已改守卫写法（\`x && x.length\` / \`x || 占位\`），22/22 转绿。
 
 **⑦ 判据**：\`test:coupled\` **507 tests 全绿**；\`check:ai-tasks\` ✅。**诚实边界**：① F-36 的类型修复未经真实 \`vue-tsc\` 在干净 npm 安装工程验证（本仓 workspace 软链，见 ai-cobuild §4「维护方跑仓库内单测不算独立验证」）——须走发布 + 外部复测；② F-37 的端到端同样需干净工程 \`npm i\` 后跑 \`proteus build\`，本仓只锁住「排除判定存在且早于诊断收集」；③ F-38 缺陷 B 的 data-* 传参依赖小程序 dataset 驼峰化（\`proteus-arg-0\` → \`proteusArg0\`），该行为微信官方文档明确，但未真机验。
+
+1498. **★诊断徽标循环跳 + 问题面板/文件树同源排序**（2026-11-13 · 用户「继续Studio主线」→ 选「诊断链收口」 · 承接 #1494 handoff）:
+
+**① 承接点**：#1494 的 note 明写「未做：按错误数排序」，诚实边界写「只跳第一条 / 目录跳路径最靠前而非错误最多」。本单把两条一次收口；符号面板模糊匹配/多选**另立单**（避免一条任务改多件不相干的事，ai-development M5）。
+
+**② 排序单一真源 `ui/src/diagRank.ts`（纯函数、零运行时依赖）**：`diagGroups` 按「错误数降序 → 警告数降序 → 路径」分组，组内保持 `mergeSort` 的 行→列 顺序；`diagScopeFrom` 按组顺序展开作用域；`diagScope` 供单测。`DiagPanel.vue` 的分组与 `FileTree.vue` 的徽标跳转都从 `diag.ts` 的 re-export 取，不再各排一次。★渲染侧把 `diagGroups` 放进 computed 只算一次（文件树上千行，每行重排会卡，同 #1404 的 gitMark 用 Map）。
+
+**③ 循环游标**：徽标连点在该行作用域内循环，`title`/`aria-label` 显示「第 N/M 条」；`diagSeq`（单调代数，不用 `Date.now()`——同毫秒会重复）给游标签名，诊断刷新 / 换行一律归零。目录首次落点因此是**错误最多的文件**，而非路径最靠前。
+
+**④ ★★判据抓到的真 bug + 一次假阳性破坏性验证（本轮最值钱的方法论）**：`jumpCursor` 初版写成普通 `let`，而 `dgNext` 在**模板**里读它 ⇒ 不建立响应式依赖 ⇒ 点击后 title 永远停在「第 1/2 条」。表现：把 `nextIndex` 改成恒 0（破坏性验证）与正确版本的读数**完全同形**（都是全 1/2），我一度据「改坏后 ㊿y 红」宣布验证成功——其实正确版本也是红的，那是**假阳性**。改成 `ref` 后才拿到正确序列 `1/2 → 2/2 → 1/2 → 2/2 · 刷新后 1/2`。⇒ **破坏性验证的前提是「基线态必须绿」**；基线本身是红时，变红不携带任何信息。与 #1404「声称已验必须有读数」同族。
+
+**⑤ 判据**：`check:studio-panel` **94 绿 0 红**（新增 ㊿y，基线经 `--update-ids` 93→94）· `tests/studio-diag-rank.test.ts` **10/10** · `build:studio-ui` 4.46s · eslint 0 error（3 条既存 warning）· `vue-tsc` 仅 1 条既存红（`popover.ts(93)`，与 HEAD 逐字节一致，未代改）· `check:ai-tasks` ✅。**破坏性验证**：排序退回路径顺序 ⇒ 单测精确 3 红 / 7 绿；游标固定 0 ⇒ ㊿y 单独红、其余 93 绿；还原后文件 sha256 与全绿版本逐字节一致。
+
+**⑥ 反巨型化**：`studio-panel-probes.mjs` 在 HEAD 已 1165 行且未登记基线（既存「新增大文件」红），本单**不再往里加码**——循环探针拆进 `scripts/studio-panel-probes-diagcycle.mjs`（52 行），主探针只 +5 行接线。顺手修 1 行既存 lint error（`let onRs = null` 的无用初值）。
+
+**⑦ 诚实边界**：① ㊿y 读的是徽标**显示给用户的 title**，不是编辑器光标行号——桩编辑器只有约 10 行，`line 10/12` 会被 CodeMirror 夹到同一行，读行号不可靠；数据层的顺序由 10 条纯函数单测钉死，UI 层只断接线与游标状态。② **真机（打包 .app）未验**，全是 Playwright 门禁 + 构建证据。③ 目录「错误最多」的排序口径在桩数据下仍是 App.vue，未构造「路径靠前但错误少」的第二个文件；该口径由单测覆盖，非 UI 证据。④ 13 天记账欠账（速览停在 10-30、`docs/project-memory-archive/2026-11.md` 不存在、决策号重号）本单未动。⑤ 符号面板模糊匹配/多选另立单。

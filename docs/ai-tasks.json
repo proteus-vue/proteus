@@ -1,7 +1,7 @@
 {
   "version": 1,
   "spec": "docs/ai-development-spec.md",
-  "updated_at": "2026-11-12",
+  "updated_at": "2026-11-13",
   "schema": {
     "说明": "Proteus 多 AI 协作开发 · 任务板（协调单一事实源）。规范全文见 docs/ai-development-spec.md 第 4 节。目标是让「谁在做 / 边界在哪 / 做完没 / 对应哪条决策」可机器核对，而不是靠记忆与口头协调。",
     "字段": {
@@ -4774,6 +4774,31 @@
         "T-studio-dir-diag-rollup"
       ],
       "note": "【done · 决策 #1494（2026-11-12）】先纠正前提：诊断面板是右栏常驻（App.vue .side），没有「打开面板」动作 ⇒ 徽标该做的是跳到错误现场。做法 jumpDiag：文件行取该文件第一条，目录行取子树里最靠前的一条（diagList 已按 文件→行→列 排好）→ ws.jump；@click.stop.prevent 不压住行点击。★判据 ㊿w 三条：点前不在该文件 / 点后是它 / 点目录徽标不折叠；只断第二条则「顺手把文件打开了」也能绿。★★变异暴露探针缺陷：去掉 .stop 后点击真折叠了 packages ⇒ 后续探针找不到 bridge.ts 行 30s 超时整轮崩溃（报 TimeoutError 而非㊿w 红）。修法：探针发现 expBefore≠expAfter 主动复原（再点一次展开），让缺 stop 表现为一条红。教训：破坏性验证不只要「能变红」还要「红得干净」——会污染后续状态的探针，真出 bug 时同样崩溃，失去定位价值。★修完后：去掉 .stop ⇒ 91 绿 + 1 红（点目录徽标不折叠=false），无崩溃。★判据：92 绿 0 红（基线 92）。★诚实边界：span@click 套在 button 里 A11y 不合法（键盘用户只能靠行点击）；只跳第一条；目录跳的是路径最靠前的文件不是错误最多的。【Handoff】- 做到哪：跳转 + 判据 + 探针复原 + 破坏性验证。- 未做：键盘可达的徽标、按错误数排序。- 下一步：真机点目录徽标看是否落在第一个错误行。"
+    },
+    {
+      "id": "T-studio-diag-cycle",
+      "title": "诊断徽标循环跳 + 问题面板/文件树同源排序（承接 #1494 handoff）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261113",
+      "scope": [
+        "packages/studio/ui/src/diag.ts",
+        "packages/studio/ui/src/diagRank.ts",
+        "packages/studio/ui/src/panels/FileTree.vue",
+        "packages/studio/ui/src/panels/DiagPanel.vue",
+        "scripts/studio-panel-probes.mjs",
+        "scripts/studio-panel-probes-diagcycle.mjs",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-check-ids.json",
+        "tests/studio-diag-rank.test.ts"
+      ],
+      "decision": 1498,
+      "verification": "node scripts/check-studio-panel.mjs（94 绿 0 红，新增 ㊿y；基线经 --update-ids 93→94）· npx vitest run tests/studio-diag-rank.test.ts（10/10）· npm run build:studio-ui（4.46s）· npx eslint <8 个改动文件>（0 error / 3 既存 warning）· npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（仅 popover.ts(93) 既存红，HEAD 逐字节一致）· node scripts/check-ai-tasks.mjs ✅ · 破坏性验证：排序退回路径顺序 ⇒ 单测 3 红/7 绿；nextIndex 固定 0 ⇒ ㊿y 单独红、其余 93 绿；还原后 sha256 与全绿版本逐字节一致",
+      "related": [
+        "T-studio-diag-badge-jump",
+        "T-studio-dir-diag-rollup"
+      ],
+      "note": "【done · 决策 #1498（2026-11-13）】承接 #1494 handoff「未做：按错误数排序」与诚实边界「只跳第一条 / 目录跳路径最靠前」。交付：① 纯函数 `diagRank.ts` 作排序单一真源（错误数降序 → 警告数 → 路径），DiagPanel 分组与 FileTree 徽标跳转共用；② 徽标连点在该作用域内循环，title/aria-label 显示「第 N/M 条」，`diagSeq` 单调代数给游标签名，刷新/换行归零；③ 目录首次落点改为错误最多的文件。★★本轮最值钱的是一次**假阳性破坏性验证**：`jumpCursor` 初版是普通 `let`，模板里读它不建立响应式依赖 ⇒ 点击后 title 永不更新；改坏版与正确版读数完全同形（全 1/2），当时误判「判据敏感」，其实基线本身就是红 ⇒ **破坏性验证的前提是基线态必须绿**。改 `ref` 后序列才正确（1/2→2/2→1/2→2/2·刷新后 1/2）。★反巨型化：probes.mjs 在 HEAD 已 1165 行且未登记基线（既存红），新增探针拆进独立 52 行模块，主探针仅 +5 行接线；顺手修 1 行既存 lint error。★诚实边界：㊿y 读徽标 title 而非编辑器光标行号（桩仅约 10 行，line 10/12 会被夹到同一行），数据顺序由 10 条单测钉死；真机 .app 未验；目录「错误最多」口径由单测覆盖、桩数据未构造反例；13 天记账欠账（速览停在 10-30 / 2026-11 归档不存在）本单未动。【Handoff】- 下一步：真机重打包点目录徽标看落点与循环手感；符号面板模糊匹配/多选另立单。"
     }
   ]
 }

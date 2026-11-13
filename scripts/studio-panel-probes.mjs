@@ -9,6 +9,7 @@
 //   调用方用解构接住（变量名与原来完全一致，判据段零改动）。
 import fs from 'node:fs'
 import path from 'node:path'
+import { DIAG_PAYLOAD, probeDiagCycle } from './studio-panel-probes-diagcycle.mjs'
 
 export async function probeTitlebar(page, studio) {
   const STUDIO = studio
@@ -800,7 +801,7 @@ export async function probeFileHover(page) {
   //    ★行不存在时**不要 hover**（会等 30s 后抛错，把整轮门禁炸掉，那不是一条红）；
   //      这里降级成"读不到卡片"，并把实际存在的 .rs 路径带进判据文案，便于定位。
   const rsRow = await page.$('#codeFiles button[data-file="packages/studio/src/format.rs"]')
-  let onRs = null
+  let onRs
   if (rsRow) {
     await rsRow.hover()
     await page.waitForTimeout(520)
@@ -1055,23 +1056,15 @@ export async function probeDiagBadges(page) {
   /* ★走 DOM 兜底（`studio:diag-update`），与菜单 / `close-blocked` 同一套双路惯例。
      桩**不能**提供 `__TAURI__.event`：那是全局开关，一开就把其他功能的 DOM 兜底全切走
      （本次实测：`onCloseBlocked` 立刻改走原生通路，⑱f 的确认框再也不弹）。 */
-  const listenerReady = await page.evaluate(() => {
+  const listenerReady = await page.evaluate((payload) => {
     let got = false
     const probe = () => {
       got = true
     }
     addEventListener('studio:diag-update', probe, { once: true })
-    dispatchEvent(
-      new CustomEvent('studio:diag-update', {
-        detail: [
-          { path: 'packages/studio/ui/src/App.vue', line: 10, col: 1, code: 'TS2339', message: 'e1', severity: 'error' },
-          { path: 'packages/studio/ui/src/App.vue', line: 12, col: 3, code: 'TS2322', message: 'e2', severity: 'error' },
-          { path: 'packages/studio/ui/src/bridge.ts', line: 20, col: 1, code: 'no-unused-vars', message: 'w1', severity: 'warning', source: 'eslint' },
-        ],
-      }),
-    )
+    dispatchEvent(new CustomEvent('studio:diag-update', { detail: payload }))
     return got
-  })
+  }, DIAG_PAYLOAD)
   await page.waitForTimeout(260)
 
   const shown = await page.evaluate(() => {
@@ -1161,5 +1154,16 @@ export async function probeDiagBadges(page) {
     () => document.querySelector('#codeFiles button.on')?.getAttribute('data-file') ?? '',
   )
 
-  return { emits, listenerReady, shown, jump: { before, after, expBefore, expAfter }, a11y: { ...a11y, kbd } }
+  /* ★决策 #1498：循环跳探针在独立模块 —— 本文件已超 1000 行（既存项），不再加码。
+     判据说明与序列设计见 studio-panel-probes-diagcycle.mjs。 */
+  const cycle = await probeDiagCycle(page)
+
+  return {
+    emits,
+    listenerReady,
+    shown,
+    jump: { before, after, expBefore, expAfter },
+    a11y: { ...a11y, kbd },
+    cycle,
+  }
 }

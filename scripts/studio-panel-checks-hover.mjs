@@ -37,6 +37,8 @@ export async function checksHover(page) {
   const fit = await probePopoverFit(page)
   const filt = await probeSymbolFilter(page)
   const dg = await probeDiagBadges(page)
+  /** 从徽标 title（用户可见文案）里取「第 N/M 条」，取不到就原样留痕 */
+  const stepOf = (s) => (String(s ?? '').match(/第 \d+\/\d+ 条/) ?? ['(无)'])[0]
 
   const appOk = onApp?.name === 'App.vue' && /371 行/.test(onApp?.text ?? '')
   const mainOk = onMain?.name === 'main.rs' && /997 行/.test(onMain?.text ?? '')
@@ -225,6 +227,21 @@ export async function checksHover(page) {
         dg.a11y?.isButton === true &&
         /跳到/.test(dg.a11y?.label ?? '') &&
         (dg.a11y?.kbd ?? '').endsWith('ui/src/App.vue'),
+    ],
+    /* ㊿y 徽标循环跳 + 刷新归零（决策 #1498）
+       ★五步序列一起断：① 新作用域从 1/2 起；② 连点 2/2 → 1/2 → 2/2（确实在两条间循环，
+       不是固定第一条）；③ 停在 2/2 时刷新 ⇒ 回 1/2（诊断变了不带旧游标）。
+       只断「点完会跳」的话，游标恒为 0 的实现照样绿 —— 那正是 #1494 的旧行为。
+       ★读徽标显示给用户的 title，不读内部变量、不注入状态；点击走真实鼠标。 */
+    [
+      `㊿y 徽标循环跳（决策 #1498）：${stepOf(dg.cycle?.initial)} → ${stepOf(dg.cycle?.after1)} → ${stepOf(
+        dg.cycle?.after2,
+      )} → ${stepOf(dg.cycle?.after3)} · 刷新后=${stepOf(dg.cycle?.refreshed)}`,
+      stepOf(dg.cycle?.initial) === '第 1/2 条' &&
+        stepOf(dg.cycle?.after1) === '第 2/2 条' &&
+        stepOf(dg.cycle?.after2) === '第 1/2 条' &&
+        stepOf(dg.cycle?.after3) === '第 2/2 条' &&
+        stepOf(dg.cycle?.refreshed) === '第 1/2 条',
     ],
     /* ㊿o 面板级联模型（决策 #1482）——守的是用户三句话：
        "只能点箭头太固化" ⇒ 整行可点；

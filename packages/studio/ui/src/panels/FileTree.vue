@@ -12,7 +12,7 @@
 //   ② **布局必须有几何判据**（决策 #1218 的教训）：文件树宽度/行高变化会被判据 ㉓ 盯住。
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { buildTree, flatten, toggleCollapsed, type TreeNode } from '../fileTree'
-import { diagList, diagStale } from '../diag'
+import { diagGroups, diagList, diagScopeFrom, diagSeq, diagStale } from '../diag'
 import { useWorkspaceState } from '../useWorkspaceState'
 import { git } from '../git'
 import { openMenu } from '../contextmenu'
@@ -82,20 +82,53 @@ const diagMark = computed(() => {
 })
 
 /**
- * 点徽标 → 跳到**该文件/该子树的第一条诊断**（决策 #1494）。
+ * 点徽标 → 在该行作用域内**循环**跳到下一条诊断（决策 #1498，承接 #1494）。
  *
- * 【为什么不是"打开诊断面板"】诊断面板是右栏常驻的（App.vue 的 `.side`），
- *   没有"打开"这个动作。用户点徽标真正想要的是一步到错误现场。
- * 【为什么取第一条而不是循环】"跳到错误"的语义是定位，不是浏览；要看全量，
- *   右栏的 DiagPanel 本来就在。★目录徽标取的是**子树里最靠前**的那条（按 diagList 顺序，
- *   已按 文件→行→列 排好），这样"折叠着点顶层目录"也能一步落到第一个问题。
+ * ★★推翻 #1494 的「取第一条而不是循环」：一个文件有多条错误时，徽标连点几次
+ *   光标都停在第一行，看起来像按钮坏了。现在徽标显示「第 N/M 条」，连点在该
+ *   作用域内循环；要看全量，右栏 DiagPanel 仍然常驻。
+ * ★★目录落点也改了：#1494 取「子树里路径最靠前」的一条，现按 `diagGroups` 的
+ *   错误数降序展开 ⇒ 首次落到**问题最多的文件**（正是 #1494 handoff 留的欠账）。
+ *
+ * 【为什么用 diagSeq 签游标】诊断刷新后旧 index 可能指向完全不同的问题；
+ *   换行 / 刷新 ⇒ 一律从第一条重新开始，不把上次进度带过去。
  */
+type JumpCursor = { scope: string; seq: number; index: number }
+/* ★★必须是 `ref`，不能用普通 `let`（㊿y 抓到的真 bug）：`dgNext` 在模板里读游标，
+   普通变量不建立响应式依赖 ⇒ 点击后 `title` 永远停在「第 1/2 条」，用户看不到进度。
+   ★更值钱的是它暴露了一次**假阳性破坏性验证**：改坏 `nextIndex` 与正确版本的读数
+   完全同形（都是全 1/2），当时误判成「判据敏感」，其实是功能根本没生效。 */
+const jumpCursor = ref<JumpCursor | null>(null)
+const scopeKey = (r: { node: { path: string; dir: boolean } }) =>
+  `${r.node.dir ? 'd' : 'f'}:${r.node.path}`
+
+/* ★分组只算一次：computed 依赖 diagList，行内只做 filter/flatMap。
+   文件树上千行时每行重排诊断会明显卡（与 #1404 的 gitMark 用 Map 同理）。 */
+const ranked = computed(() => diagGroups(diagList.value))
+const scopeDiags = (r: { node: { path: string; dir: boolean } }) =>
+  diagScopeFrom(ranked.value, r.node.path, r.node.dir)
+
+/** 下一次点击会落到第几条（0-based index）；`dgNext` 与 `jumpDiag` 共用，不各写一遍 */
+const nextIndex = (r: { node: { path: string; dir: boolean } }, total: number) => {
+  const cur = jumpCursor.value
+  return cur && cur.scope === scopeKey(r) && cur.seq === diagSeq.value
+    ? (cur.index + 1) % total
+    : 0
+}
+/** 徽标文案用的 1-based 序号；★只读，不推进游标 */
+const dgNext = (r: { node: { path: string; dir: boolean } }) => {
+  const total = scopeDiags(r).length
+  return total ? nextIndex(r, total) + 1 : 0
+}
+const dgTotal = (r: { node: { path: string; dir: boolean } }) => scopeDiags(r).length
+
 function jumpDiag(r: { node: { path: string; dir: boolean } }) {
-  const first = r.node.dir
-    ? diagList.value.find((d) => d.path.startsWith(`${r.node.path}/`))
-    : diagList.value.find((d) => d.path === r.node.path)
-  if (!first) return
-  ws.jump = { path: first.path, line: first.line }
+  const list = scopeDiags(r)
+  if (!list.length) return
+  const index = nextIndex(r, list.length)
+  jumpCursor.value = { scope: scopeKey(r), seq: diagSeq.value, index }
+  const d = list[index]
+  ws.jump = { path: d.path, line: d.line }
 }
 
 /** 一行（目录或文件）要显示的两枚计数；没有就返回 0/0 */
@@ -361,8 +394,8 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       <button
         v-if="dg(r).e > 0"
         class="dg err"
-        :title="`${dg(r).e} 个错误 · 点击跳到第一个`"
-        :aria-label="`跳到 ${r.node.name} 的第一个错误`"
+        :title="`${dg(r).e} 个错误 · 点击跳到第 ${dgNext(r)}/${dgTotal(r)} 条`"
+        :aria-label="`跳到 ${r.node.name} 的第 ${dgNext(r)} 个错误（共 ${dg(r).e} 个）`"
         @click.stop="jumpDiag(r)"
       >
         {{ dg(r).e }}
@@ -370,8 +403,8 @@ function onNodeMenu(e: MouseEvent, node: TreeNode) {
       <button
         v-if="dg(r).w > 0"
         class="dg warn"
-        :title="`${dg(r).w} 个警告 · 点击跳到第一个`"
-        :aria-label="`跳到 ${r.node.name} 的第一个警告`"
+        :title="`${dg(r).w} 个警告 · 点击跳到第 ${dgNext(r)}/${dgTotal(r)} 条`"
+        :aria-label="`跳到 ${r.node.name} 的第 ${dgNext(r)} 个警告（共 ${dg(r).w} 个）`"
         @click.stop="jumpDiag(r)"
       >
         {{ dg(r).w }}

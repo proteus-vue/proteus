@@ -12,7 +12,7 @@
  *   按钮右侧显示上次时刻与耗时，避免"以为刚跑过"。
  */
 import { computed, ref } from 'vue'
-import { diagAt, diagCost, diagErr, diagList, diagRunning, runEslint } from '../diag'
+import { diagAt, diagCost, diagErr, diagGroups, diagList, diagRunning, runEslint } from '../diag'
 import PanelShell from './PanelShell.vue'
 import Icon from '../ui/Icon.vue'
 import { pushToast } from '../toast'
@@ -34,20 +34,9 @@ const checkedAt = computed(() =>
   diagAt.value ? new Date(diagAt.value).toLocaleTimeString('zh-CN', { hour12: false }) : '',
 )
 
-/** 按文件分组（顺序沿用 diagList 已排好的顺序，不重新排序） */
-const groups = computed(() => {
-  const map = new Map<string, Diag[]>()
-  for (const d of diagList.value) {
-    const arr = map.get(d.path)
-    if (arr) arr.push(d)
-    else map.set(d.path, [d])
-  }
-  return [...map.entries()].map(([path, items]) => ({
-    path,
-    items,
-    errors: items.filter((i) => i.severity !== 'warning').length,
-  }))
-})
+/** ★决策 #1498：分组与排序都取自 `diag.ts` 的单一真源（错误多的文件在前），
+ *  与文件树徽标的循环跳顺序同源 —— 不再在这里自己按路径排一遍。 */
+const groups = computed(() => diagGroups(diagList.value))
 
 /** 折叠集合为空 = 全部展开（问题通常不多，展开更好扫） */
 const collapsed = ref<string[]>([])
