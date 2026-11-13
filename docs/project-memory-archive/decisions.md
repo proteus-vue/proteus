@@ -17370,3 +17370,21 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑥ 反巨型化**：`studio-panel-probes.mjs` 在 HEAD 已 1165 行且未登记基线（既存「新增大文件」红），本单**不再往里加码**——循环探针拆进 `scripts/studio-panel-probes-diagcycle.mjs`（52 行），主探针只 +5 行接线。顺手修 1 行既存 lint error（`let onRs = null` 的无用初值）。
 
 **⑦ 诚实边界**：① ㊿y 读的是徽标**显示给用户的 title**，不是编辑器光标行号——桩编辑器只有约 10 行，`line 10/12` 会被 CodeMirror 夹到同一行，读行号不可靠；数据层的顺序由 10 条纯函数单测钉死，UI 层只断接线与游标状态。② **真机（打包 .app）未验**，全是 Playwright 门禁 + 构建证据。③ 目录「错误最多」的排序口径在桩数据下仍是 App.vue，未构造「路径靠前但错误少」的第二个文件；该口径由单测覆盖，非 UI 证据。④ 13 天记账欠账（速览停在 10-30、`docs/project-memory-archive/2026-11.md` 不存在、决策号重号）本单未动。⑤ 符号面板模糊匹配/多选另立单。
+
+1499. **★符号面板模糊匹配：驼峰缩写 + 子序列 + 精确优先**（2026-11-13 · 用户「继续」→ 接 #1491 handoff · 承接 #1498 留的「符号面板另立单」）:
+
+**① 承接点**：#1491 的诚实边界明写「只做子串（`useAutoSave` 搜 `uas` 不行）；无多选；过滤状态不记忆」，handoff 留「未做：模糊匹配/驼峰分词、多选、状态记忆」。本单**只做匹配算法**，多选与状态记忆继续留 handoff（一条任务只做一件可验证的事，ai-development M5）。
+
+**② 单一真源 `ui/src/symbolMatch.ts`（80 行纯函数）**：`symbolWords` 分词（驼峰 / 连续大写词尾 / 下划线，`XMLHttpRequest` → XML·Http·Request）、`symbolAbbr` 取词首、`symbolMatchRank` 三档（3=连续子串含 kind / 2=词首缩写 / 1=子序列 / 0=不命中）、`filterSymbols` 只保留全表**最高档**。`SymbolPanel.vue` 的 `matched` 从 6 行内联 filter 收敛成一行调用，分组/键盘/跳转逻辑一行未动。
+
+**③ ★为什么必须「只取最高档」（判据反推出的设计约束，不是先拍脑袋定的策略）**：连续子串命中存在时，子序列几乎必然多命中一批——搜 `sym1`，`sym21` 是 `s,y,m,2,1` 的子序列却**不含** `sym1`。三档混显会让「搜一个明确存在的串」被噪音淹没，既有判据 ㊿t 的「过滤后全部含 sym1」也会立刻翻红（破坏性验证 B 实测 16 条 / allMatch=false）。⇒ 有精确命中就只显示精确命中，没有才逐级放宽。
+
+**④ 桩补 `useAutoSave`**：#1491 点名的验收样本，替换原本的 `sym5` —— 总数仍 80 / 20 条非导出 / interface-type-function 三组不变，且该项不含 `sym1` ⇒ ㊿t 不受影响。★动手前取证：既有判据只锁 `sym1`/`sym12` 计数，不引用具体符号名，所以改桩安全。
+
+**⑤ 判据**：`check:studio-panel` **95 绿 0 红**（新增 ㊿z，基线经 `--update-ids` 94→95）· `tests/studio-symbol-match.test.ts` **12/12** · `build:studio-ui` 4.48s · eslint 0 error · `vue-tsc` 仅 1 条既存红（`popover.ts(93)`，与 HEAD 逐字节一致，未代改）· `check:ai-tasks` ✅ · `check:file-size` 本单文件无红。★㊿z 全程 `page.keyboard.type` 真实敲键，读**用户可见的条目与副标题**；刻意不 `click` 输入框（指针移进面板会触发卡片/面板 leave 链），沿用 ㊿t 的「全局 keydown 接首字符并聚焦」，换查询用等量 Backspace。三段分别钉 `uas`（词首缩写）/ `bs`（驼峰缩写）/ `ss`（子序列），副标题「匹配 N/80」排除「面板根本没在过滤」的残留态。
+
+**⑥ 破坏性验证（先确认基线态全绿，见 #1498 假阳性教训）**：A 退回纯子串 ⇒ 单测 2 红/10 绿、**㊿z 单独红**（`uas/bs/ss` 全空）、㊿t 绿；B 去掉「只取最高档」⇒ 单测 3 红/9 绿（精确优先三条）、**㊿t 红 + ㊿z 的 bs 段红**（混入 `MAX_BYTES`）。⇒ 精确优先同时被数据层与 UI 两层判据守着。两组还原后 sha256 与全绿版本逐字节一致。★先取证门禁每次自己调 `build-ui.sh` 重建（非 `--no-build`），排除「改了源码但门禁读旧产物」这类假阳性前提。
+
+**⑦ 反巨型化**：新探针进独立模块 `scripts/studio-panel-probes-symbolfuzzy.mjs`（60 行），`studio-panel-probes.mjs` 本单**一行未加**（HEAD 已 1165 行且未登记基线的既存红不继续加码）。
+
+**⑧ 诚实边界**：① 子序列是放宽档，短查询仍可能偏宽（单字符查询与旧行为一致，因 rank3 优先）；多词查询（如 `auto save`）未做，留 handoff。② **真机（打包 .app）未验**，全是 Playwright 门禁 + 构建证据。③ 多选与过滤态记忆未做。④ 13 天记账欠账（速览停在 10-30、`2026-11` 归档不存在、决策号重号）本单未动。

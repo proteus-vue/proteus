@@ -4799,6 +4799,29 @@
         "T-studio-dir-diag-rollup"
       ],
       "note": "【done · 决策 #1498（2026-11-13）】承接 #1494 handoff「未做：按错误数排序」与诚实边界「只跳第一条 / 目录跳路径最靠前」。交付：① 纯函数 `diagRank.ts` 作排序单一真源（错误数降序 → 警告数 → 路径），DiagPanel 分组与 FileTree 徽标跳转共用；② 徽标连点在该作用域内循环，title/aria-label 显示「第 N/M 条」，`diagSeq` 单调代数给游标签名，刷新/换行归零；③ 目录首次落点改为错误最多的文件。★★本轮最值钱的是一次**假阳性破坏性验证**：`jumpCursor` 初版是普通 `let`，模板里读它不建立响应式依赖 ⇒ 点击后 title 永不更新；改坏版与正确版读数完全同形（全 1/2），当时误判「判据敏感」，其实基线本身就是红 ⇒ **破坏性验证的前提是基线态必须绿**。改 `ref` 后序列才正确（1/2→2/2→1/2→2/2·刷新后 1/2）。★反巨型化：probes.mjs 在 HEAD 已 1165 行且未登记基线（既存红），新增探针拆进独立 52 行模块，主探针仅 +5 行接线；顺手修 1 行既存 lint error。★诚实边界：㊿y 读徽标 title 而非编辑器光标行号（桩仅约 10 行，line 10/12 会被夹到同一行），数据顺序由 10 条单测钉死；真机 .app 未验；目录「错误最多」口径由单测覆盖、桩数据未构造反例；13 天记账欠账（速览停在 10-30 / 2026-11 归档不存在）本单未动。【Handoff】- 下一步：真机重打包点目录徽标看落点与循环手感；符号面板模糊匹配/多选另立单。"
+    },
+    {
+      "id": "T-studio-symbol-fuzzy",
+      "title": "符号面板模糊匹配：驼峰缩写 + 子序列 + 精确优先（承接 #1491 handoff）",
+      "type": "framework-feature",
+      "status": "done",
+      "owner": "session:workbuddy-main-20261113",
+      "scope": [
+        "packages/studio/ui/src/symbolMatch.ts",
+        "packages/studio/ui/src/panels/SymbolPanel.vue",
+        "scripts/studio-panel-stub.mjs",
+        "scripts/studio-panel-probes-symbolfuzzy.mjs",
+        "scripts/studio-panel-checks-hover.mjs",
+        "scripts/studio-panel-check-ids.json",
+        "tests/studio-symbol-match.test.ts"
+      ],
+      "decision": 1499,
+      "verification": "node scripts/check-studio-panel.mjs（95 绿 0 红，新增 ㊿z；基线经 --update-ids 94→95）· npx vitest run tests/studio-symbol-match.test.ts（12/12）· npm run build:studio-ui（4.48s）· npx eslint <6 个改动文件>（0 error）· npx vue-tsc --noEmit -p packages/studio/ui/tsconfig.json（仅 popover.ts(93) 既存红，HEAD 逐字节一致）· node scripts/check-ai-tasks.mjs ✅ · node scripts/check-file-size.mjs（本单文件无红）· 破坏性验证 A：退回纯子串 ⇒ 单测 2 红/10 绿 + ㊿z 单独红、㊿t 绿；B：去掉只取最高档 ⇒ 单测 3 红/9 绿 + ㊿t 红/㊿z bs 段红；还原后 sha256 与全绿版本逐字节一致",
+      "branch": null,
+      "related": [
+        "T-studio-symbol-filter"
+      ],
+      "note": "【done · 决策 #1499（2026-11-13）】承接 #1491 handoff「未做：模糊匹配/驼峰分词、多选、状态记忆」与诚实边界「useAutoSave 搜 uas 不行」。交付：① 纯函数 `symbolMatch.ts` 作匹配口径单一真源（分词 → 词首缩写 → 三档 rank → 只取全表最高档），SymbolPanel 的 matched 收敛成一行调用；② 桩补 useAutoSave（替换 sym5，80 条/20 非导出/三组不变，不影响 ㊿t）；③ ㊿z 走真实键盘断 uas/bs/ss 三档 + 12 条纯函数单测。★★最值钱的是「只取最高档」这条约束来自判据反推：搜 sym1 时 sym21 是子序列命中却不含 sym1，混显会把精确结果淹没且直接打红 ㊿t（验证 B 实测 16 条 / allMatch=false）——不是先拍脑袋定的策略。★破坏性验证前先确认基线态全绿（#1498 假阳性教训），并取证门禁每次自己 build-ui.sh 重建，排除「改源码但读旧产物」的假阳性前提。★反巨型化：新探针独立 60 行模块，probes.mjs 本单一行未加。★诚实边界：多词查询未做、真机 .app 未验、子序列短查询仍可能偏宽；多选与过滤态记忆未做；13 天记账欠账本单未动。【Handoff】- 做到哪：匹配算法 + 桩样本 + 判据 + 两组破坏性验证。- 未做：多选、过滤态记忆、多词查询、真机手感。- 下一步：真机重打包打 uas/bs 试手感；或另立单做多选 / 状态记忆。"
     }
   ]
 }

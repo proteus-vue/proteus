@@ -169,7 +169,11 @@ export function stubTauri(payload) {
             /* ★决策 #1483：造 **80 条**（真实 bridge.ts 有 100 个符号）。
               只给 5 条时面板很矮，"会不会被底边/状态栏切掉"这条根本测不出来。
               每 4 条里 1 条非导出 ⇒ 20 条淡色。 */
-            const named = ['Stats', 'BridgeState', 'hasBridge', 'invoke', 'MAX_BYTES']
+            /* ★决策 #1499：末位补 `useAutoSave` —— #1491 handoff 点名的验收样本
+               （搜 `uas` 必须靠词首缩写命中）。它替换的是原本的 `sym5`，
+               所以总数仍 80 / 20 条非导出 / interface-type-function 三组不变，
+               且不影响 ㊿t 搜 `sym1` 的结果（该项不含 sym1）。 */
+            const named = ['Stats', 'BridgeState', 'hasBridge', 'invoke', 'MAX_BYTES', 'useAutoSave']
             return Array.from({ length: 80 }, (_, i) => ({
               name: i < named.length ? named[i] : `sym${i}`,
               kind: i === 0 ? 'interface' : i === 1 ? 'type' : 'function',

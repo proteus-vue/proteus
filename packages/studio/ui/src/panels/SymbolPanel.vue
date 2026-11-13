@@ -19,6 +19,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { fileSymbols, type SymbolRow } from '../bridge'
 import { useAnchoredPopover, type AnchorRect } from '../popover'
 import { useWorkspaceState } from '../useWorkspaceState'
+import { filterSymbols } from '../symbolMatch'
 import StudioIcon from '../icons/StudioIcon.vue'
 
 const props = defineProps<{
@@ -59,15 +60,11 @@ const ORDER = [
 
 /* ★决策 #1491：过滤 + 键盘导航。
    真实的 `bridge.ts` 有 **95 个符号**，只靠鼠标滚是一件事倍功半的活；
-   IDE 里这个动作的标准形状是"**打字即过滤、↑↓ 选、回车跳**"。 */
+   IDE 里这个动作的标准形状是"**打字即过滤、↑↓ 选、回车跳**"。
+   ★决策 #1499：匹配口径搬到 `symbolMatch.ts` —— 连续子串 / 词首缩写 / 子序列三档，
+     **只取最高档**。放在这里写成一行的代价是「精确命中被模糊命中淹没」没人能验。 */
 const q = ref('')
-const matched = computed(() => {
-  const needle = q.value.trim().toLowerCase()
-  if (!needle) return rows.value
-  return rows.value.filter(
-    (r) => r.name.toLowerCase().includes(needle) || r.kind.toLowerCase().includes(needle),
-  )
-})
+const matched = computed(() => filterSymbols(rows.value, q.value))
 
 const groups = computed(() => {
   const m = new Map<string, SymbolRow[]>()

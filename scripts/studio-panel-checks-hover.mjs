@@ -17,6 +17,7 @@ import {
   probeSymbolFilter,
   probeSymbolPanel,
 } from './studio-panel-probes.mjs'
+import { probeSymbolFuzzy } from './studio-panel-probes-symbolfuzzy.mjs'
 
 export async function checksHover(page) {
   const {
@@ -36,6 +37,7 @@ export async function checksHover(page) {
   const chain = await probePopoverChain(page)
   const fit = await probePopoverFit(page)
   const filt = await probeSymbolFilter(page)
+  const fz = await probeSymbolFuzzy(page)
   const dg = await probeDiagBadges(page)
   /** 从徽标 title（用户可见文案）里取「第 N/M 条」，取不到就原样留痕 */
   const stepOf = (s) => (String(s ?? '').match(/第 \d+\/\d+ 条/) ?? ['(无)'])[0]
@@ -164,6 +166,30 @@ export async function checksHover(page) {
         /匹配\s+\d+\/80/.test(filt.filtered?.sub ?? '') &&
         filt.curText === 'sym12' &&
         filt.closed === true,
+    ],
+    /* ㊿z 符号面板模糊匹配（决策 #1499）
+       ★三段一起断：`uas`（词首缩写）/ `bs`（驼峰缩写）/ `ss`（子序列，连续子串搜不到）。
+         只断「有结果」会假绿 —— 退回纯子串时某些串可能碰巧命中，所以两个缩写档
+         直接断言**恰好命中那一条**；子序列档断言含 Stats 且条目数 <80。
+       ★三段副标题都要显示「匹配 N/80」：只断列表会放过「面板根本没在过滤」的残留态。
+       ★Esc 收起证明三段是在**同一个面板**里连续改查询，而不是三个残留浮层。 */
+    [
+      `㊿z 符号模糊匹配（决策 #1499）：uas→[${(fz.uas?.names ?? []).join(',')}] · bs→[${
+        (fz.bs?.names ?? []).join(',')
+      }] · ss→[${(fz.ss?.names ?? []).join(',')}] · 副标题「${(fz.uas?.sub ?? '').slice(0, 24)}」· Esc收起=${
+        fz.closed
+      }`,
+      fz.opened === true &&
+        (fz.uas?.names ?? []).length === 1 &&
+        fz.uas?.names?.[0] === 'useAutoSave' &&
+        (fz.bs?.names ?? []).length === 1 &&
+        fz.bs?.names?.[0] === 'BridgeState' &&
+        (fz.ss?.names ?? []).includes('Stats') &&
+        (fz.ss?.names?.length ?? 99) < 80 &&
+        /匹配\s+1\/80/.test(fz.uas?.sub ?? '') &&
+        /匹配\s+1\/80/.test(fz.bs?.sub ?? '') &&
+        /匹配\s+\d+\/80/.test(fz.ss?.sub ?? '') &&
+        fz.closed === true,
     ],
     /* ㊿u 树行诊断徽标（决策 #1492）
        ★两段都断：① Rust 源里确实存在 `diag:update`（事件名改掉就红，不会静默）；
