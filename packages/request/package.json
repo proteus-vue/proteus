@@ -4,6 +4,11 @@
   "description": "Proteus 请求库的 Vue 产品层：useQuery / useMutation / useRequest —— 真响应式（模板可直接绑）+ 三态结果（含 unknown）· 内核在 @proteus-vue/api 的 request/（平台中立·零 vue 依赖）",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/request"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

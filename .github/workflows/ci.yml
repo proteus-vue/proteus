@@ -389,6 +389,13 @@ jobs:
       - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
         run: node scripts/check-package-health.js
 
+      # ★repository 字段门禁（2026-11-13 新增）：OIDC trusted publishing 要求
+      #   package.json 的 repository.url 与 GitHub 仓库逐字匹配，缺了就只能靠 granular token + OTP
+      #   （本仓 49 个包曾长期全部缺失 ⇒ publish.yml 从来跑不起来）。
+      #   放在 CI：新增包若漏该字段，PR 阶段就拦住。
+      - name: repository 字段门禁（OIDC 发布前置）
+        run: node scripts/check-pkg-repository.mjs --check
+
       # ★发布物内容门禁（2026-09-20 事故后新增）：核对**实际打出去的包里有什么**——
       #   `components` 曾丢了全部 74 个 p-* 组件而其余门禁全绿（它们查的是「我声明的」）。
       #   放在 CI 每次跑，是为了在 PR 阶段就拦住「files 声明改了但通配不展开」这类回退。

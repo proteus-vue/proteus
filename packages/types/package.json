@@ -4,6 +4,11 @@
   "description": "Proteus 框架级共享类型单一来源（types-plan B3）：Platform/PlatformTarget + ProteusConfig JSON Schema",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/types"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

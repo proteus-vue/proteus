@@ -4,6 +4,11 @@
   "description": "Proteus 公共层：平台适配器 + 全局类型声明（wx/Page/RouteBuilder/MpEvent）",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/shared"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

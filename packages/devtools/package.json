@@ -4,6 +4,11 @@
   "description": "Proteus DevTools 面板（devtools-plan UI 层）：十视图（时间轴/火焰图/状态·时间旅行·值编辑/路由/根因/组件/页面/依赖图/设备/所有权）+ 一键接入 + Vue DevTools 插件（Timeline/Inspectors）+ 开放数据源（WS/CDP 协议）——浏览器端 dev 工具，不随业务产物发布",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/devtools"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

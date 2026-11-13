@@ -4,6 +4,11 @@
   "description": "Proteus 安全基线（security-plan B1-B2）：M1 SecretStorage 敏感字段加密存储（WebCrypto AES-GCM+PBKDF2 / DemoCipher 降级）+ M3 PermissionRegistry 权限最小化",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/security"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

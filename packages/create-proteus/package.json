@@ -4,6 +4,11 @@
   "description": "Proteus 脚手架：npm create @proteus-vue/proteus my-app —— 一键生成 Web + 微信小程序（Skyline）双端工程",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/create-proteus"
+  },
   "publishConfig": {
     "access": "public"
   },

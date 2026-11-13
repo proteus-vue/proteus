@@ -4,6 +4,11 @@
   "description": "Proteus 应用全局配置（G-35）：四层合并（默认<env<platform<remote）+ 自研轻量校验（非法降级不崩溃）——纯 TS 零依赖，M1",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/app-config"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

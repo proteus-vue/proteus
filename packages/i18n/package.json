@@ -4,6 +4,11 @@
   "description": "Proteus 国际化（i18n-plan B1）：跨端消息目录 + ICU 子集（插值/复数/选择）+ 类型安全 t()——业务零平台分支",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/i18n"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -4,6 +4,11 @@
   "description": "G-31 组件与 API 语义化（component-semantics-plan B1）：Component IR（C-IR）schema + 属性约束校验 + semantic 映射——组件=语义、属性=约束、Backend 消费 semantic 而非 tag（零依赖纯逻辑）",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/component-ir"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

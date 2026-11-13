@@ -4,6 +4,11 @@
   "description": "Proteus 命令行：proteus build（独立编译）/ explain（决策 trace + AI 说明书）/ rules（规则目录）",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "proteus": "./dist/index.js"
   },

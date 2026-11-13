@@ -4,6 +4,11 @@
   "description": "G-32 B4 ④ 手势原语（proteus-semantic-primitives-plus-plan §6）：纯手势识别器（tap/longpress/pan/swipe/pinch/rotate/press）+ useGesture Hook + v-gesture 指令——手势=声明式约束，事件是 Backend 实现细节",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/gesture"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

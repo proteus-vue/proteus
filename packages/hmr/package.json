@@ -4,6 +4,11 @@
   "description": "Proteus HMR 运行时（devtools-plus G-34 M1）：HMR payload 协议 + 状态保留 + Vue import.meta.hot 适配 + WebSocket 客户端 + 安全 reload——开发期工具链，不随业务产物发布",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/hmr"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

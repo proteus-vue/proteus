@@ -4,6 +4,11 @@
   "description": "G-45 B2（proteus-dev-host-plan）：调试基座即宿主（Install-Once Host）——DevHost SPI 真实现（动态后端模块装载门禁链：manifest/签名/conformance 快检/覆盖率）+ 转发桩 pending 语义（未装载调用回放，业务零重试零重启）+ 双层构建计划器（基座 cacheKey 与业务规模无关，构建 O(改动) 非 O(规模)）——打破 uni-app 式「自定义基座循环」",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/dev-host"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

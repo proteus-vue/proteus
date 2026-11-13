@@ -4,6 +4,11 @@
   "description": "Proteus 测试核心（test-framework M3+B2）：createMockContext（唯一 wx 来源）+ mountMpComponent（SFC → 编译 → 逻辑层实例）+ snapshot（编译快照规范化：WXML 结构等值 / sourcemap 校验 / JS 导出检查）——L1-L3 标准件",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/test-core"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

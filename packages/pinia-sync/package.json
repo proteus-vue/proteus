@@ -4,6 +4,11 @@
   "description": "Proteus × Pinia 多端状态协同（docs/proteus-pinia-plan M8.1）：LWW 零依赖默认 + CRDT 接口占位",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/pinia-sync"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

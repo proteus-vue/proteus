@@ -4,6 +4,11 @@
   "description": "Proteus 编译引擎 —— 标准 Vue SFC → 小程序四件套（纯函数、零运行时依赖、规则注册表 + AI 说明书）",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/compiler"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

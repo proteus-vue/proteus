@@ -4,6 +4,11 @@
   "description": "★★VC3（多端一致性标准）：统一快照格式 + 归一化 + schema 校验器——几何/计算样式跨端同格式（禁止比对层格式适配）",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/consistency"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

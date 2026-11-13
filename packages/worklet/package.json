@@ -4,6 +4,11 @@
   "description": "Proteus Worklet（Skyline UI 线程动画）：统一封装官方 wx.worklet（shared/derived/timing/spring/Easing/runOnJS）+ applyAnimatedStyle 绑定——非 Skyline 环境诚实降级 JS 线程，零硬依赖",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/worklet"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -4,6 +4,11 @@
   "description": "Proteus 样式运行时安全（G-31 B1+B2）：属性名白名单 + 值类型校验 + createStyleGuard 拦截记录（DevTools style-safety Inspector 数据源）——纯 TS 零依赖",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/style-safety"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

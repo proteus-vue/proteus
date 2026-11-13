@@ -4,6 +4,11 @@
   "description": "Proteus API 层（api-plan A1/A8）：网络请求统一抽象（wx.request/fetch）+ 设备信息——业务零平台分支",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/api"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

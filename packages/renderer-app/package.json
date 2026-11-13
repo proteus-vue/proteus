@@ -4,6 +4,11 @@
   "description": "Proteus App 渲染器（app-plan B1）：Vue createRenderer 自定义 host config（NativeAdapter 抽象）——标准 Vue SFC 的 App 原生运行时通道",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/renderer-app"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -4,6 +4,11 @@
   "description": "Proteus 运行时：setData 桥接（批量 + 深层 diff）/ 页面生命周期 / store 桥 / app 骨架模板",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/runtime"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

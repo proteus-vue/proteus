@@ -4,6 +4,11 @@
   "description": "Proteus 框架内置组件（以微信小程序内置组件为基准）：view/text/button/input/image/scroll-view/textarea/switch/slider/icon/progress/navigator/picker 的跨端组件本体 + install + MpComponentSchema 契约对照——与扩展组件（@proteus-vue/components，p-* 生态组件）区分",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/built-in-components"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

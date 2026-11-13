@@ -4,6 +4,11 @@
   "description": "Proteus CSS 跨端兼容（G-21 B1）：--strict-css 校验（CSS001-012）+ 编译期重写（calc/vh/rgba）+ css-compat-report——纯逻辑零运行时依赖",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/css-compat"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

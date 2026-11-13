@@ -4,6 +4,11 @@
   "description": "Proteus 小程序语义 Web 模拟层（14-mp-first-semantics）：wx API 模拟（wx.request/showToast/…）+ 聚合安装（内置组件 @proteus-vue/built-in-components + wx API）——以小程序为标准，Web 端完全对齐表现",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git",
+    "directory": "packages/web"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
