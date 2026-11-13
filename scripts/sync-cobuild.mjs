@@ -22,6 +22,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { computeBreakdown } from './lib/cobuild-stats.mjs'
 import { mergeNote } from './lib/cobuild-note.mjs'
+import { mergeVerification, isExternalPriorityField } from './lib/cobuild-verification.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(HERE, '..')
@@ -98,22 +99,38 @@ for (const ee of ext.entries ?? []) {
       continue
     }
     if (JSON.stringify(mine[f]) === JSON.stringify(ee[f])) continue
-    // 外部验证结论回写（外部 passed/failed 覆盖框架的 unverified/partial）
-    const extVerified = ee.verification === 'passed' || ee.verification === 'failed'
-    const mineUnverified = mine.verification !== 'passed' && mine.verification !== 'failed'
-    if (extVerified && mineUnverified) {
-      changes.push({ kind: 'ledger-update', id: ee.id, field: f, from: mine[f], to: ee[f] })
-      mine[f] = ee[f]
-    } else if (f === 'verification' && mine.verification === 'n_a' && ee.verification) {
-      // ★n_a 是**框架侧占位**（修复未发布时「不适用」），不是经过考虑的结论 ——
-      //   规范里 verification 属「外部优先」，故外部的实质结论（如 unverified/partial）覆盖它，不算冲突。
-      //   2026-09-20 实例：F-34 框架填 n_a（未发布故不适用），外部用工作树源码复测 6/6 后填 unverified
-      //   （诚实：修复有效但未发布故不能称 passed）——按外部优先采纳，脚本不应误报冲突。
-      changes.push({ kind: 'ledger-update', id: ee.id, field: f, from: mine[f], to: ee[f] })
-      mine[f] = ee[f]
-    } else if (f === 'verification' && mine.verification === 'passed' && ee.verification !== 'passed') {
-      // 框架已验通过、外部还没验 → 不算冲突，只是外部落后（记提示）
-      changes.push({ kind: 'note', id: ee.id, detail: `外部 verification=${ee.verification}，框架已=${mine.verification}（外部尚未复测新版）` })
+    // ★★2026-11-13 重写（外部 F-46 报告）：旧逻辑把「外部结论」白名单写死成 `passed | failed`，
+    //   而 `partial` 是规范 §3 明列的**合法结论**（外部对「需真机才能验的部分」的诚实标注）。
+    //   后果：F-42/F-43 外部填 partial、框架填 unverified ⇒ 被判成**冲突**，要人工裁决。
+    //   这不是数据问题，是**判据把规范的合法值当成了非法值**。
+    //
+    //   新判据按「谁的字段 + 谁的结论更权威」，不再按「值是否在白名单里」：
+    //   ① verification / verified_by 属「外部优先」⇒ 外部给了值就采纳（含 partial / failed /
+    //      unverified / n_a 全部合法值），不算冲突；
+    //   ② **唯一保留为冲突**：框架已 passed（框架确信验过），而外部对 verification 给了
+    //      passed/unverified 之外的明确相反结论（failed / partial）——双方结论直接矛盾，交人裁决；
+    //   ③ 框架 passed + 外部 unverified ⇒ 不是矛盾，是外部还没验新版 ⇒ 采纳并记 note。
+    if (isExternalPriorityField(f)) {
+      // ★判据在 lib/cobuild-verification.mjs（唯一实现，可被测试真跑断言）。
+      //   本处只做「调用 + 记账」——不在这里重复写一遍白名单/矛盾判定。
+      const merged = mergeVerification(mine, ee)
+      if (merged.conflict) {
+        conflicts.push({ id: ee.id, field: f, external: ee[f], framework: mine[f] })
+      } else {
+        const from = mine[f]
+        const next = f === 'verification' ? merged.value : merged.by
+        if (next !== from) {
+          mine[f] = next
+          changes.push({
+            kind: merged.note ? 'note' : 'ledger-update',
+            id: ee.id,
+            field: f,
+            from: from === undefined ? '(空)' : from,
+            to: next,
+            detail: merged.note,
+          })
+        }
+      }
     } else {
       conflicts.push({ id: ee.id, field: f, external: ee[f], framework: mine[f] })
     }

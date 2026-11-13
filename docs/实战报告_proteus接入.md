@@ -2754,3 +2754,152 @@ npm pack @proteus-vue/compiler@0.3.0-beta.35
 | F-35 | compiler | beta.21 | 箭头事件处理器（此前已发布，仍待复测） |
 
 复测后请在台账把对应条目改成 `verification=passed` + `verified_by=external`——这是唯一能把「真实收口率」分母里的这 11 条真正消掉的证据。
+
+## 三十一、★ 第16轮复测：`0.3.0-beta.35`（2026-11-13）—— F-36~F-44 逐条复测：7 条收口、2 条待真机、新发现 1 条
+
+> 框架方 11-12 提交 `ff10782a`（F-36~F-44 翻 published）与回执。本轮按共建规范逐条跑最小复现，
+> **不读源码下结论，全部以真实产物/真实构建为准**。
+
+### 一、结论速览
+
+| 条目 | 结论 | 判据 |
+|---|---|---|
+| F-36 components 缺 typings 依赖 | ✅ **passed** | 移除 miniprogram-api-typings 后 vue-tsc 0 报错 |
+| F-37 门禁封死自带组件 | ✅ **passed** | 删除自建基线后 build:web exit 0 |
+| F-38 组件事件两缺口 | ✅ **passed** | 产物 handler 为合法方法名 |
+| F-39 p-fluid 不认 var()/% | ✅ **passed** | `padding: var(--sp-4)` 原样透传 |
+| F-40 p-fluid 无 clamp | ✅ **passed** | 产物 `clamp(20px, calc(...), 32px)` |
+| F-41 p-grid minColWidth 固定 | ✅ **passed** | 390 宽 3 列（卡片 95px，与手写版一致） |
+| F-42 p-adaptive MP 不可用 | ⏳ **partial** | 产物已修，SelectorQuery 真机行为未验 |
+| F-43 MP 观察器零接线 | ⏳ **partial** | 依赖已接线，同上 |
+| F-44 mergeNote 误标归属 | ✅ **passed** | 无标签文本不再被标 framework，幂等 |
+
+新增：**F-45**（minor）——F-41 只修了运行时组件，编译器语义通道未跟上。
+
+### 二、三条值得单说的验证
+
+#### ① F-36：严格验证方式是「把依赖删掉」
+
+| 步 | 结果 |
+|---|---|
+| 升级前 | 必须装 `miniprogram-api-typings`，否则 3 处 TS2304 |
+| `pnpm remove -D miniprogram-api-typings` 后 | `vue-tsc --noEmit` → **0 报错** |
+| 三个组件源码 grep `getCurrentPages` | **0 处**（已收敛到 `runtime/page-route.ts` 的 adapter 抽象） |
+
+⇒ 消费者不再需要自己补类型依赖。这条不是"构建通过"，是**把旧的规避手段撤掉后仍然通过**。
+
+#### ② F-37：同样是「撤掉规避」验证
+
+删掉本工程自建的两个基线文件（profile-boundary 24 键 / cse-lint 22 键）后：
+
+```
+npm run build:web → exit 0
+无 profile-boundary/error、无 cse-lint/error
+```
+
+⇒ 门禁不再对 `node_modules` 下的框架组件二次执法。**两个基线文件已从工程删除**（它们已成死代码）。
+
+#### ③ F-41：手机端 3 列真的回来了
+
+用框架新增的流式列宽：
+
+```html
+<p-grid :min-col-width="142" :min-col-width-min="88" :min-col-width-vw="22" :gap="8">
+```
+
+产物内联样式：
+
+```css
+grid-template-columns: repeat(auto-fill, minmax(max(88px, min(142px, 22vw)), 1fr))
+```
+
+四档实测与手写断点版对照：
+
+| 视口 | p-grid（新） | 手写断点版 | |
+|---|---|---|---|
+| 1440 | 7 列 / 144px | 7 列 | ✅ |
+| 1024 | 5 列 / 172px | 5 列 | ✅ |
+| 768 | 4 列 / 154px | 4 列 | ✅ |
+| **390** | **3 列 / 95px / 高 77px** | **3 列 / 95px** | ✅ |
+
+**零媒体查询达到与手写断点完全相同的结果。** 第 15 轮报的"p-grid 能力倒退"已消除。
+
+> 中途把 `min-col-width-min` 定在 96 时手机上仍是 2 列——核算几何：可用宽 300px，
+> 3 列需 `3×96 + 2×12 = 312px`，差 12px。调到 `88 / gap 8` 即达标（`3×88 + 2×8 = 280`）。
+> 这是参数选取，不是框架缺陷。
+
+### 三、新发现：F-45（minor）
+
+F-41 的修复**只覆盖运行时组件**。编译器语义通道（页面内 `<p-grid>`）里：
+
+```
+grep -c 'minColWidthMin|minColWidthVw' compiler/dist/index.js → 0
+```
+
+且语义展开处显式过滤 prop（`index.js:19591`）：
+
+```js
+if (name !== 'min-col-width' && name !== 'minColWidth' && name !== 'gap') continue;
+```
+
+⇒ 同一组件、同一套 props，**放在页面里和放在组件里行为不同，且失败静默**（被 `continue` 跳过，无警告）。
+
+本工程当前把 p-grid 放在自定义组件 `chapter-tree` 内（运行时路径），故不受影响；
+但这条限制了"页面内直接用"这一常见写法。
+
+### 四、我方适配修正
+
+| 项 | 动作 |
+|---|---|
+| `miniprogram-api-typings` | **已从 devDependencies 移除**（F-36 修复后不再需要） |
+| `profile-boundary-baseline.json` | **已删除**（F-37 修复后不再需要） |
+| `cse-lint-baseline.json` | **已删除**（同上） |
+| 章节网格参数 | `142 / min 88 / vw 22 / gap 8`（手机 3 列、桌面 7 列） |
+
+### 五、诚实边界
+
+- **F-42 / F-43 判 partial，不是 passed**：产物层已确认修复（不再首行 return、适配器已接线、
+  `container-measure.js` 三导出齐全），但**形态是否真随容器宽切换**依赖
+  `wx.createSelectorQuery().boundingClientRect` 的触发时机，浏览器环境验不了，**必须真机**。
+- **本轮只验了 Web 端渲染 + MP 产物静态分析**，未上真机。
+- 一个过程教训：验证脚本最初用 `ls node_modules/.pnpm/@proteus-vue+compiler@*` 取第一个目录，
+  **取到了残留的 beta.31**，导致前两轮误判"修复无效"。改用 `require.resolve` 走真实解析后才看到正确结果。
+  —— 写复测脚本时不能用目录名猜版本。
+
+---
+
+## 处理回执（第 16 轮）
+
+**被复测版本**：`0.3.0-beta.35` + `components@0.3.0-beta.34`
+
+### 改了什么
+
+| ID | 问题 | 处置 |
+|---|---|---|
+| **F-46**（miner · 你们新报） | `sync-cobuild` 把 `verification=partial` 判成冲突 | ✅ **本轮已修**。根因是判据把「外部结论」白名单写死成 `passed \| failed`，而 `partial` 是规范 §3 明列的合法值（你们对「需真机才能验」的诚实标注）。已重写为**按归属判定**：`verification`/`verified_by` 走「外部优先」通道，只有「框架已 passed + 外部明确相反（failed/partial）」才进 conflicts。判据抽到 `scripts/lib/cobuild-verification.mjs`（唯一实现，测试可**真跑**断言——旧断言只 `toContain` 查源码字符串，这正是该缺陷长期存在而门禁全绿的原因）。 |
+| **F-45**（minor · 你们新报） | F-41 只修了运行时组件，编译器语义通道（页面内 `<p-grid>`）仍只认 `min-col-width`/`gap`，新 prop 被静默丢弃 | ⏳ **待修**。已认领，见下「下一步」。 |
+| F-42 / F-43 | 仍为 `partial`（产物已修，SelectorQuery 真机行为未验） | 接受你们的判断，保持 `partial`。**不再由框架侧判冲突**——这正是 F-46 修掉的那个缺陷。 |
+
+### 怎么验的（可执行）
+
+```bash
+# F-46 回归锁（行为级：真跑合并判据，不是查源码字符串）
+npx vitest run tests/ai-cobuild.test.ts        # 15 例
+
+# 破坏性验证（退回旧白名单语义 → 必须红）
+#   把 mergeVerification 改回「外部非 passed/failed 则保留框架值」
+#   → expected 'unverified' to be 'partial'  （正是 F-46 的缺陷形态）
+#   还原 → 15/15 绿
+```
+
+### 自我批评
+
+**F-46 是同一个错误的第二次。** 上次（F-44）是 `mergeNote` 把「认不出标签的文本」默认归为 framework，这次是 `verification` 把「不在白名单里的合法值」当成冲突——**两次都是「按我见过的值写死」而不是「按字段归属判定」**。
+
+更值得记的是**为什么门禁没拦住**：旧断言是 `src.toContain('mine.verification === \'n_a\' ')` —— 它锁的是**具体实现形态**，不是行为契约。所以判据被写成白名单也照样绿。这次把判据抽成 lib 纯函数，测试真跑输入输出。**能跑 ≠ 能红，这条今天已经踩了三次**（F-41 的 `toContain`、台账脏数据断言、这次的 F-46）。
+
+### 下一步
+
+1. **F-45**：编译器语义通道对齐 `minColWidthMin`/`minColWidthVw`（当前只有运行时组件认）
+2. F-42/F-43：等你们真机验 SelectorQuery 行为后翻 `passed`
+3. 仍待复测：F-29、F-35

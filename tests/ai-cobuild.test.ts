@@ -103,19 +103,47 @@ describe('AI 共建三方一致性（报告 ↔ 台账 ↔ 回执）', () => {
   //   「外部优先」字段。此前脚本只在外部 passed/failed 时让位 → 外部填 unverified（用工作树源码复测 6/6
   //   后诚实标注「有效但未发布」）时被误判冲突，迫使人工裁决（本该零人工）。
   //   ★破坏性：撤掉 sync-cobuild.mjs 里 `mine[f] === 'n_a'` 那条分支 → 本用例当场红。
-  it('★外部实质结论覆盖框架 n_a 占位（不误报冲突）', () => {
+  // ★2026-11-13 重写（外部 F-46 报告）：旧断言锁的是「n_a 分支」这个**具体实现**，
+  //   而 F-46 暴露的正是「按值白名单写死」这个判据缺陷——partial 是规范合法值却被判冲突。
+  //   现改为锁**行为契约**（并抽 lib 让断言能真跑）。
+  //   ★破坏性：把 sync-cobuild.mjs 的 verification 通道改回 passed/failed 白名单 → 本用例红。
+  it('★外部实质结论覆盖框架占位（含 partial）——不再按值白名单判冲突', () => {
     const src = fs.readFileSync(path.join(root, 'scripts/sync-cobuild.mjs'), 'utf8')
-    // 规则形态：verification 字段上「框架 n_a + 外部有值」→ 采纳外部（changes.push / mine[f] = ee[f]）
-    expect(src, 'n_a 覆盖规则必须在位（否则外部 unverified 被误判冲突）').toMatch(
-      /f === 'verification' && mine\.verification === 'n_a' && ee\.verification/,
+    expect(src, 'verification 必须走外部优先通道（lib 调用形态）').toContain('isExternalPriorityField(f)')
+    expect(src, '不得在脚本内重复实现白名单判据').toContain('mergeVerification(mine, ee)')
+    expect(src, '不得回退到按值白名单（F-46 缺陷形态）').not.toMatch(
+      /const extVerified = ee\.verification === 'passed' \|\| ee\.verification === 'failed'/,
     )
-    const i = src.indexOf("mine.verification === 'n_a'")
-    expect(src.slice(i, i + 600), 'n_a 分支必须采纳外部值（而非落入 conflicts）').toContain('mine[f] = ee[f]')
     // 规范文档里必须写着「verification 只能由使用方给出」——规则与文档同源
     const spec = fs.readFileSync(path.join(root, 'docs/ai-cobuild-spec.md'), 'utf8')
     expect(spec, '规范须声明 verification 的归属（外部给出，框架自测不算）').toMatch(
       /verification=passed\*\*\s*只能由使用方给出|复测是使用方的事/,
     )
+  })
+
+  // ★F-46 行为级回归锁：真跑合并判据，锁住「partial 不被判冲突」。
+  it('★F-46：外部 partial 必须被采纳（不得判冲突）', async () => {
+    const { mergeVerification } = await import('../scripts/lib/cobuild-verification.mjs')
+    // ① 框架 unverified + 外部 partial ⇒ 采纳 partial，无冲突（F-42/F-43 的真实情形）
+    const a = mergeVerification({ verification: 'unverified' }, { verification: 'partial' })
+    expect(a.value).toBe('partial')
+    expect(a.conflict).toBe(false)
+    // ② 框架 n_a（占位）+ 外部 unverified ⇒ 采纳（F-34 历史实例）
+    const b = mergeVerification({ verification: 'n_a' }, { verification: 'unverified' })
+    expect(b.value).toBe('unverified')
+    expect(b.conflict).toBe(false)
+    // ③ 框架 passed + 外部 partial ⇒ **真矛盾**，交人裁决
+    const c = mergeVerification({ verification: 'passed' }, { verification: 'partial' })
+    expect(c.conflict, '框架 passed 与外部 partial 是相反结论，必须交人裁决').toBe(true)
+    // ④ 框架 passed + 外部 unverified ⇒ 不是矛盾（外部还没验新版），但记 note
+    const d = mergeVerification({ verification: 'passed' }, { verification: 'unverified' })
+    expect(d.conflict).toBe(false)
+    expect(d.value).toBe('unverified')
+    expect(d.note).toBeTruthy()
+    // ⑤ verified_by 同样走外部优先
+    const e2 = mergeVerification({ verification: 'unverified', verified_by: undefined }, { verification: 'passed', verified_by: 'external' })
+    expect(e2.by).toBe('external')
+    expect(e2.conflict).toBe(false)
   })
 
   // ★台账的框架侧元数据（rounds / verification_breakdown）是「被整份覆盖」的直接受害者
