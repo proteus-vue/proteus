@@ -17,7 +17,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./types": "./dist/types.d.ts",
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "default": "./dist/types.js"
+    },
     "./scan": {
       "types": "./dist/scan.d.ts",
       "import": "./dist/scan.js",
@@ -91,7 +95,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts src/navigation.ts src/app-stack.ts src/app-route.ts src/app-adapter.ts src/router-core.ts src/branch-navigator.ts src/stack-diff.ts src/deep-link.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/types.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts src/navigation.ts src/app-stack.ts src/app-route.ts src/app-adapter.ts src/router-core.ts src/branch-navigator.ts src/stack-diff.ts src/deep-link.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
   },
   "dependencies": {
     "@proteus-vue/shared": "0.3.0-beta.34",
