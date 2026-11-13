@@ -10,6 +10,12 @@
 #   --allow-drift       允许「同版本号但内容不同」的包被跳过（默认报错并要求 bump）
 #   --skip-drift-check  跳过发布前漂移预检（调用方已检查过时用，避免重复耗时）
 #   --skip-content-check 跳过发布物内容预检（同上：调用方刚查过）
+#   --otp <6位码>       ★npm 双因素验证码：账号开了 2FA 且 token 非 bypass-2fa 时必填。
+#                       为什么需要（2026-11-12 实测）：该账号的发布一度被 EOTP 挡住——
+#                       认证是通的，但每次 npm publish 都要一次性验证码；而本脚本原先
+#                       没有任何透传通道 ⇒ 5 个包逐个 EOTP 失败、44 个被跳过、0 个发出。
+#                       ★验证码 30 秒即过期：OTP 模式下包多时可能后几个包已超时——
+#                       超时就重新给一个码再跑（已发的会按幂等跳过，不会重复发）。
 #
 # ★打包器与上传器分离（2026-09-20 真实事故的根治，见 docs/实战报告_proteus接入.md 第十二节）：
 #   本仓 `components` 的 files 里有纯目录通配 `"p-*"`。**npm 打包器不展开它**
@@ -36,6 +42,7 @@ ALLOW_DRIFT=0
 SKIP_DRIFT_CHECK=0
 SKIP_CONTENT_CHECK=0
 DRY_RUN=0
+OTP_ARG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2 ;;
@@ -43,9 +50,15 @@ while [ $# -gt 0 ]; do
     --allow-drift) ALLOW_DRIFT=1; shift ;;
     --skip-drift-check) SKIP_DRIFT_CHECK=1; shift ;;
     --skip-content-check) SKIP_CONTENT_CHECK=1; shift ;;
+    --otp) OTP_ARG="$2"; shift 2 ;;
     *) echo "未知参数：$1"; exit 2 ;;
   esac
 done
+
+OTP_FLAG=""
+if [ -n "$OTP_ARG" ]; then
+  OTP_FLAG="--otp=$OTP_ARG"
+fi
 
 ROOT="$PWD"
 FAIL=0
@@ -169,7 +182,7 @@ for dir in packages/*/; do
 
   # 演练模式：不查 registry（只验证**命令本身**是否被 npm 接受），走完全相同的参数
   if [ "$DRY_RUN" = "1" ]; then
-    if out=$(npm publish "$tgz" --access public --tag "$TAG" --dry-run 2>&1); then
+    if out=$(npm publish "$tgz" --access public --tag "$TAG" $OTP_FLAG --dry-run 2>&1); then
       echo "dry-ok $name@$version → ${TAG}（${nfiles} 个文件）"
       PUB=$((PUB + 1))
     else
@@ -184,7 +197,7 @@ for dir in packages/*/; do
   # ★注：registry 的幂等跳过已在**循环开头**完成（先查后打包，省掉未变更包的 pack 开销）——
   #   走到这里说明该包确需发布（registry 没有该版本）。
   echo "publish $name@$version → ${TAG}（${nfiles} 个文件）"
-  if npm publish "$tgz" --access public --tag "$TAG"; then
+  if npm publish "$tgz" --access public --tag "$TAG" $OTP_FLAG; then
     PUB=$((PUB + 1))
   else
     echo "FAIL $name@$version"
