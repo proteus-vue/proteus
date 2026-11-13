@@ -2616,3 +2616,141 @@ createMpSizeObserverFactory(source: MpMeasureSource): SizeObserverFactory
 
 **结论：零媒体查询在当前版框架下不可达成。** 这不是放弃，是能力边界已量化——
 F-39 与 F-42/F-43 修复前，`@media` 是唯一能表达这两类需求的手段。
+
+---
+
+## 处理回执（第 13 轮）
+
+**被复测版本**：`0.3.0-beta.28 / beta.31` → **修复发在 `0.3.0-beta.34` / `beta.35`**
+
+### 改了什么
+
+| ID | 问题 | 修法 |
+|---|---|---|
+| F-36 | 组件直连全局 `getCurrentPages`，消费者 `vue-tsc` 报 TS2304，`proteus build` 中断 | 三处重复的 `routeOf()` 收敛到 `packages/components/runtime/page-route.ts` 的 `currentPageRoute(fallback)`，内部只依赖 `adapter.getCurrentPages`。组件不再触碰平台全局。 |
+| F-37 | 两道样式门禁（`profile-boundary` / `cse-lint`）扫描 `node_modules` 里的框架组件，消费者构建被封死 | 两处 `transform()` 入口都加 `if (/[\\/]node_modules[\\/]/.test(id)) return null`。**语义边界写进注释**：门禁约束消费者源码写法；已发布依赖的合规由框架仓库 CI（同规则跑 `packages/**`）保证，不在消费者侧二次执法。 |
+
+### 怎么验的（可执行）
+
+```bash
+# ① 回归锁（12 例，含 v-for 作用域与 property 声明结构断言）
+npx vitest run tests/cobuild-f36-f38.test.ts
+
+# ② 破坏性验证（逐条撤掉修复必须红）
+#   组件退回全局 getCurrentPages        → 1 failed
+#   两道门禁去掉 node_modules 排除      → 2 failed
+#   还原                               → 12/12 绿
+
+# ③ 发布物内容实证（不看版本号，看包内实际内容）
+npm pack @proteus-vue/components@0.3.0-beta.34
+tar xzf *.tgz && grep -c currentPageRoute package/p-auth-gate/index.vue   # → 2
+ls package/runtime/page-route.ts                                          # → 存在
+
+npm pack @proteus-vue/plugin-vite@0.3.0-beta.35
+tar xzf *.tgz && node -e 'const s=require("fs").readFileSync("package/dist/index.js","utf8");
+  console.log(/if \(\/\[\\\\\/\]node_modules/.test(s))'                   # → true（两道门禁都有）
+```
+
+### 自我批评
+
+**这一轮我发过一个坏版本。** beta.34 发布时，`compiler` 与 `plugin-vite` 打包的是**两周前的 `dist/`**——我改完源码直接跑了 `pnpm release`，没有重建。
+版本号对、`--dry-run` 49 包全绿、`check:publish-contents` 全绿，但包内实际是旧代码（`npm pack` 解包 grep，新增符号 0 次）。
+
+更严重的是**根因不在"我忘了"，而在发布链里没有任何一步会检查这件事**：`release.mjs` 不构建、`publish-all.sh` 不构建、内容门禁只验「files 声明的文件在包内且 import 闭包可解析」——旧 dist 完全满足这些条件。所有判据都在看"形状"，没有一条看"内容是否比源码旧"。
+
+已修的根治措施：新增 `scripts/check-dist-fresh.mjs`（比较 `max(src mtime)` 与 `min(dist mtime)`），接三处——`publish-all.sh`（**无 skip 开关**）、`release.mjs` ②a、CI `build-packages` 之后。破坏性验证过。
+
+## 处理回执（第 14 轮）
+
+**被复测版本**：`0.3.0-beta.28 / beta.31` → **修复发在 `0.3.0-beta.35`**
+
+### 改了什么
+
+| ID | 问题 | 修法 |
+|---|---|---|
+| F-38 | ① `defineEmits<泛型>()` 编译成 `data.emit=undefined`（组件事件全部静默失效）<br>② `v-for` 作用域内参数化 handler 被原样输出或丢掉参数 | **A**：宏过滤正则 `defineEmits\s*\(` → `defineEmits\s*[<(]`（两处：宏过滤 + `emitEnabled`）。与 `defineProps`/`defineModel` 的形态对齐。<br>**B**：v-for 变量是**模板作用域**、方法作用域取不到 ⇒ 改用 `data-*` 传参：`data-proteus-arg-0="{{a.key}}"` + 包装方法 `this.run(e.currentTarget.dataset.proteusArg0)`。实现为 `SerializeContext.forScope`（`serializeElement` 入口压栈 / try-finally 还原）+ `tryForScopedHandler`。 |
+
+### 怎么验的（可执行）
+
+```bash
+npx vitest run tests/cobuild-f36-f38.test.ts   # 12 例
+# 破坏性：defineEmits 退回只认调用形式 → 1 failed
+#         禁用 v-for 作用域路径        → 4 failed
+```
+
+三种原缺陷形态现在都产出合法处理器名：
+```js
+compileVueSfc('<view v-for="a in ACTIONS"><button @click="run(a.key)">x</button></view>')
+// 修复前：bindtap="run(a.key)"          ← 非法处理器名，永不触发
+// 修复后：bindtap="proteusForRunakey" + data-proteus-arg-0="{{a.key}}"
+```
+
+### 自我批评
+
+`defineEmits` 这一条是**同一个宏有多种语法形态，判据只覆盖了我见过的那一种**。`defineProps`/`defineModel` 早就写了 `[<(]`，只有 `defineEmits` 落在 `\(`——这种"同族里漏一个"的形态，靠读代码很难发现，只有真跑最小复现才暴露。
+
+## 处理回执（第 15 轮）
+
+**被复测版本**：`0.3.0-beta.31` → **修复发在 `0.3.0-beta.35`（compiler）/ `beta.34`（components）**
+
+### 改了什么
+
+五条同源——**柔性布局系统在 MP 端没接完**（fluid 包能力齐全，消费方一个没接）。
+
+| ID | 问题 | 修法 |
+|---|---|---|
+| F-39 | `p-fluid` 只接受纯数字，`var()`/百分比/auto 被静默剥离 | 根因不是"正则写漏"，而是 `parseFluidExpr` **有两处完全相同的实现**（`fluid-layout.ts` + `template.ts`），模板用的是后者。已删副本收敛为唯一实现；解析器改用**括号配平扫描器**，非纯数字实参**原样透传**。 |
+| F-40 | MP 产物是裸 `calc()` 无夹取：1600 宽出 33.8px（应 32）；`designWidth=1280` 时 390 宽只有 3.31px（应 ≥20） | 新增 `fluidDecl()` 作为 `p-fluid` 唯一出口，纯数字输出 `clamp(min, calc(...), max)`。 |
+| F-41 | `p-grid` 的 `minColWidth` 固定下限，390 宽只排 2 列（手写版 3 列） | 新增 `minColWidthMin` + `minColWidthVw` → CSS `max(96px, min(142px, 22vw))`。**纯 CSS 函数、零运行时**（选它而非 JS 断点表：后者要 ResizeObserver，MP 没有）。 |
+| F-42 | `p-adaptive` MP 端模板 ref 拿不到元素 → `onReady` 首行 return → 整段逻辑跳过 | 接 `mpContainerObserverFactory`（与 `p-zone`/`p-split`/`p-toolbar` 同一范式）。 |
+| F-43 | `createMpSizeObserverFactory` 已实现但**零接线** | 同 F-42——**两者是同一根因的两面**，同一处修复同时收口。 |
+
+### 怎么验的（可执行）
+
+```bash
+npx vitest run tests/fluid-mp-gaps.test.ts tests/fluid-layout.test.ts   # 12 + 18 例
+# 破坏性验证 5 条全部见红：
+#   parseFluidExpr 退回纯数字正则 → 4 failed
+#   fluidDecl 退回裸 calc        → 6 failed
+#   p-adaptive 退回元素空 return → 2 failed
+#   colWidthCss 退回固定值       → 1 failed
+#   删 defineProps 声明          → 1 failed
+
+# 发布物实证
+npm pack @proteus-vue/compiler@0.3.0-beta.35
+# 解包后 parseFluidExpr 是括号配平扫描器（非旧正则）；fluidDecl 3 处 / minRaw 12 处
+```
+
+### 诚实边界
+
+1. **未做真机验证** —— MP 端 `p-adaptive` 的形态切换需真机跑。运行时类不加 scoped 后缀的机制 `p-zone` 已验证，但 `p-adaptive` 未单独验。
+2. **`clamp` 在 Skyline 上** —— Skyline 不支持 `clamp`，表现为忽略该声明。比负值/越界安全，但**仍不是流式**。
+3. **F-41 只改 Web** —— `p-grid` 本就是 Web-only。
+
+### 自我批评
+
+**F-41 的破坏性验证第一轮是假绿的。** 我最初只断言"源码里存在 `minColWidthMin` 字符串"，删掉 `defineProps` 声明测试照样通过。改成真解析 `computed` 体求值 + 断言 `defineProps` 块结构后才见红。**能跑 ≠ 能红**——这是同一类错误的第二次（上午的台账脏数据断言也改了三版才做对）。
+
+**另一处需要说明的**：F-40 的旧注释写着「clamp 边界仅超界屏 ±1-2px，可忽略」——这个前提**从来没被验证过**，实测直接证伪（390 宽会外推出负值）。写进注释的"经验"如果不标出处、不带取证，就会变成下一轮的坑。
+
+---
+
+## 第 13-15 轮汇总：待复测清单
+
+修复已全部发布，**11 条等待你们的独立复测**（框架侧自测与 npm pack 实证都不算独立验证）：
+
+| ID | 包 | 版本 | 一句话复测要点 |
+|---|---|---|---|
+| F-36 | components | beta.34 | 引用任一 `p-*` 后 `npx vue-tsc --noEmit` 应 0 报错 |
+| F-37 | plugin-vite | beta.35 | 全新模板 + `p-button` 后 `proteus build --target web` 应通过 |
+| F-38 | compiler | beta.35 | ① `defineEmits<{}>()` 组件的事件能真实触发<br>② `v-for` 内 `@click="fn(item.id)"` 能点到 |
+| F-39 | compiler | beta.35 | `p-fluid="padding(var(--sp-4))"` 产物应含 `padding: var(--sp-4)` |
+| F-40 | compiler | beta.35 | MP 产物应为 `clamp(...)`；1600 宽下字号应封顶 32px |
+| F-41 | components | beta.34 | 390 宽下 `p-grid` 配 `minColWidthMin=96 minColWidthVw=22` 应 3 列 |
+| F-42 | components | beta.34 | MP 端 `p-adaptive` 的 `form` 应随容器宽度切换（不再恒 `sheet`） |
+| F-43 | components | beta.34 | 同上（F-42/F-43 同根因） |
+| F-44 | 仓库工具链 | main | `pnpm sync:cobuild` 不应再把你的原文标成 `[framework]`；连跑两次应 0 变更 |
+| F-29 | 仓库工具链 | main | 下次发布后核对台账是否及时回填 |
+| F-35 | compiler | beta.21 | 箭头事件处理器（此前已发布，仍待复测） |
+
+复测后请在台账把对应条目改成 `verification=passed` + `verified_by=external`——这是唯一能把「真实收口率」分母里的这 11 条真正消掉的证据。
