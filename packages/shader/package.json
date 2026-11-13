@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/shader",
-  "version": "0.3.0-beta.28",
+  "version": "0.3.0-beta.39",
   "description": "Proteus ShaderBackend（G-62）：材质着色器的可插拔落地层——算法真源 = Rust WGSL（proteus-shader-gen），本包定义落地后端 SPI + 材质目录 + conformance，宿主只做落地不写算法",
   "type": "module",
   "license": "Apache-2.0",

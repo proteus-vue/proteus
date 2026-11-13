@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/tokens",
-  "version": "0.3.0-beta.28",
+  "version": "0.3.0-beta.39",
   "description": "Proteus UI 宪法（Charites Design Tokens）：--sa-* 视觉 token 单一真源（浅/深两套）+ 汇总 --pf-* 环境变量 = 三套命名空间收口。纯数据 + CSS 生成，零依赖。",
   "type": "module",
   "license": "Apache-2.0",

@@ -1,5 +1,15 @@
 # @proteus-vue/compiler
 
+## 0.3.0-beta.39
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/component-ir@0.3.0-beta.39
+  - @proteus-vue/contracts@0.3.0-beta.39
+  - @proteus-vue/slot-runtime@0.3.0-beta.39
+  - @proteus-vue/types@0.3.0-beta.39
+
 ## 0.3.0-beta.37
 
 ### Patch Changes
