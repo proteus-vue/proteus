@@ -1474,6 +1474,40 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
     expect(js).toContain('wx.getWindowInfo')
   })
 
+  // ★2026-11-13（外部 F-45）：F-41 给 p-grid 运行时组件加了 minColWidthMin / minColWidthVw，
+  //   但编译器的**语义通道**（页面内 <p-grid> 展开）白名单没跟上 ⇒
+  //   ① 两个新 prop 不参与档位计算（流式下限失效）；
+  //   ② 因为不在 semanticProp() 里，还会被**原样输出到产物元素**上
+  //      （`<view min-col-width-min="{{88}}" …>` —— 垃圾属性）。
+  //   ★破坏性：把 tryParseSemanticGrid 的 SEMANTIC_ATTRS 去掉两个新 prop → 本用例红。
+  it('★F-45：语义通道识别 min-col-width-min / -vw（不得丢语义、不得留垃圾属性）', () => {
+    const { wxml, js } = compileVueSfc(
+      '<template><view><p-grid :min-col-width="142" :min-col-width-min="88" :min-col-width-vw="22" :gap="8"><view v-for="i in items" :key="i.id">{{i.t}}</view></p-grid></view></template>',
+      { filename: 'pages/fluid3.vue', fluidLayout: { designWidth: 375 } },
+    )
+    // ① 两个新 prop 必须**从产物元素上剥掉**（值已并入档位计算）
+    expect(wxml, 'F-45：新 prop 被原样输出成垃圾属性').not.toMatch(/min-col-width-min=/)
+    expect(wxml, 'F-45：新 prop 被原样输出成垃圾属性').not.toMatch(/min-col-width-vw=/)
+    // ② 档位求解必须用流式表达式 max(min, min(max, vw/100*w))
+    //   init 段（屏幕宽近似）与 ready 段（实测容器宽）**两处**都要有，且公式同源
+    expect(js, 'F-45：init 段未用流式下限').toMatch(/Math\.max\(88, Math\.min\(142, \(22 \/ 100\) \* __pw\)\)/)
+    expect(js, 'F-45：ready 段未用流式下限').toMatch(/Math\.max\(88, Math\.min\(142, \(22 \/ 100\) \* w\)\)/)
+    // ③ 仍走语义展开（不是回退运行时组件）
+    expect(wxml).not.toMatch(/<p-grid/)
+    expect(wxml).toMatch(/id="pgrid0"/)
+  })
+
+  it('★F-45：未启用流式时行为与旧版一致（不回归）', () => {
+    const { wxml, js } = compileVueSfc(
+      '<template><p-grid :min-col-width="160" :gap="12"><view>x</view></p-grid></template>',
+      { filename: 'pages/fluid4.vue', fluidLayout: { designWidth: 375 } },
+    )
+    // 不产生 max()/min() 表达式，仍是纯常量
+    expect(js).not.toMatch(/Math\.min\(160/)
+    expect(js).toContain('pgridStyle0: "flex-grow:0; flex-shrink:0; flex-basis:181px"')
+    expect(wxml).toMatch(/id="pgrid0"/)
+  })
+
   it('★#496 柔性语义编译：动态 props 回退运行时组件（警告 + 标签保留）', () => {
     const { wxml, warnings } = compileVueSfc('<template><p-grid :min-col-width="n">x</p-grid></template>', { filename: 'pages/fluid2.vue' })
     expect(wxml).toMatch(/<p-grid/)

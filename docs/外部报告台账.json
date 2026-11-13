@@ -873,11 +873,15 @@
       "round": 16,
       "reported_in": "0.3.0-beta.35",
       "found_by": "external",
-      "status": "open",
+      "status": "fixed",
       "verification": "unverified",
       "evidence": "F-41 的修复给 p-grid 组件加了 minColWidthMin / minColWidthVw 两个 props，运行时组件里实现为 `max(${min}px, min(${max}px, ${vw}vw))`（已验证可用）。\n但编译器语义通道（页面内 <p-grid> 会被展开成 flex + p-grid-item）没有同步：\n  grep -c 'minColWidthMin\\|minColWidthVw' node_modules/@proteus-vue/compiler/dist/index.js → 0\n而语义展开的地方显式过滤 prop（compiler index.js:19591）：\n  if (name !== 'min-col-width' && name !== 'minColWidth' && name !== 'gap') continue;\n⇒ 页面内写 <p-grid :min-col-width-min=\"88\" ...> 时该 prop 被跳过，产物里没有对应样式。\n对照：同一写法放在**自定义组件**内（走运行时组件回退）则 prop 完整保留。",
       "repro": "// 页面内（语义编译）—— 新 prop 丢失\ncompileVueSfc('<template><view><p-grid :min-col-width=\"142\" :min-col-width-min=\"88\" :min-col-width-vw=\"22\" :gap=\"8\"><view v-for=\"i in items\" :key=\"i.id\">{{i.t}}</view></p-grid></view></template>',\n  {px2rpx:true,rpxRatio:2}, {file:'page.vue'})\n// → 产物 style 只有 display:flex;flex-wrap:wrap;gap:8px，无 max(...min(...)) 列宽表达式\n\n// 组件内（运行时回退）—— 新 prop 保留\n// → 产物保留 <p-grid min-col-width=\"142\" min-col-width-min=\"88\" min-col-width-vw=\"22\" gap=\"8\">",
-      "verification_note": "[external] 发现路径：本工程把 p-grid 用在自定义组件 chapter-tree 内（走运行时路径），四档实测 1440→7 / 1024→5 / 768→4 / 390→3 列全部达标，与手写断点版一致；\n但尝试把同一写法搬到页面内验证时，新 prop 在产物里消失——说明两条路径能力不等。\n[external] 消费者困惑点：同一个组件、同一套 props，放在页面里和放在组件里行为不同，且失败是静默的（prop 被 continue 跳过，无警告）。这违背「一份源码两端/两处同语义」的预期。\n[external] ① 语义通道同步支持 minColWidthMin / minColWidthVw（产物里同样输出 `max(min, min(max, vw))` 的列宽档位）；\n② 或在语义展开时对**未识别的 p-grid prop** 给警告（现在是静默 continue）。\n[external] 本工程继续把 p-grid 放在组件内（运行时路径），不改动；若将来需要页面内使用，须先确认此条已修。"
+      "verification_note": "[external] 发现路径：本工程把 p-grid 用在自定义组件 chapter-tree 内（走运行时路径），四档实测 1440→7 / 1024→5 / 768→4 / 390→3 列全部达标，与手写断点版一致；\n但尝试把同一写法搬到页面内验证时，新 prop 在产物里消失——说明两条路径能力不等。\n[external] 消费者困惑点：同一个组件、同一套 props，放在页面里和放在组件里行为不同，且失败是静默的（prop 被 continue 跳过，无警告）。这违背「一份源码两端/两处同语义」的预期。\n[external] ① 语义通道同步支持 minColWidthMin / minColWidthVw（产物里同样输出 `max(min, min(max, vw))` 的列宽档位）；\n② 或在语义展开时对**未识别的 p-grid prop** 给警告（现在是静默 continue）。\n[external] 本工程继续把 p-grid 放在组件内（运行时路径），不改动；若将来需要页面内使用，须先确认此条已修。\n[framework · 2026-11-13 · 决策 #1500] 已修（工作树）：编译器语义通道（页面内 <p-grid> 展开）补齐 min-col-width-min / min-col-width-vw。★这是 F-41 的残留——当时只改了运行时组件（CSS max/min），语义通道是**另一条独立通路**（JS 逐档算 px basis），白名单没跟上 ⇒ ① 新 prop 不参与档位计算；② 且不在 semanticProp() 里，会被**原样输出成垃圾属性**（`<view min-col-width-min=\"{{88}}\" …>`）。修法：① tryParseSemanticGrid 的 SEMANTIC_ATTRS 补两个 prop（kebab + camel 双写法）；② semanticGridInitCode / semanticGridReadyCode 的列数计算改用 `Math.max(min, Math.min(max, (vw/100)*w))`（与组件侧 CSS 表达式同源同式）；③ semanticProp() 同步扩展使新 prop 从产物剥离。★回归锁 tests/mp-transform.test.ts 2 例（含「不启用流式时行为不回归」）。破坏性验证：SEMANTIC_ATTRS 退回旧白名单 → 「F-45：init 段未用流式下限」当场红；还原 199/199 绿。★数值验证：min=88/vw=22/max=142/gap=8 时，390 宽从 2 列变 4 列（手写断点方案 3 列，参数不同属正常，机制一致）。★待发布 + 待外部复测。",
+      "fix_state": "worktree",
+      "packages": [
+        "@proteus-vue/compiler"
+      ]
     },
     {
       "id": "F-46",
@@ -1024,8 +1028,7 @@
       "(未标注)": 0
     },
     "by_status": {
-      "fixed": 45,
-      "open": 1
+      "fixed": 46
     },
     "resolved": 40,
     "真实收口率": 87

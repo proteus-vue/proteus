@@ -2122,11 +2122,22 @@ function watchTail(w: WatchInfo | undefined, propsVar?: string): string {
 /**
  * ★#496c 柔性语义编译：p-grid 档位求解段——onLoad 屏幕宽近似（px，首帧即近似不错闪）
  */
-function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
+function semanticGridInitCode(
+  grids: Array<{ minColWidth: number; minColWidthMin?: number; minColWidthVw?: number; gap: number; index: number }>,
+): string {
   if (!grids.length) return ''
   const perGrid = grids
     .map((g) => {
-      const cols = `Math.max(1, Math.floor((__pw + ${g.gap}) / (${g.minColWidth} + ${g.gap})))`
+      // ★2026-11-13（外部 F-45）：流式下限——运行时组件用 CSS `max(min, min(max, vw))`，
+      //   语义通道是 JS 逐档算 px basis（需要具体数值）⇒ 这里用**同一个表达式**在 JS 里求值，
+      //   保证两端语义一致（窄屏取 min、宽屏封顶 max、中间随宽度流式）。
+      const min = g.minColWidthMin ?? 0
+      const vw = g.minColWidthVw ?? 0
+      const minExpr =
+        min > 0 && vw > 0 && min < g.minColWidth
+          ? `Math.max(${min}, Math.min(${g.minColWidth}, (${vw} / 100) * __pw))`
+          : `${g.minColWidth}`
+      const cols = `Math.max(1, Math.floor((__pw + ${g.gap}) / ((${minExpr}) + ${g.gap})))`
       return `__sb[${JSON.stringify(`pgridStyle${g.index}`)}] = 'flex-grow:0; flex-shrink:0; flex-basis:' + Math.floor((__pw - (${cols} - 1) * ${g.gap}) / ${cols}) + 'px'`
     })
     .join('\n')
@@ -2195,21 +2206,32 @@ function probeReadyCode(tag: string, scopeId?: string): string {
  * 模拟器拖动宽度/真机旋转后 onLoad/onReady 不重跑，旧 px 档会让大容器一列且不满（复测根因）
  * ③onUnload 注销 resize（this.__pgOff）。回调 ES5 风格。
  */
-function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
+function semanticGridReadyCode(
+  grids: Array<{ minColWidth: number; minColWidthMin?: number; minColWidthVw?: number; gap: number; index: number }>,
+): string {
   if (!grids.length) return ''
   const refreshBody = grids
     .map((g) => {
-      const MC = g.minColWidth
       const GP = g.gap
+      // ★2026-11-13（外部 F-45）：流式下限与 init 段同源——同一表达式，只是变量换成实测容器宽 `w`。
+      //   ★两端必须用同一个公式：组件侧 CSS `max(min, min(max, vw))` ↔ 这里 JS 同式
+      //   （此前 init/ready 两处各写一遍算术，改一处漏一处正是本仓反复踩的形态）。
+      const min = g.minColWidthMin ?? 0
+      const vw = g.minColWidthVw ?? 0
+      const effMinExpr =
+        min > 0 && vw > 0 && min < g.minColWidth
+          ? `Math.max(${min}, Math.min(${g.minColWidth}, (${vw} / 100) * w))`
+          : `${g.minColWidth}`
       return [
         "var __q = wx.createSelectorQuery()",
         `__q.select('#pgrid${g.index}').boundingClientRect(function (rect) {`,
         '  if (rect && rect.width > 0) {',
         '    var w = rect.width',
-        `    var cols = Math.max(1, Math.floor((w + ${GP}) / (${MC} + ${GP})))`,
+        `    var __mc = ${effMinExpr}`,
+        `    var cols = Math.max(1, Math.floor((w + ${GP}) / (__mc + ${GP})))`,
         // ★#496f 整 px 向下取整（小数 basis 总和=容器宽在 Skyline 取整方向不确定 → 溢出 wrap 单列不满）
         `    var basis = Math.floor((w - (cols - 1) * ${GP}) / cols)`,
-        `    console.log('[proteus][pgrid${g.index}] w=' + w + ' cols=' + cols + ' basis=' + basis + 'px')`,
+        `    console.log('[proteus][pgrid${g.index}] w=' + w + ' minCol=' + __mc + ' cols=' + cols + ' basis=' + basis + 'px')`,
         `    __self.setData({ ${JSON.stringify(`pgridStyle${g.index}`)}: 'flex-grow:0; flex-shrink:0; flex-basis:' + basis + 'px' })`,
         '  }',
         '}).exec()',

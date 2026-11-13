@@ -401,8 +401,20 @@ interface SerializeContext {
   fluidLayout?: FluidLayoutConfig
   /** ★#496 页面上下文标记（语义编译仅页面——组件内 p-grid 走运行时组件；Skyline query 需页面 onReady） */
   isPage?: boolean
-  /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位 style 变量与求解段；index = style 变量序） */
-  semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
+  /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位 style 变量与求解段；index = style 变量序）
+   *  ★2026-11-13（外部 F-45）：补 `minColWidthMin` / `minColWidthVw`——语义通道此前只认
+   *  `min-col-width` / `gap`，F-41 新增的两个 prop 在页面内 `<p-grid>` 上被当成未知属性
+   *  **原样输出到产物元素**（既丢语义又留垃圾属性）。现与运行时组件同语义。 */
+  semanticGrids: Array<{
+    minColWidth: number
+    /** 窄屏下限（px）；0 = 不启用流式 */
+    minColWidthMin?: number
+    /** 流式系数（vw 数值）；0 = 不启用流式 */
+    minColWidthVw?: number
+    gap: number
+    index: number
+    defaultStyle: string
+  }>
   /** ★批次 4（M6）：属性降级表覆盖（缺省 = component-ir DEGRADATION_TABLE） */
   degradationTable?: Record<string, Record<string, { mp: 'supported' | 'fallback' | 'unsupported'; web: 'supported' | 'fallback' | 'unsupported'; behavior?: string }>>
 }
@@ -526,36 +538,53 @@ function hasInterpolation(node: ElementNode): boolean {
   return false
 }
 
-/** 解析 p-grid 语义 props（MVP：静态属性或 :bind 数字字面量；其它形态 → 回退运行时组件并警告） */
-function tryParseSemanticGrid(node: ElementNode): { minColWidth: number; gap: number } | null {
+/**
+ * 解析 p-grid 语义 props（MVP：静态属性或 :bind 数字字面量；其它形态 → 回退运行时组件并警告）
+ *
+ * ★2026-11-13（外部 F-45）：补齐 `min-col-width-min` / `min-col-width-vw`（F-41 新增的两个
+ *   流式下限 prop）。此前白名单只有 min-col-width / gap ⇒ 新 prop 不参与解析，
+ *   且因为不在 `semanticProp()` 里，会被**原样输出到产物元素**上
+ *   （`<view min-col-width-min="{{88}}" …>` —— 既丢语义又留垃圾属性）。
+ */
+function tryParseSemanticGrid(
+  node: ElementNode,
+): { minColWidth: number; minColWidthMin: number; minColWidthVw: number; gap: number } | null {
   let minColWidth = 160
+  let minColWidthMin = 0
+  let minColWidthVw = 0
   let gap = 12
+  /** 语义 prop 名归一（kebab / camel 两种写法都认） */
+  const SEMANTIC_ATTRS = new Set(['min-col-width', 'minColWidth', 'min-col-width-min', 'minColWidthMin', 'min-col-width-vw', 'minColWidthVw', 'gap'])
   for (const p of node.props) {
     const d = p as { type: number; name?: string; arg?: { content: string } | null; exp?: { content: string } | null; value?: { content: string } | null }
     if (d.type === NodeTypes.ATTRIBUTE) {
       const name = d.name ?? ''
-      if (name !== 'min-col-width' && name !== 'minColWidth' && name !== 'gap') continue
+      if (!SEMANTIC_ATTRS.has(name)) continue
       const raw = d.value ? d.value.content : undefined
       if (raw === undefined) continue
       const num = Number(raw.trim())
       if (!Number.isFinite(num)) return null
       if (name === 'gap') gap = num
+      else if (name === 'min-col-width-min' || name === 'minColWidthMin') minColWidthMin = num
+      else if (name === 'min-col-width-vw' || name === 'minColWidthVw') minColWidthVw = num
       else minColWidth = num
       continue
     }
     // :bind 数字字面量（:min-col-width="160"）——arg 即属性名（kebab 原文），exp 即字面量
     if (d.type === NodeTypes.DIRECTIVE) {
       if (d.name !== 'bind') continue
-      const propName = exprContent(d.arg) // 'min-col-width' / 'minColWidth' / 'gap'
-      if (propName !== 'min-col-width' && propName !== 'minColWidth' && propName !== 'gap') continue
+      const propName = exprContent(d.arg) // 'min-col-width' / 'minColWidth' / 'gap' / …
+      if (!SEMANTIC_ATTRS.has(propName)) continue
       const raw = exprContent(d.exp)
       const num = Number(raw.trim())
       if (!Number.isFinite(num)) return null
       if (propName === 'gap') gap = num
+      else if (propName === 'min-col-width-min' || propName === 'minColWidthMin') minColWidthMin = num
+      else if (propName === 'min-col-width-vw' || propName === 'minColWidthVw') minColWidthVw = num
       else minColWidth = num
     }
   }
-  return { minColWidth, gap }
+  return { minColWidth, minColWidthMin, minColWidthVw, gap }
 }
 
 /** 合成元素（走标准递归序列化——class/scope/v-for 处理自动一致） */
@@ -585,18 +614,49 @@ function buildGridItemStyle(containerWidth: number, minColWidth: number, gap: nu
  * p-grid → 容器 flex（静态 gap）+ 直接子元素逐包档位容器（子 v-for/v-if 迁移到包装层）
  * 档位 style 由 script 段 setData（pgridStyle{index}）——页面 onLoad 屏幕宽近似 + onReady SelectorQuery 实测精修
  */
-function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: { minColWidth: number; gap: number }): string {
+function serializeSemanticGrid(
+  node: ElementNode,
+  ctx: SerializeContext,
+  grid: { minColWidth: number; minColWidthMin: number; minColWidthVw: number; gap: number },
+): string {
   const index = ctx.semanticGrids.length
   const designWidth = ctx.fluidLayout?.designWidth ?? 375
-  const defaultStyle = buildGridItemStyle(designWidth, grid.minColWidth, grid.gap)
-  ctx.semanticGrids.push({ minColWidth: grid.minColWidth, gap: grid.gap, index, defaultStyle })
+  // ★2026-11-13（外部 F-45）：流式下限（F-41 的两个 prop）在语义通道的落点。
+  //   运行时组件用 CSS `max(min, min(max, vw))` 交给浏览器算；
+  //   语义通道是 **JS 逐档算 px basis**（`calcColumns` 需要具体数值）⇒ 这里按
+  //   **设计稿宽度**把 vw 折算成 px，得到 `effMin`（该宽度下的有效下限）。
+  //   两者语义一致：窄屏取 min、宽屏封顶 max。页面 onReady 实测容器宽后会重算（见 semanticGridReadyCode）。
+  const effectiveMin = (containerWidth: number): number => {
+    if (grid.minColWidthMin <= 0 || grid.minColWidthVw <= 0 || grid.minColWidthMin >= grid.minColWidth) {
+      return grid.minColWidth
+    }
+    const fromVw = (grid.minColWidthVw / 100) * containerWidth
+    return Math.max(grid.minColWidthMin, Math.min(grid.minColWidth, fromVw))
+  }
+  const defaultStyle = buildGridItemStyle(designWidth, effectiveMin(designWidth), grid.gap)
+  ctx.semanticGrids.push({
+    minColWidth: grid.minColWidth,
+    minColWidthMin: grid.minColWidthMin,
+    minColWidthVw: grid.minColWidthVw,
+    gap: grid.gap,
+    index,
+    defaultStyle,
+  })
   ctx.trace?.add('fluid/semantic-grid', {
     line: node.loc.start.line,
-    before: `<p-grid min-col-width="${grid.minColWidth}" gap="${grid.gap}">…</p-grid>`,
-    after: `容器 flex(row/wrap/gap ${grid.gap}px) id=pgrid${index} + 子项 p-grid-item（style 绑 {{pgridStyle${index}}}——px 档位实测容器宽，#496c）`,
+    before: `<p-grid min-col-width="${grid.minColWidth}"${grid.minColWidthMin > 0 ? ` min-col-width-min="${grid.minColWidthMin}" min-col-width-vw="${grid.minColWidthVw}"` : ''} gap="${grid.gap}">…</p-grid>`,
+    after: `容器 flex(row/wrap/gap ${grid.gap}px) id=pgrid${index} + 子项 p-grid-item（style 绑 {{pgridStyle${index}}}——px 档位实测容器宽，#496c${grid.minColWidthMin > 0 ? `；流式下限 max(${grid.minColWidthMin}px, min(${grid.minColWidth}px, ${grid.minColWidthVw}vw))` : ''}）`,
   })
 
-  const semanticProp = (dirName: string): boolean => dirName === 'min-col-width' || dirName === 'minColWidth' || dirName === 'gap'
+  /** 语义 prop：这些从产物元素上剥掉（值已并入 style/档位计算），不得原样残留 */
+  const semanticProp = (dirName: string): boolean =>
+    dirName === 'min-col-width' ||
+    dirName === 'minColWidth' ||
+    dirName === 'min-col-width-min' ||
+    dirName === 'minColWidthMin' ||
+    dirName === 'min-col-width-vw' ||
+    dirName === 'minColWidthVw' ||
+    dirName === 'gap'
 
   // 容器 props：p-grid 自身 v-if/v-for/用户 class/style 保留；仅剥语义 props（静态/bind min-col-width·gap）
   const containerProps: unknown[] = []

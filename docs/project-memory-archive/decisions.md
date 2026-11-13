@@ -17388,3 +17388,34 @@ iOS `.regular` 的关键是**区域级**：「each layer continuously adapts bas
 **⑦ 反巨型化**：新探针进独立模块 `scripts/studio-panel-probes-symbolfuzzy.mjs`（60 行），`studio-panel-probes.mjs` 本单**一行未加**（HEAD 已 1165 行且未登记基线的既存红不继续加码）。
 
 **⑧ 诚实边界**：① 子序列是放宽档，短查询仍可能偏宽（单字符查询与旧行为一致，因 rank3 优先）；多词查询（如 `auto save`）未做，留 handoff。② **真机（打包 .app）未验**，全是 Playwright 门禁 + 构建证据。③ 多选与过滤态记忆未做。④ 13 天记账欠账（速览停在 10-30、`2026-11` 归档不存在、决策号重号）本单未动。
+
+1500. **★F-45：编译器语义通道补齐 p-grid 流式下限（F-41 的残留）**（2026-11-13 · 外部第 16 轮）:
+**① 缺陷**：F-41 给 `p-grid` 运行时组件加了 `minColWidthMin` / `minColWidthVw`，实现为 CSS `max(96px, min(142px, 22vw))`。但**编译器语义通道**（页面内 `<p-grid>` 会被展开成 flex + `p-grid-item`）没跟上，白名单只有 `min-col-width` / `gap` ⇒ 两个后果：
+  - 新 prop **不参与档位计算**（流式下限失效）；
+  - 且因为不在 `semanticProp()` 里，会被**原样输出到产物元素**（`<view min-col-width-min="{{88}}" …>`）——既丢语义又留垃圾属性。
+
+**② 为什么是"修一处漏一处"的典型**：`p-grid` 有**两条独立通路**——
+  运行时组件（Web/组件内，CSS 函数由浏览器算）与编译器语义展开（页面内，**JS 逐档算 px basis**，
+  因为 Skyline 的 flex-basis 用 calc 百分比不可靠，见 #496c）。
+  改组件那条通路时，另一条完全不在视野里。**这与 F-39 的两份 `parseFluidExpr` 是同一类结构缺陷**：
+  「同一件事有多条消费通道时，必须逐条接」——本仓已在 F-30/F-32/#500/#505/F-39 反复踩过。
+
+**③ 修法（三处，缺一不可）**：
+  1. `tryParseSemanticGrid` 的 `SEMANTIC_ATTRS` 补 `min-col-width-min` / `minColWidthMin` /
+     `min-col-width-vw` / `minColWidthVw`（kebab 与 camel 双写法都认，与既有 `min-col-width` 一致）；
+  2. `semanticGridInitCode`（onLoad 屏幕宽近似）与 `semanticGridReadyCode`（onReady 实测容器宽）
+     的列数计算改用 `Math.max(min, Math.min(max, (vw/100) * w))` —— **与组件侧 CSS 表达式同源同式**；
+  3. `semanticProp()` 同步扩展，使新 prop 从产物元素**剥离**（值已并入档位计算）。
+
+**④ 数值验证**（min=88 / vw=22 / max=142 / gap=8）：
+  390 宽 → 有效下限 88 → **4 列**（原固定 142 时 2 列）；768 宽 → 142（封顶）→ 5 列。
+  外部手写断点方案在 390 宽是 3 列（用 96px）——参数不同，**机制一致**（窄屏降下限、宽屏封顶）。
+
+**⑤ 回归锁**：`tests/mp-transform.test.ts` 2 例——① 新 prop 必须从产物剥离 + init/ready 两段都要用流式表达式 + 仍走语义展开（不回退运行时组件）；② 未启用流式时行为与旧版一致（防回归）。
+**破坏性验证**：`SEMANTIC_ATTRS` 退回旧白名单 → 「F-45：init 段未用流式下限」当场红；还原 199/199 绿。
+签：`test:coupled` 全绿。
+
+**⑥ 教训（与 F-46 呼应）**：F-45 与 F-46 都是「**判据/白名单按我见过的那一种写法写死**」——
+  F-45 是 prop 白名单漏了新 prop，F-46 是 verification 白名单漏了合法值 `partial`。
+  **通用判据**：写白名单前先问「这个集合的依据是什么？规范/契约里还有哪些成员？」——
+  按**契约**枚举，不按**记忆**枚举。
