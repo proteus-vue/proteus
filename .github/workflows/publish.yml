@@ -81,6 +81,17 @@ jobs:
       - name: 构建 workspace 包
         run: node scripts/build-packages.mjs
 
+      # ★OIDC 前置核验（2026-11-13 新增）：trusted publishing 要求
+      #   package.json 的 repository.url 与 GitHub 仓库逐字匹配——缺了 OIDC 换不到发布权，
+      #   会退化成"没有凭据"（表现为逐包 404）。放在发布前，让失败原因一眼可见。
+      - name: repository 字段核验（OIDC 发布前置）
+        run: node scripts/check-pkg-repository.mjs --check
+
+      # ★构建产物新鲜度（2026-11-12 坏发布事故后新增）：dist 不得比 src 旧。
+      #   CI 的 mtime 在 build 之后是真实构建时刻（上面刚 build 完），判据有效。
+      - name: 构建产物新鲜度
+        run: node scripts/check-dist-fresh.mjs --check
+
       # ★发布前漂移核验：本地 pack ↔ registry 同版本内容必须一致
       #   （防「改了源码忘 bump」——同版本无法覆盖发布，新内容会永远发不出去）
       - name: 发布前漂移核验
